@@ -1,4 +1,5 @@
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { parseStepTokenWindows, stepDecodeEnd } from "./step-windows"
 
 type SidebarInferenceMessage = {
   id: string
@@ -33,20 +34,13 @@ function formatRate(tokens: number, seconds: number): string | undefined {
   return `${rate.toFixed(1)} t/s`
 }
 
-function firstOutputStart(parts: readonly unknown[]): number | undefined {
-  let earliest: number | undefined
-  for (const value of parts) {
-    if (!value || typeof value !== "object") continue
-    const part = value as { type?: unknown; time?: unknown }
-    if (part.type !== "text" && part.type !== "reasoning") continue
-    const time = part.time && typeof part.time === "object" ? (part.time as { start?: unknown }) : undefined
-    const start = time?.start
-    if (typeof start !== "number" || !Number.isFinite(start)) continue
-    if (earliest === undefined || start < earliest) earliest = start
-  }
-  return earliest
-}
-
+// Per-step prefill window: from the previous step's last activity (tool
+// execution excluded) to this step's first output token. Message-level token
+// counts ACCUMULATE across steps (each tool-calling loop re-sends the full
+// context), so dividing them by the whole turn span charges tool execution
+// time against decode and counts every step's re-sent context against the
+// first step's prefill — both rates come out wildly wrong on multi-step
+// turns. Each finished step contributes its own tokens and window instead.
 export function sidebarLocalInferenceView(input: {
   messages: readonly SidebarInferenceMessage[]
   partsByMessage: Record<string, readonly unknown[] | undefined>
@@ -63,19 +57,56 @@ export function sidebarLocalInferenceView(input: {
   const startedAt = message.time?.created
   if (typeof startedAt !== "number" || !Number.isFinite(startedAt)) return undefined
 
-  const firstOutputAt = firstOutputStart(input.partsByMessage[message.id] ?? [])
-  if (firstOutputAt === undefined || firstOutputAt < startedAt) return undefined
-
   const now = input.now ?? Date.now()
-  const completedAt =
-    typeof message.time?.completed === "number" && Number.isFinite(message.time.completed)
-      ? message.time.completed
-      : now
-  const inputTokens = message.tokens?.input ?? 0
-  const outputTokens = message.tokens?.output ?? 0
+  const { steps, sawStepPart } = parseStepTokenWindows(input.partsByMessage[message.id] ?? [], now)
 
-  const prefillRate = formatRate(inputTokens, (firstOutputAt - startedAt) / 1000)
-  const decodeRate = formatRate(outputTokens, (Math.max(completedAt, firstOutputAt) - firstOutputAt) / 1000)
+  // Older sessions may carry no step parts at all: fall back to the
+  // message-level totals attributed to a single step so the panel still has
+  // something accurate to show for single-step turns.
+  if (!sawStepPart && steps.length === 1) {
+    steps[0].input = message.tokens?.input ?? 0
+    steps[0].output = message.tokens?.output ?? 0
+    steps[0].finished = true
+  }
+
+  let prefillTokens = 0
+  let prefillMs = 0
+  let decodeTokens = 0
+  let decodeMs = 0
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]
+    // The in-flight step has no usage yet — pairing its window with tokens
+    // from earlier steps would drag the decode rate down while tools run.
+    if (!step.finished) continue
+
+    const firstOut = step.firstOut
+    const end = stepDecodeEnd(step)
+    if (firstOut !== undefined && end !== undefined && end > firstOut && step.output > 0) {
+      decodeTokens += step.output
+      decodeMs += end - firstOut
+    }
+
+    if (firstOut === undefined || step.input <= 0) continue
+    if (i === 0) {
+      if (firstOut > startedAt) {
+        prefillTokens += step.input
+        prefillMs += firstOut - startedAt
+      }
+      continue
+    }
+    const prev = steps[i - 1]
+    const prevEnd = stepDecodeEnd(prev)
+    if (prevEnd === undefined) continue
+    const toolMs =
+      prev.toolStart !== undefined && prev.toolEnd !== undefined ? Math.max(0, prev.toolEnd - prev.toolStart) : 0
+    const gap = firstOut - prevEnd - toolMs
+    if (gap <= 0) continue
+    prefillTokens += step.input
+    prefillMs += gap
+  }
+
+  const prefillRate = formatRate(prefillTokens, prefillMs / 1000)
+  const decodeRate = formatRate(decodeTokens, decodeMs / 1000)
   if (!prefillRate && !decodeRate) return undefined
 
   return {

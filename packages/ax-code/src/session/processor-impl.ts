@@ -205,6 +205,10 @@ export namespace SessionProcessor {
     // usage (an "empty model turn"). Surfaced via `result.streamError` so the
     // prompt loop can attribute the stall to its real cause.
     let lastStreamError: unknown
+    // Usage of the most recent finish-step event. `assistantMessage.tokens`
+    // accumulates across steps, so per-step decisions (empty-turn detection)
+    // must read this instead.
+    let lastStepUsage: MessageV2.Assistant["tokens"] | undefined
     let lastStatusWrite = 0
     let lastWaitState: string | undefined
     let lastActiveTool: string | undefined
@@ -252,6 +256,9 @@ export namespace SessionProcessor {
       },
       get streamError() {
         return lastStreamError
+      },
+      get lastStepUsage() {
+        return lastStepUsage
       },
       partFromToolCall(toolCallID: string) {
         return toolcalls[toolCallID]
@@ -930,6 +937,7 @@ export namespace SessionProcessor {
                     usage: value.usage ?? { inputTokens: 0, outputTokens: 0 },
                     metadata: value.providerMetadata,
                   })
+                  lastStepUsage = usage.tokens
                   const usageLog = {
                     command: "session.processor.usage",
                     status: source === "missing" ? "missing" : "ok",

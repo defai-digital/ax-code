@@ -565,7 +565,8 @@ export namespace SessionPrompt {
       // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
       ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: cachedMsgs }))
 
-      let { lastUser, lastUserParts, lastAssistant, lastFinished, tasks } = scanLoopMessages(msgs)
+      let { lastUser, lastUserParts, lastAssistant, lastFinished, lastFinishedStepTokens, tasks } =
+        scanLoopMessages(msgs)
 
       if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
       if (mediaProjectionUserID !== lastUser.id) {
@@ -830,6 +831,7 @@ export namespace SessionPrompt {
           userModel: lastUser.model,
           model,
           lastFinished,
+          lastFinishedStepTokens,
           superLong: superLongActive,
           latestUserParts: lastUserParts ?? [],
         })
@@ -1140,9 +1142,12 @@ export namespace SessionPrompt {
       }
 
       const modelFinished = modelTurnFinished(processor.message.finish)
+      // Empty-turn detection must see THIS step's usage: message tokens
+      // accumulate across steps, so after any productive step a later empty
+      // completion would read as non-empty and skip recovery.
       const emptyModelTurn = isEmptyModelTurn({
         finish: processor.message.finish,
-        tokens: processor.message.tokens,
+        tokens: processor.lastStepUsage ?? processor.message.tokens,
       })
       const truncatedModelTurn = isTruncatedModelTurn({
         finish: processor.message.finish,

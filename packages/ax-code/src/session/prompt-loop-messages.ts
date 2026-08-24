@@ -6,6 +6,7 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
   let lastUserParts: MessageV2.Part[] | undefined
   let lastAssistant: MessageV2.Assistant | undefined
   let lastFinished: MessageV2.Assistant | undefined
+  let lastFinishedStepTokens: MessageV2.StepFinishPart["tokens"] | undefined
   let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
 
   // Walk newest → oldest. Stop once both lastUser and lastFinished are known;
@@ -18,8 +19,15 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
       lastUserParts = msg.parts
     }
     if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
-    if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
+    if (!lastFinished && msg.info.role === "assistant" && msg.info.finish) {
       lastFinished = msg.info as MessageV2.Assistant
+      // The last step's usage is the current context size. The message-level
+      // totals accumulate across every step of the turn, so overflow checks
+      // against them fire spuriously on multi-step turns.
+      lastFinishedStepTokens = msg.parts.findLast(
+        (part): part is MessageV2.StepFinishPart => part.type === "step-finish",
+      )?.tokens
+    }
     if (!lastFinished) {
       const found = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
       if (found.length > 0) tasks.push(...found)
@@ -32,6 +40,7 @@ export function scanLoopMessages(msgs: MessageV2.WithParts[]) {
     lastUserParts,
     lastAssistant,
     lastFinished,
+    lastFinishedStepTokens,
     tasks,
   }
 }

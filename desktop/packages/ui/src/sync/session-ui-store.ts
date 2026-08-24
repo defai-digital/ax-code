@@ -37,7 +37,11 @@ import { isLegacyWorkSession, WORK_SESSION_SEND_DISABLED } from "@/lib/workSessi
 import { toast } from "@/components/ui"
 import { getSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
-import { buildSessionContextUsage, findLatestAssistantTokenUsage } from "@/lib/messages/assistantTokens"
+import {
+  buildSessionContextUsage,
+  findLatestAssistantTokenUsage,
+  findLatestStepTokenUsage,
+} from "@/lib/messages/assistantTokens"
 import { flattenAssistantTextParts } from "@/lib/messages/messageText"
 import { EXECUTION_FORK_META_TEXT } from "@/lib/messages/executionMeta"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
@@ -757,7 +761,12 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     const latestUsage = findLatestAssistantTokenUsage(messages)
     if (!latestUsage) return null
 
-    return buildSessionContextUsage(latestUsage.tokens, {
+    // Message token totals accumulate across every step of the turn, so they
+    // overstate the current context size on multi-step turns. Prefer the
+    // latest step-finish usage (what the context window actually holds).
+    const stepTokens = latestUsage.messageId ? findLatestStepTokenUsage(getSyncParts(latestUsage.messageId)) : null
+
+    return buildSessionContextUsage(stepTokens ?? latestUsage.tokens, {
       contextLimit,
       outputLimit,
       lastMessageId: latestUsage.messageId,

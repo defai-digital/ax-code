@@ -1784,7 +1784,10 @@ export function Prompt(props: PromptProps) {
     const model = sync.data.provider.find((x: any) => x.id === last.providerID)?.models?.[last.modelID]
     const budget = model ? calculateCompactionBudget(model, sync.data.config.compaction?.reserved) : undefined
     return footerContextGauge({
-      totalTokens: effectiveTokenTotal(last.tokens),
+      // The compactor compares the LATEST step's usage against the budget,
+      // not the turn-cumulative message totals (which grow with every step
+      // and would pin the gauge near 100% on any multi-step turn).
+      totalTokens: effectiveTokenTotal(Usage.lastStepTokens(sync.data.part[last.id] ?? []) ?? last.tokens),
       budget,
       compactionAuto: sync.data.config.compaction?.auto,
       contextLimit: model?.limit?.context,
@@ -1830,7 +1833,12 @@ export function Prompt(props: PromptProps) {
     if (!last) return undefined
     const completed = last.time.completed
     const now = completed ?? Date.now()
-    return footerTokenChip({ tokens: last.tokens, startedAt: last.time.created, now })
+    return footerTokenChip({
+      tokens: last.tokens,
+      startedAt: last.time.created,
+      now,
+      parts: sync.data.part[last.id] ?? [],
+    })
   })
   const livenessIndicator = createMemo(() =>
     footerLivenessIndicator({

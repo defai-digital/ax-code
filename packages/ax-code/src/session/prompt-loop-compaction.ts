@@ -70,6 +70,7 @@ export async function maybeScheduleUsageCompaction(input: {
   userModel: MessageV2.User["model"]
   model: Provider.Model
   lastFinished?: MessageV2.Assistant
+  lastFinishedStepTokens?: MessageV2.StepFinishPart["tokens"]
   superLong?: boolean
   latestUserParts?: MessageV2.Part[]
 }) {
@@ -83,9 +84,17 @@ export async function maybeScheduleUsageCompaction(input: {
     return false
   }
 
-  const overflow = input.lastFinished
+  // Compare the LATEST step's usage against the budget — the same value the
+  // in-loop overflow check uses. The message-level totals accumulate across
+  // every step of the turn (each tool-calling loop re-sends the full
+  // context), so checking them here scheduled an unnecessary compaction on
+  // any multi-step turn whose summed usage crossed the budget. Fall back to
+  // the message totals only when no step-finish part exists (single-step
+  // turns, where they agree).
+  const tokens = input.lastFinishedStepTokens ?? input.lastFinished?.tokens
+  const overflow = tokens
     ? await SessionCompaction.isOverflow({
-        tokens: input.lastFinished.tokens,
+        tokens,
         model: input.model,
         superLong: input.superLong,
       })

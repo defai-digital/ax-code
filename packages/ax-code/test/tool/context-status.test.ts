@@ -3,7 +3,7 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
-import { MessageID, type SessionID } from "../../src/session/schema"
+import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import { SessionCompaction } from "../../src/session/compaction"
 import { effectiveTokenTotal } from "../../src/session/compaction-budget"
 import { ToolRegistry } from "../../src/tool/registry"
@@ -133,6 +133,60 @@ describe("tool.context_status", () => {
           used: effectiveTokenTotal(ASSISTANT_TOKENS),
           headroom: expected!.usable - effectiveTokenTotal(ASSISTANT_TOKENS),
         })
+      },
+    })
+  })
+
+  test("reports the latest step's usage, not the turn-cumulative message total", async () => {
+    await using tmp = await project({ contextTools: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await ToolRegistry.tools(modelRef)
+        const tool = tools.find((candidate) => candidate.id === "context_status")
+
+        const session = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: modelRef,
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: session.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          // Three tool-calling steps at ~30k context each accumulate to 93k
+          // on the message totals — over the 90k usable budget — while the
+          // actual current context is only the latest step's 31k.
+          tokens: { input: 90_000, output: 3_000, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: modelRef.modelID,
+          providerID: modelRef.providerID,
+          time: { created: Date.now(), completed: Date.now() },
+        } as MessageV2.Assistant)
+        const stepTokens = { input: 30_000, output: 1_000, reasoning: 0, cache: { read: 0, write: 0 } }
+        for (const [index, reason] of ["tool-calls", "tool-calls", "stop"].entries()) {
+          await Session.updatePart({
+            id: PartID.ascending(),
+            messageID: assistant.id,
+            sessionID: session.id,
+            type: "step-finish",
+            reason,
+            tokens: index === 2 ? stepTokens : { ...stepTokens, input: 29_000 + index * 500 },
+          })
+        }
+
+        const messages = await Session.messages({ sessionID: session.id })
+        const result = await tool!.execute({}, toolContext(session.id, messages))
+
+        expect(result.metadata.used).toBe(effectiveTokenTotal(stepTokens))
+        expect(result.metadata.used).not.toBe(93_000)
       },
     })
   })

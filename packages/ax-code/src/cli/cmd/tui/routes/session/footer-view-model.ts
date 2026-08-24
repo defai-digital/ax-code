@@ -1,6 +1,7 @@
 import { formatDuration } from "@/util/format"
 import { Locale } from "@/util/locale"
 import { compactionGaugeLimit, type CompactionBudget } from "@/session/compaction-budget"
+import { parseStepTokenWindows, stepDecodeTotals } from "./step-windows"
 
 export type FooterSessionStatus =
   | {
@@ -77,10 +78,19 @@ export function formatTokenRate(rate: number): string {
 // stream. Returns `rate` undefined when the turn is settled (startedAt
 // not supplied), when there's no meaningful elapsed window yet, or
 // when there are no output tokens to report against.
+//
+// When the message's parts are supplied and carry step data, the rate is
+// computed over the finished steps' decode windows instead of the
+// wall-clock window: message token totals accumulate across steps while
+// the wall clock keeps running through tool execution, so the naive
+// output/elapsed rate continuously decays during every tool call and
+// mid-step stream — a number that reads as "the model is slowing down"
+// when nothing about decode speed changed.
 export function footerTokenChip(input: {
   tokens?: { input?: number; output?: number }
   startedAt?: number
   now?: number
+  parts?: readonly unknown[]
 }): FooterTokenChip | undefined {
   const inTok = input.tokens?.input ?? 0
   const outTok = input.tokens?.output ?? 0
@@ -89,8 +99,19 @@ export function footerTokenChip(input: {
     input: formatTokenCount(inTok),
     output: formatTokenCount(outTok),
   }
+  const now = input.now ?? Date.now()
+  if (input.parts !== undefined) {
+    const { steps, sawStepPart } = parseStepTokenWindows(input.parts, now)
+    if (sawStepPart) {
+      const totals = stepDecodeTotals(steps)
+      const seconds = totals.ms / 1000
+      if (totals.tokens > 0 && seconds >= RATE_MIN_ELAPSED_SECONDS) {
+        view.rate = formatTokenRate(totals.tokens / seconds)
+      }
+      return view
+    }
+  }
   if (input.startedAt !== undefined && outTok > 0) {
-    const now = input.now ?? Date.now()
     const elapsed = Math.max(0, (now - input.startedAt) / 1000)
     if (elapsed >= RATE_MIN_ELAPSED_SECONDS) {
       view.rate = formatTokenRate(outTok / elapsed)

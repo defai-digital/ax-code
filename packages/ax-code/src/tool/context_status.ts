@@ -67,7 +67,14 @@ function lastUsedTokens(messages: MessageV2.WithParts[]) {
     )
   })
   if (!last || last.info.role !== "assistant") return 0
-  return effectiveTokenTotal(last.info.tokens)
+  // The compactor measures the LATEST step's usage against the budget.
+  // Message-level totals accumulate across every step of the turn (each
+  // tool-calling loop re-sends the full context), so reporting them would
+  // inflate "used" by roughly the step count and tell the model its context
+  // is nearly full when it is not. Fall back to the message totals only when
+  // no step-finish part exists (single-step turns, where they agree).
+  const step = last.parts.findLast((part): part is MessageV2.StepFinishPart => part.type === "step-finish")
+  return effectiveTokenTotal(step?.tokens ?? last.info.tokens)
 }
 
 const parameters = z.object({})

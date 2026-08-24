@@ -67,17 +67,7 @@ const toNonNegativeNumber = (value: unknown): number => {
   return value
 }
 
-const extractTokenBreakdown = (message: SessionMessage): NormalizedTokenBreakdown => {
-  const tokenCandidate = (message.info as { tokens?: unknown }).tokens
-  const source =
-    tokenCandidate !== undefined
-      ? tokenCandidate
-      : (
-          message.parts.find((part) => (part as { tokens?: unknown }).tokens !== undefined) as
-            | { tokens?: unknown }
-            | undefined
-        )?.tokens
-
+const normalizeTokenBreakdown = (source: unknown): NormalizedTokenBreakdown => {
   if (typeof source === "number") {
     return {
       ...EMPTY_BREAKDOWN,
@@ -110,6 +100,35 @@ const extractTokenBreakdown = (message: SessionMessage): NormalizedTokenBreakdow
     cacheWrite,
     total: input + output + reasoning + cacheRead + cacheWrite,
   }
+}
+
+const extractTokenBreakdown = (message: SessionMessage): NormalizedTokenBreakdown => {
+  const tokenCandidate = (message.info as { tokens?: unknown }).tokens
+  const source =
+    tokenCandidate !== undefined
+      ? tokenCandidate
+      : (
+          message.parts.find((part) => (part as { tokens?: unknown }).tokens !== undefined) as
+            | { tokens?: unknown }
+            | undefined
+        )?.tokens
+
+  return normalizeTokenBreakdown(source)
+}
+
+// The message's most recent FINISHED step usage, from its step-finish parts.
+// Message-level token totals accumulate across every step of the turn (each
+// tool-calling loop re-sends the full context), so they overstate the current
+// context size by roughly the step count. Undefined when the message carries
+// no step-finish part — callers fall back to the message totals, which agree
+// on single-step turns.
+const extractLatestStepBreakdown = (message: SessionMessage): NormalizedTokenBreakdown | undefined => {
+  for (let index = message.parts.length - 1; index >= 0; index -= 1) {
+    const part = message.parts[index] as { type?: unknown; tokens?: unknown }
+    if (part.type !== "step-finish" || part.tokens === undefined) continue
+    return normalizeTokenBreakdown(part.tokens)
+  }
+  return undefined
 }
 
 const pickString = (...values: unknown[]): string => {
@@ -346,7 +365,9 @@ export const ContextPanelContent: React.FC = () => {
       }
     }
 
-    const tokenBreakdown = contextMessage ? extractTokenBreakdown(contextMessage) : EMPTY_BREAKDOWN
+    const tokenBreakdown = contextMessage
+      ? (extractLatestStepBreakdown(contextMessage) ?? extractTokenBreakdown(contextMessage))
+      : EMPTY_BREAKDOWN
 
     const totalAssistantCost = CONTEXT_COST_DISPLAY_ENABLED
       ? assistantMessages.reduce((sum, message) => {

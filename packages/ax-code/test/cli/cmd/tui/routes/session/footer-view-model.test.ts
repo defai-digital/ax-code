@@ -78,6 +78,40 @@ describe("footerTokenChip", () => {
       output: "0",
     })
   })
+
+  test("rate from parts uses finished steps' decode windows (no tool-time decay)", () => {
+    const startedAt = 1_700_000_000_000
+    // One finished step decoded 100 tokens in 1s, then a 56s tool ran and the
+    // in-flight second step has no usage yet. Wall-clock math over the 60s
+    // turn would report ~1.7 t/s and keep decaying; the step-aware rate is a
+    // stable 100 t/s.
+    expect(
+      footerTokenChip({
+        tokens: { input: 10_000, output: 100 },
+        startedAt,
+        now: startedAt + 60_000,
+        parts: [
+          { type: "step-start" },
+          { type: "text", time: { start: startedAt + 1_000, end: startedAt + 2_000 } },
+          { type: "tool", state: { status: "completed", time: { start: startedAt + 2_000, end: startedAt + 58_000 } } },
+          { type: "step-finish", tokens: { input: 10_000, output: 100 } },
+          { type: "step-start" },
+        ],
+      }),
+    ).toEqual({ input: "10k", output: "100", rate: "100 t/s" })
+  })
+
+  test("parts without step data fall back to the wall-clock window", () => {
+    const startedAt = 1_700_000_000_000
+    expect(
+      footerTokenChip({
+        tokens: { input: 1000, output: 200 },
+        startedAt,
+        now: startedAt + 5_000,
+        parts: [{ type: "text", time: { start: startedAt + 1_000, end: startedAt + 5_000 } }],
+      }),
+    ).toEqual({ input: "1.0k", output: "200", rate: "40.0 t/s" })
+  })
 })
 
 describe("footerGoalChip", () => {

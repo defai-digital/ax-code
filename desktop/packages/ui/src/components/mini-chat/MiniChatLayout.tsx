@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n"
 import { invokeDesktop, isElectronShell } from "@/lib/desktop"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSessionWorktreeStore } from "@/sync/session-worktree-store"
-import { useSessionMessages, useSessions } from "@/sync/sync-context"
+import { useSessionMessages, useSessionParts, useSessions } from "@/sync/sync-context"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useGitBranchLabel, useGitStore } from "@/stores/useGitStore"
@@ -17,7 +17,11 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { resolveSessionDiffStats } from "@/components/session/sidebar/utils"
 import { Icon } from "@/components/icon/Icon"
 import { useRuntimeAPIs } from "@/hooks/useRuntimeAPIs"
-import { buildSessionContextUsage, findLatestAssistantTokenUsage } from "@/lib/messages/assistantTokens"
+import {
+  buildSessionContextUsage,
+  findLatestAssistantTokenUsage,
+  findLatestStepTokenUsage,
+} from "@/lib/messages/assistantTokens"
 import type { SessionContextUsage } from "@/stores/types/sessionTypes"
 import { buildMiniChatMainHandoffPayload } from "./miniChatMainHandoff"
 import { compactMiniChatPath, findMiniChatProjectForDirectory, normalizeMiniChatPath } from "./miniChatPath"
@@ -153,22 +157,29 @@ const MiniChatHeader: React.FC<{ mode: MiniChatMode }> = ({ mode }) => {
       : null
   const contextLimit = limit && typeof limit.context === "number" ? limit.context : 0
   const outputLimit = limit && typeof limit.output === "number" ? limit.output : 0
+  const latestUsage = React.useMemo(
+    () => findLatestAssistantTokenUsage(currentSessionMessages),
+    [currentSessionMessages],
+  )
+  // Message token totals accumulate across every step of the turn, so they
+  // overstate the current context size on multi-step turns. Prefer the latest
+  // step-finish usage (what the context window actually holds).
+  const latestUsageParts = useSessionParts(latestUsage?.messageId ?? "")
   const contextUsage = React.useMemo<SessionContextUsage | null>(() => {
     if (!currentSessionId || currentSessionMessages.length === 0) {
       return null
     }
 
-    const latestUsage = findLatestAssistantTokenUsage(currentSessionMessages)
     if (!latestUsage) {
       return null
     }
 
-    return buildSessionContextUsage(latestUsage.tokens, {
+    return buildSessionContextUsage(findLatestStepTokenUsage(latestUsageParts) ?? latestUsage.tokens, {
       contextLimit,
       outputLimit,
       lastMessageId: latestUsage.messageId,
     })
-  }, [contextLimit, currentSessionId, currentSessionMessages, outputLimit])
+  }, [contextLimit, currentSessionId, currentSessionMessages, latestUsage, latestUsageParts, outputLimit])
   const [stableContextUsage, setStableContextUsage] = React.useState<SessionContextUsage | null>(null)
   const dragRegionStyle = { WebkitAppRegion: "drag" } as React.CSSProperties
   const noDragRegionStyle = { WebkitAppRegion: "no-drag" } as React.CSSProperties

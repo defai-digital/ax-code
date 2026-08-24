@@ -410,8 +410,40 @@ describe("session.prompt helpers", () => {
     expect(String(result.lastUser?.id)).toBe("004")
     expect(String(result.lastAssistant?.id)).toBe("003")
     expect(String(result.lastFinished?.id)).toBe("002")
+    expect(result.lastFinishedStepTokens).toBeUndefined()
     expect(result.lastUserParts as any).toEqual(msgs[3].parts)
     expect(result.tasks as any).toEqual(msgs[2].parts)
+  })
+
+  test("scanLoopMessages returns the last step-finish tokens of the finished turn", () => {
+    const stepTokens = { input: 30_000, output: 1_000, reasoning: 0, cache: { read: 0, write: 0 } }
+    const msgs = [
+      {
+        info: { id: "001", role: "user" },
+        parts: [{ type: "text", text: "do the thing" }],
+      },
+      {
+        info: {
+          id: "002",
+          role: "assistant",
+          finish: "stop",
+          // Turn-cumulative totals across three steps — NOT the current
+          // context size; the last step-finish is.
+          tokens: { input: 90_000, output: 3_000, reasoning: 0, cache: { read: 0, write: 0 } },
+        },
+        parts: [
+          { type: "step-start" },
+          { type: "step-finish", reason: "tool-calls", tokens: { ...stepTokens, input: 10_000 } },
+          { type: "step-start" },
+          { type: "step-finish", reason: "stop", tokens: stepTokens },
+        ],
+      },
+    ] as any as MessageV2.WithParts[]
+
+    const result = scanLoopMessages(msgs)
+
+    expect(String(result.lastFinished?.id)).toBe("002")
+    expect(result.lastFinishedStepTokens).toEqual(stepTokens)
   })
 
   test("maps pending compaction results to loop actions", () => {

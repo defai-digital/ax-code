@@ -39,6 +39,37 @@ export const findLatestAssistantTokenUsage = (
   return null
 }
 
+// Tokens of a message's most recent FINISHED step, from its step-finish
+// parts. Assistant message token totals accumulate across every step of the
+// turn (each tool-calling loop re-sends the full context), so the message
+// totals overstate the current context size by roughly the step count.
+// Returns null when no step-finish part exists — callers fall back to the
+// message totals, which agree on single-step turns.
+export const findLatestStepTokenUsage = (parts: readonly unknown[]): AssistantTokens | null => {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index] as { type?: unknown; tokens?: unknown } | null
+    if (!part || part.type !== "step-finish") {
+      continue
+    }
+
+    const tokens = part.tokens as AssistantTokens | undefined
+    if (!tokens || typeof tokens.input !== "number" || typeof tokens.output !== "number") {
+      return null
+    }
+    return {
+      input: tokens.input,
+      output: tokens.output,
+      reasoning: typeof tokens.reasoning === "number" ? tokens.reasoning : 0,
+      cache: {
+        read: typeof tokens.cache?.read === "number" ? tokens.cache.read : 0,
+        write: typeof tokens.cache?.write === "number" ? tokens.cache.write : 0,
+      },
+    }
+  }
+
+  return null
+}
+
 export const buildSessionContextUsage = (
   tokens: AssistantTokens,
   limits: {

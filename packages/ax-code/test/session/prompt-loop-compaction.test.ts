@@ -251,6 +251,33 @@ describe("session.prompt usage compaction", () => {
     expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ triggerReason: "provider_usage" }))
   })
 
+  test("checks overflow against the latest step's tokens, not the turn-cumulative message totals", async () => {
+    // A three-step turn at ~30k context per step accumulates to 93k on the
+    // message totals; checking THAT against the budget would schedule a
+    // compaction the session does not need. The latest step-finish tokens
+    // are the real current context size.
+    overflowSpy = vi.spyOn(SessionCompaction, "isOverflow").mockResolvedValue(false)
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    const stepTokens = { input: 30_000, output: 1_000, reasoning: 0, cache: { read: 0, write: 0 } }
+
+    const scheduled = await maybeScheduleUsageCompaction({
+      sessionID: "ses_test" as any,
+      agent: "build",
+      userModel,
+      model,
+      lastFinished: {
+        summary: false,
+        tokens: { input: 90_000, output: 3_000, reasoning: 0, cache: { read: 0, write: 0 } },
+      } as any,
+      lastFinishedStepTokens: stepTokens as any,
+      latestUserParts: [{ type: "text", text: "keep going" } as any],
+    })
+
+    expect(overflowSpy).toHaveBeenCalledWith(expect.objectContaining({ tokens: stepTokens }))
+    expect(scheduled).toBe(false)
+    expect(createSpy).not.toHaveBeenCalled()
+  })
+
   test("skips usage compaction while the latest user turn carries unresolved media (#259)", async () => {
     overflowSpy = vi.spyOn(SessionCompaction, "isOverflow").mockResolvedValue(true)
     createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
