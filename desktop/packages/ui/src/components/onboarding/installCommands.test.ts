@@ -31,7 +31,8 @@ describe("installCommands", () => {
 
   test("Linux command uses the bash release installer", () => {
     expect(getInstallCommand("linux")).toContain("curl")
-    expect(getInstallCommand("linux")).toContain("raw.githubusercontent.com/defai-digital/ax-code/main/install")
+    expect(getInstallCommand("linux")).toContain("api.github.com/repos/defai-digital/ax-code/contents/install?ref=main")
+    expect(getInstallCommand("linux")).toContain("application/vnd.github.raw+json")
     expect(getInstallCommand("linux")).toContain("bash")
     expect(getInstallCommand("linux")).not.toContain("not available")
   })

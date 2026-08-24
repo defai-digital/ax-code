@@ -66,10 +66,12 @@ export function getInstallCommandHighlights(platform: OnboardingPlatform): Insta
     case "linux":
       return [
         { kind: "keyword", text: "curl" },
-        { kind: "muted", text: " -fsSL " },
+        { kind: "muted", text: " -fsSL -H " },
+        { kind: "string", text: '"Accept: application/vnd.github.raw+json"' },
+        { kind: "muted", text: " " },
         {
           kind: "string",
-          text: "https://raw.githubusercontent.com/defai-digital/ax-code/main/install",
+          text: '"https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main"',
         },
         { kind: "muted", text: " | " },
         { kind: "keyword", text: "bash" },
