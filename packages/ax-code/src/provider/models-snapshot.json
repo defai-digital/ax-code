@@ -175813,41 +175813,6 @@
           "output": 1048576
         }
       },
-      "inclusionai/ring-2.6-1t": {
-        "id": "inclusionai/ring-2.6-1t",
-        "name": "inclusionAI: Ring-2.6-1T (retires Aug 24)",
-        "description": "Reasoning model for deliberate analysis, multi-step problem solving, and tool use",
-        "family": "ring",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2026-05-08",
-        "last_updated": "2026-05-08",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "output": 65536
-        }
-      },
       "inclusionai/ling-3.0-flash": {
         "id": "inclusionai/ling-3.0-flash",
         "name": "Ling-3.0-flash",
@@ -175869,58 +175834,6 @@
         "temperature": true,
         "release_date": "2026-07-23",
         "last_updated": "2026-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "output": 32768
-        }
-      },
-      "inclusionai/ling-2.6-1t": {
-        "id": "inclusionai/ling-2.6-1t",
-        "name": "inclusionAI: Ling-2.6-1T (retires Aug 24)",
-        "description": "Tool-capable chat model for instruction following and agentic application workflows",
-        "family": "ling",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-23",
-        "last_updated": "2026-04-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "output": 32768
-        }
-      },
-      "inclusionai/ling-2.6-flash": {
-        "id": "inclusionai/ling-2.6-flash",
-        "name": "inclusionAI: Ling-2.6-flash (retires Aug 24)",
-        "description": "Efficient model for low-latency assistance, extraction, and routine automation",
-        "family": "ling",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-21",
-        "last_updated": "2026-04-21",
         "modalities": {
           "input": [
             "text"

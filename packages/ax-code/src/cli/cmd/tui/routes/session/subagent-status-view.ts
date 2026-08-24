@@ -318,15 +318,25 @@ export function mergeSubagentRollupTasks(
   toolTasks: readonly SubagentRollupTask[],
   queueTasks: readonly SubagentRollupTask[],
 ): SubagentRollupTask[] {
-  const seen = new Set<string>()
-  const out: SubagentRollupTask[] = []
-  for (const task of [...toolTasks, ...queueTasks]) {
+  const ordered = [...toolTasks, ...queueTasks]
+  // Dedupe by session (or unbound id). Honor the "live" contract: an active
+  // task (running/pending) supersedes an ended one for the same key, so a
+  // completed/error tool part never shadows a newly queued or running row.
+  // Between two equally-live entries the tool part (listed first) wins.
+  const best = new Map<string, SubagentRollupTask>()
+  for (const task of ordered) {
     const key = task.sessionID ?? `unbound:${task.id}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(task)
+    const current = best.get(key)
+    if (!current) {
+      best.set(key, task)
+      continue
+    }
+    if (taskIsActive(task.status) && !taskIsActive(current.status)) best.set(key, task)
   }
-  return out
+  return ordered.filter((task) => {
+    const key = task.sessionID ?? `unbound:${task.id}`
+    return best.get(key) === task
+  })
 }
 
 export function queueItemsForSessionTree(

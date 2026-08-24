@@ -255,6 +255,33 @@ describe("buildSubagentStatusView", () => {
     expect(merged[0]?.agent).toBe("explore")
   })
 
+  test("a completed tool part does not hide a follow-up queue row for the same session", () => {
+    const merged = mergeSubagentRollupTasks(
+      [
+        {
+          id: "part",
+          sessionID: "child",
+          title: "From tool",
+          agent: "explore",
+          status: "completed",
+        },
+      ],
+      [
+        {
+          id: "queue",
+          sessionID: "child",
+          title: "From queue",
+          agent: "reviewer",
+          status: "running",
+        },
+      ],
+    )
+
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.title).toBe("From queue")
+    expect(merged[0]?.agent).toBe("reviewer")
+  })
+
   test("keeps queue rows scoped to the current session tree", () => {
     const scoped = queueItemsForSessionTree(
       [
