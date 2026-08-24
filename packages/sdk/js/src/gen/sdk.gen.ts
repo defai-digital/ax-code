@@ -982,7 +982,7 @@ export class Isolation extends HeyApiClient {
   /**
    * Set isolation mode
    *
-   * Update the runtime isolation mode. Sets the environment variable so it takes effect immediately.
+   * Persist the project isolation mode and return the effective state. An existing CLI or environment override remains authoritative.
    */
   public set<ThrowOnError extends boolean = false>(
     parameters: {

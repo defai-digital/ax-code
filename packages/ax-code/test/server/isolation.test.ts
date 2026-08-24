@@ -23,7 +23,7 @@ async function withCleanIsolationEnv(fn: () => Promise<void>) {
 }
 
 describe("isolation route", () => {
-  test("defaults to workspace-write when config has no isolation setting", async () => {
+  test("defaults to full-access when config has no isolation setting", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({}))
@@ -33,17 +33,17 @@ describe("isolation route", () => {
         fn: async () => {
           const response = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
-          expect(await response.json()).toEqual({ mode: "workspace-write", network: false })
+          expect(await response.json()).toEqual({ mode: "full-access", network: true })
         },
       })
     })
   })
 
-  test("config is the authority — env var does not override config for GET", async () => {
+  test("explicit env mode overrides config for GET", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
-      // Config says workspace-write. Even though the env says full-access,
-      // the GET endpoint reconciles from config, so the UI sees workspace-write.
+      // CLI --sandbox is represented by this env flag and must remain the
+      // highest-precedence source when the TUI synchronizes its state.
       await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ isolation: { mode: "workspace-write" } }))
       process.env.AX_CODE_ISOLATION_MODE = "full-access"
 
@@ -52,15 +52,14 @@ describe("isolation route", () => {
         fn: async () => {
           const response = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
-          expect(await response.json()).toEqual({ mode: "workspace-write", network: false })
-          // Env is reconciled to match the config-derived state.
-          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("workspace-write")
+          expect(await response.json()).toEqual({ mode: "full-access", network: true })
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("full-access")
         },
       })
     })
   })
 
-  test("config read-only is honored even when env says workspace-write", async () => {
+  test("explicit restricted env mode overrides config read-only", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       await writeFile(path.join(tmp.path, "ax-code.json"), JSON.stringify({ isolation: { mode: "read-only" } }))
@@ -71,8 +70,8 @@ describe("isolation route", () => {
         fn: async () => {
           const response = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
-          expect(await response.json()).toEqual({ mode: "read-only", network: false })
-          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("read-only")
+          expect(await response.json()).toEqual({ mode: "workspace-write", network: false })
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("workspace-write")
         },
       })
     })
@@ -89,18 +88,18 @@ describe("isolation route", () => {
           const response = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
           expect(await response.json()).toEqual({ mode: "full-access", network: true })
-          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBe("true")
+          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBeUndefined()
         },
       })
     })
   })
 
-  test("GET reconciles env vars to match config", async () => {
+  test("GET refreshes externally edited config without manufacturing env overrides", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       await writeFile(
         path.join(tmp.path, "ax-code.json"),
-        JSON.stringify({ isolation: { mode: "workspace-write", network: true } }),
+        JSON.stringify({ isolation: { mode: "workspace-write", network: false } }),
       )
 
       await Instance.provide({
@@ -108,9 +107,16 @@ describe("isolation route", () => {
         fn: async () => {
           const response = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
-          expect(await response.json()).toEqual({ mode: "workspace-write", network: true })
-          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("workspace-write")
-          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBe("true")
+          expect(await response.json()).toEqual({ mode: "workspace-write", network: false })
+
+          await writeFile(
+            path.join(tmp.path, "ax-code.json"),
+            JSON.stringify({ isolation: { mode: "read-only", network: false } }),
+          )
+          const refreshed = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
+          expect(await refreshed.json()).toEqual({ mode: "read-only", network: false })
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBeUndefined()
+          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBeUndefined()
         },
       })
     })
@@ -137,9 +143,10 @@ describe("isolation route", () => {
           const updated = JSON.parse(await readFile(configPath, "utf-8"))
           expect(updated.isolation).toEqual({ mode: "read-only", network: false })
 
-          // Env vars are set
-          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("read-only")
-          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBe("false")
+          // Persisted config, rather than a process-global env mutation, is
+          // the runtime source for this directory.
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBeUndefined()
+          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBeUndefined()
 
           // Subsequent GET returns the persisted state
           const get = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
@@ -165,8 +172,8 @@ describe("isolation route", () => {
           })
           expect(put.status).toBe(200)
           expect(await put.json()).toEqual({ mode: "full-access", network: true })
-          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("full-access")
-          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBe("true")
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBeUndefined()
+          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBeUndefined()
         },
       })
     })
@@ -230,7 +237,7 @@ describe("isolation route", () => {
           expect(await put.json()).toEqual({ mode: "workspace-write", network: false })
           const updated = JSON.parse(await readFile(configPath, "utf-8"))
           expect(updated.isolation).toEqual({ mode: "workspace-write", network: false })
-          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBe("false")
+          expect(process.env.AX_CODE_ISOLATION_NETWORK).toBeUndefined()
         },
       })
     })
@@ -258,7 +265,7 @@ describe("isolation route", () => {
           const response = await Server.Default().request(`/isolation?directory=${encodeURIComponent(tmp.path)}`)
           expect(response.status).toBe(200)
           expect(await response.json()).toEqual({ mode: "full-access", network: true })
-          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("full-access")
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBeUndefined()
         },
       })
     })
@@ -302,14 +309,13 @@ describe("isolation route", () => {
     })
   })
 
-  test("PUT response reports requested mode even when env var has a stale value", async () => {
+  test("PUT persists the request but reports an explicit env override as effective", async () => {
     await withCleanIsolationEnv(async () => {
       await using tmp = await tmpdir({ git: true })
       const configPath = path.join(tmp.path, "ax-code.json")
       await writeFile(configPath, JSON.stringify({}))
-      // Simulate a stale env var from --sandbox full-access at startup.
-      // The PUT requests workspace-write; the response must report
-      // workspace-write (the requested value), not full-access (stale).
+      // Simulate --sandbox full-access at startup. The PUT still persists the
+      // requested project preference, but it cannot outrank the CLI override.
       process.env.AX_CODE_ISOLATION_MODE = "full-access"
 
       await Instance.provide({
@@ -321,9 +327,10 @@ describe("isolation route", () => {
             body: JSON.stringify({ mode: "workspace-write" }),
           })
           expect(put.status).toBe(200)
-          // The response must report the requested mode, not the stale env.
-          expect(await put.json()).toEqual({ mode: "workspace-write", network: false })
-          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("workspace-write")
+          expect(await put.json()).toEqual({ mode: "full-access", network: true })
+          expect(process.env.AX_CODE_ISOLATION_MODE).toBe("full-access")
+          const updated = JSON.parse(await readFile(configPath, "utf-8"))
+          expect(updated.isolation).toEqual({ mode: "workspace-write", network: false })
         },
       })
     })

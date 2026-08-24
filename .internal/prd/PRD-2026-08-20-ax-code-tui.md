@@ -2,11 +2,14 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Active |
+| Status | Phase 1 complete; Phases 2–3 deferred |
 | Owner | AX Code CLI |
 | Created | 2026-08-20 |
+| Last reviewed | 2026-08-23 |
 | Related | ADR-058; TUI renderer contract; TUI performance criteria |
 | Technical plan | `.internal/reports/planning/ax-code-tui/TECH-SPEC.md` |
+
+Phase 1 consolidation shipped: `packages/ax-code-tui` is `@ax-code/tui`; the three `opentui-*` workspace packages are gone. Phase 2 (source ownership of the renderer snapshot) and Phase 3 (pi-tui-informed hardening) are **not** current v7.x work.
 
 ## 1. Problem
 

@@ -1,7 +1,7 @@
 # AX Code Intel — performance baseline harness
 
 Phase 0 of the intel stabilization milestone (see
-`.internal/prd/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md`, D4):
+`.internal/prd/complete/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md`, D4):
 a manual-only benchmark harness that records the performance baseline every
 later phase is judged against. It is a script plus fixture tree — no product
 code changes except one additive field (`peakRssKb`) on `src/perf.ts`'s

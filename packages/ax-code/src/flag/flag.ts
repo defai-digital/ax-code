@@ -263,7 +263,8 @@ defineBooleanFlag("AX_CODE_DISABLE_PROJECT_CONFIG")
 // This must be evaluated at access time so runtime toggles (server routes/tests)
 // remain immediately effective.
 // On by default as the documented product posture (docs/guides/autonomous.md):
-// autonomous pairs with the default sandbox (workspace-write, network off).
+// autonomous pairs with sandbox off (full-access, network on) unless an
+// explicit isolation policy selects a restricted mode.
 // Config `autonomous: false` is reconciled into this env at config load.
 defineBooleanFlag("AX_CODE_AUTONOMOUS", true)
 

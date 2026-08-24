@@ -84,7 +84,7 @@ export function cli(argv = hideBin(process.argv)) {
       choices: ["DEBUG", "INFO", "WARN", "ERROR"],
     })
     .option("sandbox", {
-      describe: "isolation sandbox mode",
+      describe: "isolation sandbox mode (default: full-access / sandbox off)",
       type: "string",
       choices: ["read-only", "workspace-write", "full-access"],
     })

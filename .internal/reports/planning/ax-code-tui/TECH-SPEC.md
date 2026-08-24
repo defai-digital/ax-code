@@ -2,8 +2,9 @@
 
 | Field | Value |
 | --- | --- |
-| Status | Approved for implementation |
+| Status | Phase 1 implemented; Phases 2–3 deferred |
 | Date | 2026-08-20 |
+| Last reviewed | 2026-08-23 |
 | PRD | `.internal/prd/PRD-2026-08-20-ax-code-tui.md` |
 | ADR | `.internal/adr/ADR-058-ax-code-tui.md` |
 

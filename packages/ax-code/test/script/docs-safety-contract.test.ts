@@ -9,23 +9,21 @@ async function readRepoFile(relativePath: string) {
 }
 
 describe("public safety documentation contract", () => {
-  test("front-door docs state that runtime isolation defaults to workspace-write", async () => {
+  test("front-door docs state that runtime isolation defaults to full-access", async () => {
     const readme = await readRepoFile("README.md")
     const security = await readRepoFile("SECURITY.md")
     const sandbox = await readRepoFile("docs/guides/sandbox.md")
 
-    expect(readme).toContain(
-      "AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default",
-    )
-    expect(security).toContain("The runtime isolation default is `workspace-write` with network disabled")
-    expect(sandbox).toContain("By default, AX Code starts in **workspace-write**")
+    expect(readme).toContain("AX Code starts with autonomous mode on and the sandbox off (`full-access`) by default")
+    expect(security).toContain("The runtime isolation default is `full-access` (sandbox off)")
+    expect(sandbox).toContain("By default, AX Code starts in **full-access** with the sandbox off")
   })
 
-  test("autonomous safety docs describe sandbox-on as the default", async () => {
+  test("autonomous safety docs recommend sandbox-on for untrusted work", async () => {
     const autonomous = await readRepoFile("docs/guides/autonomous.md")
 
-    expect(autonomous).toContain("Recommended default")
-    expect(autonomous).toContain("The default runtime posture is autonomous on plus sandbox on")
+    expect(autonomous).toContain("Recommended for untrusted or team repositories")
+    expect(autonomous).toContain("The default runtime posture is autonomous on plus sandbox off")
   })
 
   test("security policy supported version table tracks the current minor line", async () => {

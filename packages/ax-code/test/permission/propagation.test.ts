@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { Permission } from "../../src/permission"
 import { Instance } from "../../src/project/instance"
@@ -6,6 +6,12 @@ import { PermissionTable } from "../../src/session/session.sql"
 import { SessionID } from "../../src/session/schema"
 import { Database, eq } from "../../src/storage/db"
 import { tmpdir } from "../fixture/fixture"
+
+beforeEach(() => {
+  // These tests need a real prompt in order to persist an "always" decision.
+  vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+  vi.stubEnv("AX_CODE_ISOLATION_NETWORK", "false")
+})
 
 // Regression coverage for ADR-057 D1 / SPEC-2026-08-20-agent-backend-parity
 // Phase 0 (R1): a permission granted "always" is persisted project-wide and

@@ -21,6 +21,7 @@ import { Guardian } from "./guardian"
 import { PermissionID } from "./schema"
 import { Flag } from "@/flag/flag"
 import { ScopedFlag } from "@/flag/scoped"
+import { Isolation } from "@/isolation"
 import { ProjectConfigTrust } from "@/config/project-config-trust"
 import { FileLock } from "@/util/filelock"
 
@@ -351,10 +352,10 @@ export namespace Permission {
     //     `experimental.autonomous_strict_permission: false` only as an
     //     explicit compatibility escape hatch for the legacy allow behavior.
     //
-    // When the isolation sandbox is set to `full-access` the user has
-    // explicitly opted out of all restrictions. In that posture, risk-class
-    // permissions are auto-approved so the sandbox toggle meaningfully
-    // controls whether the agent runs without approval prompts.
+    // When the effective isolation mode is `full-access`, risk-class permissions
+    // are auto-approved after explicit deny rules have been evaluated. This
+    // keeps the sandbox toggle's off state free of approval prompts while the
+    // never-auto-approve set below still protects desktop control.
     if (
       ScopedFlag.autonomous() &&
       !INTERACTIVE_ONLY.has(request.permission) &&
@@ -365,7 +366,9 @@ export namespace Permission {
         log.info("autonomous auto-approve (safe)", { permission: request.permission, patterns: request.patterns })
         return
       }
-      if (Flag.AX_CODE_ISOLATION_MODE === "full-access" && riskClass === "risk") {
+      const isolationMode =
+        Flag.AX_CODE_ISOLATION_MODE ?? (await Config.get()).isolation?.mode ?? Isolation.DEFAULT_MODE
+      if (isolationMode === "full-access" && riskClass === "risk") {
         log.info("autonomous auto-approve (risk, full-access sandbox)", {
           permission: request.permission,
           patterns: request.patterns,

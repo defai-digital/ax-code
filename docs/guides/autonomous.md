@@ -55,7 +55,7 @@ Keep safety guarantees here aligned with sandbox documentation; autonomous mode 
 Autonomous mode uses a **hybrid deny-first policy** (ADR-004 / PRD v4.2.0). When a tool calls `ctx.ask()` for permission, the Permission module classifies the permission:
 
 - **SAFE** permissions (read, glob, grep, list, lsp, code_intelligence, skill, todoread) auto-approve without creating a blocking prompt.
-- **RISK** permissions (edit, bash, external_directory, task, webfetch, websearch, codesearch, …) **fall through to the ruleset** — the agent's configured allow/deny rules still apply, and user-defined deny rules are always enforced. (In `full-access` sandbox mode, RISK permissions are auto-approved because the user has already opted out of restrictions.)
+- **RISK** permissions (edit, bash, external_directory, task, webfetch, websearch, codesearch, …) **fall through to the ruleset** — the agent's configured allow/deny rules still apply, and user-defined deny rules are always enforced. In `full-access` sandbox mode, RISK permissions are auto-approved after deny rules are evaluated.
 - **Unknown** permissions ask by default (`experimental.autonomous_strict_permission: false` preserves the legacy allow behavior).
 
 **Exceptions that are never auto-approved, even in autonomous mode:** `isolation_escalation` (sandbox override requests), `INTERACTIVE_ONLY` permissions, and the `NEVER_AUTONOMOUS_AUTOAPPROVE` set.
@@ -78,14 +78,14 @@ Autonomous mode adds a lightweight workflow reminder to the system prompt. Befor
 
 Autonomous mode and sandbox mode are **independent**. You can use both simultaneously:
 
-| Combination                  | Behavior                                                                          |
-| ---------------------------- | --------------------------------------------------------------------------------- |
-| Autonomous ON + Sandbox ON   | Agent runs freely but is confined to workspace. **Recommended default.**          |
-| Autonomous ON + Sandbox OFF  | Agent runs freely with full system access. Use for trusted projects.              |
-| Autonomous OFF + Sandbox ON  | Agent asks for permission on each action, confined to workspace. Maximum control. |
-| Autonomous OFF + Sandbox OFF | Agent asks for permission on each action, full system access.                     |
+| Combination                  | Behavior                                                                                            |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| Autonomous ON + Sandbox ON   | Agent runs freely but is confined to workspace. **Recommended for untrusted or team repositories.** |
+| Autonomous ON + Sandbox OFF  | Agent runs freely with full system access. Use for trusted projects.                                |
+| Autonomous OFF + Sandbox ON  | Agent asks for permission on each action, confined to workspace. Maximum control.                   |
+| Autonomous OFF + Sandbox OFF | Agent asks for permission on each action, full system access.                                       |
 
-The default runtime posture is autonomous on plus sandbox on: `workspace-write` with network disabled. Use `/sandbox`, `--sandbox full-access`, `AX_CODE_ISOLATION_MODE`, or project config only when you intentionally need a different boundary.
+The default runtime posture is autonomous on plus sandbox off: `full-access` with network enabled. This provides the least-friction CLI behavior but no isolation boundary. Use `/sandbox`, `--sandbox workspace-write`, `AX_CODE_ISOLATION_MODE`, or project config to enable restrictions for untrusted or unattended work.
 
 ## Configuration
 

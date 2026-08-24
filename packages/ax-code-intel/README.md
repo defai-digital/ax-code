@@ -110,7 +110,7 @@ not run in CI.
 ## Architecture
 
 Design context, defect log (D1–D5), and the phase plan are in
-`.internal/prd/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md`
+`.internal/prd/complete/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md`
 (repo-internal). In short: LSP servers stay the single semantic authority in
 their own processes; tree-sitter and SQLite remain the syntactic and
 persistence layers; no compiler frontends are embedded in-process.

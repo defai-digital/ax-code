@@ -3,7 +3,9 @@
 | Field | Value |
 | --- | --- |
 | Status | Accepted |
+| Implementation | Phase 1 shipped (`packages/ax-code-tui` / `@ax-code/tui`); Phases 2–3 deferred |
 | Date | 2026-08-20 |
+| Last reviewed | 2026-08-23 |
 | Deciders | AX Code maintainers |
 | Related | PRD-2026-08-20; ADR-047 stability practices |
 

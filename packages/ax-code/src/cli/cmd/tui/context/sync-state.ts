@@ -22,6 +22,7 @@ import type { Path } from "@ax-code/sdk"
 import type { SessionGoal } from "@/session/goal"
 import type { Snapshot } from "@/snapshot"
 import { Flag } from "@/flag/flag"
+import { Isolation } from "@/isolation"
 import type { SyncedSessionRisk } from "./sync-session-risk"
 import { emptyWorkflowDashboardState, type WorkflowDashboardState } from "./sync-runtime-store"
 
@@ -101,6 +102,9 @@ export interface SyncStoreState {
 }
 
 export function createInitialSyncState(): SyncStoreState {
+  const isolationMode = Flag.AX_CODE_ISOLATION_MODE ?? Isolation.DEFAULT_MODE
+  const isolationNetwork = isolationMode === "full-access" ? true : (Flag.AX_CODE_ISOLATION_NETWORK ?? false)
+
   return {
     provider_next: {
       all: [],
@@ -148,8 +152,8 @@ export function createInitialSyncState(): SyncStoreState {
     },
     workflowDashboard: emptyWorkflowDashboardState(),
     isolation: {
-      mode: Flag.AX_CODE_ISOLATION_MODE ?? "workspace-write",
-      network: Flag.AX_CODE_ISOLATION_NETWORK ?? false,
+      mode: isolationMode,
+      network: isolationNetwork,
     },
     autonomous: true,
     smartLlm: false,

@@ -127,7 +127,7 @@ the documented $0 exception; other GLM 3 and GLM 4 SKUs stay filtered out.
 
 - Test with a public or disposable repository first. A hosted provider or gateway receives the prompts and code
   context sent to its API.
-- Keep the default sandbox, or use read-only mode for a review-only smoke test.
+- Enable `workspace-write` isolation, or use `read-only` for a review-only smoke test.
 - Start with one short task and one agent. Council, arena, long sessions, and large repositories can consume many
   requests and quickly hit free-tier limits.
 - Store credentials with `ax-code providers login` or an environment variable; never commit API keys to

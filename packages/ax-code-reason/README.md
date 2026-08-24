@@ -76,7 +76,7 @@ live in `packages/ax-code/test/debug-engine/`, `test/tool/`, and
 
 This package is a sibling of `@ax-code/ax-code-intel`, extracted from the AX
 Code core under the same stabilization effort. The governing PRD
-(`.internal/prd/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md`,
+(`.internal/prd/complete/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md`,
 repo-internal) covers intel directly and scopes this package's D5 contract
 work (explicit export maps, lifecycle documentation); the reasoning engine
 itself predates that PRD and is not otherwise described by it.

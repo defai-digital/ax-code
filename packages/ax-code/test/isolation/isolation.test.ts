@@ -19,10 +19,10 @@ beforeEach(clearIsolationEnv)
 afterEach(clearIsolationEnv)
 
 describe("isolation.resolve", () => {
-  test("defaults to workspace-write with network disabled", () => {
+  test("defaults to full-access with network enabled", () => {
     const state = Isolation.resolve(undefined, root)
-    expect(state.mode).toBe("workspace-write")
-    expect(state.network).toBe(false)
+    expect(state.mode).toBe("full-access")
+    expect(state.network).toBe(true)
     expect(state.backend).toBe("auto")
     expect(state.protected).toContain(path.resolve(root, ".git"))
     expect(state.protected).toContain(path.resolve(root, ".ax-code"))

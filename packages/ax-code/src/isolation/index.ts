@@ -56,7 +56,9 @@ export namespace Isolation {
     bypass?: string[]
   }
 
-  export const DEFAULT_MODE: Mode = "workspace-write"
+  // Product default: no sandbox boundaries unless the user, project, or
+  // managed configuration explicitly selects a restricted mode.
+  export const DEFAULT_MODE: Mode = "full-access"
   export const DEFAULT_BACKEND: Backend = "auto"
 
   function resolvePath(filepath: string) {

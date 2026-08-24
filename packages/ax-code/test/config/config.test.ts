@@ -72,6 +72,13 @@ test("loads config with defaults when no files exist", async () => {
   })
 })
 
+test("isolation schema preserves omitted fields for layered config", () => {
+  expect(Config.Info.parse({ isolation: {} }).isolation).toEqual({})
+  expect(Config.Info.parse({ isolation: { protected: ["secrets"] } }).isolation).toEqual({
+    protected: ["secrets"],
+  })
+})
+
 test("getFresh reloads modes after mid-session ax-code.json edit", async () => {
   await using tmp = await tmpdir()
   await writeConfig(tmp.path, {
@@ -356,6 +363,34 @@ test("merges multiple config files with correct precedence", async () => {
       // .jsonc has higher precedence than .json
       expect(config.model).toBe("base")
       expect(config.username).toBe("base")
+    },
+  })
+})
+
+test("partial higher-precedence isolation config preserves an explicit restricted mode", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await writeConfig(dir, {
+        isolation: { mode: "read-only", network: false },
+      })
+      await writeConfig(
+        dir,
+        {
+          isolation: { protected: ["secrets"] },
+        },
+        "ax-code.jsonc",
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect((await Config.get()).isolation).toEqual({
+        mode: "read-only",
+        network: false,
+        protected: ["secrets"],
+      })
     },
   })
 })

@@ -141,9 +141,9 @@ The same runtime, session store, and evidence model back every surface.
 
 ## Control model
 
-AX Code starts with autonomous mode on and runtime isolation in `workspace-write` by default: network disabled, writes confined to the workspace, and protected paths such as `.git/` and `.ax-code/` blocked. The agent makes progress without asking about every low-risk step while the sandbox holds the boundary.
+AX Code starts with autonomous mode on and the sandbox off (`full-access`) by default: filesystem writes and network access are unrestricted. This favors a low-friction local CLI experience for trusted projects; enable `workspace-write` or `read-only` before opening untrusted code or running unattended work.
 
-- Change isolation intentionally with `/sandbox`, or `--sandbox read-only | workspace-write | full-access`.
+- Enable or change isolation with `/sandbox`, or `--sandbox read-only | workspace-write | full-access`.
 - Use `/autonomous` or `AX_CODE_AUTONOMOUS=false` to stop for each permission and question.
 - Control external tool surfaces with `ax-code mcp list --tools`, `ax-code mcp trust`, and permission rules.
 - Provider and MCP credentials are encrypted at rest; server mode is localhost-only by default.

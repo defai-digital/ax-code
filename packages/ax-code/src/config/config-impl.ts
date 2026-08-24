@@ -200,13 +200,14 @@ export namespace Config {
       else delete copy.formatter
     }
 
-    // Untrusted project config must not loosen the safety floor. A committed
-    // ax-code.json could otherwise set isolation.mode = full-access, enable
+    // Untrusted project config must not loosen an explicit lower-precedence
+    // safety policy. A committed ax-code.json could otherwise override a
+    // managed or user setting with isolation.mode = full-access, enable
     // network, or replace the blocked-path list (blocked_paths: []) with no
     // agent write at all — a load-time privilege escalation. Project config
     // may tighten (read-only, network off, additional blocked paths) but never
-    // loosen. Mirrors Codex requirements.toml / Claude managed-settings: the
-    // repo cannot lower the product floor.
+    // loosen a user/managed floor. Mirrors Codex requirements.toml / Claude
+    // managed-settings behavior.
     if (isRecord(copy.isolation)) {
       const isolation = { ...copy.isolation }
       if (isolation.mode === "full-access") delete isolation.mode

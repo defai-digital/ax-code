@@ -62,8 +62,8 @@ The rest of the documentation maps onto those layers.
 
 ### I want to use it safely in a team or company repo
 
-- AX Code starts with autonomous mode on and sandbox mode on: `workspace-write` with network disabled by default.
-- Keep the default boundary for broad edits; use `--sandbox full-access` only when a trusted task intentionally needs unrestricted filesystem and network access.
+- AX Code starts with autonomous mode on and sandbox mode off: `full-access` with unrestricted filesystem and network access.
+- For team, company, untrusted, or unattended work, enable `--sandbox workspace-write` (or `read-only`) before starting the task.
 - Read [Sandbox Mode](../guides/sandbox.md) for execution boundaries.
 - Read [Autonomous Mode](../guides/autonomous.md) if the agent will run unattended.
 - Read [Security Policy](../../SECURITY.md) for threat model and credential storage details.

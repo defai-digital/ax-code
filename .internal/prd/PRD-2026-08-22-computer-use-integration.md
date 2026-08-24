@@ -5,7 +5,8 @@
 | Status   | Implementation complete; public release deferred until v8.0.0; frozen during v7.x except for safety, correctness, and conformance fixes |
 | Owner    | AX Code CLI & Desktop maintainers                                                                                                       |
 | Created  | 2026-08-22                                                                                                                              |
-| Updated  | 2026-08-22                                                                                                                              |
+| Updated  | 2026-08-23                                                                                                                              |
+| Last reviewed | 2026-08-23                                                                                                                         |
 | Related  | `.internal/reference/open-codex-computer-use` (OCU), `.internal/reference/cua` (Cua), `.internal/reference/deepseek-harness`            |
 | Location | `.internal/prd/PRD-2026-08-22-computer-use-integration.md`                                                                              |
 

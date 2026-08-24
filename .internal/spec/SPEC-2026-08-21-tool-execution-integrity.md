@@ -2,6 +2,7 @@
 
 **Status:** Implemented
 **Date:** 2026-08-21
+**Last reviewed:** 2026-08-23
 **Related:** PRD-2026-08-21-tool-execution-integrity, ADR-060
 
 ## 1. Scope

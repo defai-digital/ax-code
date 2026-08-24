@@ -1,7 +1,7 @@
 import type { ComputerAction, ComputerTarget } from "./action"
 import type { ActionResult } from "./action"
 import { ComputerUseError } from "./errors"
-import type { ComputerUseProvider, ObserveScope } from "./provider"
+import type { ComputerUseProvider, ObserveScope, PassiveObserveOptions } from "./provider"
 import type { ComputerObservation } from "./types"
 
 /**
@@ -61,6 +61,19 @@ export class ComputerSession {
     this.lastScope = scope
     this.elements = elements
     return { ...observation, elements: stamped }
+  }
+
+  /**
+   * Passive observe passthrough. Passive frames carry no targetable element
+   * ids, so they must NEVER enter the commit path in observe() — committing
+   * one would advance the epoch and replace the element map with an empty
+   * frame, wiping every id in-flight acts might still target. This bypasses
+   * epoch stamping entirely: no epoch advance, no element-map or scope
+   * updates, no supersede checks (nothing is committed, so nothing can be
+   * superseded).
+   */
+  async observePassive(scope: ObserveScope, options: PassiveObserveOptions): Promise<ComputerObservation> {
+    return this.provider.observe(scope, options)
   }
 
   async act(action: ComputerAction): Promise<ActionResult> {

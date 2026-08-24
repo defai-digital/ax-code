@@ -7,6 +7,7 @@
 //   refuse-desktop like basic, but desktop-scoped ax_observe is a structured
 //                 refusal (structuredContent.code: "unsupported_scope")
 import process from "node:process"
+import { createHash } from "node:crypto"
 
 const mode = process.argv[2] ?? "basic"
 
@@ -14,11 +15,25 @@ const mode = process.argv[2] ?? "basic"
 const PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 const CAPABILITIES = {
-  actions: ["click", "type", "keypress", "scroll", "drag", "set_value", "activate_window", "launch_app"],
+  actions: [
+    "click",
+    "type",
+    "keypress",
+    "scroll",
+    "drag",
+    "set_value",
+    "activate_window",
+    "launch_app",
+    "move",
+    "wait",
+  ],
   backgroundDelivery: true,
   elementTargeting: true,
   windowActivation: true,
 }
+
+/** element ids the fake observation issues; anything else is a refusal */
+const KNOWN_ELEMENTS = new Set(["el-0", "el-1", "el-2"])
 
 const APPS = [{ name: "TextEdit", pid: 4242, bundleId: "com.apple.TextEdit" }]
 
@@ -50,6 +65,43 @@ function observation(scope) {
       { id: "el-2", role: "AXTextArea", name: "Editor" },
     ],
   }
+}
+
+// ---- passive observe state ----
+// passive frames hash the fake's visible content (typed text); a revision is
+// allocated only when that content changes, so an immediate re-poll is
+// deterministically unchanged
+let typed = ""
+let passiveRevision = 0
+/** revision token -> frame hash, so superseded-but-known revisions are not gaps */
+const passiveFrames = new Map()
+let passiveLatest
+
+function passiveObservation(scope, options) {
+  const frameHash = `sha256:${createHash("sha256").update(JSON.stringify({ scope, typed })).digest("hex")}`
+  if (passiveLatest?.frameHash !== frameHash) {
+    passiveRevision += 1
+    passiveLatest = { revision: `r${passiveRevision}`, frameHash }
+    passiveFrames.set(passiveLatest.revision, frameHash)
+  }
+  const base = {
+    platform: "test",
+    provider: "external",
+    timestamp: Date.now(),
+    elements: [],
+    revision: passiveLatest.revision,
+    frameHash: passiveLatest.frameHash,
+  }
+  // screenshot dedup: the client already advertises this frame hash
+  const screenshot = options.have?.includes(frameHash)
+    ? undefined
+    : { data: PNG_BASE64, mimeType: "image/png", width: 1, height: 1 }
+  if (options.sinceRevision !== null && options.sinceRevision !== undefined) {
+    // unknown or evicted revision: latest full frame + gap, never silent unchanged
+    if (!passiveFrames.has(options.sinceRevision)) return { ...base, unchanged: false, gap: true, screenshot }
+    if (options.sinceRevision === passiveLatest.revision) return { ...base, unchanged: true }
+  }
+  return { ...base, unchanged: false, screenshot }
 }
 
 function send(message) {
@@ -123,9 +175,47 @@ function handle(line) {
           })
           return
         }
+        // passive mode: sinceRevision present (null bootstraps, a token resumes)
+        if (args.sinceRevision !== undefined) {
+          ok(passiveObservation(args.scope, args))
+          return
+        }
         ok(observation(args.scope))
         return
       case "ax_act": {
+        // in-memory refusal: element targets the fake observation never issued
+        const refusalFor = (action) => {
+          if (action.type === "wait" && action.condition?.type !== "screen_stable") {
+            const target = action.condition?.target
+            if (target?.kind !== "element") return "unsupported_target"
+            return KNOWN_ELEMENTS.has(target.id) ? undefined : "unknown_element"
+          }
+          if (["click", "set_value", "move"].includes(action.type) && action.target?.kind === "element") {
+            return KNOWN_ELEMENTS.has(action.target.id) ? undefined : "unknown_element"
+          }
+          return undefined
+        }
+        // batch form: ordered, non-atomic; default stopOnError aborts the rest
+        if (Array.isArray(args.actions)) {
+          const stopOnError = args.stopOnError !== false
+          const results = []
+          for (const [index, action] of args.actions.entries()) {
+            const refusal = refusalFor(action)
+            results.push({ index, ok: refusal === undefined, refusal })
+            // typing visibly changes the fake's content, so passive polls must move
+            if (refusal === undefined && action.type === "type") typed += action.text
+            if (refusal !== undefined && stopOnError) break
+          }
+          const failed = results.find((step) => !step.ok)
+          ok({
+            ok: failed === undefined,
+            provider: "external",
+            action: args.actions[0]?.type,
+            refusal: failed?.refusal,
+            results,
+          })
+          return
+        }
         const action = args.action ?? {}
         if (action.type === "launch_app" && action.app === "RefuseMe") {
           send({
@@ -139,6 +229,21 @@ function handle(line) {
           })
           return
         }
+        const refusal = refusalFor(action)
+        if (refusal) {
+          send({
+            jsonrpc: "2.0",
+            id: message.id,
+            result: {
+              content: [{ type: "text", text: `${action.type} refused: ${refusal}` }],
+              isError: true,
+              structuredContent: { code: refusal },
+            },
+          })
+          return
+        }
+        // typing visibly changes the fake's content, so passive polls must move
+        if (action.type === "type") typed += action.text
         ok({ ok: true, provider: "external", action: action.type, detail: `${action.type} done` })
         return
       }

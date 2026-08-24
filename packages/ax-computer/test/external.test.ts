@@ -23,7 +23,18 @@ describe("ExternalComputerProvider", () => {
 
       // after connect, capabilities come from ax_capabilities
       expect(provider.capabilities()).toEqual({
-        actions: ["click", "type", "keypress", "scroll", "drag", "set_value", "activate_window", "launch_app"],
+        actions: [
+          "click",
+          "type",
+          "keypress",
+          "scroll",
+          "drag",
+          "set_value",
+          "activate_window",
+          "launch_app",
+          "move",
+          "wait",
+        ],
         backgroundDelivery: true,
         elementTargeting: true,
         windowActivation: true,

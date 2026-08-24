@@ -2490,7 +2490,7 @@ export type McpRemoteConfig = {
 export type LayoutConfig = "auto" | "stretch"
 
 /**
- * Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation
+ * Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation. Defaults to full-access (sandbox off)
  */
 export type IsolationMode = "read-only" | "workspace-write" | "full-access"
 
@@ -2505,7 +2505,7 @@ export type IsolationBackend = "app" | "os" | "auto"
 export type IsolationConfig = {
   mode?: IsolationMode
   /**
-   * Allow network access from tools. Defaults to false in read-only and workspace-write modes
+   * Allow network access from tools. Defaults to enabled in full-access and disabled in read-only and workspace-write modes
    */
   network?: boolean
   /**

@@ -72,6 +72,14 @@ export const WindowInfoSchema = z.object({
   app: AppInfoSchema.optional(),
 })
 
+/** long-poll bound for one passive ax_observe call (ms) */
+export const PASSIVE_OBSERVE_MAX_WAIT_MS = 5_000
+/** max client-known frame hashes one passive ax_observe call may advertise */
+export const PASSIVE_OBSERVE_MAX_HAVE = 64
+
+/** content hash of a canonical masked frame: "sha256:" + 64 lowercase hex */
+export const FrameHashSchema = z.string().regex(/^sha256:[0-9a-f]{64}$/)
+
 export const ComputerObservationSchema = z.object({
   platform: z.string(),
   provider: z.string(),
@@ -82,6 +90,29 @@ export const ComputerObservationSchema = z.object({
   screenshot: PixelImageSchema.optional(),
   elements: z.array(ComputerElementSchema),
   a11yText: z.string().optional(),
+  /**
+   * passive observe only: opaque stream revision token, absent on legacy
+   * (targetable) observations
+   */
+  revision: z.string().optional(),
+  /**
+   * passive observe only: true when the canonical masked frame content did
+   * not change since `sinceRevision`; unchanged responses carry no screenshot
+   * and empty elements
+   */
+  unchanged: z.boolean().optional(),
+  /**
+   * passive observe only: true when the supplied revision was unknown or
+   * evicted; the response then holds the latest full frame (an unknown
+   * revision is never silently treated as unchanged)
+   */
+  gap: z.boolean().optional(),
+  /**
+   * passive observe only: content hash of the canonical masked frame. When
+   * the client's `have` list contains the current frameHash, the provider
+   * may omit the screenshot payload (dedup)
+   */
+  frameHash: FrameHashSchema.optional(),
   /** the untouched backend payload, for debugging and forward-compat */
   raw: z.unknown().optional(),
 })
@@ -211,6 +242,33 @@ export const ObserveScopeSchema = z.union([
   z.object({ windowId: z.string() }),
   z.object({ desktop: z.literal(true) }),
 ])
+
+/**
+ * ax_observe arguments. Legacy observe passes only `scope` and stays
+ * byte-identical in behavior: a targetable observation that advances the
+ * element-id epoch. Passive mode (`sinceRevision` present — null to
+ * bootstrap, a token to resume) never advances the epoch and its frames
+ * carry no targetable element ids (elements is always empty); clients
+ * re-snapshot with a legacy observe before element-targeted acts.
+ */
+export const ObserveArgsSchema = z
+  .object({
+    scope: ObserveScopeSchema,
+    /**
+     * omitted = legacy observe; null = bootstrap a passive stream; a token =
+     * resume from that revision. A passive revision advances only when the
+     * canonical masked frame content changes; an unknown or evicted token
+     * yields the latest full frame with gap: true, never a silent unchanged.
+     */
+    sinceRevision: z.string().min(1).max(96).nullable().optional(),
+    /** long-poll bound in ms (passive only; default 0 = return immediately) */
+    waitMs: z.number().int().min(0).max(PASSIVE_OBSERVE_MAX_WAIT_MS).optional(),
+    /** frame hashes the client already holds, for screenshot dedup (passive only) */
+    have: z.array(FrameHashSchema).max(PASSIVE_OBSERVE_MAX_HAVE).optional(),
+  })
+  .refine((args) => args.sinceRevision !== undefined || (args.waitMs === undefined && args.have === undefined), {
+    message: "waitMs and have are passive-only and require sinceRevision (null to bootstrap)",
+  })
 
 export const ProviderCapabilitiesSchema = z.object({
   actions: z.array(ComputerActionTypeSchema),
@@ -408,10 +466,20 @@ export const AX_COMPUTER_TOOLS: readonly CanonicalToolDefinition[] = [
   {
     name: AX_OBSERVE_TOOL,
     description:
-      "Observe a scope ({ app } | { windowId } | { desktop: true }); returns a ComputerObservation in structuredContent. Element ids are only valid against the observation that issued them.",
+      "Observe a scope ({ app } | { windowId } | { desktop: true }); returns a ComputerObservation in structuredContent. Element ids are only valid against the observation that issued them. Passive mode (sinceRevision: null to bootstrap, then the last revision token to resume) streams non-targetable frames that never advance the element-id epoch: unchanged frames return { unchanged: true } with no screenshot and empty elements, an unknown or evicted revision returns the latest full frame with gap: true, and a frame whose frameHash is in `have` may omit the screenshot.",
     inputSchema: {
       type: "object",
-      properties: { scope: SCOPE_JSON_SCHEMA },
+      properties: {
+        scope: SCOPE_JSON_SCHEMA,
+        // passive observe: null bootstraps, a revision token resumes; waitMs/have are passive-only
+        sinceRevision: { anyOf: [{ type: "string", minLength: 1, maxLength: 96 }, { type: "null" }] },
+        waitMs: { type: "number", minimum: 0, maximum: PASSIVE_OBSERVE_MAX_WAIT_MS },
+        have: {
+          type: "array",
+          items: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" },
+          maxItems: PASSIVE_OBSERVE_MAX_HAVE,
+        },
+      },
       required: ["scope"],
       additionalProperties: false,
     },

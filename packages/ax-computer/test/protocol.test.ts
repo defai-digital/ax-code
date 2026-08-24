@@ -4,10 +4,12 @@ import {
   AX_COMPUTER_PROTOCOL_MIN_VERSION,
   AX_COMPUTER_PROTOCOL_VERSION,
   AX_COMPUTER_TOOLS,
+  ActArgsSchema,
   ActionResultSchema,
   AppInfoSchema,
   ComputerActionSchema,
   ComputerObservationSchema,
+  ObserveArgsSchema,
   ObserveScopeSchema,
   PixelImageSchema,
   ProtocolError,
@@ -48,6 +50,44 @@ describe("protocol payload schemas", () => {
     expect(
       ComputerObservationSchema.safeParse({ ...VALID_OBSERVATION, elements: [{ role: "AXButton" }] }).success,
     ).toBe(false)
+  })
+
+  test("passive observe args: waitMs/have require sinceRevision; bounds enforced", () => {
+    const scope = { app: "TextEdit" }
+    const hash = `sha256:${"a".repeat(64)}`
+    // legacy observe (scope only) and both passive forms are valid
+    expect(ObserveArgsSchema.safeParse({ scope }).success).toBe(true)
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: null }).success).toBe(true)
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: "r1", waitMs: 1_000, have: [hash] }).success).toBe(true)
+    // waitMs/have without sinceRevision are rejected
+    expect(ObserveArgsSchema.safeParse({ scope, waitMs: 1 }).success).toBe(false)
+    expect(ObserveArgsSchema.safeParse({ scope, have: [hash] }).success).toBe(false)
+    // revision token and waitMs bounds
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: "" }).success).toBe(false)
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: "x".repeat(97) }).success).toBe(false)
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: "r1", waitMs: -1 }).success).toBe(false)
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: "r1", waitMs: 5_001 }).success).toBe(false)
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: "r1", waitMs: 5_000 }).success).toBe(true)
+    // frame hashes must be canonical sha256; the have list is bounded
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: null, have: ["sha256:zz"] }).success).toBe(false)
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: null, have: Array(65).fill(hash) }).success).toBe(false)
+    expect(ObserveArgsSchema.safeParse({ scope, sinceRevision: null, have: Array(64).fill(hash) }).success).toBe(true)
+  })
+
+  test("passive observation fields are optional and frameHash is validated", () => {
+    const passive = {
+      platform: "test",
+      provider: "external",
+      timestamp: 1,
+      elements: [],
+      revision: "r1",
+      frameHash: `sha256:${"b".repeat(64)}`,
+    }
+    expect(ComputerObservationSchema.safeParse(passive).success).toBe(true)
+    expect(ComputerObservationSchema.safeParse({ ...passive, unchanged: true, gap: true }).success).toBe(true)
+    expect(ComputerObservationSchema.safeParse({ ...passive, frameHash: "sha256:nope" }).success).toBe(false)
+    // legacy observations carry none of the passive fields and still validate
+    expect(ComputerObservationSchema.parse(VALID_OBSERVATION)).toEqual(VALID_OBSERVATION)
   })
 
   test("pixel images require data and mimeType; dimensions stay optional", () => {
@@ -91,6 +131,67 @@ describe("protocol payload schemas", () => {
     expect(ComputerActionSchema.safeParse({ type: "click", target: { kind: "point", x: 1 } }).success).toBe(false)
     expect(ComputerActionSchema.safeParse({ type: "keypress", keys: "cmd+s" }).success).toBe(false)
     expect(ComputerActionSchema.safeParse({ type: "scroll", direction: "sideways" }).success).toBe(false)
+  })
+
+  test("move and wait action variants validate", () => {
+    const actions: ComputerAction[] = [
+      { type: "move", target: { kind: "element", id: "el-1" } },
+      { type: "move", target: { kind: "point", x: 10, y: 20 } },
+      { type: "wait", condition: { type: "element_visible", target: { kind: "element", id: "el-1" } } },
+      { type: "wait", condition: { type: "element_enabled", target: { kind: "element", id: "el-1" } } },
+      { type: "wait", condition: { type: "value_matches", target: { kind: "element", id: "el-2" }, value: "x" } },
+      { type: "wait", condition: { type: "screen_stable" }, timeoutMs: 5_000, pollMs: 250 },
+    ]
+    for (const action of actions) {
+      expect(ComputerActionSchema.safeParse(action).success, JSON.stringify(action)).toBe(true)
+    }
+  })
+
+  test("element-only wait conditions reject point targets; pollMs has a floor", () => {
+    for (const condition of [
+      { type: "element_visible", target: { kind: "point", x: 1, y: 2 } },
+      { type: "element_enabled", target: { kind: "point", x: 1, y: 2 } },
+      { type: "value_matches", target: { kind: "point", x: 1, y: 2 }, value: "x" },
+    ]) {
+      expect(ComputerActionSchema.safeParse({ type: "wait", condition }).success, JSON.stringify(condition)).toBe(false)
+    }
+    expect(
+      ComputerActionSchema.safeParse({ type: "wait", condition: { type: "screen_stable" }, pollMs: 10 }).success,
+    ).toBe(false)
+    expect(
+      ComputerActionSchema.safeParse({ type: "wait", condition: { type: "screen_stable" }, timeoutMs: -1 }).success,
+    ).toBe(false)
+  })
+
+  test("ax_act args require exactly one of action/actions, bounded to 25 steps", () => {
+    const click = { type: "click", target: { kind: "point", x: 1, y: 2 } }
+    expect(ActArgsSchema.safeParse({ action: click }).success).toBe(true)
+    expect(ActArgsSchema.safeParse({ actions: [click], stopOnError: false }).success).toBe(true)
+    // neither, both, empty batch, and oversized batch are all rejected
+    expect(ActArgsSchema.safeParse({}).success).toBe(false)
+    expect(ActArgsSchema.safeParse({ action: click, actions: [click] }).success).toBe(false)
+    expect(ActArgsSchema.safeParse({ actions: [] }).success).toBe(false)
+    expect(ActArgsSchema.safeParse({ actions: Array.from({ length: 26 }, () => click) }).success).toBe(false)
+    expect(ActArgsSchema.safeParse({ actions: Array.from({ length: 25 }, () => click) }).success).toBe(true)
+  })
+
+  test("action results carry optional per-step batch outcomes", () => {
+    expect(
+      ActionResultSchema.safeParse({
+        ok: false,
+        provider: "external",
+        action: "click",
+        refusal: "unknown_element",
+        results: [
+          { index: 0, ok: true },
+          { index: 1, ok: false, refusal: "unknown_element", detail: "no such element" },
+        ],
+      }).success,
+    ).toBe(true)
+    expect(
+      ActionResultSchema.safeParse({ ok: true, provider: "external", action: "click", results: [{ ok: true }] })
+        .success,
+    ).toBe(false)
   })
 
   test("observe scopes cover app, windowId, and desktop exactly", () => {

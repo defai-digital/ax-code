@@ -62,7 +62,7 @@ describe("tui sync state", () => {
         evidenceRefCount: 0,
         exposedArtifactCount: 0,
       },
-      isolation: { mode: "workspace-write", network: false },
+      isolation: { mode: "full-access", network: true },
       autonomous: true,
       smartLlm: false,
       superLong: false,
@@ -86,6 +86,16 @@ describe("tui sync state", () => {
 
     process.env.AX_CODE_ISOLATION_MODE = "full-access"
     process.env.AX_CODE_ISOLATION_NETWORK = "true"
+
+    expect(createInitialSyncState().isolation).toEqual({
+      mode: "full-access",
+      network: true,
+    })
+  })
+
+  test("full-access always enables network in the initial state", () => {
+    process.env.AX_CODE_ISOLATION_MODE = "full-access"
+    process.env.AX_CODE_ISOLATION_NETWORK = "false"
 
     expect(createInitialSyncState().isolation).toEqual({
       mode: "full-access",

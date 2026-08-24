@@ -150,13 +150,20 @@ export type IsolationBackend = z.infer<typeof IsolationBackend>
 
 export const Isolation = z
   .object({
-    mode: IsolationMode.default("workspace-write").describe(
-      "Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation",
+    // Keep defaults out of the per-source schema. Config files are parsed
+    // independently before they are merged, so materializing a mode here
+    // would let a higher-precedence partial object accidentally replace an
+    // explicit lower-precedence isolation policy. Isolation.resolve owns the
+    // runtime default instead.
+    mode: IsolationMode.optional().describe(
+      "Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation. Defaults to full-access (sandbox off)",
     ),
     network: z
       .boolean()
-      .default(false)
-      .describe("Allow network access from tools. Defaults to false in read-only and workspace-write modes"),
+      .optional()
+      .describe(
+        "Allow network access from tools. Defaults to enabled in full-access and disabled in read-only and workspace-write modes",
+      ),
     protected: z
       .array(z.string())
       .optional()

@@ -5,9 +5,9 @@ import z from "zod"
 import { Isolation } from "../../isolation"
 import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
-import { persistProjectConfigFeatureResponse, readProjectConfig } from "./project-config"
-import { FeatureFlag } from "@/util/feature-flags"
-import type { Config } from "../../config/config"
+import { persistProjectConfigResponse } from "./project-config"
+import { Config } from "../../config/config"
+import { Instance } from "@/project/instance"
 import { JsonBoolean } from "./query"
 
 const log = Log.create({ service: "isolation" })
@@ -21,13 +21,9 @@ const IsolationState = z
   })
   .meta({ ref: "IsolationState" })
 
-function isolationConfigState(config: Config.Info | undefined) {
-  // Compute isolation state from config + default only, ignoring env vars.
-  // This is the source of truth for the UI: what the user persisted to
-  // ax-code.json (or the default when no explicit setting exists).
-  const mode = config?.isolation?.mode ?? Isolation.DEFAULT_MODE
-  const network = mode === "full-access" ? true : (config?.isolation?.network ?? false)
-  return { mode, network }
+function effectiveIsolationState(config: Config.Info | undefined) {
+  const state = Isolation.resolve(config?.isolation, Instance.directory, Instance.worktree)
+  return { mode: state.mode, network: state.network }
 }
 
 export const IsolationRoutes = lazy(() =>
@@ -51,17 +47,11 @@ export const IsolationRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        // Always reconcile from persisted config so an external edit to
-        // ax-code.json propagates without a server restart. The env vars
-        // are the runtime authority for in-process readers (Permission /
-        // prompt-tools / runtime-policy), so keep them in sync — but
-        // never let a stale env reading short-circuit the config read.
-        const config = await readProjectConfig()
-        const state = isolationConfigState(config)
-        // Reconcile env vars so in-process readers see the same value
-        // the UI does.
-        FeatureFlag.set("AX_CODE_ISOLATION_MODE", state.mode)
-        FeatureFlag.set("AX_CODE_ISOLATION_NETWORK", state.network)
+        // Re-read the merged config so external edits take effect without a
+        // server restart. Isolation.resolve preserves the documented
+        // CLI/env > config > default precedence; this route must never turn an
+        // explicit restricted CLI mode back into the less restrictive default.
+        const state = effectiveIsolationState(await Config.getFresh())
         return c.json({ mode: state.mode, network: state.network })
       },
     )
@@ -69,7 +59,8 @@ export const IsolationRoutes = lazy(() =>
       "/",
       describeRoute({
         summary: "Set isolation mode",
-        description: "Update the runtime isolation mode. Sets the environment variable so it takes effect immediately.",
+        description:
+          "Persist the project isolation mode and return the effective state. An existing CLI or environment override remains authoritative.",
         operationId: "isolation.set",
         responses: {
           200: {
@@ -91,19 +82,9 @@ export const IsolationRoutes = lazy(() =>
         // to false for workspace-write. See #240.
         const requestedNetwork = c.req.valid("json").network
         const network = mode === "read-only" ? false : (requestedNetwork ?? mode === "full-access")
-        // Use the explicitly requested mode and computed network for the
-        // response. Isolation.resolve() reads Flag.AX_CODE_ISOLATION_MODE
-        // (env var) first, which has the OLD value at this point — the
-        // env is only updated by persistProjectConfigFeatureResponse below.
-        // Using resolve()'s state.mode for the response would report the
-        // stale env value to the client, making the desktop UI show the
-        // wrong toggle state until the next GET reconciliation.
-        const persistedState = await persistProjectConfigFeatureResponse({
+        const persisted = await persistProjectConfigResponse({
           log,
           context: "isolation mode",
-          featureFlag: "AX_CODE_ISOLATION_MODE",
-          featureValue: mode,
-          responseState: { mode, network },
           update: (config) => {
             // Preserve backend / protected / other isolation fields. Replacing
             // the whole object with { mode, network } dropped OS sandbox
@@ -112,9 +93,13 @@ export const IsolationRoutes = lazy(() =>
             config.isolation = { ...prev, mode, network }
           },
         })
-        if ("error" in persistedState) return c.json(persistedState, 500)
-        FeatureFlag.set("AX_CODE_ISOLATION_NETWORK", network)
-        return c.json(persistedState)
+        if (persisted) return c.json(persisted, 500)
+
+        // Refresh the per-directory config cache so tool execution observes
+        // the persisted setting immediately. Report the effective state: an
+        // explicit CLI/env override remains authoritative until restart.
+        const state = effectiveIsolationState(await Config.getFresh())
+        return c.json(state)
       },
     ),
 )

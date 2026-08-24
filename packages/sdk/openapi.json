@@ -1498,7 +1498,7 @@
           }
         ],
         "summary": "Set isolation mode",
-        "description": "Update the runtime isolation mode. Sets the environment variable so it takes effect immediately.",
+        "description": "Persist the project isolation mode and return the effective state. An existing CLI or environment override remains authoritative.",
         "responses": {
           "200": {
             "description": "Updated isolation state",
@@ -44066,8 +44066,7 @@
         ]
       },
       "IsolationMode": {
-        "default": "workspace-write",
-        "description": "Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation",
+        "description": "Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation. Defaults to full-access (sandbox off)",
         "type": "string",
         "enum": [
           "read-only",
@@ -44092,8 +44091,7 @@
             "$ref": "#/components/schemas/IsolationMode"
           },
           "network": {
-            "default": false,
-            "description": "Allow network access from tools. Defaults to false in read-only and workspace-write modes",
+            "description": "Allow network access from tools. Defaults to enabled in full-access and disabled in read-only and workspace-write modes",
             "type": "boolean"
           },
           "protected": {

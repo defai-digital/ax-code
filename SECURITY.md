@@ -29,25 +29,25 @@ We will acknowledge your report within **6 business days** and keep you informed
 
 ax-code is an AI-powered coding assistant that runs locally on your machine. It provides an agent system with access to powerful tools including shell execution, file operations, and web access.
 
-The runtime isolation default is `workspace-write` with network disabled. This is the default safe posture for local repository work: the agent can edit inside the workspace, but writes outside the workspace, protected-path writes, and network tools require an explicit boundary change.
+The runtime isolation default is `full-access` (sandbox off), with unrestricted filesystem writes and network access. This is a convenience posture for trusted local projects, not a security boundary. Select `workspace-write` or `read-only` before using AX Code with untrusted repositories or unattended workloads.
 
 ### Execution Isolation Sandbox
 
 ax-code includes a built-in execution isolation sandbox that restricts what the AI agent can access. Three modes are available:
 
-| Mode                          | Behavior                                                                                                         |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Workspace write** (default) | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected; network disabled by default |
-| **Read-only**                 | Blocks all file mutations and shell commands                                                                     |
-| **Full access**               | Disables isolation entirely                                                                                      |
+| Mode                      | Behavior                                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Full access** (default) | Disables isolation entirely and enables network access                                                           |
+| **Workspace write**       | Allows writes only inside the workspace; `.git` and `.ax-code` are always protected; network disabled by default |
+| **Read-only**             | Blocks all file mutations and shell commands                                                                     |
 
 Key properties:
 
-- **Default behavior** — AX Code starts in `workspace-write` unless `--sandbox`, `AX_CODE_ISOLATION_MODE`, or config sets a different mode
-- **Explicit unrestricted mode** — use `full-access` only when you intentionally want to disable isolation
+- **Default behavior** — AX Code starts in `full-access` unless `--sandbox`, `AX_CODE_ISOLATION_MODE`, or config sets a different mode
+- **Recommended restricted mode** — use `workspace-write` for untrusted or team repositories; it confines writes to the workspace and disables network by default
 - **Tool-level enforcement** — all mutation tools (bash, edit, write, apply_patch) and network tools (webfetch, websearch, codesearch) check isolation policy before executing
 - **Protected paths** — `.git` and `.ax-code` directories are always protected from writes, even in workspace-write mode
-- **Escalation prompts** — isolation violations present an approval dialog instead of silently failing; users can allow a blocked operation once without changing their config
+- **Escalation prompts** — in restricted modes, isolation violations present an approval dialog instead of silently failing; users can allow a blocked operation once without changing their config
 - **CLI control** — `--sandbox read-only`, `--sandbox workspace-write`, `--sandbox full-access`
 - **Environment variable** — `AX_CODE_ISOLATION_MODE`
 
@@ -196,7 +196,7 @@ AX Code is designed for enterprise use with the following hardening features:
 - **Session Audit Trails**: Every tool call, permission decision, and file change is recorded in SQLite with snapshots. Supports replay, fork, and export for compliance reviews.
 - **Deterministic Refactoring (DRE)**: `impact_analyze`, `refactor_plan`, and `refactor_apply` (shadow worktree + lint/typecheck/tests) provide auditable, reversible changes.
 - **Credential Management**: AES-256-GCM encryption for all keys/tokens. Per-directory isolation via `InstanceState`.
-- **Default Sandbox Enforcement**: Application-level isolation with bash command parsing (tree-sitter). The runtime defaults to `workspace-write` with network disabled; protected paths (`.git`, `.ax-code`) apply in sandboxed modes.
+- **Opt-in Sandbox Enforcement**: Application-level isolation with bash command parsing (tree-sitter). Select `workspace-write` or `read-only` to enforce sandbox boundaries; protected paths (`.git`, `.ax-code`) apply in sandboxed modes.
 - **Server Hardening**: Localhost-only by default; password-protected remote access with Basic Auth.
 - **Code Intelligence & Scanning**: Built-in secret/hardcode detection, dependency impact analysis.
 

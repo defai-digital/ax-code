@@ -1,4 +1,4 @@
-import { afterEach, test, expect, vi } from "vitest"
+import { afterEach, beforeEach, test, expect, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
 import { writeFile, mkdir } from "node:fs/promises"
 import os from "os"
@@ -11,6 +11,14 @@ import { Database, eq } from "../../src/storage/db"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import { MessageID, SessionID } from "../../src/session/schema"
+
+beforeEach(() => {
+  // Permission prompt mechanics are exercised under an explicit restricted
+  // mode. The product default is full-access, which intentionally auto-approves
+  // established risk classes in autonomous mode.
+  vi.stubEnv("AX_CODE_ISOLATION_MODE", "workspace-write")
+  vi.stubEnv("AX_CODE_ISOLATION_NETWORK", "false")
+})
 
 afterEach(async () => {
   vi.unstubAllEnvs()
@@ -949,6 +957,30 @@ test("ask - autonomous full-access never implicitly approves computer use", asyn
           ruleset: [{ permission: "computer", pattern: "*", action: "allow" }],
         }),
       ).resolves.toBeUndefined()
+    },
+  })
+})
+
+test("ask - autonomous default full-access approves established risk permissions", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.stubEnv("AX_CODE_AUTONOMOUS", "true")
+  delete process.env.AX_CODE_ISOLATION_MODE
+  delete process.env.AX_CODE_ISOLATION_NETWORK
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(
+        Permission.ask({
+          sessionID: SessionID.make("session_autonomous_default_full_access"),
+          permission: "bash",
+          patterns: ["echo ok"],
+          metadata: {},
+          always: ["echo ok"],
+          ruleset: [],
+        }),
+      ).resolves.toBeUndefined()
+      expect(await Permission.list()).toHaveLength(0)
     },
   })
 })

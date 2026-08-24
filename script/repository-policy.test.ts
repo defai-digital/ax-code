@@ -29,9 +29,9 @@ describe("repository internal-only path policy", () => {
     expect(isApprovedTrackedInternalPath("./.internal/adr/ADR-060-instance-scoped-tool-execution.md")).toBe(true)
     expect(isApprovedTrackedInternalPath(".internal\\spec\\SPEC-2026-08-21-tool-execution-integrity.md")).toBe(true)
     expect(
-      isApprovedTrackedInternalPath(".internal/prd/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md"),
+      isApprovedTrackedInternalPath(".internal/prd/complete/PRD-2026-08-21-ax-code-intel-stabilization-acceleration.md"),
     ).toBe(true)
-    expect(isApprovedTrackedInternalPath(".internal/prd/PRD-2026-08-22-ax-code-reason-stabilization.md")).toBe(true)
+    expect(isApprovedTrackedInternalPath(".internal/prd/complete/PRD-2026-08-22-ax-code-reason-stabilization.md")).toBe(true)
     expect(isApprovedTrackedInternalPath(".internal/reports/qa/self-scan.md")).toBe(false)
     expect(
       unapprovedTrackedInternalPaths([...APPROVED_TRACKED_INTERNAL_FILES, ".internal/reports/qa/self-scan.md"]),

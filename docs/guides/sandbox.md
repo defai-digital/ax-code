@@ -2,10 +2,12 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-19
+Last reviewed: 2026-08-23
 Owner: ax-code runtime
 
-AX Code includes a built-in execution sandbox that restricts what the AI agent can do on your system. By default, AX Code starts in **workspace-write** with network disabled. Switch to `full-access` only when you intentionally want to disable sandbox boundaries.
+AX Code includes a built-in execution sandbox that can restrict what the AI agent does on your system. By default, AX Code starts in **full-access** with the sandbox off, so filesystem writes and network access are unrestricted. Enable `workspace-write` or `read-only` before working with untrusted repositories or running unattended tasks.
+
+> **Security warning:** `full-access` is not a security boundary. The agent can modify files outside the workspace, write `.git/` and `.ax-code/`, run unrestricted shell commands, and access the network.
 
 ## Quick Start
 
@@ -82,7 +84,9 @@ In `ax-code.json`:
 
 ### Precedence
 
-CLI flag > environment variable > config file > default (workspace-write)
+CLI flag > environment variable > config file > default (`full-access`)
+
+When a CLI or environment override is active, the TUI reports that effective mode. A `/sandbox` toggle can save the project preference, but the higher-precedence override remains active until it is removed (normally on restart).
 
 ## Isolation Modes
 

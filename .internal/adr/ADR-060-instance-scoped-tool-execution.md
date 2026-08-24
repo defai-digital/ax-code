@@ -1,7 +1,9 @@
 # ADR-060: Instance-Scoped Tool Execution and Raw-Prompt-Free Request Evidence
 
 **Status:** Accepted
+**Implementation:** Shipped
 **Date:** 2026-08-21
+**Last reviewed:** 2026-08-23
 **Decision owners:** AX Code runtime maintainers
 
 ## Context

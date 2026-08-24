@@ -1,7 +1,13 @@
 import type { ActionResult, ComputerAction } from "../action"
 import { ComputerUseError } from "../errors"
 import { StdioMcpClient, mcpRefusal, mcpText, type McpCallToolResult, type McpClient } from "../mcp/stdio-client"
-import type { ActBatchOptions, ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../provider"
+import type {
+  ActBatchOptions,
+  ComputerUseProvider,
+  ObserveScope,
+  PassiveObserveOptions,
+  ProviderCapabilities,
+} from "../provider"
 import {
   AX_ACT_TOOL,
   AX_CAPABILITIES_TOOL,
@@ -14,6 +20,7 @@ import {
   ListAppsResultSchema,
   ListWindowsResultSchema,
   ComputerObservationSchema,
+  ObserveArgsSchema,
   ObserveScopeSchema,
   ProviderCapabilitiesSchema,
   ProtocolError,
@@ -41,7 +48,18 @@ export interface ExternalComputerProviderConfig {
  * cannot do.
  */
 const DEFAULT_CAPABILITIES: ProviderCapabilities = {
-  actions: ["click", "type", "keypress", "scroll", "drag", "set_value", "activate_window", "launch_app", "move", "wait"],
+  actions: [
+    "click",
+    "type",
+    "keypress",
+    "scroll",
+    "drag",
+    "set_value",
+    "activate_window",
+    "launch_app",
+    "move",
+    "wait",
+  ],
   backgroundDelivery: true,
   elementTargeting: true,
   windowActivation: true,
@@ -81,11 +99,14 @@ export class ExternalComputerProvider implements ComputerUseProvider {
       .windows
   }
 
-  async observe(scope: ObserveScope): Promise<ComputerObservation> {
+  async observe(scope: ObserveScope, options?: PassiveObserveOptions): Promise<ComputerObservation> {
     // validate the request before it goes on the wire: a malformed scope must
     // fail here, not as a server-side rejection with a less actionable message
     validatePayload(ObserveScopeSchema, scope, "observe scope")
-    const result = await this.callCanonical(AX_OBSERVE_TOOL, { scope })
+    // passive observations ride the same ax_observe tool; legacy observe
+    // (no options) stays byte-identical on the wire
+    const args = options ? validatePayload(ObserveArgsSchema, { scope, ...options }, "observe args") : { scope }
+    const result = await this.callCanonical(AX_OBSERVE_TOOL, args)
     return validatePayload(ComputerObservationSchema, this.structured(result, AX_OBSERVE_TOOL), AX_OBSERVE_TOOL)
   }
 

@@ -19,7 +19,7 @@ function assert(condition: unknown, detail: string): asserts condition {
 }
 
 /**
- * CU-001..CU-010 compat suite. Runs against any provider factory — mock
+ * CU-001..CU-016 compat suite. Runs against any provider factory — mock
  * providers in CI, live backends when AX_COMPUTER_LIVE=1. Cases are
  * sequential and share one provider instance, mirroring real usage; CU-010
  * builds its own session from two fresh factory instances.
@@ -188,6 +188,100 @@ export async function runCompatSuite(
       } finally {
         await session.dispose()
       }
+    })
+
+    await run("CU-011", async () => {
+      // wait support is advertised via capabilities.actions; providers that
+      // only speak the original action set skip, matching CU-009's gating
+      if (!provider.capabilities().actions.includes("wait")) {
+        return "skipped: provider does not advertise the wait action"
+      }
+      const observation = await provider.observe({ app })
+      const element = observation.elements[0]
+      if (!element) return "skipped: observation exposes no elements to wait on"
+      // the element is already on screen, so a conforming backend resolves on
+      // the first poll; the timeout only guards against a hung wait
+      const result = await provider.act({
+        type: "wait",
+        condition: { type: "element_visible", target: { kind: "element", id: element.id } },
+        timeoutMs: 2_000,
+      })
+      assert(result.ok, `wait element_visible refused: ${result.refusal ?? result.detail ?? "?"}`)
+    })
+
+    await run("CU-012", async () => {
+      if (typeof provider.actBatch !== "function") return "skipped: provider does not support batch act"
+      const observation = await provider.observe({ app })
+      const point = safePoint(observation)
+      if (!point) return "skipped: observation screenshot has no dimensions to derive a safe point"
+      const result = await provider.actBatch([
+        { type: "click", target: { kind: "point", x: point.x, y: point.y } },
+        { type: "click", target: { kind: "point", x: point.x, y: point.y } },
+      ])
+      assert(result.ok, `batch refused: ${result.refusal ?? result.detail ?? "?"}`)
+      const steps = result.results ?? []
+      assert(steps.length === 2, `batch returned ${steps.length} step results, expected 2`)
+      assert(steps[0]?.index === 0 && steps[0].ok, "batch step 0 did not report ok")
+      assert(steps[1]?.index === 1 && steps[1].ok, "batch step 1 did not report ok")
+    })
+
+    await run("CU-013", async () => {
+      if (typeof provider.actBatch !== "function") return "skipped: provider does not support batch act"
+      const observation = await provider.observe({ app })
+      const point = safePoint(observation)
+      if (!point) return "skipped: observation screenshot has no dimensions to derive a safe point"
+      // the middle step targets an element id no observation ever issued, so
+      // every conforming backend must refuse it; the default stopOnError must
+      // then abort the trailing step before it runs
+      const result = await provider.actBatch([
+        { type: "click", target: { kind: "point", x: point.x, y: point.y } },
+        { type: "click", target: { kind: "element", id: "ax-compat-no-such-element" } },
+        { type: "click", target: { kind: "point", x: point.x, y: point.y } },
+      ])
+      assert(!result.ok, "batch with a refused middle step reported ok")
+      const steps = result.results ?? []
+      assert(steps.length === 2, `stopOnError did not abort the batch: ${steps.length} step results, expected 2`)
+      assert(steps[0]?.ok === true, "batch step 0 should have run and succeeded")
+      assert(steps[1]?.ok === false, "batch step 1 should report the refusal")
+      assert(steps[1]?.refusal, "batch step 1 carries no refusal code")
+    })
+
+    // passive observe (CU-014..CU-016) gates on a feature probe: providers
+    // without passive support ignore the options and return a legacy
+    // observation (no revision), which skips all three cases — matching the
+    // capabilities/probe gating style of CU-009..CU-013
+    let passive: { revision: string } | undefined
+
+    await run("CU-014", async () => {
+      const bootstrap = await provider.observe({ app }, { sinceRevision: null })
+      if (bootstrap.revision === undefined || bootstrap.frameHash === undefined) {
+        return "skipped: provider does not support passive observe"
+      }
+      assert(bootstrap.elements.length === 0, "passive bootstrap carried targetable elements")
+      assert(bootstrap.gap !== true, "passive bootstrap reported a gap")
+      passive = { revision: bootstrap.revision }
+      return `revision ${bootstrap.revision}`
+    })
+
+    await run("CU-015", async () => {
+      if (!passive) return "skipped: provider does not support passive observe"
+      const poll = await provider.observe({ app }, { sinceRevision: passive.revision })
+      assert(poll.unchanged === true, "immediate passive re-poll did not report unchanged: true")
+      assert(poll.revision === passive.revision, "unchanged poll moved the revision")
+      assert(!poll.screenshot, "unchanged poll carried a screenshot")
+      assert(poll.elements.length === 0, "unchanged poll carried elements")
+    })
+
+    await run("CU-016", async () => {
+      if (!passive) return "skipped: provider does not support passive observe"
+      const typed = await provider.act({ type: "type", text: "ax-passive" })
+      assert(typed.ok, `type refused: ${typed.refusal ?? typed.detail ?? "?"}`)
+      const poll = await provider.observe({ app }, { sinceRevision: passive.revision })
+      assert(poll.unchanged === false, "poll after a visible change did not report unchanged: false")
+      assert(poll.revision !== undefined && poll.revision !== passive.revision, "changed poll issued no new revision")
+      assert(poll.gap !== true, "changed poll reported a gap for a known revision")
+      assert(poll.elements.length === 0, "passive change frame carried targetable elements")
+      passive = { revision: poll.revision }
     })
   } finally {
     await provider.dispose()
