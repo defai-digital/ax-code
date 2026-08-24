@@ -11,6 +11,9 @@
     "@ax-code/tui#build": {
       "outputs": ["spinner/dist/**"]
     },
+    "@openchamber/ui#build": {
+      "dependsOn": ["@ax-code/sdk#build"]
+    },
     "ax-code-desktop#build": {
       "dependsOn": ["@ax-code/sdk#build", "@openchamber/ui#build"],
       "inputs": ["$TURBO_DEFAULT$", "../ui/src/**", "../../../packages/sdk/js/**"],

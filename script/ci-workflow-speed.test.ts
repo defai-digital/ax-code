@@ -24,6 +24,13 @@ describe("CI workflow speed policy", () => {
     expect(desktop.indexOf("pnpm run desktop:build")).toBeGreaterThan(desktop.indexOf("desktop-macos:"))
   })
 
+  test("Desktop UI typecheck-as-build waits for generated SDK types", () => {
+    const turbo = JSON.parse(readFileSync("turbo.json", "utf8")) as {
+      tasks?: Record<string, { dependsOn?: string[] }>
+    }
+    expect(turbo.tasks?.["@openchamber/ui#build"]?.dependsOn).toEqual(expect.arrayContaining(["@ax-code/sdk#build"]))
+  })
+
   test("release workflows never cancel an in-flight publish", () => {
     expect(release).toMatch(/cancel-in-progress:\s*false/)
     expect(desktopRelease).toMatch(/cancel-in-progress:\s*false/)
