@@ -29,11 +29,15 @@ runs:
       uses: actions/checkout@v7
 
     - name: Setup pnpm
-      shell: bash
-      run: npm install -g pnpm@${{ inputs.pnpm-version }}
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.pnpm-version }}
+        run_install: false
 
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
         registry-url: ${{ inputs.registry-url }}
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml

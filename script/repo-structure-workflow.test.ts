@@ -4,6 +4,10 @@ import { readFileSync } from "node:fs"
 const workflow = readFileSync(".github/workflows/repo-structure.yml", "utf8")
 
 describe("repo-structure workflow policy", () => {
+  test("cancels superseded runs on the same ref", () => {
+    expect(workflow).toMatch(/cancel-in-progress:\s*true/)
+  })
+
   test("runs in merge queues and can be dispatched manually", () => {
     expect(workflow).toContain("merge_group:")
     expect(workflow).toContain("checks_requested")

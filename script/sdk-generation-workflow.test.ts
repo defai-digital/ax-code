@@ -25,6 +25,10 @@ describe("SDK generation workflow policy", () => {
     expect(testIndex).toBeGreaterThan(generationIndex)
   })
 
+  test("cancels superseded runs on the same ref", () => {
+    expect(workflow).toMatch(/cancel-in-progress:\s*true/)
+  })
+
   test("the required deterministic job does not run V8 coverage", () => {
     const deterministicJob = workflow.slice(workflow.indexOf("\n  deterministic:"), workflow.indexOf("\n  live:"))
     expect(deterministicJob).toContain("pnpm --dir packages/ax-code run test:ci -- deterministic")
