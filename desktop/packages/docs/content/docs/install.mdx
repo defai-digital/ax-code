@@ -59,7 +59,7 @@ Install the paired CLI first, then download a Desktop package from a `desktop-v*
 
 ```bash
 # CLI
-curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
 
 # Desktop .deb
 sudo apt install ./AX-Code-<version>-linux-amd64.deb

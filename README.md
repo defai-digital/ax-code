@@ -93,7 +93,7 @@ The output format above is verbatim from these commands; the session IDs and tas
 ### macOS (Apple Silicon)
 
 ```bash
-curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
 ```
 
 ### Windows
@@ -105,7 +105,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 ### Ubuntu 24.04+
 
 ```bash
-curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
 ```
 
 On macOS, Homebrew remains available as an alternative: `brew install defai-digital/tap/ax-code`.

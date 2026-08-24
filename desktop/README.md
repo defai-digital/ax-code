@@ -55,7 +55,7 @@ xattr -cr "/Applications/AX Code.app"
 Install the CLI first (Desktop still uses the local AX Code runtime for sessions):
 
 ```bash
-curl -fsSL -H "Cache-Control: no-cache" https://raw.githubusercontent.com/defai-digital/ax-code/main/install | bash
+curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
 ```
 
 Then download a Desktop package from the [Releases page](https://github.com/defai-digital/ax-code/releases) under a `desktop-v*` tag:
