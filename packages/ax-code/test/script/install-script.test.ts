@@ -108,15 +108,32 @@ describe("install script", () => {
   })
 
   test("resolves the latest CLI version from the releases list, not /releases/latest", async () => {
+    const { execFileSync } = await import("node:child_process")
     const text = await readFile(installScript, "utf-8")
     expect(text).toContain("latest_cli_version")
     expect(text).toContain("https://api.github.com/repos/defai-digital/ax-code/releases?per_page=50")
-    expect(text).toContain('"tag_name": "v[0-9]+\\.[0-9]+\\.[0-9]+"')
+    expect(text).toContain('"tag_name":[[:space:]]*"v[0-9]+\\.[0-9]+\\.[0-9]+"')
     expect(text).toContain(
       'url="https://github.com/defai-digital/ax-code/releases/download/v${specific_version}/$filename"',
     )
     expect(text).not.toContain("https://github.com/defai-digital/ax-code/releases/latest/download/$filename")
     expect(text).not.toContain("https://api.github.com/repos/defai-digital/ax-code/releases/latest")
+
+    const extracted = execFileSync(
+      "bash",
+      [
+        "-c",
+        `set -euo pipefail
+extract() {
+  grep -oE '"tag_name":[[:space:]]*"v[0-9]+\\.[0-9]+\\.[0-9]+"' | grep -oE 'v[0-9]+\\.[0-9]+\\.[0-9]+' | sed -n 's/^v//p'
+}
+printf '%s' '{"tag_name":"desktop-v7.8.2","x":1},{"tag_name":"v7.8.2"}' | extract
+printf '%s' '{"tag_name": "v7.8.1"}' | extract
+`,
+      ],
+      { encoding: "utf-8" },
+    )
+    expect(extracted.trim().split(/\r?\n/)).toEqual(["7.8.2", "7.8.1"])
   })
 
   test("provides a native Windows PowerShell release installer", async () => {

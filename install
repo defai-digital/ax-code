@@ -154,6 +154,7 @@ ensure_minisign_available() {
 
 # First stable CLI tag (`vX.Y.Z`) from the GitHub releases list. Skips
 # `desktop-v*` siblings that `/releases/latest` can otherwise select.
+# Allow optional whitespace after `:` — GitHub may pretty-print or minify.
 latest_cli_version() {
     local releases tag
     releases="$(curl -fsSL -A "ax-code-installer" \
@@ -163,11 +164,11 @@ latest_cli_version() {
     while IFS= read -r line; do
         tag="$line"
         break
-    done < <(printf '%s' "$releases" | grep -oE '"tag_name": "v[0-9]+\.[0-9]+\.[0-9]+"' || true)
+    done < <(printf '%s' "$releases" | grep -oE '"tag_name":[[:space:]]*"v[0-9]+\.[0-9]+\.[0-9]+"' || true)
     if [ -z "$tag" ]; then
         return 1
     fi
-    printf '%s' "$tag" | sed -n 's/.*"v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*/\1/p'
+    printf '%s' "$tag" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sed -n 's/^v//p'
 }
 
 requested_version=${VERSION:-}
