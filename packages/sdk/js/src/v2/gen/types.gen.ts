@@ -11046,6 +11046,10 @@ export type ExperimentalSessionListData = {
      */
     cursor?: number
     /**
+     * Session id tiebreaker for the cursor. Pass the id of the last session of the previous page (x-next-cursor-id) so sessions sharing the cursor timestamp are not skipped.
+     */
+    cursorId?: string
+    /**
      * Filter sessions by title (case-insensitive)
      */
     search?: string

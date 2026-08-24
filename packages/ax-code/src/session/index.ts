@@ -6,7 +6,7 @@ import z from "zod"
 import { type ProviderMetadata } from "ai"
 import { Installation } from "../installation"
 
-import { Database, NotFoundError, eq, and, gte, isNull, desc, inArray, lt, sql } from "../storage/db"
+import { Database, NotFoundError, eq, and, gte, isNull, desc, inArray, lt, or, sql } from "../storage/db"
 import type { SQL } from "../storage/db"
 import { SessionTable, MessageTable, PartTable } from "./session.sql"
 import { SessionGoal } from "./goal"
@@ -726,6 +726,13 @@ export namespace Session {
     roots?: boolean
     start?: number
     cursor?: number
+    /**
+     * Session id tiebreaker for the cursor. The list is ordered by
+     * (time_updated DESC, id DESC), so a cursor built from `cursor` alone
+     * silently drops every session sharing the boundary timestamp. Passing
+     * the last-seen id resumes strictly after it.
+     */
+    cursorID?: string
     search?: string
     limit?: number
     archived?: boolean
@@ -736,6 +743,7 @@ export namespace Session {
         roots: z.boolean().optional(),
         start: z.number().int().min(0).optional(),
         cursor: z.number().int().min(0).optional(),
+        cursorID: SessionID.zod.optional(),
         search: z.string().optional(),
         limit: z.number().int().positive().optional(),
         archived: z.boolean().optional(),
@@ -753,7 +761,18 @@ export namespace Session {
       conditions.push(gte(SessionTable.time_updated, parsed.start))
     }
     if (parsed.cursor !== undefined) {
-      conditions.push(lt(SessionTable.time_updated, parsed.cursor))
+      // Match the (time_updated DESC, id DESC) ordering: rows strictly
+      // before the cursor timestamp, plus rows at the same timestamp whose
+      // id sorts before the cursor id (the tiebreaker). Without the second
+      // arm, sessions sharing the boundary timestamp are skipped.
+      conditions.push(
+        parsed.cursorID !== undefined
+          ? or(
+              lt(SessionTable.time_updated, parsed.cursor),
+              and(eq(SessionTable.time_updated, parsed.cursor), lt(SessionTable.id, parsed.cursorID)),
+            )!
+          : lt(SessionTable.time_updated, parsed.cursor),
+      )
     }
     if (parsed.search) {
       conditions.push(titleMatchesSearch(parsed.search))

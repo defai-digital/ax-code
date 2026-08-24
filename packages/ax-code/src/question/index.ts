@@ -235,12 +235,12 @@ export namespace Question {
     }
   }
 
-  export async function reply(input: { requestID: QuestionID; answers: Answer[] }) {
+  export async function reply(input: { requestID: QuestionID; answers: Answer[] }): Promise<boolean> {
     const pending = (await state()).pending
     const existing = pending.get(input.requestID)
     if (!existing) {
       log.warn("reply for unknown request", { requestID: input.requestID })
-      return
+      return false
     }
     log.info("replied", { requestID: input.requestID, answers: input.answers })
     Bus.publishDetached(Event.Replied, {
@@ -249,14 +249,15 @@ export namespace Question {
       answers: input.answers,
     })
     existing.deferred.resolve(input.answers)
+    return true
   }
 
-  export async function reject(requestID: QuestionID) {
+  export async function reject(requestID: QuestionID): Promise<boolean> {
     const pending = (await state()).pending
     const existing = pending.get(requestID)
     if (!existing) {
       log.warn("reject for unknown request", { requestID })
-      return
+      return false
     }
     log.info("rejected", { requestID })
     Bus.publishDetached(Event.Rejected, {
@@ -264,6 +265,7 @@ export namespace Question {
       requestID: existing.info.id,
     })
     existing.deferred.reject(new RejectedError())
+    return true
   }
 
   export async function list() {

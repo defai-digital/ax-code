@@ -3493,6 +3493,7 @@ export class Session extends HeyApiClient {
       roots?: boolean
       start?: number
       cursor?: number
+      cursorId?: string
       search?: string
       limit?: number
       archived?: boolean
@@ -3508,6 +3509,7 @@ export class Session extends HeyApiClient {
             { in: "query", key: "roots" },
             { in: "query", key: "start" },
             { in: "query", key: "cursor" },
+            { in: "query", key: "cursorId" },
             { in: "query", key: "search" },
             { in: "query", key: "limit" },
             { in: "query", key: "archived" },

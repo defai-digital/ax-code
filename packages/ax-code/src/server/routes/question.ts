@@ -70,7 +70,20 @@ export const QuestionRoutes = lazy(() =>
         if (!validation.ok) {
           return invalidRequest(c, { message: validation.message })
         }
-        await Question.reply({ requestID, answers: validation.answers })
+        // Check the actual reply outcome, not just pre-call pendingness — a
+        // concurrent reply for the same requestID (e.g. a client retry after
+        // a timed-out first attempt) can resolve the request in the gap
+        // between the pending check above and the reply call, which would
+        // otherwise report success for a reply that silently did nothing.
+        // Mirrors the permission route fix for the same race. See #341.
+        const applied = await Question.reply({ requestID, answers: validation.answers })
+        if (!applied) {
+          return notFound(c, {
+            name: "QuestionUnavailableError",
+            message: "Question request is unavailable",
+            resource: "question",
+          })
+        }
         return c.json(true)
       }),
     )
@@ -102,7 +115,16 @@ export const QuestionRoutes = lazy(() =>
             resource: "question",
           })
         }
-        await Question.reject(requestID)
+        // Same race guard as the reply route above: report 404 when the
+        // reject did not actually land instead of a silent success.
+        const applied = await Question.reject(requestID)
+        if (!applied) {
+          return notFound(c, {
+            name: "QuestionUnavailableError",
+            message: "Question request is unavailable",
+            resource: "question",
+          })
+        }
         return c.json(true)
       }),
     ),

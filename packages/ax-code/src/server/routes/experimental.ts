@@ -11,6 +11,7 @@ import { Instance } from "../../project/instance"
 import { Project } from "../../project/project"
 import { MCP } from "../../mcp"
 import { Session } from "../../session"
+import { SessionID } from "../../session/schema"
 import { zodToJsonSchema } from "zod-to-json-schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -227,6 +228,10 @@ export const ExperimentalRoutes = lazy(() =>
           cursor: OptionalQueryNumber(z.number().int().min(0)).meta({
             description: "Return sessions updated before this timestamp (milliseconds since epoch)",
           }),
+          cursorId: SessionID.zod.optional().meta({
+            description:
+              "Session id tiebreaker for the cursor. Pass the id of the last session of the previous page (x-next-cursor-id) so sessions sharing the cursor timestamp are not skipped.",
+          }),
           search: z.string().optional().meta({ description: "Filter sessions by title (case-insensitive)" }),
           limit: OptionalQueryNumber(z.number().int().min(1).max(1000)).meta({
             description: "Maximum number of sessions to return",
@@ -243,6 +248,7 @@ export const ExperimentalRoutes = lazy(() =>
             roots: query.roots,
             start: query.start,
             cursor: query.cursor,
+            cursorID: query.cursorId,
             search: query.search,
             limit: limit + 1,
             archived: query.archived,
@@ -251,7 +257,12 @@ export const ExperimentalRoutes = lazy(() =>
         const hasMore = sessions.length > limit
         const list = hasMore ? sessions.slice(0, limit) : sessions
         if (hasMore && list.length > 0) {
-          c.header("x-next-cursor", String(list[list.length - 1].time.updated))
+          const last = list[list.length - 1]
+          // Emit the full (time_updated, id) ordering key. A timestamp-only
+          // cursor silently drops sessions that share the boundary
+          // timestamp because the SQL filter is a strict less-than.
+          c.header("x-next-cursor", String(last.time.updated))
+          c.header("x-next-cursor-id", last.id)
         }
         return c.json(list)
       },

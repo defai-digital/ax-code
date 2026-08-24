@@ -25716,6 +25716,15 @@
           },
           {
             "in": "query",
+            "name": "cursorId",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses_.*"
+            },
+            "description": "Session id tiebreaker for the cursor. Pass the id of the last session of the previous page (x-next-cursor-id) so sessions sharing the cursor timestamp are not skipped."
+          },
+          {
+            "in": "query",
             "name": "search",
             "schema": {
               "type": "string"

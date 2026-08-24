@@ -338,7 +338,13 @@ export const GlobalRoutes = lazy(() =>
             q.push(JSON.stringify(payload))
           }
 
+          // Control frames carry the GlobalEvent shape (`directory` +
+          // `payload`) so clients parsing the stream against the declared
+          // schema don't fail on the very first frame, and multi-project
+          // clients can attribute the connection to a project — real data
+          // frames pushed via GlobalBus already include `directory`.
           pushControl({
+            directory: Instance.directory,
             payload: {
               type: Event.Connected.type,
               properties: {},
@@ -349,6 +355,7 @@ export const GlobalRoutes = lazy(() =>
           heartbeat = setInterval(() => {
             try {
               pushControl({
+                directory: Instance.directory,
                 payload: {
                   type: "server.heartbeat",
                   properties: {},
