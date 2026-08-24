@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.2] - 2026-08-24
+
+### Changed
+
+- Stop using turn-cumulative token totals where per-step usage is meant.
+
+### Fixed
+
+- Fix queued-message drain stranding after abort/hold.
+
 ## [7.8.1] - 2026-08-24
 
 ### Changed

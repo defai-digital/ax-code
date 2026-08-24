@@ -26925,33 +26925,6 @@
           "output": 4096
         }
       },
-      "inclusionai/ring-2.6-1t": {
-        "id": "inclusionai/ring-2.6-1t",
-        "name": "Ring 2.6 1T",
-        "description": "Reasoning model for deliberate analysis, multi-step problem solving, and tool use",
-        "family": "ring",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-05-08",
-        "last_updated": "2026-05-08",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 65536
-        }
-      },
       "inclusionai/ling-3.0-flash": {
         "id": "inclusionai/ling-3.0-flash",
         "name": "Ling 3.0 Flash",
@@ -26963,32 +26936,6 @@
         "structured_output": false,
         "release_date": "2026-07-23",
         "last_updated": "2026-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 32768
-        }
-      },
-      "inclusionai/ling-2.6-1t": {
-        "id": "inclusionai/ling-2.6-1t",
-        "name": "Ling 2.6 1T",
-        "description": "Tool-capable chat model for instruction following and agentic application workflows",
-        "family": "ling",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-04-23",
-        "last_updated": "2026-04-23",
         "modalities": {
           "input": [
             "text"
@@ -27037,32 +26984,6 @@
           ]
         },
         "open_weights": false,
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 32768
-        }
-      },
-      "inclusionai/ling-2.6-flash": {
-        "id": "inclusionai/ling-2.6-flash",
-        "name": "Ling 2.6 Flash",
-        "description": "Efficient model for low-latency assistance, extraction, and routine automation",
-        "family": "ling",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "release_date": "2026-04-21",
-        "last_updated": "2026-04-21",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
         "limit": {
           "context": 262144,
           "input": 262144,
@@ -28733,6 +28654,36 @@
           "context": 65536,
           "input": 65536,
           "output": 65536
+        }
+      },
+      "TEE/qwen3.8-27b": {
+        "id": "TEE/qwen3.8-27b",
+        "name": "Qwen3.8 27B TEE",
+        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 262144
         }
       },
       "TEE/qwen3.5-27b": {
@@ -121357,7 +121308,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 256000,
+          "context": 262000,
           "output": 16000
         }
       },
@@ -121487,9 +121438,9 @@
           {
             "type": "effort",
             "values": [
-              "none",
-              "high",
-              "xhigh"
+              "low",
+              "medium",
+              "high"
             ]
           }
         ],
@@ -121729,9 +121680,13 @@
           {
             "type": "effort",
             "values": [
+              "none",
+              "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -121750,7 +121705,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
+          "context": 128072,
           "output": 13107
         }
       },
@@ -137727,32 +137682,6 @@
           "output": 32768
         }
       },
-      "arcee-ai/trinity-mini": {
-        "id": "arcee-ai/trinity-mini",
-        "name": "Trinity Mini",
-        "description": "Reasoning-tuned 26B MoE model with 3B active parameters for agents, tools, and multi-step workloads",
-        "family": "trinity",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "knowledge": "2024-10",
-        "release_date": "2025-12-01",
-        "last_updated": "2025-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        }
-      },
       "arcee-ai/trinity-large-thinking": {
         "id": "arcee-ai/trinity-large-thinking",
         "name": "Trinity Large Thinking",
@@ -141165,43 +141094,6 @@
           "output": 100000
         }
       },
-      "openai/o3-deep-research": {
-        "id": "openai/o3-deep-research",
-        "name": "o3-deep-research",
-        "description": "Research model for long-horizon investigation, synthesis, and analytical reports",
-        "family": "o",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "medium"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2024-05",
-        "release_date": "2024-06-26",
-        "last_updated": "2024-06-26",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "input": 100000,
-          "output": 100000
-        }
-      },
       "openai/gpt-5.4-pro": {
         "id": "openai/gpt-5.4-pro",
         "name": "GPT 5.4 Pro",
@@ -142261,34 +142153,6 @@
         "limit": {
           "context": 0,
           "output": 0
-        }
-      },
-      "openai/gpt-4o-mini-search-preview": {
-        "id": "openai/gpt-4o-mini-search-preview",
-        "name": "GPT 4o Mini Search Preview",
-        "description": "Compact GPT model for low-latency assistance and high-volume workloads",
-        "family": "gpt-mini",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-09",
-        "release_date": "2025-03-12",
-        "last_updated": "2025-01",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "input": 111616,
-          "output": 16384
         }
       },
       "openai/gpt-5.2-pro": {
@@ -145380,60 +145244,6 @@
         "limit": {
           "context": 256000,
           "output": 4096
-        }
-      },
-      "mistral/magistral-medium": {
-        "id": "mistral/magistral-medium",
-        "name": "Magistral Medium (latest)",
-        "description": "Mistral reasoning model for transparent analysis, math, and complex decisions",
-        "family": "magistral-medium",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-06",
-        "release_date": "2025-03-17",
-        "last_updated": "2025-03-20",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 16384
-        }
-      },
-      "mistral/magistral-small": {
-        "id": "mistral/magistral-small",
-        "name": "Magistral Small",
-        "description": "Mistral reasoning model for transparent analysis, math, and complex decisions",
-        "family": "magistral-small",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "temperature": true,
-        "knowledge": "2025-06",
-        "release_date": "2025-03-17",
-        "last_updated": "2025-03-17",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 128000
         }
       },
       "mistral/ministral-3b": {
