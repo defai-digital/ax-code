@@ -263,6 +263,43 @@ test("set does not steal a freshly created auth lock with a partial body", async
   }
 })
 
+test("remove drops a coalesced all() so later get does not return deleted credentials", async () => {
+  await Auth.set("qoder-cli", { type: "api", key: "stale-key" })
+
+  const originalReadJson = Filesystem.readJson.bind(Filesystem)
+  let releaseRead!: () => void
+  const readReleased = new Promise<void>((resolve) => {
+    releaseRead = resolve
+  })
+  let initialReadObserved!: () => void
+  const initialRead = new Promise<void>((resolve) => {
+    initialReadObserved = resolve
+  })
+  let intercepted = false
+  const readSpy = vi.spyOn(Filesystem, "readJson").mockImplementation(async (target) => {
+    if (target === file && !intercepted) {
+      intercepted = true
+      initialReadObserved()
+      await readReleased
+    }
+    return originalReadJson(target)
+  })
+
+  try {
+    const inflight = Auth.all()
+    await initialRead
+    await Auth.remove("qoder-cli")
+    await expect(Auth.get("qoder-cli")).resolves.toBeUndefined()
+    releaseRead()
+    await inflight
+    expect(await Auth.get("qoder-cli")).toBeUndefined()
+  } finally {
+    releaseRead()
+    readSpy.mockRestore()
+    await Auth.remove("qoder-cli").catch(() => undefined)
+  }
+})
+
 test("canary migration preserves credentials written after its initial read", async () => {
   await fs.writeFile(file, JSON.stringify({ anthropic: { type: "api", key: "sk-existing" } }))
 

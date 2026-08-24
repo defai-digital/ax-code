@@ -443,6 +443,7 @@ export namespace Auth {
       if (cause instanceof AuthError) throw cause
       throw authError("Failed to write auth data", cause)
     }
+    allPending = undefined
     await invalidateProviderCacheAfterAuthChange()
   }
 
@@ -459,6 +460,7 @@ export namespace Auth {
     } catch (cause) {
       throw authError("Failed to write auth data", cause)
     }
+    allPending = undefined
     await invalidateProviderCacheAfterAuthChange()
   }
 }

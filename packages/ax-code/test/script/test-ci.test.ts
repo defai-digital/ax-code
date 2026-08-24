@@ -9,6 +9,7 @@ import {
   num,
   parseJUnit,
   resolveCoverageEnabled,
+  resolveRerunOnFail,
   resolveShardConcurrency,
   resolveTestCIGroup,
   renderSummaryText,
@@ -233,6 +234,16 @@ describe("script.test-ci", () => {
     expect(summary).toContain("- ignored harmless errors: 1")
     expect(summary).toContain("- max skipped across runs: 2")
     expect(summary).toContain("- recovery-2.xml (passed)")
+  })
+
+  test("retries once on GitHub Actions unless --rerun-on-fail is set", () => {
+    expect(resolveRerunOnFail({ flagValue: undefined, githubActions: undefined })).toBe(0)
+    expect(resolveRerunOnFail({ flagValue: undefined, githubActions: "true" })).toBe(1)
+    expect(resolveRerunOnFail({ flagValue: "0", githubActions: "true" })).toBe(0)
+    expect(resolveRerunOnFail({ flagValue: "2", githubActions: undefined })).toBe(2)
+    expect(() => resolveRerunOnFail({ flagValue: "-1", githubActions: "true" })).toThrowError(
+      "Invalid value for --rerun-on-fail: -1",
+    )
   })
 
   test("treats --rerun-on-fail as last-run-wins", () => {

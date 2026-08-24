@@ -61,6 +61,20 @@ export function num(name: string, fallback = 0) {
   return parsed
 }
 
+export function resolveRerunOnFail(input: { flagValue: string | undefined; githubActions: string | undefined }) {
+  if (input.flagValue != null && input.flagValue !== "") {
+    const parsed = Number.parseInt(input.flagValue, 10)
+    if (Number.isNaN(parsed) || parsed < 0) {
+      throw new Error(`Invalid value for --rerun-on-fail: ${input.flagValue}`)
+    }
+    return parsed
+  }
+  // Last-run-wins already greens a passing retry. Default one retry on GitHub
+  // Actions so a single flake does not fail the required job; local runs stay
+  // fail-fast unless `--rerun-on-fail` is passed.
+  return input.githubActions ? 1 : 0
+}
+
 export function shardFiles(files: string[], size: number) {
   if (!Number.isSafeInteger(size) || size < 1) throw new Error(`Shard size must be a positive integer: ${size}`)
   const shards: string[][] = []
@@ -392,7 +406,10 @@ async function main() {
     }
   }
 
-  const reruns = num("--rerun-on-fail")
+  const reruns = resolveRerunOnFail({
+    flagValue: arg("--rerun-on-fail"),
+    githubActions: process.env.GITHUB_ACTIONS,
+  })
   const runs = [] as Result[]
   runs.push(await runPass(1))
   for (let i = 0; i < reruns; i++) {
