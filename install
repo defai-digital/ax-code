@@ -2,6 +2,7 @@
 set -euo pipefail
 APP=ax-code
 AX_CODE_MINISIGN_PUBLIC_KEY='RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO'
+AX_CODE_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
 
 MUTED='\033[0;2m'
 RED='\033[0;31m'
@@ -60,7 +61,7 @@ ensure_minisign_available() {
         return 0
     fi
 
-    local tools_root="${XDG_CACHE_HOME:-$HOME/.cache}/ax-code/tools/minisign/${MINISIGN_BOOTSTRAP_VERSION}"
+    local tools_root="${AX_CODE_CACHE_HOME}/ax-code/tools/minisign/${MINISIGN_BOOTSTRAP_VERSION}"
     local bin_path="$tools_root/minisign"
     if [ -x "$bin_path" ]; then
         export PATH="$tools_root:$PATH"
@@ -664,6 +665,20 @@ warn_path_precedence() {
     fi
 }
 
+cleanup_bootstrap_cache_launcher() {
+    local cached_launcher="${AX_CODE_CACHE_HOME}/ax-code/tools/minisign/${MINISIGN_BOOTSTRAP_VERSION}/ax-code"
+    local cached_target=""
+
+    if [ -L "$cached_launcher" ]; then
+        cached_target=$(readlink "$cached_launcher" 2>/dev/null || true)
+        if [ "$cached_target" = "${INSTALL_DIR}/ax-code" ]; then
+            rm -f "$cached_launcher"
+            print_message info "${MUTED}Removed stale ax-code launcher from bootstrap cache at ${NC}$cached_launcher"
+        fi
+    fi
+}
+
+cleanup_bootstrap_cache_launcher
 cleanup_stale_source_launchers
 cleanup_stale_bundled_launchers
 
@@ -739,6 +754,12 @@ link_installed_binary_on_path() {
         case "$path_entry" in
             "$HOME"/*) ;;
             *) continue ;;
+        esac
+
+        # Bootstrap tools are temporarily prepended to PATH during install.
+        # They are caches, not stable locations for the ax-code launcher.
+        case "$path_entry" in
+            "$AX_CODE_CACHE_HOME"|"$AX_CODE_CACHE_HOME"/*) continue ;;
         esac
 
         link_path="$path_entry/ax-code"
@@ -838,10 +859,11 @@ warn_path_precedence
 warn_if_not_on_current_path
 
 echo -e ""
-echo -e "${MUTED}                    ${NC}             ▄     "
-echo -e "${MUTED}█▀▀█ █▀▀█ █▀▀█ █▀▀▄ ${NC}█▀▀▀ █▀▀█ █▀▀█ █▀▀█"
-echo -e "${MUTED}█░░█ █░░█ █▀▀▀ █░░█ ${NC}█░░░ █░░█ █░░█ █▀▀▀"
-echo -e "${MUTED}▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀ ${NC}▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀"
+echo -e "${MUTED}    _    __  __   ${NC}  ____          _      "
+echo -e "${MUTED}   / \\   \\ \\/ /   ${NC} / ___|___   __| | ___ "
+echo -e "${MUTED}  / _ \\   \\  /    ${NC}| |   / _ \\ / _\` |/ _ \\"
+echo -e "${MUTED} / ___ \\  /  \\    ${NC}| |__| (_) | (_| |  __/"
+echo -e "${MUTED}/_/   \\_\\/_/\\_\\   ${NC} \\____\\___/ \\__,_|\\___|"
 echo -e ""
 echo -e ""
 echo -e "${MUTED}AX Code includes free models, to start:${NC}"
