@@ -679,10 +679,15 @@ export namespace TaskQueue {
     ) {
       const { SessionPrompt } = await import("./prompt")
       await SessionPrompt.cancel(current.sessionID, { interrupt: true })
-      const after = await get(id)
-      if (after.status === "cancelled") return after
     }
-    if (current.status === "running") {
+    // Re-read after the interrupt and branch on the fresh status, not the stale
+    // pre-cancel read. The executor settles an interrupted item to a terminal
+    // status (failed via its catch block, or cancelled via the block observers);
+    // that outcome is authoritative. Blindly writing "cancelled" here would
+    // clobber a completed or already-recorded row and falsify its outcome.
+    const after = await get(id)
+    if (after.status === "completed" || after.status === "failed" || after.status === "cancelled") return after
+    if (after.status === "running") {
       return setStatus({ id, status: "cancelled", error: "Stopped by operator." })
     }
     return cancel(id)

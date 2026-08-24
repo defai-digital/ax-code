@@ -1243,3 +1243,64 @@ describe("TaskQueue payload write atomicity", () => {
     })
   })
 })
+
+describe("TaskQueue.stop", () => {
+  test("does not clobber a failure the executor settled during the interrupt", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const item = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Explore",
+          payload: { source: "task", resumeOnRestart: true },
+        })
+        await TaskQueue.setStatus({ id: item.id, status: "running" })
+
+        // Simulate the executor settling the interrupted item to "failed" while
+        // stop() is cancelling the session. The terminal outcome is authoritative
+        // and must not be overwritten with "cancelled".
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockImplementation(async () => {
+          await TaskQueue.setStatus({ id: item.id, status: "failed", error: "interrupted by user" })
+        })
+        try {
+          const stopped = await TaskQueue.stop(item.id)
+          expect(stopped.status).toBe("failed")
+          expect(stopped.error).toBe("interrupted by user")
+        } finally {
+          cancel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("never overwrites a completed item that settled during the interrupt", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const item = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Explore",
+          payload: { source: "task", resumeOnRestart: true },
+        })
+        await TaskQueue.setStatus({ id: item.id, status: "running" })
+
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockImplementation(async () => {
+          await TaskQueue.setStatus({ id: item.id, status: "completed" })
+        })
+        try {
+          const stopped = await TaskQueue.stop(item.id)
+          expect(stopped.status).toBe("completed")
+          expect(stopped.error).toBeUndefined()
+        } finally {
+          cancel.mockRestore()
+        }
+      },
+    })
+  })
+})
