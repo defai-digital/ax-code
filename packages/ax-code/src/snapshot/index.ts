@@ -534,6 +534,40 @@ export namespace Snapshot {
     })
   }
 
+  export async function previewRevert(patches: Patch[]) {
+    const current = await state()
+    const baselines = new Map<string, { hash: string; file: string }>()
+    for (const item of patches) {
+      if (!valid(item.hash)) continue
+      for (const requestedFile of item.files) {
+        const resolved = await revertPath(current, requestedFile)
+        const file = path.relative(current.worktree, resolved).replaceAll("\\", "/")
+        if (!baselines.has(file)) baselines.set(file, { hash: item.hash, file })
+      }
+    }
+    if (baselines.size === 0) return []
+
+    const currentHash = await track()
+    if (!currentHash) return []
+    const filesByHash = new Map<string, Set<string>>()
+    for (const item of baselines.values()) {
+      const files = filesByHash.get(item.hash)
+      if (files) files.add(item.file)
+      else filesByHash.set(item.hash, new Set([item.file]))
+    }
+
+    const diffs = new Map<string, FileDiff>()
+    for (const [hash, files] of filesByHash) {
+      for (const diff of await diffFull(hash, currentHash)) {
+        if (files.has(diff.file)) diffs.set(`${hash}\0${diff.file}`, diff)
+      }
+    }
+    return [...baselines.values()].flatMap((item) => {
+      const diff = diffs.get(`${item.hash}\0${item.file}`)
+      return diff ? [diff] : []
+    })
+  }
+
   export async function diff(hash: string) {
     const current = await state()
     return withOperationLock(current, async () => {

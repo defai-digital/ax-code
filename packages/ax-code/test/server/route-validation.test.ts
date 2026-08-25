@@ -461,6 +461,7 @@ describe("server route validation", () => {
             },
           ],
           summary: { files: 1, additions: 1, deletions: 1 },
+          descendants: [],
         } satisfies SessionRollback.PreviewResult
         const previewSpy = vi.spyOn(SessionRollback, "preview").mockResolvedValue(preview)
         const applySpy = vi.spyOn(SessionRollback, "apply")
@@ -479,6 +480,7 @@ describe("server route validation", () => {
             point: { step: 3 },
             diffs: [{ file: "src/app.ts", additions: 1, deletions: 1 }],
             summary: { files: 1, additions: 1, deletions: 1 },
+            descendants: [],
           })
         } finally {
           previewSpy.mockRestore()

@@ -845,6 +845,39 @@ export namespace Session {
     })
   })
 
+  export const descendants = fn(SessionID.zod, async (parentID) => {
+    const project = Instance.project
+    const rows = Database.use((db) =>
+      db
+        .select()
+        .from(SessionTable)
+        .where(eq(SessionTable.project_id, project.id))
+        .orderBy(SessionTable.time_created, SessionTable.id)
+        .all(),
+    )
+    const byParent = new Map<SessionID, SessionRow[]>()
+    for (const row of rows) {
+      if (!row.parent_id) continue
+      const list = byParent.get(row.parent_id)
+      if (list) list.push(row)
+      else byParent.set(row.parent_id, [row])
+    }
+
+    const result: Info[] = []
+    const pending = [parentID]
+    const seen = new Set<SessionID>(pending)
+    for (let index = 0; index < pending.length; index++) {
+      for (const row of byParent.get(pending[index]) ?? []) {
+        if (seen.has(row.id)) continue
+        seen.add(row.id)
+        pending.push(row.id)
+        const next = parseRow(row)
+        if (next) result.push(next)
+      }
+    }
+    return result
+  })
+
   async function removeInternal(sessionID: SessionID, options: { updatedBefore?: number } = {}): Promise<number> {
     const session = await get(sessionID)
     // Collect descendants and delete them inside the same transaction to

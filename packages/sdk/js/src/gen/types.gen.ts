@@ -3757,6 +3757,10 @@ export type SessionRollbackPreview = {
     additions: number
     deletions: number
   }
+  descendants: Array<{
+    sessionID: string
+    files: Array<string>
+  }>
 }
 
 export type SessionSemanticDiffChange = {

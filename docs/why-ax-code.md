@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-21
+Last reviewed: 2026-08-25
 Owner: AX Code maintainers
 
 Most coding agents optimize the moment of writing code. AX Code optimizes the moment after: deciding whether to keep what the agent produced.
@@ -15,7 +15,7 @@ AX Code is built around that problem:
 
 - **Evidence.** Every session is recorded as a typed event log — routing decisions, model activity, steps, tool calls, tool results — plus file snapshots taken during the run.
 - **Verification.** Where a gate is enforceable, your repository's own checks decide. Arena candidates and gated refactor application run typecheck, lint, and tests before a result is accepted.
-- **Reversibility.** Snapshot points are recoverable per step, not only per session.
+- **Reversibility.** Snapshot points are recoverable per step, not only per session, including changes delegated to nested sessions in the same working directory.
 - **Your decision.** AX Code ranks, scores, and reports. It does not merge for you.
 
 ## Who it is for

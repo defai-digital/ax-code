@@ -666,7 +666,7 @@ export const SessionRoutes = lazy(() =>
         summary: "Preview rollback point",
         tags: ["Session"],
         description:
-          "Preview the file changes covered by a step-level rollback point selected by step index or tool name.",
+          "Preview root and same-directory descendant file changes covered by a step-level rollback point selected by step index or tool name.",
         operationId: "session.rollback_preview",
         responses: {
           200: {
@@ -701,7 +701,8 @@ export const SessionRoutes = lazy(() =>
       describeRoute({
         summary: "Apply rollback point",
         tags: ["Session"],
-        description: "Apply a step-level rollback point selected by step index or tool name.",
+        description:
+          "Apply a step-level rollback point, including same-directory descendant changes, selected by step index or tool name.",
         operationId: "session.rollback",
         responses: {
           200: {

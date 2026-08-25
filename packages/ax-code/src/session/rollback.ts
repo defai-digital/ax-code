@@ -4,7 +4,6 @@ import type { ReplayEvent } from "../replay/event"
 import { EventQuery } from "../replay/query"
 import { Session } from "."
 import { Snapshot } from "../snapshot"
-import { SessionSummary } from "./summary"
 import { MessageID, PartID, SessionID } from "./schema"
 import { SessionRevert } from "./revert"
 import { uniqueStrings } from "../util/string-list"
@@ -66,6 +65,12 @@ export namespace SessionRollback {
       point: Point,
       diffs: Snapshot.FileDiff.array(),
       summary: Summary,
+      descendants: z
+        .object({
+          sessionID: SessionID.zod,
+          files: z.string().array(),
+        })
+        .array(),
     })
     .meta({
       ref: "SessionRollbackPreview",
@@ -159,18 +164,6 @@ export namespace SessionRollback {
     return [...input.points].reverse().find((point) => match(point, input.tool!))
   }
 
-  function messagesFromPoint(msgs: Awaited<ReturnType<typeof Session.messages>>, point: Point) {
-    let started = false
-    return msgs.flatMap((msg) => {
-      if (started) return [msg]
-      if (msg.info.id !== point.messageID) return []
-      const index = msg.parts.findIndex((part) => part.id === point.partID)
-      if (index < 0) return []
-      started = true
-      return [{ ...msg, parts: msg.parts.slice(index) }]
-    })
-  }
-
   export async function points(sessionID: SessionID) {
     const msgs = await Session.messages({ sessionID })
     return detail({
@@ -180,13 +173,15 @@ export namespace SessionRollback {
   }
 
   export async function preview(input: { sessionID: SessionID; step?: number; tool?: string }) {
-    const [msgs, availablePoints] = await Promise.all([
-      Session.messages({ sessionID: input.sessionID }),
-      points(input.sessionID),
-    ])
+    const availablePoints = await points(input.sessionID)
     const point = pick({ points: availablePoints, step: input.step, tool: input.tool })
     if (!point) return
-    const diffs = await SessionSummary.computeDiff({ messages: messagesFromPoint(msgs, point) })
+    const preview = await SessionRevert.preview({
+      sessionID: input.sessionID,
+      messageID: point.messageID,
+      partID: point.partID,
+    })
+    const diffs = preview.diffs
     return {
       point,
       diffs,
@@ -195,6 +190,7 @@ export namespace SessionRollback {
         additions: diffs.reduce((sum, diff) => sum + diff.additions, 0),
         deletions: diffs.reduce((sum, diff) => sum + diff.deletions, 0),
       },
+      descendants: preview.descendants,
     } satisfies PreviewResult
   }
 

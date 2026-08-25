@@ -4055,7 +4055,7 @@ export class Session2 extends HeyApiClient {
   /**
    * Apply rollback point
    *
-   * Apply a step-level rollback point selected by step index or tool name.
+   * Apply a step-level rollback point, including same-directory descendant changes, selected by step index or tool name.
    */
   public rollback<ThrowOnError extends boolean = false>(
     parameters: {
@@ -4168,7 +4168,7 @@ export class Session2 extends HeyApiClient {
   /**
    * Preview rollback point
    *
-   * Preview the file changes covered by a step-level rollback point selected by step index or tool name.
+   * Preview root and same-directory descendant file changes covered by a step-level rollback point selected by step index or tool name.
    */
   public rollbackPreview<ThrowOnError extends boolean = false>(
     parameters: {

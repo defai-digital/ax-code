@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-21
+Last reviewed: 2026-08-25
 Owner: AX Code runtime
 
 Every AX Code session is recorded while it runs. This page covers the commands that turn that recording into something you can review, compare, export, and undo.
@@ -98,7 +98,9 @@ ax-code rollback <sessionID> --step 4    # restore one step
 ax-code rollback <sessionID>             # restore the whole session
 ```
 
-`--list` reads rollback points from the execution graph, so you can target a specific step rather than reverting the entire run.
+`--list` combines durable step events with execution-graph detail, so you can target a specific step rather than reverting the entire run. `--dry-run` uses the same rollback planner as apply and lists any delegated sessions whose file ledger contributes to the result.
+
+Rollback follows nested child sessions when they wrote to the parent's exact working directory. It restores their post-boundary file changes while retaining their transcripts. Descendants running in another worktree or directory are excluded, and rollback fails closed if any included session is still running.
 
 **Boundaries worth knowing before you rely on it:** rollback restores from snapshots taken during the run. A file that was never snapshotted — because it was changed outside the session, or was not in a recoverable state — cannot be restored this way. Use `--dry-run` first on anything consequential.
 
