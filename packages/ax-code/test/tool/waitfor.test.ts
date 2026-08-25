@@ -88,7 +88,7 @@ async function enqueueBackgroundSubagent(input: {
 }
 
 describe("tool.waitfor", () => {
-  test("completed target returns the child result and marks it delivered, suppressing the handoff", async () => {
+  test("completed target claims the child result and suppresses the handoff", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -115,7 +115,8 @@ describe("tool.waitfor", () => {
         expect(result.output).toContain(`session_id: ${child.id}`)
 
         const latest = await TaskQueue.get(TaskQueueID.make(item.id))
-        expect(latest.payload["deliveryStatus"]).toBe("delivered")
+        expect(latest.payload["deliveryStatus"]).toBe("delivering")
+        expect(TaskQueue.resultDeliveryClaim(latest)?.owner).toBe("waitfor")
 
         // The handoff path's delivery guard must now suppress the automatic
         // completion message — no duplicate <task id=...> in the parent.
@@ -131,11 +132,18 @@ describe("tool.waitfor", () => {
           .map((part) => part.text)
           .find((text) => text.includes("<task id="))
         expect(handoff).toBeUndefined()
+
+        const claim = TaskQueue.resultDeliveryClaim(latest)
+        expect(claim?.owner).toBe("waitfor")
+        if (claim?.owner === "waitfor") {
+          await TaskQueue.completeResultDelivery({ id: item.id, claim })
+        }
+        expect((await TaskQueue.get(item.id)).payload["deliveryStatus"]).toBe("delivered")
       },
     })
   })
 
-  test("already-delivered target resolves by child session id and reads the result without re-marking", async () => {
+  test("already-delivered target resolves by child session id without duplicating the result", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -149,22 +157,15 @@ describe("tool.waitfor", () => {
         })
         await TaskQueue.setDelivery({ id: item.id, status: "delivered" })
 
-        const deliverySpy = vi.spyOn(TaskQueue, "setDelivery")
-        try {
-          const result = await (
-            await WaitForTool.init()
-          ).execute({ task_id: child.id, timeout: 30 }, toolContext(parent.id))
+        const result = await (
+          await WaitForTool.init()
+        ).execute({ task_id: child.id, timeout: 30 }, toolContext(parent.id))
 
-          expect(result.output).toContain("already delivered text")
-          expect(deliverySpy).not.toHaveBeenCalled()
-          // delivered is true only when THIS call marks the item delivered —
-          // an already-delivered item reports false.
-          expect(result.metadata.delivered).toBe(false)
-          expect(result.metadata.taskID).toBe(item.id)
-          expect(result.output).toContain(`task_id: ${item.id}`)
-        } finally {
-          deliverySpy.mockRestore()
-        }
+        expect(result.output).not.toContain("already delivered text")
+        expect(result.output).toContain("already delivered")
+        expect(result.metadata.delivered).toBe(false)
+        expect(result.metadata.taskID).toBe(item.id)
+        expect(result.output).toContain(`task_id: ${item.id}`)
       },
     })
   })

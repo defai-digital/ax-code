@@ -14,6 +14,7 @@ import { resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-
 import { providerFallbackSwitchState } from "../../src/session/prompt-helpers"
 import { SessionRetry } from "../../src/session/retry"
 import { MessageID, SessionID } from "../../src/session/schema"
+import { TaskQueue } from "../../src/session/task-queue"
 import { tmpdir } from "../fixture/fixture"
 
 const model: Provider.Model = {
@@ -477,6 +478,78 @@ describe("session.processor", () => {
 
         expect(result).toBe("continue")
         expect(processor.message.finish).toBe("tool-calls")
+      },
+    })
+  })
+
+  test("finalizes a waitfor result claim only after the tool result is persisted", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const child = await Session.create({ parentID: streamInput.sessionID })
+        const queued = await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "background task",
+          payload: {
+            source: "task",
+            resumeOnRestart: true,
+            deliveryStatus: "pending",
+            parentSessionID: streamInput.sessionID,
+          },
+        })
+        const item = await TaskQueue.setStatus({ id: queued.id, status: "completed" })
+        const callID = "call_waitfor_delivery"
+        await TaskQueue.claimResultDelivery({
+          id: item.id,
+          claim: {
+            owner: "waitfor",
+            sessionID: streamInput.sessionID,
+            messageID: processor.message.id,
+            callID,
+            time: Date.now(),
+          },
+        })
+        expect((await TaskQueue.get(item.id)).payload["deliveryStatus"]).toBe("delivering")
+
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "tool-input-start", id: callID, toolName: "waitfor" }
+            yield {
+              type: "tool-call",
+              toolCallId: callID,
+              toolName: "waitfor",
+              input: { task_id: item.id, timeout: 30 },
+            }
+            yield {
+              type: "tool-result",
+              toolCallId: callID,
+              input: { task_id: item.id, timeout: 30 },
+              output: {
+                output: "task result",
+                title: "background task",
+                metadata: { taskID: item.id, delivered: true },
+                attachments: [],
+              },
+            }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any)
+
+        const result = await processor.process(streamInput)
+
+        expect(result).toBe("continue")
+        expect((await TaskQueue.get(item.id)).payload["deliveryStatus"]).toBe("delivered")
       },
     })
   })

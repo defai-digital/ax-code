@@ -5,7 +5,7 @@ import { Session } from "../session"
 import { SessionID, TaskQueueID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { TaskQueue } from "../session/task-queue"
-import { childVisibleText } from "../session/background-subagent-handoff"
+import { childVisibleText, isEmptySubagentResultText } from "../session/background-subagent-handoff"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "waitfor-tool" })
@@ -195,9 +195,9 @@ export const WaitForTool = Tool.define("waitfor", async () => {
         }
       }
 
-      // Re-read after the terminal transition so deliveryStatus is current.
+      // Re-read after the terminal transition so the delivery claim is based
+      // on current state rather than the last polling snapshot.
       const latest = await TaskQueue.get(item.id).catch(() => current)
-      const alreadyDelivered = latest.payload["deliveryStatus"] === "delivered"
 
       let text = ""
       if (item.kind === "subagent") {
@@ -211,25 +211,49 @@ export const WaitForTool = Tool.define("waitfor", async () => {
             : `Task finished with status: ${latest.status}.`)
       }
 
-      // Consume the result exactly once: marking delivered makes the handoff
-      // path's guard (background-subagent-delivery.ts) suppress the automatic
-      // completion notification. If delivery already ran, just read the child
-      // session result without re-marking (the race is benign either way).
-      // `delivered` in the metadata is true ONLY when this call actually
-      // marked the item delivered.
+      const liveTaskSubagent = latest.kind === "subagent" && latest.payload["source"] === "task"
       let markedDelivered = false
-      if (!alreadyDelivered && item.kind === "subagent") {
-        markedDelivered = await TaskQueue.setDelivery({
+      if (liveTaskSubagent) {
+        const selection = await TaskQueue.claimResultDelivery({
           id: item.id,
-          status: "delivered",
-          resultEmpty: text.trim().length === 0,
-        }).then(
-          () => true,
-          (e) => {
-            log.warn("failed to mark background task delivered", { taskQueueID: item.id, error: e })
-            return false
+          claim: {
+            owner: "waitfor",
+            sessionID: ctx.sessionID,
+            messageID: ctx.messageID,
+            callID: ctx.callID ?? "",
+            time: Date.now(),
           },
-        )
+          resultEmpty: latest.status !== "completed" || isEmptySubagentResultText(text),
+        }).catch((error) => {
+          log.warn("failed to claim background task result", { taskQueueID: item.id, error })
+          return undefined
+        })
+
+        if (!selection?.accepted) {
+          const owner = selection?.claim?.owner
+          return {
+            title: item.title,
+            metadata: {
+              taskID: item.id,
+              sessionID: item.sessionID,
+              status: latest.status,
+              timedOut: false,
+              delivered: false,
+            },
+            output: [
+              `task_id: ${item.id}`,
+              ...(item.sessionID ? [`session_id: ${item.sessionID}`] : []),
+              `state: ${latest.status}`,
+              "",
+              !selection
+                ? "The result could not be claimed safely; the automatic parent handoff remains authoritative."
+                : owner === "handoff"
+                  ? "The result is already being delivered through the automatic parent handoff; no duplicate result is included here."
+                  : "The result was already delivered; no duplicate result is included here.",
+            ].join("\n"),
+          }
+        }
+        markedDelivered = selection.accepted
       }
 
       return {

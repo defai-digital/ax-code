@@ -9,7 +9,7 @@ import type { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
 import { SessionMetadata } from "./metadata"
-import { SessionID, TaskQueueID } from "./schema"
+import { MessageID, PartID, SessionID, TaskQueueID } from "./schema"
 import { TaskQueueTable } from "./session.sql"
 import { SessionShard } from "./shard"
 
@@ -338,6 +338,36 @@ export namespace TaskQueue {
     )
   }
 
+  export async function listBackgroundResultDeliveriesForRecovery(): Promise<Info[]> {
+    return SessionShard.storeForProject(Instance.project.id).use((db) =>
+      db
+        .select()
+        .from(TaskQueueTable)
+        .where(
+          and(
+            eq(TaskQueueTable.project_id, Instance.project.id),
+            eq(TaskQueueTable.kind, "subagent"),
+            inArray(TaskQueueTable.status, ["completed", "failed"]),
+          ),
+        )
+        .orderBy(asc(TaskQueueTable.time_completed), asc(TaskQueueTable.id))
+        .all()
+        .flatMap((row) => {
+          try {
+            const item = fromRow(row)
+            if (!isLiveTaskSubagentPayload(item.payload)) return []
+            const delivery = DeliveryStatus.safeParse(item.payload["deliveryStatus"])
+            const claim = resultDeliveryClaim(item)
+            if (delivery.success && delivery.data === "delivered" && claim?.owner !== "waitfor") return []
+            return [item]
+          } catch {
+            log.warn("skipping corrupt background result delivery row", { id: row.id })
+            return []
+          }
+        }),
+    )
+  }
+
   export async function enqueue(input: EnqueueInput): Promise<Info> {
     const parsed = EnqueueInput.parse(input)
     if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
@@ -411,8 +441,224 @@ export namespace TaskQueue {
     return item
   }
 
-  export const DeliveryStatus = z.enum(["pending", "delivered", "blocked"])
+  export const DeliveryStatus = z.enum(["pending", "delivering", "delivered", "blocked"])
   export type DeliveryStatus = z.infer<typeof DeliveryStatus>
+
+  export const ResultDeliveryClaim = z.discriminatedUnion("owner", [
+    z.object({
+      owner: z.literal("handoff"),
+      messageID: MessageID.zod,
+      partID: PartID.zod,
+      time: z.number(),
+    }),
+    z.object({
+      owner: z.literal("waitfor"),
+      sessionID: SessionID.zod,
+      messageID: MessageID.zod,
+      callID: z.string(),
+      time: z.number(),
+    }),
+  ])
+  export type ResultDeliveryClaim = z.infer<typeof ResultDeliveryClaim>
+
+  export function resultDeliveryClaim(item: Info): ResultDeliveryClaim | undefined {
+    const parsed = ResultDeliveryClaim.safeParse(item.payload["resultDelivery"])
+    return parsed.success ? parsed.data : undefined
+  }
+
+  function sameResultDeliveryClaim(left: ResultDeliveryClaim, right: ResultDeliveryClaim) {
+    if (left.owner !== right.owner) return false
+    if (left.owner === "handoff" && right.owner === "handoff") {
+      return left.messageID === right.messageID && left.partID === right.partID
+    }
+    if (left.owner === "waitfor" && right.owner === "waitfor") {
+      return left.sessionID === right.sessionID && left.messageID === right.messageID && left.callID === right.callID
+    }
+    return false
+  }
+
+  /**
+   * Atomically selects the single consumer for a background-subagent result.
+   * A handoff claim remains resumable until it is finalized so a crash retry
+   * can reuse its stable message/part ids. A waitfor claim stays in-progress
+   * until the processor durably records the tool result; its
+   * session/message/call ids let restart recovery verify that boundary.
+   */
+  export async function claimResultDelivery(input: {
+    id: TaskQueueID
+    claim: ResultDeliveryClaim
+    resultEmpty?: boolean
+  }): Promise<{ item: Info; claim?: ResultDeliveryClaim; claimed: boolean; accepted: boolean }> {
+    const now = Date.now()
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const current = fromRow(currentRow)
+      const status = DeliveryStatus.safeParse(current.payload["deliveryStatus"])
+      const existing = resultDeliveryClaim(current)
+
+      if (status.success && status.data === "delivered") {
+        const accepted =
+          existing?.owner === "waitfor" &&
+          input.claim.owner === "waitfor" &&
+          sameResultDeliveryClaim(existing, input.claim)
+        return { item: current, claim: existing, claimed: false, accepted }
+      }
+
+      if (existing) {
+        const accepted =
+          (existing.owner === "handoff" && input.claim.owner === "handoff") ||
+          sameResultDeliveryClaim(existing, input.claim)
+        return { item: current, claim: existing, claimed: false, accepted }
+      }
+
+      const payload: Payload = {
+        ...current.payload,
+        deliveryStatus: "delivering",
+        resultDelivery: input.claim,
+      }
+      delete payload["deliveryError"]
+      if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
+      const row = db
+        .update(TaskQueueTable)
+        .set({ payload, time_updated: now })
+        .where(eq(TaskQueueTable.id, input.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return { item: fromRow(row), claim: input.claim, claimed: true, accepted: true }
+    })
+    assertProjectItem(result.item)
+    if (result.claimed) publishUpdated(result.item)
+    return result
+  }
+
+  export async function completeResultDelivery(input: {
+    id: TaskQueueID
+    claim: ResultDeliveryClaim
+    resultEmpty?: boolean
+  }): Promise<{ item: Info; completed: boolean }> {
+    const now = Date.now()
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const current = fromRow(currentRow)
+      const existing = resultDeliveryClaim(current)
+      if (!existing || !sameResultDeliveryClaim(existing, input.claim)) {
+        return { item: current, completed: false, changed: false }
+      }
+      if (current.payload["deliveryStatus"] === "delivered") {
+        return { item: current, completed: true, changed: false }
+      }
+      const payload: Payload = {
+        ...current.payload,
+        deliveryStatus: "delivered",
+      }
+      delete payload["deliveryError"]
+      if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
+      const row = db
+        .update(TaskQueueTable)
+        .set({ payload, time_updated: now })
+        .where(eq(TaskQueueTable.id, input.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return { item: fromRow(row), completed: true, changed: true }
+    })
+    assertProjectItem(result.item)
+    if (result.changed) publishUpdated(result.item)
+    return { item: result.item, completed: result.completed }
+  }
+
+  export async function completeWaitForResultDelivery(input: {
+    id: TaskQueueID
+    sessionID: SessionID
+    messageID: MessageID
+    callID: string
+  }): Promise<{ item: Info; completed: boolean }> {
+    const current = await get(input.id)
+    const claim = resultDeliveryClaim(current)
+    if (
+      claim?.owner !== "waitfor" ||
+      claim.sessionID !== input.sessionID ||
+      claim.messageID !== input.messageID ||
+      claim.callID !== input.callID
+    ) {
+      return { item: current, completed: false }
+    }
+    return completeResultDelivery({ id: input.id, claim })
+  }
+
+  export async function blockResultDelivery(input: {
+    id: TaskQueueID
+    claim: ResultDeliveryClaim
+    error: string
+  }): Promise<{ item: Info; blocked: boolean }> {
+    const now = Date.now()
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const current = fromRow(currentRow)
+      const existing = resultDeliveryClaim(current)
+      if (
+        current.payload["deliveryStatus"] === "delivered" ||
+        !existing ||
+        !sameResultDeliveryClaim(existing, input.claim)
+      ) {
+        return { item: current, blocked: false, changed: false }
+      }
+      const payload: Payload = {
+        ...current.payload,
+        deliveryStatus: "blocked",
+        deliveryError: input.error,
+      }
+      const row = db
+        .update(TaskQueueTable)
+        .set({ payload, time_updated: now })
+        .where(eq(TaskQueueTable.id, input.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return { item: fromRow(row), blocked: true, changed: true }
+    })
+    assertProjectItem(result.item)
+    if (result.changed) publishUpdated(result.item)
+    return { item: result.item, blocked: result.blocked }
+  }
+
+  export async function releaseWaitForResultDelivery(input: {
+    id: TaskQueueID
+    claim: Extract<ResultDeliveryClaim, { owner: "waitfor" }>
+  }): Promise<{ item: Info; released: boolean }> {
+    const now = Date.now()
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+      if (!currentRow) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      const current = fromRow(currentRow)
+      const existing = resultDeliveryClaim(current)
+      if (!existing || !sameResultDeliveryClaim(existing, input.claim)) {
+        return { item: current, released: false, changed: false }
+      }
+      const payload: Payload = {
+        ...current.payload,
+        deliveryStatus: "pending",
+      }
+      delete payload["resultDelivery"]
+      delete payload["deliveryError"]
+      delete payload["deliveryEmpty"]
+      const row = db
+        .update(TaskQueueTable)
+        .set({ payload, time_updated: now })
+        .where(eq(TaskQueueTable.id, input.id))
+        .returning()
+        .get()
+      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return { item: fromRow(row), released: true, changed: true }
+    })
+    assertProjectItem(result.item)
+    if (result.changed) publishUpdated(result.item)
+    return { item: result.item, released: result.released }
+  }
 
   export async function setDelivery(input: {
     id: TaskQueueID
@@ -436,6 +682,10 @@ export namespace TaskQueue {
       if (input.error !== undefined) payload["deliveryError"] = input.error
       else delete payload["deliveryError"]
       if (input.resultEmpty !== undefined) payload["deliveryEmpty"] = input.resultEmpty
+      if (input.status === "pending") {
+        delete payload["resultDelivery"]
+        delete payload["deliveryEmpty"]
+      }
       const row = db
         .update(TaskQueueTable)
         .set({ payload, time_updated: now })
@@ -713,11 +963,19 @@ export namespace TaskQueue {
     const current = await get(id)
     assertActionStatus(current, "retry", ["failed", "cancelled"])
     const now = Date.now()
+    const payload: Payload = { ...current.payload }
+    if (current.kind === "subagent" && current.payload["source"] === "task") {
+      payload["deliveryStatus"] = "pending"
+      delete payload["resultDelivery"]
+      delete payload["deliveryError"]
+      delete payload["deliveryEmpty"]
+    }
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(TaskQueueTable)
         .set({
           status: "queued",
+          payload,
           error: null,
           time_started: null,
           time_completed: null,

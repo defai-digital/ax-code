@@ -14,5 +14,5 @@ When NOT to use waitfor:
 
 Notes:
 - Waiting on a task that has not started because it is gated on this session going idle is refused — that would deadlock. End your turn instead.
-- Consuming a result with waitfor marks it delivered, which suppresses the automatic completion notification (handoff) for that task. You will not be notified about it again.
+- Consuming a result with waitfor claims it for this tool call and suppresses the automatic completion notification (handoff) for that task. If the automatic handoff already claimed it, waitfor reports that state without repeating the result.
 - On timeout, waitfor returns normally with "Still running" — the task keeps running and you will be notified when it finishes.

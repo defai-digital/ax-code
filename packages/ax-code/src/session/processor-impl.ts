@@ -23,8 +23,9 @@ import { Permission } from "@/permission"
 import { Question } from "@/question"
 import { SelfCorrection } from "./correction"
 import { ToolErrorPatternTracker } from "./tool-error-pattern"
-import { PartID } from "./schema"
+import { PartID, TaskQueueID } from "./schema"
 import type { SessionID, MessageID } from "./schema"
+import { TaskQueue } from "./task-queue"
 import { NamedError } from "@ax-code/util/error"
 import { Recorder } from "@/replay/recorder"
 import { Database } from "@/storage/db"
@@ -717,6 +718,27 @@ export namespace SessionProcessor {
                         attachments: value.output.attachments,
                       },
                     })
+                    const resultMetadata = asRecord(value.output.metadata)
+                    const resultTaskID = resultMetadata?.["taskID"]
+                    if (
+                      match.tool === "waitfor" &&
+                      resultMetadata?.["delivered"] === true &&
+                      typeof resultTaskID === "string" &&
+                      resultTaskID.startsWith("tsk_")
+                    ) {
+                      await TaskQueue.completeWaitForResultDelivery({
+                        id: TaskQueueID.make(resultTaskID),
+                        sessionID: input.sessionID,
+                        messageID: input.assistantMessage.id,
+                        callID: value.toolCallId,
+                      }).catch((error) => {
+                        log.warn("failed to finalize waitfor result delivery", {
+                          taskQueueID: resultTaskID,
+                          sessionID: input.sessionID,
+                          error,
+                        })
+                      })
+                    }
                     Recorder.emit({
                       type: "tool.result",
                       sessionID: input.sessionID,

@@ -141,6 +141,14 @@ export async function InstanceBootstrap() {
       task: () => DiagnosticCorrelation.init(),
     }),
   ])
+  await runtimeTask({
+    service: "BackgroundSubagentDelivery.recover",
+    label: "background subagent result delivery recovery",
+    task: async () => {
+      const { recoverBackgroundSubagentHandoffs } = await import("@/session/background-subagent-delivery")
+      return recoverBackgroundSubagentHandoffs()
+    },
+  })
   // Start provider loading in the background so it's ready by the time
   // the user sends their first prompt. Previously warmup was called
   // inside the prompt loop — after the user already typed — causing a

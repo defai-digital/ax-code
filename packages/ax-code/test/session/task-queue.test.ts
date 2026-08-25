@@ -6,7 +6,7 @@ import { Question } from "../../src/question"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
-import { TaskQueueID } from "../../src/session/schema"
+import { MessageID, PartID, TaskQueueID } from "../../src/session/schema"
 import { TaskQueueTable } from "../../src/session/session.sql"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
@@ -1239,6 +1239,88 @@ describe("TaskQueue payload write atomicity", () => {
         })
         expect(retry.claimed).toBe(false)
         expect(retry.entry.messageID).toBe(a.entry.messageID)
+      },
+    })
+  })
+
+  test("claimResultDelivery atomically selects waitfor or handoff", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const created = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "background task",
+          payload: { source: "task", deliveryStatus: "pending" },
+        })
+
+        const [handoff, waitfor] = await Promise.all([
+          TaskQueue.claimResultDelivery({
+            id: created.id,
+            claim: {
+              owner: "handoff",
+              messageID: MessageID.make("msg_result_handoff"),
+              partID: PartID.make("prt_result_handoff"),
+              time: Date.now(),
+            },
+          }),
+          TaskQueue.claimResultDelivery({
+            id: created.id,
+            claim: {
+              owner: "waitfor",
+              sessionID: session.id,
+              messageID: MessageID.make("msg_waitfor_parent"),
+              callID: "call_waitfor",
+              time: Date.now(),
+            },
+          }),
+        ])
+
+        expect([handoff, waitfor].filter((result) => result.claimed)).toHaveLength(1)
+        expect([handoff, waitfor].filter((result) => result.accepted)).toHaveLength(1)
+        const latest = await TaskQueue.get(created.id)
+        const claim = TaskQueue.resultDeliveryClaim(latest)
+        expect(claim?.owner).toBe(handoff.claimed ? "handoff" : "waitfor")
+        expect(latest.payload["deliveryStatus"]).toBe("delivering")
+      },
+    })
+  })
+
+  test("retry clears a prior live-subagent result delivery claim", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const child = await Session.create({})
+        const created = await TaskQueue.enqueue({
+          sessionID: child.id,
+          kind: "subagent",
+          title: "background task",
+          payload: { source: "task", deliveryStatus: "pending" },
+        })
+        await TaskQueue.setStatus({ id: created.id, status: "failed", error: "first attempt failed" })
+        await TaskQueue.claimResultDelivery({
+          id: created.id,
+          claim: {
+            owner: "waitfor",
+            sessionID: child.id,
+            messageID: MessageID.make("msg_failed_wait"),
+            callID: "call_failed_wait",
+            time: Date.now(),
+          },
+          resultEmpty: true,
+        })
+
+        const retried = await TaskQueue.retry(created.id)
+
+        expect(retried.status).toBe("queued")
+        expect(retried.payload["deliveryStatus"]).toBe("pending")
+        expect(TaskQueue.resultDeliveryClaim(retried)).toBeUndefined()
+        expect(retried.payload["deliveryEmpty"]).toBeUndefined()
       },
     })
   })
