@@ -83706,6 +83706,45 @@
     "name": "Cloudflare AI Gateway",
     "doc": "https://developers.cloudflare.com/ai-gateway/",
     "models": {
+      "deepseek/deepseek-v4-pro": {
+        "id": "deepseek/deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "description": "Open MoE flagship with million-token context for coding and long agent runs",
+        "family": "deepseek-thinking",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 384000
+        }
+      },
       "anthropic/claude-opus-4.8": {
         "id": "anthropic/claude-opus-4.8",
         "name": "Claude Opus 4.8",
@@ -83745,6 +83784,9 @@
         "limit": {
           "context": 1000000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "anthropic/claude-sonnet-4.6": {
@@ -83791,7 +83833,7 @@
           "output": 128000
         },
         "provider": {
-          "npm": "ai-gateway-provider"
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "anthropic/claude-sonnet-5": {
@@ -83820,7 +83862,7 @@
         "structured_output": true,
         "temperature": false,
         "knowledge": "2026-01-31",
-        "release_date": "2026-06-29",
+        "release_date": "2026-06-30",
         "last_updated": "2026-06-30",
         "modalities": {
           "input": [
@@ -83836,6 +83878,9 @@
         "limit": {
           "context": 1000000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "anthropic/claude-haiku-4.5": {
@@ -83871,6 +83916,9 @@
         "limit": {
           "context": 200000,
           "output": 64000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "anthropic/claude-opus-4.7": {
@@ -83896,7 +83944,7 @@
         "structured_output": true,
         "temperature": false,
         "knowledge": "2026-01-31",
-        "release_date": "2026-04-14",
+        "release_date": "2026-04-16",
         "last_updated": "2026-04-16",
         "modalities": {
           "input": [
@@ -83958,6 +84006,9 @@
         "limit": {
           "context": 200000,
           "output": 64000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "anthropic/claude-opus-4.6": {
@@ -83986,7 +84037,7 @@
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-05-31",
-        "release_date": "2026-02-04",
+        "release_date": "2026-02-05",
         "last_updated": "2026-03-13",
         "modalities": {
           "input": [
@@ -84002,6 +84053,9 @@
         "limit": {
           "context": 1000000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "anthropic/claude-sonnet-4.5": {
@@ -84037,6 +84091,9 @@
         "limit": {
           "context": 1000000,
           "output": 64000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "anthropic/claude-fable-5": {
@@ -84062,7 +84119,7 @@
         "structured_output": true,
         "temperature": false,
         "knowledge": "2026-01-31",
-        "release_date": "2026-06-07",
+        "release_date": "2026-06-09",
         "last_updated": "2026-06-09",
         "modalities": {
           "input": [
@@ -84078,6 +84135,9 @@
         "limit": {
           "context": 1000000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "anthropic/claude-opus-5": {
@@ -84119,6 +84179,9 @@
         "limit": {
           "context": 1000000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
         }
       },
       "openai/gpt-4o": {
@@ -84148,34 +84211,9 @@
         "limit": {
           "context": 128000,
           "output": 16384
-        }
-      },
-      "openai/gpt-5.3-chat-latest": {
-        "id": "openai/gpt-5.3-chat-latest",
-        "name": "GPT-5.3 Chat (latest)",
-        "description": "Chat-tuned GPT model for conversational assistance, writing, and tool workflows",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-08-31",
-        "release_date": "2026-03-03",
-        "last_updated": "2026-03-03",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
         },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 16384
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5-nano": {
@@ -84213,9 +84251,12 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 400000,
+          "context": 128000,
           "input": 272000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-4o-mini": {
@@ -84245,131 +84286,10 @@
         "limit": {
           "context": 128000,
           "output": 16384
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
-      },
-      "openai/gpt-3.5-turbo": {
-        "id": "openai/gpt-3.5-turbo",
-        "name": "GPT-3.5-turbo",
-        "description": "Compact GPT model for low-latency assistance and high-volume workloads",
-        "family": "gpt",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2021-09-01",
-        "release_date": "2023-03-01",
-        "last_updated": "2023-11-06",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 16385,
-          "output": 4096
-        },
-        "status": "deprecated"
-      },
-      "openai/o1-pro": {
-        "id": "openai/o1-pro",
-        "name": "o1-pro",
-        "description": "O-series reasoning model for hard analysis, math, coding, and planning",
-        "family": "o-pro",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2023-09",
-        "release_date": "2025-03-19",
-        "last_updated": "2025-03-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "output": 100000
-        },
-        "status": "deprecated"
-      },
-      "openai/gpt-4-turbo": {
-        "id": "openai/gpt-4-turbo",
-        "name": "GPT-4 Turbo",
-        "description": "Compact GPT model for low-latency assistance and high-volume workloads",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2023-11-06",
-        "last_updated": "2024-04-09",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 4096
-        },
-        "status": "deprecated"
-      },
-      "openai/gpt-4": {
-        "id": "openai/gpt-4",
-        "name": "GPT-4",
-        "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-11",
-        "release_date": "2023-11-06",
-        "last_updated": "2024-04-09",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8192,
-          "output": 8192
-        },
-        "status": "deprecated"
       },
       "openai/gpt-5.6-sol": {
         "id": "openai/gpt-5.6-sol",
@@ -84412,44 +84332,9 @@
           "context": 1050000,
           "input": 922000,
           "output": 128000
-        }
-      },
-      "openai/o3-pro": {
-        "id": "openai/o3-pro",
-        "name": "o3-pro",
-        "description": "High-effort o3 tier for difficult technical reasoning and careful answers",
-        "family": "o-pro",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2024-05",
-        "release_date": "2025-06-10",
-        "last_updated": "2025-06-10",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
         },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "output": 100000
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5.4-pro": {
@@ -84486,9 +84371,12 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1050000,
+          "context": 1000000,
           "input": 922000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5": {
@@ -84526,52 +84414,12 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 400000,
+          "context": 128000,
           "input": 272000,
           "output": 128000
-        }
-      },
-      "openai/gpt-5.6": {
-        "id": "openai/gpt-5.6",
-        "name": "GPT-5.6",
-        "description": "Frontier GPT-5.6 model for complex professional work, coding, and agentic workflows",
-        "family": "gpt-sol",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high",
-              "xhigh",
-              "max"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2026-02-16",
-        "release_date": "2026-07-09",
-        "last_updated": "2026-07-09",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
         },
-        "open_weights": false,
-        "limit": {
-          "context": 1050000,
-          "input": 922000,
-          "output": 128000
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5-mini": {
@@ -84609,9 +84457,12 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 400000,
+          "context": 128000,
           "input": 272000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5.6-luna": {
@@ -84655,93 +84506,9 @@
           "context": 1050000,
           "input": 922000,
           "output": 128000
-        }
-      },
-      "openai/gpt-5.3-codex": {
-        "id": "openai/gpt-5.3-codex",
-        "name": "GPT-5.3 Codex",
-        "description": "Coding-optimized GPT model for repository edits, reviews, and agentic software work",
-        "family": "gpt-codex",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2025-08-31",
-        "release_date": "2026-02-05",
-        "last_updated": "2026-02-05",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 400000,
-          "input": 272000,
-          "output": 128000
         },
         "provider": {
-          "npm": "ai-gateway-provider"
-        }
-      },
-      "openai/gpt-5.3-codex-spark": {
-        "id": "openai/gpt-5.3-codex-spark",
-        "name": "GPT-5.3 Codex Spark",
-        "description": "Coding-optimized GPT model for repository edits, reviews, and agentic software work",
-        "family": "gpt-codex-spark",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2025-08-31",
-        "release_date": "2026-02-05",
-        "last_updated": "2026-02-05",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "input": 100000,
-          "output": 32000
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-4.1-nano": {
@@ -84768,90 +84535,11 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1047576,
+          "context": 1000000,
           "output": 32768
         },
-        "status": "deprecated"
-      },
-      "openai/o1": {
-        "id": "openai/o1",
-        "name": "o1",
-        "description": "O-series reasoning model for hard analysis, math, coding, and planning",
-        "family": "o",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2023-09",
-        "release_date": "2024-12-05",
-        "last_updated": "2024-12-05",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "output": 100000
-        },
-        "status": "deprecated"
-      },
-      "openai/gpt-5.2": {
-        "id": "openai/gpt-5.2",
-        "name": "GPT-5.2",
-        "description": "Reliable GPT generation for broad coding, writing, and tool-assisted product work",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "medium",
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2025-08-31",
-        "release_date": "2025-12-11",
-        "last_updated": "2025-12-11",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 400000,
-          "input": 272000,
-          "output": 128000
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5.4-mini": {
@@ -84890,9 +84578,12 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 400000,
+          "context": 128000,
           "input": 272000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/o3": {
@@ -84932,43 +84623,9 @@
         "limit": {
           "context": 200000,
           "output": 100000
-        }
-      },
-      "openai/gpt-5-pro": {
-        "id": "openai/gpt-5-pro",
-        "name": "GPT-5 Pro",
-        "description": "Higher-accuracy GPT-5 tier for tough analysis, coding reviews, and planning",
-        "family": "gpt-pro",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2024-09-30",
-        "release_date": "2025-10-06",
-        "last_updated": "2025-10-06",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
         },
-        "open_weights": false,
-        "limit": {
-          "context": 400000,
-          "input": 272000,
-          "output": 272000
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-4.1": {
@@ -84998,6 +84655,9 @@
         "limit": {
           "context": 1047576,
           "output": 32768
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5.6-terra": {
@@ -85041,6 +84701,9 @@
           "context": 1050000,
           "input": 922000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/o4-mini": {
@@ -85080,7 +84743,9 @@
           "context": 200000,
           "output": 100000
         },
-        "status": "deprecated"
+        "provider": {
+          "npm": "@ai-sdk/openai"
+        }
       },
       "openai/gpt-5.4": {
         "id": "openai/gpt-5.4",
@@ -85119,12 +84784,12 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1050000,
+          "context": 1000000,
           "input": 922000,
           "output": 128000
         },
         "provider": {
-          "npm": "ai-gateway-provider"
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/o3-mini": {
@@ -85163,81 +84828,8 @@
           "context": 200000,
           "output": 100000
         },
-        "status": "deprecated"
-      },
-      "openai/gpt-5.2-chat-latest": {
-        "id": "openai/gpt-5.2-chat-latest",
-        "name": "GPT-5.2 Chat",
-        "description": "Chat-tuned GPT model for conversational assistance, writing, and tool workflows",
-        "family": "gpt-codex",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "medium"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": false,
-        "knowledge": "2025-08-31",
-        "release_date": "2025-12-11",
-        "last_updated": "2025-12-11",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 16384
-        }
-      },
-      "openai/gpt-5.2-pro": {
-        "id": "openai/gpt-5.2-pro",
-        "name": "GPT-5.2 Pro",
-        "description": "Higher-accuracy GPT-5.2 variant for tougher reasoning and review workflows",
-        "family": "gpt-pro",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "medium",
-              "high",
-              "xhigh"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": false,
-        "knowledge": "2025-08-31",
-        "release_date": "2025-12-11",
-        "last_updated": "2025-12-11",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 400000,
-          "input": 272000,
-          "output": 128000
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-4.1-mini": {
@@ -85267,6 +84859,9 @@
         "limit": {
           "context": 1047576,
           "output": 32768
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5.4-nano": {
@@ -85305,9 +84900,12 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 400000,
+          "context": 128000,
           "input": 272000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
       "openai/gpt-5.1": {
@@ -85345,22 +84943,22 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 400000,
+          "context": 128000,
           "input": 272000,
           "output": 128000
+        },
+        "provider": {
+          "npm": "@ai-sdk/openai"
         }
       },
-      "workers-ai/@cf/nvidia/nemotron-3-120b-a12b": {
-        "id": "workers-ai/@cf/nvidia/nemotron-3-120b-a12b",
-        "name": "Nemotron 3 Super 120B",
-        "description": "Nemotron middle tier for collaborative agents and high-volume reasoning workloads",
-        "family": "nemotron",
-        "attachment": false,
+      "xai/grok-4.6": {
+        "id": "xai/grok-4.6",
+        "name": "Grok 4.6",
+        "description": "xAI's frontier model for long-running agents, coding, knowledge work, and visual projects",
+        "family": "grok",
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
-          {
-            "type": "toggle"
-          },
           {
             "type": "effort",
             "values": [
@@ -85371,11 +84969,82 @@
           }
         ],
         "tool_call": true,
-        "interleaved": true,
         "structured_output": true,
         "temperature": true,
-        "release_date": "2026-03-11",
-        "last_updated": "2026-03-11",
+        "knowledge": "2026-02-01",
+        "release_date": "2026-08-12",
+        "last_updated": "2026-08-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
+      "xai/grok-4.5": {
+        "id": "xai/grok-4.5",
+        "name": "Grok 4.5",
+        "description": "xAI's Grok model for chat, coding, agentic tools, and lower hallucination risk",
+        "family": "grok",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-07-08",
+        "last_updated": "2026-07-08",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 500000,
+          "output": 500000
+        }
+      },
+      "alibaba/qwen3.7-max": {
+        "id": "alibaba/qwen3.7-max",
+        "name": "Qwen3.7 Max",
+        "description": "Qwen frontier model tuned for agent frameworks, coding assistants, and long tasks",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-05-21",
+        "last_updated": "2026-05-21",
         "modalities": {
           "input": [
             "text"
@@ -85384,22 +85053,144 @@
             "text"
           ]
         },
-        "open_weights": true,
+        "open_weights": false,
         "limit": {
-          "context": 256000,
-          "output": 256000
+          "context": 1000000,
+          "output": 65536
         }
       },
-      "workers-ai/@cf/aisingapore/gemma-sea-lion-v4-27b-it": {
-        "id": "workers-ai/@cf/aisingapore/gemma-sea-lion-v4-27b-it",
-        "name": "Gemma Sea Lion V4 27B It",
-        "description": "Open Gemma instruction model for efficient chat and self-hosted deployments",
-        "family": "gemma",
+      "alibaba/qwen3.5-397b-a17b": {
+        "id": "alibaba/qwen3.5-397b-a17b",
+        "name": "Qwen3.5 397B-A17B",
+        "description": "Large open Qwen multimodal MoE for visual agents and long technical tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-02-15",
+        "last_updated": "2026-02-15",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
+      "alibaba/qwen3.8-max": {
+        "id": "alibaba/qwen3.8-max",
+        "name": "Qwen3.8 Max",
+        "description": "2.4-trillion-parameter MoE flagship for coding, professional work, multimodal understanding, and long-horizon agentic workflows",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          },
+          {
+            "type": "budget_tokens",
+            "min": 0,
+            "max": 262144
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "temperature": true,
+        "release_date": "2026-08-03",
+        "last_updated": "2026-08-03",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "alibaba/qwen3.7-plus": {
+        "id": "alibaba/qwen3.7-plus",
+        "name": "Qwen3.7 Plus",
+        "description": "Multimodal Qwen workhorse for long-context agents, visual inputs, and coding",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2026-06-02",
+        "last_updated": "2026-06-02",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 64000
+        }
+      },
+      "alibaba/qwen3-max": {
+        "id": "alibaba/qwen3-max",
+        "name": "Qwen3 Max",
+        "description": "Flagship Qwen3 model for coding agents, complex reasoning, and tool use",
+        "family": "qwen",
         "attachment": false,
         "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
+        "tool_call": true,
         "temperature": true,
+        "knowledge": "2025-04",
         "release_date": "2025-09-23",
         "last_updated": "2025-09-23",
         "modalities": {
@@ -85410,546 +85201,10 @@
             "text"
           ]
         },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 128000
-        }
-      },
-      "workers-ai/@cf/google/gemma-4-26b-a4b-it": {
-        "id": "workers-ai/@cf/google/gemma-4-26b-a4b-it",
-        "name": "Gemma 4 26B A4B IT",
-        "description": "Open Gemma instruction model for efficient chat and self-hosted deployments",
-        "family": "gemma",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          },
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "interleaved": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-04-02",
-        "last_updated": "2026-04-02",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 256000,
-          "output": 16384
-        }
-      },
-      "workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8": {
-        "id": "workers-ai/@cf/meta/llama-3.1-8b-instruct-fp8",
-        "name": "Llama 3.1 8B Instruct fp8",
-        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-07-23",
-        "last_updated": "2024-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 32000,
-          "output": 32000
-        }
-      },
-      "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast": {
-        "id": "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-        "name": "Llama 3.3 70B Instruct fp8 Fast",
-        "description": "Popular open Llama workhorse for multilingual chat, coding, and self-hosting",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-12-06",
-        "last_updated": "2024-12-06",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 24000,
-          "output": 24000
-        }
-      },
-      "workers-ai/@cf/meta/llama-3.2-3b-instruct": {
-        "id": "workers-ai/@cf/meta/llama-3.2-3b-instruct",
-        "name": "Llama 3.2 3B Instruct",
-        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-09-25",
-        "last_updated": "2024-09-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 80000,
-          "output": 80000
-        }
-      },
-      "workers-ai/@cf/meta/llama-guard-3-8b": {
-        "id": "workers-ai/@cf/meta/llama-guard-3-8b",
-        "name": "Llama Guard 3 8B",
-        "description": "Safety model for policy screening, moderation, and risk-aware routing workflows",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-07-23",
-        "last_updated": "2024-07-23",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 131072
-        }
-      },
-      "workers-ai/@cf/meta/llama-3.2-1b-instruct": {
-        "id": "workers-ai/@cf/meta/llama-3.2-1b-instruct",
-        "name": "Llama 3.2 1B Instruct",
-        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-09-25",
-        "last_updated": "2024-09-25",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 60000,
-          "output": 60000
-        }
-      },
-      "workers-ai/@cf/meta/llama-4-scout-17b-16e-instruct": {
-        "id": "workers-ai/@cf/meta/llama-4-scout-17b-16e-instruct",
-        "name": "Llama 4 Scout 17B 16E Instruct",
-        "description": "Open Llama with long-context vision for efficient multimodal agents",
-        "family": "llama",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2024-08",
-        "release_date": "2025-04-05",
-        "last_updated": "2025-04-05",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131000,
-          "output": 16384
-        }
-      },
-      "workers-ai/@cf/meta/llama-3.2-11b-vision-instruct": {
-        "id": "workers-ai/@cf/meta/llama-3.2-11b-vision-instruct",
-        "name": "Llama 3.2 11B Vision Instruct",
-        "description": "Open Llama multimodal model for image understanding and text reasoning",
-        "family": "llama",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2023-12",
-        "release_date": "2024-09-25",
-        "last_updated": "2024-09-25",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 128000
-        }
-      },
-      "workers-ai/@cf/moonshotai/kimi-k2.7-code": {
-        "id": "workers-ai/@cf/moonshotai/kimi-k2.7-code",
-        "name": "Kimi K2.7 Code",
-        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
-        "family": "kimi-k2",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          },
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-01",
-        "release_date": "2026-06-12",
-        "last_updated": "2026-06-12",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
+        "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 262144
-        }
-      },
-      "workers-ai/@cf/openai/gpt-oss-120b": {
-        "id": "workers-ai/@cf/openai/gpt-oss-120b",
-        "name": "GPT OSS 120B",
-        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "last_updated": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 16384
-        }
-      },
-      "workers-ai/@cf/openai/gpt-oss-20b": {
-        "id": "workers-ai/@cf/openai/gpt-oss-20b",
-        "name": "GPT OSS 20B",
-        "description": "Open-weight GPT model for self-hosted reasoning and instruction-following workloads",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "last_updated": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 16384
-        }
-      },
-      "workers-ai/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b": {
-        "id": "workers-ai/@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-        "name": "Deepseek R1 Distill Qwen 32B",
-        "description": "R1 reasoning distilled into Qwen 2.5 32B for efficient open-weight step-by-step problem solving",
-        "family": "deepseek-thinking",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-01-20",
-        "last_updated": "2025-01-20",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 80000,
-          "output": 80000
-        }
-      },
-      "workers-ai/@cf/qwen/qwen3-30b-a3b-fp8": {
-        "id": "workers-ai/@cf/qwen/qwen3-30b-a3b-fp8",
-        "name": "Qwen3 30B A3b fp8",
-        "description": "Qwen instruction model for multilingual chat, reasoning, and tool use",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-04-28",
-        "last_updated": "2025-04-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 32768,
-          "output": 32768
-        }
-      },
-      "workers-ai/@cf/qwen/qwq-32b": {
-        "id": "workers-ai/@cf/qwen/qwq-32b",
-        "name": "Qwq 32B",
-        "description": "Qwen reasoning model for deliberate problem solving, math, and coding",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2024-04",
-        "release_date": "2025-03-05",
-        "last_updated": "2025-03-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 24000,
-          "output": 24000
-        }
-      },
-      "workers-ai/@cf/qwen/qwen2.5-coder-32b-instruct": {
-        "id": "workers-ai/@cf/qwen/qwen2.5-coder-32b-instruct",
-        "name": "Qwen2.5 Coder 32B Instruct",
-        "description": "Qwen coding model for software agents, repository edits, and code reasoning",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2024-11-12",
-        "last_updated": "2024-11-12",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 32768,
-          "output": 32768
-        }
-      },
-      "workers-ai/@cf/zai-org/glm-5.2": {
-        "id": "workers-ai/@cf/zai-org/glm-5.2",
-        "name": "Glm 5.2",
-        "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
-        "family": "glm",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          },
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-13",
-        "last_updated": "2026-06-13",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "output": 256000
-        }
-      },
-      "workers-ai/@cf/mistralai/mistral-small-3.1-24b-instruct": {
-        "id": "workers-ai/@cf/mistralai/mistral-small-3.1-24b-instruct",
-        "name": "Mistral Small 3.1 24B Instruct",
-        "description": "Efficient Mistral model for fast chat, extraction, and production assistants",
-        "family": "mistral-small",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "knowledge": "2024-06",
-        "release_date": "2025-03-17",
-        "last_updated": "2025-03-17",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 128000,
-          "output": 128000
-        }
-      },
-      "workers-ai/@cf/ibm-granite/granite-4.0-h-micro": {
-        "id": "workers-ai/@cf/ibm-granite/granite-4.0-h-micro",
-        "name": "Granite 4.0 H Micro",
-        "description": "Efficient model for low-latency assistance, extraction, and routine automation",
-        "family": "granite",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-10-02",
-        "last_updated": "2025-10-02",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131000,
-          "output": 131000
+          "output": 65536
         }
       }
     }

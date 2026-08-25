@@ -8,6 +8,7 @@ import {
   sessionChromeRows,
   subagentPanelRows,
   truncateToCellWidth,
+  wrapPreview,
   type PinnedInputCandidate,
 } from "../../../src/cli/cmd/tui/routes/session/last-input-view-model"
 
@@ -225,6 +226,16 @@ describe("derivePinnedInputBanner", () => {
     expect(banner.lineCount).toBe(2)
     expect(banner.lines[0]?.startsWith("Input ")).toBe(true)
     expect(banner.lines[1]?.startsWith("Input ")).toBe(false)
+  })
+})
+
+describe("wrapPreview", () => {
+  test("keeps the last word that already fits when the prefix ends on a boundary", () => {
+    expect(wrapPreview("hello world extra words that wrap", 11, 20, 2)).toEqual(["hello world", "extra words that wr…"])
+  })
+
+  test("backs up to the last space when the fitted prefix ends mid-word", () => {
+    expect(wrapPreview("hello worlds extra", 10, 20, 2)).toEqual(["hello", "worlds extra"])
   })
 })
 

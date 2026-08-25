@@ -186,7 +186,7 @@ export function truncateToCellWidth(text: string, width: number) {
   return fitWidth(text, budget) + ELLIPSIS
 }
 
-function wrapPreview(text: string, firstLineWidth: number, nextLineWidth: number, maxLines: 1 | 2) {
+export function wrapPreview(text: string, firstLineWidth: number, nextLineWidth: number, maxLines: 1 | 2) {
   const lines: string[] = []
   let remaining = text
   for (let index = 0; index < maxLines; index++) {
@@ -202,7 +202,13 @@ function wrapPreview(text: string, firstLineWidth: number, nextLineWidth: number
       break
     }
     const fitted = fitWidth(remaining, width)
-    const breakAt = fitted.lastIndexOf(" ")
+    if (!fitted) break
+    // Back up to the last space only when the fitted prefix ends mid-word.
+    // If the next character is a space, the last word already fits and
+    // lastIndexOf(" ") would drop it from the line.
+    const next = remaining.slice(fitted.length).charAt(0)
+    const midWord = next !== "" && next !== " "
+    const breakAt = midWord ? fitted.lastIndexOf(" ") : -1
     const chunk = breakAt > 0 ? fitted.slice(0, breakAt) : fitted
     lines.push(chunk)
     remaining = remaining.slice(chunk.length).trimStart()
