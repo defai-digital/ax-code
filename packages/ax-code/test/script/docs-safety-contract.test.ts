@@ -26,6 +26,20 @@ describe("public safety documentation contract", () => {
     expect(autonomous).toContain("The default runtime posture is autonomous on plus sandbox off")
   })
 
+  test("public Homebrew instructions trust the shared tap before installation", async () => {
+    const documents = await Promise.all([
+      readRepoFile("README.md"),
+      readRepoFile("docs/getting-started/install-runtime.md"),
+      readRepoFile("docs/getting-started/start-here.md"),
+    ])
+
+    for (const document of documents) {
+      expect(document).toContain("brew tap defai-digital/tap")
+      expect(document).toContain("brew trust defai-digital/tap")
+      expect(document).toContain("brew install defai-digital/tap/ax-code")
+    }
+  })
+
   test("security policy supported version table tracks the current minor line", async () => {
     const security = await readRepoFile("SECURITY.md")
     const pkg = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf-8"))

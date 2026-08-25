@@ -32,8 +32,15 @@ curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/
 Homebrew remains a supported alternative for the macOS CLI:
 
 ```bash
+brew tap defai-digital/tap
+brew trust defai-digital/tap
 brew install defai-digital/tap/ax-code
 ```
+
+Homebrew requires explicit trust for non-official taps. This whole-tap trust covers all current and future formulae,
+casks, and external commands published in `defai-digital/tap`. The shared tap contains both the CLI formula and the
+Desktop cask, and Homebrew can load both definitions while resolving an install. Use the release installer instead if
+whole-tap trust is not acceptable.
 
 One-line remote execution is a convenience path. The Windows installer verifies the downloaded CLI ZIP with minisign after it starts, but `irm | iex` does not verify `install.ps1` itself before execution.
 
@@ -64,7 +71,8 @@ Supported user installs should report `Runtime: Node vX.Y.Z (node-bundled)` on m
 
 Desktop is installed through separate platform-specific channels:
 
-- macOS: `brew install --cask defai-digital/tap/ax-code-desktop`
+- macOS: after tapping and trusting `defai-digital/tap` as shown above,
+  `brew install --cask defai-digital/tap/ax-code-desktop`
 - Windows x64: download and run the latest `AX-Code-<version>-win-x64.exe` from GitHub Releases.
 - Windows ARM64: download and run the latest `AX-Code-<version>-win-arm64.exe` from GitHub Releases.
 - Linux amd64: download `AX-Code-<version>-linux-amd64.deb` (Ubuntu) or `AX-Code-<version>-linux-x86_64.AppImage` (portable) from a `desktop-v*` GitHub Release.
@@ -79,7 +87,7 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 | Channel                              | Install or setup command                                                                                                                            | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
 | macOS bash release installer         | `curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" \| bash`    | `node-bundled`         | Supported on macOS   | Primary Apple Silicon user-local install path                      |
-| Homebrew formula                     | `brew install defai-digital/tap/ax-code`                                                                                                            | `node-bundled`         | Supported            | Alternative macOS package-manager install path                     |
+| Homebrew formula                     | `brew tap defai-digital/tap && brew trust defai-digital/tap && brew install defai-digital/tap/ax-code`                                              | `node-bundled`         | Supported            | Alternative macOS package-manager install path                     |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                               | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Linux bash release installer         | `curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" \| bash`    | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
@@ -98,8 +106,9 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 ## Platform Policy
 
 - macOS: use the bash release installer as the primary documented CLI path. It installs under `~/.ax-code`, bootstraps pinned Minisign when needed, verifies the release archive, and does not require Homebrew. Contributor builds use `pnpm run setup:cli`.
-- Use fully qualified shared-tap commands such as `brew install defai-digital/tap/ax-code`. Homebrew taps
-  `defai-digital/tap` automatically; this remains the supported package-manager alternative.
+- The supported Homebrew path explicitly taps and trusts `defai-digital/tap` before using fully qualified install
+  commands. Whole-tap trust includes all current and future formulae, casks, and external commands in the shared tap;
+  use the bash release installer when that trust scope is not acceptable.
 - Linux CLI: use the bash installer for Ubuntu Desktop/Server **24.04 LTS** and newer on **amd64** and **arm64** (glibc). Release builds produce `ax-code-linux-x64.tar.gz` and `ax-code-linux-arm64.tar.gz` on Ubuntu 24.04 runners so the glibc baseline stays compatible with 24.04+. Musl (Alpine) is not supported by current release archives.
 - Linux Desktop: `desktop-v*` releases publish `.deb` and AppImage for **amd64/x86_64** and **arm64** (Ubuntu 24.04 glibc baseline). AppImage is the Linux auto-update channel (`latest-linux.yml` / `latest-linux-arm64.yml`). Install the CLI separately; Desktop sessions still require the local AX Code runtime.
 - macOS CLI archives: release builds publish `darwin-arm64` only (Apple Silicon). Intel macOS is not a supported install target for current CLI/Desktop packages.
@@ -147,6 +156,8 @@ curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/
 Managed Macs can use the Homebrew formula so CLI updates track the tap:
 
 ```bash
+brew tap defai-digital/tap
+brew trust defai-digital/tap
 brew install defai-digital/tap/ax-code
 ```
 

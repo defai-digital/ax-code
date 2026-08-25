@@ -92,11 +92,16 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 ### macOS (Apple Silicon)
 
-Install with Homebrew:
+Install with Homebrew. Current Homebrew releases require explicit trust for third-party taps:
 
 ```bash
+brew tap defai-digital/tap
+brew trust defai-digital/tap
 brew install defai-digital/tap/ax-code
 ```
+
+Trusting the tap allows Homebrew to load all current and future formulae and casks published there. Use the release
+installer below if you do not want to grant whole-tap trust.
 
 Or use the release installer:
 

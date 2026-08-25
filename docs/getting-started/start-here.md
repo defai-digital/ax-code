@@ -52,7 +52,8 @@ The rest of the documentation maps onto those layers.
 - Start with the [root README](../../README.md) for install and first launch.
 - Supported install paths use the compiled runtime:
   - Bash release installer for macOS Apple Silicon and Linux: `curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash`
-  - Homebrew alternative for macOS CLI: `brew install defai-digital/tap/ax-code`
+  - Homebrew alternative for macOS CLI:
+    `brew tap defai-digital/tap && brew trust defai-digital/tap && brew install defai-digital/tap/ax-code`
   - GitHub release installer for Windows PowerShell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"`
 - The Bash installer is not the canonical Windows setup path.
 - npm packages are no longer supported install or upgrade channels. See [Installation and Runtime Channels](install-runtime.md) for platform policy, runtime labels, and the local launcher matrix.
