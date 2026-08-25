@@ -4,241 +4,6 @@ export type ClientOptions = {
   baseUrl: `${string}://${string}` | (string & {})
 }
 
-export type EventInstallationUpdated = {
-  type: "installation.updated"
-  properties: {
-    version: string
-    warnings?: Array<string>
-  }
-}
-
-export type EventInstallationUpdateAvailable = {
-  type: "installation.update-available"
-  properties: {
-    version: string
-  }
-}
-
-export type Project = {
-  id: string
-  worktree: string
-  vcs?: "git"
-  name?: string
-  icon?: {
-    url?: string
-    override?: string
-    color?: string
-  }
-  commands?: {
-    /**
-     * Startup script to run when creating a new workspace (worktree)
-     */
-    start?: string
-  }
-  time: {
-    created: number
-    updated: number
-    initialized?: number
-  }
-  sandboxes: Array<string>
-}
-
-export type EventProjectUpdated = {
-  type: "project.updated"
-  properties: Project
-}
-
-export type EventServerInstanceDisposed = {
-  type: "server.instance.disposed"
-  properties: {
-    directory: string
-  }
-}
-
-export type EventServerConnected = {
-  type: "server.connected"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventGlobalDisposed = {
-  type: "global.disposed"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventFileWatcherUpdated = {
-  type: "file.watcher.updated"
-  properties: {
-    file: string
-    event: "add" | "change" | "unlink"
-  }
-}
-
-export type EventLspUpdated = {
-  type: "lsp.updated"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventLspClientDiagnostics = {
-  type: "lsp.client.diagnostics"
-  properties: {
-    serverID: string
-    path: string
-  }
-}
-
-export type EventSessionGoal = {
-  type: "session.goal"
-  properties: {
-    sessionID: string
-    goal: {
-      sessionID: string
-      objective: string
-      status: "active" | "paused" | "complete" | "blocked" | "budget_limited"
-      tokenBudget?: number
-      tokensUsed: number
-      timeUsedSeconds: number
-      time: {
-        created: number
-        updated?: number
-      }
-      remainingTokens?: number
-    } | null
-  }
-}
-
-export type OutputFormatText = {
-  type: "text"
-}
-
-export type JsonSchema = {
-  [key: string]: unknown
-}
-
-export type OutputFormatJsonSchema = {
-  type: "json_schema"
-  schema: JsonSchema
-  retryCount?: number
-}
-
-export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
-
-export type FileDiff = {
-  file: string
-  before: string
-  after: string
-  additions: number
-  deletions: number
-  status?: "added" | "deleted" | "modified"
-}
-
-export type UserMessage = {
-  id: string
-  sessionID: string
-  role: "user"
-  time: {
-    created: number
-  }
-  format?: OutputFormat
-  summary?: {
-    title?: string
-    body?: string
-    diffs: Array<FileDiff>
-  }
-  agent: string
-  model: {
-    providerID: string
-    modelID: string
-  }
-  system?: string
-  tools?: {
-    [key: string]: boolean
-  }
-  isolation?: {
-    mode?: "read-only" | "workspace-write" | "full-access"
-    network?: boolean
-  }
-  variant?: string
-  requestedDepth?: "fast" | "standard" | "deep" | "xdeep"
-}
-
-export type ProviderAuthError = {
-  name: "ProviderAuthError"
-  data: {
-    providerID: string
-    message: string
-  }
-}
-
-export type UnknownError = {
-  name: "UnknownError"
-  data: {
-    message: string
-    metadata?: {
-      [key: string]: string
-    }
-  }
-}
-
-export type MessageOutputLengthError = {
-  name: "MessageOutputLengthError"
-  data: {
-    [key: string]: unknown
-  }
-}
-
-export type MessageOutputLoopError = {
-  name: "MessageOutputLoopError"
-  data: {
-    message: string
-    metadata?: {
-      [key: string]: string
-    }
-  }
-}
-
-export type MessageAbortedError = {
-  name: "MessageAbortedError"
-  data: {
-    message: string
-    metadata?: {
-      [key: string]: string
-    }
-  }
-}
-
-export type StructuredOutputError = {
-  name: "StructuredOutputError"
-  data: {
-    message: string
-    retries: number
-    metadata?: {
-      [key: string]: string
-    }
-  }
-}
-
-export type ContextOverflowError = {
-  name: "ContextOverflowError"
-  data: {
-    message: string
-    responseBody?: string
-  }
-}
-
-export type RequestTooLargeError = {
-  name: "RequestTooLargeError"
-  data: {
-    message: string
-    responseBody?: string
-  }
-}
-
 export type ApiError = {
   name: "APIError"
   data: {
@@ -255,2031 +20,29 @@ export type ApiError = {
   }
 }
 
-export type AutonomousLimitExceededError = {
-  name: "AutonomousLimitExceededError"
-  data: {
-    kind: "steps" | "files" | "lines" | "blocked_path" | "tool_calls"
-    current: number
-    limit: number
-    message: string
-  }
-}
-
-export type AssistantMessage = {
-  id: string
-  sessionID: string
-  role: "assistant"
-  time: {
-    created: number
-    completed?: number
-  }
-  error?:
-    | ProviderAuthError
-    | UnknownError
-    | MessageOutputLengthError
-    | MessageOutputLoopError
-    | MessageAbortedError
-    | StructuredOutputError
-    | ContextOverflowError
-    | RequestTooLargeError
-    | ApiError
-    | AutonomousLimitExceededError
-  parentID: string
-  modelID: string
-  providerID: string
-  mode: string
-  agent: string
-  path: {
-    cwd: string
-    root: string
-  }
-  summary?: boolean
-  tokens: {
-    total?: number
-    input: number
-    output: number
-    reasoning: number
-    cache: {
-      read: number
-      write: number
-    }
-  }
-  structured?: unknown
-  variant?: string
-  finish?: string
-  feedback?: "up" | "down"
-}
-
-export type Message = UserMessage | AssistantMessage
-
-export type EventMessageUpdated = {
-  type: "message.updated"
-  properties: {
-    info: Message
-  }
-}
-
-export type EventMessageRemoved = {
-  type: "message.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-  }
-}
-
-export type TextPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "text"
-  text: string
-  synthetic?: boolean
-  ignored?: boolean
-  time?: {
-    start: number
-    end?: number
-  }
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type SubtaskPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "subtask"
-  prompt: string
-  description: string
-  agent: string
+export type Agent = {
+  name: string
+  description?: string
+  mode: "subagent" | "primary" | "all"
+  native?: boolean
+  hidden?: boolean
+  tier?: "core" | "specialist" | "internal" | "subagent"
+  topP?: number
+  temperature?: number
+  color?: string
+  permission: PermissionRuleset
   model?: {
-    providerID: string
     modelID: string
+    providerID: string
   }
-  command?: string
-}
-
-export type ReasoningPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "reasoning"
-  text: string
-  metadata?: {
+  variant?: string
+  prompt?: string
+  displayName?: string
+  options: {
     [key: string]: unknown
   }
-  time: {
-    start: number
-    end?: number
-  }
+  steps?: number
 }
-
-export type FilePartSourceText = {
-  value: string
-  start: number
-  end: number
-}
-
-export type FileSource = {
-  text: FilePartSourceText
-  type: "file"
-  path: string
-}
-
-export type Range = {
-  start: {
-    line: number
-    character: number
-  }
-  end: {
-    line: number
-    character: number
-  }
-}
-
-export type SymbolSource = {
-  text: FilePartSourceText
-  type: "symbol"
-  path: string
-  range: Range
-  name: string
-  kind: number
-}
-
-export type ResourceSource = {
-  text: FilePartSourceText
-  type: "resource"
-  clientName: string
-  uri: string
-}
-
-export type FilePartSource = FileSource | SymbolSource | ResourceSource
-
-export type FilePart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "file"
-  mime: string
-  filename?: string
-  url: string
-  source?: FilePartSource
-}
-
-export type ToolStatePending = {
-  status: "pending"
-  input: {
-    [key: string]: unknown
-  }
-  raw: string
-}
-
-export type ToolStateRunning = {
-  status: "running"
-  input: {
-    [key: string]: unknown
-  }
-  title?: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-  }
-}
-
-export type ToolStateCompleted = {
-  status: "completed"
-  input: {
-    [key: string]: unknown
-  }
-  output: string
-  title: string
-  metadata: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end: number
-    compacted?: number
-  }
-  attachments?: Array<FilePart>
-}
-
-export type ToolStateError = {
-  status: "error"
-  input: {
-    [key: string]: unknown
-  }
-  error: string
-  metadata?: {
-    [key: string]: unknown
-  }
-  time: {
-    start: number
-    end: number
-  }
-}
-
-export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
-
-export type ToolPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "tool"
-  callID: string
-  tool: string
-  state: ToolState
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type StepStartPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "step-start"
-  snapshot?: string
-}
-
-export type StepFinishPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "step-finish"
-  reason: string
-  snapshot?: string
-  tokens: {
-    total?: number
-    input: number
-    output: number
-    reasoning: number
-    cache: {
-      read: number
-      write: number
-    }
-  }
-}
-
-export type SnapshotPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "snapshot"
-  snapshot: string
-}
-
-export type PatchPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "patch"
-  hash: string
-  files: Array<string>
-}
-
-export type AgentPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "agent"
-  name: string
-  source?: {
-    value: string
-    start: number
-    end: number
-  }
-}
-
-export type RetryPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "retry"
-  attempt: number
-  error: ApiError
-  time: {
-    created: number
-  }
-}
-
-export type CompactionPart = {
-  id: string
-  sessionID: string
-  messageID: string
-  type: "compaction"
-  auto: boolean
-  overflow?: boolean
-  triggerReason?: "provider_usage" | "context_overflow_error" | "request_too_large" | "prompt_preflight" | "manual"
-}
-
-export type Part =
-  | TextPart
-  | SubtaskPart
-  | ReasoningPart
-  | FilePart
-  | ToolPart
-  | StepStartPart
-  | StepFinishPart
-  | SnapshotPart
-  | PatchPart
-  | AgentPart
-  | RetryPart
-  | CompactionPart
-
-export type EventMessagePartUpdated = {
-  type: "message.part.updated"
-  properties: {
-    part: Part
-  }
-}
-
-export type EventMessagePartDelta = {
-  type: "message.part.delta"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-    field: string
-    delta: string
-    offset?: number
-  }
-}
-
-export type EventMessagePartRemoved = {
-  type: "message.part.removed"
-  properties: {
-    sessionID: string
-    messageID: string
-    partID: string
-  }
-}
-
-export type PermissionRequest = {
-  id: string
-  sessionID: string
-  permission: string
-  patterns: Array<string>
-  metadata: {
-    [key: string]: unknown
-  }
-  always: Array<string>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventPermissionAsked = {
-  type: "permission.asked"
-  properties: PermissionRequest
-}
-
-export type EventPermissionReplied = {
-  type: "permission.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    reply: "once" | "always" | "reject"
-  }
-}
-
-export type SessionStatus =
-  | {
-      type: "idle"
-    }
-  | {
-      type: "retry"
-      attempt: number
-      message: string
-      next: number
-    }
-  | {
-      type: "busy"
-      step?: number
-      maxSteps?: number
-      startedAt?: number
-      lastActivityAt?: number
-      activeTool?: string
-      toolCallID?: string
-      waitState?: "llm" | "tool"
-    }
-
-export type EventSessionStatus = {
-  type: "session.status"
-  properties: {
-    sessionID: string
-    status: SessionStatus
-  }
-}
-
-export type EventSessionIdle = {
-  type: "session.idle"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type QuestionOption = {
-  /**
-   * Display text (1-5 words, concise)
-   */
-  label: string
-  /**
-   * Explanation of choice
-   */
-  description: string
-}
-
-export type QuestionInfo = {
-  /**
-   * Complete question
-   */
-  question: string
-  /**
-   * Very short label (max 30 chars)
-   */
-  header: string
-  /**
-   * Available choices
-   */
-  options: Array<QuestionOption>
-  /**
-   * Allow selecting multiple choices
-   */
-  multiple?: boolean
-  /**
-   * Allow typing a custom answer (default: true)
-   */
-  custom?: boolean
-}
-
-export type QuestionRequest = {
-  id: string
-  sessionID: string
-  /**
-   * Questions to ask
-   */
-  questions: Array<QuestionInfo>
-  tool?: {
-    messageID: string
-    callID: string
-  }
-}
-
-export type EventQuestionAsked = {
-  type: "question.asked"
-  properties: QuestionRequest
-}
-
-export type QuestionAnswer = Array<string>
-
-export type EventQuestionReplied = {
-  type: "question.replied"
-  properties: {
-    sessionID: string
-    requestID: string
-    answers: Array<QuestionAnswer>
-  }
-}
-
-export type EventQuestionRejected = {
-  type: "question.rejected"
-  properties: {
-    sessionID: string
-    requestID: string
-  }
-}
-
-export type EventSessionCompacted = {
-  type: "session.compacted"
-  properties: {
-    sessionID: string
-  }
-}
-
-export type Todo = {
-  /**
-   * Brief description of the task
-   */
-  content: string
-  status: "pending" | "in_progress" | "completed" | "cancelled"
-  priority: "high" | "medium" | "low"
-}
-
-export type EventTodoUpdated = {
-  type: "todo.updated"
-  properties: {
-    sessionID: string
-    todos: Array<Todo>
-  }
-}
-
-export type EventNotificationToastShow = {
-  type: "notification.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventNotificationMonitorLine = {
-  type: "notification.monitor.line"
-  properties: {
-    monitorID: string
-    line: string
-    description: string
-  }
-}
-
-export type EventNotificationMonitorExit = {
-  type: "notification.monitor.exit"
-  properties: {
-    monitorID: string
-    description: string
-    exitCode: number | null
-  }
-}
-
-export type EventFileEdited = {
-  type: "file.edited"
-  properties: {
-    file: string
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
-  }
-}
-
-export type EventTaskQueueCreated = {
-  type: "task.queue.created"
-  properties: {
-    item: {
-      id: string
-      projectID: string
-      directory: string
-      worktree?: string
-      sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
-      status:
-        | "queued"
-        | "waiting_for_idle"
-        | "running"
-        | "blocked_permission"
-        | "blocked_question"
-        | "paused"
-        | "failed"
-        | "completed"
-        | "cancelled"
-      priority: number
-      position: number
-      title: string
-      agent?: string
-      model?: unknown
-      sourceMessageID?: string
-      sourceTaskID?: string
-      payload: {
-        [key: string]: unknown
-      }
-      error?: string
-      executionTimeoutMs?: number
-      time: {
-        created: number
-        updated?: number
-        started?: number
-        completed?: number
-      }
-    }
-  }
-}
-
-export type EventTaskQueueUpdated = {
-  type: "task.queue.updated"
-  properties: {
-    item: {
-      id: string
-      projectID: string
-      directory: string
-      worktree?: string
-      sessionID?: string
-      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
-      status:
-        | "queued"
-        | "waiting_for_idle"
-        | "running"
-        | "blocked_permission"
-        | "blocked_question"
-        | "paused"
-        | "failed"
-        | "completed"
-        | "cancelled"
-      priority: number
-      position: number
-      title: string
-      agent?: string
-      model?: unknown
-      sourceMessageID?: string
-      sourceTaskID?: string
-      payload: {
-        [key: string]: unknown
-      }
-      error?: string
-      executionTimeoutMs?: number
-      time: {
-        created: number
-        updated?: number
-        started?: number
-        completed?: number
-      }
-    }
-  }
-}
-
-export type EventTaskQueueDeleted = {
-  type: "task.queue.deleted"
-  properties: {
-    id: string
-    projectID: string
-    sessionID?: string
-  }
-}
-
-export type EventDebugEngineCorrelatedDiagnostics = {
-  type: "debug-engine.correlated-diagnostics"
-  properties: {
-    file: string
-    correlations: Array<{
-      file: string
-      line: number
-      message: string
-      severity: number
-      rootCauseFile: string | null
-      rootCauseSymbol: string | null
-      rootCauseChain: Array<string>
-      confidence: "high" | "medium" | "low"
-      lspTimestamp: number
-      lspServerIDs: Array<string>
-      graphQueryIds: Array<string>
-      graphIndexedAt: number
-      graphCompleteness: "full" | "partial" | "lsp-only"
-    }>
-  }
-}
-
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
-export type EventCommandExecuted = {
-  type: "command.executed"
-  properties: {
-    name: string
-    sessionID: string
-    arguments: string
-    messageID: string
-    source?: "command" | "file" | "mcp" | "skill"
-    sourceTool?: string
-    workflow?: string
-    workflowRunID?: string
-    warnings?: Array<{
-      code: string
-      message: string
-      severity: "info" | "warn" | "error"
-    }>
-  }
-}
-
-export type WorkflowRunEventRecord = {
-  id: string
-  projectID: string
-  directory: string
-  parentSessionID?: string
-  sourceTemplateID?: string
-  sourceTaskID?: string
-  status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-  currentPhaseID?: string
-  spec: {
-    schemaVersion: 1
-    id: string
-    name: string
-    description: string
-    tags?: Array<string>
-    trigger?:
-      | {
-          kind: "manual"
-          source?: "prompt" | "command" | "api"
-        }
-      | {
-          kind: "scheduled"
-          schedule: string
-          timezone?: string
-          enabled?: boolean
-        }
-      | {
-          kind: "command"
-          command?: string
-        }
-      | {
-          kind: "api"
-          route?: string
-          enabled?: boolean
-        }
-      | {
-          kind: "webhook"
-          event: string
-          enabled?: false
-          securityGate?: "required"
-        }
-    inputs?: Array<{
-      id: string
-      label?: string
-      description?: string
-      type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
-      required?: boolean
-      sensitive?: boolean
-      default?: unknown
-    }>
-    routine?: {
-      enabled?: boolean
-      mode?: "manual" | "scheduled" | "api" | "webhook"
-      schedule?: string
-      timezone?: string
-      apiRoute?: string
-      webhookEvent?: string
-      securityGate?: "local-only" | "required"
-    }
-    budget?: {
-      maxTotalTokens?: number
-      maxInputTokensPerChild?: number
-      maxOutputTokensPerChild?: number
-      maxWallTimeMs?: number
-      maxConcurrentAgents?: number
-      maxTotalAgents?: number
-      maxToolCalls?: number
-      maxRetries?: number
-    }
-    pacing?: {
-      maxRequestsPerMinute?: number
-      maxTokensPerMinute?: number
-    }
-    modelPolicy?: {
-      defaultModel?: string
-      cheapModel?: string
-      strongModel?: string
-      plannerModel?: string
-      workerModel?: string
-      verifierModel?: string
-      synthesizerModel?: string
-      effort?: "normal" | "deep" | "workflow" | "max-workflow"
-      allowedProviders?: Array<string>
-      routing?: Array<{
-        phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
-        use: "planner" | "worker" | "verifier" | "synthesizer"
-      }>
-    }
-    permissions?: {
-      writePolicy?: "read-only" | "serialized" | "worktree-required"
-      allowedTools?: Array<string>
-      networkPolicy?: "inherit" | "disabled" | "allowed"
-      escalationPolicy?: "inherit" | "ask" | "deny"
-    }
-    artifacts?: Array<{
-      id: string
-      kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
-      retention?: "ephemeral" | "session" | "durable"
-      exposeToMainContext?: boolean
-      redaction?: {
-        status?: "none" | "redacted" | "pending"
-        summary?: string
-      }
-    }>
-    verification?: {
-      mode?: "required" | "optional" | "deferred" | "skipped"
-      workflow?: "review" | "debug" | "qa"
-      commands?: Array<string>
-      requiredArtifactIds?: Array<string>
-      reason?: string
-    }
-    synthesis?: {
-      agent?: string
-      model?: string
-      outputFormat?: "markdown" | "json" | "table" | "findings"
-      exposeToMainContext?: boolean
-      requiredArtifactIds?: Array<string>
-    }
-    phases: Array<{
-      id: string
-      name: string
-      kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
-      prompt?: string
-      agent?: string
-      inputs?: Array<string>
-      outputs?: Array<string>
-      dependsOn?: Array<string>
-      maxParallel?: number
-      mergeStrategy?:
-        | "all"
-        | "first-success"
-        | "majority"
-        | "vote-with-critic"
-        | "critic-confirmation"
-        | "custom-reducer"
-      modelPolicy?: {
-        defaultModel?: string
-        cheapModel?: string
-        strongModel?: string
-        plannerModel?: string
-        workerModel?: string
-        verifierModel?: string
-        synthesizerModel?: string
-        effort?: "normal" | "deep" | "workflow" | "max-workflow"
-        allowedProviders?: Array<string>
-        routing?: Array<{
-          phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
-          use: "planner" | "worker" | "verifier" | "synthesizer"
-        }>
-      }
-      budget?: {
-        maxTotalTokens?: number
-        maxInputTokensPerChild?: number
-        maxOutputTokensPerChild?: number
-        maxWallTimeMs?: number
-        maxConcurrentAgents?: number
-        maxTotalAgents?: number
-        maxToolCalls?: number
-        maxRetries?: number
-      }
-      pacing?: {
-        maxRequestsPerMinute?: number
-        maxTokensPerMinute?: number
-      }
-    }>
-  }
-  inputValues?: {
-    [key: string]: unknown
-  }
-  budget: {
-    [key: string]: unknown
-  }
-  budgetUsage: {
-    totalTokens?: number
-    inputTokens?: number
-    outputTokens?: number
-    toolCalls?: number
-    childAgents?: number
-    retries?: number
-  }
-  verificationEnvelopeIDs: Array<string>
-  error?: string
-  time: {
-    created: number
-    updated: number
-    started?: number
-    completed?: number
-  }
-}
-
-export type EventWorkflowRunCreated = {
-  type: "workflow.run.created"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type EventWorkflowRunUpdated = {
-  type: "workflow.run.updated"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type EventWorkflowRunStarted = {
-  type: "workflow.run.started"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type EventWorkflowRunBlocked = {
-  type: "workflow.run.blocked"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type EventWorkflowRunPaused = {
-  type: "workflow.run.paused"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type EventWorkflowRunResumed = {
-  type: "workflow.run.resumed"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type EventWorkflowRunCompleted = {
-  type: "workflow.run.completed"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type EventWorkflowRunFailed = {
-  type: "workflow.run.failed"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type EventWorkflowRunCancelled = {
-  type: "workflow.run.cancelled"
-  properties: {
-    run: WorkflowRunEventRecord
-  }
-}
-
-export type WorkflowPhaseEventRecord = {
-  id: string
-  runID: string
-  specPhaseID: string
-  position: number
-  name: string
-  kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
-  status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
-  agent?: string
-  modelPolicy?: unknown
-  budget?: unknown
-  outputs: Array<string>
-  error?: string
-  time: {
-    created: number
-    updated: number
-    started?: number
-    completed?: number
-  }
-}
-
-export type EventWorkflowPhaseUpdated = {
-  type: "workflow.phase.updated"
-  properties: {
-    phase: WorkflowPhaseEventRecord
-  }
-}
-
-export type EventWorkflowPhaseStarted = {
-  type: "workflow.phase.started"
-  properties: {
-    phase: WorkflowPhaseEventRecord
-  }
-}
-
-export type EventWorkflowPhaseCompleted = {
-  type: "workflow.phase.completed"
-  properties: {
-    phase: WorkflowPhaseEventRecord
-  }
-}
-
-export type EventWorkflowPhaseFailed = {
-  type: "workflow.phase.failed"
-  properties: {
-    phase: WorkflowPhaseEventRecord
-  }
-}
-
-export type WorkflowChildEventRecord = {
-  id: string
-  runID: string
-  phaseID: string
-  taskQueueID?: string
-  sessionID?: string
-  status:
-    | "queued"
-    | "running"
-    | "blocked_permission"
-    | "blocked_question"
-    | "paused"
-    | "failed"
-    | "completed"
-    | "cancelled"
-  agent?: string
-  model?: unknown
-  budgetSlice?: unknown
-  artifactIDs: Array<string>
-  evidenceRefs: Array<{
-    kind: "artifact" | "verification" | "finding" | "debug-evidence"
-    id: string
-  }>
-  outputSummary?: string
-  error?: string
-  time: {
-    created: number
-    updated: number
-    started?: number
-    completed?: number
-  }
-}
-
-export type EventWorkflowChildCreated = {
-  type: "workflow.child.created"
-  properties: {
-    child: WorkflowChildEventRecord
-  }
-}
-
-export type EventWorkflowChildUpdated = {
-  type: "workflow.child.updated"
-  properties: {
-    child: WorkflowChildEventRecord
-  }
-}
-
-export type EventWorkflowChildStarted = {
-  type: "workflow.child.started"
-  properties: {
-    child: WorkflowChildEventRecord
-  }
-}
-
-export type EventWorkflowChildCompleted = {
-  type: "workflow.child.completed"
-  properties: {
-    child: WorkflowChildEventRecord
-  }
-}
-
-export type EventWorkflowChildFailed = {
-  type: "workflow.child.failed"
-  properties: {
-    child: WorkflowChildEventRecord
-  }
-}
-
-export type EventWorkflowChildCancelled = {
-  type: "workflow.child.cancelled"
-  properties: {
-    child: WorkflowChildEventRecord
-  }
-}
-
-export type WorkflowArtifactCompactEventRecord = {
-  id: string
-  runID: string
-  phaseID?: string
-  childID?: string
-  specArtifactID?: string
-  kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
-  retention: "ephemeral" | "session" | "durable"
-  exposeToMainContext: boolean
-  summary?: string
-  redaction?: {
-    status?: "none" | "redacted" | "pending"
-    summary?: string
-  }
-  evidenceRefs: Array<{
-    kind: "artifact" | "verification" | "finding" | "debug-evidence"
-    id: string
-  }>
-  time: {
-    created: number
-    updated: number
-  }
-}
-
-export type EventWorkflowArtifactWritten = {
-  type: "workflow.artifact.written"
-  properties: {
-    artifact: WorkflowArtifactCompactEventRecord
-  }
-}
-
-export type WorkflowBudgetLedgerEventEntry = {
-  id: string
-  runID: string
-  phaseID?: string
-  childID?: string
-  kind: "reserve" | "consume" | "warn" | "exceeded" | "correction"
-  usageDelta: {
-    totalTokens?: number
-    inputTokens?: number
-    outputTokens?: number
-    toolCalls?: number
-    childAgents?: number
-    retries?: number
-  }
-  message?: string
-  time: {
-    created: number
-    updated: number
-  }
-}
-
-export type EventWorkflowBudgetAppended = {
-  type: "workflow.budget.appended"
-  properties: {
-    entry: WorkflowBudgetLedgerEventEntry
-  }
-}
-
-export type EventWorkflowBudgetWarning = {
-  type: "workflow.budget.warning"
-  properties: {
-    entry: WorkflowBudgetLedgerEventEntry
-    warnings: Array<string>
-  }
-}
-
-export type EventWorkflowBudgetExceeded = {
-  type: "workflow.budget.exceeded"
-  properties: {
-    entry: WorkflowBudgetLedgerEventEntry
-    exceeded: Array<string>
-  }
-}
-
-export type WorkflowVerificationAttachedEventRecord = {
-  runID: string
-  envelopeIDs: Array<string>
-  run: WorkflowRunEventRecord
-}
-
-export type EventWorkflowVerificationAttached = {
-  type: "workflow.verification.attached"
-  properties: {
-    verification: WorkflowVerificationAttachedEventRecord
-  }
-}
-
-export type EventScheduledTaskCreated = {
-  type: "scheduled.task.created"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      catchUpPolicy: "skip" | "run_once"
-      maxRunDurationMs?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskUpdated = {
-  type: "scheduled.task.updated"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      catchUpPolicy: "skip" | "run_once"
-      maxRunDurationMs?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskDeleted = {
-  type: "scheduled.task.deleted"
-  properties: {
-    id: string
-    projectID: string
-  }
-}
-
-export type EventScheduledTaskFired = {
-  type: "scheduled.task.fired"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      catchUpPolicy: "skip" | "run_once"
-      maxRunDurationMs?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-    run: {
-      id: string
-      taskID: string
-      projectID: string
-      triggerType: "scheduled" | "manual"
-      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
-      occurrenceAt?: number
-      coalescedCount: number
-      queueID?: string
-      workflowRunID?: string
-      error?: string
-      timeStarted?: number
-      timeCompleted?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskSucceeded = {
-  type: "scheduled.task.succeeded"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      catchUpPolicy: "skip" | "run_once"
-      maxRunDurationMs?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-    run: {
-      id: string
-      taskID: string
-      projectID: string
-      triggerType: "scheduled" | "manual"
-      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
-      occurrenceAt?: number
-      coalescedCount: number
-      queueID?: string
-      workflowRunID?: string
-      error?: string
-      timeStarted?: number
-      timeCompleted?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskFailed = {
-  type: "scheduled.task.failed"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      catchUpPolicy: "skip" | "run_once"
-      maxRunDurationMs?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-    run: {
-      id: string
-      taskID: string
-      projectID: string
-      triggerType: "scheduled" | "manual"
-      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
-      occurrenceAt?: number
-      coalescedCount: number
-      queueID?: string
-      workflowRunID?: string
-      error?: string
-      timeStarted?: number
-      timeCompleted?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskSkipped = {
-  type: "scheduled.task.skipped"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      catchUpPolicy: "skip" | "run_once"
-      maxRunDurationMs?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-    run: {
-      id: string
-      taskID: string
-      projectID: string
-      triggerType: "scheduled" | "manual"
-      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
-      occurrenceAt?: number
-      coalescedCount: number
-      queueID?: string
-      workflowRunID?: string
-      error?: string
-      timeStarted?: number
-      timeCompleted?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventScheduledTaskFailedPersistently = {
-  type: "scheduled.task.failed_persistently"
-  properties: {
-    task: {
-      id: string
-      projectID: string
-      directory: string
-      title: string
-      prompt: string
-      schedule:
-        | {
-            type: "once"
-            runAt: number
-          }
-        | {
-            type: "daily"
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "weekly"
-            day: number
-            time: string
-            timezone?: string
-          }
-        | {
-            type: "cron"
-            expression: string
-            timezone?: string
-          }
-      status: "active" | "paused" | "disabled"
-      agent?: string
-      model?: unknown
-      workflowTemplateID?: string
-      workflowStartOptions?: {
-        allowScaleBeyondDefaults?: boolean
-        allowWriteWorkflows?: boolean
-        durableChildren?: boolean
-        enqueueChildren?: boolean
-      }
-      lastQueueID?: string
-      lastWorkflowRunID?: string
-      error?: string
-      nextRunAt?: number
-      lastRunAt?: number
-      catchUpPolicy: "skip" | "run_once"
-      maxRunDurationMs?: number
-      time: {
-        created: number
-        updated?: number
-      }
-    }
-  }
-}
-
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
-export type EventCodeIndexProgress = {
-  type: "code.index.progress"
-  properties: {
-    projectID: string
-    completed: number
-    total: number
-  }
-}
-
-export type EventCodeIndexState = {
-  type: "code.index.state"
-  properties: {
-    projectID: string
-    state: "idle" | "indexing" | "failed"
-    error?: string
-  }
-}
-
-export type PermissionAction = "allow" | "deny" | "ask"
-
-export type PermissionRule = {
-  permission: string
-  pattern: string
-  action: PermissionAction
-}
-
-export type PermissionRuleset = Array<PermissionRule>
-
-export type Session = {
-  id: string
-  slug: string
-  projectID: string
-  directory: string
-  parentID?: string
-  summary?: {
-    additions: number
-    deletions: number
-    files: number
-    diffs?: Array<FileDiff>
-  }
-  share?: {
-    url: string
-  }
-  title: string
-  version: string
-  time: {
-    created: number
-    updated: number
-    compacting?: number
-    archived?: number
-  }
-  permission?: PermissionRuleset
-  revert?: {
-    messageID: string
-    partID?: string
-    snapshot?: string
-    diff?: string
-  }
-  metadata?: {
-    [key: string]: unknown
-  }
-}
-
-export type EventSessionCreated = {
-  type: "session.created"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionUpdated = {
-  type: "session.updated"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionDeleted = {
-  type: "session.deleted"
-  properties: {
-    info: Session
-  }
-}
-
-export type EventSessionDiff = {
-  type: "session.diff"
-  properties: {
-    sessionID: string
-    diff: Array<FileDiff>
-  }
-}
-
-export type EventSessionError = {
-  type: "session.error"
-  properties: {
-    sessionID?: string
-    error?:
-      | ProviderAuthError
-      | UnknownError
-      | MessageOutputLengthError
-      | MessageOutputLoopError
-      | MessageAbortedError
-      | StructuredOutputError
-      | ContextOverflowError
-      | RequestTooLargeError
-      | ApiError
-      | AutonomousLimitExceededError
-  }
-}
-
-export type EventProviderUpdated = {
-  type: "provider.updated"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
-  properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
-  }
-}
-
-export type Pty = {
-  id: string
-  title: string
-  command: string
-  args: Array<string>
-  cwd: string
-  status: "running" | "exited"
-  pid: number
-}
-
-export type EventPtyCreated = {
-  type: "pty.created"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyUpdated = {
-  type: "pty.updated"
-  properties: {
-    info: Pty
-  }
-}
-
-export type EventPtyExited = {
-  type: "pty.exited"
-  properties: {
-    id: string
-    exitCode: number
-  }
-}
-
-export type EventPtyDeleted = {
-  type: "pty.deleted"
-  properties: {
-    id: string
-  }
-}
-
-export type Event =
-  | EventInstallationUpdated
-  | EventInstallationUpdateAvailable
-  | EventProjectUpdated
-  | EventServerInstanceDisposed
-  | EventServerConnected
-  | EventGlobalDisposed
-  | EventFileWatcherUpdated
-  | EventLspUpdated
-  | EventLspClientDiagnostics
-  | EventSessionGoal
-  | EventMessageUpdated
-  | EventMessageRemoved
-  | EventMessagePartUpdated
-  | EventMessagePartDelta
-  | EventMessagePartRemoved
-  | EventPermissionAsked
-  | EventPermissionReplied
-  | EventSessionStatus
-  | EventSessionIdle
-  | EventQuestionAsked
-  | EventQuestionReplied
-  | EventQuestionRejected
-  | EventSessionCompacted
-  | EventTodoUpdated
-  | EventNotificationToastShow
-  | EventNotificationMonitorLine
-  | EventNotificationMonitorExit
-  | EventFileEdited
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
-  | EventTaskQueueCreated
-  | EventTaskQueueUpdated
-  | EventTaskQueueDeleted
-  | EventDebugEngineCorrelatedDiagnostics
-  | EventVcsBranchUpdated
-  | EventCommandExecuted
-  | EventWorkflowRunCreated
-  | EventWorkflowRunUpdated
-  | EventWorkflowRunStarted
-  | EventWorkflowRunBlocked
-  | EventWorkflowRunPaused
-  | EventWorkflowRunResumed
-  | EventWorkflowRunCompleted
-  | EventWorkflowRunFailed
-  | EventWorkflowRunCancelled
-  | EventWorkflowPhaseUpdated
-  | EventWorkflowPhaseStarted
-  | EventWorkflowPhaseCompleted
-  | EventWorkflowPhaseFailed
-  | EventWorkflowChildCreated
-  | EventWorkflowChildUpdated
-  | EventWorkflowChildStarted
-  | EventWorkflowChildCompleted
-  | EventWorkflowChildFailed
-  | EventWorkflowChildCancelled
-  | EventWorkflowArtifactWritten
-  | EventWorkflowBudgetAppended
-  | EventWorkflowBudgetWarning
-  | EventWorkflowBudgetExceeded
-  | EventWorkflowVerificationAttached
-  | EventScheduledTaskCreated
-  | EventScheduledTaskUpdated
-  | EventScheduledTaskDeleted
-  | EventScheduledTaskFired
-  | EventScheduledTaskSucceeded
-  | EventScheduledTaskFailed
-  | EventScheduledTaskSkipped
-  | EventScheduledTaskFailedPersistently
-  | EventWorktreeReady
-  | EventWorktreeFailed
-  | EventCodeIndexProgress
-  | EventCodeIndexState
-  | EventSessionCreated
-  | EventSessionUpdated
-  | EventSessionDeleted
-  | EventSessionDiff
-  | EventSessionError
-  | EventProviderUpdated
-  | EventTuiPromptAppend
-  | EventTuiCommandExecute
-  | EventTuiToastShow
-  | EventTuiSessionSelect
-  | EventPtyCreated
-  | EventPtyUpdated
-  | EventPtyExited
-  | EventPtyDeleted
-
-export type GlobalEvent = {
-  directory: string
-  payload: Event
-}
-
-/**
- * Log level
- */
-export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
-
-/**
- * Server configuration for ax-code serve and web commands
- */
-export type ServerConfig = {
-  /**
-   * Port to listen on
-   */
-  port?: number
-  /**
-   * Loopback hostname to listen on; network binds are disabled
-   */
-  hostname?: string
-  /**
-   * Deprecated; mDNS discovery is disabled
-   */
-  mdns?: boolean
-  /**
-   * Deprecated; mDNS discovery is disabled
-   */
-  mdnsDomain?: string
-  /**
-   * Additional loopback origins to allow for CORS
-   */
-  cors?: Array<string>
-}
-
-export type PermissionActionConfig = "ask" | "allow" | "deny"
-
-export type PermissionObjectConfig = {
-  [key: string]: PermissionActionConfig
-}
-
-export type PermissionRuleConfig = PermissionActionConfig | PermissionObjectConfig
-
-export type PermissionConfig =
-  | {
-      __originalKeys?: Array<string>
-      read?: PermissionRuleConfig
-      edit?: PermissionRuleConfig
-      glob?: PermissionRuleConfig
-      grep?: PermissionRuleConfig
-      list?: PermissionRuleConfig
-      bash?: PermissionRuleConfig
-      task?: PermissionRuleConfig
-      external_directory?: PermissionRuleConfig
-      todowrite?: PermissionActionConfig
-      todoread?: PermissionActionConfig
-      question?: PermissionActionConfig
-      webfetch?: PermissionActionConfig
-      websearch?: PermissionActionConfig
-      codesearch?: PermissionActionConfig
-      lsp?: PermissionRuleConfig
-      doom_loop?: PermissionActionConfig
-      skill?: PermissionRuleConfig
-      [key: string]: PermissionRuleConfig | Array<string> | PermissionActionConfig | undefined
-    }
-  | PermissionActionConfig
 
 export type AgentConfig = {
   model?: string
@@ -2329,190 +92,155 @@ export type AgentConfig = {
   [key: string]: unknown
 }
 
-export type ProviderConfig = {
-  api?: string
-  name?: string
-  env?: Array<string>
+export type AgentPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "agent"
+  name: string
+  source?: {
+    value: string
+    start: number
+    end: number
+  }
+}
+
+export type AgentPartInput = {
   id?: string
-  npm?: string
-  options?: {
-    apiKey?: string
-    baseURL?: string
-    /**
-     * GitHub Enterprise URL for copilot authentication
-     */
-    enterpriseUrl?: string
-    /**
-     * Enable promptCacheKey for this provider (default false)
-     */
-    setCacheKey?: boolean
-    timeout?: number | false
-    /**
-     * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.
-     */
-    chunkTimeout?: number
-    /**
-     * Tool surface for constrained local providers such as AX Engine. "core" keeps coding/file tools only; "full" exposes every enabled tool.
-     */
-    toolProfile?: "core" | "full"
+  type: "agent"
+  name: string
+  source?: {
+    value: string
+    start: number
+    end: number
+  }
+}
+
+export type AppErrorEnvelope = {
+  name: string
+  message: string
+  status: number
+  code?: string
+  logRef?: string
+  retryable?: boolean
+  details?: {
     [key: string]: unknown
   }
-  models?: {
-    [key: string]: {
-      id?: string
-      name?: string
-      family?: string
-      release_date?: string
-      attachment?: boolean
-      reasoning?: boolean
-      temperature?: boolean
-      tool_call?: boolean
-      interleaved?:
-        | true
-        | {
-            field: "reasoning_content" | "reasoning_details"
-          }
-      limit?: {
-        context: number
-        input?: number
-        output: number
-      }
-      modalities?: {
-        input: Array<"text" | "audio" | "image" | "video" | "pdf">
-        output: Array<"text" | "audio" | "image" | "video" | "pdf">
-      }
-      experimental?:
-        | boolean
-        | {
-            [key: string]: unknown
-          }
-      status?: "alpha" | "beta" | "deprecated" | "active"
-      options?: {
-        [key: string]: unknown
-      }
-      headers?: {
-        [key: string]: string
-      }
-      provider?: {
-        npm?: string
-        api?: string
-      }
-      /**
-       * Variant-specific configuration
-       */
-      variants?: {
-        [key: string]: {
-          /**
-           * Disable this variant for the model
-           */
-          disabled?: boolean
-          [key: string]: unknown
-        }
-      }
+}
+
+export type AssistantMessage = {
+  id: string
+  sessionID: string
+  role: "assistant"
+  time: {
+    created: number
+    completed?: number
+  }
+  error?:
+    | ProviderAuthError
+    | UnknownError
+    | MessageOutputLengthError
+    | MessageOutputLoopError
+    | MessageAbortedError
+    | StructuredOutputError
+    | ContextOverflowError
+    | RequestTooLargeError
+    | ApiError
+    | AutonomousLimitExceededError
+  parentID: string
+  modelID: string
+  providerID: string
+  mode: string
+  agent: string
+  path: {
+    cwd: string
+    root: string
+  }
+  summary?: boolean
+  tokens: {
+    total?: number
+    input: number
+    output: number
+    reasoning: number
+    cache: {
+      read: number
+      write: number
     }
   }
-  whitelist?: Array<string>
-  blacklist?: Array<string>
+  structured?: unknown
+  variant?: string
+  finish?: string
+  feedback?: "up" | "down"
 }
 
-export type McpLocalConfig = {
-  /**
-   * Type of MCP server connection
-   */
-  type: "local"
-  /**
-   * Command and arguments to run the MCP server
-   */
-  command: Array<string>
-  /**
-   * Environment variables to set when running the MCP server
-   */
-  environment?: {
-    [key: string]: string
+export type Auth =
+  | {
+      type: "oauth"
+      refresh: string
+      access: string
+      expires: number
+      accountId?: string
+      enterpriseUrl?: string
+    }
+  | {
+      type: "api"
+      key: string
+    }
+  | {
+      type: "wellknown"
+      key: string
+      token: string
+    }
+
+export type AutonomousLimitExceededError = {
+  name: "AutonomousLimitExceededError"
+  data: {
+    kind: "steps" | "files" | "lines" | "blocked_path" | "tool_calls"
+    current: number
+    limit: number
+    message: string
   }
-  /**
-   * Enable or disable the MCP server on startup
-   */
-  enabled?: boolean
-  /**
-   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
-   */
-  timeout?: number
 }
 
-export type McpOAuthConfig = {
-  /**
-   * OAuth client ID. If not provided, dynamic client registration (RFC 7591) will be attempted.
-   */
-  clientId?: string
-  /**
-   * OAuth client secret (if required by the authorization server)
-   */
-  clientSecret?: string
-  /**
-   * OAuth scopes to request during authorization
-   */
-  scope?: string
+export type AutonomousState = {
+  enabled: boolean
 }
 
-export type McpRemoteConfig = {
-  /**
-   * Type of MCP server connection
-   */
-  type: "remote"
-  /**
-   * URL of the remote MCP server
-   */
-  url: string
-  /**
-   * Enable or disable the MCP server on startup
-   */
-  enabled?: boolean
-  /**
-   * Headers to send with the request
-   */
-  headers?: {
-    [key: string]: string
+export type Command = {
+  name: string
+  description?: string
+  agent?: string
+  model?: string
+  source?: "command" | "file" | "mcp" | "skill"
+  sourceTool?: "ax-code" | "agents" | "opencode" | "claude" | "builtin" | "config"
+  scope?: "builtin" | "project" | "user" | "config" | "compat" | "mcp"
+  location?: string
+  warnings?: Array<{
+    code: string
+    message: string
+    severity: "info" | "warn" | "error"
+  }>
+  workflow?: string
+  allowShell?: boolean
+  argumentHint?: string
+  requiresArguments?: boolean
+  template: string
+  subtask?: boolean
+  hints: Array<string>
+  mcpPrompt?: {
+    client: string
+    name: string
   }
-  /**
-   * OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.
-   */
-  oauth?: McpOAuthConfig | false
-  /**
-   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
-   */
-  timeout?: number
 }
 
-/**
- * @deprecated Always uses stretch layout.
- */
-export type LayoutConfig = "auto" | "stretch"
-
-/**
- * Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation. Defaults to full-access (sandbox off)
- */
-export type IsolationMode = "read-only" | "workspace-write" | "full-access"
-
-/**
- * Isolation enforcement backend: app (portable tool checks, default), os (kernel sandbox for bash when available), auto (prefer os with app fallback)
- */
-export type IsolationBackend = "app" | "os" | "auto"
-
-/**
- * Execution isolation configuration
- */
-export type IsolationConfig = {
-  mode?: IsolationMode
-  /**
-   * Allow network access from tools. Defaults to enabled in full-access and disabled in read-only and workspace-write modes
-   */
-  network?: boolean
-  /**
-   * Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected
-   */
-  protected?: Array<string>
-  backend?: IsolationBackend
+export type CompactionPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "compaction"
+  auto: boolean
+  overflow?: boolean
+  triggerReason?: "provider_usage" | "context_overflow_error" | "request_too_large" | "prompt_preflight" | "manual"
 }
 
 export type Config = {
@@ -3184,36 +912,1733 @@ export type Config = {
   }
 }
 
-export type AppErrorEnvelope = {
-  name: string
-  message: string
-  status: number
-  code?: string
-  logRef?: string
-  retryable?: boolean
-  details?: {
+export type ContextOverflowError = {
+  name: "ContextOverflowError"
+  data: {
+    message: string
+    responseBody?: string
+  }
+}
+
+export type Event =
+  | EventInstallationUpdated
+  | EventInstallationUpdateAvailable
+  | EventProjectUpdated
+  | EventServerInstanceDisposed
+  | EventServerConnected
+  | EventGlobalDisposed
+  | EventFileWatcherUpdated
+  | EventLspUpdated
+  | EventLspClientDiagnostics
+  | EventSessionGoal
+  | EventMessageUpdated
+  | EventMessageRemoved
+  | EventMessagePartUpdated
+  | EventMessagePartDelta
+  | EventMessagePartRemoved
+  | EventPermissionAsked
+  | EventPermissionReplied
+  | EventSessionStatus
+  | EventSessionIdle
+  | EventQuestionAsked
+  | EventQuestionReplied
+  | EventQuestionRejected
+  | EventTaskQueueCreated
+  | EventTaskQueueUpdated
+  | EventTaskQueueDeleted
+  | EventSessionCompacted
+  | EventTodoUpdated
+  | EventNotificationToastShow
+  | EventNotificationMonitorLine
+  | EventNotificationMonitorExit
+  | EventFileEdited
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
+  | EventDebugEngineCorrelatedDiagnostics
+  | EventVcsBranchUpdated
+  | EventCommandExecuted
+  | EventWorkflowRunCreated
+  | EventWorkflowRunUpdated
+  | EventWorkflowRunStarted
+  | EventWorkflowRunBlocked
+  | EventWorkflowRunPaused
+  | EventWorkflowRunResumed
+  | EventWorkflowRunCompleted
+  | EventWorkflowRunFailed
+  | EventWorkflowRunCancelled
+  | EventWorkflowPhaseUpdated
+  | EventWorkflowPhaseStarted
+  | EventWorkflowPhaseCompleted
+  | EventWorkflowPhaseFailed
+  | EventWorkflowChildCreated
+  | EventWorkflowChildUpdated
+  | EventWorkflowChildStarted
+  | EventWorkflowChildCompleted
+  | EventWorkflowChildFailed
+  | EventWorkflowChildCancelled
+  | EventWorkflowArtifactWritten
+  | EventWorkflowBudgetAppended
+  | EventWorkflowBudgetWarning
+  | EventWorkflowBudgetExceeded
+  | EventWorkflowVerificationAttached
+  | EventScheduledTaskCreated
+  | EventScheduledTaskUpdated
+  | EventScheduledTaskDeleted
+  | EventScheduledTaskFired
+  | EventScheduledTaskSucceeded
+  | EventScheduledTaskFailed
+  | EventScheduledTaskSkipped
+  | EventScheduledTaskFailedPersistently
+  | EventWorktreeReady
+  | EventWorktreeFailed
+  | EventCodeIndexProgress
+  | EventCodeIndexState
+  | EventSessionCreated
+  | EventSessionUpdated
+  | EventSessionDeleted
+  | EventSessionDiff
+  | EventSessionError
+  | EventProviderUpdated
+  | EventTuiPromptAppend
+  | EventTuiCommandExecute
+  | EventTuiToastShow
+  | EventTuiSessionSelect
+  | EventPtyCreated
+  | EventPtyUpdated
+  | EventPtyExited
+  | EventPtyDeleted
+
+export type EventCodeIndexProgress = {
+  type: "code.index.progress"
+  properties: {
+    projectID: string
+    completed: number
+    total: number
+  }
+}
+
+export type EventCodeIndexState = {
+  type: "code.index.state"
+  properties: {
+    projectID: string
+    state: "idle" | "indexing" | "failed"
+    error?: string
+  }
+}
+
+export type EventCommandExecuted = {
+  type: "command.executed"
+  properties: {
+    name: string
+    sessionID: string
+    arguments: string
+    messageID: string
+    source?: "command" | "file" | "mcp" | "skill"
+    sourceTool?: string
+    workflow?: string
+    workflowRunID?: string
+    warnings?: Array<{
+      code: string
+      message: string
+      severity: "info" | "warn" | "error"
+    }>
+  }
+}
+
+export type EventDebugEngineCorrelatedDiagnostics = {
+  type: "debug-engine.correlated-diagnostics"
+  properties: {
+    file: string
+    correlations: Array<{
+      file: string
+      line: number
+      message: string
+      severity: number
+      rootCauseFile: string | null
+      rootCauseSymbol: string | null
+      rootCauseChain: Array<string>
+      confidence: "high" | "medium" | "low"
+      lspTimestamp: number
+      lspServerIDs: Array<string>
+      graphQueryIds: Array<string>
+      graphIndexedAt: number
+      graphCompleteness: "full" | "partial" | "lsp-only"
+    }>
+  }
+}
+
+export type EventFileEdited = {
+  type: "file.edited"
+  properties: {
+    file: string
+  }
+}
+
+export type EventFileWatcherUpdated = {
+  type: "file.watcher.updated"
+  properties: {
+    file: string
+    event: "add" | "change" | "unlink"
+  }
+}
+
+export type EventGlobalDisposed = {
+  type: "global.disposed"
+  properties: {
     [key: string]: unknown
   }
 }
 
-export type Auth =
-  | {
-      type: "oauth"
-      refresh: string
-      access: string
-      expires: number
-      accountId?: string
-      enterpriseUrl?: string
+export type EventInstallationUpdateAvailable = {
+  type: "installation.update-available"
+  properties: {
+    version: string
+  }
+}
+
+export type EventInstallationUpdated = {
+  type: "installation.updated"
+  properties: {
+    version: string
+    warnings?: Array<string>
+  }
+}
+
+export type EventLspClientDiagnostics = {
+  type: "lsp.client.diagnostics"
+  properties: {
+    serverID: string
+    path: string
+  }
+}
+
+export type EventLspUpdated = {
+  type: "lsp.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventMessagePartDelta = {
+  type: "message.part.delta"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
+    field: string
+    delta: string
+    offset?: number
+  }
+}
+
+export type EventMessagePartRemoved = {
+  type: "message.part.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+    partID: string
+  }
+}
+
+export type EventMessagePartUpdated = {
+  type: "message.part.updated"
+  properties: {
+    part: Part
+  }
+}
+
+export type EventMessageRemoved = {
+  type: "message.removed"
+  properties: {
+    sessionID: string
+    messageID: string
+  }
+}
+
+export type EventMessageUpdated = {
+  type: "message.updated"
+  properties: {
+    info: Message
+  }
+}
+
+export type EventNotificationMonitorExit = {
+  type: "notification.monitor.exit"
+  properties: {
+    monitorID: string
+    description: string
+    exitCode: number | null
+  }
+}
+
+export type EventNotificationMonitorLine = {
+  type: "notification.monitor.line"
+  properties: {
+    monitorID: string
+    line: string
+    description: string
+  }
+}
+
+export type EventNotificationToastShow = {
+  type: "notification.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventPermissionAsked = {
+  type: "permission.asked"
+  properties: PermissionRequest
+}
+
+export type EventPermissionReplied = {
+  type: "permission.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    reply: "once" | "always" | "reject"
+  }
+}
+
+export type EventProjectUpdated = {
+  type: "project.updated"
+  properties: Project
+}
+
+export type EventProviderUpdated = {
+  type: "provider.updated"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventPtyCreated = {
+  type: "pty.created"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventPtyDeleted = {
+  type: "pty.deleted"
+  properties: {
+    id: string
+  }
+}
+
+export type EventPtyExited = {
+  type: "pty.exited"
+  properties: {
+    id: string
+    exitCode: number
+  }
+}
+
+export type EventPtyUpdated = {
+  type: "pty.updated"
+  properties: {
+    info: Pty
+  }
+}
+
+export type EventQuestionAsked = {
+  type: "question.asked"
+  properties: QuestionRequest
+}
+
+export type EventQuestionRejected = {
+  type: "question.rejected"
+  properties: {
+    sessionID: string
+    requestID: string
+  }
+}
+
+export type EventQuestionReplied = {
+  type: "question.replied"
+  properties: {
+    sessionID: string
+    requestID: string
+    answers: Array<QuestionAnswer>
+  }
+}
+
+export type EventScheduledTaskCreated = {
+  type: "scheduled.task.created"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
     }
-  | {
-      type: "api"
-      key: string
+  }
+}
+
+export type EventScheduledTaskDeleted = {
+  type: "scheduled.task.deleted"
+  properties: {
+    id: string
+    projectID: string
+  }
+}
+
+export type EventScheduledTaskFailed = {
+  type: "scheduled.task.failed"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
     }
-  | {
-      type: "wellknown"
-      key: string
-      token: string
+    run: {
+      id: string
+      taskID: string
+      projectID: string
+      triggerType: "scheduled" | "manual"
+      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+      occurrenceAt?: number
+      coalescedCount: number
+      queueID?: string
+      workflowRunID?: string
+      error?: string
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated?: number
+      }
     }
+  }
+}
+
+export type EventScheduledTaskFailedPersistently = {
+  type: "scheduled.task.failed_persistently"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskFired = {
+  type: "scheduled.task.fired"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    run: {
+      id: string
+      taskID: string
+      projectID: string
+      triggerType: "scheduled" | "manual"
+      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+      occurrenceAt?: number
+      coalescedCount: number
+      queueID?: string
+      workflowRunID?: string
+      error?: string
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskSkipped = {
+  type: "scheduled.task.skipped"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    run: {
+      id: string
+      taskID: string
+      projectID: string
+      triggerType: "scheduled" | "manual"
+      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+      occurrenceAt?: number
+      coalescedCount: number
+      queueID?: string
+      workflowRunID?: string
+      error?: string
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskSucceeded = {
+  type: "scheduled.task.succeeded"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+    run: {
+      id: string
+      taskID: string
+      projectID: string
+      triggerType: "scheduled" | "manual"
+      status: "running" | "completed" | "failed" | "timeout" | "skipped_overlap" | "missed_skip"
+      occurrenceAt?: number
+      coalescedCount: number
+      queueID?: string
+      workflowRunID?: string
+      error?: string
+      timeStarted?: number
+      timeCompleted?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventScheduledTaskUpdated = {
+  type: "scheduled.task.updated"
+  properties: {
+    task: {
+      id: string
+      projectID: string
+      directory: string
+      title: string
+      prompt: string
+      schedule:
+        | {
+            type: "once"
+            runAt: number
+          }
+        | {
+            type: "daily"
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "weekly"
+            day: number
+            time: string
+            timezone?: string
+          }
+        | {
+            type: "cron"
+            expression: string
+            timezone?: string
+          }
+      status: "active" | "paused" | "disabled"
+      agent?: string
+      model?: unknown
+      workflowTemplateID?: string
+      workflowStartOptions?: {
+        allowScaleBeyondDefaults?: boolean
+        allowWriteWorkflows?: boolean
+        durableChildren?: boolean
+        enqueueChildren?: boolean
+      }
+      lastQueueID?: string
+      lastWorkflowRunID?: string
+      error?: string
+      nextRunAt?: number
+      lastRunAt?: number
+      catchUpPolicy: "skip" | "run_once"
+      maxRunDurationMs?: number
+      time: {
+        created: number
+        updated?: number
+      }
+    }
+  }
+}
+
+export type EventServerConnected = {
+  type: "server.connected"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventServerInstanceDisposed = {
+  type: "server.instance.disposed"
+  properties: {
+    directory: string
+  }
+}
+
+export type EventSessionCompacted = {
+  type: "session.compacted"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventSessionCreated = {
+  type: "session.created"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventSessionDeleted = {
+  type: "session.deleted"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventSessionDiff = {
+  type: "session.diff"
+  properties: {
+    sessionID: string
+    diff: Array<FileDiff>
+  }
+}
+
+export type EventSessionError = {
+  type: "session.error"
+  properties: {
+    sessionID?: string
+    error?:
+      | ProviderAuthError
+      | UnknownError
+      | MessageOutputLengthError
+      | MessageOutputLoopError
+      | MessageAbortedError
+      | StructuredOutputError
+      | ContextOverflowError
+      | RequestTooLargeError
+      | ApiError
+      | AutonomousLimitExceededError
+  }
+}
+
+export type EventSessionGoal = {
+  type: "session.goal"
+  properties: {
+    sessionID: string
+    goal: {
+      sessionID: string
+      objective: string
+      status: "active" | "paused" | "complete" | "blocked" | "budget_limited"
+      tokenBudget?: number
+      tokensUsed: number
+      timeUsedSeconds: number
+      time: {
+        created: number
+        updated?: number
+      }
+      remainingTokens?: number
+    } | null
+  }
+}
+
+export type EventSessionIdle = {
+  type: "session.idle"
+  properties: {
+    sessionID: string
+  }
+}
+
+export type EventSessionStatus = {
+  type: "session.status"
+  properties: {
+    sessionID: string
+    status: SessionStatus
+  }
+}
+
+export type EventSessionUpdated = {
+  type: "session.updated"
+  properties: {
+    info: Session
+  }
+}
+
+export type EventTaskQueueCreated = {
+  type: "task.queue.created"
+  properties: {
+    item: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      executionTimeoutMs?: number
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type EventTaskQueueDeleted = {
+  type: "task.queue.deleted"
+  properties: {
+    id: string
+    projectID: string
+    sessionID?: string
+  }
+}
+
+export type EventTaskQueueUpdated = {
+  type: "task.queue.updated"
+  properties: {
+    item: {
+      id: string
+      projectID: string
+      directory: string
+      worktree?: string
+      sessionID?: string
+      kind: "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
+      status:
+        | "queued"
+        | "waiting_for_idle"
+        | "running"
+        | "blocked_permission"
+        | "blocked_question"
+        | "paused"
+        | "failed"
+        | "completed"
+        | "cancelled"
+      priority: number
+      position: number
+      title: string
+      agent?: string
+      model?: unknown
+      sourceMessageID?: string
+      sourceTaskID?: string
+      payload: {
+        [key: string]: unknown
+      }
+      error?: string
+      executionTimeoutMs?: number
+      time: {
+        created: number
+        updated?: number
+        started?: number
+        completed?: number
+      }
+    }
+  }
+}
+
+export type EventTodoUpdated = {
+  type: "todo.updated"
+  properties: {
+    sessionID: string
+    todos: Array<Todo>
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
+export type EventWorkflowArtifactWritten = {
+  type: "workflow.artifact.written"
+  properties: {
+    artifact: WorkflowArtifactCompactEventRecord
+  }
+}
+
+export type EventWorkflowBudgetAppended = {
+  type: "workflow.budget.appended"
+  properties: {
+    entry: WorkflowBudgetLedgerEventEntry
+  }
+}
+
+export type EventWorkflowBudgetExceeded = {
+  type: "workflow.budget.exceeded"
+  properties: {
+    entry: WorkflowBudgetLedgerEventEntry
+    exceeded: Array<string>
+  }
+}
+
+export type EventWorkflowBudgetWarning = {
+  type: "workflow.budget.warning"
+  properties: {
+    entry: WorkflowBudgetLedgerEventEntry
+    warnings: Array<string>
+  }
+}
+
+export type EventWorkflowChildCancelled = {
+  type: "workflow.child.cancelled"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildCompleted = {
+  type: "workflow.child.completed"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildCreated = {
+  type: "workflow.child.created"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildFailed = {
+  type: "workflow.child.failed"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildStarted = {
+  type: "workflow.child.started"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowChildUpdated = {
+  type: "workflow.child.updated"
+  properties: {
+    child: WorkflowChildEventRecord
+  }
+}
+
+export type EventWorkflowPhaseCompleted = {
+  type: "workflow.phase.completed"
+  properties: {
+    phase: WorkflowPhaseEventRecord
+  }
+}
+
+export type EventWorkflowPhaseFailed = {
+  type: "workflow.phase.failed"
+  properties: {
+    phase: WorkflowPhaseEventRecord
+  }
+}
+
+export type EventWorkflowPhaseStarted = {
+  type: "workflow.phase.started"
+  properties: {
+    phase: WorkflowPhaseEventRecord
+  }
+}
+
+export type EventWorkflowPhaseUpdated = {
+  type: "workflow.phase.updated"
+  properties: {
+    phase: WorkflowPhaseEventRecord
+  }
+}
+
+export type EventWorkflowRunBlocked = {
+  type: "workflow.run.blocked"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunCancelled = {
+  type: "workflow.run.cancelled"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunCompleted = {
+  type: "workflow.run.completed"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunCreated = {
+  type: "workflow.run.created"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunFailed = {
+  type: "workflow.run.failed"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunPaused = {
+  type: "workflow.run.paused"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunResumed = {
+  type: "workflow.run.resumed"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunStarted = {
+  type: "workflow.run.started"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowRunUpdated = {
+  type: "workflow.run.updated"
+  properties: {
+    run: WorkflowRunEventRecord
+  }
+}
+
+export type EventWorkflowVerificationAttached = {
+  type: "workflow.verification.attached"
+  properties: {
+    verification: WorkflowVerificationAttachedEventRecord
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type ExecutionGraph = {
+  sessionID: string
+  nodes: Array<ExecutionGraphNode>
+  edges: Array<ExecutionGraphEdge>
+  metadata: ExecutionGraphMetadata
+}
+
+export type ExecutionGraphEdge = {
+  from: string
+  to: string
+  type: "sequence" | "call_result" | "step_contains"
+}
+
+export type ExecutionGraphMetadata = {
+  duration: number
+  tokens: ExecutionGraphTokens
+  risk: ExecutionGraphRisk
+  agents: Array<string>
+  tools: Array<string>
+  steps: number
+  errors: number
+}
+
+export type ExecutionGraphNode = {
+  id: string
+  type: "session" | "step" | "tool_call" | "tool_result" | "agent_route" | "llm" | "error"
+  label: string
+  timestamp: number
+  duration?: number
+  status?: "ok" | "error" | "pending"
+  stepIndex?: number
+  callID?: string
+  tool?: string
+  agent?: string
+  confidence?: number
+  tokens?: ExecutionGraphTokens
+}
+
+export type ExecutionGraphResponse = {
+  data: ExecutionGraph
+}
+
+export type ExecutionGraphRisk = {
+  level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  score: number
+  summary: string
+}
+
+export type ExecutionGraphTokens = {
+  input: number
+  output: number
+}
+
+export type ExecutionGraphTopologyHeading = {
+  kind: "heading"
+  text: string
+}
+
+export type ExecutionGraphTopologyLine =
+  | ExecutionGraphTopologyHeading
+  | ExecutionGraphTopologyPath
+  | ExecutionGraphTopologyStep
+  | ExecutionGraphTopologyPair
+
+export type ExecutionGraphTopologyPair = {
+  kind: "pair"
+  text: string
+  call: string
+  result: string
+}
+
+export type ExecutionGraphTopologyPath = {
+  kind: "path"
+  text: string
+  nodes: Array<string>
+}
+
+export type ExecutionGraphTopologyResponse = {
+  data: Array<ExecutionGraphTopologyLine>
+}
+
+export type ExecutionGraphTopologyStep = {
+  kind: "step"
+  text: string
+  stepIndex: number
+  nodes: Array<string>
+}
+
+export type File = {
+  path: string
+  added: number
+  removed: number
+  status: "added" | "deleted" | "modified"
+}
+
+export type FileContent = {
+  type: "text" | "binary"
+  content: string
+  diff?: string
+  patch?: {
+    oldFileName: string
+    newFileName: string
+    oldHeader?: string
+    newHeader?: string
+    hunks: Array<{
+      oldStart: number
+      oldLines: number
+      newStart: number
+      newLines: number
+      lines: Array<string>
+    }>
+    index?: string
+  }
+  encoding?: "base64"
+  mimeType?: string
+}
+
+export type FileDiff = {
+  file: string
+  before: string
+  after: string
+  additions: number
+  deletions: number
+  status?: "added" | "deleted" | "modified"
+}
+
+export type FileNode = {
+  name: string
+  path: string
+  absolute: string
+  type: "file" | "directory"
+  ignored: boolean
+}
+
+export type FilePart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "file"
+  mime: string
+  filename?: string
+  url: string
+  source?: FilePartSource
+}
+
+export type FilePartInput = {
+  id?: string
+  type: "file"
+  mime: string
+  filename?: string
+  url: string
+  source?: FilePartSource
+}
+
+export type FilePartSource = FileSource | SymbolSource | ResourceSource
+
+export type FilePartSourceText = {
+  value: string
+  start: number
+  end: number
+}
+
+export type FileSource = {
+  text: FilePartSourceText
+  type: "file"
+  path: string
+}
+
+export type FormatterStatus = {
+  name: string
+  extensions: Array<string>
+  enabled: boolean
+}
+
+export type GlobalEvent = {
+  directory: string
+  payload: Event
+}
+
+export type GlobalSession = {
+  id: string
+  slug: string
+  projectID: string
+  directory: string
+  parentID?: string
+  summary?: {
+    additions: number
+    deletions: number
+    files: number
+    diffs?: Array<FileDiff>
+  }
+  share?: {
+    url: string
+  }
+  title: string
+  version: string
+  time: {
+    created: number
+    updated: number
+    compacting?: number
+    archived?: number
+  }
+  permission?: PermissionRuleset
+  revert?: {
+    messageID: string
+    partID?: string
+    snapshot?: string
+    diff?: string
+  }
+  metadata?: {
+    [key: string]: unknown
+  }
+  project: ProjectSummary | null
+}
+
+/**
+ * Isolation enforcement backend: app (portable tool checks, default), os (kernel sandbox for bash when available), auto (prefer os with app fallback)
+ */
+export type IsolationBackend = "app" | "os" | "auto"
+
+/**
+ * Execution isolation configuration
+ */
+export type IsolationConfig = {
+  mode?: IsolationMode
+  /**
+   * Allow network access from tools. Defaults to enabled in full-access and disabled in read-only and workspace-write modes
+   */
+  network?: boolean
+  /**
+   * Additional paths relative to workspace root that are protected from writes. .git and .ax-code are always protected
+   */
+  protected?: Array<string>
+  backend?: IsolationBackend
+}
+
+/**
+ * Isolation mode: read-only blocks all mutations, workspace-write allows writes inside workspace only, full-access disables isolation. Defaults to full-access (sandbox off)
+ */
+export type IsolationMode = "read-only" | "workspace-write" | "full-access"
+
+export type IsolationState = {
+  mode: "read-only" | "workspace-write" | "full-access"
+  network: boolean
+}
+
+export type JsonSchema = {
+  [key: string]: unknown
+}
+
+export type LspStatus = {
+  id: string
+  name: string
+  root: string
+  status: "connected" | "error"
+}
+
+/**
+ * @deprecated Always uses stretch layout.
+ */
+export type LayoutConfig = "auto" | "stretch"
+
+/**
+ * Log level
+ */
+export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
+
+export type McpStatus =
+  | McpStatusConnected
+  | McpStatusDisabled
+  | McpStatusFailed
+  | McpStatusNeedsAuth
+  | McpStatusNeedsClientRegistration
+  | McpStatusNeedsTrust
+
+export type McpStatusConnected = {
+  status: "connected"
+}
+
+export type McpStatusDisabled = {
+  status: "disabled"
+}
+
+export type McpStatusFailed = {
+  status: "failed"
+  error: string
+}
+
+export type McpStatusNeedsAuth = {
+  status: "needs_auth"
+}
+
+export type McpStatusNeedsClientRegistration = {
+  status: "needs_client_registration"
+  error: string
+}
+
+export type McpStatusNeedsTrust = {
+  status: "needs_trust"
+  fingerprint: string
+  source: {
+    kind:
+      | "wellknown"
+      | "global"
+      | "custom"
+      | "project"
+      | "config_directory"
+      | "inline"
+      | "account"
+      | "managed"
+      | "runtime"
+      | "unknown"
+    path?: string
+    url?: string
+  }
+}
+
+export type McpLocalConfig = {
+  /**
+   * Type of MCP server connection
+   */
+  type: "local"
+  /**
+   * Command and arguments to run the MCP server
+   */
+  command: Array<string>
+  /**
+   * Environment variables to set when running the MCP server
+   */
+  environment?: {
+    [key: string]: string
+  }
+  /**
+   * Enable or disable the MCP server on startup
+   */
+  enabled?: boolean
+  /**
+   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
+   */
+  timeout?: number
+}
+
+export type McpOAuthConfig = {
+  /**
+   * OAuth client ID. If not provided, dynamic client registration (RFC 7591) will be attempted.
+   */
+  clientId?: string
+  /**
+   * OAuth client secret (if required by the authorization server)
+   */
+  clientSecret?: string
+  /**
+   * OAuth scopes to request during authorization
+   */
+  scope?: string
+}
+
+export type McpReadResourceResult = {
+  contents: Array<
+    | {
+        uri?: string
+        mimeType?: string
+        text: string
+        [key: string]: unknown
+      }
+    | {
+        uri?: string
+        mimeType?: string
+        blob: string
+        [key: string]: unknown
+      }
+  >
+  [key: string]: unknown
+}
+
+export type McpRemoteConfig = {
+  /**
+   * Type of MCP server connection
+   */
+  type: "remote"
+  /**
+   * URL of the remote MCP server
+   */
+  url: string
+  /**
+   * Enable or disable the MCP server on startup
+   */
+  enabled?: boolean
+  /**
+   * Headers to send with the request
+   */
+  headers?: {
+    [key: string]: string
+  }
+  /**
+   * OAuth authentication configuration for the MCP server. Set to false to disable OAuth auto-detection.
+   */
+  oauth?: McpOAuthConfig | false
+  /**
+   * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
+   */
+  timeout?: number
+}
+
+export type McpResource = {
+  name: string
+  uri: string
+  description?: string
+  mimeType?: string
+  client: string
+}
+
+export type Message = UserMessage | AssistantMessage
+
+export type MessageAbortedError = {
+  name: "MessageAbortedError"
+  data: {
+    message: string
+    metadata?: {
+      [key: string]: string
+    }
+  }
+}
+
+export type MessageOutputLengthError = {
+  name: "MessageOutputLengthError"
+  data: {
+    [key: string]: unknown
+  }
+}
+
+export type MessageOutputLoopError = {
+  name: "MessageOutputLoopError"
+  data: {
+    message: string
+    metadata?: {
+      [key: string]: string
+    }
+  }
+}
 
 export type Model = {
   id: string
@@ -3270,6 +2695,136 @@ export type Model = {
   }
 }
 
+export type OutputFormat = OutputFormatText | OutputFormatJsonSchema
+
+export type OutputFormatJsonSchema = {
+  type: "json_schema"
+  schema: JsonSchema
+  retryCount?: number
+}
+
+export type OutputFormatText = {
+  type: "text"
+}
+
+export type Part =
+  | TextPart
+  | SubtaskPart
+  | ReasoningPart
+  | FilePart
+  | ToolPart
+  | StepStartPart
+  | StepFinishPart
+  | SnapshotPart
+  | PatchPart
+  | AgentPart
+  | RetryPart
+  | CompactionPart
+
+export type PatchPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "patch"
+  hash: string
+  files: Array<string>
+}
+
+export type Path = {
+  home: string
+  state: string
+  config: string
+  worktree: string
+  directory: string
+}
+
+export type PermissionAction = "allow" | "deny" | "ask"
+
+export type PermissionActionConfig = "ask" | "allow" | "deny"
+
+export type PermissionConfig =
+  | {
+      __originalKeys?: Array<string>
+      read?: PermissionRuleConfig
+      edit?: PermissionRuleConfig
+      glob?: PermissionRuleConfig
+      grep?: PermissionRuleConfig
+      list?: PermissionRuleConfig
+      bash?: PermissionRuleConfig
+      task?: PermissionRuleConfig
+      external_directory?: PermissionRuleConfig
+      todowrite?: PermissionActionConfig
+      todoread?: PermissionActionConfig
+      question?: PermissionActionConfig
+      webfetch?: PermissionActionConfig
+      websearch?: PermissionActionConfig
+      codesearch?: PermissionActionConfig
+      lsp?: PermissionRuleConfig
+      doom_loop?: PermissionActionConfig
+      skill?: PermissionRuleConfig
+      [key: string]: PermissionRuleConfig | Array<string> | PermissionActionConfig | undefined
+    }
+  | PermissionActionConfig
+
+export type PermissionObjectConfig = {
+  [key: string]: PermissionActionConfig
+}
+
+export type PermissionRequest = {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: Array<string>
+  metadata: {
+    [key: string]: unknown
+  }
+  always: Array<string>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type PermissionRule = {
+  permission: string
+  pattern: string
+  action: PermissionAction
+}
+
+export type PermissionRuleConfig = PermissionActionConfig | PermissionObjectConfig
+
+export type PermissionRuleset = Array<PermissionRule>
+
+export type Project = {
+  id: string
+  worktree: string
+  vcs?: "git"
+  name?: string
+  icon?: {
+    url?: string
+    override?: string
+    color?: string
+  }
+  commands?: {
+    /**
+     * Startup script to run when creating a new workspace (worktree)
+     */
+    start?: string
+  }
+  time: {
+    created: number
+    updated: number
+    initialized?: number
+  }
+  sandboxes: Array<string>
+}
+
+export type ProjectSummary = {
+  id: string
+  name?: string
+  worktree: string
+}
+
 export type Provider = {
   id: string
   name: string
@@ -3284,102 +2839,278 @@ export type Provider = {
   }
 }
 
-export type IsolationState = {
-  mode: "read-only" | "workspace-write" | "full-access"
-  network: boolean
+export type ProviderAuthAuthorization = {
+  url: string
+  method: "auto" | "code"
+  instructions: string
 }
 
-export type AutonomousState = {
-  enabled: boolean
-}
-
-export type SmartLlmState = {
-  enabled: boolean
-}
-
-export type SuperLongState = {
-  enabled: boolean
-}
-
-export type SuperLongStatus = {
-  enabled: boolean
-  source: "scoped" | "session-override" | "env" | "config" | "model-default"
-  durationMs: number | null
-  startedAt: number | null
-  elapsedMs: number | null
-  remainingMs: number | null
-}
-
-export type WorkflowArtifactEventRecord = {
-  id: string
-  runID: string
-  phaseID?: string
-  childID?: string
-  specArtifactID?: string
-  kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
-  retention: "ephemeral" | "session" | "durable"
-  exposeToMainContext: boolean
-  summary?: string
-  payload?: unknown
-  redaction?: {
-    status?: "none" | "redacted" | "pending"
-    summary?: string
+export type ProviderAuthError = {
+  name: "ProviderAuthError"
+  data: {
+    providerID: string
+    message: string
   }
-  evidenceRefs: Array<{
-    kind: "artifact" | "verification" | "finding" | "debug-evidence"
-    id: string
-  }>
+}
+
+export type ProviderAuthMethod = {
+  type: "oauth" | "api"
+  label: string
+  prompts?: Array<
+    | {
+        type: "text"
+        key: string
+        message: string
+        placeholder?: string
+        when?: {
+          key: string
+          op: "eq" | "neq"
+          value: string
+        }
+      }
+    | {
+        type: "select"
+        key: string
+        message: string
+        options: Array<{
+          label: string
+          value: string
+          hint?: string
+        }>
+        when?: {
+          key: string
+          op: "eq" | "neq"
+          value: string
+        }
+      }
+  >
+}
+
+export type ProviderConfig = {
+  api?: string
+  name?: string
+  env?: Array<string>
+  id?: string
+  npm?: string
+  options?: {
+    apiKey?: string
+    baseURL?: string
+    /**
+     * GitHub Enterprise URL for copilot authentication
+     */
+    enterpriseUrl?: string
+    /**
+     * Enable promptCacheKey for this provider (default false)
+     */
+    setCacheKey?: boolean
+    timeout?: number | false
+    /**
+     * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.
+     */
+    chunkTimeout?: number
+    /**
+     * Tool surface for constrained local providers such as AX Engine. "core" keeps coding/file tools only; "full" exposes every enabled tool.
+     */
+    toolProfile?: "core" | "full"
+    [key: string]: unknown
+  }
+  models?: {
+    [key: string]: {
+      id?: string
+      name?: string
+      family?: string
+      release_date?: string
+      attachment?: boolean
+      reasoning?: boolean
+      temperature?: boolean
+      tool_call?: boolean
+      interleaved?:
+        | true
+        | {
+            field: "reasoning_content" | "reasoning_details"
+          }
+      limit?: {
+        context: number
+        input?: number
+        output: number
+      }
+      modalities?: {
+        input: Array<"text" | "audio" | "image" | "video" | "pdf">
+        output: Array<"text" | "audio" | "image" | "video" | "pdf">
+      }
+      experimental?:
+        | boolean
+        | {
+            [key: string]: unknown
+          }
+      status?: "alpha" | "beta" | "deprecated" | "active"
+      options?: {
+        [key: string]: unknown
+      }
+      headers?: {
+        [key: string]: string
+      }
+      provider?: {
+        npm?: string
+        api?: string
+      }
+      /**
+       * Variant-specific configuration
+       */
+      variants?: {
+        [key: string]: {
+          /**
+           * Disable this variant for the model
+           */
+          disabled?: boolean
+          [key: string]: unknown
+        }
+      }
+    }
+  }
+  whitelist?: Array<string>
+  blacklist?: Array<string>
+}
+
+export type Pty = {
+  id: string
+  title: string
+  command: string
+  args: Array<string>
+  cwd: string
+  status: "running" | "exited"
+  pid: number
+}
+
+export type QuestionAnswer = Array<string>
+
+export type QuestionInfo = {
+  /**
+   * Complete question
+   */
+  question: string
+  /**
+   * Very short label (max 30 chars)
+   */
+  header: string
+  /**
+   * Available choices
+   */
+  options: Array<QuestionOption>
+  /**
+   * Allow selecting multiple choices
+   */
+  multiple?: boolean
+  /**
+   * Allow typing a custom answer (default: true)
+   */
+  custom?: boolean
+}
+
+export type QuestionOption = {
+  /**
+   * Display text (1-5 words, concise)
+   */
+  label: string
+  /**
+   * Explanation of choice
+   */
+  description: string
+}
+
+export type QuestionRequest = {
+  id: string
+  sessionID: string
+  /**
+   * Questions to ask
+   */
+  questions: Array<QuestionInfo>
+  tool?: {
+    messageID: string
+    callID: string
+  }
+}
+
+export type Range = {
+  start: {
+    line: number
+    character: number
+  }
+  end: {
+    line: number
+    character: number
+  }
+}
+
+export type ReasoningPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "reasoning"
+  text: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    start: number
+    end?: number
+  }
+}
+
+export type RequestTooLargeError = {
+  name: "RequestTooLargeError"
+  data: {
+    message: string
+    responseBody?: string
+  }
+}
+
+export type ResourceSource = {
+  text: FilePartSourceText
+  type: "resource"
+  clientName: string
+  uri: string
+}
+
+export type RetryPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "retry"
+  attempt: number
+  error: ApiError
   time: {
     created: number
-    updated: number
   }
 }
 
-export type ToolIds = Array<string>
-
-export type ToolListItem = {
-  id: string
-  description: string
-  parameters: unknown
-}
-
-export type ToolList = Array<ToolListItem>
-
-export type Worktree = {
-  name: string
-  branch: string
-  directory: string
-}
-
-export type WorktreeCreateInput = {
-  name?: string
+/**
+ * Server configuration for ax-code serve and web commands
+ */
+export type ServerConfig = {
   /**
-   * Additional startup script to run after the project's start command
+   * Port to listen on
    */
-  startCommand?: string
+  port?: number
+  /**
+   * Loopback hostname to listen on; network binds are disabled
+   */
+  hostname?: string
+  /**
+   * Deprecated; mDNS discovery is disabled
+   */
+  mdns?: boolean
+  /**
+   * Deprecated; mDNS discovery is disabled
+   */
+  mdnsDomain?: string
+  /**
+   * Additional loopback origins to allow for CORS
+   */
+  cors?: Array<string>
 }
 
-export type WorktreeListItem = {
-  name: string
-  directory: string
-  branch?: string
-}
-
-export type WorktreeRemoveInput = {
-  directory: string
-}
-
-export type WorktreeResetInput = {
-  directory: string
-}
-
-export type ProjectSummary = {
-  id: string
-  name?: string
-  worktree: string
-}
-
-export type GlobalSession = {
+export type Session = {
   id: string
   slug: string
   projectID: string
@@ -3412,26 +3143,30 @@ export type GlobalSession = {
   metadata?: {
     [key: string]: unknown
   }
-  project: ProjectSummary | null
 }
 
-export type McpResource = {
-  name: string
-  uri: string
-  description?: string
-  mimeType?: string
-  client: string
+export type SessionBranchFamily = {
+  currentID: string
+  recommendedID: string
+  confidence: number
+  reasons: Array<string>
+  items: Array<SessionBranchItem>
+  root: Session
+  current: Session
+  recommended: SessionBranchItem
 }
 
-export type SessionSemanticDiffKind =
-  | "bug_fix"
-  | "refactor"
-  | "optimization"
-  | "test"
-  | "documentation"
-  | "configuration"
-  | "dependency"
-  | "rewrite"
+export type SessionBranchItem = {
+  id: string
+  title: string
+  risk: SessionBranchRisk
+  view: SessionBranchView
+  decision: SessionBranchScorecard
+  headline: string
+  semantic: SessionSemanticDiffSummary | null
+  current: boolean
+  recommended: boolean
+}
 
 export type SessionBranchRisk = {
   level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
@@ -3468,6 +3203,16 @@ export type SessionBranchRisk = {
   mitigations: Array<string>
 }
 
+export type SessionBranchScorecard = {
+  total: number
+  breakdown: Array<{
+    key: "correctness" | "safety" | "simplicity" | "validation"
+    label: string
+    value: number
+    detail: string
+  }>
+}
+
 export type SessionBranchView = {
   tools: Array<string>
   routes: Array<{
@@ -3482,67 +3227,83 @@ export type SessionBranchView = {
   notes: Array<string>
 }
 
-export type SessionBranchScorecard = {
-  total: number
-  breakdown: Array<{
-    key: "correctness" | "safety" | "simplicity" | "validation"
-    label: string
-    value: number
-    detail: string
+export type SessionCompareAdvisory = {
+  winner: "A" | "B" | "tie"
+  confidence: number
+  reasons: Array<string>
+}
+
+export type SessionCompareAnalysis = {
+  tools: Array<string>
+  routes: Array<{
+    from: string
+    to: string
+    confidence: number
   }>
-}
-
-export type SessionSemanticDiffRisk = "low" | "medium" | "high"
-
-export type SessionSemanticDiffCount = {
-  kind: SessionSemanticDiffKind
-  count: number
-}
-
-export type SessionSemanticDiffChange = {
-  file: string
-  status?: "added" | "deleted" | "modified" | null
-  kind: SessionSemanticDiffKind
-  risk: SessionSemanticDiffRisk
-  summary: string
-  additions: number
-  deletions: number
-  signals: Array<string>
-}
-
-export type SessionSemanticDiffSummary = {
+  counts: {
+    [key: string]: number
+  }
+  plan: string
+  notes: Array<string>
+  decision: SessionBranchScorecard
   headline: string
-  risk: SessionSemanticDiffRisk
-  primary: SessionSemanticDiffKind
-  files: number
-  additions: number
-  deletions: number
-  counts: Array<SessionSemanticDiffCount>
-  signals: Array<string>
-  changes: Array<SessionSemanticDiffChange>
 }
 
-export type SessionBranchItem = {
+export type SessionCompareDecision = {
+  winner: "A" | "B" | "tie"
+  confidence: number
+  recommendation: string
+  reasons: Array<string>
+  differences: Array<string>
+  session1: SessionCompareDecisionSession
+  session2: SessionCompareDecisionSession
+}
+
+export type SessionCompareDecisionSession = {
+  title: string
+  plan: string
+  headline: string
+  change: string | null
+  validation: string
+}
+
+export type SessionCompareDifferences = {
+  toolChainDiffers: boolean
+  routeDiffers: boolean
+  eventCountDelta: number
+}
+
+export type SessionCompareReplay = {
+  stepsCompared: number
+  divergences: number
+  reasons: Array<string>
+}
+
+export type SessionCompareResult = {
+  session1: SessionCompareSummary
+  session2: SessionCompareSummary
+  differences: SessionCompareDifferences
+  advisory: SessionCompareAdvisory
+  decision: SessionCompareDecision
+  analysis: {
+    session1: SessionCompareAnalysis
+    session2: SessionCompareAnalysis
+  }
+  replay?: {
+    session1: SessionCompareReplay
+    session2: SessionCompareReplay
+  }
+}
+
+export type SessionCompareSummary = {
   id: string
   title: string
   risk: SessionBranchRisk
-  view: SessionBranchView
   decision: SessionBranchScorecard
+  events: number
+  plan: string
   headline: string
   semantic: SessionSemanticDiffSummary | null
-  current: boolean
-  recommended: boolean
-}
-
-export type SessionBranchFamily = {
-  currentID: string
-  recommendedID: string
-  confidence: number
-  reasons: Array<string>
-  items: Array<SessionBranchItem>
-  root: Session
-  current: Session
-  recommended: SessionBranchItem
 }
 
 export type SessionDreDetail = {
@@ -3584,99 +3345,47 @@ export type SessionDreDetail = {
   semantic: SessionSemanticDiffSummary | null
 }
 
-export type SessionDreTimelineLine = {
-  kind: "heading" | "meta" | "step" | "route" | "tool" | "llm" | "error"
-  text: string
-}
-
 export type SessionDreSnapshot = {
   detail: SessionDreDetail | null
   timeline: Array<SessionDreTimelineLine>
 }
 
-export type ExecutionGraphTokens = {
-  input: number
-  output: number
-}
-
-export type ExecutionGraphNode = {
-  id: string
-  type: "session" | "step" | "tool_call" | "tool_result" | "agent_route" | "llm" | "error"
-  label: string
-  timestamp: number
-  duration?: number
-  status?: "ok" | "error" | "pending"
-  stepIndex?: number
-  callID?: string
-  tool?: string
-  agent?: string
-  confidence?: number
-  tokens?: ExecutionGraphTokens
-}
-
-export type ExecutionGraphEdge = {
-  from: string
-  to: string
-  type: "sequence" | "call_result" | "step_contains"
-}
-
-export type ExecutionGraphRisk = {
-  level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
-  score: number
-  summary: string
-}
-
-export type ExecutionGraphMetadata = {
-  duration: number
-  tokens: ExecutionGraphTokens
-  risk: ExecutionGraphRisk
-  agents: Array<string>
-  tools: Array<string>
-  steps: number
-  errors: number
-}
-
-export type ExecutionGraph = {
-  sessionID: string
-  nodes: Array<ExecutionGraphNode>
-  edges: Array<ExecutionGraphEdge>
-  metadata: ExecutionGraphMetadata
-}
-
-export type ExecutionGraphTopologyHeading = {
-  kind: "heading"
+export type SessionDreTimelineLine = {
+  kind: "heading" | "meta" | "step" | "route" | "tool" | "llm" | "error"
   text: string
 }
-
-export type ExecutionGraphTopologyPath = {
-  kind: "path"
-  text: string
-  nodes: Array<string>
-}
-
-export type ExecutionGraphTopologyStep = {
-  kind: "step"
-  text: string
-  stepIndex: number
-  nodes: Array<string>
-}
-
-export type ExecutionGraphTopologyPair = {
-  kind: "pair"
-  text: string
-  call: string
-  result: string
-}
-
-export type ExecutionGraphTopologyLine =
-  | ExecutionGraphTopologyHeading
-  | ExecutionGraphTopologyPath
-  | ExecutionGraphTopologyStep
-  | ExecutionGraphTopologyPair
 
 export type SessionGraphSnapshot = {
   graph: ExecutionGraph
   topology: Array<ExecutionGraphTopologyLine>
+}
+
+export type SessionMetadata = {
+  [key: string]: unknown
+}
+
+export type SessionMoveValidation = {
+  sessionID: string
+  valid: boolean
+  reason: "ok" | "target_missing" | "target_not_directory" | "outside_current_project" | "same_directory"
+  current: {
+    directory: string
+    projectID: string
+    worktree: string
+  }
+  target: {
+    directory: string
+    exists: boolean
+    isDirectory: boolean
+    sameDirectory: boolean
+    withinCurrentProject: boolean
+    git: {
+      worktree: string | null
+      branch: string | null
+      dirty: boolean | null
+    }
+  }
+  warnings: Array<string>
 }
 
 export type SessionRiskDetail = {
@@ -4022,83 +3731,9 @@ export type SessionRiskDetail = {
   }
 }
 
-export type SessionCompareSummary = {
-  id: string
-  title: string
-  risk: SessionBranchRisk
-  decision: SessionBranchScorecard
-  events: number
-  plan: string
-  headline: string
-  semantic: SessionSemanticDiffSummary | null
-}
-
-export type SessionCompareDifferences = {
-  toolChainDiffers: boolean
-  routeDiffers: boolean
-  eventCountDelta: number
-}
-
-export type SessionCompareAdvisory = {
-  winner: "A" | "B" | "tie"
-  confidence: number
-  reasons: Array<string>
-}
-
-export type SessionCompareDecisionSession = {
-  title: string
-  plan: string
-  headline: string
-  change: string | null
-  validation: string
-}
-
-export type SessionCompareDecision = {
-  winner: "A" | "B" | "tie"
-  confidence: number
-  recommendation: string
-  reasons: Array<string>
-  differences: Array<string>
-  session1: SessionCompareDecisionSession
-  session2: SessionCompareDecisionSession
-}
-
-export type SessionCompareAnalysis = {
-  tools: Array<string>
-  routes: Array<{
-    from: string
-    to: string
-    confidence: number
-  }>
-  counts: {
-    [key: string]: number
-  }
-  plan: string
-  notes: Array<string>
-  decision: SessionBranchScorecard
-  headline: string
-}
-
-export type SessionCompareReplay = {
-  stepsCompared: number
-  divergences: number
-  reasons: Array<string>
-}
-
-export type SessionCompareResult = {
-  session1: SessionCompareSummary
-  session2: SessionCompareSummary
-  differences: SessionCompareDifferences
-  advisory: SessionCompareAdvisory
-  decision: SessionCompareDecision
-  analysis: {
-    session1: SessionCompareAnalysis
-    session2: SessionCompareAnalysis
-  }
-  replay?: {
-    session1: SessionCompareReplay
-    session2: SessionCompareReplay
-  }
+export type SessionRollbackApplyInput = {
+  step?: number
+  tool?: string
 }
 
 export type SessionRollbackPoint = {
@@ -4114,30 +3749,6 @@ export type SessionRollbackPoint = {
   kinds: Array<string>
 }
 
-export type SessionMoveValidation = {
-  sessionID: string
-  valid: boolean
-  reason: "ok" | "target_missing" | "target_not_directory" | "outside_current_project" | "same_directory"
-  current: {
-    directory: string
-    projectID: string
-    worktree: string
-  }
-  target: {
-    directory: string
-    exists: boolean
-    isDirectory: boolean
-    sameDirectory: boolean
-    withinCurrentProject: boolean
-    git: {
-      worktree: string | null
-      branch: string | null
-      dirty: boolean | null
-    }
-  }
-  warnings: Array<string>
-}
-
 export type SessionRollbackPreview = {
   point: SessionRollbackPoint
   diffs: Array<FileDiff>
@@ -4148,13 +3759,191 @@ export type SessionRollbackPreview = {
   }
 }
 
-export type SessionRollbackApplyInput = {
-  step?: number
-  tool?: string
+export type SessionSemanticDiffChange = {
+  file: string
+  status?: "added" | "deleted" | "modified" | null
+  kind: SessionSemanticDiffKind
+  risk: SessionSemanticDiffRisk
+  summary: string
+  additions: number
+  deletions: number
+  signals: Array<string>
 }
 
-export type SessionMetadata = {
-  [key: string]: unknown
+export type SessionSemanticDiffCount = {
+  kind: SessionSemanticDiffKind
+  count: number
+}
+
+export type SessionSemanticDiffKind =
+  | "bug_fix"
+  | "refactor"
+  | "optimization"
+  | "test"
+  | "documentation"
+  | "configuration"
+  | "dependency"
+  | "rewrite"
+
+export type SessionSemanticDiffRisk = "low" | "medium" | "high"
+
+export type SessionSemanticDiffSummary = {
+  headline: string
+  risk: SessionSemanticDiffRisk
+  primary: SessionSemanticDiffKind
+  files: number
+  additions: number
+  deletions: number
+  counts: Array<SessionSemanticDiffCount>
+  signals: Array<string>
+  changes: Array<SessionSemanticDiffChange>
+}
+
+export type SessionStatus =
+  | {
+      type: "idle"
+    }
+  | {
+      type: "retry"
+      attempt: number
+      message: string
+      next: number
+    }
+  | {
+      type: "busy"
+      step?: number
+      maxSteps?: number
+      startedAt?: number
+      lastActivityAt?: number
+      activeTool?: string
+      toolCallID?: string
+      waitState?: "llm" | "tool"
+    }
+
+export type SmartLlmState = {
+  enabled: boolean
+}
+
+export type SnapshotPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "snapshot"
+  snapshot: string
+}
+
+export type StepFinishPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "step-finish"
+  reason: string
+  snapshot?: string
+  tokens: {
+    total?: number
+    input: number
+    output: number
+    reasoning: number
+    cache: {
+      read: number
+      write: number
+    }
+  }
+}
+
+export type StepStartPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "step-start"
+  snapshot?: string
+}
+
+export type StructuredOutputError = {
+  name: "StructuredOutputError"
+  data: {
+    message: string
+    retries: number
+    metadata?: {
+      [key: string]: string
+    }
+  }
+}
+
+export type SubtaskPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "subtask"
+  prompt: string
+  description: string
+  agent: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  command?: string
+}
+
+export type SubtaskPartInput = {
+  id?: string
+  type: "subtask"
+  prompt: string
+  description: string
+  agent: string
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  command?: string
+}
+
+export type SuperLongState = {
+  enabled: boolean
+}
+
+export type SuperLongStatus = {
+  enabled: boolean
+  source: "scoped" | "session-override" | "env" | "config" | "model-default"
+  durationMs: number | null
+  startedAt: number | null
+  elapsedMs: number | null
+  remainingMs: number | null
+}
+
+export type Symbol = {
+  name: string
+  kind: number
+  location: {
+    uri: string
+    range: Range
+  }
+}
+
+export type SymbolSource = {
+  text: FilePartSourceText
+  type: "symbol"
+  path: string
+  range: Range
+  name: string
+  kind: number
+}
+
+export type TextPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "text"
+  text: string
+  synthetic?: boolean
+  ignored?: boolean
+  time?: {
+    start: number
+    end?: number
+  }
+  metadata?: {
+    [key: string]: unknown
+  }
 }
 
 export type TextPartInput = {
@@ -4172,274 +3961,485 @@ export type TextPartInput = {
   }
 }
 
-export type FilePartInput = {
-  id?: string
-  type: "file"
-  mime: string
-  filename?: string
-  url: string
-  source?: FilePartSource
+export type Todo = {
+  /**
+   * Brief description of the task
+   */
+  content: string
+  status: "pending" | "in_progress" | "completed" | "cancelled"
+  priority: "high" | "medium" | "low"
 }
 
-export type AgentPartInput = {
-  id?: string
-  type: "agent"
-  name: string
-  source?: {
-    value: string
+export type ToolIds = Array<string>
+
+export type ToolList = Array<ToolListItem>
+
+export type ToolListItem = {
+  id: string
+  description: string
+  parameters: unknown
+}
+
+export type ToolPart = {
+  id: string
+  sessionID: string
+  messageID: string
+  type: "tool"
+  callID: string
+  tool: string
+  state: ToolState
+  metadata?: {
+    [key: string]: unknown
+  }
+}
+
+export type ToolState = ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError
+
+export type ToolStateCompleted = {
+  status: "completed"
+  input: {
+    [key: string]: unknown
+  }
+  output: string
+  title: string
+  metadata: {
+    [key: string]: unknown
+  }
+  time: {
+    start: number
+    end: number
+    compacted?: number
+  }
+  attachments?: Array<FilePart>
+}
+
+export type ToolStateError = {
+  status: "error"
+  input: {
+    [key: string]: unknown
+  }
+  error: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
     start: number
     end: number
   }
 }
 
-export type SubtaskPartInput = {
-  id?: string
-  type: "subtask"
-  prompt: string
-  description: string
+export type ToolStatePending = {
+  status: "pending"
+  input: {
+    [key: string]: unknown
+  }
+  raw: string
+}
+
+export type ToolStateRunning = {
+  status: "running"
+  input: {
+    [key: string]: unknown
+  }
+  title?: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  time: {
+    start: number
+  }
+}
+
+export type UnknownError = {
+  name: "UnknownError"
+  data: {
+    message: string
+    metadata?: {
+      [key: string]: string
+    }
+  }
+}
+
+export type UserMessage = {
+  id: string
+  sessionID: string
+  role: "user"
+  time: {
+    created: number
+  }
+  format?: OutputFormat
+  summary?: {
+    title?: string
+    body?: string
+    diffs: Array<FileDiff>
+  }
   agent: string
-  model?: {
+  model: {
     providerID: string
     modelID: string
   }
-  command?: string
-}
-
-export type ExecutionGraphTopologyResponse = {
-  data: Array<ExecutionGraphTopologyLine>
-}
-
-export type ExecutionGraphResponse = {
-  data: ExecutionGraph
-}
-
-export type ProviderAuthMethod = {
-  type: "oauth" | "api"
-  label: string
-  prompts?: Array<
-    | {
-        type: "text"
-        key: string
-        message: string
-        placeholder?: string
-        when?: {
-          key: string
-          op: "eq" | "neq"
-          value: string
-        }
-      }
-    | {
-        type: "select"
-        key: string
-        message: string
-        options: Array<{
-          label: string
-          value: string
-          hint?: string
-        }>
-        when?: {
-          key: string
-          op: "eq" | "neq"
-          value: string
-        }
-      }
-  >
-}
-
-export type ProviderAuthAuthorization = {
-  url: string
-  method: "auto" | "code"
-  instructions: string
-}
-
-export type Symbol = {
-  name: string
-  kind: number
-  location: {
-    uri: string
-    range: Range
+  system?: string
+  tools?: {
+    [key: string]: boolean
   }
-}
-
-export type FileNode = {
-  name: string
-  path: string
-  absolute: string
-  type: "file" | "directory"
-  ignored: boolean
-}
-
-export type FileContent = {
-  type: "text" | "binary"
-  content: string
-  diff?: string
-  patch?: {
-    oldFileName: string
-    newFileName: string
-    oldHeader?: string
-    newHeader?: string
-    hunks: Array<{
-      oldStart: number
-      oldLines: number
-      newStart: number
-      newLines: number
-      lines: Array<string>
-    }>
-    index?: string
+  isolation?: {
+    mode?: "read-only" | "workspace-write" | "full-access"
+    network?: boolean
   }
-  encoding?: "base64"
-  mimeType?: string
-}
-
-export type File = {
-  path: string
-  added: number
-  removed: number
-  status: "added" | "deleted" | "modified"
-}
-
-export type McpStatusConnected = {
-  status: "connected"
-}
-
-export type McpStatusDisabled = {
-  status: "disabled"
-}
-
-export type McpStatusFailed = {
-  status: "failed"
-  error: string
-}
-
-export type McpStatusNeedsAuth = {
-  status: "needs_auth"
-}
-
-export type McpStatusNeedsClientRegistration = {
-  status: "needs_client_registration"
-  error: string
-}
-
-export type McpStatusNeedsTrust = {
-  status: "needs_trust"
-  fingerprint: string
-  source: {
-    kind:
-      | "wellknown"
-      | "global"
-      | "custom"
-      | "project"
-      | "config_directory"
-      | "inline"
-      | "account"
-      | "managed"
-      | "runtime"
-      | "unknown"
-    path?: string
-    url?: string
-  }
-}
-
-export type McpStatus =
-  | McpStatusConnected
-  | McpStatusDisabled
-  | McpStatusFailed
-  | McpStatusNeedsAuth
-  | McpStatusNeedsClientRegistration
-  | McpStatusNeedsTrust
-
-export type McpReadResourceResult = {
-  contents: Array<
-    | {
-        uri?: string
-        mimeType?: string
-        text: string
-        [key: string]: unknown
-      }
-    | {
-        uri?: string
-        mimeType?: string
-        blob: string
-        [key: string]: unknown
-      }
-  >
-  [key: string]: unknown
-}
-
-export type Path = {
-  home: string
-  state: string
-  config: string
-  worktree: string
-  directory: string
+  variant?: string
+  requestedDepth?: "fast" | "standard" | "deep" | "xdeep"
 }
 
 export type VcsInfo = {
   branch: string
 }
 
-export type Command = {
-  name: string
-  description?: string
-  agent?: string
-  model?: string
-  source?: "command" | "file" | "mcp" | "skill"
-  sourceTool?: "ax-code" | "agents" | "opencode" | "claude" | "builtin" | "config"
-  scope?: "builtin" | "project" | "user" | "config" | "compat" | "mcp"
-  location?: string
-  warnings?: Array<{
-    code: string
-    message: string
-    severity: "info" | "warn" | "error"
+export type WorkflowArtifactCompactEventRecord = {
+  id: string
+  runID: string
+  phaseID?: string
+  childID?: string
+  specArtifactID?: string
+  kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+  retention: "ephemeral" | "session" | "durable"
+  exposeToMainContext: boolean
+  summary?: string
+  redaction?: {
+    status?: "none" | "redacted" | "pending"
+    summary?: string
+  }
+  evidenceRefs: Array<{
+    kind: "artifact" | "verification" | "finding" | "debug-evidence"
+    id: string
   }>
-  workflow?: string
-  allowShell?: boolean
-  argumentHint?: string
-  requiresArguments?: boolean
-  template: string
-  subtask?: boolean
-  hints: Array<string>
-  mcpPrompt?: {
-    client: string
-    name: string
+  time: {
+    created: number
+    updated: number
   }
 }
 
-export type Agent = {
-  name: string
-  description?: string
-  mode: "subagent" | "primary" | "all"
-  native?: boolean
-  hidden?: boolean
-  tier?: "core" | "specialist" | "internal" | "subagent"
-  topP?: number
-  temperature?: number
-  color?: string
-  permission: PermissionRuleset
-  model?: {
-    modelID: string
-    providerID: string
+export type WorkflowArtifactEventRecord = {
+  id: string
+  runID: string
+  phaseID?: string
+  childID?: string
+  specArtifactID?: string
+  kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+  retention: "ephemeral" | "session" | "durable"
+  exposeToMainContext: boolean
+  summary?: string
+  payload?: unknown
+  redaction?: {
+    status?: "none" | "redacted" | "pending"
+    summary?: string
   }
-  variant?: string
-  prompt?: string
-  displayName?: string
-  options: {
+  evidenceRefs: Array<{
+    kind: "artifact" | "verification" | "finding" | "debug-evidence"
+    id: string
+  }>
+  time: {
+    created: number
+    updated: number
+  }
+}
+
+export type WorkflowBudgetLedgerEventEntry = {
+  id: string
+  runID: string
+  phaseID?: string
+  childID?: string
+  kind: "reserve" | "consume" | "warn" | "exceeded" | "correction"
+  usageDelta: {
+    totalTokens?: number
+    inputTokens?: number
+    outputTokens?: number
+    toolCalls?: number
+    childAgents?: number
+    retries?: number
+  }
+  message?: string
+  time: {
+    created: number
+    updated: number
+  }
+}
+
+export type WorkflowChildEventRecord = {
+  id: string
+  runID: string
+  phaseID: string
+  taskQueueID?: string
+  sessionID?: string
+  status:
+    | "queued"
+    | "running"
+    | "blocked_permission"
+    | "blocked_question"
+    | "paused"
+    | "failed"
+    | "completed"
+    | "cancelled"
+  agent?: string
+  model?: unknown
+  budgetSlice?: unknown
+  artifactIDs: Array<string>
+  evidenceRefs: Array<{
+    kind: "artifact" | "verification" | "finding" | "debug-evidence"
+    id: string
+  }>
+  outputSummary?: string
+  error?: string
+  time: {
+    created: number
+    updated: number
+    started?: number
+    completed?: number
+  }
+}
+
+export type WorkflowPhaseEventRecord = {
+  id: string
+  runID: string
+  specPhaseID: string
+  position: number
+  name: string
+  kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+  status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+  agent?: string
+  modelPolicy?: unknown
+  budget?: unknown
+  outputs: Array<string>
+  error?: string
+  time: {
+    created: number
+    updated: number
+    started?: number
+    completed?: number
+  }
+}
+
+export type WorkflowRunEventRecord = {
+  id: string
+  projectID: string
+  directory: string
+  parentSessionID?: string
+  sourceTemplateID?: string
+  sourceTaskID?: string
+  status: "queued" | "running" | "blocked" | "paused" | "failed" | "completed" | "cancelled"
+  currentPhaseID?: string
+  spec: {
+    schemaVersion: 1
+    id: string
+    name: string
+    description: string
+    tags?: Array<string>
+    trigger?:
+      | {
+          kind: "manual"
+          source?: "prompt" | "command" | "api"
+        }
+      | {
+          kind: "scheduled"
+          schedule: string
+          timezone?: string
+          enabled?: boolean
+        }
+      | {
+          kind: "command"
+          command?: string
+        }
+      | {
+          kind: "api"
+          route?: string
+          enabled?: boolean
+        }
+      | {
+          kind: "webhook"
+          event: string
+          enabled?: false
+          securityGate?: "required"
+        }
+    inputs?: Array<{
+      id: string
+      label?: string
+      description?: string
+      type?: "string" | "number" | "boolean" | "json" | "path" | "string-array"
+      required?: boolean
+      sensitive?: boolean
+      default?: unknown
+    }>
+    routine?: {
+      enabled?: boolean
+      mode?: "manual" | "scheduled" | "api" | "webhook"
+      schedule?: string
+      timezone?: string
+      apiRoute?: string
+      webhookEvent?: string
+      securityGate?: "local-only" | "required"
+    }
+    budget?: {
+      maxTotalTokens?: number
+      maxInputTokensPerChild?: number
+      maxOutputTokensPerChild?: number
+      maxWallTimeMs?: number
+      maxConcurrentAgents?: number
+      maxTotalAgents?: number
+      maxToolCalls?: number
+      maxRetries?: number
+    }
+    pacing?: {
+      maxRequestsPerMinute?: number
+      maxTokensPerMinute?: number
+    }
+    modelPolicy?: {
+      defaultModel?: string
+      cheapModel?: string
+      strongModel?: string
+      plannerModel?: string
+      workerModel?: string
+      verifierModel?: string
+      synthesizerModel?: string
+      effort?: "normal" | "deep" | "workflow" | "max-workflow"
+      allowedProviders?: Array<string>
+      routing?: Array<{
+        phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+        use: "planner" | "worker" | "verifier" | "synthesizer"
+      }>
+    }
+    permissions?: {
+      writePolicy?: "read-only" | "serialized" | "worktree-required"
+      allowedTools?: Array<string>
+      networkPolicy?: "inherit" | "disabled" | "allowed"
+      escalationPolicy?: "inherit" | "ask" | "deny"
+    }
+    artifacts?: Array<{
+      id: string
+      kind: "summary" | "finding" | "patch" | "verification" | "metric" | "log"
+      retention?: "ephemeral" | "session" | "durable"
+      exposeToMainContext?: boolean
+      redaction?: {
+        status?: "none" | "redacted" | "pending"
+        summary?: string
+      }
+    }>
+    verification?: {
+      mode?: "required" | "optional" | "deferred" | "skipped"
+      workflow?: "review" | "debug" | "qa"
+      commands?: Array<string>
+      requiredArtifactIds?: Array<string>
+      reason?: string
+    }
+    synthesis?: {
+      agent?: string
+      model?: string
+      outputFormat?: "markdown" | "json" | "table" | "findings"
+      exposeToMainContext?: boolean
+      requiredArtifactIds?: Array<string>
+    }
+    phases: Array<{
+      id: string
+      name: string
+      kind: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+      prompt?: string
+      agent?: string
+      inputs?: Array<string>
+      outputs?: Array<string>
+      dependsOn?: Array<string>
+      maxParallel?: number
+      mergeStrategy?:
+        | "all"
+        | "first-success"
+        | "majority"
+        | "vote-with-critic"
+        | "critic-confirmation"
+        | "custom-reducer"
+      modelPolicy?: {
+        defaultModel?: string
+        cheapModel?: string
+        strongModel?: string
+        plannerModel?: string
+        workerModel?: string
+        verifierModel?: string
+        synthesizerModel?: string
+        effort?: "normal" | "deep" | "workflow" | "max-workflow"
+        allowedProviders?: Array<string>
+        routing?: Array<{
+          phaseKind?: "fanout" | "sequential" | "synthesis" | "verification" | "noop"
+          use: "planner" | "worker" | "verifier" | "synthesizer"
+        }>
+      }
+      budget?: {
+        maxTotalTokens?: number
+        maxInputTokensPerChild?: number
+        maxOutputTokensPerChild?: number
+        maxWallTimeMs?: number
+        maxConcurrentAgents?: number
+        maxTotalAgents?: number
+        maxToolCalls?: number
+        maxRetries?: number
+      }
+      pacing?: {
+        maxRequestsPerMinute?: number
+        maxTokensPerMinute?: number
+      }
+    }>
+  }
+  inputValues?: {
     [key: string]: unknown
   }
-  steps?: number
+  budget: {
+    [key: string]: unknown
+  }
+  budgetUsage: {
+    totalTokens?: number
+    inputTokens?: number
+    outputTokens?: number
+    toolCalls?: number
+    childAgents?: number
+    retries?: number
+  }
+  verificationEnvelopeIDs: Array<string>
+  error?: string
+  time: {
+    created: number
+    updated: number
+    started?: number
+    completed?: number
+  }
 }
 
-export type LspStatus = {
-  id: string
-  name: string
-  root: string
-  status: "connected" | "error"
+export type WorkflowVerificationAttachedEventRecord = {
+  runID: string
+  envelopeIDs: Array<string>
+  run: WorkflowRunEventRecord
 }
 
-export type FormatterStatus = {
+export type Worktree = {
   name: string
-  extensions: Array<string>
-  enabled: boolean
+  branch: string
+  directory: string
+}
+
+export type WorktreeCreateInput = {
+  name?: string
+  /**
+   * Additional startup script to run after the project's start command
+   */
+  startCommand?: string
+}
+
+export type WorktreeListItem = {
+  name: string
+  directory: string
+  branch?: string
+}
+
+export type WorktreeRemoveInput = {
+  directory: string
+}
+
+export type WorktreeResetInput = {
+  directory: string
 }
 
 export type GlobalHealthData = {
