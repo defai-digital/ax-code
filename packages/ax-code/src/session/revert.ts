@@ -12,6 +12,7 @@ import { Bus } from "../bus"
 import { SessionPrompt } from "./prompt"
 import { SessionShard } from "./shard"
 import { Instance } from "../project/instance"
+import { Filesystem } from "../util/filesystem"
 
 export namespace SessionRevert {
   const log = Log.create({ service: "session.revert" })
@@ -60,15 +61,25 @@ export namespace SessionRevert {
   }
 
   function displayFile(file: string) {
-    return path.relative(Instance.worktree, path.resolve(Instance.worktree, file)).replaceAll("\\", "/")
+    const worktree = path.resolve(Instance.worktree)
+    const resolved = path.resolve(worktree, file)
+    if (resolved === worktree || !Filesystem.contains(worktree, resolved)) {
+      throw new Error(`Session revert file escapes the current worktree: ${file}`)
+    }
+    return path.relative(worktree, resolved).replaceAll("\\", "/")
   }
 
   async function workspaceScope(sessionID: SessionID) {
     const session = await Session.get(sessionID)
+    const worktree = path.resolve(Instance.worktree)
     const directory = path.resolve(session.directory)
-    const descendants = (await Session.descendants(sessionID)).filter(
-      (candidate) => path.resolve(candidate.directory) === directory,
-    )
+    if (session.projectID !== Instance.project.id || !Filesystem.contains(worktree, directory)) {
+      throw new Error(`Session revert target ${sessionID} is outside the current worktree`)
+    }
+    const descendants = (await Session.descendants(sessionID)).filter((candidate) => {
+      const candidateDirectory = path.resolve(candidate.directory)
+      return Filesystem.contains(worktree, candidateDirectory) && candidateDirectory === directory
+    })
     return { session, descendants, sessions: [session, ...descendants] }
   }
 

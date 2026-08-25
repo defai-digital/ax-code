@@ -263,6 +263,50 @@ describe("descendant-aware rollback", () => {
     })
   })
 
+  test("rejects a revert target that no longer belongs to the current worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const boundarySnapshot = await Snapshot.track()
+        expect(boundarySnapshot).toBeDefined()
+        const target = await createBoundary(session.id, tmp.path, boundarySnapshot!)
+        await Session.setDirectory({ sessionID: session.id, directory: outside.path })
+
+        await expect(SessionRevert.preview(target)).rejects.toThrow("outside the current worktree")
+      },
+    })
+  })
+
+  test("rejects descendant patch metadata that escapes the current worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using outside = await tmpdir()
+    const outsideFile = path.join(outside.path, "keep.txt")
+    await fs.writeFile(outsideFile, "keep\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const child = await Session.create({ parentID: parent.id })
+        const boundarySnapshot = await Snapshot.track()
+        expect(boundarySnapshot).toBeDefined()
+        const target = await createBoundary(parent.id, tmp.path, boundarySnapshot!)
+        await recordPatch({
+          sessionID: child.id,
+          directory: tmp.path,
+          hash: boundarySnapshot!,
+          files: [outsideFile],
+        })
+
+        await expect(SessionRevert.preview(target)).rejects.toThrow("Session revert file escapes the current worktree")
+        expect(await fs.readFile(outsideFile, "utf8")).toBe("keep\n")
+      },
+    })
+  })
+
   test("orders same-millisecond message and part boundaries by monotonic id payload", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

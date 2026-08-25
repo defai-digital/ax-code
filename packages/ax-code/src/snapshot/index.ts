@@ -483,10 +483,12 @@ export namespace Snapshot {
         })
         throw new Error(`Snapshot restore failed: rollback diff exited with code ${introduced.code}`)
       }
-      const introducedFiles = introduced.text
-        .split("\0")
-        .filter(Boolean)
-        .map((file) => path.join(current.worktree, file))
+      const introducedFiles = await Promise.all(
+        introduced.text
+          .split("\0")
+          .filter(Boolean)
+          .map((file) => revertPath(current, file)),
+      )
       const result = await runGit([...core, ...args(current, ["read-tree", snapshot])], { cwd: current.worktree })
       if (result.code === 0) {
         const checkout = await checkoutIndex(current)

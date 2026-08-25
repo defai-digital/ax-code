@@ -1239,6 +1239,17 @@ test("restore rolls back the snapshot index when checkout-index fails", async ()
   expect(body).toContain("failed to rollback snapshot index after restore failure")
 })
 
+test("restore validates introduced rollback paths before deleting them", async () => {
+  const source = await fs.readFile(path.join(import.meta.dirname, "../../src/snapshot/index.ts"), "utf-8")
+  const restoreStart = source.indexOf("export async function restore")
+  const revertStart = source.indexOf("export async function revert", restoreStart)
+  const body = source.slice(restoreStart, revertStart)
+
+  expect(body).toContain("await Promise.all(")
+  expect(body).toContain(".map((file) => revertPath(current, file))")
+  expect(body).not.toContain(".map((file) => path.join(current.worktree, file))")
+})
+
 test("revert should not delete files that existed but were deleted in snapshot", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
