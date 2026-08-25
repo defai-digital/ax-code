@@ -81247,7 +81247,7 @@
       },
       "qwen/qwen3-next-80b-a3b-thinking": {
         "id": "qwen/qwen3-next-80b-a3b-thinking",
-        "name": "Qwen3 Next 80B A3B Thinking",
+        "name": "Qwen3-Next 80B-A3B (Thinking)",
         "description": "Efficient Qwen thinking model for local reasoning, math, and coding agents",
         "family": "qwen",
         "attachment": false,
@@ -81449,7 +81449,7 @@
       },
       "qwen/qwen3-next-80b-a3b-instruct": {
         "id": "qwen/qwen3-next-80b-a3b-instruct",
-        "name": "Qwen3 Next 80B A3B Instruct",
+        "name": "Qwen3-Next 80B-A3B Instruct",
         "description": "Qwen instruction model for multilingual chat, reasoning, and tool use",
         "family": "qwen",
         "attachment": false,
@@ -81539,7 +81539,7 @@
         "name": "Qwen3.5 27B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -81553,8 +81553,7 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
@@ -81562,8 +81561,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 256000,
-          "output": 64000
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen3.5-122b-a10b": {
@@ -81571,7 +81570,7 @@
         "name": "Qwen3.5 122B A10B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -81585,8 +81584,7 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
@@ -81594,8 +81592,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 256000,
-          "output": 64000
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -167831,7 +167829,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 262144
         }
       },
       "deepseek/deepseek-v3.1-terminus": {

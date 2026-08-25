@@ -92,6 +92,14 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 ### macOS (Apple Silicon)
 
+Install with Homebrew:
+
+```bash
+brew install defai-digital/tap/ax-code
+```
+
+Or use the release installer:
+
 ```bash
 curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
 ```
@@ -107,8 +115,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 ```bash
 curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
 ```
-
-On macOS, Homebrew remains available as an alternative: `brew install defai-digital/tap/ax-code`.
 
 Then:
 
