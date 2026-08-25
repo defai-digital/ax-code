@@ -41,6 +41,7 @@ const importStore = async () => {
           },
         ],
         summary: { files: 1, additions: 1, deletions: 1 },
+        descendants: [],
       },
     }),
   )
