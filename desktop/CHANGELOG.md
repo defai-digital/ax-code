@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.5] - 2026-08-25
+
+### Changed
+
+- Clarify autonomous run limits and progress.
+- Prevent rollback paths from escaping worktree.
+- Update vulnerable Rust dependencies.
+
+### Fixed
+
+- Fix autonomous line cap treating binary copies as text.
+
 ## [7.8.4] - 2026-08-25
 
 ### Fixed

@@ -168927,32 +168927,6 @@
           "output": 235929
         }
       },
-      "google/gemma-3n-e4b-it": {
-        "id": "google/gemma-3n-e4b-it",
-        "name": "Google: Gemma 3n 4B",
-        "description": "Open Gemma instruction model for efficient chat and self-hosted deployments",
-        "family": "gemma",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-05-20",
-        "last_updated": "2025-05-20",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 32768,
-          "output": 29491
-        }
-      },
       "google/lyria-3-clip-preview": {
         "id": "google/lyria-3-clip-preview",
         "name": "Lyria 3 Clip Preview",
