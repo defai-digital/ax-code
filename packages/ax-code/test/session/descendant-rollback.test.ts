@@ -10,6 +10,7 @@ import { SessionRevert } from "../../src/session/revert"
 import { SessionRollback } from "../../src/session/rollback"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import { Snapshot } from "../../src/snapshot"
+import { Storage } from "../../src/storage/storage"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
@@ -134,8 +135,9 @@ describe("descendant-aware rollback", () => {
           after: "after parent boundary\n",
         })
 
-        await SessionRollback.apply(target)
+        const rolledBack = await SessionRollback.apply(target)
         expect(await fs.readFile(file, "utf8")).toBe("before parent boundary\n")
+        expect(rolledBack.summary).toMatchObject({ files: 1, additions: 1, deletions: 1 })
       },
     })
   })
@@ -157,8 +159,9 @@ describe("descendant-aware rollback", () => {
         expect(preview.diffs).toMatchObject([{ file: "root-only.txt", status: "added" }])
         expect(preview.descendants).toEqual([])
 
-        await SessionRollback.apply(target)
+        const rolledBack = await SessionRollback.apply(target)
         await expect(fs.access(file)).rejects.toMatchObject({ code: "ENOENT" })
+        expect(rolledBack.summary).toMatchObject({ files: 1, additions: 1, deletions: 0 })
       },
     })
   })
@@ -256,6 +259,126 @@ describe("descendant-aware rollback", () => {
 
         expect(preview.diffs.map((diff) => diff.file)).toEqual(["packages/app/child.ts"])
         expect(preview.descendants).toEqual([{ sessionID: child.id, files: ["packages/app/child.ts"] }])
+      },
+    })
+  })
+
+  test("orders same-millisecond message and part boundaries by monotonic id payload", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const now = vi.spyOn(Date, "now").mockReturnValue(1_900_000_000_000)
+        try {
+          const initial = await Snapshot.track()
+          expect(initial).toBeDefined()
+          const beforeFile = path.join(tmp.path, "before-boundary.txt")
+          await fs.writeFile(beforeFile, "keep this change\n")
+          await recordPatch({ sessionID: session.id, directory: tmp.path, hash: initial!, files: [beforeFile] })
+
+          const boundarySnapshot = await Snapshot.track()
+          expect(boundarySnapshot).toBeDefined()
+          const boundary = await createAssistantMessage(session.id, tmp.path)
+          await Session.updatePart({
+            id: PartID.ascending(),
+            messageID: boundary.id,
+            sessionID: session.id,
+            type: "text",
+            text: "Keep changes before this message",
+          })
+
+          const afterFile = path.join(tmp.path, "after-boundary.txt")
+          await fs.writeFile(afterFile, "revert this change\n")
+          await recordPatch({
+            sessionID: session.id,
+            directory: tmp.path,
+            hash: boundarySnapshot!,
+            files: [afterFile],
+          })
+
+          const preview = await SessionRevert.preview({ sessionID: session.id, messageID: boundary.id })
+
+          expect(preview.diffs.map((diff) => diff.file)).toEqual(["after-boundary.txt"])
+        } finally {
+          now.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("supports whole-message rollback when the boundary message has no parts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const baseline = await Snapshot.track()
+        expect(baseline).toBeDefined()
+        const boundary = await createAssistantMessage(session.id, tmp.path)
+        const file = path.join(tmp.path, "after-empty-message.txt")
+        await fs.writeFile(file, "revert this change\n")
+        await recordPatch({ sessionID: session.id, directory: tmp.path, hash: baseline!, files: [file] })
+
+        const target = { sessionID: session.id, messageID: boundary.id }
+        const preview = await SessionRevert.preview(target)
+        expect(preview.diffs.map((diff) => diff.file)).toEqual(["after-empty-message.txt"])
+
+        await SessionRollback.apply(target)
+        await expect(fs.access(file)).rejects.toMatchObject({ code: "ENOENT" })
+      },
+    })
+  })
+
+  test("keeps a completed revert recoverable when the diff cache write fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const baseline = await Snapshot.track()
+        expect(baseline).toBeDefined()
+        const target = await createBoundary(session.id, tmp.path, baseline!)
+        const file = path.join(tmp.path, "recoverable.txt")
+        await fs.writeFile(file, "recover me\n")
+        await recordPatch({ sessionID: session.id, directory: tmp.path, hash: baseline!, files: [file] })
+        const storageWrite = vi.spyOn(Storage, "write").mockRejectedValue(new Error("diff cache unavailable"))
+
+        try {
+          const reverted = await SessionRevert.revert(target)
+          expect(reverted.revert?.snapshot).toBeDefined()
+          await expect(fs.access(file)).rejects.toMatchObject({ code: "ENOENT" })
+
+          await SessionRevert.unrevert({ sessionID: session.id })
+          expect(await fs.readFile(file, "utf8")).toBe("recover me\n")
+        } finally {
+          storageWrite.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("restores the worktree when persisting revert metadata fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const baseline = await Snapshot.track()
+        expect(baseline).toBeDefined()
+        const target = await createBoundary(session.id, tmp.path, baseline!)
+        const file = path.join(tmp.path, "metadata-failure.txt")
+        await fs.writeFile(file, "keep after failure\n")
+        await recordPatch({ sessionID: session.id, directory: tmp.path, hash: baseline!, files: [file] })
+        const setRevert = vi.spyOn(Session, "setRevert").mockRejectedValue(new Error("metadata unavailable"))
+
+        try {
+          await expect(SessionRevert.revert(target)).rejects.toThrow("metadata unavailable")
+          expect(await fs.readFile(file, "utf8")).toBe("keep after failure\n")
+          expect((await Session.get(session.id)).revert).toBeUndefined()
+        } finally {
+          setRevert.mockRestore()
+        }
       },
     })
   })

@@ -176,6 +176,43 @@ test("revert rejects worktree escapes and the worktree root", async () => {
   })
 })
 
+test("revert validates every path before mutating the worktree", async () => {
+  await using tmp = await bootstrap()
+  await using outside = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+      const file = path.join(tmp.path, "a.txt")
+      await Filesystem.write(file, "dirty")
+
+      await expect(
+        Snapshot.revert([{ hash: before!, files: [file, path.join(outside.path, "escape.txt")] }]),
+      ).rejects.toThrow("Snapshot revert path escapes the worktree")
+
+      expect(await fs.readFile(file, "utf8")).toBe("dirty")
+    },
+  })
+})
+
+test("revert rejects a missing snapshot object without deleting the file", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const file = path.join(tmp.path, "a.txt")
+      await Filesystem.write(file, "keep")
+
+      await expect(Snapshot.revert([{ hash: "0".repeat(40), files: [file] }])).rejects.toThrow(
+        "snapshot object is unavailable",
+      )
+
+      expect(await fs.readFile(file, "utf8")).toBe("keep")
+    },
+  })
+})
+
 test.skipIf(process.platform === "win32")(
   "revert rejects a path whose parent symlink escapes the worktree",
   async () => {
@@ -281,6 +318,44 @@ test.skipIf(process.platform === "win32")(
   },
 )
 
+test.skipIf(process.platform === "win32")("revert restores earlier files when a later checkout fails", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      await fs.mkdir(path.join(dir, "sub"))
+      await Filesystem.write(path.join(dir, "a.txt"), "snapshot-a")
+      await Filesystem.write(path.join(dir, "sub", "b.txt"), "snapshot-b")
+      await $`git add .`.cwd(dir).quiet()
+      await $`git commit --no-gpg-sign -m init`.cwd(dir).quiet()
+    },
+  })
+
+  const first = path.join(tmp.path, "a.txt")
+  const subdir = path.join(tmp.path, "sub")
+  const second = path.join(subdir, "b.txt")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+      await Filesystem.write(first, "current-a")
+      await Filesystem.write(second, "current-b")
+      await fs.chmod(subdir, 0o500)
+
+      try {
+        await expect(Snapshot.revert([{ hash: before!, files: [first, second] }])).rejects.toThrow(
+          "Snapshot revert failed",
+        )
+      } finally {
+        await fs.chmod(subdir, 0o700)
+      }
+
+      expect(await fs.readFile(first, "utf8")).toBe("current-a")
+      expect(await fs.readFile(second, "utf8")).toBe("current-b")
+    },
+  })
+})
+
 test.skipIf(process.platform === "win32")("restore rolls back working tree after checkout-index failure", async () => {
   await using tmp = await tmpdir({
     git: true,
@@ -315,6 +390,45 @@ test.skipIf(process.platform === "win32")("restore rolls back working tree after
     },
   })
 })
+
+test.skipIf(process.platform === "win32")(
+  "restore removes files introduced before a later checkout-index failure",
+  async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await fs.mkdir(path.join(dir, "sub"))
+        await Filesystem.write(path.join(dir, "added-by-restore.txt"), "snapshot-added")
+        await Filesystem.write(path.join(dir, "sub", "b.txt"), "snapshot-b")
+        await $`git add .`.cwd(dir).quiet()
+        await $`git commit --no-gpg-sign -m init`.cwd(dir).quiet()
+      },
+    })
+
+    const added = path.join(tmp.path, "added-by-restore.txt")
+    const subdir = path.join(tmp.path, "sub")
+    const second = path.join(subdir, "b.txt")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const snapshot = await Snapshot.track()
+        expect(snapshot).toBeTruthy()
+        await fs.rm(added)
+        await Filesystem.write(second, "current-b")
+        await fs.chmod(subdir, 0o500)
+
+        try {
+          await expect(Snapshot.restore(snapshot!)).rejects.toThrow("Snapshot restore failed")
+        } finally {
+          await fs.chmod(subdir, 0o700)
+        }
+
+        await expect(fs.access(added)).rejects.toMatchObject({ code: "ENOENT" })
+        expect(await fs.readFile(second, "utf8")).toBe("current-b")
+      },
+    })
+  },
+)
 
 test("empty directory handling", async () => {
   await using tmp = await bootstrap()

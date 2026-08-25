@@ -144051,6 +144051,31 @@
           "output": 0
         }
       },
+      "alibaba/wan-v3.0-video": {
+        "id": "alibaba/wan-v3.0-video",
+        "name": "Wan v3.0 Video",
+        "description": "Video model for prompt-guided generation, editing, and motion workflows",
+        "family": "o",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "release_date": "2026-08-23",
+        "last_updated": "2026-08-23",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "video"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "alibaba/qwen3-coder-plus": {
         "id": "alibaba/qwen3-coder-plus",
         "name": "Qwen3 Coder Plus",
@@ -145860,34 +145885,6 @@
         "attachment": false,
         "reasoning": false,
         "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-09",
-        "release_date": "2025-12-01",
-        "last_updated": "2026-02-28",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 384000
-        }
-      },
-      "deepseek/deepseek-reasoner": {
-        "id": "deepseek/deepseek-reasoner",
-        "name": "DeepSeek Reasoner",
-        "description": "DeepSeek reasoning model for multi-step analysis, math, coding, and tools",
-        "family": "deepseek-thinking",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": false,
         "structured_output": true,
         "temperature": true,
         "knowledge": "2025-09",

@@ -50,8 +50,13 @@ export namespace SessionRevert {
     descendants: DescendantContribution[]
   }
 
+  function idOrderKey(id: string) {
+    const separator = id.indexOf("_")
+    return separator < 0 ? id : id.slice(separator + 1)
+  }
+
   function after(left: Position, right: Position) {
-    return left.time > right.time || (left.time === right.time && left.id > right.id)
+    return left.time > right.time || (left.time === right.time && idOrderKey(left.id) > idOrderKey(right.id))
   }
 
   function displayFile(file: string) {
@@ -76,9 +81,18 @@ export namespace SessionRevert {
     let lastUser: MessageV2.User | undefined
     for (const msg of all) {
       if (msg.info.role === "user") lastUser = msg.info
+      if (msg.info.id === input.messageID && input.partID === undefined) {
+        const first = msg.parts[0]
+        return {
+          revert: {
+            messageID: lastUser ? lastUser.id : msg.info.id,
+          } satisfies NonNullable<Session.Info["revert"]>,
+          snapshot: first?.type === "step-start" ? first.snapshot : undefined,
+        }
+      }
       const remaining: MessageV2.Part[] = []
       for (const part of msg.parts) {
-        const match = msg.info.id === input.messageID && (input.partID === undefined || part.id === input.partID)
+        const match = msg.info.id === input.messageID && part.id === input.partID
         if (match) {
           // if no useful parts left in message, same as reverting whole message
           const partID = remaining.some((item) => ["text", "tool"].includes(item.type)) ? input.partID : undefined
@@ -207,24 +221,49 @@ export namespace SessionRevert {
     const planned = await plan(input)
     const before = await Snapshot.track()
     planned.revert.snapshot = planned.session.revert?.snapshot ?? before
-    await Snapshot.revert(planned.patches)
-    const after = await Snapshot.track()
-    const diffs = before && after ? await Snapshot.diffFull(after, before) : []
-    if (planned.revert.snapshot) planned.revert.diff = await Snapshot.diff(planned.revert.snapshot)
-    await Storage.write(["session_diff", input.sessionID], diffs)
-    await Bus.publish(Session.Event.Diff, {
-      sessionID: input.sessionID,
-      diff: diffs,
+    const files = [...new Set(planned.patches.flatMap((patch) => patch.files))]
+    let applied = false
+    let diffs: Snapshot.FileDiff[] = []
+    let next: Session.Info
+    try {
+      await Snapshot.revert(planned.patches)
+      applied = true
+      const after = await Snapshot.track()
+      diffs = before && after ? await Snapshot.diffFull(after, before) : []
+      if (planned.revert.snapshot) planned.revert.diff = await Snapshot.diff(planned.revert.snapshot)
+      next = await Session.setRevert({
+        sessionID: input.sessionID,
+        revert: planned.revert,
+        summary: {
+          additions: diffs.reduce((sum, item) => sum + item.additions, 0),
+          deletions: diffs.reduce((sum, item) => sum + item.deletions, 0),
+          files: diffs.length,
+        },
+      })
+    } catch (error) {
+      if (applied && before && files.length > 0) {
+        await Snapshot.revert([{ hash: before, files }]).catch((rollbackError) => {
+          log.error("failed to restore workspace after session revert failure", {
+            sessionID: input.sessionID,
+            error: rollbackError,
+          })
+        })
+      }
+      throw error
+    }
+
+    await Storage.write(["session_diff", input.sessionID], diffs).catch((error) => {
+      log.error("failed to persist session diff after revert", { sessionID: input.sessionID, error })
     })
-    return Session.setRevert({
-      sessionID: input.sessionID,
-      revert: planned.revert,
-      summary: {
-        additions: diffs.reduce((sum, item) => sum + item.additions, 0),
-        deletions: diffs.reduce((sum, item) => sum + item.deletions, 0),
-        files: diffs.length,
-      },
-    })
+    try {
+      await Bus.publish(Session.Event.Diff, {
+        sessionID: input.sessionID,
+        diff: diffs,
+      })
+    } catch (error) {
+      log.error("failed to publish session diff after revert", { sessionID: input.sessionID, error })
+    }
+    return next
   }
 
   export async function unrevert(input: { sessionID: SessionID }) {

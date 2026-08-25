@@ -456,6 +456,37 @@ export namespace Snapshot {
         throw new Error(`Snapshot restore failed: write-tree exited with code ${savedTree.code}`)
       }
       const rollbackTree = savedTree.text.trim()
+      const introduced = await runGit(
+        [
+          ...quote,
+          ...args(current, [
+            "diff",
+            "--no-ext-diff",
+            "--no-renames",
+            "--name-only",
+            "-z",
+            "--diff-filter=A",
+            rollbackTree,
+            snapshot,
+            "--",
+            ".",
+          ]),
+        ],
+        { cwd: current.worktree },
+      )
+      if (introduced.code !== 0) {
+        log.error("failed to identify files introduced by snapshot restore", {
+          snapshot,
+          rollbackTree,
+          exitCode: introduced.code,
+          stderr: introduced.stderr,
+        })
+        throw new Error(`Snapshot restore failed: rollback diff exited with code ${introduced.code}`)
+      }
+      const introducedFiles = introduced.text
+        .split("\0")
+        .filter(Boolean)
+        .map((file) => path.join(current.worktree, file))
       const result = await runGit([...core, ...args(current, ["read-tree", snapshot])], { cwd: current.worktree })
       if (result.code === 0) {
         const checkout = await checkoutIndex(current)
@@ -471,6 +502,16 @@ export namespace Snapshot {
             stderr: rollback.stderr,
           })
         } else {
+          for (const file of introducedFiles) {
+            await remove(file).catch((rollbackError) => {
+              log.error("failed to remove introduced file while rolling back snapshot restore", {
+                snapshot,
+                rollbackTree,
+                file,
+                error: rollbackError,
+              })
+            })
+          }
           const rollbackCheckout = await checkoutIndex(current)
           if (rollbackCheckout.code !== 0) {
             log.error("failed to rollback snapshot working tree after restore failure", {
@@ -501,35 +542,127 @@ export namespace Snapshot {
     const current = await state()
     return withOperationLock(current, async () => {
       const seen = new Set<string>()
+      const targets: Array<{ file: string; hash: string }> = []
       for (const item of patches) {
         if (!valid(item.hash)) continue
         for (const requestedFile of item.files) {
           const file = await revertPath(current, requestedFile)
           if (seen.has(file)) continue
           seen.add(file)
-          log.info("reverting", { file, hash: item.hash })
-          const rel = path.relative(current.worktree, file)
-          const result = await runGit([...core, ...args(current, ["checkout", item.hash, "--", rel])], {
+          targets.push({ file, hash: item.hash })
+        }
+      }
+      if (targets.length === 0) return
+
+      for (const hash of new Set(targets.map((target) => target.hash))) {
+        const object = await runGit([...core, ...args(current, ["cat-file", "-e", `${hash}^{tree}`])], {
+          cwd: current.worktree,
+        })
+        if (object.code === 0) continue
+        log.error("snapshot object is unavailable", { hash, exitCode: object.code, stderr: object.stderr })
+        throw new Error(`Snapshot revert failed: snapshot object is unavailable: ${hash}`)
+      }
+
+      current.prevHash = undefined
+      await add(current)
+      const savedTree = await runGit([...core, ...args(current, ["write-tree"])], { cwd: current.worktree })
+      if (savedTree.code !== 0) {
+        log.error("failed to prepare snapshot revert rollback", {
+          exitCode: savedTree.code,
+          stderr: savedTree.stderr,
+        })
+        throw new Error(`Snapshot revert failed: write-tree exited with code ${savedTree.code}`)
+      }
+      const rollbackTree = savedTree.text.trim()
+      const applied: typeof targets = []
+
+      const applyTarget = async (target: (typeof targets)[number]) => {
+        log.info("reverting", target)
+        const rel = path.relative(current.worktree, target.file)
+        const result = await runGit([...core, ...args(current, ["checkout", target.hash, "--", rel])], {
+          cwd: current.worktree,
+        })
+        if (result.code !== 0) {
+          const tree = await runGit([...core, ...args(current, ["ls-tree", target.hash, "--", rel])], {
             cwd: current.worktree,
           })
-          if (result.code !== 0) {
-            const tree = await runGit([...core, ...args(current, ["ls-tree", item.hash, "--", rel])], {
+          if (tree.code !== 0) {
+            log.error("failed to inspect file in snapshot", {
+              file: target.file,
+              hash: target.hash,
+              exitCode: tree.code,
+              stderr: tree.stderr,
+            })
+            throw new Error(`Snapshot revert failed for ${target.file}: ls-tree exited with code ${tree.code}`)
+          }
+          if (tree.text.trim()) {
+            log.error("file existed in snapshot but checkout failed", {
+              file: target.file,
+              hash: target.hash,
+              exitCode: result.code,
+              stderr: result.stderr,
+            })
+            throw new Error(`Snapshot revert failed for ${target.file}: checkout exited with code ${result.code}`)
+          }
+          log.info("file did not exist in snapshot, deleting", target)
+          await remove(target.file)
+        }
+      }
+
+      try {
+        for (const target of targets) {
+          applied.push(target)
+          await applyTarget(target)
+        }
+      } catch (error) {
+        const rollback = await runGit([...core, ...args(current, ["read-tree", rollbackTree])], {
+          cwd: current.worktree,
+        })
+        if (rollback.code !== 0) {
+          log.error("failed to rollback snapshot index after revert failure", {
+            rollbackTree,
+            exitCode: rollback.code,
+            stderr: rollback.stderr,
+          })
+        } else {
+          for (const target of applied) {
+            const rel = path.relative(current.worktree, target.file)
+            const tree = await runGit([...core, ...args(current, ["ls-tree", rollbackTree, "--", rel])], {
               cwd: current.worktree,
             })
-            if (tree.code === 0 && tree.text.trim()) {
-              log.error("file existed in snapshot but checkout failed", {
-                file,
-                hash: item.hash,
-                exitCode: result.code,
-                stderr: result.stderr,
+            if (tree.code !== 0) {
+              log.error("failed to inspect file while rolling back snapshot revert", {
+                file: target.file,
+                rollbackTree,
+                exitCode: tree.code,
+                stderr: tree.stderr,
               })
-              throw new Error(`Snapshot revert failed for ${file}: checkout exited with code ${result.code}`)
-            } else {
-              log.info("file did not exist in snapshot, deleting", { file })
-              await remove(file)
+              continue
+            }
+            if (!tree.text.trim()) {
+              await remove(target.file).catch((rollbackError) => {
+                log.error("failed to remove file while rolling back snapshot revert", {
+                  file: target.file,
+                  rollbackTree,
+                  error: rollbackError,
+                })
+              })
+              continue
+            }
+            const checkout = await runGit([...core, ...args(current, ["checkout-index", "-f", "--", rel])], {
+              cwd: current.worktree,
+            })
+            if (checkout.code !== 0) {
+              log.error("failed to restore file while rolling back snapshot revert", {
+                file: target.file,
+                rollbackTree,
+                exitCode: checkout.code,
+                stderr: checkout.stderr,
+              })
             }
           }
         }
+        throw error
       }
     })
   }
