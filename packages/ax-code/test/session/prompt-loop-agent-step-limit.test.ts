@@ -71,14 +71,14 @@ describe("prompt loop agent step limit", () => {
 
     expect(result.action).toBe("continue")
     if (result.action !== "continue") throw new Error("expected continuation")
-    expect(result.text).toContain("review agent step limit")
+    expect(result.text).toContain("review agent model-turn limit")
     expect(result.text).toContain("auto-continuation 2/3")
     expect(result.logExtras).toEqual({ agent: "review", maxSteps: 5 })
   })
 
   test("stops with step_limit error when autonomous continuation budget is exhausted", () => {
     const warned: string[] = []
-    const published: { message: string }[] = []
+    const published: { message: string; code?: string }[] = []
     const result = handlePromptLoopAgentStepLimit(
       {
         sessionID: SessionID.descending(),
@@ -91,20 +91,22 @@ describe("prompt loop agent step limit", () => {
       },
       {
         warn: (message) => warned.push(message),
-        publishError: (input) => published.push({ message: input.message }),
+        publishError: (input) => published.push(input),
       },
     )
     expect(result.action).toBe("stop")
     if (result.action !== "stop") throw new Error("expected stop")
     expect(result.reason).toBe("step_limit")
     expect(result.errorCode).toBe("STEP_LIMIT")
-    expect(result.message).toContain("5 steps")
+    expect(result.message).toContain("5 model turns")
     expect(result.message).toContain("3 continuations")
     // The stop must be surfaced, not silent: log + published error, like the
     // sibling global/total step-limit paths.
     expect(warned).toEqual(["agent step limit reached"])
     expect(published).toHaveLength(1)
-    expect(published[0]?.message).toContain("per-agent step limit")
+    expect(published[0]?.message).toContain("per-agent model-turn limit")
+    expect(published[0]?.code).toBe("AGENT_MODEL_TURN_LIMIT")
+    expect(result.stopCode).toBe("AGENT_MODEL_TURN_LIMIT")
   })
 
   test("ignores agent step limit for non-autonomous sessions", () => {

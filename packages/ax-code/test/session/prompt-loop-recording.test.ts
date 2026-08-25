@@ -72,4 +72,37 @@ describe("prompt loop recording", () => {
 
     expect(events).toEqual([])
   })
+
+  test("records a precise stop code without changing the legacy end reason", async () => {
+    const sessionID = SessionID.descending()
+    const events: unknown[] = []
+
+    await finishPromptLoopRecording(
+      {
+        sessionID,
+        sessionStarted: true,
+        isResumingActiveLoop: false,
+        reason: "step_limit",
+        totalSteps: 2000,
+        stopCode: "MODEL_TURN_TOTAL_LIMIT",
+      },
+      {
+        emit(event) {
+          events.push(event)
+        },
+        async end() {},
+        resetBlastRadius() {},
+      },
+    )
+
+    expect(events).toEqual([
+      {
+        type: "session.end",
+        sessionID,
+        reason: "step_limit",
+        totalSteps: 2000,
+        stopCode: "MODEL_TURN_TOTAL_LIMIT",
+      },
+    ])
+  })
 })

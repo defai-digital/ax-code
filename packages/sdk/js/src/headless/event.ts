@@ -119,7 +119,7 @@ export type HeadlessSessionEvent<TSession extends { id: string }, TTodo, TDiff, 
   | { type: "session.created"; properties: { info: TSession } }
   | { type: "session.updated"; properties: { info: TSession } }
   | { type: "session.status"; properties: { sessionID: string; status: TStatus } }
-  | { type: "session.error"; properties: { sessionID?: string; error: unknown } }
+  | { type: "session.error"; properties: { sessionID?: string; error: unknown; code?: string } }
 
 export type HeadlessTaskQueueEvent<TTaskQueueItem> =
   | { type: "task.queue.created"; properties: { item: TTaskQueueItem } }

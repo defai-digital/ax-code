@@ -17,6 +17,12 @@ export type FooterSessionStatus =
       type: "busy"
       step?: number
       maxSteps?: number
+      segmentModelTurns?: number
+      segmentModelTurnLimit?: number
+      totalModelTurns?: number
+      totalModelTurnLimit?: number
+      continuations?: number
+      continuationLimit?: number | null
       startedAt?: number
       lastActivityAt?: number
       activeTool?: string

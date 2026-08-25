@@ -41,7 +41,7 @@ describe("prompt loop global step limit", () => {
 
     expect(result.action).toBe("continue_autonomous")
     if (result.action !== "continue_autonomous") throw new Error("expected autonomous continuation")
-    expect(result.text).toContain("10 steps")
+    expect(result.text).toContain("10 model turns")
     expect(result.text).toContain("auto-continuation 2/3")
   })
 
@@ -80,7 +80,7 @@ describe("prompt loop global step limit", () => {
   test("logs and publishes a user-facing error when the global step limit stops the loop", () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []
-    const published: { sessionID: SessionID; message: string }[] = []
+    const published: { sessionID: SessionID; message: string; code?: string }[] = []
 
     const result = handlePromptLoopGlobalStepLimit(
       {
@@ -103,7 +103,7 @@ describe("prompt loop global step limit", () => {
 
     expect(result).toMatchObject({ action: "stop", reason: "step_limit" })
     if (result.action !== "stop") throw new Error("expected stop")
-    expect(result.message).toContain("10 steps")
+    expect(result.message).toContain("10 model turns")
     expect(result.message).toContain("after 3 auto-continuations")
     expect(warnings).toEqual([
       {
@@ -115,12 +115,15 @@ describe("prompt loop global step limit", () => {
           step: 10,
           sessionID,
           continuations: 3,
+          stopCode: "MODEL_TURN_SEGMENT_LIMIT",
         },
       },
     ])
     expect(published).toHaveLength(1)
     expect(published[0]?.sessionID).toBe(sessionID)
-    expect(published[0]?.message).toContain("10 steps")
+    expect(published[0]?.message).toContain("10 model turns")
     expect(published[0]?.message).toContain("after 3 auto-continuations")
+    expect(published[0]?.code).toBe("MODEL_TURN_SEGMENT_LIMIT")
+    expect(result.stopCode).toBe("MODEL_TURN_SEGMENT_LIMIT")
   })
 })

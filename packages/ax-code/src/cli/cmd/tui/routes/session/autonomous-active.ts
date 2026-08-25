@@ -15,13 +15,43 @@ type AutonomousActive = {
   active: boolean
   step?: number
   maxSteps?: number
+  segmentModelTurns?: number
+  segmentModelTurnLimit?: number
+  totalModelTurns?: number
+  totalModelTurnLimit?: number
+  continuations?: number
+  continuationLimit?: number | null
 }
 
 export function autonomousActiveView(status?: FooterSessionStatus): AutonomousActive {
   if (!status || status.type !== "busy") return { active: false }
   if (status.step === undefined || status.maxSteps === undefined) return { active: false }
   if (status.maxSteps <= 0) return { active: false }
-  return { active: true, step: status.step, maxSteps: status.maxSteps }
+  return {
+    active: true,
+    step: status.step,
+    maxSteps: status.maxSteps,
+    ...(status.segmentModelTurns !== undefined ? { segmentModelTurns: status.segmentModelTurns } : {}),
+    ...(status.segmentModelTurnLimit !== undefined ? { segmentModelTurnLimit: status.segmentModelTurnLimit } : {}),
+    ...(status.totalModelTurns !== undefined ? { totalModelTurns: status.totalModelTurns } : {}),
+    ...(status.totalModelTurnLimit !== undefined ? { totalModelTurnLimit: status.totalModelTurnLimit } : {}),
+    ...(status.continuations !== undefined ? { continuations: status.continuations } : {}),
+    ...(status.continuationLimit !== undefined ? { continuationLimit: status.continuationLimit } : {}),
+  }
+}
+
+export function autonomousProgressLabel(view: AutonomousActive): string {
+  if (!view.active || view.step === undefined || view.maxSteps === undefined) return ""
+  const segmentTurns = view.segmentModelTurns ?? view.step
+  const segmentLimit = view.segmentModelTurnLimit ?? view.maxSteps
+  const parts = [`turn ${segmentTurns}/${segmentLimit}`]
+  if (view.totalModelTurns !== undefined && view.totalModelTurnLimit !== undefined) {
+    parts.push(`total ${view.totalModelTurns}/${view.totalModelTurnLimit}`)
+  }
+  if (view.continuations !== undefined && view.continuationLimit !== undefined) {
+    parts.push(`cont ${view.continuations}/${view.continuationLimit === null ? "∞" : view.continuationLimit}`)
+  }
+  return parts.join(" · ")
 }
 
 // "Is this assistant text part the one currently streaming inside an

@@ -2,7 +2,7 @@ import { Log } from "../util/log"
 import { Session } from "."
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import { agentStepLimitContinuationDecision } from "./prompt-autonomous-decisions"
-import type { SessionID } from "./schema"
+import type { SessionID, SessionStop } from "./schema"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -21,11 +21,12 @@ type PromptLoopAgentStepLimitTransition =
       reason: "step_limit"
       errorCode: "STEP_LIMIT"
       message: string
+      stopCode: SessionStop.Code
     }
 
 type PromptLoopAgentStepLimitDeps = {
   warn?: (message: string, fields: Record<string, unknown>) => void
-  publishError?: (input: { sessionID: SessionID; message: string }) => void
+  publishError?: (input: { sessionID: SessionID; message: string; code?: SessionStop.Code }) => void
 }
 
 export function handlePromptLoopAgentStepLimit(
@@ -57,16 +58,19 @@ export function handlePromptLoopAgentStepLimit(
       step: input.step,
       maxSteps: input.maxSteps,
       continuations: input.continuations,
+      stopCode: "AGENT_MODEL_TURN_LIMIT",
     })
     ;(deps.publishError ?? Session.publishError)({
       sessionID: input.sessionID,
       message: decision.message,
+      code: "AGENT_MODEL_TURN_LIMIT",
     })
     return {
       action: "stop",
       reason: decision.reason,
       errorCode: decision.errorCode,
       message: decision.message,
+      stopCode: "AGENT_MODEL_TURN_LIMIT",
     }
   }
 

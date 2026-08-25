@@ -1,4 +1,4 @@
-import { SessionID, type MessageID } from "./schema"
+import { SessionID, type MessageID, type SessionStop } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
@@ -69,6 +69,7 @@ import {
   isEmptyModelTurn,
   isTruncatedModelTurn,
   modelTurnFinished,
+  ordinaryRunCeilingConvergenceDecision,
   readOnlyExplorationDecision,
   resolveTurnToolChoice,
   shouldRestoreForcedTextOnlyTurn,
@@ -117,7 +118,7 @@ import {
 } from "./prompt-loop-config"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { clearSessionToolCycleRing, sessionToolCycleSignatures } from "./tool-cycle-ring"
-import { GOAL_CEILING_CONVERGENCE_STEPS } from "@/constants/session"
+import { GOAL_CEILING_CONVERGENCE_STEPS, ORDINARY_RUN_CEILING_CONVERGENCE_STEPS } from "@/constants/session"
 import {
   CommandInput as CommandInputSchema,
   type CommandInput as CommandInputType,
@@ -313,7 +314,14 @@ export namespace SessionPrompt {
     })
     let sessionStarted = false
     await using _recorder = defer(async () => {
-      await finishPromptLoopRecording({ sessionID, sessionStarted, isResumingActiveLoop, reason, totalSteps })
+      await finishPromptLoopRecording({
+        sessionID,
+        sessionStarted,
+        isResumingActiveLoop,
+        reason,
+        totalSteps,
+        stopCode,
+      })
     })
     beginPromptLoopRecording(sessionID)
     // Idempotent — primary warmup happens in InstanceBootstrap so providers
@@ -335,6 +343,7 @@ export namespace SessionPrompt {
     // The default "error" is the correct catch-all for unexpected throws,
     // but a break without a prior assignment will misreport a completed session.
     let reason: PromptLoopEndReason = "error"
+    let stopCode: SessionStop.Code | undefined
     let consecutiveErrors = 0
     let continuations = 0
     // Budget wrap-up state for the session goal. Seeded from the DURABLE
@@ -380,6 +389,7 @@ export namespace SessionPrompt {
     // started later in the same run still gets its own warning), then let the
     // hard ceiling stop the run.
     let goalCeilingWarnedFor: number | undefined
+    let ordinaryCeilingWarned = false
     let todoRetries = 0
     let completionGateRetries = 0
     let lastCompletionGateSignature: string | undefined
@@ -668,6 +678,7 @@ export namespace SessionPrompt {
           message: totalStepLimit.message,
         })
         reason = totalStepLimit.reason
+        stopCode = totalStepLimit.stopCode
         break
       }
 
@@ -704,6 +715,7 @@ export namespace SessionPrompt {
           message: globalStepLimit.message,
         })
         reason = globalStepLimit.reason
+        stopCode = globalStepLimit.stopCode
         break
       }
 
@@ -742,6 +754,7 @@ export namespace SessionPrompt {
           continue
         }
       }
+
       const assistantExit = resolvePromptLoopAssistantExit({
         sessionID,
         lastUserID: lastUser.id,
@@ -758,6 +771,37 @@ export namespace SessionPrompt {
       if (assistantExit.action === "stop") {
         reason = assistantExit.reason
         break
+      }
+
+      // Ordinary runs only need a convergence turn when the loop would
+      // otherwise continue. A clean completed response near the ceiling must
+      // stop normally instead of paying for an unnecessary wrap-up request.
+      const ordinaryCeilingWarning = ordinaryRunCeilingConvergenceDecision({
+        autonomous: effectivelyAutonomous,
+        longRunActive: superLongActive || goalLongRun,
+        warned: ordinaryCeilingWarned,
+        totalModelTurns: effectiveTotalSteps,
+        totalModelTurnLimit: totalStepCeiling,
+        maxWarningTurns: ORDINARY_RUN_CEILING_CONVERGENCE_STEPS,
+      })
+      if (ordinaryCeilingWarning.action === "warn") {
+        ordinaryCeilingWarned = true
+        log.info("ordinary run ceiling convergence warning", {
+          command: "session.prompt.loop",
+          status: "nudge",
+          sessionID,
+          remainingModelTurns: ordinaryCeilingWarning.remainingModelTurns,
+          totalModelTurnLimit: totalStepCeiling,
+        })
+        await createAutonomousTextContinuation({
+          sessionID,
+          messages: msgs,
+          text: AutonomousContinuationPrompt.ordinaryRunCeilingApproach({
+            remainingModelTurns: ordinaryCeilingWarning.remainingModelTurns,
+            totalModelTurnLimit: totalStepCeiling,
+          }),
+        })
+        continue
       }
 
       step++
@@ -861,6 +905,10 @@ export namespace SessionPrompt {
         step,
         maxSteps: effectivePacingMaxSteps({ agentSteps: maxSteps, sessionStepLimit }),
         consecutiveErrors,
+        totalModelTurns: effectiveTotalSteps,
+        totalModelTurnLimit: totalStepCeiling,
+        continuations,
+        continuationLimit: Number.isFinite(effectiveMaxContinuations) ? effectiveMaxContinuations : null,
       })
       const agentStepLimit = handlePromptLoopAgentStepLimit({
         sessionID,
@@ -881,6 +929,7 @@ export namespace SessionPrompt {
           message: agentStepLimit.message,
         })
         reason = agentStepLimit.reason
+        stopCode = agentStepLimit.stopCode
         break
       }
       if (agentStepLimit.action === "continue") {
@@ -1763,6 +1812,7 @@ export namespace SessionPrompt {
       }
       if (errorTransition.action === "stop") {
         reason = errorTransition.reason
+        stopCode = errorTransition.stopCode
         break
       }
       if (processor.message.error) {

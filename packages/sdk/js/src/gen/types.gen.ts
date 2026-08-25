@@ -1808,6 +1808,7 @@ export type EventSessionError = {
       | RequestTooLargeError
       | ApiError
       | AutonomousLimitExceededError
+    code?: SessionStopCode
   }
 }
 
@@ -3817,12 +3818,26 @@ export type SessionStatus =
       type: "busy"
       step?: number
       maxSteps?: number
+      segmentModelTurns?: number
+      segmentModelTurnLimit?: number
+      totalModelTurns?: number
+      totalModelTurnLimit?: number
+      continuations?: number
+      continuationLimit?: number | null
       startedAt?: number
       lastActivityAt?: number
       activeTool?: string
       toolCallID?: string
       waitState?: "llm" | "tool"
     }
+
+export type SessionStopCode =
+  | "MODEL_TURN_SEGMENT_LIMIT"
+  | "MODEL_TURN_TOTAL_LIMIT"
+  | "AGENT_MODEL_TURN_LIMIT"
+  | "AGGREGATE_TOOL_CALL_LIMIT"
+  | "FILE_CHANGE_LIMIT"
+  | "LINE_CHANGE_LIMIT"
 
 export type SmartLlmState = {
   enabled: boolean

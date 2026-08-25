@@ -2,6 +2,7 @@ import z from "zod"
 
 import { AgentControl } from "@/control-plane/agent-control"
 import { SafetyPolicy } from "@/control-plane/safety-policy"
+import { SessionStop } from "@/session/schema"
 
 const Base = z.object({
   sessionID: z.string(),
@@ -22,6 +23,7 @@ export const SessionEndEvent = Base.extend({
   type: z.literal("session.end"),
   reason: z.enum(["completed", "aborted", "error", "step_limit", "stalled"]),
   totalSteps: z.number().int(),
+  stopCode: SessionStop.Code.optional(),
 })
 
 export const AgentRouteEvent = Base.extend({

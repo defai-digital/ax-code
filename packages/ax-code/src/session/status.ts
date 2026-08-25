@@ -18,8 +18,17 @@ export namespace SessionStatus {
       }),
       z.object({
         type: z.literal("busy"),
+        // Legacy pacing fields retained for API compatibility.
         step: z.number().optional(),
         maxSteps: z.number().optional(),
+        // Explicit workload units for honest progress reporting.
+        segmentModelTurns: z.number().int().nonnegative().optional(),
+        segmentModelTurnLimit: z.number().int().positive().optional(),
+        totalModelTurns: z.number().int().nonnegative().optional(),
+        totalModelTurnLimit: z.number().int().positive().optional(),
+        continuations: z.number().int().nonnegative().optional(),
+        // null means the cap is lifted by an active goal or Super-Long mode.
+        continuationLimit: z.number().int().nonnegative().nullable().optional(),
         startedAt: z.number().optional(),
         lastActivityAt: z.number().optional(),
         activeTool: z.string().optional(),

@@ -366,7 +366,7 @@ describe("prompt loop error transitions", () => {
     // previously this churned to a generic "too many consecutive errors".
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []
-    const published: { sessionID: SessionID; message: string }[] = []
+    const published: { sessionID: SessionID; message: string; code?: string }[] = []
     const capMessage =
       "Autonomous line-change cap reached: 52941/5000 lines modified. Set experimental.autonomous_caps.lines to raise."
 
@@ -392,7 +392,12 @@ describe("prompt loop error transitions", () => {
       },
     )
 
-    expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+    expect(result).toEqual({
+      action: "stop",
+      reason: "error",
+      consecutiveErrors: 1,
+      stopCode: "LINE_CHANGE_LIMIT",
+    })
     expect(warnings).toEqual([
       {
         message: "autonomous cap exceeded, stopping without retry",
@@ -403,10 +408,11 @@ describe("prompt loop error transitions", () => {
           consecutiveErrors: 1,
           step: 4,
           sessionID,
+          stopCode: "LINE_CHANGE_LIMIT",
         },
       },
     ])
-    expect(published).toEqual([{ sessionID, message: capMessage }])
+    expect(published).toEqual([{ sessionID, message: capMessage, code: "LINE_CHANGE_LIMIT" }])
   })
 
   test("per-tool cap trips fall through to ordinary error handling (counters reset each turn)", async () => {
@@ -424,6 +430,38 @@ describe("prompt loop error transitions", () => {
             current: 51,
             limit: 50,
             message: 'Autonomous per-tool call cap reached for "bash": 51/50 calls.',
+          },
+        },
+        consecutiveErrors: 1,
+        step: 4,
+      },
+      {
+        warn() {},
+        publishError(input) {
+          published.push(input)
+        },
+      },
+    )
+
+    expect(result).toEqual({ action: "continue", consecutiveErrors: 1 })
+    expect(published).toEqual([])
+  })
+
+  test("blocked-path cap shapes remain recoverable so the model can choose another path", async () => {
+    const sessionID = SessionID.descending()
+    const published: { sessionID: SessionID; message: string }[] = []
+
+    const result = await handlePromptLoopError(
+      {
+        sessionID,
+        currentModel: primaryModel,
+        error: {
+          name: "AutonomousLimitExceededError",
+          data: {
+            kind: "blocked_path",
+            current: 0,
+            limit: 0,
+            message: "Choose a path outside the protected list.",
           },
         },
         consecutiveErrors: 1,

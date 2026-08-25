@@ -2,18 +2,18 @@ import { Log } from "../util/log"
 import { Session } from "."
 import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 import { globalStepLimitDecision } from "./prompt-autonomous-decisions"
-import type { SessionID } from "./schema"
+import type { SessionID, SessionStop } from "./schema"
 
 const log = Log.create({ service: "session.prompt" })
 
 type PromptLoopGlobalStepLimitTransition =
   | { action: "ignore" }
   | { action: "continue_autonomous"; text: string }
-  | { action: "stop"; reason: "step_limit"; message: string }
+  | { action: "stop"; reason: "step_limit"; message: string; stopCode: SessionStop.Code }
 
 type PromptLoopGlobalStepLimitDeps = {
   warn?: (message: string, fields: Record<string, unknown>) => void
-  publishError?: (input: { sessionID: SessionID; message: string }) => void
+  publishError?: (input: { sessionID: SessionID; message: string; code?: SessionStop.Code }) => void
 }
 
 export function handlePromptLoopGlobalStepLimit(
@@ -48,10 +48,17 @@ export function handlePromptLoopGlobalStepLimit(
     step: input.step,
     sessionID: input.sessionID,
     continuations: input.continuations,
+    stopCode: "MODEL_TURN_SEGMENT_LIMIT",
   })
   ;(deps.publishError ?? Session.publishError)({
     sessionID: input.sessionID,
     message: decision.message,
+    code: "MODEL_TURN_SEGMENT_LIMIT",
   })
-  return { action: "stop", reason: decision.reason, message: decision.message }
+  return {
+    action: "stop",
+    reason: decision.reason,
+    message: decision.message,
+    stopCode: "MODEL_TURN_SEGMENT_LIMIT",
+  }
 }

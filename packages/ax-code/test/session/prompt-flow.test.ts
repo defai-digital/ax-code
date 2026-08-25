@@ -537,8 +537,8 @@ describe("session.prompt flow", () => {
                 message.parts.some(
                   (part) =>
                     part.type === "text" &&
-                    part.text.includes("Autonomous mode reached the build agent step limit") &&
-                    part.text.includes("agent step-limit auto-continuation"),
+                    part.text.includes("Autonomous mode reached the build agent model-turn limit") &&
+                    part.text.includes("agent model-turn-limit auto-continuation"),
                 ),
             ),
           ).toBe(true)
@@ -1257,7 +1257,7 @@ describe("session.prompt flow", () => {
               message.parts.some(
                 (part) =>
                   part.type === "text" &&
-                  part.text.includes("Autonomous mode is approaching the agent step limit") &&
+                  part.text.includes("Autonomous mode is approaching the agent model-turn limit") &&
                   part.text.includes("Write remaining bug report") &&
                   part.text.includes("5 unfinished todos") &&
                   part.text.includes("create the required .internal/bugs report now") &&

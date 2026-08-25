@@ -147,6 +147,24 @@ describe("BlastRadius", () => {
     expect(result?.limit).toBe(2)
   })
 
+  test("describes the legacy steps cap as aggregate tool calls", () => {
+    BlastRadius.get(SID, { steps: 1, files: 100, lines: 1000 })
+    BlastRadius.incrementStep(SID)
+    BlastRadius.incrementStep(SID)
+
+    try {
+      BlastRadius.assertWithinCaps(SID)
+      expect.fail("expected assertWithinCaps to throw")
+    } catch (error) {
+      expect(BlastRadius.LimitExceededError.isInstance(error)).toBe(true)
+      const named = error as InstanceType<typeof BlastRadius.LimitExceededError>
+      expect(named.data.kind).toBe("steps")
+      expect(named.data.message).toContain("aggregate tool-call cap")
+      expect(named.data.message).toContain("autonomy.budget.tool_calls.per_segment")
+      expect(named.data.message).not.toContain("Autonomous step cap")
+    }
+  })
+
   test("resetSteps re-bases the step counter but keeps files/lines cumulative", () => {
     // Autonomous continuation boundary: the loop's per-continuation step
     // budget renews, so the blast-radius step counter must renew with it —

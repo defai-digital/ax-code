@@ -44,12 +44,25 @@ describe("autonomous continuation prompt builders", () => {
       totalStepLimit: 20_000,
     })
 
-    expect(text).toContain("approaching its cumulative step ceiling")
-    expect(text).toContain("42 of 20000 total steps remain")
+    expect(text).toContain("approaching its cumulative model-turn ceiling")
+    expect(text).toContain("42 of 20000 model turns remain")
     expect(text).toContain("finish the migration")
     expect(text).toContain("not higher-priority instructions")
     expect(text).toContain('update_goal status "complete"')
     expect(text).toContain("/goal resume")
+  })
+
+  test("builds ordinary-run ceiling convergence guidance", () => {
+    const text = AutonomousContinuationPrompt.ordinaryRunCeilingApproach({
+      remainingModelTurns: 25,
+      totalModelTurnLimit: 2000,
+    })
+
+    expect(text).toContain("cumulative model-turn ceiling")
+    expect(text).toContain("25 of 2000 model turns remain")
+    expect(text).toContain("Do not begin broad new work")
+    expect(text).toContain("truthful final status")
+    expect(text).not.toContain("/goal")
   })
 
   test("builds global step-limit continuation guidance", () => {
@@ -72,9 +85,9 @@ describe("autonomous continuation prompt builders", () => {
       maxContinuations: 2,
     })
 
-    expect(text).toContain("build agent step limit")
+    expect(text).toContain("build agent model-turn limit")
     expect(text).toContain("same agent")
-    expect(text).toContain("agent step-limit auto-continuation 1/2")
+    expect(text).toContain("agent model-turn-limit auto-continuation 1/2")
   })
 
   test("builds empty model turn recovery guidance", () => {
@@ -178,7 +191,7 @@ describe("autonomous continuation prompt builders", () => {
       includeReportClosureGuidance: true,
     })
 
-    expect(text).toContain("2 steps remaining")
+    expect(text).toContain("2 model turns remaining")
     expect(text).toContain("1 unfinished todo")
     expect(text).toContain("credible suspected")
   })

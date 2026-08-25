@@ -30,9 +30,16 @@ export const GOAL_TOTAL_STEP_HEADROOM = SUPER_LONG_TOTAL_STEP_HEADROOM
 // verification run plus a hand-off summary; narrow enough that a default
 // 20,000-step run spends well under 1% of its budget converging.
 export const GOAL_CEILING_CONVERGENCE_STEPS = 50
+// Ordinary autonomous runs use the same bounded wrap-up window before their
+// smaller cumulative ceiling. The runtime scales this down to at most 10% for
+// deliberately tiny custom budgets, so the warning cannot consume a large
+// share of the configured run.
+export const ORDINARY_RUN_CEILING_CONVERGENCE_STEPS = 50
 
 // Autonomous mode hardening (ADR-004 / PRD v4.2.0).
-// These bound a single autonomous session. Defaults are wide enough that
+// These bound a single autonomous session. AUTONOMOUS_MAX_STEPS is the
+// aggregate tool-call cap per continuation segment; the legacy name and
+// config alias remain for compatibility. Defaults are wide enough that
 // ordinary use does not trip them; narrow enough that a runaway loop
 // fails loudly with a specific error class. Override per-session via
 // `experimental.autonomous_caps` in ax-code.json.

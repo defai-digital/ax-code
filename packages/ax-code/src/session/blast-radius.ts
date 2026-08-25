@@ -42,6 +42,7 @@ export namespace BlastRadius {
   interface State {
     files: Set<string>
     lines: number
+    /** Aggregate tool calls in the current continuation segment (legacy field name). */
     steps: number
     /** Per-tool call counts for the per-tool cap (PRD v4.2.1 P2-3). */
     toolCalls: Map<string, number>
@@ -140,9 +141,8 @@ export namespace BlastRadius {
    * Clear per-tool call counters at turn boundaries so a long autonomous
    * session does not falsely trip the perTool cap because the caller has
    * legitimately used the same tool many times across separate turns.
-   * Cumulative counters (steps / files / lines) intentionally persist —
-   * they represent total session blast radius and are bounded by their
-   * own caps.
+   * Aggregate segment tool calls and cumulative files/lines intentionally
+   * persist across model turns; each is bounded by its own cap.
    */
   export function resetToolCalls(sessionID: SessionID) {
     const state = sessions.get(sessionID)
@@ -152,8 +152,8 @@ export namespace BlastRadius {
   }
 
   /**
-   * Re-base the step (tool-call) counter at autonomous continuation
-   * boundaries. The prompt loop budgets its steps PER CONTINUATION
+   * Re-base the aggregate tool-call counter at autonomous continuation
+   * boundaries. The prompt loop budgets model turns PER CONTINUATION
    * (`session.max_steps` per cycle, bounded overall by
    * `session.max_total_steps` / the Super-Long ceiling), but this counter
    * was only cleared at loop end — so a run that legitimately continued
@@ -168,7 +168,7 @@ export namespace BlastRadius {
     state.steps = 0
   }
 
-  /** Increment step count and return the new value. */
+  /** Increment the aggregate segment tool-call count and return the new value. */
   export function incrementStep(sessionID: SessionID): number {
     const state = get(sessionID)
     state.steps += 1
@@ -277,7 +277,7 @@ export namespace BlastRadius {
   function describe(check: { kind: Kind; current: number; limit: number }, toolName?: string): string {
     switch (check.kind) {
       case "steps":
-        return `Autonomous step cap reached: ${check.current}/${check.limit}. The session will stop. Set experimental.autonomous_caps.steps to raise this limit.`
+        return `Autonomous aggregate tool-call cap reached: ${check.current}/${check.limit} calls in the current continuation segment. The session will stop. Review /limits before raising autonomy.budget.tool_calls.per_segment (legacy experimental.autonomous_caps.steps).`
       case "files":
         return `Autonomous file-change cap reached: ${check.current}/${check.limit} files modified. Set experimental.autonomous_caps.files to raise.`
       case "lines":

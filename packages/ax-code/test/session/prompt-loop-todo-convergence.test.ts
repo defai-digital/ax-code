@@ -114,7 +114,7 @@ describe("prompt loop todo convergence", () => {
     if (result.action !== "continue") throw new Error("expected continuation")
     expect(result.lastTodoContextSignature).toBeUndefined()
     expect(result.lastTodoDeadlineSignature).toBe(pendingTodoSignature([implementationTodo]))
-    expect(result.text).toContain("2 steps remaining")
+    expect(result.text).toContain("2 model turns remaining")
     expect(result.text).toContain("finish implementation")
     expect(info).toEqual([
       {

@@ -40525,6 +40525,9 @@
                     "$ref": "#/components/schemas/AutonomousLimitExceededError"
                   }
                 ]
+              },
+              "code": {
+                "$ref": "#/components/schemas/SessionStopCode"
               }
             }
           }
@@ -48173,6 +48176,43 @@
               "maxSteps": {
                 "type": "number"
               },
+              "segmentModelTurns": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "segmentModelTurnLimit": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "totalModelTurns": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "totalModelTurnLimit": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "continuations": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "continuationLimit": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "startedAt": {
                 "type": "number"
               },
@@ -48197,6 +48237,17 @@
               "type"
             ]
           }
+        ]
+      },
+      "SessionStopCode": {
+        "type": "string",
+        "enum": [
+          "MODEL_TURN_SEGMENT_LIMIT",
+          "MODEL_TURN_TOTAL_LIMIT",
+          "AGENT_MODEL_TURN_LIMIT",
+          "AGGREGATE_TOOL_CALL_LIMIT",
+          "FILE_CHANGE_LIMIT",
+          "LINE_CHANGE_LIMIT"
         ]
       },
       "SmartLlmState": {

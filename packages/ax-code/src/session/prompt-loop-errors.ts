@@ -8,7 +8,7 @@ import {
   providerFallbackLookupDecision,
   providerFallbackSwitchState,
 } from "./prompt-loop-decisions"
-import type { SessionID } from "./schema"
+import type { SessionID, SessionStop } from "./schema"
 import { Todo } from "./todo"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { BlastRadius } from "./blast-radius"
@@ -24,7 +24,7 @@ type PromptLoopErrorResult =
       notice: string
       consecutiveErrors: number
     }
-  | { action: "stop"; reason: "error"; consecutiveErrors: number }
+  | { action: "stop"; reason: "error"; consecutiveErrors: number; stopCode?: SessionStop.Code }
 
 type PromptLoopErrorTransition =
   | {
@@ -46,6 +46,7 @@ type PromptLoopErrorTransition =
       consecutiveErrors: number
       fallbackModelOverride: MessageV2.User["model"] | undefined
       resetCachedModel: boolean
+      stopCode?: SessionStop.Code
     }
 
 type PromptLoopErrorTransitionDeps = {
@@ -60,7 +61,7 @@ type PromptLoopErrorDeps = {
   ) => Promise<MessageV2.User["model"] | undefined>
   isLocal?: (providerID: MessageV2.User["model"]["providerID"]) => Promise<boolean>
   warn?: (message: string, fields: Record<string, unknown>) => void
-  publishError?: (input: { sessionID: SessionID; message: string }) => void
+  publishError?: (input: { sessionID: SessionID; message: string; code?: SessionStop.Code }) => void
 }
 
 function providerFallbackUnavailableMessage(input: {
@@ -118,12 +119,29 @@ function isAxEngineStreamStall(input: { providerID: string; error: unknown }) {
  * Matches both the live NamedError and its serialized `{name, data}` shape
  * (assistant message errors arrive serialized).
  */
-function terminalAutonomousCapMessage(error: unknown): string | undefined {
+function terminalAutonomousCap(error: unknown): { message: string; stopCode: SessionStop.Code } | undefined {
   if (!BlastRadius.LimitExceededError.isInstance(error)) return undefined
   const data = (error as { data?: { kind?: unknown; message?: unknown } }).data
-  if (data?.kind === "tool_calls") return undefined
+  // Per-tool counters reset at each model turn, and blocked-path errors are
+  // deliberately recoverable so the model can choose a different path.
+  if (data?.kind === "tool_calls" || data?.kind === "blocked_path") return undefined
   const message = typeof data?.message === "string" ? data.message.trim() : ""
-  return message || "Autonomous blast-radius cap exceeded; the session was stopped."
+  const stopCode: SessionStop.Code = (() => {
+    switch (data?.kind) {
+      case "steps":
+        return "AGGREGATE_TOOL_CALL_LIMIT"
+      case "files":
+        return "FILE_CHANGE_LIMIT"
+      case "lines":
+        return "LINE_CHANGE_LIMIT"
+      default:
+        return "AGGREGATE_TOOL_CALL_LIMIT"
+    }
+  })()
+  return {
+    message: message || "Autonomous blast-radius cap exceeded; the session was stopped.",
+    stopCode,
+  }
 }
 
 export async function handlePromptLoopError(
@@ -137,8 +155,8 @@ export async function handlePromptLoopError(
   },
   deps: PromptLoopErrorDeps = {},
 ): Promise<PromptLoopErrorResult> {
-  const capMessage = terminalAutonomousCapMessage(input.error)
-  if (capMessage) {
+  const cap = terminalAutonomousCap(input.error)
+  if (cap) {
     ;(deps.warn ?? log.warn)("autonomous cap exceeded, stopping without retry", {
       command: "session.prompt.loop",
       status: "error",
@@ -146,9 +164,19 @@ export async function handlePromptLoopError(
       consecutiveErrors: input.consecutiveErrors,
       step: input.step,
       sessionID: input.sessionID,
+      stopCode: cap.stopCode,
     })
-    ;(deps.publishError ?? Session.publishError)({ sessionID: input.sessionID, message: capMessage })
-    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+    ;(deps.publishError ?? Session.publishError)({
+      sessionID: input.sessionID,
+      message: cap.message,
+      code: cap.stopCode,
+    })
+    return {
+      action: "stop",
+      reason: "error",
+      consecutiveErrors: input.consecutiveErrors,
+      stopCode: cap.stopCode,
+    }
   }
 
   // Replaying an idle-timed-out local request is actively harmful: MLX may
@@ -372,6 +400,7 @@ export async function resolvePromptLoopErrorTransition(
       consecutiveErrors: errorResult.consecutiveErrors,
       fallbackModelOverride: input.fallbackModelOverride,
       resetCachedModel: false,
+      ...(errorResult.stopCode ? { stopCode: errorResult.stopCode } : {}),
     }
   }
 

@@ -28,7 +28,7 @@ import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
 import { ProjectID } from "../project/schema"
-import { SessionID, MessageID, PartID } from "./schema"
+import { SessionID, MessageID, PartID, SessionStop } from "./schema"
 
 import type { Provider } from "@/provider/provider"
 import { providerModelKey } from "@/provider/model-key"
@@ -264,6 +264,7 @@ export namespace Session {
       z.object({
         sessionID: SessionID.zod.optional(),
         error: MessageV2.Assistant.shape.error,
+        code: SessionStop.Code.optional(),
       }),
     ),
   }
@@ -272,10 +273,12 @@ export namespace Session {
     sessionID?: SessionID
     error?: MessageV2.Assistant["error"]
     message?: string
+    code?: SessionStop.Code
   }) {
     Bus.publishDetached(Event.Error, {
       ...(input.sessionID ? { sessionID: input.sessionID } : {}),
       error: input.error ?? new NamedError.Unknown({ message: input.message ?? "Unknown error" }).toObject(),
+      ...(input.code ? { code: input.code } : {}),
     })
   }
 

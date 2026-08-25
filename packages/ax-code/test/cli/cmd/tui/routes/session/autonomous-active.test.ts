@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
   autonomousActiveView,
+  autonomousProgressLabel,
   isAutonomousProducedMessage,
   isLiveAutonomousText,
 } from "@/cli/cmd/tui/routes/session/autonomous-active"
@@ -36,6 +37,43 @@ describe("autonomousActiveView", () => {
       step: 5,
       maxSteps: 50,
     })
+  })
+
+  test("surfaces explicit model-turn and continuation progress", () => {
+    const view = autonomousActiveView({
+      type: "busy",
+      step: 5,
+      maxSteps: 50,
+      segmentModelTurns: 5,
+      segmentModelTurnLimit: 50,
+      totalModelTurns: 105,
+      totalModelTurnLimit: 2000,
+      continuations: 2,
+      continuationLimit: 3,
+    })
+
+    expect(view).toMatchObject({
+      active: true,
+      segmentModelTurns: 5,
+      segmentModelTurnLimit: 50,
+      totalModelTurns: 105,
+      totalModelTurnLimit: 2000,
+      continuations: 2,
+      continuationLimit: 3,
+    })
+    expect(autonomousProgressLabel(view)).toBe("turn 5/50 · total 105/2000 · cont 2/3")
+  })
+
+  test("renders an unbounded continuation cap explicitly", () => {
+    const view = autonomousActiveView({
+      type: "busy",
+      step: 1,
+      maxSteps: 500,
+      continuations: 7,
+      continuationLimit: null,
+    })
+
+    expect(autonomousProgressLabel(view)).toBe("turn 1/500 · cont 7/∞")
   })
 })
 

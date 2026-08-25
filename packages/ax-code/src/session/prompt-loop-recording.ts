@@ -1,6 +1,6 @@
 import { Recorder } from "../replay/recorder"
 import { BlastRadius } from "./blast-radius"
-import type { SessionID } from "./schema"
+import type { SessionID, SessionStop } from "./schema"
 
 export type PromptLoopEndReason = "completed" | "aborted" | "error" | "step_limit" | "stalled"
 
@@ -32,6 +32,7 @@ export async function finishPromptLoopRecording(
     isResumingActiveLoop: boolean
     reason: PromptLoopEndReason
     totalSteps: number
+    stopCode?: SessionStop.Code
   },
   deps: Omit<PromptLoopRecordingDeps, "begin"> = defaultDeps,
 ) {
@@ -41,6 +42,7 @@ export async function finishPromptLoopRecording(
       sessionID: input.sessionID,
       reason: input.reason,
       totalSteps: input.totalSteps,
+      ...(input.stopCode ? { stopCode: input.stopCode } : {}),
     })
   }
   await deps.end(input.sessionID)

@@ -2,13 +2,13 @@ import { Log } from "../util/log"
 import { Session } from "."
 import { SessionGoal } from "./goal"
 import { totalStepLimitDecision } from "./prompt-autonomous-decisions"
-import type { SessionID } from "./schema"
+import type { SessionID, SessionStop } from "./schema"
 
 const log = Log.create({ service: "session.prompt" })
 
 type PromptLoopTotalStepLimitTransition =
   | { action: "ignore" }
-  | { action: "stop"; reason: "step_limit"; message: string }
+  | { action: "stop"; reason: "step_limit"; message: string; stopCode: SessionStop.Code }
 
 type PromptLoopTotalStepLimitGoal = {
   objective: string
@@ -17,7 +17,7 @@ type PromptLoopTotalStepLimitGoal = {
 
 type PromptLoopTotalStepLimitDeps = {
   warn?: (message: string, fields: Record<string, unknown>) => void
-  publishError?: (input: { sessionID: SessionID; message: string }) => void
+  publishError?: (input: { sessionID: SessionID; message: string; code?: SessionStop.Code }) => void
   pauseGoal?: (sessionID: SessionID) => Promise<unknown>
 }
 
@@ -70,10 +70,12 @@ export async function handlePromptLoopTotalStepLimit(
     sessionID: input.sessionID,
     continuations: input.continuations,
     goalPaused,
+    stopCode: "MODEL_TURN_TOTAL_LIMIT",
   })
   ;(deps.publishError ?? Session.publishError)({
     sessionID: input.sessionID,
     message,
+    code: "MODEL_TURN_TOTAL_LIMIT",
   })
-  return { action: "stop", reason: decision.reason, message }
+  return { action: "stop", reason: decision.reason, message, stopCode: "MODEL_TURN_TOTAL_LIMIT" }
 }

@@ -246,11 +246,12 @@ export function globalStepLimitDecision(input: {
     reason: "step_limit",
     errorCode: "STEP_LIMIT",
     message:
-      `Agent reached maximum step limit (${formatDecisionCount(input.stepLimit)} steps${
+      `The run reached the per-segment model-turn limit (${formatDecisionCount(input.stepLimit)} model turns${
         input.continuations > 0 ? ` after ${formatDecisionCount(input.continuations)} auto-continuations` : ""
       }). ` +
-      `To increase, set "session.max_steps" in ax-code.json. ` +
-      `Try breaking the task into smaller parts or increase the limit for complex autonomous tasks.`,
+      `No automatic continuations remain, and unfinished work is not complete. ` +
+      `Send a new prompt such as "continue" to start a user-directed run, or use /goal for goal-tracked work. ` +
+      `Review /limits before raising autonomy.budget.model_turns.per_segment or autonomy.budget.continuations.`,
   }
 }
 
@@ -669,12 +670,47 @@ export function totalStepLimitDecision(input: {
     reason: "step_limit",
     errorCode: "TOTAL_STEP_LIMIT",
     message:
-      `Session reached the cumulative step ceiling (${formatDecisionCount(input.totalStepLimit)} total steps` +
+      `Session reached the cumulative model-turn ceiling (${formatDecisionCount(input.totalStepLimit)} model turns` +
       `${input.continuations > 0 ? ` across ${formatDecisionCount(input.continuations)} auto-continuations` : ""}). ` +
       `This ceiling bounds every autonomous run, including active goals and Super-Long mode. ` +
-      `To raise it, set "session.max_total_steps" in ax-code.json. ` +
+      `Review /limits before raising autonomy.budget.model_turns.total (legacy session.max_total_steps). ` +
       `The session is stopped; remaining work should not be treated as complete.`,
   }
+}
+
+type OrdinaryRunCeilingConvergenceDecision = { action: "ignore" } | { action: "warn"; remainingModelTurns: number }
+
+/**
+ * Give an ordinary autonomous run one bounded chance to converge before its
+ * cumulative model-turn ceiling. Goal and Super-Long runs have their own
+ * lifecycle guidance and must not receive this ordinary-run prompt.
+ */
+export function ordinaryRunCeilingConvergenceDecision(input: {
+  autonomous: boolean
+  longRunActive: boolean
+  warned: boolean
+  totalModelTurns: number
+  totalModelTurnLimit: number
+  maxWarningTurns: number
+}): OrdinaryRunCeilingConvergenceDecision {
+  if (!input.autonomous || input.longRunActive || input.warned || input.totalModelTurns <= 0) {
+    return { action: "ignore" }
+  }
+  if (!Number.isFinite(input.totalModelTurnLimit) || input.totalModelTurnLimit <= 0) {
+    return { action: "ignore" }
+  }
+  if (!Number.isFinite(input.maxWarningTurns) || input.maxWarningTurns <= 0) {
+    return { action: "ignore" }
+  }
+
+  const remainingModelTurns = input.totalModelTurnLimit - input.totalModelTurns
+  if (remainingModelTurns <= 0) return { action: "ignore" }
+  const warningWindow = Math.min(
+    Math.floor(input.maxWarningTurns),
+    Math.max(1, Math.floor(input.totalModelTurnLimit * 0.1)),
+  )
+  if (remainingModelTurns > warningWindow) return { action: "ignore" }
+  return { action: "warn", remainingModelTurns }
 }
 
 export function agentStepLimitContinuationDecision(input: {
@@ -722,10 +758,10 @@ export function agentStepLimitContinuationDecision(input: {
     reason: "step_limit",
     errorCode: "STEP_LIMIT",
     message:
-      `Agent reached the per-agent step limit (${formatDecisionCount(input.maxSteps)} steps) ` +
+      `Agent reached the per-agent model-turn limit (${formatDecisionCount(input.maxSteps)} model turns) ` +
       `and the continuation budget is exhausted ` +
       `(${formatDecisionCount(input.continuations)} continuations used). ` +
-      `To increase, set the agent's step limit or raise session.max_continuations.`,
+      `Review /limits before raising the agent's model-turn limit or autonomy.budget.continuations.`,
   }
 }
 

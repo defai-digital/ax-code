@@ -17,6 +17,7 @@ import {
   isNoProgressToolTurn,
   isReadOnlyExplorationTurn,
   modelTurnFinished,
+  ordinaryRunCeilingConvergenceDecision,
   toolCallingBackstopDecision,
   toolCallingBackstopWrapUp,
   toolOnlyStopMessage,
@@ -158,8 +159,10 @@ describe("autonomous continuation decisions", () => {
       reason: "step_limit",
       errorCode: "STEP_LIMIT",
     })
-    expect(decision.message).toContain("10 steps")
+    expect(decision.message).toContain("10 model turns")
     expect(decision.message).toContain("after 3 auto-continuations")
+    expect(decision.message).toContain('Send a new prompt such as "continue"')
+    expect(decision.message).toContain("/goal")
   })
 
   test("treats non-comparable continuation limits as exhausted", () => {
@@ -196,7 +199,7 @@ describe("autonomous continuation decisions", () => {
 
     expect(decision.action).toBe("stop")
     if (decision.action !== "stop") throw new Error("expected stop")
-    expect(decision.message).toContain("an invalid number of steps")
+    expect(decision.message).toContain("an invalid number of model turns")
     expect(decision.message).not.toContain("NaN")
   })
 
@@ -211,7 +214,7 @@ describe("autonomous continuation decisions", () => {
 
     expect(decision.action).toBe("stop")
     if (decision.action !== "stop") throw new Error("expected stop")
-    expect(decision.message).toContain("session.max_steps")
+    expect(decision.message).toContain("autonomy.budget.model_turns.per_segment")
   })
 
   test("continues autonomous sessions at a finite agent step limit while continuation budget remains", () => {
@@ -294,7 +297,7 @@ describe("autonomous continuation decisions", () => {
     if (decision.action !== "stop") throw new Error("expected stop decision")
     expect(decision.reason).toBe("step_limit")
     expect(decision.errorCode).toBe("STEP_LIMIT")
-    expect(decision.message).toContain("5 steps")
+    expect(decision.message).toContain("5 model turns")
     expect(decision.message).toContain("3 continuations")
   })
 
@@ -865,8 +868,8 @@ describe("total step limit decision", () => {
       errorCode: "TOTAL_STEP_LIMIT",
     })
     if (decision.action !== "stop") throw new Error("expected stop")
-    expect(decision.message).toContain("cumulative step ceiling")
-    expect(decision.message).toContain("2000 total steps")
+    expect(decision.message).toContain("cumulative model-turn ceiling")
+    expect(decision.message).toContain("2000 model turns")
     expect(decision.message).toContain("57 auto-continuations")
     expect(decision.message).toContain("session.max_total_steps")
     expect(decision.message).toContain("should not be treated as complete")
@@ -885,6 +888,48 @@ describe("total step limit decision", () => {
     const decision = totalStepLimitDecision({ totalSteps: 500, totalStepLimit: 500, continuations: 0 })
     if (decision.action !== "stop") throw new Error("expected stop")
     expect(decision.message).not.toContain("auto-continuations")
+  })
+})
+
+describe("ordinary run ceiling convergence decision", () => {
+  const base = {
+    autonomous: true,
+    longRunActive: false,
+    warned: false,
+    totalModelTurns: 1950,
+    totalModelTurnLimit: 2000,
+    maxWarningTurns: 50,
+  }
+
+  test("warns once inside the bounded ordinary-run window", () => {
+    expect(ordinaryRunCeilingConvergenceDecision(base)).toEqual({
+      action: "warn",
+      remainingModelTurns: 50,
+    })
+    expect(ordinaryRunCeilingConvergenceDecision({ ...base, warned: true })).toEqual({ action: "ignore" })
+  })
+
+  test("does not warn early, in manual mode, or during long runs", () => {
+    expect(ordinaryRunCeilingConvergenceDecision({ ...base, totalModelTurns: 1949 })).toEqual({ action: "ignore" })
+    expect(ordinaryRunCeilingConvergenceDecision({ ...base, autonomous: false })).toEqual({ action: "ignore" })
+    expect(ordinaryRunCeilingConvergenceDecision({ ...base, longRunActive: true })).toEqual({ action: "ignore" })
+  })
+
+  test("scales the warning window down for small custom ceilings", () => {
+    expect(
+      ordinaryRunCeilingConvergenceDecision({
+        ...base,
+        totalModelTurns: 89,
+        totalModelTurnLimit: 100,
+      }),
+    ).toEqual({ action: "ignore" })
+    expect(
+      ordinaryRunCeilingConvergenceDecision({
+        ...base,
+        totalModelTurns: 90,
+        totalModelTurnLimit: 100,
+      }),
+    ).toEqual({ action: "warn", remainingModelTurns: 10 })
   })
 })
 

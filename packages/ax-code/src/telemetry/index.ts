@@ -150,6 +150,7 @@ export namespace Telemetry {
         case "session.end":
           sessionSpan.setAttribute("session.reason", event.reason)
           sessionSpan.setAttribute("session.total_steps", event.totalSteps)
+          if (event.stopCode) sessionSpan.setAttribute("session.stop_code", event.stopCode)
           break
       }
     }

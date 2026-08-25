@@ -118,18 +118,20 @@ AX_CODE_AUTONOMOUS=false ax-code   # force autonomous off
 
 Environment variable > config file > default (on)
 
-## Workload budgets (step limits)
+## Workload budgets (model turns and tool calls)
 
 Autonomous mode does **not** mean unlimited execution. Several independent caps apply. Defaults below are the shipped constants; raise or lower them in `ax-code.json` when a workload needs more room.
+
+A **model turn** is one outer-loop model request. A **tool call** is one tool invocation inside a model turn. These are separate budgets: a single model turn can issue several tool calls. Legacy config names containing `steps` remain supported, but they do not make the two units interchangeable.
 
 Prefer the first-class **`autonomy`** object. Legacy `session.*` and `experimental.autonomous_caps.*` keys still work as aliases (lower precedence).
 
 | Cap                        | Default                                                       | Unit                                                      | Preferred config                                       | Legacy alias                                    |
 | -------------------------- | ------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------- |
-| Per-segment session steps  | 500                                                           | Outer loop iterations per continuation segment            | `autonomy.budget.model_turns.per_segment`              | `session.max_steps`                             |
-| Auto-continuations         | 3                                                             | Segments after a step ceiling (ordinary autonomous)       | `autonomy.budget.continuations`                        | `session.max_continuations` (`0` disables)      |
-| Cumulative total steps     | 2,000 ordinary · 20,000 goal / Super-Long                     | Sum across continuations                                  | `autonomy.budget.model_turns.total`                    | `session.max_total_steps`                       |
-| Per-agent steps            | Unbounded for native agents                                   | Outer iterations for that agent                           | `agent.<name>.steps` (optional)                        | —                                               |
+| Per-segment model turns    | 500                                                           | Model requests per continuation segment                   | `autonomy.budget.model_turns.per_segment`              | `session.max_steps`                             |
+| Auto-continuations         | 3                                                             | Segments after a model-turn ceiling (ordinary autonomous) | `autonomy.budget.continuations`                        | `session.max_continuations` (`0` disables)      |
+| Cumulative model turns     | 2,000 ordinary · 20,000 goal / Super-Long                     | Model requests summed across continuations                | `autonomy.budget.model_turns.total`                    | `session.max_total_steps`                       |
+| Per-agent model turns      | Unbounded for native agents                                   | Model requests while that agent is active                 | `agent.<name>.steps` (optional)                        | —                                               |
 | Todo auto-retries          | 10                                                            | Continuations while todos remain pending                  | `autonomy.budget.todo_retries`                         | `session.max_todo_retries`                      |
 | Blast-radius tool calls    | 500 / segment                                                 | Tool invocations in autonomous mode                       | `autonomy.budget.tool_calls.per_segment`               | `experimental.autonomous_caps.steps`            |
 | Blast-radius files / lines | 50 files · 5,000 lines                                        | Change footprint (survives continuations)                 | `autonomy.budget.changes.files_total` / `.lines_total` | `experimental.autonomous_caps.files` / `.lines` |
@@ -156,11 +158,26 @@ Set `autonomy.profile` to seed several fields at once (explicit fields still win
 
 In a session, run **`/limits`** to print the resolved budget stack, effective TUI denominator for the active agent, config sources, and doctor warnings (for example when `agent.steps` is tighter than the session segment). Use `/limits help` for key names.
 
-**What the TUI shows:** during a multi-step run the header chip reports `step current/max` where `max` is the **effective pacing cap** for the active agent — `min(agent.steps, session.max_steps)` when the agent is capped, otherwise the per-segment limit. It is not a total-run counter across auto-continuations.
+**What the TUI shows:** during an autonomous run the header reports `turn current/max · total current/max · cont current/max`. `turn` is the current continuation segment and uses the **effective pacing cap** for the active agent — `min(agent.steps, session.max_steps)` when the agent is capped, otherwise the per-segment limit. `total` survives auto-continuations. `cont` shows `∞` when an active goal or Super-Long mode lifts the ordinary continuation cap.
 
-**Auto-routing:** keyword routing may switch the session to a specialist agent (Debug, Security, DevOps, …). Specialists share the same unbounded-by-default agent step policy as Dev unless you set `agent.<name>.steps`. Disable routing with `"routing": { "disable": true }` if you want the Dev agent only.
+**Auto-routing:** keyword routing may switch the session to a specialist agent (Debug, Security, DevOps, …). Specialists share the same unbounded-by-default agent model-turn policy as Dev unless you set `agent.<name>.steps`. Disable routing with `"routing": { "disable": true }` if you want the Dev agent only.
 
 **Long runs:** use `/goal` or Super-Long for multi-hour work — they lift ordinary continuation caps and use the larger cumulative ceiling (default 20,000), with verification / pause semantics documented in [Loop Mode](loop-mode.md).
+
+### When a limit stops a run
+
+Before an ordinary run reaches its cumulative model-turn ceiling, AX Code injects one bounded convergence instruction (at most the final 50 turns, scaled down for small custom budgets). It tells the model to stop broad exploration, finish or safely park in-flight work, run targeted verification, and report unfinished work truthfully. It does not add budget or bypass any cap.
+
+When a terminal budget is reached, `session.error` includes an optional machine-readable `code`, and the replay `session.end` event records the same value as `stopCode`. Existing coarse end reasons remain unchanged for compatibility. Current limit codes are:
+
+- `MODEL_TURN_SEGMENT_LIMIT`
+- `MODEL_TURN_TOTAL_LIMIT`
+- `AGENT_MODEL_TURN_LIMIT`
+- `AGGREGATE_TOOL_CALL_LIMIT`
+- `FILE_CHANGE_LIMIT`
+- `LINE_CHANGE_LIMIT`
+
+At a segment ceiling, AX Code auto-continues while the configured continuation budget remains. Once that budget is exhausted, the run stops and the message says what happened. Sending a new prompt such as `continue` starts a new user-directed run with new run accounting; it does not retroactively extend the stopped run. Use `/goal` when the objective should remain explicit and resumable until completion, blocking, or a goal/runtime budget boundary. `/goal` does not disable permission, isolation, blast-radius, stall, token, time, or cumulative model-turn safeguards.
 
 ### Example: raise budgets for a large autonomous batch
 

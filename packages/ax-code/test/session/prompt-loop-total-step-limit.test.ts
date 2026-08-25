@@ -33,7 +33,7 @@ describe("prompt loop total step limit", () => {
 
   test("stops without touching the goal when no goal is set", async () => {
     const sessionID = SessionID.descending()
-    const published: { message: string }[] = []
+    const published: { message: string; code?: string }[] = []
     let paused = 0
 
     const result = await handlePromptLoopTotalStepLimit(
@@ -46,7 +46,7 @@ describe("prompt loop total step limit", () => {
       {
         warn() {},
         publishError(input) {
-          published.push({ message: input.message })
+          published.push(input)
         },
         async pauseGoal() {
           paused += 1
@@ -57,15 +57,17 @@ describe("prompt loop total step limit", () => {
     expect(result).toMatchObject({ action: "stop", reason: "step_limit" })
     if (result.action !== "stop") throw new Error("expected stop")
     expect(paused).toBe(0)
-    expect(result.message).toContain("cumulative step ceiling")
+    expect(result.message).toContain("cumulative model-turn ceiling")
     expect(result.message).not.toContain("/goal resume")
     expect(published).toHaveLength(1)
+    expect(published[0]?.code).toBe("MODEL_TURN_TOTAL_LIMIT")
+    expect(result.stopCode).toBe("MODEL_TURN_TOTAL_LIMIT")
   })
 
   test("pauses an active goal at the ceiling and appends resume guidance", async () => {
     const sessionID = SessionID.descending()
     const pausedSessions: SessionID[] = []
-    const published: { message: string }[] = []
+    const published: { message: string; code?: string }[] = []
     const warnings: { message: string; fields: Record<string, unknown> }[] = []
 
     const result = await handlePromptLoopTotalStepLimit(
@@ -81,7 +83,7 @@ describe("prompt loop total step limit", () => {
           warnings.push({ message, fields })
         },
         publishError(input) {
-          published.push({ message: input.message })
+          published.push(input)
         },
         async pauseGoal(id) {
           pausedSessions.push(id)
@@ -98,6 +100,7 @@ describe("prompt loop total step limit", () => {
     // The published error carries the same goal-aware message the transcript gets.
     expect(published).toHaveLength(1)
     expect(published[0]?.message).toBe(result.message)
+    expect(published[0]?.code).toBe("MODEL_TURN_TOTAL_LIMIT")
     expect(warnings.some((w) => w.message === "cumulative total step limit reached")).toBe(true)
     expect(warnings.find((w) => w.message === "cumulative total step limit reached")?.fields["goalPaused"]).toBe(true)
   })
