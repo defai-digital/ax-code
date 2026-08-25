@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.4] - 2026-08-25
+
+### Fixed
+
+- Fix Desktop rollback preview fixture.
+- Fix rollback boundary and snapshot recovery.
+- Fix rollback across delegated sessions.
+
 ## [7.8.3] - 2026-08-24
 
 ### Changed
