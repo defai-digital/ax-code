@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.3] - 2026-08-24
+
+### Changed
+
+- Stabilize OpenAPI schema key order for SDK generation.
+- Document Homebrew tap trust requirement.
+- Clarify macOS install options.
+- Make background result delivery idempotent.
+- Pin the current session input under the subagent rail.
+- Unwrap global events in SDK IPC transport.
+- Normalize non-standard provider overflow errors.
+
+### Fixed
+
+- Fix computer_watch polls invalidating snapshot element ids.
+- Fix pinned-input wrap dropping a word that already fits.
+- Fix Bash installer startup file selection.
+- Fix stream delta coalescer dropping text on out-of-order offsets.
+- Fix curl installer version lookup on minified GitHub JSON.
+
 ## [7.8.2] - 2026-08-24
 
 ### Changed
