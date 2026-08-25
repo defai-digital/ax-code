@@ -16,6 +16,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
+import { isBinaryFile } from "./file-content"
 import { ToolNumber } from "./schema"
 
 const log = Log.create({ service: "tool.read" })
@@ -228,7 +229,7 @@ export const ReadTool = Tool.define("read", {
         }
       }
 
-      const isBinary = await isBinaryFile(filepath, Number(stat.size))
+      const isBinary = await isBinaryFile(filepath)
       if (isBinary) throw readError("ReadBinaryFileError", `Cannot read binary file: ${filepath}`)
 
       const stream = createReadStream(filepath, { encoding: "utf8" })
@@ -336,63 +337,3 @@ export const ReadTool = Tool.define("read", {
     }
   },
 })
-
-async function isBinaryFile(filepath: string, fileSize: number): Promise<boolean> {
-  const ext = path.extname(filepath).toLowerCase()
-  // binary check for common non-text extensions
-  switch (ext) {
-    case ".zip":
-    case ".tar":
-    case ".gz":
-    case ".exe":
-    case ".dll":
-    case ".so":
-    case ".class":
-    case ".jar":
-    case ".war":
-    case ".7z":
-    case ".doc":
-    case ".docx":
-    case ".xls":
-    case ".xlsx":
-    case ".ppt":
-    case ".pptx":
-    case ".odt":
-    case ".ods":
-    case ".odp":
-    case ".bin":
-    case ".dat":
-    case ".obj":
-    case ".o":
-    case ".a":
-    case ".lib":
-    case ".wasm":
-    case ".pyc":
-    case ".pyo":
-      return true
-    default:
-      break
-  }
-
-  if (fileSize === 0) return false
-
-  const fh = await fs.open(filepath, "r")
-  try {
-    const sampleSize = Math.min(4096, fileSize)
-    const bytes = Buffer.alloc(sampleSize)
-    const result = await fh.read(bytes, 0, sampleSize, 0)
-    if (result.bytesRead === 0) return false
-
-    let nonPrintableCount = 0
-    for (let i = 0; i < result.bytesRead; i++) {
-      if (bytes[i] === 0) return true
-      if (bytes[i] < 9 || (bytes[i] > 13 && bytes[i] < 32)) {
-        nonPrintableCount++
-      }
-    }
-    // If >30% non-printable characters, consider it binary
-    return nonPrintableCount / result.bytesRead > 0.3
-  } finally {
-    await fh.close()
-  }
-}

@@ -37,6 +37,7 @@ import { classifyDestructiveCommand } from "./bash-destructive"
 import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
+import { estimateAutonomousLineDelta } from "./file-content"
 import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
@@ -168,15 +169,6 @@ const log = Log.create({ service: "bash-tool" })
 const CLEANUP_KILL_TIMEOUT_MS = 250
 const isBunRuntime = Boolean((process.versions as Record<string, string | undefined>).bun)
 const useSetsidProcessGroup = process.platform === "linux" && isBunRuntime
-
-async function estimateFileLineDelta(filePath: string) {
-  const stat = await fs.stat(filePath).catch((error: NodeJS.ErrnoException) => {
-    if (Filesystem.isMissingPathError(error)) return undefined
-    throw error
-  })
-  if (!stat?.isFile()) return 1
-  return Math.max(1, Math.ceil(stat.size / 80))
-}
 
 // Track child process groups so we can clean them up if the parent
 // process exits unexpectedly (crash, SIGKILL, etc.). Without this,
@@ -1153,7 +1145,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         if (proc.exitCode === 0) {
           for (const filePath of redirectWritePaths) {
             if (Filesystem.contains(Instance.worktree, filePath)) {
-              BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, await estimateFileLineDelta(filePath))
+              BlastRadius.recordWriteAndAssert(ctx.sessionID, filePath, await estimateAutonomousLineDelta(filePath))
             }
           }
         }

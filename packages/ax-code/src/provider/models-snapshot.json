@@ -13774,7 +13774,11 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
           }
         ],
         "tool_call": true,
@@ -13879,8 +13883,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 65536,
-          "input": 65536,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -13922,7 +13926,11 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
           }
         ],
         "tool_call": true,
@@ -15473,12 +15481,11 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
-            "type": "budget_tokens",
-            "min": 1024,
-            "max": 81920
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
           }
         ],
         "tool_call": true,
@@ -16008,12 +16015,11 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
-            "type": "budget_tokens",
-            "min": 1024,
-            "max": 81920
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
           }
         ],
         "tool_call": true,
@@ -16948,8 +16954,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 65536,
-          "input": 65536,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -17014,7 +17020,15 @@
         "family": "claude",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": false,
         "release_date": "2026-05-01",
@@ -17044,7 +17058,11 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
           }
         ],
         "tool_call": true,
@@ -18034,7 +18052,11 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
           }
         ],
         "tool_call": true,
@@ -19809,8 +19831,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "input": 131072,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -20086,8 +20108,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "input": 131072,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -24710,8 +24732,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "input": 131072,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -24738,8 +24760,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "input": 131072,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -25758,8 +25780,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 65536,
-          "input": 65536,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -25815,8 +25837,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 65536,
-          "input": 65536,
+          "context": 262144,
+          "input": 262144,
           "output": 32768
         }
       },
@@ -71929,6 +71951,42 @@
           "output": 131072
         }
       },
+      "baidu/glm-5.3": {
+        "id": "baidu/glm-5.3",
+        "name": "GLM-5.3 (Baidu)",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        }
+      },
       "baidu/glm-5.2": {
         "id": "baidu/glm-5.2",
         "name": "GLM-5.2 (Baidu)",
@@ -109028,8 +109086,8 @@
           "output": 4096
         }
       },
-      "Qwen/Qwen3.6-35B-A3B-FP8": {
-        "id": "Qwen/Qwen3.6-35B-A3B-FP8",
+      "Qwen/Qwen3.6-35B-A3B": {
+        "id": "Qwen/Qwen3.6-35B-A3B",
         "name": "Qwen3.6 35B-A3B",
         "description": "Open multimodal Qwen MoE for local agents that need vision, audio, and code",
         "family": "qwen",
@@ -109086,6 +109144,46 @@
           "output": 4096
         }
       },
+      "Qwen/Qwen3.8-27B": {
+        "id": "Qwen/Qwen3.8-27B",
+        "name": "Qwen3.8-27B",
+        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
       "zai-org/GLM-5.2": {
         "id": "zai-org/GLM-5.2",
         "name": "GLM-5.2",
@@ -109100,7 +109198,6 @@
           {
             "type": "effort",
             "values": [
-              "none",
               "high",
               "max"
             ]
@@ -109220,6 +109317,171 @@
         "limit": {
           "context": 262144,
           "output": 262144
+        }
+      }
+    }
+  },
+  "pendra": {
+    "id": "pendra",
+    "env": [
+      "PENDRA_API_KEY"
+    ],
+    "npm": "@ai-sdk/openai-compatible",
+    "api": "https://api.pendra.ai/api/v1",
+    "name": "Pendra",
+    "doc": "https://pendra.ai/docs/integrations/opencode",
+    "models": {
+      "deepseek-v4-flash": {
+        "id": "deepseek-v4-flash",
+        "name": "DeepSeek V4 Flash",
+        "description": "Fast DeepSeek V4 lane for economical reasoning, coding, and long-context work",
+        "family": "deepseek-flash",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "knowledge": "2025-05",
+        "release_date": "2026-04-24",
+        "last_updated": "2026-04-24",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        }
+      },
+      "llama3.3:70b": {
+        "id": "llama3.3:70b",
+        "name": "Llama-3.3-70B-Instruct",
+        "description": "Popular open Llama workhorse for multilingual chat, coding, and self-hosting",
+        "family": "llama",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2023-12",
+        "release_date": "2024-12-06",
+        "last_updated": "2024-12-06",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 128000,
+          "output": 4096
+        }
+      },
+      "qwen3.6:27b": {
+        "id": "qwen3.6:27b",
+        "name": "Qwen3.6 27B",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-04-22",
+        "last_updated": "2026-04-22",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 65536
+        }
+      },
+      "gpt-oss:120b": {
+        "id": "gpt-oss:120b",
+        "name": "GPT OSS 120B",
+        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
+        "family": "gpt-oss",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2025-08-05",
+        "last_updated": "2025-08-05",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 32768
+        }
+      },
+      "qwen3-coder:30b": {
+        "id": "qwen3-coder:30b",
+        "name": "Qwen3-Coder 30B-A3B Instruct",
+        "description": "Smaller Qwen coder for efficient local agents and repo-level fixes",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": false,
+        "tool_call": true,
+        "temperature": true,
+        "knowledge": "2025-04",
+        "release_date": "2025-04",
+        "last_updated": "2025-04",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 65536
         }
       }
     }
@@ -121158,9 +121420,10 @@
           {
             "type": "effort",
             "values": [
+              "none",
               "low",
-              "medium",
-              "high"
+              "high",
+              "max"
             ]
           }
         ],
@@ -121613,11 +121876,8 @@
             "type": "effort",
             "values": [
               "none",
-              "minimal",
               "low",
-              "medium",
               "high",
-              "xhigh",
               "max"
             ]
           }
@@ -158999,7 +159259,7 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1000000,
+          "context": 1048576,
           "output": 131072
         }
       },
@@ -162639,6 +162899,40 @@
         "open_weights": false,
         "limit": {
           "context": 512000,
+          "output": 65536
+        }
+      },
+      "agnes-2.5-pro-alpha": {
+        "id": "agnes-2.5-pro-alpha",
+        "name": "Agnes 2.5 Pro Alpha",
+        "description": "Paid reasoning model for advanced coding, scientific reasoning, long-context analysis, agentic workflows, and multimodal understanding.",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-07-24",
+        "last_updated": "2026-07-24",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
           "output": 65536
         }
       },
@@ -166562,7 +166856,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "tencent/hunyuan-a13b-instruct": {
@@ -166597,7 +166891,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "tencent/hy3": {
@@ -166891,7 +167185,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "nvidia/nemotron-3-nano-30b-a3b": {
@@ -166926,7 +167220,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "nvidia/nemotron-3-super-120b-a12b": {
@@ -167033,7 +167327,7 @@
         "open_weights": true,
         "limit": {
           "context": 512288,
-          "output": 512288
+          "output": 461059
         }
       },
       "nvidia/nemotron-3.5-lightning:free": {
@@ -167318,7 +167612,7 @@
         "open_weights": false,
         "limit": {
           "context": 32768,
-          "output": 32768
+          "output": 29491
         }
       },
       "aion-labs/aion-2.0": {
@@ -167460,7 +167754,7 @@
         "open_weights": false,
         "limit": {
           "context": 16384,
-          "output": 16384
+          "output": 14745
         }
       },
       "z-ai/glm-5": {
@@ -167711,7 +168005,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048575,
-          "output": 384000
+          "output": 943717
         }
       },
       "deepseek/deepseek-v4-pro": {
@@ -167784,7 +168078,7 @@
         "open_weights": true,
         "limit": {
           "context": 163840,
-          "output": 163840
+          "output": 147456
         }
       },
       "deepseek/deepseek-chat-v3.1": {
@@ -167819,7 +168113,7 @@
         "open_weights": false,
         "limit": {
           "context": 161000,
-          "output": 161000
+          "output": 144900
         }
       },
       "deepseek/deepseek-r1-0528": {
@@ -167906,7 +168200,7 @@
         "open_weights": false,
         "limit": {
           "context": 163840,
-          "output": 163840
+          "output": 147456
         }
       },
       "deepseek/deepseek-r1-distill-llama-70b": {
@@ -167941,7 +168235,7 @@
         "open_weights": false,
         "limit": {
           "context": 8192,
-          "output": 8192
+          "output": 7372
         }
       },
       "deepseek/deepseek-v3.2-exp": {
@@ -168086,7 +168380,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "arcee-ai/virtuoso-large": {
@@ -168332,7 +168626,7 @@
         "open_weights": false,
         "limit": {
           "context": 65536,
-          "output": 65536
+          "output": 58982
         }
       },
       "google/gemma-3-4b-it": {
@@ -168478,7 +168772,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "google/gemma-3n-e4b-it": {
@@ -168504,7 +168798,7 @@
         "open_weights": false,
         "limit": {
           "context": 32768,
-          "output": 6554
+          "output": 29491
         }
       },
       "google/lyria-3-clip-preview": {
@@ -168644,7 +168938,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "google/gemma-3-12b-it": {
@@ -168793,7 +169087,7 @@
         "open_weights": false,
         "limit": {
           "context": 65536,
-          "output": 65536
+          "output": 58982
         }
       },
       "google/lyria-3-pro-preview": {
@@ -168988,7 +169282,7 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "meta/muse-spark-1.2": {
@@ -169030,7 +169324,7 @@
         "open_weights": false,
         "limit": {
           "context": 1048576,
-          "output": 1048576
+          "output": 943718
         }
       },
       "meta/muse-spark-1.1": {
@@ -169072,7 +169366,7 @@
         "open_weights": false,
         "limit": {
           "context": 1048576,
-          "output": 1048576
+          "output": 943718
         }
       },
       "meta/muse-spark-1.2-contributor": {
@@ -169114,7 +169408,7 @@
         "open_weights": false,
         "limit": {
           "context": 1048576,
-          "output": 1048576
+          "output": 943718
         }
       },
       "cognitivecomputations/dolphin-mistral-24b-venice-edition": {
@@ -169165,7 +169459,7 @@
         "open_weights": false,
         "limit": {
           "context": 4096,
-          "output": 4096
+          "output": 3686
         }
       },
       "inception/mercury-2": {
@@ -169382,7 +169676,7 @@
         "open_weights": false,
         "limit": {
           "context": 500000,
-          "output": 500000
+          "output": 450000
         }
       },
       "x-ai/grok-4.5": {
@@ -169420,7 +169714,7 @@
         "open_weights": false,
         "limit": {
           "context": 500000,
-          "output": 500000
+          "output": 450000
         }
       },
       "perceptron/perceptron-mk1": {
@@ -169686,7 +169980,7 @@
         "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "moonshotai/kimi-k2.7-code": {
@@ -169722,7 +170016,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "anthropic/claude-opus-4.8": {
@@ -170973,7 +171267,7 @@
         "open_weights": false,
         "limit": {
           "context": 4095,
-          "output": 4096
+          "output": 3685
         }
       },
       "openai/gpt-5.6-sol": {
@@ -171564,7 +171858,7 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "openai/gpt-4.1-nano": {
@@ -172081,7 +172375,7 @@
         "open_weights": false,
         "limit": {
           "context": 4095,
-          "output": 4096
+          "output": 3685
         }
       },
       "openai/gpt-5.6-terra": {
@@ -172561,7 +172855,7 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "openai/gpt-5.4-nano": {
@@ -172978,7 +173272,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "nousresearch/hermes-4-405b": {
@@ -173013,7 +173307,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 26215
+          "output": 117964
         }
       },
       "stepfun/step-3.5-flash": {
@@ -173123,7 +173417,7 @@
         "limit": {
           "context": 256000,
           "input": 256000,
-          "output": 256000
+          "output": 230400
         }
       },
       "qwen/qwen2.5-vl-72b-instruct": {
@@ -173150,7 +173444,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 128000
+          "output": 115200
         }
       },
       "qwen/qwen3.5-plus-20260420": {
@@ -173214,7 +173508,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "qwen/qwen3.7-max": {
@@ -173325,41 +173619,6 @@
           "output": 16384
         }
       },
-      "qwen/qwen-plus-2025-07-28:thinking": {
-        "id": "qwen/qwen-plus-2025-07-28:thinking",
-        "name": "Qwen: Qwen Plus 0728 (thinking)",
-        "description": "Qwen reasoning model for deliberate problem solving, math, and coding",
-        "family": "qwen",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-09-08",
-        "last_updated": "2025-09-08",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1000000,
-          "output": 32768
-        }
-      },
       "qwen/qwen3-235b-a22b-thinking-2507": {
         "id": "qwen/qwen3-235b-a22b-thinking-2507",
         "name": "Qwen: Qwen3 235B A22B Thinking 2507",
@@ -173391,7 +173650,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 262144
+          "output": 117964
         }
       },
       "qwen/qwen3-vl-8b-thinking": {
@@ -173499,7 +173758,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "qwen/qwen3-vl-235b-a22b-thinking": {
@@ -173607,7 +173866,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "qwen/qwen-plus": {
@@ -173661,7 +173920,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "qwen/qwen3-coder-flash": {
@@ -173980,7 +174239,7 @@
         "open_weights": false,
         "limit": {
           "context": 32768,
-          "output": 32768
+          "output": 29491
         }
       },
       "qwen/qwen3-max-thinking": {
@@ -174226,7 +174485,7 @@
         "open_weights": false,
         "limit": {
           "context": 32768,
-          "output": 32768
+          "output": 29491
         }
       },
       "qwen/qwen3.6-35b-a3b": {
@@ -174263,7 +174522,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "qwen/qwen3.6-27b": {
@@ -174327,7 +174586,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "qwen/qwen3.8-27b": {
@@ -174365,7 +174624,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
+          "context": 1000000,
           "output": 131072
         }
       },
@@ -174475,7 +174734,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "qwen/qwen3.5-27b": {
@@ -174584,7 +174843,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -174860,7 +175119,7 @@
         "open_weights": false,
         "limit": {
           "context": 65536,
-          "output": 65536
+          "output": 58982
         }
       },
       "xiaomi/mimo-v2.5": {
@@ -175050,7 +175309,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 25600
+          "output": 115200
         }
       },
       "perplexity/sonar": {
@@ -175077,7 +175336,7 @@
         "open_weights": false,
         "limit": {
           "context": 127072,
-          "output": 25415
+          "output": 114364
         }
       },
       "perplexity/sonar-reasoning-pro": {
@@ -175113,7 +175372,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 25600
+          "output": 115200
         }
       },
       "perplexity/sonar-pro": {
@@ -175200,7 +175459,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "thedrummer/skyfall-36b-v2": {
@@ -175225,7 +175484,7 @@
         "open_weights": false,
         "limit": {
           "context": 32768,
-          "output": 32768
+          "output": 29491
         }
       },
       "thedrummer/rocinante-12b": {
@@ -175250,7 +175509,7 @@
         "open_weights": false,
         "limit": {
           "context": 65536,
-          "output": 65536
+          "output": 58982
         }
       },
       "thedrummer/unslopnemo-12b": {
@@ -175275,7 +175534,7 @@
         "open_weights": false,
         "limit": {
           "context": 32768,
-          "output": 32768
+          "output": 26214
         }
       },
       "rekaai/reka-edge": {
@@ -175303,7 +175562,7 @@
         "open_weights": false,
         "limit": {
           "context": 16384,
-          "output": 16384
+          "output": 14745
         }
       },
       "rekaai/reka-flash-3": {
@@ -175337,7 +175596,7 @@
         "open_weights": false,
         "limit": {
           "context": 65536,
-          "output": 65536
+          "output": 58982
         }
       },
       "stealth/claude-opus-4.8": {
@@ -175805,7 +176064,7 @@
         "open_weights": false,
         "limit": {
           "context": 1048576,
-          "output": 1048576
+          "output": 943718
         }
       },
       "inclusionai/ling-3.0-flash": {
@@ -175866,7 +176125,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "meta-llama/llama-3.3-70b-instruct": {
@@ -175946,7 +176205,7 @@
         "open_weights": false,
         "limit": {
           "context": 60000,
-          "output": 60000
+          "output": 54000
         }
       },
       "meta-llama/llama-3.1-8b-instruct": {
@@ -175973,7 +176232,7 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "meta-llama/llama-3.1-70b-instruct": {
@@ -176080,7 +176339,7 @@
         "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 32768
+          "output": 209715
         }
       },
       "mistralai/mistral-medium-3.1": {
@@ -176108,7 +176367,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 26215
+          "output": 104857
         }
       },
       "mistralai/mistral-nemo": {
@@ -176172,7 +176431,7 @@
         "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 209715
         }
       },
       "mistralai/ministral-8b": {
@@ -176198,7 +176457,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 128000
+          "output": 102400
         }
       },
       "mistralai/devstral-2512": {
@@ -176226,7 +176485,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 209715
         }
       },
       "mistralai/mistral-small-2603": {
@@ -176263,7 +176522,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 209715
         }
       },
       "mistralai/mistral-small-3.2-24b-instruct": {
@@ -176345,7 +176604,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 52429
+          "output": 209715
         }
       },
       "mistralai/voxtral-small-24b-2507": {
@@ -176373,7 +176632,7 @@
         "open_weights": false,
         "limit": {
           "context": 32000,
-          "output": 6400
+          "output": 25600
         }
       },
       "mistralai/ministral-3b-2512": {
@@ -176400,7 +176659,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 32768
+          "output": 104857
         }
       },
       "mistralai/mistral-medium-3": {
@@ -176428,7 +176687,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 26215
+          "output": 104857
         }
       },
       "mistralai/mistral-large-2407": {
@@ -176455,7 +176714,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 32768
+          "output": 104857
         }
       },
       "mistralai/mistral-large": {
@@ -176482,7 +176741,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 25600
+          "output": 102400
         }
       },
       "mistralai/mixtral-8x22b-instruct": {
@@ -176509,7 +176768,7 @@
         "open_weights": false,
         "limit": {
           "context": 65536,
-          "output": 13108
+          "output": 52428
         }
       },
       "mistralai/ministral-14b-2512": {
@@ -176536,7 +176795,7 @@
         "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 52429
+          "output": 209715
         }
       },
       "mistralai/codestral-2508": {
@@ -176563,7 +176822,7 @@
         "open_weights": false,
         "limit": {
           "context": 256000,
-          "output": 51200
+          "output": 204800
         }
       },
       "mistralai/mistral-saba": {
@@ -176590,7 +176849,7 @@
         "open_weights": false,
         "limit": {
           "context": 32768,
-          "output": 32768
+          "output": 26214
         }
       },
       "mistralai/mistral-small-3.1-24b-instruct": {
@@ -176617,7 +176876,7 @@
         "open_weights": false,
         "limit": {
           "context": 128000,
-          "output": 128000
+          "output": 102400
         }
       },
       "morph/morph-v3-large": {
@@ -176911,7 +177170,7 @@
         "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "nex-agi/nex-n2-pro": {
@@ -176947,7 +177206,7 @@
         "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 262144
+          "output": 235929
         }
       },
       "upstage/solar-pro-3": {
@@ -176982,7 +177241,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "upstage/solar-pro4": {
@@ -177157,7 +177416,7 @@
         "open_weights": false,
         "limit": {
           "context": 8192,
-          "output": 16384
+          "output": 7372
         }
       },
       "kwaipilot/kat-coder-pro-v2.5": {
@@ -177261,7 +177520,7 @@
         "open_weights": false,
         "limit": {
           "context": 131000,
-          "output": 131000
+          "output": 117900
         }
       },
       "ibm-granite/granite-4.1-8b": {
@@ -177287,7 +177546,7 @@
         "open_weights": false,
         "limit": {
           "context": 131072,
-          "output": 131072
+          "output": 117964
         }
       },
       "dots-studio/dots-3-note-preview:free": {
@@ -177322,7 +177581,7 @@
         "open_weights": false,
         "limit": {
           "context": 512000,
-          "output": 512000
+          "output": 460800
         }
       },
       "minimax/minimax-01": {
@@ -177349,7 +177608,7 @@
         "open_weights": false,
         "limit": {
           "context": 1000192,
-          "output": 1000192
+          "output": 900172
         }
       },
       "minimax/minimax-m1": {
@@ -177481,7 +177740,7 @@
         "open_weights": true,
         "limit": {
           "context": 196608,
-          "output": 131072
+          "output": 176947
         }
       },
       "minimax/minimax-m2": {
@@ -177552,6 +177811,43 @@
           "output": 128000
         }
       },
+      "minimax/minimax-m3:free": {
+        "id": "minimax/minimax-m3:free",
+        "name": "MiniMax: MiniMax M3 (free)",
+        "description": "MiniMax-M3 is a multimodal foundation model from MiniMax. It supports text, image, and video inputs with text output, a 1M-token context window, and is suited for long-horizon agentic work, coding,...",
+        "family": "minimax",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-06-01",
+        "last_updated": "2026-06-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 943718
+        }
+      },
       "minimax/minimax-m2.7:free": {
         "id": "minimax/minimax-m2.7:free",
         "name": "MiniMax: MiniMax M2.7 (free)",
@@ -177583,7 +177879,7 @@
         "open_weights": true,
         "limit": {
           "context": 196608,
-          "output": 196608
+          "output": 176947
         }
       },
       "minimax/minimax-m2.1": {

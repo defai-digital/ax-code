@@ -39,6 +39,23 @@ describe("BlastRadius", () => {
     expect(BlastRadius.get(SID).lines).toBe(0)
   })
 
+  test("zero line delta still counts the file and can trip the file cap", () => {
+    BlastRadius.get(SID, { steps: 100, files: 1, lines: 5 })
+    BlastRadius.recordWrite(SID, "/vendor/bin/sdluatex", 0)
+    const afterFirst = BlastRadius.get(SID)
+    expect(afterFirst.lines).toBe(0)
+    expect(afterFirst.files.size).toBe(1)
+    expect(BlastRadius.checkAfterIncrement(SID)).toBeNull()
+
+    BlastRadius.recordWrite(SID, "/vendor/bin/other", 0)
+    expect(BlastRadius.get(SID).lines).toBe(0)
+    expect(BlastRadius.get(SID).files.size).toBe(2)
+    const trip = BlastRadius.checkAfterIncrement(SID)
+    expect(trip?.kind).toBe("files")
+    expect(trip?.current).toBe(2)
+    expect(trip?.limit).toBe(1)
+  })
+
   test("recordWrite skips line counting for default lines-exempt paths but still counts the file", () => {
     // Regression: a session regenerated the ~160k-line
     // provider/models-snapshot.json in one bash redirect, which alone blew

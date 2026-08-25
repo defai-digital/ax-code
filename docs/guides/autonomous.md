@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-11
+Last reviewed: 2026-08-25
 Owner: ax-code runtime
 
 Autonomous mode lets ax-code complete tasks without waiting for human confirmation at each low-risk step. When enabled, permission prompts are auto-approved unless they are explicitly blocked, and question dialogs are auto-answered with a best-practice heuristic that favors recommended, default, common, simple, and minimal choices while avoiding risky or over-engineered options.
@@ -137,6 +137,8 @@ Prefer the first-class **`autonomy`** object. Legacy `session.*` and `experiment
 | Per-tool flood caps        | e.g. bash 50, edit 100                                        | Calls per model turn                                      | `autonomy.budget.tool_calls.per_tool`                  | `experimental.autonomous_caps.perTool`          |
 | Tool-only streak breaker   | Nudge 15 · final ~30 · stop 35                                | Consecutive tool-only model finishes                      | `autonomy.stall.tool_only_*`                           | —                                               |
 | Tool-call burst limiter    | 30 calls / 10s                                                | Rolling window per processor turn                         | `autonomy.budget.tool_calls.rate`                      | —                                               |
+
+Binary files (`cp` of an executable, `curl -o` of a zip, and other non-text writes) still count toward the **file** cap, but they charge **zero lines**. The line cap measures textual change. Shell text writes keep the `ceil(size / 80)` estimate so a dense payload cannot evade the budget by having few newlines.
 
 ### Profiles
 

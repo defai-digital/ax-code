@@ -140,6 +140,75 @@ describe("tool.bash permissions", () => {
 })
 
 describe("tool.bash truncation", () => {
+  test("binary cp does not consume the autonomous line cap", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_blast_binary_cp")
+      BlastRadius.reset(sessionID)
+      try {
+        BlastRadius.applyConfigCaps(sessionID, { lines: 5, files: 100 })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            const source = path.join(tmp.path, "sdluatex")
+            const dest = path.join(tmp.path, "copied")
+            await fs.writeFile(source, Buffer.concat([Buffer.from("ELF"), Buffer.alloc(997, 0)]))
+
+            const result = await bash.execute(
+              {
+                command: `cp ${shellQuote(source)} ${shellQuote(dest)}`,
+                description: "Copy extensionless binary",
+              },
+              { ...ctx, sessionID },
+            )
+
+            expect(result.metadata.exit).toBe(0)
+            const state = BlastRadius.get(sessionID)
+            expect(state.lines).toBe(0)
+            expect(state.files.size).toBe(1)
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
+  test("binary cp still participates in autonomous file-cap accounting", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_blast_binary_file_cap")
+      BlastRadius.reset(sessionID)
+      try {
+        BlastRadius.applyConfigCaps(sessionID, { lines: 5, files: 0 })
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            const source = path.join(tmp.path, "sdluatex")
+            const dest = path.join(tmp.path, "copied")
+            await fs.writeFile(source, Buffer.concat([Buffer.from("ELF"), Buffer.alloc(997, 0)]))
+
+            await expect(
+              bash.execute(
+                {
+                  command: `cp ${shellQuote(source)} ${shellQuote(dest)}`,
+                  description: "Copy extensionless binary under file cap",
+                },
+                { ...ctx, sessionID },
+              ),
+            ).rejects.toMatchObject({
+              data: { message: expect.stringContaining("Autonomous file-change cap reached") },
+            })
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
   test("redirect blast radius uses file-size estimate instead of one line per file", async () => {
     await using tmp = await tmpdir({ git: true })
     await withAutonomous(async () => {
