@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { ActionResult, ComputerAction } from "../src/action"
 import { ComputerUseError } from "../src/errors"
-import type { ComputerUseProvider, ObserveScope, ProviderCapabilities } from "../src/provider"
+import type { ComputerUseProvider, ObserveScope, PassiveObserveOptions, ProviderCapabilities } from "../src/provider"
 import { ComputerSession } from "../src/session"
 import type { AppInfo, ComputerObservation } from "../src/types"
 
@@ -28,6 +28,7 @@ class FakeProvider implements ComputerUseProvider {
   disposed = false
   readonly acts: ComputerAction[] = []
   readonly observedScopes: ObserveScope[] = []
+  readonly observedOptions: Array<PassiveObserveOptions | undefined> = []
 
   constructor(
     readonly name: string,
@@ -42,8 +43,9 @@ class FakeProvider implements ComputerUseProvider {
     return [{ name: `${this.name}-app` }]
   }
 
-  async observe(scope: ObserveScope): Promise<ComputerObservation> {
+  async observe(scope: ObserveScope, options?: PassiveObserveOptions): Promise<ComputerObservation> {
     this.observedScopes.push(scope)
+    this.observedOptions.push(options)
     return observation(this.name, this.elementIds)
   }
 
@@ -406,5 +408,41 @@ describe("ComputerSession", () => {
     expect(fresh.elements[0]!.id).toBe("e1:x")
     await session.act({ type: "click", target: { kind: "element", id: fresh.elements[0]!.id } })
     expect(next.acts).toEqual([{ type: "click", target: { kind: "element", id: "x" } }])
+  })
+
+  test("observePassive does not advance the epoch or invalidate prior ids", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const session = new ComputerSession(primary)
+    const first = await session.observe({ desktop: true })
+    expect(first.elements[0]!.id).toBe("e1:a")
+
+    const passive = await session.observePassive({ desktop: true }, { sinceRevision: null })
+    expect(primary.observedOptions.at(-1)).toEqual({ sinceRevision: null })
+    // Legacy providers may still return elements; they must not be stamped
+    // as a new epoch and must not replace the current map.
+    expect(passive.elements.map((element) => element.id)).toEqual(["a"])
+
+    await session.act({ type: "click", target: { kind: "element", id: first.elements[0]!.id } })
+    expect(primary.acts).toEqual([{ type: "click", target: { kind: "element", id: "a" } }])
+  })
+
+  test("observePassive does not supersede an in-flight targetable observe", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const session = new ComputerSession(primary)
+    const pendingResult = deferred<ComputerObservation>()
+    primary.observe = async (scope, options) => {
+      primary.observedScopes.push(scope)
+      primary.observedOptions.push(options)
+      if (options) return observation("primary", ["passive"])
+      return pendingResult.promise
+    }
+
+    const pending = session.observe({ desktop: true })
+    await session.observePassive({ desktop: true }, { sinceRevision: null })
+    pendingResult.resolve(observation("primary", ["a"]))
+    const committed = await pending
+    expect(committed.elements[0]!.id).toBe("e1:a")
+    await session.act({ type: "click", target: { kind: "element", id: committed.elements[0]!.id } })
+    expect(primary.acts).toEqual([{ type: "click", target: { kind: "element", id: "a" } }])
   })
 })

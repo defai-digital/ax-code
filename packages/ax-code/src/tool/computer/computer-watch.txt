@@ -1,6 +1,7 @@
 - Watches an app, window, or the desktop for a period, polling observations and reporting what changed
 - Use this to monitor ongoing activity (a build running, a page loading, a dialog appearing) instead of taking repeated snapshots
 - Returns a change timeline (element-count and screen-content changes with timestamps) plus the final observation
+- Polls are passive: they do not issue targetable element ids and do not invalidate ids from a prior computer_snapshot. Call computer_snapshot after the watch before acting on elements
 - Scope rules match computer_snapshot: pass app or windowId, or neither for the desktop (never both)
 - Keep durationMs modest; each poll is a backend screenshot + accessibility read
 - If the watch is aborted, the partial timeline and the last completed observation are still returned

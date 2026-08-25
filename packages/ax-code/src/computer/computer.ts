@@ -8,6 +8,7 @@ import type {
   ComputerObservation,
   ComputerUseProvider,
   ObserveScope,
+  PassiveObserveOptions,
   WindowInfo,
 } from "@ax-code/computer/index"
 import { Config } from "@/config/config"
@@ -435,6 +436,38 @@ export namespace Computer {
     s.lastProvider = name
     s.lastObservation = observation
     if (options.audit) emitObserve(options.audit, name, scope, observation, Date.now() - start, true)
+    return observation
+  }
+
+  /**
+   * Passive observe for watch/poll loops. Does not advance the element-id
+   * epoch, does not replace the element map, and does not overwrite
+   * lastObservation / lastProvider / lastScope — those belong to the last
+   * targetable snapshot. In-flight snapshot ids stay valid while a watch
+   * is polling. Re-snapshot before acting on elements in a watch frame.
+   */
+  export async function observePassive(
+    scope: ObserveScope,
+    options: ObserveOptions & PassiveObserveOptions,
+  ): Promise<ComputerObservation> {
+    const s = await state()
+    const name = await resolveObserveProvider(s, scope)
+    if (!name) {
+      throw new Error(
+        'Computer use is not configured. Set computer.provider ("axnative", "cua", or "external") in ax-code.json to enable computer tools.',
+      )
+    }
+    const session = await sessionFor(name)
+    const start = Date.now()
+    const { audit, sinceRevision, waitMs, have } = options
+    let observation: ComputerObservation
+    try {
+      observation = await session.observePassive(scope, { sinceRevision, waitMs, have })
+    } catch (err) {
+      if (isUnavailable(err)) throw await unavailable(err, name)
+      throw err
+    }
+    if (audit) emitObserve(audit, name, scope, observation, Date.now() - start, true)
     return observation
   }
 

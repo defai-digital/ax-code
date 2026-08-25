@@ -11,9 +11,9 @@ import { renderObservation } from "./render"
 
 /** Content signature used for change detection between polls. */
 function signatureOf(observation: ComputerObservation): string {
-  // Observation epochs intentionally change on every poll. Compare the raw
-  // provider identity beneath the single session prefix so freshness tokens
-  // do not masquerade as visible UI changes.
+  // Passive polls do not stamp epochs. Strip a session prefix if a legacy
+  // provider still returns one, so a freshness token cannot look like a
+  // visible UI change.
   const elements = observation.elements.map(
     (e) => `${e.id.replace(/^e\d+:/, "")}|${e.role ?? ""}|${e.name ?? ""}|${e.value ?? ""}`,
   )
@@ -74,9 +74,22 @@ export const ComputerWatchTool = Tool.define("computer_watch", {
     const started = Date.now()
     const changes: WatchChange[] = []
     let polls = 0
-    let observation = await Computer.observe(scope, {
-      audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_watch" },
-    })
+    // Passive polls must not go through Computer.observe(): that path
+    // commits a new epoch and replaces lastObservation, which would
+    // invalidate element ids from a concurrent computer_snapshot.
+    let sinceRevision: string | null = null
+    let have: string[] | undefined
+    const poll = async () => {
+      const next = await Computer.observePassive(scope, {
+        sinceRevision,
+        ...(have ? { have } : {}),
+        audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_watch" },
+      })
+      if (next.revision) sinceRevision = next.revision
+      if (next.frameHash) have = [next.frameHash]
+      return next
+    }
+    let observation = await poll()
     polls++
     let signature = signatureOf(observation)
     let elementCount = observation.elements.length
@@ -90,18 +103,21 @@ export const ComputerWatchTool = Tool.define("computer_watch", {
 
       let polled: ComputerObservation
       try {
-        polled = await Computer.observe(scope, {
-          audit: { sessionID: ctx.sessionID, messageID: ctx.messageID, tool: "computer_watch" },
-        })
+        polled = await poll()
       } catch (err) {
         // An act committed while this poll was in flight, so the session
         // superseded the observation. Skip the poll; the next interval
-        // re-observes the post-action UI.
+        // re-observes the post-action UI. Passive polls no longer throw
+        // this at the session layer; the catch remains for providers that
+        // still surface it.
         if (err instanceof ComputerUseError && err.code === "superseded_observation") continue
         throw err
       }
       observation = polled
       polls++
+      // Providers that support passive observe report unchanged frames
+      // without a screenshot; do not treat a missing screenshot as a change.
+      if (observation.unchanged === true) continue
       const next = signatureOf(observation)
       if (next === signature) continue
       const nextCount = observation.elements.length

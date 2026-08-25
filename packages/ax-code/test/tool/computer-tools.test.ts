@@ -518,6 +518,27 @@ describe("computer_watch tool", () => {
       expect(result.metadata.polls).toBe(1)
     })
   })
+
+  test("watch polls do not invalidate snapshot element ids", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
+      const snapshot = await ComputerSnapshotTool.init()
+      const snap = await snapshot.execute({ includeScreenshot: false }, makeCtx([]))
+      expect(snap.output).toContain("[e1:save-btn]")
+
+      const watch = await ComputerWatchTool.init()
+      await watch.execute({ durationMs: 500, intervalMs: 200, includeScreenshot: false }, makeCtx([]))
+
+      const action = await ComputerActionTool.init()
+      const result = await action.execute({ type: "click", target: "e1:save-btn" }, makeCtx([]))
+      expect(provider.acts[0]).toEqual({
+        type: "click",
+        target: { kind: "element", id: "save-btn" },
+        button: undefined,
+        count: undefined,
+      })
+      expect(result.output).toContain("ok")
+    })
+  })
 })
 
 describe("computer_plan tool", () => {
