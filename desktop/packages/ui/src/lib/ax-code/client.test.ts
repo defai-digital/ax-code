@@ -1,13 +1,60 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 
 import type { RuntimeAPIs } from "../api/types"
-import { axCodeClient, formatPromptSendError } from "./client"
+import { axCodeClient, formatPromptSendError, resolveDesktopBaseUrl } from "./client"
 
 afterEach(() => {
   axCodeClient.setDirectory(undefined)
   if (typeof window !== "undefined") {
-    delete (window as typeof window & { __AX_CODE_DESKTOP_RUNTIME_APIS__?: unknown }).__AX_CODE_DESKTOP_RUNTIME_APIS__
+    const runtimeWindow = window as typeof window & {
+      __AX_CODE_DESKTOP_DESKTOP_SERVER__?: unknown
+      __AX_CODE_DESKTOP_ELECTRON__?: unknown
+      __AX_CODE_DESKTOP_RUNTIME_APIS__?: unknown
+    }
+    delete runtimeWindow.__AX_CODE_DESKTOP_DESKTOP_SERVER__
+    delete runtimeWindow.__AX_CODE_DESKTOP_ELECTRON__
+    delete runtimeWindow.__AX_CODE_DESKTOP_RUNTIME_APIS__
   }
+})
+
+describe("resolveDesktopBaseUrl", () => {
+  test("uses the preload loopback bridge when the Electron renderer uses web runtime APIs", () => {
+    const runtimeWindow = window as typeof window & {
+      __AX_CODE_DESKTOP_DESKTOP_SERVER__?: { origin: string }
+      __AX_CODE_DESKTOP_ELECTRON__?: { runtime: string }
+      __AX_CODE_DESKTOP_RUNTIME_APIS__?: RuntimeAPIs
+    }
+    runtimeWindow.__AX_CODE_DESKTOP_DESKTOP_SERVER__ = {
+      origin: "http://127.0.0.1:54321",
+      axCodePort: null,
+      apiPrefix: "/api",
+      cliAvailable: true,
+    }
+    runtimeWindow.__AX_CODE_DESKTOP_ELECTRON__ = { runtime: "electron" }
+    runtimeWindow.__AX_CODE_DESKTOP_RUNTIME_APIS__ = {
+      runtime: { platform: "web", isDesktop: false },
+    } as RuntimeAPIs
+
+    expect(resolveDesktopBaseUrl()).toBe("http://127.0.0.1:54321/api")
+  })
+
+  test("ignores an untrusted desktop-server global without a desktop runtime", () => {
+    const runtimeWindow = window as typeof window & {
+      __AX_CODE_DESKTOP_DESKTOP_SERVER__?: { origin: string }
+      __AX_CODE_DESKTOP_RUNTIME_APIS__?: RuntimeAPIs
+    }
+    runtimeWindow.__AX_CODE_DESKTOP_DESKTOP_SERVER__ = {
+      origin: "http://127.0.0.1:54321",
+      axCodePort: null,
+      apiPrefix: "/api",
+      cliAvailable: true,
+    }
+    runtimeWindow.__AX_CODE_DESKTOP_RUNTIME_APIS__ = {
+      runtime: { platform: "web", isDesktop: false },
+    } as RuntimeAPIs
+
+    expect(resolveDesktopBaseUrl()).toBeNull()
+  })
 })
 
 describe("formatPromptSendError", () => {

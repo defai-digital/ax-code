@@ -192,20 +192,20 @@ const ensureAbsoluteBaseUrl = (candidate: string): string => {
   }
 }
 
-const resolveDesktopBaseUrl = (): string | null => {
+export const resolveDesktopBaseUrl = (): string | null => {
   if (typeof window === "undefined") {
     return null
   }
-  const desktopServer = (
-    window as typeof window & {
-      __AX_CODE_DESKTOP_DESKTOP_SERVER__?: { origin: string; apiPrefix?: string }
-      __AX_CODE_DESKTOP_RUNTIME_APIS__?: RuntimeAPIs
-    }
-  ).__AX_CODE_DESKTOP_DESKTOP_SERVER__
+  const runtimeWindow = window as typeof window & {
+    __AX_CODE_DESKTOP_DESKTOP_SERVER__?: { origin: string; apiPrefix?: string }
+    __AX_CODE_DESKTOP_ELECTRON__?: { runtime?: string }
+    __AX_CODE_DESKTOP_RUNTIME_APIS__?: RuntimeAPIs
+  }
+  const desktopServer = runtimeWindow.__AX_CODE_DESKTOP_DESKTOP_SERVER__
 
   const isDesktop = Boolean(
-    (window as typeof window & { __AX_CODE_DESKTOP_RUNTIME_APIS__?: RuntimeAPIs }).__AX_CODE_DESKTOP_RUNTIME_APIS__
-      ?.runtime?.isDesktop,
+    runtimeWindow.__AX_CODE_DESKTOP_RUNTIME_APIS__?.runtime?.isDesktop ||
+      runtimeWindow.__AX_CODE_DESKTOP_ELECTRON__?.runtime === "electron",
   )
 
   if (!desktopServer || !isDesktop) {

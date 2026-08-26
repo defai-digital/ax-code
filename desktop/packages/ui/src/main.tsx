@@ -11,6 +11,7 @@ import { syncDesktopSettings, initializeAppearancePreferences } from "./lib/pers
 import { applyPersistedDirectoryPreferences } from "./lib/directoryPersistence"
 import { initializeLocale, I18nProvider } from "./lib/i18n"
 import { recordDesktopStartupEvent } from "./lib/desktop"
+import { scheduleRendererPaintMilestone } from "./lib/rendererPaintMilestone"
 
 const runtimeAPIs =
   (typeof window !== "undefined" && window.__AX_CODE_DESKTOP_RUNTIME_APIS__) ||
@@ -23,31 +24,19 @@ initializeLocale()
 const recordRendererPaintMilestone = () => {
   if (typeof window === "undefined" || typeof performance === "undefined") return
 
-  const reportPaint = () => {
-    const paints = performance.getEntriesByType("paint")
-    const firstPaint = paints.find((entry) => entry.name === "first-paint")
-    const firstContentfulPaint = paints.find((entry) => entry.name === "first-contentful-paint")
-    void recordDesktopStartupEvent("renderer.first-paint", {
-      firstPaintMs: firstPaint ? Math.round(firstPaint.startTime) : null,
-      firstContentfulPaintMs: firstContentfulPaint ? Math.round(firstContentfulPaint.startTime) : null,
-    })
-  }
-
-  if ("PerformanceObserver" in window) {
-    try {
-      const observer = new PerformanceObserver(() => {
-        reportPaint()
-        observer.disconnect()
-      })
-      observer.observe({ type: "paint", buffered: true })
-      return
-    } catch {
-      // Fall back to a post-frame read below.
-    }
-  }
-
-  window.requestAnimationFrame(() => {
-    window.setTimeout(reportPaint, 0)
+  scheduleRendererPaintMilestone({
+    readPaintEntries: () => performance.getEntriesByType("paint"),
+    observePaint:
+      "PerformanceObserver" in window
+        ? (onPaint) => {
+            const observer = new PerformanceObserver(() => onPaint())
+            observer.observe({ type: "paint", buffered: true })
+            return observer
+          }
+        : undefined,
+    requestFrame: (callback) => window.requestAnimationFrame(callback),
+    schedule: (callback) => window.setTimeout(callback, 0),
+    record: (details) => recordDesktopStartupEvent("renderer.first-paint", details),
   })
 }
 

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { buildSmokeAppArgs, buildSmokeBundleIdentifier, parseArgs } from "./smoke-packaged-app.mjs"
+import {
+  buildSmokeAppArgs,
+  buildSmokeBundleIdentifier,
+  findMissingStartupEvents,
+  parseArgs,
+} from "./smoke-packaged-app.mjs"
 
 describe("smoke-packaged-app args", () => {
   test("uses an isolated Electron profile", () => {
@@ -11,6 +16,15 @@ describe("smoke-packaged-app args", () => {
   test("creates a distinct macOS bundle identifier for each smoke app copy", () => {
     expect(buildSmokeBundleIdentifier("smoke-run-123")).toBe("ai.defai.ax-code-app.smoke.smokerun123")
     expect(() => buildSmokeBundleIdentifier("")).toThrow("smoke run identifier")
+  })
+
+  test("reports startup events that did not reach diagnostics", () => {
+    expect(
+      findMissingStartupEvents(
+        ["electron.app.ready", "renderer.first-paint"],
+        [{ name: "electron.app.ready" }, { name: "renderer.entry.start" }],
+      ),
+    ).toEqual(["renderer.first-paint"])
   })
 
   test("requires a temporary Electron profile", () => {

@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - Avoid shadowing Homebrew CLI installs.
 - Strangle Desktop file reads onto core and serve packaged renderer over app://.
 
+### Fixed
+
+- Fix packaged Desktop startup over the app protocol and preserve startup smoke diagnostics.
+
 ## [7.8.5] - 2026-08-25
 
 ### Changed

@@ -56,6 +56,11 @@ export const buildSmokeBundleIdentifier = (runID) => {
   return `ai.defai.ax-code-app.smoke.${String(runID).replaceAll("-", "")}`
 }
 
+export const findMissingStartupEvents = (requiredEvents, events) => {
+  const names = new Set(Array.isArray(events) ? events.map((event) => event?.name).filter(Boolean) : [])
+  return requiredEvents.filter((required) => !names.has(required))
+}
+
 const pathExists = async (candidate) => {
   try {
     await fs.access(candidate, fsConstants.F_OK)
@@ -303,6 +308,7 @@ const main = async () => {
   const executable = await findMacExecutable(smokeAppPath)
   const stdout = []
   const stderr = []
+  let latestStartupDiagnostics = null
 
   const child = spawn(executable, buildSmokeAppArgs({ userDataDir }), {
     env: {
@@ -361,8 +367,11 @@ const main = async () => {
     const eventNames = await waitFor(
       async () => {
         const diagnostics = await fetchJson(`http://127.0.0.1:${serverPort}/api/desktop/diagnostics/startup`)
+        latestStartupDiagnostics = diagnostics.body
         const names = Array.isArray(diagnostics.body?.events) ? diagnostics.body.events.map((event) => event?.name) : []
-        return requiredStartupEvents.every((required) => names.includes(required)) ? names : null
+        const missing = findMissingStartupEvents(requiredStartupEvents, diagnostics.body?.events)
+        if (missing.length > 0) throw new Error(`missing events: ${missing.join(", ")}`)
+        return names
       },
       args.timeoutMs,
       "startup diagnostics",
@@ -409,6 +418,12 @@ const main = async () => {
       await fs.mkdir(args.artifacts, { recursive: true })
       await fs.writeFile(path.join(args.artifacts, "stdout.log"), stdout.join(""))
       await fs.writeFile(path.join(args.artifacts, "stderr.log"), stderr.join(""))
+      if (latestStartupDiagnostics) {
+        await fs.writeFile(
+          path.join(args.artifacts, "startup-diagnostics.json"),
+          `${JSON.stringify(latestStartupDiagnostics, null, 2)}\n`,
+        )
+      }
       await copyLogIfPresent(args.artifacts)
     }
     throw error
