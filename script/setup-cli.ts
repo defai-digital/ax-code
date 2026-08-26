@@ -1,11 +1,15 @@
 /**
- * Sets up the `ax-code` command globally so it can be run from anywhere.
+ * Sets up a global launcher for this checkout so it can be run from anywhere.
  *
  * Usage: pnpm run setup:cli
  *
  * By default this installs a launcher that targets the locally built bundled
  * CLI, matching the Homebrew/curl runtime. Pass `--source` to install a
  * contributor-only launcher that forwards to Node from this checkout.
+ *
+ * If Homebrew already provides `ax-code`, the checkout is installed as
+ * `ax-code-src` instead so `brew upgrade ax-code` keeps updating the `ax-code`
+ * command. Pass `--override-homebrew` to take over `ax-code` anyway.
  */
 
 import childProcess from "child_process"
@@ -17,6 +21,8 @@ import { sourceLauncherScript as generateSourceLauncherScript } from "../package
 import { whichAllSync, whichSync } from "./which"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
+export const PACKAGED_LAUNCHER_BASENAME = "ax-code"
+export const CHECKOUT_LAUNCHER_BASENAME = "ax-code-src"
 
 type WhichFn = (command: string) => string | null | undefined
 type WhichAllFn = (command: string) => string[]
@@ -57,6 +63,46 @@ export function isHomebrewManagedBinary(
   } catch {
     return false
   }
+}
+
+export function isCheckoutLauncherScript(content: string): boolean {
+  if (!content.includes("AX_CODE_ORIGINAL_CWD")) return false
+  return (
+    content.includes("/dist/") ||
+    content.includes("\\dist\\") ||
+    content.includes("AX_CODE_SOURCE_CWD") ||
+    content.includes("AX_CODE_SOURCE_ENTRY")
+  )
+}
+
+export function resolveLauncherBasename(input: { overrideHomebrew?: boolean; homebrewOnPath?: boolean }): string {
+  if (input.overrideHomebrew) return PACKAGED_LAUNCHER_BASENAME
+  if (input.homebrewOnPath) return CHECKOUT_LAUNCHER_BASENAME
+  return PACKAGED_LAUNCHER_BASENAME
+}
+
+export function launcherPaths(binDir: string, basename: string, windows: boolean): string[] {
+  if (windows) return [path.join(binDir, `${basename}.cmd`), path.join(binDir, basename)]
+  return [path.join(binDir, basename)]
+}
+
+export function removeShadowingCheckoutLauncher(
+  launcherPath: string,
+  readFileSync: (p: string) => string,
+  unlinkSync: UnlinkFn,
+  log: (msg: string) => void,
+): boolean {
+  let content: string
+  try {
+    content = readFileSync(launcherPath)
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false
+    throw err
+  }
+  if (!isCheckoutLauncherScript(content)) return false
+  unlinkSync(launcherPath)
+  log(`Removed PATH-shadowing checkout launcher: ${launcherPath}`)
+  return true
 }
 
 export function getInstallBinDir(
@@ -161,10 +207,12 @@ export function removeExistingLauncherSymlink(
 export function setupCliPathNotes(input: {
   binDir: string
   launcherPath: string
+  launcherName?: string
   onPath: string | null | undefined
   allOnPath: string[]
   isHomebrew: (binaryPath: string) => boolean
 }): string[] {
+  if ((input.launcherName ?? PACKAGED_LAUNCHER_BASENAME) !== PACKAGED_LAUNCHER_BASENAME) return []
   const lines: string[] = []
   if (input.onPath && path.dirname(input.onPath) !== input.binDir) {
     lines.push(`Note: "ax-code" currently resolves to ${input.onPath}, which shadows this install.`)
@@ -299,9 +347,22 @@ export function setupCli(input: SetupCliOptions = {}) {
   const realpathSync = input.realpathSync ?? ((p: string) => fs.realpathSync(p))
   const windows = platform === "win32"
   const binDir = getInstallBinDir(env, which, platform, realpathSync)
+  const allOnPath = whichAll("ax-code")
+  const homebrewOnPath = allOnPath.some((p) => isHomebrewManagedBinary(p, realpathSync))
+  const overrideHomebrew = args.includes("--override-homebrew")
+  const launcherName = resolveLauncherBasename({ overrideHomebrew, homebrewOnPath })
 
   if (!exists(binDir)) {
     mkdirSync(binDir, { recursive: true })
+  }
+
+  if (launcherName === CHECKOUT_LAUNCHER_BASENAME) {
+    const removed = launcherPaths(binDir, PACKAGED_LAUNCHER_BASENAME, windows).filter((p) =>
+      removeShadowingCheckoutLauncher(p, readFileSync, unlinkSync, log),
+    )
+    if (removed.length) {
+      log("Homebrew's `ax-code` will stay first on PATH. This checkout is installed as `ax-code-src`.")
+    }
   }
 
   const sourceMode = args.includes("--source")
@@ -343,15 +404,15 @@ export function setupCli(input: SetupCliOptions = {}) {
       }
 
   if (windows) {
-    const cmdPath = path.join(binDir, "ax-code.cmd")
+    const cmdPath = path.join(binDir, `${launcherName}.cmd`)
     writeFileSync(cmdPath, launcher.windows)
     log(`Created: ${cmdPath}`)
 
-    const bashPath = path.join(binDir, "ax-code")
+    const bashPath = path.join(binDir, launcherName)
     writeFileSync(bashPath, launcher.unix, { mode: 0o755 })
     log(`Created: ${bashPath}`)
   } else {
-    const shPath = path.join(binDir, "ax-code")
+    const shPath = path.join(binDir, launcherName)
     try {
       removeExistingLauncherSymlink(shPath, lstatSync, unlinkSync)
       writeFileSync(shPath, launcher.unix, { mode: 0o755 })
@@ -369,13 +430,15 @@ export function setupCli(input: SetupCliOptions = {}) {
 
   // PATH can hide this launcher behind Homebrew, or hide Homebrew behind this
   // launcher. Either way the user types `ax-code` and does not get the binary
-  // they just installed / upgraded.
-  const launcherPath = windows ? path.join(binDir, "ax-code.cmd") : path.join(binDir, "ax-code")
+  // they just installed / upgraded. Installing as `ax-code-src` when Homebrew
+  // is present avoids that trap.
+  const launcherPath = windows ? path.join(binDir, `${launcherName}.cmd`) : path.join(binDir, launcherName)
   const pathNotes = setupCliPathNotes({
     binDir,
     launcherPath,
+    launcherName,
     onPath: which("ax-code"),
-    allOnPath: whichAll("ax-code"),
+    allOnPath,
     isHomebrew: (binaryPath) => isHomebrewManagedBinary(binaryPath, realpathSync),
   })
   if (pathNotes.length) {
@@ -384,12 +447,19 @@ export function setupCli(input: SetupCliOptions = {}) {
   }
 
   log("")
-  log(`ax-code CLI installed globally (${launcher.mode} launcher)!`)
+  log(`ax-code CLI installed globally (${launcher.mode} launcher as ${launcherName})!`)
   log("")
   log("Try it:")
-  log("  ax-code --help")
-  log("  ax-code providers list")
-  log("  ax-code mcp add")
+  log(`  ${launcherName} --help`)
+  log(`  ${launcherName} providers list`)
+  log(`  ${launcherName} mcp add`)
+  if (launcherName === CHECKOUT_LAUNCHER_BASENAME) {
+    log("")
+    log("Homebrew already provides `ax-code`, so this checkout is `ax-code-src`.")
+    log("`brew upgrade ax-code` will keep updating the `ax-code` command.")
+    log("Take over `ax-code` from Homebrew with:")
+    log("  pnpm run setup:cli -- --override-homebrew")
+  }
   if (!bundledMode) {
     log("")
     log("Need the packaged-runtime launcher instead?")
@@ -403,7 +473,7 @@ export function setupCli(input: SetupCliOptions = {}) {
     log("  pnpm run setup:cli -- --source")
   }
   log("")
-  log(`If "ax-code" is not found, ensure ${binDir} is in your PATH.`)
+  log(`If "${launcherName}" is not found, ensure ${binDir} is in your PATH.`)
 }
 
 if (import.meta.main) {

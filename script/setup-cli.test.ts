@@ -6,10 +6,15 @@ import {
   bundledBinaryPath,
   bundledBuildMarkerPath,
   bundledLauncherScript,
+  CHECKOUT_LAUNCHER_BASENAME,
   getInstallBinDir,
+  isCheckoutLauncherScript,
   isHomebrewManagedBinary,
+  PACKAGED_LAUNCHER_BASENAME,
   preferredBundledTarget,
   removeExistingLauncherSymlink,
+  removeShadowingCheckoutLauncher,
+  resolveLauncherBasename,
   setupCli,
   setupCliPathNotes,
   sourceLauncherScript,
@@ -323,6 +328,50 @@ describe("setup-cli helpers", () => {
     expect(markerWrite?.[1]).toContain("/repo")
   })
 
+  test("identifies checkout launcher scripts written by setup:cli", () => {
+    expect(isCheckoutLauncherScript('#!/bin/sh\nAX_CODE_ORIGINAL_CWD="$(pwd)" exec "/repo/dist/ax-code" "$@"\n')).toBe(
+      true,
+    )
+    expect(
+      isCheckoutLauncherScript(
+        '#!/bin/sh\nexport AX_CODE_ORIGINAL_CWD="$(pwd)"\nAX_CODE_SOURCE_CWD="/repo/packages/ax-code"\n',
+      ),
+    ).toBe(true)
+    expect(isCheckoutLauncherScript('#!/bin/sh\nexec /opt/homebrew/bin/ax-code "$@"\n')).toBe(false)
+  })
+
+  test("installs the checkout as ax-code-src when Homebrew is already on PATH", () => {
+    expect(resolveLauncherBasename({ homebrewOnPath: true })).toBe(CHECKOUT_LAUNCHER_BASENAME)
+    expect(resolveLauncherBasename({ homebrewOnPath: true, overrideHomebrew: true })).toBe(PACKAGED_LAUNCHER_BASENAME)
+    expect(resolveLauncherBasename({})).toBe(PACKAGED_LAUNCHER_BASENAME)
+  })
+
+  test("removes only a checkout launcher that would shadow Homebrew", () => {
+    const unlinks: string[] = []
+    const logs: string[] = []
+    expect(
+      removeShadowingCheckoutLauncher(
+        "/home/user/.local/bin/ax-code",
+        () => '#!/bin/sh\nAX_CODE_ORIGINAL_CWD="$(pwd)" exec "/repo/dist/ax-code" "$@"\n',
+        (target) => unlinks.push(target),
+        (msg) => logs.push(msg),
+      ),
+    ).toBe(true)
+    expect(unlinks).toEqual(["/home/user/.local/bin/ax-code"])
+    expect(logs.some((line) => line.includes("Removed PATH-shadowing checkout launcher"))).toBe(true)
+
+    unlinks.length = 0
+    expect(
+      removeShadowingCheckoutLauncher(
+        "/home/user/.local/bin/ax-code",
+        () => '#!/bin/sh\nexec /opt/homebrew/bin/ax-code "$@"\n',
+        (target) => unlinks.push(target),
+        () => undefined,
+      ),
+    ).toBe(false)
+    expect(unlinks).toEqual([])
+  })
+
   test("detects Homebrew-managed binaries via their Cellar realpath", () => {
     const realpath = (p: string) =>
       p === "/opt/homebrew/bin/ax-code" ? "/opt/homebrew/Cellar/ax-code/7.6.1/bin/ax-code" : p
@@ -345,7 +394,7 @@ describe("setup-cli helpers", () => {
     )
   })
 
-  test("setupCli skips the Homebrew directory and warns about the shadowing install", () => {
+  test("setupCli skips the Homebrew directory and installs ax-code-src instead of shadowing brew", () => {
     const writes: Array<[string, string]> = []
     const logs: string[] = []
     const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
@@ -367,13 +416,14 @@ describe("setup-cli helpers", () => {
       log: (msg) => logs.push(msg),
     })
 
-    expect(writes.map(([target]) => target)).toEqual(["/pnpm/home/ax-code"])
-    expect(logs.some((line) => line.includes("brew unlink ax-code"))).toBe(true)
+    expect(writes.map(([target]) => target)).toEqual(["/pnpm/home/ax-code-src"])
+    expect(logs.some((line) => line.includes("brew unlink ax-code"))).toBe(false)
+    expect(logs.some((line) => line.includes("this checkout is `ax-code-src`"))).toBe(true)
   })
 
   test("setupCli replaces a fallback launcher symlink instead of following it into Homebrew", () => {
     const operations: string[] = []
-    const launcherPath = "/pnpm/home/ax-code"
+    const launcherPath = "/pnpm/home/ax-code-src"
     const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
     const marker = bundledBuildMarkerPath(binary)
     setupCli({
@@ -398,19 +448,33 @@ describe("setup-cli helpers", () => {
     expect(operations).toEqual([`lstat:${launcherPath}`, `unlink:${launcherPath}`, `write:${launcherPath}`])
   })
 
-  test("setupCli warns when the new launcher will shadow Homebrew on PATH", () => {
+  test("setupCli does not shadow Homebrew on PATH unless --override-homebrew is set", () => {
+    const writes: Array<[string, string]> = []
+    const unlinks: string[] = []
     const logs: string[] = []
     const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
     const marker = bundledBuildMarkerPath(binary)
+    const checkoutLauncher = bundledLauncherScript({
+      binaryPath: binary,
+      windows: false,
+    })
     setupCli({
       root: "/repo",
       env: { PNPM_HOME: "/pnpm/home" },
       platform: "darwin",
       arch: "arm64",
-      exists: (target) => target === "/pnpm/home" || target === binary || target === marker,
+      exists: (target) =>
+        target === "/pnpm/home" || target === binary || target === marker || target === "/pnpm/home/ax-code",
       mkdirSync: () => undefined,
-      readFileSync: (p) => (p === marker ? "/repo\n" : ""),
-      writeFileSync: () => undefined,
+      readFileSync: (p) => {
+        if (p === marker) return "/repo\n"
+        if (p === "/pnpm/home/ax-code") return checkoutLauncher
+        return ""
+      },
+      writeFileSync: (target, content) => {
+        writes.push([target, String(content)])
+      },
+      unlinkSync: (target) => unlinks.push(target),
       spawnSync: () => ({ status: 0, stdout: null, stderr: null, pid: 1, output: null, signal: null }) as any,
       which: () => "/pnpm/home/ax-code",
       whichAll: () => ["/pnpm/home/ax-code", "/opt/homebrew/bin/ax-code"],
@@ -418,9 +482,53 @@ describe("setup-cli helpers", () => {
       log: (msg) => logs.push(msg),
     })
 
+    expect(writes.map(([target]) => target)).toEqual(["/pnpm/home/ax-code-src"])
+    expect(unlinks).toEqual(["/pnpm/home/ax-code"])
+    expect(logs.some((line) => line.includes("Removed PATH-shadowing checkout launcher"))).toBe(true)
+    expect(logs.some((line) => line.includes("earlier on PATH than Homebrew"))).toBe(false)
+  })
+
+  test("setupCli --override-homebrew keeps the checkout as ax-code and warns about shadowing Homebrew", () => {
+    const writes: Array<[string, string]> = []
+    const logs: string[] = []
+    const binary = bundledBinaryPath({ root: "/repo", platform: "darwin", arch: "arm64" })
+    const marker = bundledBuildMarkerPath(binary)
+    setupCli({
+      args: ["--override-homebrew"],
+      root: "/repo",
+      env: { PNPM_HOME: "/pnpm/home" },
+      platform: "darwin",
+      arch: "arm64",
+      exists: (target) => target === "/pnpm/home" || target === binary || target === marker,
+      mkdirSync: () => undefined,
+      readFileSync: (p) => (p === marker ? "/repo\n" : ""),
+      writeFileSync: (target, content) => {
+        writes.push([target, String(content)])
+      },
+      spawnSync: () => ({ status: 0, stdout: null, stderr: null, pid: 1, output: null, signal: null }) as any,
+      which: () => "/pnpm/home/ax-code",
+      whichAll: () => ["/pnpm/home/ax-code", "/opt/homebrew/bin/ax-code"],
+      realpathSync: (p) => (p === "/opt/homebrew/bin/ax-code" ? "/opt/homebrew/Cellar/ax-code/7.7.1/bin/ax-code" : p),
+      log: (msg) => logs.push(msg),
+    })
+
+    expect(writes.map(([target]) => target)).toEqual(["/pnpm/home/ax-code"])
     expect(logs.some((line) => line.includes("earlier on PATH than Homebrew"))).toBe(true)
     expect(logs.some((line) => line.includes("brew upgrade ax-code"))).toBe(true)
     expect(logs.some((line) => line.includes("mv /pnpm/home/ax-code /pnpm/home/ax-code.bak"))).toBe(true)
+  })
+
+  test("setupCliPathNotes is silent when the checkout is installed as ax-code-src", () => {
+    expect(
+      setupCliPathNotes({
+        binDir: "/pnpm/home",
+        launcherPath: "/pnpm/home/ax-code-src",
+        launcherName: CHECKOUT_LAUNCHER_BASENAME,
+        onPath: "/opt/homebrew/bin/ax-code",
+        allOnPath: ["/opt/homebrew/bin/ax-code", "/pnpm/home/ax-code-src"],
+        isHomebrew: (p) => p.includes("homebrew"),
+      }),
+    ).toEqual([])
   })
 
   test("setupCliPathNotes prefers the Homebrew-is-first warning over the inverse", () => {

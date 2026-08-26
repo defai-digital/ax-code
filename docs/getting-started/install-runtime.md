@@ -178,7 +178,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
 ```
 
-`brew upgrade` only updates the Homebrew keg. If `which ax-code` is `~/.local/bin/ax-code`, the shell keeps running that launcher until it is moved aside. `which -a ax-code` lists every match in PATH order.
+`brew upgrade` only updates the Homebrew keg. An older `setup:cli` wrapper at `~/.local/bin/ax-code` is typically earlier on PATH, so the shell keeps reporting that checkout until the wrapper is moved aside. Current `setup:cli` installs the checkout as `ax-code-src` when Homebrew is present, which prevents this. For a leftover wrapper: `mv ~/.local/bin/ax-code ~/.local/bin/ax-code.bak && hash -r`. `which -a ax-code` lists every match in PATH order.
 
 On Windows this updates the CLI. To remove the CLI install and its user PATH entry:
 
@@ -193,21 +193,21 @@ Desktop updates through the app auto-updater or by running the latest Windows De
 
 `pnpm run setup:cli` is intentionally compiled-path by default. It builds or reuses the local bundled binary under `packages/ax-code/dist/...` and installs a global launcher that points at that binary. This keeps local packaged-runtime checks close to what Homebrew and curl-installer users run.
 
-That launcher usually lands in `~/.local/bin` or `PNPM_HOME`, which is typically earlier on PATH than Homebrew. After `setup:cli`, `ax-code --version` reports the checkout binary even if `brew upgrade ax-code` just succeeded. `ax-code doctor` warns about this as `PATH launchers`. To use the Homebrew install again, move the checkout launcher aside (`mv ~/.local/bin/ax-code ~/.local/bin/ax-code.bak && hash -r`).
+That launcher usually lands in `~/.local/bin` or `PNPM_HOME`, which is typically earlier on PATH than Homebrew. If Homebrew already provides `ax-code`, `setup:cli` installs the checkout as `ax-code-src` and removes a previously written `ax-code` wrapper so `brew upgrade ax-code` keeps updating the `ax-code` command. Use `pnpm run setup:cli -- --override-homebrew` only when you intentionally want the checkout to take over `ax-code`. `ax-code doctor` still warns about that override as `PATH launchers`.
 
 After source changes that should affect the packaged runtime, refresh the bundled binary before testing the global launcher:
 
 ```bash
 pnpm --dir packages/ax-code run build -- --single
 pnpm run setup:cli -- --rebuild
-ax-code doctor
+ax-code-src --version   # or `ax-code` if Homebrew is not installed
 ```
 
-Use the source launcher only when you intentionally want the global `ax-code` command to execute this checkout through Node from source files:
+Use the source launcher only when you intentionally want the checkout command to execute this checkout through Node from source files:
 
 ```bash
 pnpm run setup:cli -- --source
-ax-code doctor
+ax-code-src doctor      # or `ax-code doctor` if Homebrew is not installed
 ```
 
 The source launcher should report `Runtime: Node vX.Y.Z (source)`.
