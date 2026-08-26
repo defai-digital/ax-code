@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.6] - 2026-08-26
+
+### Added
+
+- Add managed custom API providers.
+
+### Changed
+
+- Avoid shadowing Homebrew CLI installs.
+- Strangle Desktop file reads onto core and serve packaged renderer over app://.
+
 ## [7.8.5] - 2026-08-25
 
 ### Changed
