@@ -115,6 +115,19 @@ describe("request security origin checks", () => {
     ).resolves.toBe(true)
   })
 
+  it("allows the packaged app://ax-code renderer origin", async () => {
+    const runtime = createRuntime()
+
+    await expect(
+      runtime.isRequestOriginAllowed(
+        createMockRequest({
+          host: "127.0.0.1:3902",
+          origin: "app://ax-code",
+        }),
+      ),
+    ).resolves.toBe(true)
+  })
+
   it("allows loopback origins on a different port than the Host (dev proxy)", async () => {
     const runtime = createRuntime()
 

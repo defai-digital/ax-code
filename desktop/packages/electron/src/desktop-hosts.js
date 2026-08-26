@@ -31,6 +31,7 @@ const isLoopbackDesktopHostname = (hostname) => {
 const isLocalDesktopSenderUrl = (raw, { serverPort = 0, devRendererUrl = "" } = {}) => {
   try {
     const url = new URL(String(raw || ""))
+    if (url.protocol === "app:" && url.hostname === "ax-code") return true
     if (url.protocol !== "http:" && url.protocol !== "https:") return false
     if (!isLoopbackDesktopHostname(url.hostname)) return false
 

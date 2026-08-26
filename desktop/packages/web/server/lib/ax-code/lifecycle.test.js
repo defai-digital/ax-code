@@ -48,6 +48,39 @@ afterEach(() => {
   }
 })
 
+const createLiveSdkHandle = ({
+  url = "http://127.0.0.1:45678",
+  headers = { Authorization: "Basic test" },
+  diagnostics = {},
+  exit = { code: 1, signal: null },
+} = {}) => {
+  const live = { exitCode: null, signalCode: null }
+  let resolveClosed = () => {}
+  const closed = new Promise((resolve) => {
+    resolveClosed = resolve
+  })
+  return {
+    handle: {
+      url,
+      headers,
+      close: vi.fn(async () => undefined),
+      closed,
+      diagnostics,
+      get exitCode() {
+        return live.exitCode
+      },
+      get signalCode() {
+        return live.signalCode
+      },
+    },
+    resolveClosed: () => {
+      live.exitCode = exit.code
+      live.signalCode = exit.signal
+      resolveClosed()
+    },
+  }
+}
+
 const createMockChild = () => {
   const child = new EventEmitter()
   child.stdout = new EventEmitter()
@@ -320,18 +353,13 @@ describe("ax-code lifecycle", () => {
 
   it("SDK handle has null exitCode/signalCode so isManagedAxCodeProcessAlive does not treat it as exited", async () => {
     delete process.env.AX_CODE_BINARY
-    startHeadlessBackendMock.mockResolvedValueOnce({
-      url: "http://127.0.0.1:45678",
-      headers: { Authorization: "Basic test" },
-      close: vi.fn(async () => undefined),
-    })
+    const { handle } = createLiveSdkHandle()
+    startHeadlessBackendMock.mockResolvedValueOnce(handle)
 
     const runtime = createRuntime()
     const server = await runtime.startAxCode()
 
-    // exitCode and signalCode must be null (not undefined) so hasChildProcessExited()
-    // returns false and health check failures go through the consecutive-failures
-    // counter instead of triggering an immediate restart.
+    expect(server).toBe(handle)
     expect(server.exitCode).toBe(null)
     expect(server.signalCode).toBe(null)
 
@@ -356,7 +384,6 @@ describe("ax-code lifecycle", () => {
 
   it("marks the SDK handle as exited once its closed promise resolves", async () => {
     delete process.env.AX_CODE_BINARY
-    let resolveClosed
     const diagnostics = {
       launchedAt: "2026-06-10T00:00:00.000Z",
       binary: "ax-code",
@@ -366,28 +393,17 @@ describe("ax-code lifecycle", () => {
       readyUrl: "http://127.0.0.1:45678",
       envKeys: ["PATH"],
     }
-    startHeadlessBackendMock.mockResolvedValueOnce({
-      url: "http://127.0.0.1:45678",
-      headers: { Authorization: "Basic test" },
-      close: vi.fn(async () => undefined),
-      closed: new Promise((resolve) => {
-        resolveClosed = resolve
-      }),
-      diagnostics,
-    })
+    const { handle, resolveClosed } = createLiveSdkHandle({ diagnostics, exit: { code: 1, signal: null } })
+    startHeadlessBackendMock.mockResolvedValueOnce(handle)
 
     const runtime = createRuntime()
     const server = await runtime.startAxCode()
 
+    expect(server).toBe(handle)
     expect(server.exitCode).toBe(null)
-    expect(server.signalCode).toBe(null)
-
-    diagnostics.exit = { code: 1, signal: null, beforeReady: false }
     resolveClosed()
     await new Promise((resolve) => setImmediate(resolve))
-
     expect(server.exitCode).toBe(1)
-    expect(server.signalCode).toBe(null)
   })
 
   it("surfaces SDK launch diagnostics in lastAxCodeLaunchDiagnostics", async () => {

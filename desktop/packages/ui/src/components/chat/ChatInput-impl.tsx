@@ -48,6 +48,7 @@ import { Button } from "@/components/ui/button"
 import { isDesktopShell } from "@/lib/desktop"
 import { listenDesktopNativeDragDrop, readDesktopFile } from "@/lib/desktopNative"
 import { isIMECompositionEvent } from "@/lib/ime"
+import { parseChatSlashCommand } from "./chatInputSlashCommand"
 import { StopIcon } from "@/components/icons/StopIcon"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { getCycledPrimaryAgentName } from "@/lib/modelControlUtils"
@@ -1607,10 +1608,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
       textareaRef.current?.blur()
     }
 
-    // Handle local slash commands only in normal mode
-    const normalizedCommand = primaryText.trimStart()
-    if (inputMode === "normal" && normalizedCommand.startsWith("/")) {
-      const commandName = normalizedCommand.slice(1).trim().split(/\s+/)[0]?.toLowerCase()
+    const slashCommand = parseChatSlashCommand(primaryText, inputMode)
+    if (slashCommand) {
+      const commandName = slashCommand.name
 
       if (commandName === "undo" && currentSessionId) {
         await useSessionUIStore.getState().handleSlashUndo(currentSessionId)
@@ -1642,7 +1642,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           await sessionActions.waitForConnectionOrThrow()
           // Everything after `/summary ` is an optional topic hint
           // the user wants the summary focused on.
-          const topic = normalizedCommand.replace(/^\/summary\b/i, "").trim()
+          const topic = slashCommand.rest
           const topicLine = topic ? ` focused on: ${topic}` : ""
           const topicBlock = topic
             ? `The user asked you to focus this summary on: ${topic}. Prioritize that topic; mention unrelated threads only in passing.`

@@ -231,7 +231,6 @@ export const registerProjectIconRoutes = (app, dependencies) => {
   }
 
   const fsSearchRuntime = createFsSearchRuntime({
-    fsPromises,
     path,
     spawn,
     resolveGitBinaryForSpawn,

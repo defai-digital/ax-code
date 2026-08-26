@@ -353,5 +353,7 @@ describe("desktop hosts config", () => {
     expect(isLocalDesktopSenderUrl("http://[::]:3910/settings", { serverPort: 3910 })).toBe(false)
     expect(isLocalDesktopSenderUrl("http://[::1]:3911/settings", { serverPort: 3910 })).toBe(false)
     expect(isLocalDesktopSenderUrl("https://remote.example.com/settings", { serverPort: 3910 })).toBe(false)
+    expect(isLocalDesktopSenderUrl("app://ax-code/", { serverPort: 3910 })).toBe(true)
+    expect(isLocalDesktopSenderUrl("app://evil/", { serverPort: 3910 })).toBe(false)
   })
 })

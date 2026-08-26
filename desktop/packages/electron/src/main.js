@@ -15,6 +15,7 @@ const {
   net: electronNet,
   powerMonitor,
   webContents,
+  protocol,
 } = require("electron")
 const { autoUpdater } = require("electron-updater")
 const path = require("path")
@@ -52,7 +53,18 @@ const {
   normalizeHostUrl,
   removeDisabledRemoteAccessSettingsFromRoot,
 } = require("./desktop-hosts")
-const { isTrustedRendererNavigationUrl, normalizeDevRendererUrl } = require("./renderer-navigation-policy")
+const { normalizeDevRendererUrl } = require("./renderer-navigation-policy")
+const {
+  PACKAGED_RENDERER_ORIGIN,
+  PACKAGED_RENDERER_PRIVILEGED_SCHEMES,
+  PACKAGED_RENDERER_SCHEME,
+  buildPackagedRendererCsp,
+  createPackagedRendererProtocolHandler,
+  isPackagedRendererUrl,
+  isTrustedRendererNavigationUrl,
+} = require("./desktop-renderer-protocol")
+
+protocol.registerSchemesAsPrivileged(PACKAGED_RENDERER_PRIVILEGED_SCHEMES)
 const { normalizeSafeExternalUrl } = require("./external-url")
 const { buildDesktopOpenDialogOptions, resolveDesktopDialogOwnerWindow } = require("./desktop-dialog")
 const { createTrayController } = require("./tray.mjs")
@@ -452,6 +464,9 @@ function safeOpenExternal(url) {
 
 async function createWindow() {
   rendererReadyForOpenProject = false
+  if (serverPort > 0) {
+    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = `http://127.0.0.1:${serverPort}`
+  }
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -586,9 +601,11 @@ async function createWindow() {
     mainWindow = null
   })
 
-  const rendererUrl = getDevRendererUrl() || `http://localhost:${serverPort}`
+  const rendererUrl =
+    getDevRendererUrl() || (app.isPackaged ? `${PACKAGED_RENDERER_ORIGIN}/` : `http://127.0.0.1:${serverPort}`)
   recordStartupEvent("renderer.load-url.start", {
     devRenderer: Boolean(getDevRendererUrl()),
+    packagedProtocol: app.isPackaged && !getDevRendererUrl(),
   })
   // Rejects on timeout into the whenReady startup-failure path, so a wedged
   // server cannot leave the app looking dead with a hidden window.
@@ -1695,6 +1712,9 @@ const applyMacVibrancy = (browserWindow) => {
 // (or, when a non-local default host is configured, that host's URL). We do not
 // inject runtime-config the way upstream's packaged-UI protocol did.
 const createAdditionalWindow = async (url) => {
+  if (serverPort > 0) {
+    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = `http://127.0.0.1:${serverPort}`
+  }
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -2537,6 +2557,9 @@ const senderWindow = (event) => (event ? BrowserWindow.fromWebContents(event.sen
 // entry; the renderer (ElectronMiniChatApp) reads mode/sessionId/directory/
 // projectId from the URL query string.
 const createMiniChatWindow = async ({ mode, sessionId, directory, projectId }) => {
+  if (serverPort > 0) {
+    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = `http://127.0.0.1:${serverPort}`
+  }
   const win = new BrowserWindow({
     width: 420,
     height: 640,
@@ -2725,6 +2748,25 @@ app.whenReady().then(async () => {
   }
 
   recordStartupEvent("electron.app.ready")
+  if (app.isPackaged) {
+    protocol.handle(
+      PACKAGED_RENDERER_SCHEME,
+      createPackagedRendererProtocolHandler({
+        webDistPath: getWebDistPath(),
+        readFile: (filePath) => fsp.readFile(filePath),
+      }),
+    )
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      if (!isPackagedRendererUrl(details.url)) {
+        callback({})
+        return
+      }
+      const responseHeaders = { ...(details.responseHeaders || {}) }
+      responseHeaders["Content-Security-Policy"] = [buildPackagedRendererCsp()]
+      callback({ responseHeaders })
+    })
+  }
+
   nativeTheme.themeSource = "system"
   setupApplicationMenu()
   setupTray()

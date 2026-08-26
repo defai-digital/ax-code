@@ -81285,7 +81285,7 @@
         "name": "Qwen3.5 397B A17B",
         "description": "Large open Qwen multimodal MoE for visual agents and long technical tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -81299,7 +81299,8 @@
         "last_updated": "2026-02-15",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -81307,8 +81308,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3.5-flash": {
@@ -81843,7 +81844,7 @@
         "name": "Qwen3.5 27B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -81857,7 +81858,8 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -81865,8 +81867,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3.5-122b-a10b": {
@@ -81874,7 +81876,7 @@
         "name": "Qwen3.5 122B A10B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -81888,7 +81890,8 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -81896,8 +81899,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -173569,8 +173572,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 128000,
-          "output": 115200
+          "context": 32000,
+          "output": 28800
         }
       },
       "qwen/qwen3.5-plus-20260420": {
@@ -176277,8 +176280,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 16384
+          "context": 128000,
+          "output": 115200
         }
       },
       "meta-llama/llama-guard-4-12b": {
@@ -176437,8 +176440,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 327680,
-          "output": 16384
+          "context": 131072,
+          "output": 8192
         }
       },
       "mistralai/ministral-8b-2512": {

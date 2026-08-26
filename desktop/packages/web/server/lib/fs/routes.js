@@ -1,4 +1,5 @@
 import { createRealpathCache } from "../path-realpath-cache.js"
+import { mapCoreFileNodesToDirectoryList } from "./core-file-adapter.js"
 
 const EXEC_JOB_TTL_MS = 30 * 60 * 1000
 
@@ -437,6 +438,7 @@ export const registerFsRoutes = (app, dependencies) => {
     buildAugmentedPath,
     resolveGitBinaryForSpawn,
     openchamberUserConfigRoot,
+    coreFileAdapter,
   } = dependencies
   const realpathCache = createRealpathCache({
     realpath: fsPromises.realpath.bind(fsPromises),
@@ -931,17 +933,10 @@ export const registerFsRoutes = (app, dependencies) => {
         return res.status(403).json({ error: "Access to file denied" })
       }
 
-      const handle = await fsPromises.open(canonicalPath, "r")
-      let content
-      try {
-        const stats = await handle.stat()
-        if (!stats.isFile()) {
-          return res.status(400).json({ error: "Specified path is not a file" })
-        }
-        content = await handle.readFile("utf8")
-      } finally {
-        await handle.close()
+      if (!coreFileAdapter || typeof coreFileAdapter.read !== "function") {
+        return res.status(503).json({ error: "AX Code core file API is not ready" })
       }
+      const content = await coreFileAdapter.read({ path: canonicalPath, directory: canonicalBase })
       return res.type("text/plain").send(content)
     } catch (error) {
       const err = error
@@ -1009,19 +1004,12 @@ export const registerFsRoutes = (app, dependencies) => {
         res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`)
       }
 
-      const handle = await fsPromises.open(canonicalPath, "r")
-      let content
-      try {
-        const stats = await handle.stat()
-        if (!stats.isFile()) {
-          return res.status(400).json({ error: "Specified path is not a file" })
-        }
-        content = await handle.readFile()
-      } finally {
-        await handle.close()
+      if (!coreFileAdapter || typeof coreFileAdapter.raw !== "function") {
+        return res.status(503).json({ error: "AX Code core file API is not ready" })
       }
+      const raw = await coreFileAdapter.raw({ path: canonicalPath, directory: canonicalBase })
       res.setHeader("Cache-Control", "no-store")
-      return res.type(mimeType).send(content)
+      return res.type(raw.mimeType || mimeType).send(raw.buffer)
     } catch (error) {
       const err = error
       if (err && typeof err === "object" && err.code === "ENOENT") {
@@ -1410,78 +1398,18 @@ export const registerFsRoutes = (app, dependencies) => {
       }
       resolvedPath = canonical.path
 
-      const stats = await fsPromises.stat(resolvedPath)
-      if (!stats.isDirectory()) {
-        return res.status(400).json({ error: "Specified path is not a directory" })
+      if (!coreFileAdapter || typeof coreFileAdapter.list !== "function") {
+        return res.status(503).json({ error: "AX Code core file API is not ready" })
       }
-
-      const dirents = await fsPromises.readdir(resolvedPath, { withFileTypes: true })
-      let ignoredPaths = new Set()
-      if (respectGitignore) {
-        try {
-          const pathsToCheck = dirents.map((d) => d.name)
-          if (pathsToCheck.length > 0) {
-            try {
-              const result = await new Promise((resolve) => {
-                const child = spawn(resolveGitBinaryForSpawn(), ["check-ignore", "--", ...pathsToCheck], {
-                  cwd: resolvedPath,
-                  windowsHide: true,
-                  stdio: ["ignore", "pipe", "pipe"],
-                })
-
-                let stdout = ""
-                child.stdout.on("data", (data) => {
-                  stdout += data.toString()
-                })
-                child.on("close", () => resolve(stdout))
-                child.on("error", () => resolve(""))
-              })
-
-              result
-                .split("\n")
-                .filter(Boolean)
-                .forEach((name) => {
-                  const fullPath = path.join(resolvedPath, name.trim())
-                  ignoredPaths.add(fullPath)
-                })
-            } catch {}
-          }
-        } catch {}
-      }
-
-      const entries = await Promise.all(
-        dirents.map(async (dirent) => {
-          const entryPath = path.join(resolvedPath, dirent.name)
-          if (respectGitignore && ignoredPaths.has(entryPath)) {
-            return null
-          }
-
-          let isDirectory = dirent.isDirectory()
-          const isSymbolicLink = dirent.isSymbolicLink()
-
-          if (!isDirectory && isSymbolicLink) {
-            try {
-              const linkStats = await fsPromises.stat(entryPath)
-              isDirectory = linkStats.isDirectory()
-            } catch {
-              isDirectory = false
-            }
-          }
-
-          return {
-            name: dirent.name,
-            path: entryPath,
-            isDirectory,
-            isFile: dirent.isFile(),
-            isSymbolicLink,
-          }
-        }),
-      )
-
-      return res.json({
-        path: resolvedPath,
-        entries: entries.filter(Boolean),
-      })
+      const nodes = await coreFileAdapter.list({ path: resolvedPath, directory: canonical.base })
+      const mapped = mapCoreFileNodesToDirectoryList(resolvedPath, nodes)
+      const entries = respectGitignore
+        ? mapped.entries.filter((entry) => {
+            const node = Array.isArray(nodes) ? nodes.find((item) => item?.name === entry.name) : null
+            return !node?.ignored
+          })
+        : mapped.entries
+      return res.json({ directory: mapped.directory, entries })
     } catch (error) {
       const err = error
       const code = err && typeof err === "object" && "code" in err ? err.code : undefined

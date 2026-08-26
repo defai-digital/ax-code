@@ -87,7 +87,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     } catch {}
   }
 
-  const hasChildProcessExited = (child) => !child || child.exitCode !== null || child.signalCode !== null
+  const hasChildProcessExited = (child) => !child || child.exitCode != null || child.signalCode != null
 
   const isManagedAxCodeProcessAlive = () => {
     const child = state.axCodeProcess
@@ -491,21 +491,8 @@ export const createAxCodeLifecycleRuntime = (deps) => {
       sdk: summarizeSdkLaunchDiagnostics(handle.diagnostics),
     }
 
-    // The SDK handle is not a ChildProcess; without exit fields,
-    // hasChildProcessExited() would treat it as dead (undefined !== null) and
-    // every health blip would trigger a restart. Track real exit state via the
-    // handle's `closed` promise instead of pinning the fields to null forever.
-    const managed = { ...handle, healthVerified: true, exitCode: null, signalCode: null }
-    if (typeof handle.closed?.then === "function") {
-      void handle.closed.then(() => {
-        if (managed.exitCode === null && managed.signalCode === null) {
-          const exit = handle.diagnostics?.exit ?? null
-          managed.signalCode = exit?.signal ?? null
-          managed.exitCode = exit?.code ?? (managed.signalCode === null ? 0 : null)
-        }
-      })
-    }
-    return managed
+    handle.healthVerified = true
+    return handle
   }
 
   const summarizeSdkLaunchDiagnostics = (diagnostics, { includeCapturedOutput = false } = {}) => {

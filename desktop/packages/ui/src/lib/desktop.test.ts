@@ -61,6 +61,13 @@ describe("canUseLocalElectronDesktopIPC", () => {
     expect(canUseLocalElectronDesktopIPC()).toBe(false)
     restoreWindow()
   })
+
+  test("allows packaged app://ax-code as the local desktop origin", () => {
+    mockDesktopWindow({ origin: "app://ax-code", localOrigin: "http://127.0.0.1:3910" })
+
+    expect(canUseLocalElectronDesktopIPC()).toBe(true)
+    restoreWindow()
+  })
 })
 
 describe("requestDirectoryAccess", () => {

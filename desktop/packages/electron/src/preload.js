@@ -30,10 +30,48 @@ window.addEventListener(
 
 // Signal to the UI that it's running inside the Electron shell.
 // Detected by isElectronShell() in packages/ui/src/lib/desktop.ts.
+const invokeDesktopCommand = (command, args) => {
+  if (!isAllowedDesktopInvokeCommand(command)) {
+    return Promise.reject(new Error("Desktop IPC command is not available"))
+  }
+  return ipcRenderer.invoke(command, args ?? {})
+}
+
+const listenDesktopEvent = (channel, handler) => {
+  if (typeof channel !== "string" || !channel.startsWith("openchamber:")) {
+    return Promise.resolve(() => {})
+  }
+  const wrapped = (_event, payload) => handler({ payload })
+  ipcRenderer.on(channel, wrapped)
+  return Promise.resolve(() => ipcRenderer.removeListener(channel, wrapped))
+}
+
+const openDesktopDialog = (options) => ipcRenderer.invoke("desktop_dialog_open", options ?? {})
+
 contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP_ELECTRON__", {
   runtime: "electron",
   recordStartupEvent: (name, details) =>
     ipcRenderer.invoke("desktop_record_startup_event", { name, details: details ?? {} }),
+})
+
+const rendererApiOrigin =
+  typeof process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN === "string"
+    ? process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN.trim()
+    : ""
+if (rendererApiOrigin) {
+  contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP_DESKTOP_SERVER__", {
+    origin: rendererApiOrigin.replace(/\/+$/, ""),
+    axCodePort: null,
+    apiPrefix: "/api",
+    cliAvailable: true,
+  })
+}
+
+contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP__", {
+  runtime: "electron",
+  invoke: invokeDesktopCommand,
+  listen: listenDesktopEvent,
+  openDialog: openDesktopDialog,
 })
 
 // The shared UI waits for this desktop boot outcome before removing the splash
@@ -47,28 +85,12 @@ contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP_DESKTOP_BOOT_OUTCOME__", crea
 // works in both Tauri and Electron without changes to the shared UI package.
 contextBridge.exposeInMainWorld("__TAURI__", {
   core: {
-    invoke: (command, args) => {
-      if (!isAllowedDesktopInvokeCommand(command)) {
-        return Promise.reject(new Error("Desktop IPC command is not available"))
-      }
-      return ipcRenderer.invoke(command, args ?? {})
-    },
+    invoke: invokeDesktopCommand,
   },
   dialog: {
-    open: (options) => ipcRenderer.invoke("desktop_dialog_open", options ?? {}),
+    open: openDesktopDialog,
   },
-  // Bridges Tauri's event.listen(name, cb) → Promise<unlisten>. The shared UI
-  // uses this to receive 'openchamber:update-progress' from the main process.
-  // Scoped to the openchamber: namespace so the renderer cannot subscribe to
-  // arbitrary main-process channels.
   event: {
-    listen: (channel, handler) => {
-      if (typeof channel !== "string" || !channel.startsWith("openchamber:")) {
-        return Promise.resolve(() => {})
-      }
-      const wrapped = (_event, payload) => handler({ payload })
-      ipcRenderer.on(channel, wrapped)
-      return Promise.resolve(() => ipcRenderer.removeListener(channel, wrapped))
-    },
+    listen: listenDesktopEvent,
   },
 })

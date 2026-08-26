@@ -1,4 +1,5 @@
 import { registerFsRoutes } from "../fs/routes.js"
+import { createCoreFileAdapter } from "../fs/core-file-adapter.js"
 import { registerQuotaRoutes } from "../quota/routes.js"
 import { registerGitHubRoutes } from "../github/routes.js"
 import { registerGitRoutes } from "../git/routes.js"
@@ -64,6 +65,16 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     } = routeDependencies
 
     const { getProviderSources, removeProviderConfig } = await import("./index.js")
+    const coreFileAdapter = createCoreFileAdapter({
+      getBaseUrl: () => {
+        try {
+          return String(buildAxCodeUrl("/", "") || "").replace(/\/+$/, "")
+        } catch {
+          return ""
+        }
+      },
+      getHeaders: typeof getAxCodeAuthHeaders === "function" ? getAxCodeAuthHeaders : undefined,
+    })
     const backgroundAxCodeReloader = createBackgroundAxCodeReloader({
       refreshAxCodeAfterConfigChange,
       clientReloadDelayMs,
@@ -103,7 +114,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       sanitizeProjects,
       readSettingsFromDiskMigrated,
       persistSettings,
-      createFsSearchRuntime,
+      createFsSearchRuntime: (opts) => createFsSearchRuntime({ ...opts, coreFileAdapter }),
       spawn,
       resolveGitBinaryForSpawn,
     })
@@ -299,6 +310,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       buildAugmentedPath,
       resolveGitBinaryForSpawn,
       openchamberUserConfigRoot,
+      coreFileAdapter,
     })
   }
 

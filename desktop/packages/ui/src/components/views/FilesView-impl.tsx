@@ -94,9 +94,9 @@ import {
   MAX_VIEW_CHARS,
   detectFileLineEnding,
   normalizeEditorLineEndings,
-  serializeEditorContent,
   type FileLineEnding,
 } from "./filesViewEditorContent"
+import { saveFilesViewDraft } from "./filesViewEditorSave"
 import {
   getFilesViewParentDirectoryPath as getParentDirectoryPath,
   isDirectoryReadError,
@@ -1466,11 +1466,22 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
     setIsSaving(true)
 
     try {
-      const contentToWrite = serializeEditorContent(draftContent, loadedFileLineEnding)
-      const result = await files.writeFile(selectedFile.path, contentToWrite, selectedFileReadOptions)
-      if (!result?.success) {
-        toast.error(t("filesView.toast.writeFileFailed"))
+      const result = await saveFilesViewDraft({
+        path: selectedFile.path,
+        draftContent,
+        displayedContent,
+        lineEnding: loadedFileLineEnding,
+        writeFile: files.writeFile,
+        options: selectedFileReadOptions,
+      })
+      if (!result.ok) {
+        toast.error(
+          result.reason === "unsupported" ? t("filesView.toast.savingNotSupported") : t("filesView.toast.writeFileFailed"),
+        )
         return false
+      }
+      if (result.skipped) {
+        return true
       }
       setFileContent(draftContent)
       // Refresh stat after write so polling doesn't see a stale metadata change.
@@ -1488,7 +1499,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
     } finally {
       setIsSaving(false)
     }
-  }, [draftContent, files, isDirty, loadedFileLineEnding, readFileStat, selectedFile, selectedFileReadOptions, t])
+  }, [displayedContent, draftContent, files, isDirty, loadedFileLineEnding, readFileStat, selectedFile, selectedFileReadOptions, t])
 
   React.useEffect(() => {
     if (!isDirty) {

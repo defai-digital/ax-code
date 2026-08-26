@@ -73,6 +73,9 @@ describe("headless backend lifecycle", () => {
     expect(args).toContain("serve --hostname=127.0.0.1 --port=")
     expect(args).not.toContain("--port=0")
 
+    expect(backend.exitCode).toBe(null)
+    expect(Object.getOwnPropertyDescriptor(backend, "exitCode")?.get).toBeTypeOf("function")
+
     let closed = false
     void backend.closed.then(() => {
       closed = true
@@ -80,6 +83,7 @@ describe("headless backend lifecycle", () => {
     await backend.close()
     await backend.closed
     expect(closed).toBe(true)
+    expect(backend.exitCode !== null || backend.signalCode !== null).toBe(true)
 
     await waitForProcessExit(Number(await waitForFile(fake.pidFile)))
   })

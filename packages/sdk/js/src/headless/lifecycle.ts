@@ -96,6 +96,8 @@ export type HeadlessBackendHandle = {
   diagnostics: HeadlessBackendDiagnostics
   closed: Promise<void>
   close(): Promise<void>
+  exitCode: number | null
+  signalCode: NodeJS.Signals | null
 }
 
 export class HeadlessBackendStartupError extends Error {
@@ -174,8 +176,16 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     detached: process.platform !== "win32",
     env,
   })
+  const liveExit = {
+    exitCode: null as number | null,
+    signalCode: null as NodeJS.Signals | null,
+  }
   const closed = new Promise<void>((resolve) => {
-    proc.once("exit", () => resolve())
+    proc.once("exit", (code, signal) => {
+      liveExit.signalCode = signal
+      liveExit.exitCode = code ?? (signal == null ? 0 : null)
+      resolve()
+    })
     proc.once("error", () => resolve())
   })
 
@@ -327,6 +337,12 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
     headers,
     diagnostics,
     closed,
+    get exitCode() {
+      return liveExit.exitCode
+    },
+    get signalCode() {
+      return liveExit.signalCode
+    },
     async close() {
       await killProc(proc)
     },

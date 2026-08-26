@@ -70,6 +70,9 @@ export const createRequestSecurityRuntime = () => {
     // exact host match. What must be rejected is a cross-site (non-loopback)
     // browser origin: any website open in the user's browser can otherwise
     // reach this loopback server.
+    if (originHeader === "app://ax-code") {
+      return true
+    }
     return normalizeLoopbackHttpOrigin(originHeader) !== null
   }
 

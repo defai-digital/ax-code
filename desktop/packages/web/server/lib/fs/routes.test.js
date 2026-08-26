@@ -122,7 +122,7 @@ const callWrite = async (handler, body) => {
   return res
 }
 
-const registerFs = (fsPromises, settings = { approvedDirectories: [] }) => {
+const registerFs = (fsPromises, settings = { approvedDirectories: [] }, coreFileAdapter) => {
   const { app, getRoute } = createRouteRegistry()
   registerFsRoutes(app, {
     os: { homedir: () => "/home/user" },
@@ -139,6 +139,7 @@ const registerFs = (fsPromises, settings = { approvedDirectories: [] }) => {
     buildAugmentedPath: () => "/usr/bin",
     resolveGitBinaryForSpawn: () => "git",
     openchamberUserConfigRoot: "/home/user/.config",
+    coreFileAdapter,
   })
   return { getRoute }
 }
@@ -222,11 +223,13 @@ describe("fs outside workspace authorization", () => {
   })
 
   it("allows outside-workspace reads inside an approved directory", async () => {
-    const handle = createReadHandle("approved")
-    const fsPromises = {
-      open: vi.fn(async () => handle),
+    const coreFileAdapter = {
+      read: vi.fn(async () => "approved"),
+      raw: vi.fn(),
+      list: vi.fn(async () => []),
     }
-    const { getRoute } = registerFs(fsPromises, { approvedDirectories: ["/tmp/approved"] })
+    const fsPromises = { open: vi.fn(async () => { throw new Error("must not open") }) }
+    const { getRoute } = registerFs(fsPromises, { approvedDirectories: ["/tmp/approved"] }, coreFileAdapter)
 
     const res = await callRoute(getRoute("GET", "/api/fs/read"), {
       query: { path: "/tmp/approved/file.txt", allowOutsideWorkspace: "true" },
@@ -234,19 +237,16 @@ describe("fs outside workspace authorization", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.sent).toBe("approved")
-    expect(fsPromises.open).toHaveBeenCalledWith("/tmp/approved/file.txt", "r")
-    expect(handle.stat).toHaveBeenCalled()
-    expect(handle.readFile).toHaveBeenCalledWith("utf8")
-    expect(handle.close).toHaveBeenCalled()
+    expect(fsPromises.open).not.toHaveBeenCalled()
   })
 
   it("allows raw outside-workspace reads inside an approved directory", async () => {
     const content = Buffer.from("approved image")
-    const handle = createReadHandle(content)
-    const fsPromises = {
-      open: vi.fn(async () => handle),
+    const coreFileAdapter = {
+      raw: vi.fn(async () => ({ buffer: content, mimeType: "image/png" })),
     }
-    const { getRoute } = registerFs(fsPromises, { approvedDirectories: ["/tmp/approved"] })
+    const fsPromises = { open: vi.fn(async () => { throw new Error("must not open") }) }
+    const { getRoute } = registerFs(fsPromises, { approvedDirectories: ["/tmp/approved"] }, coreFileAdapter)
 
     const res = await callRoute(getRoute("GET", "/api/fs/raw"), {
       query: { path: "/tmp/approved/image.png", allowOutsideWorkspace: "true" },
@@ -255,10 +255,7 @@ describe("fs outside workspace authorization", () => {
     expect(res.statusCode).toBe(200)
     expect(res.contentType).toBe("image/png")
     expect(res.sent).toEqual(content)
-    expect(fsPromises.open).toHaveBeenCalledWith("/tmp/approved/image.png", "r")
-    expect(handle.stat).toHaveBeenCalled()
-    expect(handle.readFile).toHaveBeenCalledWith()
-    expect(handle.close).toHaveBeenCalled()
+    expect(fsPromises.open).not.toHaveBeenCalled()
   })
 
   it("rejects directory listing through a workspace symlink that resolves outside the workspace", async () => {

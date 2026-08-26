@@ -1,7 +1,7 @@
 import type { ProjectEntry } from "@/lib/api/types"
 import type { DraftStarterRef } from "@/lib/draftStarters"
 import type { ShortcutCombo } from "@/lib/shortcuts"
-import { getTauriGlobal } from "@/lib/tauriGlobal"
+import { getDesktopBridge, hasDesktopBridge } from "./desktopBridge"
 import { isLoopbackHostname } from "./loopback"
 
 export type UpdateInfo = {
@@ -174,23 +174,14 @@ const getElectronRuntime = (): ElectronRuntimeGlobal | null => {
   )
 }
 
-// True whenever a desktop IPC bridge is present on `window.__TAURI__`. Despite
-// the name this is also true in the Electron shell: its preload
-// (packages/electron/src/preload.js) exposes a Tauri-compatible
-// `__TAURI__.core.invoke` shim so the shared UI drives both shells unchanged.
-export const isTauriShell = (): boolean => {
-  if (typeof window === "undefined") return false
-  const tauri = getTauriGlobal()
-  return typeof tauri?.core?.invoke === "function"
-}
+// True whenever a desktop IPC bridge is present. Despite the name this is also
+// true in the Electron shell: preload exposes `window.__AX_CODE_DESKTOP__` and
+// a one-release `__TAURI__` compatibility alias.
+export const isTauriShell = (): boolean => hasDesktopBridge()
 
 export const isElectronShell = (): boolean => getElectronRuntime()?.runtime === "electron"
 
-export const hasDesktopInvoke = (): boolean => {
-  if (typeof window === "undefined") return false
-  const tauri = getTauriGlobal()
-  return typeof tauri?.core?.invoke === "function"
-}
+export const hasDesktopInvoke = (): boolean => hasDesktopBridge()
 
 export const canUseElectronDesktopIPC = (): boolean => isElectronShell() && hasDesktopInvoke()
 
@@ -212,9 +203,9 @@ export const invokeDesktop = async <T = unknown>(
   args?: Record<string, unknown>,
 ): Promise<T | null> => {
   if (typeof window === "undefined") return null
-  const tauri = getTauriGlobal()
-  if (typeof tauri?.core?.invoke !== "function") return null
-  return tauri.core.invoke(command, args ?? {}) as Promise<T>
+  const bridge = getDesktopBridge()
+  if (typeof bridge?.invoke !== "function") return null
+  return bridge.invoke(command, args ?? {}) as Promise<T>
 }
 
 export type NativeFileSearchResult = {
@@ -328,10 +319,14 @@ export const isDesktopLocalOriginActive = (): boolean => {
   if (typeof window === "undefined") return false
   if (!isDesktopShell()) return false
 
+  const currentUrl = parseUrl(window.location.origin)
+  if (currentUrl?.protocol === "app:" && currentUrl.hostname === "ax-code") {
+    return true
+  }
+
   const local =
     typeof window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ === "string" ? window.__AX_CODE_DESKTOP_LOCAL_ORIGIN__ : ""
   const localUrl = parseUrl(local)
-  const currentUrl = parseUrl(window.location.origin)
 
   if (localUrl && currentUrl) {
     if (localUrl.origin === currentUrl.origin) {
@@ -401,8 +396,7 @@ export const requestDirectoryAccess = async (
   // Desktop shell on local instance: use native folder picker.
   if (isTauriShell() && isDesktopLocalOriginActive()) {
     try {
-      const tauri = getTauriGlobal()
-      const selected = await tauri?.dialog?.open?.({
+      const selected = await getDesktopBridge()?.openDialog?.({
         directory: true,
         multiple: false,
         title: "Select Working Directory",
@@ -426,8 +420,7 @@ export const requestFileAccess = async (options?: {
 }): Promise<{ success: boolean; path?: string; error?: string }> => {
   if (isTauriShell() && isDesktopLocalOriginActive()) {
     try {
-      const tauri = getTauriGlobal()
-      const selected = await tauri?.dialog?.open?.({
+      const selected = await getDesktopBridge()?.openDialog?.({
         directory: false,
         multiple: false,
         title: "Select File",
@@ -463,8 +456,7 @@ export const checkForDesktopUpdates = async (opts?: { manual?: boolean }): Promi
   }
 
   try {
-    const tauri = getTauriGlobal()
-    const info = await tauri?.core?.invoke?.("desktop_check_for_updates", { manual: Boolean(opts?.manual) })
+    const info = await invokeDesktop("desktop_check_for_updates", { manual: Boolean(opts?.manual) })
     return (info ?? null) as UpdateInfo | null
   } catch (error) {
     console.warn("Failed to check for updates (desktop)", error)
@@ -483,14 +475,14 @@ export const downloadDesktopUpdate = async (onProgress?: (progress: UpdateProgre
     return false
   }
 
-  const tauri = getTauriGlobal()
+  const bridge = getDesktopBridge()
   let unlisten: null | (() => void | Promise<void>) = null
   let downloaded = 0
   let total: number | undefined
 
   try {
-    if (typeof onProgress === "function" && tauri?.event?.listen) {
-      unlisten = await tauri.event.listen("openchamber:update-progress", (evt) => {
+    if (typeof onProgress === "function" && typeof bridge?.listen === "function") {
+      unlisten = await bridge.listen("openchamber:update-progress", (evt) => {
         const payload = evt?.payload
         if (!payload || typeof payload !== "object") return
         const data = payload as { event?: unknown; data?: unknown }
@@ -519,7 +511,7 @@ export const downloadDesktopUpdate = async (onProgress?: (progress: UpdateProgre
       })
     }
 
-    await tauri?.core?.invoke?.("desktop_download_and_install_update")
+    await invokeDesktop("desktop_download_and_install_update")
     return true
   } catch (error) {
     // Rethrow so the caller surfaces the real failure (network, disk,
@@ -551,8 +543,7 @@ export const restartToApplyUpdate = async (): Promise<boolean> => {
   // so a plain restart is enough there.
   if (isElectronShell()) {
     try {
-      const tauri = getTauriGlobal()
-      await tauri?.core?.invoke?.("desktop_quit_and_install")
+      await invokeDesktop("desktop_quit_and_install")
       return true
     } catch (error) {
       console.warn("Failed to apply update (electron)", error)
@@ -569,8 +560,7 @@ export const restartDesktopApp = async (): Promise<boolean> => {
   }
 
   try {
-    const tauri = getTauriGlobal()
-    await tauri?.core?.invoke?.("desktop_restart")
+    await invokeDesktop("desktop_restart")
     return true
   } catch (error) {
     console.warn("Failed to restart desktop app (tauri)", error)
@@ -584,8 +574,7 @@ export const getDesktopLanAddress = async (): Promise<string | null> => {
   }
 
   try {
-    const tauri = getTauriGlobal()
-    const result = await tauri?.core?.invoke?.("desktop_get_lan_address")
+    const result = await invokeDesktop("desktop_get_lan_address")
     return typeof result === "string" && result.trim().length > 0 ? result.trim() : null
   } catch (error) {
     console.warn("Failed to get desktop LAN address (tauri)", error)
@@ -604,8 +593,7 @@ export const openDesktopPath = async (path: string, app?: string | null): Promis
   }
 
   try {
-    const tauri = getTauriGlobal()
-    await tauri?.core?.invoke?.("desktop_open_path", {
+    await invokeDesktop("desktop_open_path", {
       path: trimmed,
       app: typeof app === "string" && app.trim().length > 0 ? app.trim() : undefined,
     })
@@ -627,8 +615,7 @@ export const revealDesktopPath = async (path: string): Promise<boolean> => {
   }
 
   try {
-    const tauri = getTauriGlobal()
-    await tauri?.core?.invoke?.("desktop_reveal_path", {
+    await invokeDesktop("desktop_reveal_path", {
       path: trimmed,
     })
     return true
@@ -648,8 +635,7 @@ export const saveDesktopMarkdownFile = async (defaultFileName: string, content: 
   }
 
   try {
-    const tauri = getTauriGlobal()
-    const result = await tauri?.core?.invoke?.("desktop_save_markdown_file", {
+    const result = await invokeDesktop("desktop_save_markdown_file", {
       defaultFileName: trimmedFileName,
       content,
     })
@@ -678,8 +664,7 @@ export const openDesktopProjectInApp = async (
   }
 
   try {
-    const tauri = getTauriGlobal()
-    await tauri?.core?.invoke?.("desktop_open_in_app", {
+    await invokeDesktop("desktop_open_in_app", {
       projectPath: trimmedProjectPath,
       appId: trimmedAppId,
       appName: trimmedAppName,
@@ -705,8 +690,7 @@ export const openDesktopFileInApp = async (filePath: string, appId: string, appN
   }
 
   try {
-    const tauri = getTauriGlobal()
-    await tauri?.core?.invoke?.("desktop_open_file_in_app", {
+    await invokeDesktop("desktop_open_file_in_app", {
       filePath: trimmedFilePath,
       appId: trimmedAppId,
       appName: trimmedAppName,
@@ -744,8 +728,7 @@ export const fetchDesktopInstalledApps = async (
   }
 
   try {
-    const tauri = getTauriGlobal()
-    const result = await tauri?.core?.invoke?.("desktop_get_installed_apps", {
+    const result = await invokeDesktop("desktop_get_installed_apps", {
       apps: candidate,
       force: force === true ? true : undefined,
     })

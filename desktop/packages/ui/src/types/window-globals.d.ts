@@ -30,6 +30,17 @@ type AxCodeDebugTools = {
 declare global {
   interface Window {
     __axCodeDebug?: AxCodeDebugTools
+    __AX_CODE_DESKTOP__?: {
+      runtime?: string
+      invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>
+      listen?: (event: string, handler: (evt: { payload?: unknown }) => void) => Promise<() => void>
+      openDialog?: (options: Record<string, unknown>) => Promise<unknown>
+    }
+    __TAURI__?: {
+      core?: { invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown> }
+      event?: { listen?: (event: string, handler: (evt: { payload?: unknown }) => void) => Promise<() => void> }
+      dialog?: { open?: (options: Record<string, unknown>) => Promise<unknown> }
+    }
     __AX_CODE_DESKTOP_DESKTOP_BOOT_OUTCOME__?: DesktopBootOutcome
     __AX_CODE_DESKTOP_DESKTOP_SERVER__?: DesktopServerRuntime
     __AX_CODE_DESKTOP_ELECTRON__?: {
