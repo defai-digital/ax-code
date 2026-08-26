@@ -29,6 +29,7 @@ import {
   axEngineConnectedDialogActions,
   axEngineSetupDialogActions,
   configUpdateParams,
+  CUSTOM_API_PROVIDER_OPTION_ID,
   normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
@@ -39,9 +40,18 @@ import {
   providerDialogProviders,
   providerDialogTypeOptions,
   selectableProviderDefaultModelID,
+  withCustomApiProviderDialogEntry,
   type AxEngineConnectedAction,
   type AxEngineSetupAction,
 } from "./dialog-provider-options"
+import {
+  configureCustomApiProvider,
+  confirmCustomApiProviderDelete,
+  customApiProviderManagementMenu,
+  deleteCustomApiProvider,
+  isManagedCustomApiProviderConfig,
+  listCustomApiProviders,
+} from "./dialog-custom-api-provider"
 import { providerConnectCategoryMeta } from "@/mode/provider-category"
 import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
 import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
@@ -508,6 +518,7 @@ export function createDialogProviderOptions() {
         available: sync.data.provider_next.all,
         configured: sync.data.provider,
       }),
+      withCustomApiProviderDialogEntry,
       map((provider) => {
         const isConnected = providerDialogConnected({
           providerID: provider.id,
@@ -528,11 +539,47 @@ export function createDialogProviderOptions() {
               fallbackMessage: `Failed to update ${provider.name}`,
               toast,
               run: async () => {
+                if (provider.id === CUSTOM_API_PROVIDER_OPTION_ID) {
+                  const saved = await configureCustomApiProvider({ dialog, sdk, theme })
+                  if (!saved) return
+                  await sync.bootstrap()
+                  toast.show({ variant: "success", message: `Saved ${saved.name}` })
+                  await openModelDialogForProvider(saved.providerID, saved.name)
+                  return
+                }
+
                 const isConnected = providerDialogConnected({
                   providerID: provider.id,
                   connected: sync.data.provider_next.connected,
                   configured: sync.data.provider,
                 })
+
+                if (isManagedCustomApiProviderConfig(sync.data.config, provider.id)) {
+                  const existing = (await listCustomApiProviders(sdk)).find(
+                    (candidate) => candidate.providerID === provider.id,
+                  )
+                  if (!existing) throw new Error(`Managed custom provider ${provider.id} is unavailable`)
+                  const action = await customApiProviderManagementMenu({ dialog, provider: existing })
+                  if (action === null) return
+                  if (action === "use") {
+                    await openModelDialogForProvider(existing.providerID, existing.name)
+                    return
+                  }
+                  if (action === "update") {
+                    const saved = await configureCustomApiProvider({ dialog, sdk, theme, existing })
+                    if (!saved) return
+                    await sync.bootstrap()
+                    toast.show({ variant: "success", message: `Updated ${saved.name}` })
+                    await openModelDialogForProvider(saved.providerID, saved.name)
+                    return
+                  }
+                  if (!(await confirmCustomApiProviderDelete({ dialog, provider: existing }))) return
+                  await deleteCustomApiProvider(sdk, existing.providerID)
+                  await sync.bootstrap()
+                  toast.show({ variant: "success", message: `Deleted ${existing.name}` })
+                  dialog.clear()
+                  return
+                }
 
                 if (DEDICATED_PRIVATE_GPU_PROVIDERS.has(provider.id)) {
                   if (isConnected) {

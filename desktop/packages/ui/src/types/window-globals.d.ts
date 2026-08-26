@@ -32,12 +32,12 @@ declare global {
     __axCodeDebug?: AxCodeDebugTools
     __AX_CODE_DESKTOP__?: {
       runtime?: string
-      invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown>
+      invoke?: <TValue = unknown>(command: string, args?: Record<string, unknown>) => Promise<TValue>
       listen?: (event: string, handler: (evt: { payload?: unknown }) => void) => Promise<() => void>
       openDialog?: (options: Record<string, unknown>) => Promise<unknown>
     }
     __TAURI__?: {
-      core?: { invoke?: (command: string, args?: Record<string, unknown>) => Promise<unknown> }
+      core?: { invoke?: <TValue = unknown>(command: string, args?: Record<string, unknown>) => Promise<TValue> }
       event?: { listen?: (event: string, handler: (evt: { payload?: unknown }) => void) => Promise<() => void> }
       dialog?: { open?: (options: Record<string, unknown>) => Promise<unknown> }
     }

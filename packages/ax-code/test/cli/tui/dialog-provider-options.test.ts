@@ -14,6 +14,7 @@ import {
   axEngineManagedProviderConfig,
   axEngineSetupDialogActions,
   configUpdateParams,
+  CUSTOM_API_PROVIDER_OPTION_ID,
   normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
@@ -26,6 +27,7 @@ import {
   providerDialogTypeOptions,
   providerModelSelectable,
   selectableProviderDefaultModelID,
+  withCustomApiProviderDialogEntry,
 } from "../../../src/cli/cmd/tui/component/dialog-provider-options"
 
 function provider(id: string, name = id) {
@@ -33,6 +35,14 @@ function provider(id: string, name = id) {
 }
 
 describe("provider dialog options", () => {
+  test("adds one synthetic custom API provider entry", () => {
+    const result = withCustomApiProviderDialogEntry([provider("openai", "OpenAI")])
+    expect(result.map((item) => item.id)).toContain(CUSTOM_API_PROVIDER_OPTION_ID)
+    expect(
+      withCustomApiProviderDialogEntry(result).filter((item) => item.id === CUSTOM_API_PROVIDER_OPTION_ID),
+    ).toHaveLength(1)
+  })
+
   test("uses available providers when the provider list bootstrap succeeds", () => {
     expect(
       providerDialogProviders({

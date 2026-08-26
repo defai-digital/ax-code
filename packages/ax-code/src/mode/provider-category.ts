@@ -12,6 +12,9 @@ import { CLI_PROVIDER_IDS } from "../provider/cli/ids"
 
 export type ProviderConnectCategory = "local" | "private-gpu" | "cli" | "api"
 
+/** Synthetic picker entry that opens the managed custom-provider editor. */
+export const CUSTOM_API_PROVIDER_OPTION_ID = "__custom-api__"
+
 export const LOCAL_RUNTIME_PROVIDER_IDS = ["ax-engine", "ax-studio", "ollama"] as const
 
 export const CLI_PLAN_PROVIDER_IDS = CLI_PROVIDER_IDS

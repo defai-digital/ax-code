@@ -1576,6 +1576,21 @@ export namespace Config {
       })
   }
 
+  async function refreshAfterGlobalUpdate(providerEnablementOnly: boolean) {
+    global.reset()
+    if (providerEnablementOnly) {
+      await refreshProviderEnablementCaches()
+    } else {
+      await Instance.disposeAll().catch((err) => {
+        log.error("failed to dispose instances during config reload", { err })
+      })
+    }
+    GlobalBus.emit("event", {
+      directory: "global",
+      payload: { type: RuntimeEvent.Disposed.type, properties: {} },
+    })
+  }
+
   export async function updateGlobal(config: Info) {
     const filepath = globalConfigFile()
     using _inProcess = await Lock.write(filepath)
@@ -1595,32 +1610,60 @@ export namespace Config {
       return merged
     })()
 
-    global.reset()
-
-    if (isProviderEnablementUpdate(config)) {
-      // Enabling or disabling a provider only changes Config and Provider
-      // state. A full Instance disposal aborts every in-flight prompt, even
-      // when the toggled provider is unrelated to the active model.
-      await refreshProviderEnablementCaches()
-    } else {
-      // Config is already on disk. Dispose reloads all in-memory services for
-      // general config changes; a stuck dispose (slow LSP/MCP teardown) must
-      // not fail the write that already succeeded — callers such as the
-      // ax-engine connection route would otherwise return 400 after a durable save.
-      await Instance.disposeAll().catch((err) => {
-        log.error("failed to dispose instances during config reload", { err })
-      })
-    }
-
-    GlobalBus.emit("event", {
-      directory: "global",
-      payload: {
-        type: RuntimeEvent.Disposed.type,
-        properties: {},
-      },
-    })
+    await refreshAfterGlobalUpdate(isProviderEnablementUpdate(config))
 
     return next
+  }
+
+  /** Replace one global provider without retaining stale nested model entries. */
+  export async function setGlobalProvider(providerID: string, provider: Provider) {
+    const filepath = globalConfigFile()
+    const next = await (async () => {
+      using _inProcess = await Lock.write(filepath)
+      using _crossProcess = await FileLock.acquire(filepath)
+      const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+      parseConfig(before, filepath)
+      const updated = applyEdits(
+        before,
+        modify(before, ["provider", providerID], provider, {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        }),
+      )
+      const merged = parseConfig(updated, filepath)
+      if (updated !== before) await Filesystem.write(filepath, updated)
+      return merged
+    })()
+    await refreshAfterGlobalUpdate(false)
+    return next
+  }
+
+  /** Remove exactly one provider from the writable global config. */
+  export async function removeGlobalProvider(providerID: string) {
+    const filepath = globalConfigFile()
+    const removed = await (async () => {
+      using _inProcess = await Lock.write(filepath)
+      using _crossProcess = await FileLock.acquire(filepath)
+      const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
+        if (err.code === "ENOENT") return "{}"
+        throw new JsonError({ path: filepath }, { cause: err })
+      })
+      const existing = parseConfig(before, filepath)
+      if (!Object.prototype.hasOwnProperty.call(existing.provider ?? {}, providerID)) return false
+      const updated = applyEdits(
+        before,
+        modify(before, ["provider", providerID], undefined, {
+          formattingOptions: { insertSpaces: true, tabSize: 2 },
+        }),
+      )
+      parseConfig(updated, filepath)
+      await Filesystem.write(filepath, updated)
+      return true
+    })()
+    if (removed) await refreshAfterGlobalUpdate(false)
+    return removed
   }
 
   export async function directories() {

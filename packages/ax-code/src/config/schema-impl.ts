@@ -541,6 +541,7 @@ export type Layout = z.infer<typeof Layout>
 
 export const Provider = ModelsDev.Provider.partial()
   .extend({
+    management: z.literal("custom-api").optional(),
     whitelist: z.array(z.string()).optional(),
     blacklist: z.array(z.string()).optional(),
     models: z

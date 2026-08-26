@@ -15,8 +15,11 @@ import type { IconName } from "@/components/icon/icons"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import {
   buildDirectoryUrl,
+  CUSTOM_API_PROVIDER_OPTION_ID,
+  deleteCustomApiProvider,
   disconnectProviderAuth,
   fetchAvailableProviders,
+  fetchCustomApiProviders,
   fetchProviderAuthMethods,
   fetchProviderJsonWithRetry,
   fetchProviderSources,
@@ -35,10 +38,13 @@ import {
   parseAvailableProvidersPayload,
   PROVIDER_RESTART_POLL_MS,
   saveProviderAuth,
+  upsertCustomApiProvider,
   connectPrivateGpu,
   dedicatedPrivateGpuVendor,
   isDedicatedPrivateGpuProvider,
   type AuthMethod,
+  type CustomApiProviderInput,
+  type CustomApiProviderView,
   type ProviderOption,
 } from "@/lib/ax-code/providerApi"
 import { reloadAxCodeConfiguration, waitForQueuedAxCodeReload } from "@/stores/useAgentsStore"
@@ -57,6 +63,7 @@ import {
   type AxEngineModelsResponse,
 } from "@/lib/ax-code/axEngineModelsApi"
 import { downloadToastTracker } from "@/lib/ax-code/axEngineDownloadToasts"
+import { CustomApiProviderForm } from "./CustomApiProviderForm"
 
 const AX_ENGINE_PROVIDER_ID = "ax-engine"
 
@@ -121,6 +128,8 @@ export const ProvidersPage: React.FC = () => {
     Record<string, { url?: string; instructions?: string; userCode?: string }>
   >({})
   const [availableProviders, setAvailableProviders] = React.useState<ProviderOption[]>([])
+  const [customApiProviders, setCustomApiProviders] = React.useState<CustomApiProviderView[]>([])
+  const [customApiProvidersLoaded, setCustomApiProvidersLoaded] = React.useState(false)
   const [availableLoading, setAvailableLoading] = React.useState(false)
   const [availableError, setAvailableError] = React.useState<string | null>(null)
   const [candidateProviderId, setCandidateProviderId] = React.useState("")
@@ -257,6 +266,24 @@ export const ProvidersPage: React.FC = () => {
 
   React.useEffect(() => {
     let isMounted = true
+    setCustomApiProvidersLoaded(false)
+    void fetchCustomApiProviders(directory)
+      .then((providers) => {
+        if (!isMounted) return
+        setCustomApiProviders(providers)
+        setCustomApiProvidersLoaded(true)
+      })
+      .catch((error) => {
+        if (!isMounted) return
+        console.error("Failed to load managed custom API providers:", error)
+      })
+    return () => {
+      isMounted = false
+    }
+  }, [directory])
+
+  React.useEffect(() => {
+    let isMounted = true
     let retryTimer: ReturnType<typeof setTimeout> | undefined
     const pollStartedAt = Date.now()
 
@@ -300,14 +327,17 @@ export const ProvidersPage: React.FC = () => {
 
   const unconnectedProviders = React.useMemo(
     () =>
-      availableProviders
-        .filter((provider) => !connectedProviderIds.has(provider.id))
-        .sort((a, b) => {
-          const labelA = (a.name || a.id).toLowerCase()
-          const labelB = (b.name || b.id).toLowerCase()
-          return labelA.localeCompare(labelB)
-        }),
-    [availableProviders, connectedProviderIds],
+      [
+        ...availableProviders.filter(
+          (provider) => provider.id !== CUSTOM_API_PROVIDER_OPTION_ID && !connectedProviderIds.has(provider.id),
+        ),
+        { id: CUSTOM_API_PROVIDER_OPTION_ID, name: t("settings.providers.custom.option.name") },
+      ].sort((a, b) => {
+        const labelA = (a.name || a.id).toLowerCase()
+        const labelB = (b.name || b.id).toLowerCase()
+        return labelA.localeCompare(labelB)
+      }),
+    [availableProviders, connectedProviderIds, t],
   )
 
   const availableConnectTypes = React.useMemo(
@@ -689,6 +719,24 @@ export const ProvidersPage: React.FC = () => {
     setAuthBusyKey(busyKey)
 
     try {
+      let managedCustomProvider = customApiProviders.find((provider) => provider.providerID === providerId)
+      if (!managedCustomProvider && !customApiProvidersLoaded) {
+        const latest = await fetchCustomApiProviders(directory)
+        setCustomApiProviders(latest)
+        setCustomApiProvidersLoaded(true)
+        managedCustomProvider = latest.find((provider) => provider.providerID === providerId)
+      }
+      if (managedCustomProvider) {
+        const removed = await deleteCustomApiProvider(providerId, directory)
+        if (!removed) throw new Error(`Managed custom provider ${providerId} no longer exists`)
+        setCustomApiProviders((providers) => providers.filter((provider) => provider.providerID !== providerId))
+        await loadProviders({ directory })
+        toast.success(t("settings.providers.custom.toast.deleted", { name: managedCustomProvider.name }))
+        setShowAuthPanel(false)
+        if (selectedProviderId === providerId) setSelectedProvider(ADD_PROVIDER_ID)
+        return
+      }
+
       const payload = await disconnectProviderAuth(providerId, directory, "all")
 
       // Only claim success when something was actually removed. A false
@@ -720,6 +768,29 @@ export const ProvidersPage: React.FC = () => {
     } catch (error) {
       console.error("Failed to disconnect provider:", error)
       toast.error(t("settings.providers.page.toast.providerDisconnectFailed"))
+    } finally {
+      setAuthBusyKey(null)
+    }
+  }
+
+  const handleSaveCustomApiProvider = async (providerId: string, input: CustomApiProviderInput) => {
+    setAuthBusyKey(`custom:${providerId}`)
+    try {
+      const saved = await upsertCustomApiProvider(providerId, input, directory)
+      setCustomApiProviders((providers) => [
+        ...providers.filter((provider) => provider.providerID !== saved.providerID),
+        saved,
+      ])
+      setCustomApiProvidersLoaded(true)
+      await loadProviders({ directory })
+      setCandidateProviderId("")
+      setSelectedProvider(saved.providerID)
+      setShowAuthPanel(false)
+      toast.success(t("settings.providers.custom.toast.saved", { name: saved.name }))
+    } catch (error) {
+      console.error("Failed to save managed custom API provider:", error)
+      toast.error(t("settings.providers.custom.error.saveFailed"))
+      throw error
     } finally {
       setAuthBusyKey(null)
     }
@@ -775,17 +846,17 @@ export const ProvidersPage: React.FC = () => {
             </div>
 
             <section className="px-2 pb-2 pt-0">
-              {availableLoading ? (
+              {availableLoading && (
                 <p className="typography-meta text-muted-foreground py-1.5">
                   {t("settings.providers.page.state.loading")}
                 </p>
-              ) : availableError ? (
-                <p className="typography-meta text-muted-foreground py-1.5">{availableError}</p>
-              ) : unconnectedProviders.length === 0 ? (
+              )}
+              {availableError && <p className="typography-meta text-muted-foreground py-1.5">{availableError}</p>}
+              {!availableLoading && !availableError && unconnectedProviders.length === 0 ? (
                 <p className="typography-meta text-muted-foreground py-1.5">
                   {t("settings.providers.page.connect.allProvidersConnected")}
                 </p>
-              ) : (
+              ) : unconnectedProviders.length > 0 ? (
                 <div className="space-y-1.5 py-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="typography-ui-label text-foreground">
@@ -945,7 +1016,7 @@ export const ProvidersPage: React.FC = () => {
                     </DropdownMenu>
                   </div>
                 </div>
-              )}
+              ) : null}
             </section>
           </div>
 
@@ -957,7 +1028,14 @@ export const ProvidersPage: React.FC = () => {
                 </h2>
               </div>
 
-              {authLoading ? (
+              {candidateProviderId === CUSTOM_API_PROVIDER_OPTION_ID ? (
+                <section className="px-2 pb-2 pt-0">
+                  <CustomApiProviderForm
+                    busy={authBusyKey?.startsWith("custom:") ?? false}
+                    onSave={handleSaveCustomApiProvider}
+                  />
+                </section>
+              ) : authLoading ? (
                 <p className="typography-meta text-muted-foreground px-2">
                   {t("settings.providers.page.auth.loadingMethods")}
                 </p>
@@ -1184,6 +1262,7 @@ export const ProvidersPage: React.FC = () => {
   }
 
   const providerModels = Array.isArray(selectedProvider.models) ? selectedProvider.models : []
+  const selectedCustomApiProvider = customApiProviders.find((provider) => provider.providerID === selectedProvider.id)
   const providerAuthMethods = authMethodsByProvider[selectedProvider.id] ?? []
   const oauthAuthMethods = providerAuthMethods.filter((method) => normalizeAuthType(method) === "oauth")
 
@@ -1253,6 +1332,13 @@ export const ProvidersPage: React.FC = () => {
                   {t("settings.providers.page.auth.useReconnectHint")}
                 </span>
               </div>
+            ) : selectedCustomApiProvider ? (
+              <CustomApiProviderForm
+                key={selectedCustomApiProvider.providerID}
+                existing={selectedCustomApiProvider}
+                busy={authBusyKey?.startsWith("custom:") ?? false}
+                onSave={handleSaveCustomApiProvider}
+              />
             ) : authLoading ? (
               <div className="py-1.5 typography-meta text-muted-foreground">
                 {t("settings.providers.page.auth.loadingMethods")}

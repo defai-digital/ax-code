@@ -5,7 +5,10 @@ import { describe, expect, test } from "vitest"
 
 import {
   buildDirectoryUrl,
+  CUSTOM_API_PROVIDER_OPTION_ID,
+  deleteCustomApiProvider,
   disconnectProviderAuth,
+  fetchCustomApiProviders,
   fetchProviderJsonWithRetry,
   fetchProviderSources,
   defaultProviderConnectCategory,
@@ -18,8 +21,10 @@ import {
   isRestartingError,
   parseAuthMethodsPayload,
   parseAvailableProvidersPayload,
+  parseCustomApiProvidersPayload,
   normalizeAuthType,
   saveProviderAuth,
+  upsertCustomApiProvider,
 } from "./providerApi"
 
 const setWindowStub = (stub: unknown): void => {
@@ -130,6 +135,7 @@ describe("provider connect type filter", () => {
     expect(providerConnectCategory("nebius")).toBe("private-gpu")
     expect(providerConnectCategory("grok-build-cli")).toBe("cli")
     expect(providerConnectCategory("huggingface")).toBe("api")
+    expect(providerConnectCategory(CUSTOM_API_PROVIDER_OPTION_ID)).toBe("api")
     expect(providerConnectCategoriesPresent(["openai", "ollama", "runpod"])).toEqual(["local", "private-gpu", "api"])
     expect(defaultProviderConnectCategory(["openai", "ollama"])).toBe("local")
     expect(
@@ -141,6 +147,92 @@ describe("provider connect type filter", () => {
 })
 
 describe("provider requests", () => {
+  test("lists, saves, and deletes managed custom API providers through the dedicated routes", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const originalFetch = globalThis.fetch
+    const view = {
+      providerID: "company-gateway",
+      name: "Company Gateway",
+      protocol: "openai-compatible" as const,
+      baseURL: "https://api.example.com/v1",
+      hasApiKey: true,
+      models: [
+        {
+          id: "company-model",
+          name: "Company Model",
+          contextWindow: 128_000,
+          outputLimit: 16_384,
+          toolCall: true,
+          reasoning: false,
+          attachment: true,
+          temperature: true,
+        },
+      ],
+    }
+    setFetchStub((async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init })
+      const payload = init?.method === "GET" ? [view] : init?.method === "DELETE" ? true : view
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }) as typeof fetch)
+
+    try {
+      expect(await fetchCustomApiProviders("/workspace")).toEqual([view])
+      expect(
+        await upsertCustomApiProvider(
+          "company-gateway",
+          {
+            name: "Company Gateway",
+            protocol: "openai-compatible",
+            baseURL: "https://api.example.com/v1",
+            apiKey: "test-token",
+            models: view.models,
+          },
+          "/workspace",
+        ),
+      ).toEqual(view)
+      expect(await deleteCustomApiProvider("company-gateway", "/workspace")).toBe(true)
+      expect(calls.map((call) => call.url)).toEqual([
+        "/api/provider/custom?directory=%2Fworkspace",
+        "/api/provider/custom/company-gateway?directory=%2Fworkspace",
+        "/api/provider/custom/company-gateway?directory=%2Fworkspace",
+      ])
+      expect(calls.map((call) => call.init?.method)).toEqual(["GET", "PUT", "DELETE"])
+      expect(calls[1]?.init?.body).toContain('"apiKey":"test-token"')
+    } finally {
+      setFetchStub(originalFetch)
+    }
+  })
+
+  test("rejects malformed managed custom provider payloads", () => {
+    expect(parseCustomApiProvidersPayload({})).toEqual([])
+    expect(parseCustomApiProvidersPayload([{ providerID: "broken" }])).toEqual([])
+    expect(
+      parseCustomApiProvidersPayload([
+        {
+          providerID: "broken",
+          name: "Broken",
+          protocol: "openai-compatible",
+          baseURL: "https://example.com/v1",
+          hasApiKey: false,
+          models: [
+            {
+              id: "model",
+              contextWindow: 100,
+              outputLimit: 101,
+              toolCall: true,
+              reasoning: false,
+              attachment: false,
+              temperature: true,
+            },
+          ],
+        },
+      ]),
+    ).toEqual([])
+  })
+
   test("saveProviderAuth sends the auth key payload through the shared auth route", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = []
     const originalFetch = globalThis.fetch

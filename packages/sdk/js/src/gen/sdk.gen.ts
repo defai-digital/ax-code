@@ -130,6 +130,11 @@ import type {
   ProviderAxEngineStartResponses,
   ProviderAxEngineStatusResponses,
   ProviderAxEngineStopResponses,
+  ProviderCustomDeleteErrors,
+  ProviderCustomDeleteResponses,
+  ProviderCustomListResponses,
+  ProviderCustomUpdateErrors,
+  ProviderCustomUpdateResponses,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
   ProviderOauthAuthorizeResponses,
@@ -5434,6 +5439,121 @@ export class Question extends HeyApiClient {
   }
 }
 
+export class Custom extends HeyApiClient {
+  /**
+   * List managed custom API providers
+   *
+   * List custom API providers without returning stored API tokens.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ProviderCustomListResponses, unknown, ThrowOnError>({
+      url: "/provider/custom",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Delete a managed custom API provider
+   *
+   * Remove the managed provider metadata and its encrypted API token.
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<
+      ProviderCustomDeleteResponses,
+      ProviderCustomDeleteErrors,
+      ThrowOnError
+    >({
+      url: "/provider/custom/{providerID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create or update a managed custom API provider
+   *
+   * Persist endpoint and model metadata in global config and store an optional API token in encrypted auth storage.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+      name: string
+      protocol: "openai-compatible" | "anthropic-compatible"
+      baseURL: string
+      apiKey?: string
+      allowInsecureHttp?: boolean
+      models: Array<{
+        id: string
+        name?: string
+        contextWindow: number
+        outputLimit: number
+        toolCall: boolean
+        reasoning: boolean
+        attachment: boolean
+        temperature: boolean
+      }>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "protocol" },
+            { in: "body", key: "baseURL" },
+            { in: "body", key: "apiKey" },
+            { in: "body", key: "allowInsecureHttp" },
+            { in: "body", key: "models" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).put<
+      ProviderCustomUpdateResponses,
+      ProviderCustomUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/provider/custom/{providerID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class PrivateGpu extends HeyApiClient {
   /**
    * Connect a dedicated private GPU endpoint
@@ -6036,6 +6156,11 @@ export class Provider extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _custom?: Custom
+  get custom(): Custom {
+    return (this._custom ??= new Custom({ client: this.client }))
   }
 
   private _privateGpu?: PrivateGpu

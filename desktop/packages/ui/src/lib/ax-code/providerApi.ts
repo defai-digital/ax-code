@@ -5,6 +5,7 @@ import type { ProviderSources } from "@/components/sections/providers/types"
 import { providerConnectCategory } from "ax-code/mode/provider-category"
 
 export {
+  CUSTOM_API_PROVIDER_OPTION_ID,
   defaultProviderConnectCategory,
   providerConnectCategoriesPresent,
   providerConnectCategory,
@@ -217,6 +218,96 @@ export interface ProviderOption {
   name?: string
 }
 
+export type CustomApiProviderProtocol = "openai-compatible" | "anthropic-compatible"
+
+export type CustomApiProviderModel = {
+  id: string
+  name?: string
+  contextWindow: number
+  outputLimit: number
+  toolCall: boolean
+  reasoning: boolean
+  attachment: boolean
+  temperature: boolean
+}
+
+export type CustomApiProviderInput = {
+  name: string
+  protocol: CustomApiProviderProtocol
+  baseURL: string
+  apiKey?: string
+  allowInsecureHttp?: boolean
+  models: CustomApiProviderModel[]
+}
+
+export type CustomApiProviderView = {
+  providerID: string
+  name: string
+  protocol: CustomApiProviderProtocol
+  baseURL: string
+  hasApiKey: boolean
+  models: CustomApiProviderModel[]
+}
+
+const isCustomApiProviderProtocol = (value: unknown): value is CustomApiProviderProtocol =>
+  value === "openai-compatible" || value === "anthropic-compatible"
+
+const isPositiveSafeInteger = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0
+
+const parseCustomApiProviderModel = (value: unknown): CustomApiProviderModel | null => {
+  if (!isRecord(value)) return null
+  if (typeof value.id !== "string" || value.id.length === 0) return null
+  if (value.name !== undefined && typeof value.name !== "string") return null
+  if (!isPositiveSafeInteger(value.contextWindow) || !isPositiveSafeInteger(value.outputLimit)) return null
+  if (value.outputLimit > value.contextWindow) return null
+  if (
+    typeof value.toolCall !== "boolean" ||
+    typeof value.reasoning !== "boolean" ||
+    typeof value.attachment !== "boolean" ||
+    typeof value.temperature !== "boolean"
+  )
+    return null
+  return {
+    id: value.id,
+    ...(value.name === undefined ? {} : { name: value.name }),
+    contextWindow: value.contextWindow,
+    outputLimit: value.outputLimit,
+    toolCall: value.toolCall,
+    reasoning: value.reasoning,
+    attachment: value.attachment,
+    temperature: value.temperature,
+  }
+}
+
+export const parseCustomApiProvider = (value: unknown): CustomApiProviderView | null => {
+  if (!isRecord(value)) return null
+  if (
+    typeof value.providerID !== "string" ||
+    typeof value.name !== "string" ||
+    !isCustomApiProviderProtocol(value.protocol) ||
+    typeof value.baseURL !== "string" ||
+    typeof value.hasApiKey !== "boolean" ||
+    !Array.isArray(value.models)
+  )
+    return null
+  const models = value.models.map(parseCustomApiProviderModel)
+  if (models.some((model) => model === null)) return null
+  return {
+    providerID: value.providerID,
+    name: value.name,
+    protocol: value.protocol,
+    baseURL: value.baseURL,
+    hasApiKey: value.hasApiKey,
+    models: models as CustomApiProviderModel[],
+  }
+}
+
+export const parseCustomApiProvidersPayload = (payload: unknown): CustomApiProviderView[] => {
+  if (!Array.isArray(payload)) return []
+  return payload.map(parseCustomApiProvider).filter((provider): provider is CustomApiProviderView => provider !== null)
+}
+
 export const normalizeAuthType = (method: AuthMethod) => {
   const raw = typeof method.type === "string" ? method.type : ""
   const label = `${method.name ?? ""} ${method.label ?? ""}`.toLowerCase()
@@ -299,6 +390,44 @@ export const fetchAvailableProviders = async (directory: string | null) => {
     method: "GET",
     headers: { Accept: "application/json" },
   })
+}
+
+export const fetchCustomApiProviders = async (directory: string | null) => {
+  const payload = await fetchProviderJsonWithRetry(buildDirectoryUrl(API_ENDPOINTS.provider.custom, directory), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  })
+  return parseCustomApiProvidersPayload(payload)
+}
+
+export const upsertCustomApiProvider = async (
+  providerId: string,
+  input: CustomApiProviderInput,
+  directory: string | null,
+) => {
+  const payload = await fetchProviderJsonWithRetry(
+    buildDirectoryUrl(replacePathParams(API_ENDPOINTS.provider.customByProvider, { providerId }), directory),
+    {
+      method: "PUT",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+  )
+  const provider = parseCustomApiProvider(payload)
+  if (!provider) throw new Error("AX Code returned an invalid custom provider response")
+  return provider
+}
+
+export const deleteCustomApiProvider = async (providerId: string, directory: string | null) => {
+  const payload = await fetchProviderJsonWithRetry(
+    buildDirectoryUrl(replacePathParams(API_ENDPOINTS.provider.customByProvider, { providerId }), directory),
+    {
+      method: "DELETE",
+      headers: { Accept: "application/json" },
+    },
+  )
+  if (typeof payload !== "boolean") throw new Error("AX Code returned an invalid custom provider delete response")
+  return payload
 }
 
 export const fetchProviderSources = async (providerId: string, directory: string | null) => {

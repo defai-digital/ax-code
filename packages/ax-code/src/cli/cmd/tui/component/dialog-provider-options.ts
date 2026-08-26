@@ -1,6 +1,7 @@
 import { filter, pipe, sortBy } from "remeda"
 import {
   CLI_PLAN_PROVIDER_IDS,
+  CUSTOM_API_PROVIDER_OPTION_ID,
   DEDICATED_PRIVATE_GPU_PROVIDER_IDS,
   LOCAL_RUNTIME_PROVIDER_IDS,
   PRIVATE_GPU_CLOUD_PROVIDER_IDS,
@@ -14,6 +15,7 @@ import {
   providerConnectTypeOptionDescription,
   providersInConnectCategory,
 } from "@/mode/provider-category"
+export { CUSTOM_API_PROVIDER_OPTION_ID } from "@/mode/provider-category"
 import {
   AX_ENGINE_CONNECTION_MODES,
   axEngineAttachProviderConfig as buildAxEngineAttachProviderConfig,
@@ -91,6 +93,8 @@ export const CLI_PROVIDERS = new Set<string>(CLI_PLAN_PROVIDER_IDS)
 
 export const PROVIDER_DIALOG_CHANGE_TYPE_VALUE = "__change_type__"
 
+const CUSTOM_API_PROVIDER_DIALOG_ENTRY = { id: CUSTOM_API_PROVIDER_OPTION_ID, name: "Custom API provider" }
+
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
 
 function providerDialogSortKey(providerID: string) {
@@ -105,6 +109,17 @@ export function providerDialogProviders(input: {
   return pipe(
     providers,
     filter((provider) => !HIDDEN_PROVIDERS.has(provider.id)),
+    sortBy(
+      (provider) => providerDialogSortKey(provider.id),
+      (provider) => provider.name,
+    ),
+  )
+}
+
+export function withCustomApiProviderDialogEntry<T extends ProviderDialogProvider>(providers: readonly T[]) {
+  if (providers.some((provider) => provider.id === CUSTOM_API_PROVIDER_OPTION_ID)) return [...providers]
+  return pipe(
+    [...providers, CUSTOM_API_PROVIDER_DIALOG_ENTRY as T],
     sortBy(
       (provider) => providerDialogSortKey(provider.id),
       (provider) => provider.name,

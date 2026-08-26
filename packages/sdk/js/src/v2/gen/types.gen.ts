@@ -2969,6 +2969,7 @@ export type ProviderConfig = {
       }
     }
   }
+  management?: "custom-api"
   whitelist?: Array<string>
   blacklist?: Array<string>
 }
@@ -13156,6 +13157,130 @@ export type ProviderListResponses = {
 }
 
 export type ProviderListResponse = ProviderListResponses[keyof ProviderListResponses]
+
+export type ProviderCustomListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/provider/custom"
+}
+
+export type ProviderCustomListResponses = {
+  /**
+   * Managed custom API providers
+   */
+  200: Array<{
+    providerID: string
+    name: string
+    protocol: "openai-compatible" | "anthropic-compatible"
+    baseURL: string
+    hasApiKey: boolean
+    models: Array<{
+      id: string
+      name?: string
+      contextWindow: number
+      outputLimit: number
+      toolCall: boolean
+      reasoning: boolean
+      attachment: boolean
+      temperature: boolean
+    }>
+  }>
+}
+
+export type ProviderCustomListResponse = ProviderCustomListResponses[keyof ProviderCustomListResponses]
+
+export type ProviderCustomDeleteData = {
+  body?: never
+  path: {
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/custom/{providerID}"
+}
+
+export type ProviderCustomDeleteErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderCustomDeleteError = ProviderCustomDeleteErrors[keyof ProviderCustomDeleteErrors]
+
+export type ProviderCustomDeleteResponses = {
+  /**
+   * Whether the provider was removed
+   */
+  200: boolean
+}
+
+export type ProviderCustomDeleteResponse = ProviderCustomDeleteResponses[keyof ProviderCustomDeleteResponses]
+
+export type ProviderCustomUpdateData = {
+  body?: {
+    name: string
+    protocol: "openai-compatible" | "anthropic-compatible"
+    baseURL: string
+    apiKey?: string
+    allowInsecureHttp?: boolean
+    models: Array<{
+      id: string
+      name?: string
+      contextWindow: number
+      outputLimit: number
+      toolCall: boolean
+      reasoning: boolean
+      attachment: boolean
+      temperature: boolean
+    }>
+  }
+  path: {
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/custom/{providerID}"
+}
+
+export type ProviderCustomUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+export type ProviderCustomUpdateError = ProviderCustomUpdateErrors[keyof ProviderCustomUpdateErrors]
+
+export type ProviderCustomUpdateResponses = {
+  /**
+   * Saved custom API provider
+   */
+  200: {
+    providerID: string
+    name: string
+    protocol: "openai-compatible" | "anthropic-compatible"
+    baseURL: string
+    hasApiKey: boolean
+    models: Array<{
+      id: string
+      name?: string
+      contextWindow: number
+      outputLimit: number
+      toolCall: boolean
+      reasoning: boolean
+      attachment: boolean
+      temperature: boolean
+    }>
+  }
+}
+
+export type ProviderCustomUpdateResponse = ProviderCustomUpdateResponses[keyof ProviderCustomUpdateResponses]
 
 export type ProviderPrivateGpuConnectionUpdateData = {
   body?: {

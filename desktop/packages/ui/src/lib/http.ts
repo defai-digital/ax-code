@@ -86,6 +86,8 @@ export const API_ENDPOINTS = {
   provider: {
     base: `${API_PATHS.base}/provider`,
     auth: `${API_PATHS.base}/provider/auth`,
+    custom: `${API_PATHS.base}/provider/custom`,
+    customByProvider: `${API_PATHS.base}/provider/custom/:providerId`,
     source: `${API_PATHS.base}/provider/:providerId/source`,
     axEngineModels: `${API_PATHS.base}/provider/ax-engine/models`,
     axEngineModelDownload: `${API_PATHS.base}/provider/ax-engine/models/:modelId/download`,

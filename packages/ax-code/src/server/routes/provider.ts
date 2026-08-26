@@ -45,6 +45,7 @@ import { connectAlibabaPai } from "@/provider/alibaba-pai"
 import { connectPrivateGpu } from "@/provider/private-gpu/connect"
 import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
 import { isRetiredProviderID } from "@/provider/retired-providers"
+import { CustomApiProvider } from "@/provider/custom-api-provider"
 
 const log = Log.create({ service: "server" })
 
@@ -271,6 +272,79 @@ export const ProviderRoutes = lazy(() =>
           default: mapValues(providers, (item) => Provider.sort(Object.values(item.models))[0]?.id ?? ""),
           connected: Object.keys(connected),
         })
+      },
+    )
+    .get(
+      "/custom",
+      describeRoute({
+        summary: "List managed custom API providers",
+        description: "List custom API providers without returning stored API tokens.",
+        operationId: "provider.custom.list",
+        responses: {
+          200: {
+            description: "Managed custom API providers",
+            content: { "application/json": { schema: resolver(CustomApiProvider.ListView) } },
+          },
+        },
+      }),
+      async (c) => c.json(await CustomApiProvider.list()),
+    )
+    .put(
+      "/custom/:providerID",
+      describeRoute({
+        summary: "Create or update a managed custom API provider",
+        description:
+          "Persist endpoint and model metadata in global config and store an optional API token in encrypted auth storage.",
+        operationId: "provider.custom.update",
+        responses: {
+          200: {
+            description: "Saved custom API provider",
+            content: { "application/json": { schema: resolver(CustomApiProvider.View) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("param", z.object({ providerID: CustomApiProvider.ProviderID })),
+      validator("json", CustomApiProvider.Upsert),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        try {
+          return c.json(await CustomApiProvider.upsert(providerID, c.req.valid("json")))
+        } catch (error) {
+          if (!CustomApiProvider.Error.isInstance(error)) throw error
+          return invalidRequest(c, {
+            message: error.data.message,
+            details: { resource: "customApiProvider", providerID },
+          })
+        }
+      },
+    )
+    .delete(
+      "/custom/:providerID",
+      describeRoute({
+        summary: "Delete a managed custom API provider",
+        description: "Remove the managed provider metadata and its encrypted API token.",
+        operationId: "provider.custom.delete",
+        responses: {
+          200: {
+            description: "Whether the provider was removed",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("param", z.object({ providerID: CustomApiProvider.ProviderID })),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        try {
+          return c.json(await CustomApiProvider.remove(providerID))
+        } catch (error) {
+          if (!CustomApiProvider.Error.isInstance(error)) throw error
+          return invalidRequest(c, {
+            message: error.data.message,
+            details: { resource: "customApiProvider", providerID },
+          })
+        }
       },
     )
     .put(
