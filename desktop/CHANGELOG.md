@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.12] - 2026-08-27
+
+### Added
+
+- Add in-place model refresh for managed custom API providers.
+
+### Changed
+
+- Resolve agent pins consistently across routing, aux calls, and the TUI.
+- Follow a pinned model to the connected provider serving the same SKU.
+- Fall back when a pinned model's provider is disabled.
+- Filter disabled providers from the session sidebar.
+- Parse nested limit and capabilities from custom API /models rows.
+- Replace the sticky compaction banner with an auto-dismiss toast.
+
+### Fixed
+
+- Fix compaction fallback test and warn on unavailable subtask pins.
+- Fix custom API catalog limits and non-chat model lanes.
+- Fix custom API gateways for OneAPI-style URL, token, and context limits.
+
 ## [7.8.11] - 2026-08-26
 
 ### Fixed

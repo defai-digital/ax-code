@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/ui",
-  "version": "7.8.11",
+  "version": "7.8.12",
   "private": true,
   "type": "module",
   "main": "src/main.tsx",
