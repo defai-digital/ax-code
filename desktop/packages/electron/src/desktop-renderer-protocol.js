@@ -91,18 +91,6 @@ const readRendererApiOriginFromArgv = (argv, env = process.env) => {
   return fromEnv
 }
 
-const injectPackagedRendererServerRuntime = (html, origin) => {
-  const source = typeof html === "string" ? html : ""
-  const safeOrigin = typeof origin === "string" ? origin.trim().replace(/\/+$/, "") : ""
-  if (!source || !safeOrigin) return source
-  const snippet = `<script>window.__AX_CODE_DESKTOP_DESKTOP_SERVER__={origin:${JSON.stringify(safeOrigin)},axCodePort:null,apiPrefix:"/api",cliAvailable:true};</script>`
-  // Keep charset as the first head child. Injecting before <meta charset>
-  // can prevent Chromium from executing later module scripts on app://.
-  if (source.includes("</head>")) return source.replace("</head>", `${snippet}</head>`)
-  if (source.includes("<head>")) return source.replace("<head>", `<head>${snippet}`)
-  return `${snippet}${source}`
-}
-
 const buildPackagedRendererCsp = () => {
   const connectSrc = LOOPBACK_CONNECT_SRC.join(" ")
   return [
@@ -270,19 +258,13 @@ const createPackagedRendererProtocolHandler = ({ webDistPath, readFile, getApiOr
       return new Response("Forbidden", { status: 403 })
     }
     try {
+      // Serve original bytes. Rewriting HTML to inject the API origin stopped
+      // Chromium from executing Vite module scripts on app://.
       const body = await readFile(resolved.path)
-      const contentType = mimeForPackagedRendererAsset(resolved.path)
-      const payload =
-        contentType.startsWith("text/html") && typeof getApiOrigin === "function"
-          ? injectPackagedRendererServerRuntime(
-              Buffer.isBuffer(body) ? body.toString("utf8") : String(body),
-              getApiOrigin(),
-            )
-          : body
-      return new Response(payload, {
+      return new Response(body, {
         status: 200,
         headers: {
-          "Content-Type": contentType,
+          "Content-Type": mimeForPackagedRendererAsset(resolved.path),
           "Content-Security-Policy": buildPackagedRendererCsp(),
           "Access-Control-Allow-Origin": PACKAGED_RENDERER_ORIGIN,
         },
@@ -308,7 +290,6 @@ module.exports = {
   buildRendererApiOrigin,
   buildRendererApiOriginAdditionalArguments,
   readRendererApiOriginFromArgv,
-  injectPackagedRendererServerRuntime,
   buildPackagedRendererCsp,
   parseCspDirective,
   isLoopbackConnectSrc,

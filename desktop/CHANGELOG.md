@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Serve packaged renderer HTML unchanged so Vite module scripts still execute on app://.
+
 ## [7.8.8] - 2026-08-26
 
 ### Fixed

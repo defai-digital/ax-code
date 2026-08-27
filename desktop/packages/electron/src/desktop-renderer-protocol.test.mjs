@@ -13,7 +13,6 @@ const {
   buildRendererApiOrigin,
   buildRendererApiOriginAdditionalArguments,
   readRendererApiOriginFromArgv,
-  injectPackagedRendererServerRuntime,
   buildPackagedRendererCsp,
   parseCspDirective,
   isLoopbackConnectSrc,
@@ -63,17 +62,9 @@ describe("packaged renderer protocol policy", () => {
     )
   })
 
-  test("injects the loopback server origin into packaged HTML", () => {
-    const html = injectPackagedRendererServerRuntime(
-      '<html><head><meta charset="UTF-8" /></head></html>',
-      "http://127.0.0.1:50959",
-    )
-    expect(html).toContain('window.__AX_CODE_DESKTOP_DESKTOP_SERVER__={origin:"http://127.0.0.1:50959"')
-    expect(html.indexOf("<meta charset")).toBeLessThan(html.indexOf("__AX_CODE_DESKTOP_DESKTOP_SERVER__"))
-  })
-
-  test("protocol handler serves packaged assets and rejects escapes", async () => {
-    const files = new Map([[path.resolve("/app/web-dist", "index.html"), "<html><head></head></html>"]])
+  test("protocol handler serves original packaged HTML without injecting runtime", async () => {
+    const original = '<html><head><meta charset="UTF-8" /></head></html>'
+    const files = new Map([[path.resolve("/app/web-dist", "index.html"), original]])
     const handle = createPackagedRendererProtocolHandler({
       webDistPath: "/app/web-dist",
       getApiOrigin: () => "http://127.0.0.1:50959",
@@ -85,7 +76,9 @@ describe("packaged renderer protocol policy", () => {
     })
     const ok = await handle({ url: "app://ax-code/" })
     expect(ok.status).toBe(200)
-    expect(await ok.text()).toContain('origin:"http://127.0.0.1:50959"')
+    expect(await ok.text()).toBe(original)
+    expect(ok.headers.get("content-type")).toContain("text/html")
+    expect(ok.headers.get("access-control-allow-origin")).toBe(PACKAGED_RENDERER_ORIGIN)
     const escaped = await handle({ url: "app://ax-code/%2e%2e/secret" })
     expect(escaped.status).toBeGreaterThanOrEqual(400)
   })
