@@ -165,6 +165,7 @@ export async function runNativeWiki(input: {
     try {
       return await generateObject({
         model: model.language,
+        maxOutputTokens: model.maxOutputTokens,
         schema: PAGE_SCHEMA,
         abortSignal: abort.signal,
         messages: [

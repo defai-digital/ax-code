@@ -29287,7 +29287,7 @@
         "name": "Gemma 4 26B A4B Uncensored TEE",
         "description": "Open Gemma instruction model for efficient chat and self-hosted deployments",
         "family": "gemma",
-        "attachment": true,
+        "attachment": false,
         "reasoning": false,
         "tool_call": true,
         "structured_output": true,
@@ -29295,8 +29295,7 @@
         "last_updated": "2026-05-23",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
@@ -176010,7 +176009,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 65536
+          "output": 235929
         }
       },
       "qwen/qwen3-vl-235b-a22b-thinking": {
@@ -176848,7 +176847,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 81920
         }
       },
       "qwen/qwen3-next-80b-a3b-instruct": {

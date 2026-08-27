@@ -4083,6 +4083,54 @@ test("defaultModel follows a configured model to the connected provider that ser
   })
 })
 
+test("getSmallModel skips a same-ID model on the current provider that cannot drive the agent loop", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          small_model: "openai/text-only",
+          disabled_providers: ["openai"],
+          provider: {
+            gateway: {
+              management: "custom-api",
+              name: "Gateway",
+              npm: "@ai-sdk/openai-compatible",
+              api: "http://127.0.0.1:8080/v1",
+              env: [],
+              models: {
+                "text-only": {
+                  id: "text-only",
+                  name: "Text Only",
+                  tool_call: false,
+                  limit: { context: 128_000, output: 16_384 },
+                },
+                "tool-model": {
+                  id: "tool-model",
+                  name: "Tool Model",
+                  tool_call: true,
+                  limit: { context: 128_000, output: 16_384 },
+                },
+              },
+              options: { baseURL: "http://127.0.0.1:8080/v1" },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("gateway"))
+      expect(String(model?.providerID)).toBe("gateway")
+      expect(String(model?.id)).toBe("tool-model")
+    },
+  })
+})
+
 test("getSmallModel follows small_model to the connected provider serving the same SKU", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({

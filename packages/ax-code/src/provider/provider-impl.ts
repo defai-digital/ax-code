@@ -1270,7 +1270,7 @@ export namespace Provider {
       // the custom provider ID, not the native `deepseek` / `openai` catalog.
       // Prefer the session's own provider, then any connected provider.
       const onCurrent = await tryGetModel(providerID, parsed.modelID)
-      if (onCurrent) return onCurrent
+      if (onCurrent && modelSelectableForProvider(providerID, onCurrent)) return onCurrent
       const moved = await resolvePinnedModel(parsed)
       if (moved) {
         log.warn("configured small_model moved to another provider", {

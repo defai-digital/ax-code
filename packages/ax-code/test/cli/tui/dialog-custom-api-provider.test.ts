@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest"
 import { CustomApiProvider } from "../../../src/provider/custom-api-provider"
 import {
+  customApiConnectKeepsSavedToken,
+  findCustomApiProviderByBaseURL,
   isManagedCustomApiProviderConfig,
   parseCustomApiProviderModelIDs,
   sameCustomApiBaseURL,
@@ -67,5 +69,46 @@ describe("sameCustomApiBaseURL", () => {
     expect(sameCustomApiBaseURL("https://API.Example.com/v1", "https://api.example.com/v1")).toBe(true)
     expect(sameCustomApiBaseURL("http://127.0.0.1:38080/v1", "http://127.0.0.1:38081/v1")).toBe(false)
     expect(sameCustomApiBaseURL("https://api.example.com/v1", "https://api.example.com/v2")).toBe(false)
+  })
+})
+
+describe("custom API connect token reuse", () => {
+  const registered = {
+    providerID: "127.0.0.1",
+    name: "127.0.0.1",
+    protocol: "openai-compatible" as const,
+    baseURL: "http://127.0.0.1:38080/v1",
+    hasApiKey: true,
+    models: [],
+  }
+
+  test("finds the managed provider that already serves the typed URL", () => {
+    expect(findCustomApiProviderByBaseURL([registered], "http://127.0.0.1:38080/v1/")).toBe(registered)
+    expect(findCustomApiProviderByBaseURL([registered], "")).toBeUndefined()
+  })
+
+  test("allows a blank token when add-mode reconnects an endpoint that already has a key", () => {
+    expect(
+      customApiConnectKeepsSavedToken({
+        baseURL: "http://127.0.0.1:38080/v1/",
+        registered: [registered],
+      }),
+    ).toBe(true)
+    expect(
+      customApiConnectKeepsSavedToken({
+        baseURL: "http://127.0.0.1:38080/v1",
+        existing: { hasApiKey: true },
+      }),
+    ).toBe(true)
+  })
+
+  test("still requires a token for a new URL or a registered endpoint without a key", () => {
+    expect(customApiConnectKeepsSavedToken({ baseURL: "https://api.example.com/v1" })).toBe(false)
+    expect(
+      customApiConnectKeepsSavedToken({
+        baseURL: "http://127.0.0.1:38080/v1",
+        registered: [{ ...registered, hasApiKey: false }],
+      }),
+    ).toBe(false)
   })
 })

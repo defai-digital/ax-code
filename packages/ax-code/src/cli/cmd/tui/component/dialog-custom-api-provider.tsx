@@ -155,6 +155,7 @@ type CustomApiConnectFields = {
 
 function DialogCustomApiConnect(props: {
   existing?: CustomApiProviderView
+  registered?: readonly CustomApiProviderView[]
   onConfirm: (fields: CustomApiConnectFields) => void
 }) {
   const dialog = useDialog()
@@ -179,7 +180,14 @@ function DialogCustomApiConnect(props: {
       focusActive()
       return
     }
-    if (!apiKey.trim() && !props.existing?.hasApiKey) {
+    if (
+      !apiKey.trim() &&
+      !customApiConnectKeepsSavedToken({
+        baseURL,
+        existing: props.existing,
+        registered: props.registered,
+      })
+    ) {
       toast.show({ message: "API token is required", variant: "error" })
       setActive("apiKey")
       focusActive()
@@ -230,7 +238,10 @@ function DialogCustomApiConnect(props: {
         </text>
       </box>
       <box gap={1}>
-        <text fg={theme.textMuted}>OpenAI-compatible base URL and bearer token. Models load from GET /models.</text>
+        <text fg={theme.textMuted}>
+          OpenAI-compatible base URL and bearer token. Models load from GET /models. Leave the token blank to keep a
+          saved key when this URL is already registered.
+        </text>
         {fieldLabel("baseURL", "1. Base URL")}
         <textarea
           height={3}
@@ -248,7 +259,11 @@ function DialogCustomApiConnect(props: {
           keyBindings={[{ name: "return", action: "submit" }]}
           ref={(val: TextareaRenderable) => (apiKeyInput = val)}
           initialValue=""
-          placeholder={props.existing?.hasApiKey ? "Leave blank to keep saved token" : "Bearer token"}
+          placeholder={
+            props.existing?.hasApiKey || (props.registered ?? []).some((provider) => provider.hasApiKey)
+              ? "Leave blank to keep saved token"
+              : "Bearer token"
+          }
           textColor={theme.text}
           focusedTextColor={theme.text}
           cursorColor={theme.text}
@@ -279,6 +294,24 @@ export function sameCustomApiBaseURL(left: string, right: string): boolean {
   return normalize(left) === normalize(right)
 }
 
+export function findCustomApiProviderByBaseURL<T extends { baseURL: string }>(
+  providers: readonly T[],
+  baseURL: string,
+): T | undefined {
+  if (!baseURL.trim()) return undefined
+  return providers.find((provider) => sameCustomApiBaseURL(provider.baseURL, baseURL))
+}
+
+/** Blank token is allowed when this URL already has an encrypted key. */
+export function customApiConnectKeepsSavedToken(input: {
+  baseURL: string
+  existing?: { hasApiKey: boolean }
+  registered?: readonly { baseURL: string; hasApiKey: boolean }[]
+}): boolean {
+  if (input.existing?.hasApiKey) return true
+  return findCustomApiProviderByBaseURL(input.registered ?? [], input.baseURL)?.hasApiKey === true
+}
+
 async function allocateProviderID(sdk: SDK, base: string): Promise<string> {
   const existing = await listCustomApiProviders(sdk)
   const used = new Set(existing.map((provider) => provider.providerID))
@@ -296,9 +329,18 @@ export async function configureCustomApiProvider(input: {
   theme: Theme
   existing?: CustomApiProviderView
 }): Promise<CustomApiProviderView | null> {
+  // Load the managed list before the form so add-mode can keep a saved token
+  // when the typed URL already belongs to a provider (Desktop already does this).
+  const registered = input.existing ? [] : await listCustomApiProviders(input.sdk)
   const fields = await new Promise<CustomApiConnectFields | null>((resolve) => {
     input.dialog.replace(
-      () => <DialogCustomApiConnect existing={input.existing} onConfirm={(value) => resolve(value)} />,
+      () => (
+        <DialogCustomApiConnect
+          existing={input.existing}
+          registered={registered}
+          onConfirm={(value) => resolve(value)}
+        />
+      ),
       () => resolve(null),
     )
   })
@@ -309,11 +351,7 @@ export async function configureCustomApiProvider(input: {
   // Connecting an endpoint that is already registered updates that provider
   // in place. Minting a second ID (`127-0-0-1` next to `127.0.0.1`) would
   // orphan every pin, recent entry, and small_model that names the first.
-  const existing =
-    input.existing ??
-    (await listCustomApiProviders(input.sdk)).find((candidate) =>
-      sameCustomApiBaseURL(candidate.baseURL, fields.baseURL),
-    )
+  const existing = input.existing ?? findCustomApiProviderByBaseURL(registered, fields.baseURL)
   const identity = existing
     ? { name: existing.name, providerID: existing.providerID }
     : CustomApiProvider.identityFromBaseURL(fields.baseURL)
@@ -324,9 +362,6 @@ export async function configureCustomApiProvider(input: {
     baseURL: fields.baseURL,
     allowInsecureHttp: new URL(fields.baseURL).protocol === "http:",
     ...(fields.apiKey.trim().length > 0 ? { apiKey: fields.apiKey } : {}),
-  }
-  if (existing && existing.baseURL === fields.baseURL && existing.models.length > 0) {
-    body.models = existing.models
   }
 
   try {
