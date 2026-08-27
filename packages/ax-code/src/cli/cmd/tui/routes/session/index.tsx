@@ -105,7 +105,7 @@ import {
 } from "./view-model"
 import { SessionCodeRenderer } from "./render-adapter"
 import { Log } from "@/util/log"
-import { firstCompactionMessageID, shouldShowCompactionNotice } from "./compaction-view-model"
+import { compactionToastForActiveSession } from "./compaction-view-model"
 import { createReconnectRecoveryGate } from "../../util/reconnect-recovery"
 import { recordTuiStartupOnce } from "@tui/util/startup-trace"
 import { isMissingSessionSnapshotError } from "../../context/sync-session-coordinator"
@@ -513,6 +513,18 @@ export function Session() {
     lastSwitch = part.id
   })
   onCleanup(() => unsubAgentSwitch())
+
+  // Durable marker is the Auto/Manual divider. Toast only the session
+  // currently on screen so background compactors stay silent.
+  const unsubCompacted = sdk.event.on("session.compacted", (evt) => {
+    const options = compactionToastForActiveSession({
+      compactedSessionID: evt.properties.sessionID,
+      activeSessionID: route.sessionID,
+    })
+    if (!options) return
+    toast.show(options)
+  })
+  onCleanup(() => unsubCompacted())
 
   let scroll: ScrollBoxRenderable
   let prompt: PromptRef
@@ -1263,20 +1275,6 @@ export function Session() {
     lastPinnedInputOccupancy = view.state === "visible" ? view.lineCount + 1 : 0
     return view
   })
-  const firstCompactionID = createMemo(() => firstCompactionMessageID(messages(), sync.data.part))
-  const dismissedCompactionNotice = createMemo(() => {
-    const dismissed = kv.get("compaction_notice_dismissed", {}) as Record<string, boolean>
-    return !!dismissed[route.sessionID]
-  })
-
-  function dismissCompactionNotice() {
-    const dismissed = kv.get("compaction_notice_dismissed", {}) as Record<string, boolean>
-    kv.set("compaction_notice_dismissed", {
-      ...dismissed,
-      [route.sessionID]: true,
-    })
-  }
-
   // snap to bottom when session changes
   createEffect(on(() => route.sessionID, toBottom))
 
@@ -1425,12 +1423,6 @@ export function Session() {
                           message={message as UserMessage}
                           parts={sync.data.part[message.id] ?? []}
                           pending={pending()}
-                          showCompactionNotice={shouldShowCompactionNotice({
-                            currentMessageID: message.id,
-                            firstMessageID: firstCompactionID(),
-                            dismissed: dismissedCompactionNotice(),
-                          })}
-                          onDismissCompactionNotice={dismissCompactionNotice}
                         />
                         <RouteIndicator messageID={message.id} routeInfoByMessage={routeInfoByMessage} />
                       </>
@@ -1550,8 +1542,6 @@ function UserMessage(props: {
   onMouseUp: () => void
   index: number
   pending?: string
-  showCompactionNotice: boolean
-  onDismissCompactionNotice: () => void
 }) {
   const ctx = use()
   const local = useLocal()
@@ -1713,9 +1703,6 @@ function UserMessage(props: {
           )
         }}
       </Show>
-      <Show when={props.showCompactionNotice}>
-        <CompactionNotice onDismiss={props.onDismissCompactionNotice} />
-      </Show>
     </>
   )
 }
@@ -1741,26 +1728,6 @@ function RouteIndicator(props: {
         </box>
       )}
     </Show>
-  )
-}
-
-function CompactionNotice(props: { onDismiss: () => void }) {
-  const { theme } = useTheme()
-  return (
-    <box
-      marginTop={1}
-      border={["left"]}
-      borderColor={theme.borderActive}
-      customBorderChars={SplitBorder.customBorderChars}
-    >
-      <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
-        <text fg={theme.text}>Session compacted to free context space.</text>
-        <text fg={theme.textMuted}>Older messages were summarized. The session can continue normally.</text>
-        <text fg={theme.textMuted} onMouseUp={props.onDismiss}>
-          dismiss
-        </text>
-      </box>
-    </box>
   )
 }
 

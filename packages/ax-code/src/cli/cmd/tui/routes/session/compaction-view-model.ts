@@ -1,21 +1,10 @@
-import type { Part } from "@ax-code/sdk/v2"
-
-type Message = {
-  id: string
-  role: string
+export const COMPACTION_TOAST = {
+  variant: "info" as const,
+  message: "Context compacted. Older messages were summarized.",
+  duration: 5000,
 }
 
-export function firstCompactionMessageID(messages: Message[], parts: Record<string, Part[] | undefined>) {
-  for (const message of messages) {
-    if (message.role !== "user") continue
-    if ((parts[message.id] ?? []).some((part) => part.type === "compaction")) return message.id
-  }
-}
-
-export function shouldShowCompactionNotice(input: {
-  currentMessageID: string
-  firstMessageID?: string
-  dismissed: boolean
-}) {
-  return !input.dismissed && input.currentMessageID === input.firstMessageID
+export function compactionToastForActiveSession(input: { compactedSessionID: string; activeSessionID: string }) {
+  if (input.compactedSessionID !== input.activeSessionID) return
+  return COMPACTION_TOAST
 }
