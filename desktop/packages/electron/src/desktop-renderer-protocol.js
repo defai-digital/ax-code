@@ -266,7 +266,6 @@ const createPackagedRendererProtocolHandler = ({ webDistPath, readFile, getApiOr
         headers: {
           "Content-Type": mimeForPackagedRendererAsset(resolved.path),
           "Content-Security-Policy": buildPackagedRendererCsp(),
-          "Access-Control-Allow-Origin": PACKAGED_RENDERER_ORIGIN,
         },
       })
     } catch {

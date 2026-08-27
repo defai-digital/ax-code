@@ -60,7 +60,6 @@ const {
   PACKAGED_RENDERER_SCHEME,
   buildPackagedRendererCsp,
   buildRendererApiOrigin,
-  buildRendererApiOriginAdditionalArguments,
   createPackagedRendererProtocolHandler,
   isPackagedRendererUrl,
   isTrustedRendererNavigationUrl,
@@ -465,9 +464,10 @@ function safeOpenExternal(url) {
 }
 
 function rendererWebPreferences() {
-  return createDesktopRendererWebPreferences(path.join(__dirname, "preload.js"), {
-    additionalArguments: buildRendererApiOriginAdditionalArguments(serverPort),
-  })
+  // Do not forward --ax-code-desktop-api-origin= into Chromium argv.
+  // Those look like command-line switches and stopped Vite module scripts
+  // from executing on app://. Session checks go through the protocol proxy.
+  return createDesktopRendererWebPreferences(path.join(__dirname, "preload.js"))
 }
 
 function localRendererOrigin() {
@@ -520,6 +520,18 @@ async function createWindow() {
     }
     event.preventDefault()
     safeOpenExternal(url)
+  })
+
+  mainWindow.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    const details = {
+      level: typeof event?.level === "number" ? event.level : level,
+      message: typeof event?.message === "string" ? event.message : String(message || ""),
+      line: event?.lineNumber ?? line,
+      source: event?.sourceId ?? sourceId,
+    }
+    if (details.level >= 2 && details.message) {
+      recordStartupEvent("renderer.console", details, { once: false })
+    }
   })
 
   mainWindow.webContents.on("did-finish-load", () => {

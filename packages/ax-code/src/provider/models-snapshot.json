@@ -81799,7 +81799,7 @@
         "name": "Qwen3.5 35B A3B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -81813,7 +81813,8 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -81821,8 +81822,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3-vl-235b-a22b-thinking": {
@@ -81894,7 +81895,7 @@
         "name": "Qwen3.5 397B A17B",
         "description": "Large open Qwen multimodal MoE for visual agents and long technical tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -81908,7 +81909,8 @@
         "last_updated": "2026-02-15",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -81916,8 +81918,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3.5-flash": {
@@ -82452,7 +82454,7 @@
         "name": "Qwen3.5 27B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -82466,7 +82468,8 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -82474,8 +82477,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3.5-122b-a10b": {
@@ -105881,15 +105884,15 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -105967,15 +105970,15 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -106011,15 +106014,15 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -106081,15 +106084,15 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -106125,15 +106128,15 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -106196,15 +106199,15 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -106240,15 +106243,15 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -106422,7 +106425,9 @@
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -106458,15 +106463,15 @@
         "reasoning": true,
         "reasoning_options": [
           {
-            "type": "toggle"
-          },
-          {
             "type": "effort",
             "values": [
+              "none",
               "minimal",
               "low",
               "medium",
-              "high"
+              "high",
+              "xhigh",
+              "max"
             ]
           }
         ],
@@ -121373,6 +121378,50 @@
         "limit": {
           "context": 400000,
           "input": 272000,
+          "output": 128000
+        }
+      },
+      "glm-5.3-flash": {
+        "id": "glm-5.3-flash",
+        "name": "GLM-5.3-Flash",
+        "description": "Native multimodal GLM model for efficient coding and long-horizon agent tasks",
+        "family": "glm",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ]
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
           "output": 128000
         }
       },
@@ -169247,7 +169296,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 228000
         }
       },
       "nvidia/nemotron-3-super-120b-a12b": {
@@ -175482,8 +175531,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 32000,
-          "output": 28800
+          "context": 128000,
+          "output": 115200
         }
       },
       "qwen/qwen3.5-plus-20260420": {
@@ -175797,7 +175846,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 65536
         }
       },
       "qwen/qwen3-vl-235b-a22b-thinking": {
@@ -176012,7 +176061,7 @@
         "open_weights": false,
         "limit": {
           "context": 262144,
-          "output": 16384
+          "output": 235929
         }
       },
       "qwen/qwen3.6-max-preview": {

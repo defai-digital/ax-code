@@ -78,7 +78,7 @@ describe("packaged renderer protocol policy", () => {
     expect(ok.status).toBe(200)
     expect(await ok.text()).toBe(original)
     expect(ok.headers.get("content-type")).toContain("text/html")
-    expect(ok.headers.get("access-control-allow-origin")).toBe(PACKAGED_RENDERER_ORIGIN)
+    expect(ok.headers.get("access-control-allow-origin")).toBeNull()
     const escaped = await handle({ url: "app://ax-code/%2e%2e/secret" })
     expect(escaped.status).toBeGreaterThanOrEqual(400)
   })
