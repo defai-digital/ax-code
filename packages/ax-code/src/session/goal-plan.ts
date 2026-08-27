@@ -3,6 +3,7 @@ import fs from "fs"
 import path from "path"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
+import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import type { SessionID } from "./schema"
@@ -32,6 +33,11 @@ export namespace GoalPlan {
     taskChecklist?: string[]
     risks?: string[]
   }
+
+  export type ReadResult =
+    | { status: "found"; contract: Contract }
+    | { status: "missing" }
+    | { status: "invalid"; error: unknown }
 
   export class Error extends globalThis.Error {
     readonly code: "invalid" | "missing" | "writer"
@@ -136,7 +142,10 @@ export namespace GoalPlan {
       ...contract.acceptance.map((item, index) => `${index + 1}. ${item.id}: ${item.text}`),
       "",
       "## Verification plan",
-      ...contract.verification.map((item, index) => `${index + 1}. ${item.tag}: ${item.action} — ${item.observation}`),
+      ...contract.verification.map(
+        (item, index) =>
+          `${index + 1}. ${item.tag}: ${escapeVerificationField(item.action)} — ${escapeVerificationField(item.observation)}`,
+      ),
       "",
       "## Non-goals",
       ...contract.nonGoals.map((item) => `- ${item}`),
@@ -162,9 +171,7 @@ export namespace GoalPlan {
   }
 
   export function parse(markdown: string): Contract {
-    if (markdown.length > MAX_READ_BYTES) {
-      throw new Error("invalid", `Goal plan exceeds ${MAX_READ_BYTES} bytes`)
-    }
+    assertWithinReadLimit(markdown)
     const sections = splitSections(markdown)
     const title = headline(markdown)
     const kindRaw = firstLine(sections.get("goal kind")).toLowerCase()
@@ -203,36 +210,58 @@ export namespace GoalPlan {
     return undefined
   }
 
-  export function readCapped(file: string): string | undefined {
+  type CappedReadResult =
+    | { status: "found"; markdown: string }
+    | { status: "missing" }
+    | { status: "invalid"; error: unknown }
+
+  function readCappedResult(file: string): CappedReadResult {
     try {
       const fd = fs.openSync(file, "r")
       try {
-        const buf = Buffer.alloc(MAX_READ_BYTES)
-        const bytes = fs.readSync(fd, buf, 0, MAX_READ_BYTES, 0)
-        if (bytes <= 0) return undefined
-        let slice = buf.subarray(0, bytes)
-        if (bytes >= MAX_READ_BYTES) {
-          const lastNl = slice.lastIndexOf(0x0a)
-          if (lastNl >= 0) slice = slice.subarray(0, lastNl)
+        const buf = Buffer.alloc(MAX_READ_BYTES + 1)
+        const bytes = fs.readSync(fd, buf, 0, MAX_READ_BYTES + 1, 0)
+        if (bytes <= 0) return { status: "found", markdown: "" }
+        if (bytes > MAX_READ_BYTES) {
+          return {
+            status: "invalid",
+            error: new Error("invalid", `Goal plan exceeds ${MAX_READ_BYTES} bytes`),
+          }
         }
-        return slice.toString("utf8")
+        return { status: "found", markdown: buf.subarray(0, bytes).toString("utf8") }
       } finally {
         fs.closeSync(fd)
       }
-    } catch {
-      return undefined
+    } catch (error) {
+      if (Filesystem.isMissingPathError(error)) return { status: "missing" }
+      return { status: "invalid", error }
     }
   }
 
-  export function read(sessionID: SessionID, created: number): Contract | undefined {
+  export function readCapped(file: string): string | undefined {
+    const result = readCappedResult(file)
+    return result.status === "found" && result.markdown ? result.markdown : undefined
+  }
+
+  export function read(sessionID: SessionID, created: number): ReadResult {
     const file = pathFor(sessionID, created)
-    const markdown = readCapped(file)
-    if (!markdown?.trim()) return undefined
+    const result = readCappedResult(file)
+    if (result.status === "missing") return result
+    if (result.status === "invalid") {
+      log.warn("goal plan read failed", { file, error: toErrorMessage(result.error) })
+      return result
+    }
+    const markdown = result.markdown
+    if (!markdown.trim()) {
+      const error = new Error("invalid", "Goal plan is empty")
+      log.warn("goal plan parse failed", { file, error: error.message })
+      return { status: "invalid", error }
+    }
     try {
-      return parse(markdown)
+      return { status: "found", contract: parse(markdown) }
     } catch (error) {
       log.warn("goal plan parse failed", { file, error: toErrorMessage(error) })
-      return undefined
+      return { status: "invalid", error }
     }
   }
 
@@ -246,11 +275,11 @@ export namespace GoalPlan {
   }
 
   export function hasValidContract(sessionID: SessionID, created: number): boolean {
-    const contract = read(sessionID, created)
-    if (!contract) return false
+    const result = read(sessionID, created)
+    if (result.status !== "found") return false
     const stored = storedDigest(sessionID, created)
     if (!stored) return false
-    return stored === digestOf(contract)
+    return stored === digestOf(result.contract)
   }
 
   export function continuationGuidance(sessionID: SessionID, created: number) {
@@ -265,13 +294,15 @@ export namespace GoalPlan {
 
   export async function write(sessionID: SessionID, created: number, markdown: string) {
     const contract = parse(markdown)
+    const rendered = render(contract)
+    assertWithinReadLimit(rendered)
     const file = pathFor(sessionID, created)
     const digestFile = digestPathFor(sessionID, created)
     await fs.promises.mkdir(path.dirname(file), { recursive: true })
     await fs.promises.mkdir(path.dirname(digestFile), { recursive: true })
     const tmp = `${file}.${process.pid}.tmp`
     const digestTmp = `${digestFile}.${process.pid}.tmp`
-    await fs.promises.writeFile(tmp, render(contract), "utf8")
+    await fs.promises.writeFile(tmp, rendered, "utf8")
     await fs.promises.writeFile(digestTmp, digestOf(contract) + "\n", "utf8")
     await fs.promises.rename(tmp, file)
     await fs.promises.rename(digestTmp, digestFile)
@@ -279,9 +310,43 @@ export namespace GoalPlan {
   }
 
   export async function copyForFork(input: { from: SessionID; fromCreated: number; to: SessionID; toCreated: number }) {
-    const markdown = readCapped(pathFor(input.from, input.fromCreated))
-    if (!markdown?.trim()) return
-    await write(input.to, input.toCreated, markdown)
+    const fromPlan = pathFor(input.from, input.fromCreated)
+    const fromDigest = digestPathFor(input.from, input.fromCreated)
+    const toPlan = pathFor(input.to, input.toCreated)
+    const toDigest = digestPathFor(input.to, input.toCreated)
+    await fs.promises.mkdir(path.dirname(toPlan), { recursive: true })
+    await fs.promises.mkdir(path.dirname(toDigest), { recursive: true })
+    const suffix = `${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`
+    const planTmp = `${toPlan}.${suffix}`
+    const digestTmp = `${toDigest}.${suffix}`
+    let copiedPlan = false
+    try {
+      await fs.promises.copyFile(fromPlan, planTmp)
+      copiedPlan = true
+      try {
+        await fs.promises.copyFile(fromDigest, digestTmp)
+      } catch (error) {
+        if (!Filesystem.isMissingPathError(error)) throw error
+        const result = read(input.from, input.fromCreated)
+        if (result.status !== "found") {
+          throw new Error(
+            result.status === "missing" ? "missing" : "invalid",
+            "Cannot copy a goal plan without a readable source contract",
+          )
+        }
+        await fs.promises.writeFile(digestTmp, digestOf(result.contract) + "\n", "utf8")
+      }
+      // Publish the digest first so a crash can never leave a target plan
+      // that looks legacy and is silently replaced on resume. A lone digest
+      // makes completion and resume fail closed until the plan is restored.
+      await fs.promises.rename(digestTmp, toDigest)
+      await fs.promises.rename(planTmp, toPlan)
+    } catch (error) {
+      await fs.promises.unlink(planTmp).catch(() => undefined)
+      await fs.promises.unlink(digestTmp).catch(() => undefined)
+      if (!copiedPlan && Filesystem.isMissingPathError(error)) return
+      throw error
+    }
   }
 
   export async function remove(sessionID: SessionID, created: number) {
@@ -336,6 +401,12 @@ export namespace GoalPlan {
       if (checklist.length < MIN_CHECKLIST || checklist.length > MAX_CHECKLIST) {
         throw new Error("invalid", `Task checklist must contain ${MIN_CHECKLIST}–${MAX_CHECKLIST} items`)
       }
+    }
+  }
+
+  function assertWithinReadLimit(markdown: string) {
+    if (Buffer.byteLength(markdown, "utf8") > MAX_READ_BYTES) {
+      throw new Error("invalid", `Goal plan exceeds ${MAX_READ_BYTES} bytes`)
     }
   }
 
@@ -398,13 +469,29 @@ export namespace GoalPlan {
       const match = /^\s*\d+\.\s+(?:(gating|evidence):\s*)?(.+?)\s*$/i.exec(line)
       if (!match?.[2]) continue
       const rest = match[2]
-      const split = rest.split(/\s+[—–-]\s+|\s+--\s+/)
-      const action = (split[0] ?? rest).trim()
-      const observation = (split.slice(1).join(" — ") || action).trim()
+      const canonicalIndex = rest.indexOf(" — ")
+      const legacy = canonicalIndex < 0 ? /\s+(?:--|–|-)\s+/.exec(rest) : undefined
+      const separatorIndex = canonicalIndex >= 0 ? canonicalIndex : legacy?.index
+      const separatorLength = canonicalIndex >= 0 ? " — ".length : legacy?.[0].length
+      const rawAction = separatorIndex === undefined ? rest : rest.slice(0, separatorIndex)
+      const rawObservation =
+        separatorIndex === undefined || separatorLength === undefined
+          ? rawAction
+          : rest.slice(separatorIndex + separatorLength)
+      const action = unescapeVerificationField(rawAction).trim()
+      const observation = unescapeVerificationField(rawObservation).trim()
       const tag = match[1]?.toLowerCase() === "evidence" ? "evidence" : "gating"
       items.push({ tag, action, observation })
     }
     return items
+  }
+
+  function escapeVerificationField(value: string) {
+    return value.replace(/\\/g, "\\\\").replace(/—/g, "\\—")
+  }
+
+  function unescapeVerificationField(value: string) {
+    return value.replace(/\\([\\—])/g, "$1")
   }
 
   function parseBullets(body: string) {

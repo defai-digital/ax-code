@@ -13,6 +13,60 @@ describe("GoalPlan parser", () => {
     expect(GoalPlan.digestOf(parsed)).toBe(GoalPlan.digestOf(contract))
   })
 
+  test.each([
+    {
+      label: "an ASCII hyphen in the action",
+      action: "run unit tests - then integration tests",
+      observation: "tests pass",
+    },
+    {
+      label: "an ASCII hyphen in the observation",
+      action: "run pnpm test",
+      observation: "unit - integration suites pass",
+    },
+    {
+      label: "an em dash in the action",
+      action: "run foo — bar suite",
+      observation: "tests pass",
+    },
+    {
+      label: "an em dash in the observation",
+      action: "run pnpm test",
+      observation: "tests pass — including integration",
+    },
+    {
+      label: "a double hyphen in the action",
+      action: "run foo -- bar suite",
+      observation: "tests pass",
+    },
+  ])("round-trips verification text containing $label", ({ action, observation }) => {
+    const contract = GoalPlan.fromFields({
+      kind: "code-change",
+      acceptance: [{ text: "the feature works" }],
+      verification: [{ tag: "gating", action, observation }],
+      nonGoals: ["unrelated changes"],
+      assumedScope: "src",
+      implementationApproach: "keep the change small",
+      taskChecklist: ["implement", "verify"],
+    })
+    const parsed = GoalPlan.parse(GoalPlan.render(contract))
+    expect(parsed.verification).toEqual(contract.verification)
+    expect(GoalPlan.digestOf(parsed)).toBe(GoalPlan.digestOf(contract))
+  })
+
+  test("splits a legacy verification line once and preserves the observation", () => {
+    const markdown = GoalPlan.render(GoalPlan.sample("ship it")).replace(
+      "1. gating: run the relevant tests or verify_project — the checks pass after the last change",
+      "1. gating: run unit tests - then integration tests - both pass",
+    )
+    const parsed = GoalPlan.parse(markdown)
+    expect(parsed.verification[0]).toEqual({
+      tag: "gating",
+      action: "run unit tests",
+      observation: "then integration tests - both pass",
+    })
+  })
+
   test("parses analysis plans without a checklist", () => {
     const markdown = `# Plan: Review the auth module
 
@@ -58,6 +112,10 @@ src
 `),
     ).toThrow(/Non-goals/)
     expect(() => GoalPlan.parse("x".repeat(GoalPlan.MAX_READ_BYTES + 1))).toThrow(/exceeds/)
+    const multibyte = GoalPlan.render(GoalPlan.sample("界".repeat(3_000)))
+    expect(multibyte.length).toBeLessThan(GoalPlan.MAX_READ_BYTES)
+    expect(Buffer.byteLength(multibyte, "utf8")).toBeGreaterThan(GoalPlan.MAX_READ_BYTES)
+    expect(() => GoalPlan.parse(multibyte)).toThrow(/exceeds/)
   })
 
   test("rejects duplicate acceptance ids and missing code-change checklist", () => {

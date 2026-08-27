@@ -78,13 +78,22 @@ export namespace GoalPlanOrchestration {
   }): Promise<Prepared> {
     const existing = await SessionGoal.get(input.sessionID)
     if (!existing) throw new Error("No goal is set for this session")
-    if (GoalPlan.hasValidContract(input.sessionID, existing.time.created)) {
+    const stored = GoalPlan.storedDigest(input.sessionID, existing.time.created)
+    const result = GoalPlan.read(input.sessionID, existing.time.created)
+    if (result.status === "found" && stored === GoalPlan.digestOf(result.contract)) {
       const goal = existing.status === "active" ? existing : await SessionGoal.resume(input.sessionID)
       return {
         goal,
         path: GoalPlan.pathFor(input.sessionID, existing.time.created),
         reused: true,
       }
+    }
+    if (stored) {
+      throw new GoalPlan.Error(
+        "invalid",
+        "Cannot resume the goal: its frozen goal contract is missing, invalid, or no longer matches the stored digest. " +
+          "Restore the original goal plan, or clear and recreate the goal.",
+      )
     }
     if (existing.status === "budget_limited") {
       // Probe resume eligibility before spending a writer turn.

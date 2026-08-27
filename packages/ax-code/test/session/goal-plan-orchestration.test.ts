@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import fs from "fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
@@ -96,7 +97,41 @@ describe("GoalPlanOrchestration", () => {
     })
   })
 
-  test("copies the plan onto a forked session", async () => {
+  test("refuses to replace a corrupt frozen contract on resume", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        const prepared = await GoalPlanOrchestration.activate({
+          sessionID: session.id,
+          objective: "preserve the frozen contract",
+        })
+        await SessionGoal.pause(session.id)
+        const digestPath = GoalPlan.digestPathFor(session.id, prepared.goal.time.created)
+        const digestBefore = await fs.readFile(digestPath, "utf8")
+        const corrupt = "# Plan: preserve the frozen contract\n\nthis is not a valid contract\n"
+        await fs.writeFile(prepared.path, corrupt)
+        let calls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          calls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+
+        await expect(GoalPlanOrchestration.resumeWithPlan({ sessionID: session.id })).rejects.toThrow(
+          "frozen goal contract",
+        )
+        expect(calls).toBe(0)
+        expect(await fs.readFile(prepared.path, "utf8")).toBe(corrupt)
+        expect(await fs.readFile(digestPath, "utf8")).toBe(digestBefore)
+        expect((await SessionGoal.get(session.id))?.status).toBe("paused")
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("copies the plan and checklist progress onto a forked session verbatim", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -107,12 +142,60 @@ describe("GoalPlanOrchestration", () => {
           sessionID: session.id,
           objective: "fork this contract",
         })
+        const checked = (await fs.readFile(prepared.path, "utf8"))
+          .replace("- [ ] Inspect the current code", "- [x] Inspect the current code")
+          .replace("- [ ] Implement the change", "- [x] Implement the change")
+        await fs.writeFile(prepared.path, checked)
+        const sourceDigest = await fs.readFile(GoalPlan.digestPathFor(session.id, prepared.goal.time.created), "utf8")
         const fork = await Session.create({})
         const copied = await SessionGoal.copyTo({ from: session.id, to: fork.id })
         expect(copied?.objective).toBe("fork this contract")
         expect(GoalPlan.hasValidContract(fork.id, copied!.time.created)).toBe(true)
-        expect(GoalPlan.read(fork.id, copied!.time.created)?.acceptance[0]?.text).toContain("fork this contract")
+        const forkPath = GoalPlan.pathFor(fork.id, copied!.time.created)
+        const forkMarkdown = await fs.readFile(forkPath, "utf8")
+        expect(forkMarkdown).toBe(checked)
+        expect(GoalPlan.firstUncheckedTask(forkMarkdown)).toBe("Run verification")
+        expect(await fs.readFile(GoalPlan.digestPathFor(fork.id, copied!.time.created), "utf8")).toBe(sourceDigest)
+        const result = GoalPlan.read(fork.id, copied!.time.created)
+        expect(result.status).toBe("found")
+        if (result.status !== "found") throw new Error("expected copied goal plan")
+        expect(result.contract.acceptance[0]?.text).toContain("fork this contract")
         expect(prepared.path).not.toBe(GoalPlan.pathFor(fork.id, copied!.time.created))
+        await Session.remove(fork.id)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("rebuilds a missing source digest while copying the plan verbatim", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        const prepared = await GoalPlanOrchestration.activate({
+          sessionID: session.id,
+          objective: "recover the fork digest",
+        })
+        const sourceMarkdown = (await fs.readFile(prepared.path, "utf8")).replace(
+          "- [ ] Inspect the current code",
+          "- [x] Inspect the current code",
+        )
+        await fs.writeFile(prepared.path, sourceMarkdown)
+        await fs.unlink(GoalPlan.digestPathFor(session.id, prepared.goal.time.created))
+
+        const fork = await Session.create({})
+        const copied = await SessionGoal.copyTo({ from: session.id, to: fork.id })
+        const forkMarkdown = await fs.readFile(GoalPlan.pathFor(fork.id, copied!.time.created), "utf8")
+        expect(forkMarkdown).toBe(sourceMarkdown)
+        expect(forkMarkdown).toContain("- [x] Inspect the current code")
+        expect(GoalPlan.hasValidContract(fork.id, copied!.time.created)).toBe(true)
+        const result = GoalPlan.read(fork.id, copied!.time.created)
+        if (result.status !== "found") throw new Error("expected copied goal plan")
+        expect(await fs.readFile(GoalPlan.digestPathFor(fork.id, copied!.time.created), "utf8")).toBe(
+          GoalPlan.digestOf(result.contract) + "\n",
+        )
         await Session.remove(fork.id)
         await Session.remove(session.id)
       },
