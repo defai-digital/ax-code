@@ -51,6 +51,7 @@ describe("createEventPipeline — system resume reconnect", () => {
           if (callIndex === 0) {
             return {
               stream: (async function* () {
+                yield { payload: { type: "server.connected", properties: {} } }
                 yield {
                   payload: { type: "session.status", properties: { sessionID: "s1", status: { type: "idle" } } },
                 }
@@ -72,6 +73,7 @@ describe("createEventPipeline — system resume reconnect", () => {
           }
           return {
             stream: (async function* () {
+              yield { payload: { type: "server.connected", properties: {} } }
               yield {
                 payload: { type: "session.status", properties: { sessionID: "s1", status: { type: "idle" } } },
               }
@@ -154,6 +156,7 @@ describe("createEventPipeline — system resume reconnect", () => {
           resolveSecondAttempt()
           return {
             stream: (async function* () {
+              yield { payload: { type: "server.connected", properties: {} } }
               yield {
                 payload: { type: "session.status", properties: { sessionID: "s1", status: { type: "idle" } } },
               }

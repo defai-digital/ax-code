@@ -58,6 +58,36 @@ describe("createUpstreamSseReader", () => {
     expect(reader.getLastEventId()).toBe("evt-1")
   })
 
+  it("does not acknowledge a lazy upstream until server.connected follows replay", async () => {
+    const order = []
+    let reader
+
+    reader = createUpstreamSseReader({
+      buildUrl: () => "http://127.0.0.1:4096/global/event",
+      reconnectDelayMs: 0,
+      isReadyEvent: ({ payload }) => payload?.type === "server.connected",
+      fetchImpl: async (_url, options) =>
+        createSseResponse({
+          signal: options.signal,
+          blocks: [
+            'id: evt-1\ndata: {"type":"session.updated","properties":{}}\n\n',
+            'id: evt-2\ndata: {"type":"server.connected","properties":{}}\n\n',
+          ],
+        }),
+      onConnect() {
+        order.push("connect")
+      },
+      onEvent(event) {
+        order.push(`event:${event.payload.type}`)
+        if (event.payload.type === "server.connected") reader.stop()
+      },
+    })
+
+    await reader.start()
+
+    expect(order).toEqual(["event:session.updated", "connect", "event:server.connected"])
+  })
+
   it("reconnects a stalled stream with Last-Event-ID", async () => {
     const fetchLastEventIds = []
     const events = []

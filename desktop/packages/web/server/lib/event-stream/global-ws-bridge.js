@@ -21,22 +21,43 @@ export function createGlobalMessageStreamWsBridge({
   }
 
   const replayEvents = (socket, requestedLastEventId) => {
-    for (const entry of globalHub.replayAfter(requestedLastEventId)) {
+    const replay = globalHub.replayAfter(requestedLastEventId)
+    if (replay.resyncRequired) {
+      const sent = sendMessageStreamWsEvent(
+        socket,
+        {
+          type: "server.resync_required",
+          properties: { reason: "buffer_overflow", cursor: replay.cursor },
+        },
+        { directory: "global", eventId: replay.cursor },
+      )
+      if (!sent) {
+        removeClient(socket)
+        return false
+      }
+    }
+    for (const entry of replay.entries) {
       const sent = sendMessageStreamWsEvent(socket, entry.payload, {
         directory: entry.directory,
         eventId: entry.eventId,
       })
       if (!sent) {
         removeClient(socket)
-        return
+        return false
       }
     }
+    return true
   }
 
   const markReady = (socket, requestedLastEventId) => {
     if (socket.readyState !== 1) {
       return
     }
+
+    // Forward the retained tail before ready. The browser applies these event
+    // frames before it starts authoritative reconnect recovery, so recovery
+    // cannot race ahead of the replayed delta stream.
+    if (!replayEvents(socket, requestedLastEventId)) return
 
     const sent = sendMessageStreamWsFrame(socket, {
       type: "ready",
@@ -49,7 +70,6 @@ export function createGlobalMessageStreamWsBridge({
 
     readyClients.add(socket)
     wsClients.add(socket)
-    replayEvents(socket, requestedLastEventId)
   }
 
   const stopHubIfUnused = () => {

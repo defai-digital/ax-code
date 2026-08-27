@@ -89,7 +89,7 @@ async function startAsyncSessionHandler<TBody>(
   },
 ) {
   const { sessionID, body } = await parseSessionJSONInput<TBody>(c as SessionJSONRouteContext)
-  const queueItem = await TaskQueue.enqueue({
+  const queueItem = await TaskQueue.enqueueIdempotent({
     sessionID,
     kind: input.kind,
     title: asyncTaskQueueTitle(input.kind, body),

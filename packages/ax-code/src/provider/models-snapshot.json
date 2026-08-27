@@ -17098,32 +17098,6 @@
           "output": 32000
         }
       },
-      "Baichuan-M2": {
-        "id": "Baichuan-M2",
-        "name": "Baichuan M2 32B Medical",
-        "description": "Compact GPT model for low-latency assistance and high-volume workloads",
-        "family": "baichuan",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "release_date": "2025-08-19",
-        "last_updated": "2025-08-19",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 32768,
-          "input": 32768,
-          "output": 32768
-        }
-      },
       "Gemma-4-31B-MeroMero-v2:thinking": {
         "id": "Gemma-4-31B-MeroMero-v2:thinking",
         "name": "Gemma 4 31B MeroMero v2 Thinking",
@@ -19201,6 +19175,41 @@
           "output": 8192
         }
       },
+      "z-ai/glm-5.3-flash-uncensored": {
+        "id": "z-ai/glm-5.3-flash-uncensored",
+        "name": "GLM 5.3 Flash Uncensored",
+        "description": "GLM 5.3 Flash Uncensored is an uncensored fine-tune of the efficient 320B mixture-of-experts reasoning model, built for unrestricted chat, creative writing, coding, agentic work, tool use, and long-context tasks.",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-27",
+        "last_updated": "2026-08-27",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        }
+      },
       "z-ai/glm-5.3-flash": {
         "id": "z-ai/glm-5.3-flash",
         "name": "GLM 5.3 Flash",
@@ -20820,33 +20829,6 @@
           "context": 1048576,
           "input": 1048576,
           "output": 131072
-        }
-      },
-      "poolside/laguna-m.1": {
-        "id": "poolside/laguna-m.1",
-        "name": "Laguna M.1",
-        "description": "Poolside's open-weight model for agentic coding and long-horizon work",
-        "family": "laguna",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2026-04-28",
-        "last_updated": "2026-06-13",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 32768
         }
       },
       "poolside/laguna-s-2.1": {
@@ -82648,7 +82630,7 @@
         "name": "Qwen3.5 122B A10B",
         "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "reasoning_options": [
           {
@@ -82662,7 +82644,8 @@
         "last_updated": "2026-02-23",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
@@ -82670,8 +82653,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3-coder-plus": {
@@ -123611,15 +123594,14 @@
         "name": "GLM-5.2",
         "description": "Open flagship GLM for long-horizon coding agents and million-token context work",
         "family": "glm",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "reasoning_options": [
           {
             "type": "effort",
             "values": [
-              "none",
               "high",
-              "max"
+              "xhigh"
             ]
           }
         ],
@@ -123630,8 +123612,7 @@
         "last_updated": "2026-07-22",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
@@ -123639,7 +123620,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
+          "context": 1000000,
           "output": 32768
         }
       },
@@ -123758,17 +123739,7 @@
         "family": "deepseek-flash",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "low",
-              "high",
-              "max"
-            ]
-          }
-        ],
+        "reasoning_options": [],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -123785,7 +123756,7 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1048576,
+          "context": 1000000,
           "output": 384000
         }
       },
@@ -178465,6 +178436,41 @@
           "output": 131072
         }
       },
+      "inclusionai/ling-3.0-flash-fin:free": {
+        "id": "inclusionai/ling-3.0-flash-fin:free",
+        "name": "Ling 3.0 Flash Fin (free)",
+        "description": "Ling 3.0 Flash Fin is a finance-focused mixture-of-experts model from InclusionAI, built on Ling 3.0 Flash with 5.1B active parameters out of 124B total. It is designed for real-world investment...",
+        "family": "ling",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-27",
+        "last_updated": "2026-08-27",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        }
+      },
       "inclusionai/ling-3.0-flash": {
         "id": "inclusionai/ling-3.0-flash",
         "name": "Ling-3.0-flash",
@@ -178830,32 +178836,6 @@
         "limit": {
           "context": 262144,
           "output": 209715
-        }
-      },
-      "mistralai/ministral-8b": {
-        "id": "mistralai/ministral-8b",
-        "name": "Mistral: Ministral 8B",
-        "description": "Ministral 8B is an 8B parameter model featuring a unique interleaved sliding-window attention pattern for faster, memory-efficient inference. Designed for edge use cases, it supports up to 128k context length...",
-        "family": "ministral",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2024-10-17",
-        "last_updated": "2024-10-17",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 128000,
-          "output": 102400
         }
       },
       "mistralai/devstral-2512": {

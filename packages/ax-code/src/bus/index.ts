@@ -5,11 +5,13 @@ import { Instance } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
 import { withTimeout } from "../util/timeout"
+import { EventJournal, type EventJournalEntry, type EventJournalReplay } from "./event-journal"
 
 export namespace Bus {
   const log = Log.create({ service: "bus" })
   const BUS_SUBSCRIBER_TIMEOUT_MS = 10_000
   type Subscription = (event: any) => void
+  type SequencedSubscription = (entry: EventJournalEntry<any>) => void
   type Pending = Promise<unknown>[]
 
   export const InstanceDisposed = BusEvent.define(
@@ -22,21 +24,29 @@ export namespace Bus {
   const state = Instance.state(
     () => {
       const subscriptions = new Map<string, Subscription[]>()
+      const sequencedSubscriptions: SequencedSubscription[] = []
+      const journal = new EventJournal<any>()
 
       return {
         subscriptions,
+        sequencedSubscriptions,
+        journal,
       }
     },
     async (entry) => {
-      const wildcard = entry.subscriptions.get("*")
-      if (!wildcard) return
+      const wildcard = entry.subscriptions.get("*") ?? []
+      if (wildcard.length === 0 && entry.sequencedSubscriptions.length === 0) return
       const event = {
         type: InstanceDisposed.type,
         properties: {
           directory: Instance.directory,
         },
       }
-      await Promise.all(deliver([...wildcard], event, InstanceDisposed.type))
+      const entryEvent = entry.journal.append(event)
+      await Promise.all([
+        ...deliver([...wildcard], event, InstanceDisposed.type),
+        ...deliver([...entry.sequencedSubscriptions], entryEvent, InstanceDisposed.type),
+      ])
     },
   )
 
@@ -60,6 +70,7 @@ export namespace Bus {
       type: def.type,
       properties,
     }
+    const journalEntry = state().journal.append(payload)
     log.debug("publishing", {
       type: def.type,
     })
@@ -73,6 +84,7 @@ export namespace Bus {
         pending.push(...deliver([sub], payload, def.type))
       }
     }
+    pending.push(...deliver([...state().sequencedSubscriptions], journalEntry, def.type))
     return { payload, pending }
   }
 
@@ -134,6 +146,27 @@ export namespace Bus {
 
   export function subscribeAll(callback: (event: any) => void) {
     return raw("*", callback)
+  }
+
+  export function subscribeAllFrom(
+    cursor: string | undefined,
+    callback: (entry: EventJournalEntry<any>) => void,
+  ): {
+    cursor: string
+    replay?: EventJournalReplay<any>
+    unsubscribe: () => void
+  } {
+    const current = state()
+    current.sequencedSubscriptions.push(callback)
+    const replay = cursor ? current.journal.replayAfter(cursor) : undefined
+    return {
+      cursor: current.journal.cursor(),
+      replay,
+      unsubscribe: () => {
+        const index = current.sequencedSubscriptions.indexOf(callback)
+        if (index !== -1) current.sequencedSubscriptions.splice(index, 1)
+      },
+    }
   }
 
   function raw(type: string, callback: (event: any) => void) {

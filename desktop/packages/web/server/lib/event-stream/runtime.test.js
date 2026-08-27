@@ -181,7 +181,7 @@ describe("message stream websocket runtime", () => {
         return createSseResponse({
           signal: options.signal,
           holdOpen: true,
-          blocks: [],
+          blocks: ['id: evt-3\ndata: {"type":"server.connected","properties":{}}\n\n'],
         })
       },
     })
@@ -204,6 +204,9 @@ describe("message stream websocket runtime", () => {
       eventId: "evt-2",
       directory: "/tmp/project",
     })
+    expect(secondSocket.sent.findIndex((frame) => frame.eventId === "evt-2")).toBeLessThan(
+      secondSocket.sent.findIndex((frame) => frame.type === "ready"),
+    )
 
     secondSocket.close()
     await runtime.close()
@@ -535,7 +538,10 @@ describe("message stream websocket runtime", () => {
         createSseResponse({
           signal: options.signal,
           holdOpen: true,
-          blocks: ['id: evt-1\ndata: {"type":"session.updated","properties":{"directory":"/tmp/project"}}\n\n'],
+          blocks: [
+            'id: ready-synthetic\ndata: {"type":"server.connected","properties":{}}\n\n',
+            'id: evt-1\ndata: {"type":"session.updated","properties":{"directory":"/tmp/project"}}\n\n',
+          ],
         }),
     })
 

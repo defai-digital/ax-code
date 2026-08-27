@@ -30,7 +30,10 @@ describe("createGlobalMessageStreamHub", () => {
       upstreamReconnectDelayMs: 100,
       fetchImpl: async () =>
         createSseResponse({
-          blocks: ['id: evt-1\ndata: {"type":"session.updated","properties":{}}\n\n'],
+          blocks: [
+            'id: ready-1\ndata: {"type":"server.connected","properties":{}}\n\n',
+            'id: evt-1\ndata: {"type":"session.updated","properties":{}}\n\n',
+          ],
         }),
     })
 
@@ -38,7 +41,7 @@ describe("createGlobalMessageStreamHub", () => {
       throw new Error("subscriber failed")
     })
     hub.subscribeEvent((event) => {
-      received.push(event.eventId)
+      if (event.payload?.type === "session.updated") received.push(event.eventId)
     })
 
     try {
@@ -60,7 +63,10 @@ describe("createGlobalMessageStreamHub", () => {
       buildAxCodeUrl: (pathname) => `http://127.0.0.1:4096${pathname}`,
       getAxCodeAuthHeaders: () => ({}),
       upstreamReconnectDelayMs: 100,
-      fetchImpl: async () => createSseResponse(),
+      fetchImpl: async () =>
+        createSseResponse({
+          blocks: ['id: ready-2\ndata: {"type":"server.connected","properties":{}}\n\n'],
+        }),
     })
 
     hub.subscribeStatus(() => {
@@ -82,7 +88,7 @@ describe("createGlobalMessageStreamHub", () => {
     }
   })
 
-  it("replays the full buffer when the Last-Event-ID anchor has been evicted", async () => {
+  it("requires authoritative resync when the Last-Event-ID anchor has been evicted", async () => {
     const received = []
     const hub = createGlobalMessageStreamHub({
       buildAxCodeUrl: (pathname) => `http://127.0.0.1:4096${pathname}`,
@@ -92,6 +98,7 @@ describe("createGlobalMessageStreamHub", () => {
       fetchImpl: async () =>
         createSseResponse({
           blocks: [
+            'id: ready-3\ndata: {"type":"server.connected","properties":{}}\n\n',
             'id: evt-1\ndata: {"type":"session.updated","properties":{}}\n\n',
             'id: evt-2\ndata: {"type":"session.updated","properties":{}}\n\n',
             'id: evt-3\ndata: {"type":"session.updated","properties":{}}\n\n',
@@ -100,7 +107,7 @@ describe("createGlobalMessageStreamHub", () => {
     })
 
     hub.subscribeEvent((event) => {
-      received.push(event.eventId)
+      if (event.payload?.type === "session.updated") received.push(event.eventId)
     })
 
     try {
@@ -111,11 +118,19 @@ describe("createGlobalMessageStreamHub", () => {
 
       // evt-1 was evicted (replayLimit=2). A reconnect with Last-Event-ID=evt-1
       // must still recover the buffered events instead of getting nothing.
-      expect(hub.replayAfter("evt-1").map((entry) => entry.eventId)).toEqual(["evt-2", "evt-3"])
+      expect(hub.replayAfter("evt-1")).toMatchObject({
+        entries: [{ eventId: "evt-2" }, { eventId: "evt-3" }],
+        resyncRequired: true,
+        cursor: "evt-3",
+      })
       // A still-buffered anchor returns only events after it.
-      expect(hub.replayAfter("evt-2").map((entry) => entry.eventId)).toEqual(["evt-3"])
+      expect(hub.replayAfter("evt-2")).toMatchObject({
+        entries: [{ eventId: "evt-3" }],
+        resyncRequired: false,
+        cursor: "evt-3",
+      })
       // No anchor → no replay (the client does a full bootstrap instead).
-      expect(hub.replayAfter("")).toEqual([])
+      expect(hub.replayAfter("")).toMatchObject({ entries: [], resyncRequired: false })
     } finally {
       hub.stop()
     }
@@ -130,7 +145,10 @@ describe("createGlobalMessageStreamHub", () => {
       upstreamReconnectDelayMs: 100,
       fetchImpl: async () =>
         createSseResponse({
-          blocks: ['id: evt-1\ndata: {"type":"session.updated","properties":{}}\n\n'],
+          blocks: [
+            'id: ready-4\ndata: {"type":"server.connected","properties":{}}\n\n',
+            'id: evt-1\ndata: {"type":"session.updated","properties":{}}\n\n',
+          ],
         }),
     })
 
@@ -138,7 +156,7 @@ describe("createGlobalMessageStreamHub", () => {
       throw new Error("async subscriber failed")
     })
     hub.subscribeEvent((event) => {
-      received.push(event.eventId)
+      if (event.payload?.type === "session.updated") received.push(event.eventId)
     })
 
     try {

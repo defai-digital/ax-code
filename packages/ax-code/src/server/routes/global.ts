@@ -14,10 +14,12 @@ import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { redactConfig, stripRedactedConfig } from "./config"
 import { errors, invalidRequest } from "../error"
-import { pushSseFrame } from "../sse-queue"
+import { encodeSsePayload, SSE_HARD_MAX, SSE_WARN_THRESHOLD } from "../sse-queue"
 import { Event } from "../event"
 import { ServiceManager } from "@/runtime/service-manager"
 import { Filesystem } from "@/util/filesystem"
+import type { EventJournalEntry } from "@/bus/event-journal"
+import type { GlobalBusEvent } from "@/bus/global"
 
 const log = Log.create({ service: "server" })
 const SERVER_STARTED_AT = Date.now()
@@ -99,6 +101,7 @@ const GlobalCapabilitiesInfo = z.object({
   events: z.object({
     heartbeat: z.literal("server.heartbeat"),
     connected: z.literal("server.connected"),
+    resyncRequired: z.literal("server.resync_required"),
     sessionCreated: z.literal("session.created"),
     sessionStatus: z.literal("session.status"),
     sessionError: z.literal("session.error"),
@@ -219,6 +222,7 @@ function getGlobalCapabilitiesInfo(): z.infer<typeof GlobalCapabilitiesInfo> {
     events: {
       heartbeat: "server.heartbeat",
       connected: "server.connected",
+      resyncRequired: "server.resync_required",
       sessionCreated: "session.created",
       sessionStatus: "session.status",
       sessionError: "session.error",
@@ -308,48 +312,54 @@ export const GlobalRoutes = lazy(() =>
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
-          const q = new AsyncQueue<string | null>()
+          type QueuedFrame = { data: string; id?: string }
+          const q = new AsyncQueue<QueuedFrame | null>()
           let done = false
+          let warned = false
           let heartbeat: ReturnType<typeof setInterval> | undefined
+          let unsubscribe = () => {}
 
           const stop = () => {
             if (done) return
             done = true
             if (heartbeat) clearInterval(heartbeat)
             try {
-              GlobalBus.off("event", handler)
+              unsubscribe()
             } finally {
               q.push(null)
             }
             log.info("global event disconnected")
           }
 
-          const push = (event: any) => {
+          const push = (entry: EventJournalEntry<GlobalBusEvent>) => {
             if (done) return
-            if (pushSseFrame(q, event) === "overflow") stop()
+            if (q.size >= SSE_HARD_MAX) {
+              log.warn("global SSE queue overflow — disconnecting client", {
+                queueSize: q.size,
+                hardMax: SSE_HARD_MAX,
+              })
+              stop()
+              return
+            }
+            q.push({ data: entry.data, id: entry.id })
+            if (q.size >= SSE_WARN_THRESHOLD && !warned) {
+              warned = true
+              log.warn("global SSE queue approaching capacity", {
+                queueSize: q.size,
+                warnThreshold: SSE_WARN_THRESHOLD,
+                hardMax: SSE_HARD_MAX,
+              })
+            }
           }
 
           // Control frames (server.connected, server.heartbeat) bypass the
           // data-frame overflow limit so a near-cap burst of real events
           // can't tear down the connection on an otherwise-fine heartbeat.
           const CONTROL_FRAME_QUEUE_LIMIT = 256
-          const pushControl = (payload: unknown) => {
-            if (q.size >= CONTROL_FRAME_QUEUE_LIMIT) return
-            q.push(JSON.stringify(payload))
+          const pushControl = (payload: unknown, id?: string, limit = CONTROL_FRAME_QUEUE_LIMIT) => {
+            if (q.size >= limit) return
+            q.push({ data: encodeSsePayload(payload), id })
           }
-
-          // Control frames carry the GlobalEvent shape (`directory` +
-          // `payload`) so clients parsing the stream against the declared
-          // schema don't fail on the very first frame, and multi-project
-          // clients can attribute the connection to a project — real data
-          // frames pushed via GlobalBus already include `directory`.
-          pushControl({
-            directory: Instance.directory,
-            payload: {
-              type: Event.Connected.type,
-              properties: {},
-            },
-          })
 
           // Send heartbeat every 10s to prevent stalled proxy streams.
           heartbeat = setInterval(() => {
@@ -367,17 +377,54 @@ export const GlobalRoutes = lazy(() =>
           }, 10_000)
           heartbeat.unref?.()
 
-          function handler(event: any) {
-            push(event)
+          const lastEventID = c.req.header("Last-Event-ID")?.trim() || undefined
+          const subscription = GlobalBus.subscribeFrom(lastEventID, push)
+          unsubscribe = subscription.unsubscribe
+
+          if (subscription.replay?.type === "replay") {
+            for (const entry of subscription.replay.entries) {
+              push(entry)
+              if (done) break
+            }
+          } else if (subscription.replay?.type === "gap") {
+            pushControl(
+              {
+                directory: Instance.directory,
+                payload: {
+                  type: Event.ResyncRequired.type,
+                  properties: {
+                    reason: subscription.replay.reason,
+                    cursor: subscription.replay.cursor,
+                  },
+                },
+              },
+              subscription.replay.cursor,
+              SSE_HARD_MAX,
+            )
           }
-          GlobalBus.on("event", handler)
+
+          // Queue the acknowledgement after replay. Consumers may now treat
+          // server.connected as proof that the live subscription is attached.
+          if (!done) {
+            pushControl(
+              {
+                directory: Instance.directory,
+                payload: {
+                  type: Event.Connected.type,
+                  properties: {},
+                },
+              },
+              subscription.cursor,
+              SSE_HARD_MAX,
+            )
+          }
 
           stream.onAbort(stop)
 
           try {
             for await (const data of q) {
               if (data === null) return
-              await stream.writeSSE({ data })
+              await stream.writeSSE(data)
             }
           } finally {
             stop()

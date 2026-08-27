@@ -148,6 +148,7 @@ export type HeadlessRuntimeCapabilities = {
   events: {
     heartbeat: "server.heartbeat"
     connected: "server.connected"
+    resyncRequired: "server.resync_required"
     sessionCreated: "session.created"
     sessionStatus: "session.status"
     sessionError: "session.error"

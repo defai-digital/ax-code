@@ -27,6 +27,8 @@ export type ResilientStreamOptions<T> = {
   signal: AbortSignal
   subscribe: (signal: AbortSignal) => Promise<StreamSubscription<T>>
   onEvent: (event: T) => void | Promise<void>
+  /** Treat the stream as connected only after this subscription acknowledgement arrives. */
+  isReadyEvent?: (event: T) => boolean
   onStatus?: (status: StreamConnectionStatus) => void
   onError?: (error: unknown, status: StreamConnectionStatus) => void
   connectTimeoutMs?: number
@@ -87,6 +89,7 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
     let watchdog: ReturnType<typeof setTimeout> | undefined
     let abortReason: StreamDisconnectReason | undefined
     let subscription: StreamSubscription<T> | undefined
+    let ready = options.isReadyEvent === undefined
 
     const abortConnection = (reason: StreamDisconnectReason) => {
       abortReason = reason
@@ -115,17 +118,39 @@ export async function runResilientStream<T>(options: ResilientStreamOptions<T>) 
       subscription = await Promise.race([subscribePromise, connectTimeout])
       if (connectTimer) clearTimeout(connectTimer)
 
-      reconnectDelay = reconnectBaseMs
-      options.onStatus?.({
-        connected: true,
-        phase: "connected",
-        attempt,
-      })
-      resetWatchdog()
+      if (ready) {
+        reconnectDelay = reconnectBaseMs
+        options.onStatus?.({
+          connected: true,
+          phase: "connected",
+          attempt,
+        })
+        resetWatchdog()
+      } else {
+        // Some streaming SDKs return an async generator before they perform
+        // the HTTP request. Keep the connect deadline active until the server
+        // emits its subscription acknowledgement; otherwise a dead generator
+        // is incorrectly reported as connected and recovery can race ahead of
+        // the actual subscription.
+        connectTimer = setTimeout(() => abortConnection("connect-timeout"), connectTimeoutMs)
+      }
 
       for await (const event of subscription.stream) {
         if (options.signal.aborted || connectionAbort.signal.aborted) break
-        resetWatchdog()
+        if (!ready && options.isReadyEvent?.(event)) {
+          ready = true
+          reconnectDelay = reconnectBaseMs
+          if (connectTimer) clearTimeout(connectTimer)
+          connectTimer = undefined
+          options.onStatus?.({
+            connected: true,
+            phase: "connected",
+            attempt,
+          })
+          resetWatchdog()
+        } else if (ready) {
+          resetWatchdog()
+        }
         await options.onEvent(event)
       }
 

@@ -378,7 +378,11 @@ function hasMessage(draft: State, sessionID: string | undefined, messageID: stri
 }
 
 export function reduceGlobalEvent(event: Event): GlobalEventResult {
-  if (event.type === "global.disposed" || event.type === "server.connected") {
+  if (
+    event.type === "global.disposed" ||
+    event.type === "server.connected" ||
+    event.type === "server.resync_required"
+  ) {
     return { type: "refresh" }
   }
   if (event.type === "project.updated") {

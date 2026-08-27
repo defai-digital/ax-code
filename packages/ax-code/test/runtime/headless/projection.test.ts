@@ -30,6 +30,17 @@ describe("headless projection", () => {
     expect(state.stream_health).toBe("unavailable")
   })
 
+  test("requests an authoritative bootstrap when event replay has a gap", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    const result = applyHeadlessProjectionEvent(state, {
+      type: "server.resync_required",
+      properties: { reason: "cursor_expired", cursor: "boot:10" },
+    })
+
+    expect(result).toEqual({ handled: true, effects: [{ type: "bootstrap.reload" }] })
+  })
+
   test("stores request prompts when autonomy is disabled and emits effects when autonomy is enabled", () => {
     const manual = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
     const autonomous = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()

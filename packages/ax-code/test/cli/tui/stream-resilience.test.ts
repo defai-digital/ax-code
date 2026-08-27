@@ -172,4 +172,77 @@ describe("runResilientStream", () => {
     expect(events).toEqual(["recovered"])
     expect(statuses.some((status) => status.reason === "watchdog-timeout")).toBe(true)
   })
+
+  test("reports connected only after the server subscription acknowledgement", async () => {
+    const abort = new AbortController()
+    const events: string[] = []
+    const connectedAtEvent: boolean[] = []
+    let connected = false
+
+    await runResilientStream<string>({
+      signal: abort.signal,
+      isReadyEvent: (event) => event === "server.connected",
+      onStatus: (status) => {
+        connected = status.connected
+      },
+      onEvent: (event) => {
+        events.push(event)
+        connectedAtEvent.push(connected)
+        if (event === "server.connected") abort.abort()
+      },
+      subscribe: async () => ({
+        stream: (async function* () {
+          yield "replayed-event"
+          yield "server.connected"
+        })(),
+      }),
+    })
+
+    expect(events).toEqual(["replayed-event", "server.connected"])
+    expect(connectedAtEvent).toEqual([false, true])
+  })
+
+  test("reconnects when a lazy stream never reaches its subscription acknowledgement", async () => {
+    const abort = new AbortController()
+    const events: string[] = []
+    const statuses: StreamConnectionStatus[] = []
+    let attempts = 0
+
+    await runResilientStream<string>({
+      signal: abort.signal,
+      connectTimeoutMs: 20,
+      watchdogMs: 1_000,
+      reconnectBaseMs: 1,
+      reconnectMaxMs: 2,
+      isReadyEvent: (event) => event === "server.connected",
+      onStatus: (status) => statuses.push(status),
+      onEvent: (event) => {
+        events.push(event)
+        if (event === "server.connected") abort.abort()
+      },
+      subscribe: async (signal) => {
+        attempts++
+        if (attempts === 1) {
+          return {
+            stream: (async function* () {
+              yield "pre-ack-event"
+              await new Promise((_, reject) => {
+                signal.addEventListener("abort", () => reject(new Error("connect aborted")), { once: true })
+              })
+            })(),
+          }
+        }
+        return {
+          stream: (async function* () {
+            yield "server.connected"
+          })(),
+        }
+      },
+    })
+
+    expect(attempts).toBe(2)
+    expect(events).toEqual(["pre-ack-event", "server.connected"])
+    expect(statuses.some((status) => status.reason === "connect-timeout")).toBe(true)
+    expect(statuses.filter((status) => status.phase === "connected")).toHaveLength(1)
+  })
 })

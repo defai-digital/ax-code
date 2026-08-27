@@ -651,7 +651,10 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
 
   const enqueueEvent = (directory: string, payload: Event) => {
     const normalizedPayload = normalizeEventType(payload)
-    const routedDirectory = routeDirectory?.(directory, normalizedPayload) || directory
+    const routedDirectory =
+      normalizedPayload.type === "server.resync_required"
+        ? "global"
+        : routeDirectory?.(directory, normalizedPayload) || directory
 
     // Track streaming metrics from session status and delta events
     if (normalizedPayload.type === "session.status") {
@@ -730,6 +733,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
   const runSseAttempt = async (signal: AbortSignal) => {
     const events = await sdk.global.event({
       signal,
+      sseMaxRetryAttempts: 0,
       ...(lastEventId && lastEventId.length > 0 ? { headers: { "Last-Event-ID": lastEventId } } : {}),
       onSseEvent: (event: { id?: unknown }) => {
         resetHeartbeat()
@@ -745,8 +749,6 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       },
     })
 
-    markConnected()
-
     let yielded = Date.now()
     resetHeartbeat()
 
@@ -760,6 +762,15 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       }
       const directory = resolveEventDirectory(event, payload)
       enqueueEvent(directory, payload)
+
+      if (payload.type === "server.connected") {
+        // The SDK returns a lazy async generator before it performs fetch.
+        // This frame is the server's actual subscription acknowledgement.
+        // Flush any replayed events first, then let reconnect recovery fetch
+        // authoritative snapshots without racing ahead of the subscription.
+        flushAll()
+        markConnected()
+      }
 
       if (Date.now() - yielded < STREAM_YIELD_MS) continue
       yielded = Date.now()
@@ -859,6 +870,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
             readyTimer = undefined
           }
           streamErrorLogged = false
+          flushAll()
           markConnected()
           return
         }

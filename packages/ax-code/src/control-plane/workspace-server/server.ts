@@ -8,8 +8,10 @@ import { Flag } from "@/flag/flag"
 import { WorkspaceID } from "../schema"
 import { Log } from "@/util/log"
 import { assertAuthenticatedNetworkBind, normalizeLoopbackHostname } from "@/runtime/listen-security"
-import { pushSseFrame } from "@/util/sse-queue"
+import { encodeSsePayload } from "@/util/sse-queue"
 import { serve, type ServerHandle } from "@/server/runtime-adapter"
+import type { EventJournalEntry } from "@/bus/event-journal"
+import type { GlobalBusEvent } from "@/bus/global"
 import {
   AX_CODE_WORKSPACE_HEADER,
   LEGACY_OPENCODE_WORKSPACE_HEADER,
@@ -40,56 +42,88 @@ export namespace WorkspaceServer {
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
-          const q = new AsyncQueue<string | null>()
+          type QueuedFrame = { data: string; id?: string }
+          const q = new AsyncQueue<QueuedFrame | null>()
           let done = false
-          let dropped = 0
-
-          q.push(
-            JSON.stringify({
-              type: "server.connected",
-              properties: {},
-            }),
-          )
+          let unsubscribe = () => {}
 
           const SSE_MAX_QUEUE = 1024
-          const listener = (event: { directory?: string; payload: unknown }) => {
-            if (event.directory !== workspaceID) return
+          const stop = () => {
+            if (done) return
+            done = true
+            clearInterval(heartbeat)
+            unsubscribe()
+            q.push(null)
+          }
+
+          const listener = (entry: EventJournalEntry<GlobalBusEvent>) => {
+            if (entry.value.directory !== workspaceID) return
             if (q.size >= SSE_MAX_QUEUE) {
-              dropped++
-              if (dropped === 1 || dropped % 100 === 0) {
-                log.warn("workspace SSE queue full; dropping events", {
-                  workspaceID,
-                  queueSize: q.size,
-                  dropped,
-                })
-              }
+              log.warn("workspace SSE queue full; disconnecting client for resync", {
+                workspaceID,
+                queueSize: q.size,
+              })
+              stop()
               return
             }
-            void pushSseFrame(q, event.payload, { maxQueueSize: SSE_MAX_QUEUE })
+            q.push({ data: encodeSsePayload(entry.value.payload), id: entry.id })
           }
 
           const heartbeat = setInterval(() => {
             if (done) return
             if (q.size >= SSE_MAX_QUEUE) return
-            q.push(JSON.stringify({ type: "server.heartbeat", properties: {} }))
+            q.push({ data: encodeSsePayload({ type: "server.heartbeat", properties: {} }) })
           }, 10_000)
           heartbeat.unref?.()
 
-          const stop = () => {
-            if (done) return
-            done = true
-            clearInterval(heartbeat)
-            GlobalBus.off("event", listener)
-            q.push(null)
+          const lastEventID = c.req.header("Last-Event-ID")?.trim() || undefined
+          const subscription = GlobalBus.subscribeFrom(lastEventID, listener)
+          unsubscribe = subscription.unsubscribe
+
+          if (subscription.replay?.type === "replay") {
+            const retained = subscription.replay.entries.filter((entry) => entry.value.directory === workspaceID)
+            if (retained.length >= SSE_MAX_QUEUE - 1) {
+              q.push({
+                data: encodeSsePayload({
+                  type: "server.resync_required",
+                  properties: {
+                    reason: "buffer_overflow",
+                    cursor: subscription.replay.cursor,
+                  },
+                }),
+                id: subscription.replay.cursor,
+              })
+            } else {
+              for (const entry of retained) {
+                listener(entry)
+                if (done) break
+              }
+            }
+          } else if (subscription.replay?.type === "gap") {
+            q.push({
+              data: encodeSsePayload({
+                type: "server.resync_required",
+                properties: {
+                  reason: subscription.replay.reason,
+                  cursor: subscription.replay.cursor,
+                },
+              }),
+              id: subscription.replay.cursor,
+            })
           }
 
-          GlobalBus.on("event", listener)
+          if (!done) {
+            q.push({
+              data: encodeSsePayload({ type: "server.connected", properties: {} }),
+              id: subscription.cursor,
+            })
+          }
           stream.onAbort(stop)
 
           try {
             for await (const data of q) {
               if (data === null) return
-              await stream.writeSSE({ data })
+              await stream.writeSSE(data)
             }
           } finally {
             stop()

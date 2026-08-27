@@ -175,6 +175,7 @@ function dispatchHeadlessProjectionEvent<
     case "workflow.verification.attached":
     case "server.connected":
     case "server.heartbeat":
+    case "server.resync_required":
     case "server.instance.disposed": {
       let effects: HeadlessProjectionEffect[] = []
       if (input.event.type === "session.deleted") {

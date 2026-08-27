@@ -295,6 +295,7 @@ describe("headless backend lifecycle", () => {
           events: {
             heartbeat: "server.heartbeat",
             connected: "server.connected",
+            resyncRequired: "server.resync_required",
             sessionCreated: "session.created",
             sessionStatus: "session.status",
             sessionError: "session.error",
@@ -356,8 +357,10 @@ describe("headless backend lifecycle", () => {
       const session = await client.createSession({ title: "App smoke" })
       await client.sendPrompt(session.id, { parts: [{ type: "text", text: "hello" }] })
 
-      for await (const event of client.subscribe()) {
+      const eventAbort = new AbortController()
+      for await (const event of client.subscribe({ signal: eventAbort.signal })) {
         applyHeadlessProjectionEvent(state, event as TestHeadlessEvent)
+        if (event.type === "session.status" && event.properties.sessionID === "sess-1") eventAbort.abort()
       }
 
       expect(HEADLESS_RUNTIME_SCHEMA_VERSION).toBe(1)

@@ -26,6 +26,7 @@ describe("createEventPipeline — online event", () => {
           const signal = options?.signal
           return {
             stream: (async function* () {
+              yield { payload: { type: "server.connected", properties: {} } }
               yield {
                 payload: {
                   type: "session.status",
@@ -107,6 +108,7 @@ describe("createEventPipeline — online event", () => {
           }
           return {
             stream: (async function* () {
+              yield { payload: { type: "server.connected", properties: {} } }
               yield {
                 payload: {
                   type: "session.status",

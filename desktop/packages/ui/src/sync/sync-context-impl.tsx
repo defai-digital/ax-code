@@ -798,11 +798,13 @@ function handleEvent(
   // Global events
   if (directory === "global" || !directory) {
     const recent = isRecentBoot()
+    const requiresResync = payload.type === "server.resync_required"
     const result = reduceGlobalEvent(payload)
     if (!result) return
     if (result.type === "refresh") {
-      // Suppress refresh during/shortly after bootstrap
-      if (!recent) {
+      // A replay gap must start a snapshot after the live subscription is
+      // attached, even when an earlier bootstrap just completed.
+      if (!recent || requiresResync) {
         useGlobalSyncStore.setState({ reload: "pending" })
       }
     } else if (result.type === "project") {
@@ -811,10 +813,14 @@ function handleEvent(
         projects: applyGlobalProject(current, result.project).projects,
       })
     }
-    // On server.connected / global.disposed, re-bootstrap all directories
-    // but only if not during recent boot
-    if (payload.type === "server.connected" || payload.type === "global.disposed") {
-      if (!recent) {
+    // On connection, disposal, or an explicit replay gap, re-bootstrap all directories.
+    // Only ordinary connection noise is suppressed during a recent boot.
+    if (
+      payload.type === "server.connected" ||
+      payload.type === "global.disposed" ||
+      payload.type === "server.resync_required"
+    ) {
+      if (!recent || requiresResync) {
         for (const dir of childStores.children.keys()) {
           const store = childStores.getChild(dir)
           if (store && store.getState().status !== "loading") {

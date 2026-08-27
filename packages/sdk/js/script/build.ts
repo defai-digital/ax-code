@@ -94,12 +94,106 @@ async function patchGeneratedSseClient(outputPath: string) {
         const backoff = Math.min(retryDelay * 2 ** backoffExponent, sseMaxRetryDelay ?? 30000)
 `,
     ],
+    [
+      /    sseDefaultRetryDelay\?: number\n    \/\*\*\n     \* Maximum number of retry attempts before giving up\./,
+      `    sseDefaultRetryDelay?: number
+    /**
+     * Maximum time without receiving bytes before reconnecting the stream.
+     * Set to 0 to disable the idle watchdog.
+     *
+     * @default 60000
+     */
+    sseIdleTimeout?: number
+    /**
+     * Maximum number of retry attempts before giving up.`,
+    ],
+    [
+      /  sseDefaultRetryDelay,\n  sseMaxRetryAttempts,/,
+      `  sseDefaultRetryDelay,
+  sseIdleTimeout,
+  sseMaxRetryAttempts,`,
+    ],
+    [
+      /    const signal = options\.signal \?\? new AbortController\(\)\.signal\n/,
+      `    const signal = options.signal ?? new AbortController().signal
+    const idleTimeoutMs = sseIdleTimeout ?? 60_000
+`,
+    ],
+    [
+      /      if \(signal\.aborted\) break;?\n\n      const headers =/,
+      `      if (signal.aborted) break
+
+      const attemptController = new AbortController()
+      const abortAttempt = () => attemptController.abort(signal.reason)
+      signal.addEventListener("abort", abortAttempt, { once: true })
+      let idleTimer: ReturnType<typeof setTimeout> | undefined
+      let idleError: Error | undefined
+      const clearIdleTimer = () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        idleTimer = undefined
+      }
+      const resetIdleTimer = () => {
+        clearIdleTimer()
+        if (idleTimeoutMs <= 0) return
+        idleTimer = setTimeout(() => {
+          idleError = new Error("SSE stream idle for " + idleTimeoutMs + "ms")
+          attemptController.abort(idleError)
+        }, idleTimeoutMs)
+      }
+      resetIdleTimer()
+
+      const headers =`,
+    ],
+    [
+      /          headers,\n          signal,\n        \}/,
+      `          headers,
+          signal: attemptController.signal,
+        }`,
+    ],
+    [
+      /        signal\.addEventListener\("abort", abortHandler\)/,
+      `        attemptController.signal.addEventListener("abort", abortHandler)`,
+    ],
+    [
+      /            if \(done\) \{\n              completed = true\n              break\n            \}\n            buffer \+= value/,
+      `            if (done) {
+              completed = true
+              break
+            }
+            resetIdleTimer()
+            buffer += value`,
+    ],
+    [
+      /          signal\.removeEventListener\("abort", abortHandler\)/,
+      `          attemptController.signal.removeEventListener("abort", abortHandler)`,
+    ],
+    [/        break \/\/ exit loop on normal completion/, `        throw new Error("SSE stream ended")`],
+    [
+      /      \} catch \(error\) \{\n        \/\/ connection failed or aborted; retry after delay/,
+      `      } catch (error) {
+        if (signal.aborted) break
+        // Connection failures, idle streams, and clean upstream closes all
+        // reconnect. EventSource semantics require a subscription to remain
+        // live until its caller aborts it.
+        error = idleError ?? error`,
+    ],
+    [
+      /        await sleep\(backoff\)\n      \}\n    \}/,
+      `        clearIdleTimer()
+        signal.removeEventListener("abort", abortAttempt)
+        await sleep(backoff)
+      } finally {
+        clearIdleTimer()
+        signal.removeEventListener("abort", abortAttempt)
+      }
+    }`,
+    ],
   ]
 
-  for (const [pattern, after] of replacements) {
+  for (const [index, [pattern, after]] of replacements.entries()) {
     const next = source.replace(pattern, after)
     if (next === source) {
-      throw new Error(`Generated SSE client changed shape; failed to patch ${file}`)
+      throw new Error(`Generated SSE client changed shape; failed to apply patch ${index + 1} to ${file}`)
     }
     source = next
   }

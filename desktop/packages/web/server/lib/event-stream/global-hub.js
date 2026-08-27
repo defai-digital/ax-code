@@ -74,6 +74,7 @@ export function createGlobalMessageStreamHub({
         }
       },
       getHeaders: getAxCodeAuthHeaders,
+      isReadyEvent: ({ payload }) => payload?.type === "server.connected",
       onConnect() {
         connected = true
         const wasReady = everConnected
@@ -151,19 +152,19 @@ export function createGlobalMessageStreamHub({
     },
     replayAfter(eventId) {
       if (!eventId) {
-        return []
+        return { entries: [], resyncRequired: false, cursor: replay.at(-1)?.eventId }
       }
 
       const index = replay.findIndex((entry) => entry.eventId === eventId)
       if (index !== -1) {
-        return replay.slice(index + 1)
+        return { entries: replay.slice(index + 1), resyncRequired: false, cursor: replay.at(-1)?.eventId }
       }
       // Anchor not in the buffer: it was evicted from the front because more
-      // than replayLimit events accumulated while the client was disconnected.
-      // The buffer is append-only and monotonic, so every retained entry is
-      // newer than the requested id — replay the whole buffer instead of
-      // silently dropping every event the client missed.
-      return replay.slice()
+      // than replayLimit events accumulated while the client was disconnected,
+      // or this proxy restarted and lost its in-memory journal. Replay the
+      // retained tail for responsiveness, but explicitly require an
+      // authoritative snapshot so the missing prefix is never silent.
+      return { entries: replay.slice(), resyncRequired: true, cursor: replay.at(-1)?.eventId ?? eventId }
     },
   }
 }

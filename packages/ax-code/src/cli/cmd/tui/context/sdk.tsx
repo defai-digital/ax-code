@@ -67,6 +67,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     let cancelFlushTimer: (() => void) | undefined
     let last = 0
     let sseGeneration = 0
+    let lastEventID: string | undefined
 
     const flush = () => {
       if (queue.length === 0) return
@@ -91,7 +92,6 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     }
 
     const handleEvent = (event: TuiRuntimeEvent) => {
-      setSseConnected(true)
       queue.push(event)
       const elapsed = Date.now() - last
 
@@ -129,7 +129,19 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       const isCurrentStream = () => generation === sseGeneration && sse === ctrl
       void runResilientStream<TuiRuntimeEvent>({
         signal: outer.signal,
-        subscribe: (signal) => sdk.event.subscribe({}, { signal }),
+        isReadyEvent: (event) => event.type === "server.connected",
+        subscribe: (signal) =>
+          sdk.event.subscribe(
+            {},
+            {
+              signal,
+              sseMaxRetryAttempts: 0,
+              ...(lastEventID ? { headers: { "Last-Event-ID": lastEventID } } : {}),
+              onSseEvent: (event) => {
+                if (typeof event.id === "string" && event.id.length > 0) lastEventID = event.id
+              },
+            },
+          ),
         onEvent: (event) => {
           if (!isCurrentStream()) return
           handleEvent(event)
@@ -201,7 +213,10 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         setWorkspaceID(next)
         sdk = createSDK()
         props.events?.setWorkspace?.(next)
-        if (!props.events) startSSE()
+        if (!props.events) {
+          lastEventID = undefined
+          startSSE()
+        }
       },
       url: props.url,
     }

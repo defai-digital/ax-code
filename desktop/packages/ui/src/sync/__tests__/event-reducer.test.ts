@@ -8,7 +8,7 @@ import type {
   Session,
   SessionStatus,
 } from "@ax-code/sdk/v2/client"
-import { applyDirectoryEvent } from "../event-reducer"
+import { applyDirectoryEvent, reduceGlobalEvent } from "../event-reducer"
 import { INITIAL_STATE, type State } from "../types"
 
 type ToolPart = Extract<Part, { type: "tool" }>
@@ -80,6 +80,17 @@ function assistantMessage(overrides: Partial<Message> = {}): Message {
     ...overrides,
   } as Message
 }
+
+describe("reduceGlobalEvent", () => {
+  test("requests a refresh when the server reports a replay gap", () => {
+    expect(
+      reduceGlobalEvent({
+        type: "server.resync_required",
+        properties: { reason: "buffer_overflow", cursor: "boot:10" },
+      }),
+    ).toEqual({ type: "refresh" })
+  })
+})
 
 describe("applyDirectoryEvent", () => {
   test("returns typed materialization when delta arrives before parts", () => {

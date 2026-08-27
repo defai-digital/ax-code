@@ -369,12 +369,42 @@ export namespace TaskQueue {
   }
 
   export async function enqueue(input: EnqueueInput): Promise<Info> {
+    return enqueueInternal(input, false)
+  }
+
+  /**
+   * Accept a retried client submission at most once when it carries a stable
+   * session message ID. The lookup and insert share one synchronous SQLite
+   * transaction, so a lost 202 response cannot enqueue the same turn twice.
+   */
+  export async function enqueueIdempotent(input: EnqueueInput): Promise<Info> {
+    return enqueueInternal(input, true)
+  }
+
+  async function enqueueInternal(input: EnqueueInput, idempotent: boolean): Promise<Info> {
     const parsed = EnqueueInput.parse(input)
     if (parsed.sessionID) await assertSessionCompatible(parsed.sessionID)
 
     const now = Date.now()
     const projectID = Instance.project.id
+    let created = false
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      if (idempotent && parsed.sessionID && parsed.sourceMessageID) {
+        const existing = db
+          .select()
+          .from(TaskQueueTable)
+          .where(
+            and(
+              eq(TaskQueueTable.project_id, projectID),
+              eq(TaskQueueTable.session_id, parsed.sessionID),
+              eq(TaskQueueTable.kind, parsed.kind),
+              eq(TaskQueueTable.source_message_id, parsed.sourceMessageID),
+            ),
+          )
+          .get()
+        if (existing) return fromRow(existing)
+      }
+
       const values: typeof TaskQueueTable.$inferInsert = {
         id: TaskQueueID.ascending(),
         project_id: projectID,
@@ -396,10 +426,13 @@ export namespace TaskQueue {
         time_updated: now,
       }
       const row = db.insert(TaskQueueTable).values(values).returning().get()
+      created = true
       return fromRow(row)
     })
-    publishCreated(item)
-    await syncSessionQueueMetadata(item)
+    if (created) {
+      publishCreated(item)
+      await syncSessionQueueMetadata(item)
+    }
     return item
   }
 

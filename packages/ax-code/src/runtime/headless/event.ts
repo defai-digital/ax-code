@@ -86,6 +86,13 @@ export type HeadlessScheduledTaskEvent<TScheduledTask> =
 export type HeadlessControlEvent =
   | { type: "server.connected"; properties: Record<string, never> }
   | { type: "server.heartbeat"; properties: Record<string, never> }
+  | {
+      type: "server.resync_required"
+      properties: {
+        reason: "invalid_cursor" | "server_restarted" | "cursor_expired" | "cursor_ahead" | "buffer_overflow"
+        cursor: string
+      }
+    }
   | { type: "server.instance.disposed" }
 
 export type HeadlessRuntimeEvent<
@@ -168,6 +175,7 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "workflow.verification.attached",
   "server.connected",
   "server.heartbeat",
+  "server.resync_required",
   "server.instance.disposed",
 ])
 

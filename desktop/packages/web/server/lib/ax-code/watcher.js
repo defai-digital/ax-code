@@ -73,6 +73,7 @@ export const createAxCodeWatcherRuntime = (deps) => {
       fetchImpl,
       stallTimeoutMs: upstreamStallTimeoutMs,
       reconnectDelayMs: upstreamReconnectDelayMs,
+      isReadyEvent: ({ payload }) => payload?.type === "server.connected",
       onConnect() {
         console.log("[PushWatcher] connected")
       },

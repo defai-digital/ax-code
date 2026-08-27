@@ -37,6 +37,7 @@ describe("createEventPipeline — permanent server errors", () => {
           }
           return {
             stream: (async function* () {
+              yield { payload: { type: "server.connected", properties: {} } }
               yield {
                 payload: {
                   type: "session.status",
@@ -118,6 +119,7 @@ describe("createEventPipeline — permanent server errors", () => {
           }
           return {
             stream: (async function* () {
+              yield { payload: { type: "server.connected", properties: {} } }
               yield {
                 payload: {
                   type: "session.status",

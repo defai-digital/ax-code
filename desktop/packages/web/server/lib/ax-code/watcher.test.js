@@ -22,13 +22,14 @@ describe("createAxCodeWatcherRuntime", () => {
       getAxCodeAuthHeaders: () => ({ Authorization: "Bearer test-token" }),
       onPayload(payload) {
         payloads.push(payload)
-        watcher.stop()
+        if (payload.type === "session.updated") watcher.stop()
       },
       fetchImpl: async (url, options) => {
         fetchCalls.push({ url, headers: options.headers })
         return createSseResponse({
           signal: options.signal,
           blocks: [
+            'id: evt-0\ndata: {"directory":"/tmp/project","payload":{"type":"server.connected","properties":{}}}\n\n',
             'id: evt-1\ndata: {"directory":"/tmp/project","payload":{"type":"session.updated","properties":{"sessionID":"ses_1"}}}\n\n',
           ],
         })
@@ -50,6 +51,10 @@ describe("createAxCodeWatcherRuntime", () => {
       },
     ])
     expect(payloads).toEqual([
+      {
+        type: "server.connected",
+        properties: {},
+      },
       {
         type: "session.updated",
         properties: {

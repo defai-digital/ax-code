@@ -151,6 +151,7 @@ export function acceptDirectoryMessageStreamWsConnection({
           return targetUrl
         },
         getHeaders: getAxCodeAuthHeaders,
+        isReadyEvent: ({ payload }) => payload?.type === "server.connected",
         onConnect() {
           if (!streamReady) {
             const readySent = sendMessageStreamWsFrame(socket, {

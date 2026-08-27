@@ -406,6 +406,10 @@
                           "type": "string",
                           "const": "server.connected"
                         },
+                        "resyncRequired": {
+                          "type": "string",
+                          "const": "server.resync_required"
+                        },
                         "sessionCreated": {
                           "type": "string",
                           "const": "session.created"
@@ -430,6 +434,7 @@
                       "required": [
                         "heartbeat",
                         "connected",
+                        "resyncRequired",
                         "sessionCreated",
                         "sessionStatus",
                         "sessionError",
@@ -29446,6 +29451,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "messageID": {
+                    "type": "string",
+                    "pattern": "^msg_.*"
+                  },
                   "agent": {
                     "type": "string"
                   },
@@ -29545,6 +29554,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "messageID": {
+                    "type": "string",
+                    "pattern": "^msg_.*"
+                  },
                   "agent": {
                     "type": "string"
                   },
@@ -37560,6 +37573,9 @@
             "$ref": "#/components/schemas/Event.server.connected"
           },
           {
+            "$ref": "#/components/schemas/Event.server.resync_required"
+          },
+          {
             "$ref": "#/components/schemas/Event.global.disposed"
           },
           {
@@ -40772,6 +40788,41 @@
             },
             "required": [
               "directory"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.server.resync_required": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.resync_required"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "invalid_cursor",
+                  "server_restarted",
+                  "cursor_expired",
+                  "cursor_ahead",
+                  "buffer_overflow"
+                ]
+              },
+              "cursor": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "reason",
+              "cursor"
             ]
           }
         },

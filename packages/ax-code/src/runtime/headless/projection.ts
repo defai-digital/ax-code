@@ -102,6 +102,10 @@ export function applyHeadlessProjectionEvent<
       state.stream_health = "connected"
       return { handled: true, effects }
 
+    case "server.resync_required":
+      effects.push({ type: "bootstrap.reload" })
+      return { handled: true, effects }
+
     case "server.instance.disposed":
       state.stream_health = "unavailable"
       effects.push({ type: "bootstrap.reload" })

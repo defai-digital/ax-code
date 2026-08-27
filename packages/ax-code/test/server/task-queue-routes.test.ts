@@ -379,6 +379,117 @@ describe("task queue routes", () => {
     })
   })
 
+  test("prompt_async retries return the original queue item without executing the turn twice", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.Default()
+    let releasePrompt: (() => void) | undefined
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              releasePrompt = () => resolve({} as any)
+            }),
+        )
+
+        try {
+          const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+          const body = JSON.stringify({
+            messageID: "msg_mobile_retry",
+            parts: [{ type: "text", text: "continue after reconnect" }],
+          })
+          const firstResponse = await app.request(`/session/${session.id}/prompt_async?${directoryQuery}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+          })
+          expect(firstResponse.status).toBe(202)
+          const first = (await firstResponse.json()) as { id: string }
+          await waitForQueueTitleStatus("continue after reconnect", "running")
+
+          const retryResponse = await app.request(`/session/${session.id}/prompt_async?${directoryQuery}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+          })
+          expect(retryResponse.status).toBe(202)
+          const retried = (await retryResponse.json()) as { id: string }
+
+          expect(retried.id).toBe(first.id)
+          expect(await TaskQueue.list({ sessionID: session.id })).toHaveLength(1)
+          const release = await waitForRouteValue(() => releasePrompt)
+          expect(promptSpy).toHaveBeenCalledTimes(1)
+
+          release()
+          await waitForQueueTitleStatus("continue after reconnect", "completed")
+        } finally {
+          releasePrompt?.()
+          promptSpy.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("shell_async retries use the request message ID as an idempotency key", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.Default()
+    let releaseShell: (() => void) | undefined
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const shellSpy = vi.spyOn(SessionPrompt, "shell").mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              releaseShell = () => resolve({} as any)
+            }),
+        )
+
+        try {
+          const directoryQuery = `directory=${encodeURIComponent(tmp.path)}`
+          const body = JSON.stringify({
+            messageID: "msg_shell_mobile_retry",
+            agent: "build",
+            command: "echo safe",
+          })
+          const firstResponse = await app.request(`/session/${session.id}/shell_async?${directoryQuery}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+          })
+          expect(firstResponse.status).toBe(202)
+          const first = (await firstResponse.json()) as { id: string }
+          await waitForQueueTitleStatus("echo safe", "running")
+
+          const retryResponse = await app.request(`/session/${session.id}/shell_async?${directoryQuery}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+          })
+          expect(retryResponse.status).toBe(202)
+          const retried = (await retryResponse.json()) as { id: string }
+
+          expect(retried.id).toBe(first.id)
+          expect(await TaskQueue.list({ sessionID: session.id })).toHaveLength(1)
+          const release = await waitForRouteValue(() => releaseShell)
+          expect(shellSpy).toHaveBeenCalledTimes(1)
+
+          release()
+          await waitForQueueTitleStatus("echo safe", "completed")
+        } finally {
+          releaseShell?.()
+          shellSpy.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("async prompt route waits behind the active queue item for the same session", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.Default()

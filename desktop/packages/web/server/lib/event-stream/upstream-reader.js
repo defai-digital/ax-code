@@ -61,6 +61,7 @@ export function createUpstreamSseReader({
   onConnect,
   onDisconnect,
   onError,
+  isReadyEvent,
 }) {
   let running = null
   let stopped = false
@@ -103,6 +104,7 @@ export function createUpstreamSseReader({
         signal?.addEventListener("abort", abortActive, { once: true })
 
         let abortReason = null
+        let attemptConnected = false
         let reader = null
         let stallTimer = null
         const clearStallTimer = () => {
@@ -155,7 +157,10 @@ export function createUpstreamSseReader({
             continue
           }
 
-          onConnect?.({ response, lastEventId })
+          if (typeof isReadyEvent !== "function") {
+            attemptConnected = true
+            onConnect?.({ response, lastEventId })
+          }
 
           const decoder = new TextDecoder()
           reader = response.body.getReader()
@@ -181,13 +186,18 @@ export function createUpstreamSseReader({
                 if (typeof envelope.eventId === "string" && envelope.eventId.length > 0) {
                   lastEventId = envelope.eventId
                 }
-                onEvent?.({
+                const event = {
                   block,
                   envelope,
                   payload: envelope.payload,
                   eventId: envelope.eventId,
                   directory: envelope.directory,
-                })
+                }
+                if (!attemptConnected && isReadyEvent?.(event)) {
+                  attemptConnected = true
+                  onConnect?.({ response, lastEventId })
+                }
+                onEvent?.(event)
               }
               separatorIndex = buffer.indexOf("\n\n")
             }
@@ -200,13 +210,18 @@ export function createUpstreamSseReader({
               if (typeof envelope.eventId === "string" && envelope.eventId.length > 0) {
                 lastEventId = envelope.eventId
               }
-              onEvent?.({
+              const event = {
                 block,
                 envelope,
                 payload: envelope.payload,
                 eventId: envelope.eventId,
                 directory: envelope.directory,
-              })
+              }
+              if (!attemptConnected && isReadyEvent?.(event)) {
+                attemptConnected = true
+                onConnect?.({ response, lastEventId })
+              }
+              onEvent?.(event)
             }
           }
         } catch (error) {

@@ -74,4 +74,72 @@ describe.each(clients)("generated SSE client %s", (_name, createSseClient) => {
 
     expect(cancelled).toBe(true)
   })
+
+  test("reconnects a cleanly closed stream with Last-Event-ID", async () => {
+    const lastEventIDs: Array<string | null> = []
+    let fetchCalls = 0
+
+    const fetch: typeof globalThis.fetch = async (input) => {
+      const request = input instanceof Request ? input : new Request(input)
+      lastEventIDs.push(request.headers.get("Last-Event-ID"))
+      fetchCalls += 1
+      const id = `evt-${fetchCalls}`
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode(`id: ${id}\ndata: {"id":"${id}"}\n\n`))
+            controller.close()
+          },
+        }),
+      )
+    }
+
+    const { stream } = createSseClient<{ id: string }>({
+      fetch,
+      sseDefaultRetryDelay: 0,
+      sseIdleTimeout: 0,
+      url: "http://localhost/events",
+    })
+
+    await expect(stream.next()).resolves.toEqual({ done: false, value: { id: "evt-1" } })
+    await expect(stream.next()).resolves.toEqual({ done: false, value: { id: "evt-2" } })
+    await stream.return(undefined)
+
+    expect(lastEventIDs.slice(0, 2)).toEqual([null, "evt-1"])
+  })
+
+  test("reconnects a stream that stops receiving bytes", async () => {
+    const errors: string[] = []
+    let fetchCalls = 0
+
+    const fetch: typeof globalThis.fetch = async () => {
+      fetchCalls += 1
+      if (fetchCalls === 1) {
+        return new Response(new ReadableStream({ start() {} }))
+      }
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('data: {"reconnected":true}\n\n'))
+          },
+        }),
+      )
+    }
+
+    const { stream } = createSseClient<{ reconnected: boolean }>({
+      fetch,
+      onSseError(error) {
+        errors.push(error instanceof Error ? error.message : String(error))
+      },
+      sseDefaultRetryDelay: 0,
+      sseIdleTimeout: 5,
+      url: "http://localhost/events",
+    })
+
+    await expect(stream.next()).resolves.toEqual({ done: false, value: { reconnected: true } })
+    await stream.return(undefined)
+
+    expect(fetchCalls).toBe(2)
+    expect(errors[0]).toBe("SSE stream idle for 5ms")
+  })
 })

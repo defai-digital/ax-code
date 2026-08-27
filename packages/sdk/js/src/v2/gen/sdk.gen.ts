@@ -4859,6 +4859,7 @@ export class Session2 extends HeyApiClient {
       executionTimeoutMs?: number
       sourceTaskID?: string
       resumeOnRestart?: boolean
+      messageID?: string
       agent: string
       model?: {
         providerID: string
@@ -4878,6 +4879,7 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "executionTimeoutMs" },
             { in: "query", key: "sourceTaskID" },
             { in: "query", key: "resumeOnRestart" },
+            { in: "body", key: "messageID" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
             { in: "body", key: "command" },
@@ -4906,6 +4908,7 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      messageID?: string
       agent: string
       model?: {
         providerID: string
@@ -4922,6 +4925,7 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "body", key: "messageID" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
             { in: "body", key: "command" },

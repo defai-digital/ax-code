@@ -46,6 +46,7 @@ export type LoopInput = z.infer<typeof LoopInput>
 
 export const ShellInput = z.object({
   sessionID: SessionID.zod,
+  messageID: MessageID.zod.optional(),
   agent: z.string(),
   model: z
     .object({

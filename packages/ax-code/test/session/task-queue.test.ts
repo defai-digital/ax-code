@@ -136,6 +136,31 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("deduplicates retried client submissions by stable session message ID", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const input = {
+          sessionID: session.id,
+          kind: "prompt" as const,
+          title: "Mobile retry",
+          sourceMessageID: MessageID.ascending(),
+          payload: { body: { parts: [{ type: "text", text: "continue" }] } },
+        }
+
+        const first = await TaskQueue.enqueueIdempotent(input)
+        const second = await TaskQueue.enqueueIdempotent({ ...input, title: "Retried request with same ID" })
+
+        expect(second.id).toBe(first.id)
+        expect(second.title).toBe("Mobile retry")
+        expect(await TaskQueue.list({ sessionID: session.id })).toHaveLength(1)
+      },
+    })
+  })
+
   test("recovers interrupted active items after backend restart", async () => {
     await using tmp = await tmpdir({ git: true })
 

@@ -15,6 +15,39 @@ afterEach(async () => {
 
 Log.init({ print: false })
 
+async function readWorkspaceSseFrames(response: Response, count: number) {
+  const reader = response.body!.getReader()
+  const decoder = new TextDecoder()
+  const frames: Array<{ id?: string; data: { type?: string; properties?: Record<string, unknown> } }> = []
+  let buffered = ""
+  try {
+    while (frames.length < count) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffered += decoder.decode(value, { stream: true }).replace(/\r\n?/g, "\n")
+      const blocks = buffered.split("\n\n")
+      buffered = blocks.pop() ?? ""
+      for (const block of blocks) {
+        const lines = block.split("\n")
+        const id = lines
+          .find((line) => line.startsWith("id:"))
+          ?.slice(3)
+          .trim()
+        const data = lines
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .join("\n")
+        if (!data) continue
+        frames.push({ id, data: JSON.parse(data) })
+        if (frames.length === count) break
+      }
+    }
+    return frames
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+}
+
 describe("control-plane/workspace-server SSE", () => {
   test("rejects non-loopback listen", () => {
     expect(() => WorkspaceServer.Listen({ hostname: "0.0.0.0", port: 0 })).toThrow(/local-only/)
@@ -163,6 +196,28 @@ describe("control-plane/workspace-server SSE", () => {
     }
   })
 
+  test("replays workspace events missed while the client is disconnected", async () => {
+    const app = WorkspaceServer.App()
+    const headers = { [AX_CODE_WORKSPACE_HEADER]: "wrk_resume_workspace" }
+    const first = await app.request("/event", { headers })
+    const [connected] = await readWorkspaceSseFrames(first, 1)
+    expect(connected?.data.type).toBe("server.connected")
+    expect(connected?.id).toBeTruthy()
+
+    GlobalBus.emit("event", {
+      directory: "wrk_resume_workspace",
+      payload: { type: "workspace.resume.test", properties: { ok: true } },
+    })
+
+    const resumed = await app.request("/event", {
+      headers: { ...headers, "Last-Event-ID": connected!.id! },
+    })
+    const frames = await readWorkspaceSseFrames(resumed, 2)
+
+    expect(frames.map((frame) => frame.data.type)).toEqual(["workspace.resume.test", "server.connected"])
+    expect(frames[1]?.id).toBe(frames[0]?.id)
+  })
+
   test("heartbeat respects the workspace SSE queue cap", async () => {
     const src = await fs.readFile(
       path.join(import.meta.dirname, "../../src/control-plane/workspace-server/server.ts"),
@@ -175,5 +230,15 @@ describe("control-plane/workspace-server SSE", () => {
     const block = src.slice(start, end)
 
     expect(block).toContain("if (q.size >= SSE_MAX_QUEUE) return")
+  })
+
+  test("backpressure disconnects for replay instead of silently dropping events", async () => {
+    const src = await fs.readFile(
+      path.join(import.meta.dirname, "../../src/control-plane/workspace-server/server.ts"),
+      "utf-8",
+    )
+
+    expect(src).toContain("workspace SSE queue full; disconnecting client for resync")
+    expect(src).not.toContain("workspace SSE queue full; dropping events")
   })
 })

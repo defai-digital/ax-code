@@ -926,6 +926,7 @@ export type Event =
   | EventProjectUpdated
   | EventServerInstanceDisposed
   | EventServerConnected
+  | EventServerResyncRequired
   | EventGlobalDisposed
   | EventFileWatcherUpdated
   | EventLspUpdated
@@ -1761,6 +1762,14 @@ export type EventServerInstanceDisposed = {
   type: "server.instance.disposed"
   properties: {
     directory: string
+  }
+}
+
+export type EventServerResyncRequired = {
+  type: "server.resync_required"
+  properties: {
+    reason: "invalid_cursor" | "server_restarted" | "cursor_expired" | "cursor_ahead" | "buffer_overflow"
+    cursor: string
   }
 }
 
@@ -4566,6 +4575,7 @@ export type GlobalCapabilitiesResponses = {
     events: {
       heartbeat: "server.heartbeat"
       connected: "server.connected"
+      resyncRequired: "server.resync_required"
       sessionCreated: "session.created"
       sessionStatus: "session.status"
       sessionError: "session.error"
@@ -12553,6 +12563,7 @@ export type SessionCommandResponse = SessionCommandResponses[keyof SessionComman
 
 export type SessionShellAsyncData = {
   body?: {
+    messageID?: string
     agent: string
     model?: {
       providerID: string
@@ -12631,6 +12642,7 @@ export type SessionShellAsyncResponse = SessionShellAsyncResponses[keyof Session
 
 export type SessionShellData = {
   body?: {
+    messageID?: string
     agent: string
     model?: {
       providerID: string

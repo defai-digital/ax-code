@@ -1099,12 +1099,17 @@ describe("gRPC SDK facade", () => {
       }) as typeof fetch,
     })
     const events = []
+    const eventAbort = new AbortController()
 
-    for await (const event of client.subscribeEvents({
-      types: ["server.connected", "session.status", "message.updated", "task.queue.updated"],
-      sessionID: "sess-1",
-    })) {
+    for await (const event of client.subscribeEvents(
+      {
+        types: ["server.connected", "session.status", "message.updated", "task.queue.updated"],
+        sessionID: "sess-1",
+      },
+      { signal: eventAbort.signal },
+    )) {
       events.push(event)
+      if (events.length === 2) eventAbort.abort()
     }
 
     expect(calls).toEqual(["GET /event"])

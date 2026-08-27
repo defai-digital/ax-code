@@ -154,6 +154,7 @@ const startEventStream = async (input: { directory?: string }) => {
     fetch: fetchFn,
     signal,
   })
+  let lastEventID: string | undefined
 
   const publishStatus = (status: StreamConnectionStatus) => {
     if (signal.aborted) return
@@ -180,11 +181,17 @@ const startEventStream = async (input: { directory?: string }) => {
 
   const done = runResilientStream<AxCodeEvent>({
     signal,
+    isReadyEvent: (event) => event.type === "server.connected",
     subscribe: (connectionSignal) =>
       sdk.event.subscribe(
         {},
         {
           signal: connectionSignal,
+          sseMaxRetryAttempts: 0,
+          ...(lastEventID ? { headers: { "Last-Event-ID": lastEventID } } : {}),
+          onSseEvent: (event) => {
+            if (typeof event.id === "string" && event.id.length > 0) lastEventID = event.id
+          },
         },
       ),
     onEvent: (event) => {

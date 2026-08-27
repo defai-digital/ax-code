@@ -117,6 +117,7 @@ test("GET /global/capabilities exposes desktop integration contract metadata", a
   expect(payload.events).toMatchObject({
     heartbeat: "server.heartbeat",
     connected: "server.connected",
+    resyncRequired: "server.resync_required",
     sessionStatus: "session.status",
     sessionError: "session.error",
   })

@@ -257,7 +257,7 @@ describe("session.prompt_async error handling", () => {
       "async function startAsyncSessionHandler",
       "function asyncTaskQueueTitle",
     )
-    expect(handler).toContain("TaskQueue.enqueue({")
+    expect(handler).toContain("TaskQueue.enqueueIdempotent({")
     expect(handler).toContain("const started = await TaskQueueExecutor.start(queueItem)")
     expect(handler).toContain("return c.json(started, 202)")
     // The deleted inline implementation must not linger.

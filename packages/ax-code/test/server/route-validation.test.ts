@@ -1082,7 +1082,9 @@ describe("server route validation", () => {
     const eventSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/event.ts"), "utf-8")
     expect(eventSrc).toContain("const shouldForward")
     expect(eventSrc).toContain("directory === undefined || directory === Instance.directory")
-    expect(eventSrc).toMatch(/Bus\.subscribeAll\(\(event\) => \{\s*if \(!shouldForward\(event\)\) return/)
+    expect(eventSrc).toMatch(
+      /Bus\.subscribeAllFrom\(lastEventID, \(entry\) => \{\s*if \(!shouldForward\(entry\.value\)\) return/,
+    )
   })
 
   test("log endpoint rejects oversized messages", async () => {
