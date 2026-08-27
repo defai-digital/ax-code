@@ -38,6 +38,20 @@ describe("custom API provider model discovery", () => {
     ])
   })
 
+  test("prefers nested limit.context from the AX Code OpenAI-compatible row shape", () => {
+    expect(
+      CustomApiProvider.parseDiscoveredModels({
+        data: [{ id: "coding", limit: { context: 204_800, output: 8_192 } }],
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        id: "coding",
+        contextWindow: 204_800,
+        outputLimit: 8_192,
+      }),
+    ])
+  })
+
   test("prefers gateway-reported context_length over the capability registry", () => {
     expect(
       CustomApiProvider.parseDiscoveredModels({
@@ -48,6 +62,35 @@ describe("custom API provider model discovery", () => {
         id: "glm-5.3",
         contextWindow: 64_000,
         outputLimit: 8_192,
+      }),
+    ])
+  })
+
+  test("uses Trust-reported windows on public aliases that are not catalog SKUs", () => {
+    expect(
+      CustomApiProvider.parseDiscoveredModels({
+        object: "list",
+        data: [
+          {
+            id: "coding",
+            object: "model",
+            owned_by: "ax-trust",
+            name: "coding",
+            context_length: 1_000_000,
+            max_output_tokens: 131_072,
+            limit: { context: 1_000_000, output: 131_072 },
+            capabilities: { reasoning: true, toolcall: true, temperature: true, attachment: false },
+          },
+        ],
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        id: "coding",
+        name: "coding",
+        contextWindow: 1_000_000,
+        outputLimit: 131_072,
+        reasoning: true,
+        toolCall: true,
       }),
     ])
   })

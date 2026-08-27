@@ -170,13 +170,17 @@ export namespace CustomApiProvider {
 
   function payloadLimits(raw?: Record<string, unknown>): { context?: number; output?: number } {
     if (!raw) return {}
+    const limit = isRecord(raw.limit) ? raw.limit : undefined
     return {
       context:
+        positiveSafeInt(limit?.context) ??
         positiveSafeInt(raw.context_length) ??
         positiveSafeInt(raw.context_window) ??
+        positiveSafeInt(raw.max_context_length) ??
         positiveSafeInt(raw.max_model_len) ??
         positiveSafeInt(raw.max_input_tokens),
-      output: positiveSafeInt(raw.max_output_tokens) ?? positiveSafeInt(raw.max_output),
+      output:
+        positiveSafeInt(limit?.output) ?? positiveSafeInt(raw.max_output_tokens) ?? positiveSafeInt(raw.max_output),
     }
   }
 
@@ -249,15 +253,21 @@ export namespace CustomApiProvider {
       },
     })
     const caps = findRegisteredModelCapabilities(id)
+    const capabilities = isRecord(raw?.capabilities) ? raw.capabilities : undefined
     return {
       id,
       name: name || id,
       contextWindow: inherited.context,
       outputLimit: inherited.output,
-      toolCall: true,
-      reasoning: caps ? caps.thinking !== "blocked" : false,
-      attachment: false,
-      temperature: true,
+      toolCall: typeof capabilities?.toolcall === "boolean" ? capabilities.toolcall : true,
+      reasoning:
+        typeof capabilities?.reasoning === "boolean"
+          ? capabilities.reasoning
+          : caps
+            ? caps.thinking !== "blocked"
+            : false,
+      attachment: typeof capabilities?.attachment === "boolean" ? capabilities.attachment : false,
+      temperature: typeof capabilities?.temperature === "boolean" ? capabilities.temperature : true,
     }
   }
 
