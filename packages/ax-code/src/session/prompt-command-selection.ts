@@ -49,7 +49,11 @@ export async function commandModel(input: {
   sessionID: SessionID
 }) {
   if (input.command?.model) {
-    return Provider.parseModel(input.command.model)
+    const pinned = await Provider.resolvePinnedModel(Provider.parseModel(input.command.model))
+    if (pinned) return pinned
+    log.warn("command model is unavailable; using the agent or last selected model", {
+      model: input.command.model,
+    })
   }
   if (input.command?.agent) {
     const agent = await Agent.get(input.command.agent)

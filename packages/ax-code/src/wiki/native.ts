@@ -18,6 +18,7 @@ import z from "zod"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
+import { Log } from "../util/log"
 import { ProviderTransform } from "../provider/transform"
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
 
@@ -88,8 +89,12 @@ Repository evidence:
 ${sourceEvidence(request)}`
 }
 
+const log = Log.create({ service: "wiki" })
+
 async function resolveModel(model?: string) {
-  const reference = model ? Provider.parseModel(model) : await Provider.defaultModel()
+  const pinned = model ? await Provider.resolvePinnedModel(Provider.parseModel(model)) : undefined
+  if (model && !pinned) log.warn("wiki model is unavailable; using the default model", { model })
+  const reference = pinned ?? (await Provider.defaultModel())
   const resolved = await Provider.getModel(reference.providerID, reference.modelID)
   return {
     reference,
