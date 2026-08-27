@@ -59,6 +59,8 @@ const {
   PACKAGED_RENDERER_PRIVILEGED_SCHEMES,
   PACKAGED_RENDERER_SCHEME,
   buildPackagedRendererCsp,
+  buildRendererApiOrigin,
+  buildRendererApiOriginAdditionalArguments,
   createPackagedRendererProtocolHandler,
   isPackagedRendererUrl,
   isTrustedRendererNavigationUrl,
@@ -462,10 +464,20 @@ function safeOpenExternal(url) {
   if (normalized) shell.openExternal(normalized)
 }
 
+function rendererWebPreferences() {
+  return createDesktopRendererWebPreferences(path.join(__dirname, "preload.js"), {
+    additionalArguments: buildRendererApiOriginAdditionalArguments(serverPort),
+  })
+}
+
+function localRendererOrigin() {
+  return getDevRendererUrl() || (app.isPackaged ? PACKAGED_RENDERER_ORIGIN : `http://127.0.0.1:${serverPort}`)
+}
+
 async function createWindow() {
   rendererReadyForOpenProject = false
   if (serverPort > 0) {
-    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = `http://127.0.0.1:${serverPort}`
+    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = buildRendererApiOrigin(serverPort)
   }
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -475,7 +487,7 @@ async function createWindow() {
     title: "AX Code",
     backgroundColor: "#151313",
     show: false,
-    webPreferences: createDesktopRendererWebPreferences(path.join(__dirname, "preload.js")),
+    webPreferences: rendererWebPreferences(),
   })
   attachDesktopBrowserWebviewPolicy(mainWindow.webContents)
 
@@ -1713,7 +1725,7 @@ const applyMacVibrancy = (browserWindow) => {
 // inject runtime-config the way upstream's packaged-UI protocol did.
 const createAdditionalWindow = async (url) => {
   if (serverPort > 0) {
-    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = `http://127.0.0.1:${serverPort}`
+    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = buildRendererApiOrigin(serverPort)
   }
   const win = new BrowserWindow({
     width: 1440,
@@ -1723,7 +1735,7 @@ const createAdditionalWindow = async (url) => {
     title: "AX Code",
     backgroundColor: "#151313",
     show: false,
-    webPreferences: createDesktopRendererWebPreferences(path.join(__dirname, "preload.js")),
+    webPreferences: rendererWebPreferences(),
   })
   attachDesktopBrowserWebviewPolicy(win.webContents)
   win.once("ready-to-show", () => win.show())
@@ -2125,7 +2137,7 @@ const clearCacheAndReload = async () => {
 }
 
 const handleNewWindow = async () => {
-  await createAdditionalWindow(localOriginUrl())
+  await createAdditionalWindow(`${localRendererOrigin()}/`)
 }
 
 const applyWindowTheme = (browserWindow, args) => {
@@ -2558,7 +2570,7 @@ const senderWindow = (event) => (event ? BrowserWindow.fromWebContents(event.sen
 // projectId from the URL query string.
 const createMiniChatWindow = async ({ mode, sessionId, directory, projectId }) => {
   if (serverPort > 0) {
-    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = `http://127.0.0.1:${serverPort}`
+    process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN = buildRendererApiOrigin(serverPort)
   }
   const win = new BrowserWindow({
     width: 420,
@@ -2568,7 +2580,7 @@ const createMiniChatWindow = async ({ mode, sessionId, directory, projectId }) =
     title: "AX Code",
     backgroundColor: "#151313",
     show: false,
-    webPreferences: createDesktopRendererWebPreferences(path.join(__dirname, "preload.js")),
+    webPreferences: rendererWebPreferences(),
   })
   attachDesktopBrowserWebviewPolicy(win.webContents)
   win.once("ready-to-show", () => win.show())
@@ -2587,7 +2599,7 @@ const createMiniChatWindow = async ({ mode, sessionId, directory, projectId }) =
   if (sessionId) params.set("sessionId", sessionId)
   if (directory) params.set("directory", directory)
   if (projectId) params.set("projectId", projectId)
-  const base = getDevRendererUrl() || `http://localhost:${serverPort}`
+  const base = localRendererOrigin()
   try {
     await loadUrlWithTimeout(win, `${base}/mini-chat.html?${params.toString()}`, { timeoutMs: WINDOW_LOAD_TIMEOUT_MS })
   } catch (error) {
@@ -2753,6 +2765,8 @@ app.whenReady().then(async () => {
       PACKAGED_RENDERER_SCHEME,
       createPackagedRendererProtocolHandler({
         webDistPath: getWebDistPath(),
+        getApiOrigin: () => buildRendererApiOrigin(serverPort),
+        fetchImpl: (url, init) => electronNet.fetch(url, init),
         readFile: (filePath) => fsp.readFile(filePath),
       }),
     )

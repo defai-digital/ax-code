@@ -1,12 +1,15 @@
 "use strict"
 
 const { isLoopbackDesktopHostname } = require("./desktop-hosts")
+const { isPackagedRendererUrl } = require("./desktop-renderer-protocol")
 
 function resolveServerRestartReloadUrl(rawUrl, { oldPort, newPort } = {}) {
   const previousPort = Number(oldPort)
   const nextPort = Number(newPort)
-  if (!Number.isInteger(previousPort) || previousPort <= 0) return null
   if (!Number.isInteger(nextPort) || nextPort <= 0) return null
+  if (isPackagedRendererUrl(rawUrl)) return String(rawUrl)
+
+  if (!Number.isInteger(previousPort) || previousPort <= 0) return null
 
   try {
     const url = new URL(typeof rawUrl === "string" ? rawUrl : "")

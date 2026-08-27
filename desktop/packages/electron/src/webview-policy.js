@@ -2,13 +2,17 @@
 
 const DESKTOP_BROWSER_WEBVIEW_PARTITION = "persist:openchamber-browser"
 
-function createDesktopRendererWebPreferences(preload) {
+function createDesktopRendererWebPreferences(preload, options = {}) {
+  const additionalArguments = Array.isArray(options.additionalArguments)
+    ? options.additionalArguments.filter((value) => typeof value === "string" && value.length > 0)
+    : []
   return {
     preload,
     contextIsolation: true,
     nodeIntegration: false,
     webSecurity: true,
     webviewTag: true,
+    ...(additionalArguments.length > 0 ? { additionalArguments } : {}),
   }
 }
 

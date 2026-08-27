@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { applySecurityHeaders, isDashboardProxyRequest, isPreviewProxyRequest } from "./response-headers.js"
+import {
+  applyPackagedRendererCorsHeaders,
+  applySecurityHeaders,
+  isDashboardProxyRequest,
+  isPreviewProxyRequest,
+} from "./response-headers.js"
 import { createMockResponse } from "../../test-helpers/route-harness.js"
 
 describe("response security headers", () => {
@@ -26,6 +31,28 @@ describe("response security headers", () => {
 
     expect(res.getHeader("X-Frame-Options")).toBeUndefined()
     expect(res.getHeader("X-Content-Type-Options")).toBe("nosniff")
+  })
+
+  it("adds credentialed CORS headers for the packaged app:// renderer", () => {
+    const res = createMockResponse()
+    expect(
+      applyPackagedRendererCorsHeaders(
+        {
+          headers: { origin: "app://ax-code" },
+        },
+        res,
+      ),
+    ).toBe(true)
+    expect(res.getHeader("Access-Control-Allow-Origin")).toBe("app://ax-code")
+    expect(res.getHeader("Access-Control-Allow-Credentials")).toBe("true")
+    expect(
+      applyPackagedRendererCorsHeaders(
+        {
+          headers: { origin: "http://example.com" },
+        },
+        res,
+      ),
+    ).toBe(false)
   })
 
   it("recognizes preview proxy requests from originalUrl when path is unavailable", () => {

@@ -56,30 +56,15 @@ export const installAppProtocolNetworkRewrites = (options: { pageOrigin: string;
   if (!isAppProtocolPageOrigin(options.pageOrigin) || !apiOrigin) return
   if (typeof window === "undefined") return
 
+  // HTTP fetch/EventSource stay on app:// so the custom protocol can proxy them
+  // same-origin. WebSockets cannot use protocol.handle, so only those rewrite
+  // to the loopback server.
   const rewriteOptions = { pageOrigin: options.pageOrigin, apiOrigin }
-  const originalFetch = window.fetch.bind(window)
-  window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-    if (typeof input === "string") {
-      return originalFetch(rewriteAppProtocolNetworkUrl(input, rewriteOptions), init)
-    }
-    return originalFetch(input as RequestInfo, init)
-  }) as typeof window.fetch
-
-  const OriginalEventSource = window.EventSource
-  if (typeof OriginalEventSource === "function") {
-    window.EventSource = class extends OriginalEventSource {
-      constructor(url: string | URL, eventSourceInitDict?: EventSourceInit) {
-        super(rewriteAppProtocolNetworkUrl(String(url), rewriteOptions), eventSourceInitDict)
-      }
-    } as typeof EventSource
-  }
-
   const OriginalWebSocket = window.WebSocket
-  if (typeof OriginalWebSocket === "function") {
-    window.WebSocket = class extends OriginalWebSocket {
-      constructor(url: string | URL, protocols?: string | string[]) {
-        super(rewriteAppProtocolWebSocketUrl(String(url), rewriteOptions), protocols)
-      }
-    } as typeof WebSocket
-  }
+  if (typeof OriginalWebSocket !== "function") return
+  window.WebSocket = class extends OriginalWebSocket {
+    constructor(url: string | URL, protocols?: string | string[]) {
+      super(rewriteAppProtocolWebSocketUrl(String(url), rewriteOptions), protocols)
+    }
+  } as typeof WebSocket
 }

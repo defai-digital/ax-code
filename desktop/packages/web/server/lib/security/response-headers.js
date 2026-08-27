@@ -1,5 +1,6 @@
 const PREVIEW_PROXY_PREFIX = "/api/preview/proxy"
 const DASHBOARD_PROXY_PREFIXES = ["/dre-graph", "/graph"]
+const PACKAGED_RENDERER_ORIGIN = "app://ax-code"
 
 const getRequestPathname = (req) => {
   const pathname = req?.path || req?.originalUrl || req?.url || ""
@@ -14,6 +15,17 @@ export const isPreviewProxyRequest = (req) => {
 export const isDashboardProxyRequest = (req) => {
   const pathname = getRequestPathname(req)
   return DASHBOARD_PROXY_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
+export const applyPackagedRendererCorsHeaders = (req, res) => {
+  const origin = typeof req?.headers?.origin === "string" ? req.headers.origin.trim() : ""
+  if (origin !== PACKAGED_RENDERER_ORIGIN) return false
+  res.setHeader("Access-Control-Allow-Origin", PACKAGED_RENDERER_ORIGIN)
+  res.setHeader("Access-Control-Allow-Credentials", "true")
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
+  res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS")
+  res.setHeader("Vary", "Origin")
+  return true
 }
 
 export const applySecurityHeaders = (req, res) => {

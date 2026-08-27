@@ -3,6 +3,7 @@
 const { contextBridge, ipcRenderer } = require("electron")
 const { createElectronDesktopBootOutcome } = require("./desktop-boot-outcome")
 const { isAllowedDesktopInvokeCommand } = require("./preload-ipc-policy")
+const { readRendererApiOriginFromArgv } = require("./desktop-renderer-protocol")
 
 // Bridge main-process desktop events to DOM CustomEvents. Several UI consumers
 // listen via window.addEventListener('openchamber:...') (e.g. open-session,
@@ -54,13 +55,10 @@ contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP_ELECTRON__", {
     ipcRenderer.invoke("desktop_record_startup_event", { name, details: details ?? {} }),
 })
 
-const rendererApiOrigin =
-  typeof process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN === "string"
-    ? process.env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN.trim()
-    : ""
+const rendererApiOrigin = readRendererApiOriginFromArgv(process.argv, process.env)
 if (rendererApiOrigin) {
   contextBridge.exposeInMainWorld("__AX_CODE_DESKTOP_DESKTOP_SERVER__", {
-    origin: rendererApiOrigin.replace(/\/+$/, ""),
+    origin: rendererApiOrigin,
     axCodePort: null,
     apiPrefix: "/api",
     cliAvailable: true,

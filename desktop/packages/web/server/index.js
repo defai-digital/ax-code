@@ -11,7 +11,7 @@ import crypto from "crypto"
 import { createUiAuth } from "./lib/ui-auth/ui-auth.js"
 import { createRequestSecurityRuntime } from "./lib/security/request-security.js"
 import { assertNoActiveLegacyPublicTunnels } from "./lib/security/legacy-tunnel.js"
-import { applySecurityHeaders } from "./lib/security/response-headers.js"
+import { applyPackagedRendererCorsHeaders, applySecurityHeaders } from "./lib/security/response-headers.js"
 import { prepareNotificationLastMessage } from "./lib/notifications/index.js"
 import { createTerminalRuntime } from "./lib/terminal/runtime.js"
 import {
@@ -1174,6 +1174,10 @@ async function main(options = {}) {
   // ── HTTP security headers (defense-in-depth for standalone/Docker deployments) ──
   app.use((req, res, next) => {
     applySecurityHeaders(req, res)
+    const cors = applyPackagedRendererCorsHeaders(req, res)
+    if (cors && req.method === "OPTIONS") {
+      return res.status(204).end()
+    }
     next()
   })
   let firstApiResponseRecorded = false

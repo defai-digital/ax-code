@@ -2,11 +2,15 @@
 
 const path = require("path")
 const { isLoopbackDesktopHostname } = require("./desktop-hosts")
-const { isTrustedRendererNavigationUrl: isTrustedLoopbackRendererNavigationUrl } = require("./renderer-navigation-policy")
+const {
+  isTrustedRendererNavigationUrl: isTrustedLoopbackRendererNavigationUrl,
+} = require("./renderer-navigation-policy")
 
 const PACKAGED_RENDERER_SCHEME = "app"
 const PACKAGED_RENDERER_HOST = "ax-code"
 const PACKAGED_RENDERER_ORIGIN = `${PACKAGED_RENDERER_SCHEME}://${PACKAGED_RENDERER_HOST}`
+const RENDERER_API_ORIGIN_ARG_PREFIX = "--ax-code-desktop-api-origin="
+const LOOPBACK_API_PREFIXES = ["/api", "/health", "/global", "/dre-graph", "/graph", "/auth"]
 
 const PACKAGED_RENDERER_PRIVILEGED_SCHEMES = [
   {
@@ -54,6 +58,46 @@ const isPackagedRendererUrl = (raw) => {
 const isTrustedRendererNavigationUrl = (raw, options = {}) => {
   if (isPackagedRendererUrl(raw)) return true
   return isTrustedLoopbackRendererNavigationUrl(raw, options)
+}
+
+const isLoopbackApiPath = (pathname) => {
+  const value = typeof pathname === "string" ? pathname : ""
+  return LOOPBACK_API_PREFIXES.some((prefix) => value === prefix || value.startsWith(`${prefix}/`))
+}
+
+const buildRendererApiOrigin = (port) => {
+  const parsed = Number(port)
+  if (!Number.isInteger(parsed) || parsed <= 0) return ""
+  return `http://127.0.0.1:${parsed}`
+}
+
+const buildRendererApiOriginAdditionalArguments = (port) => {
+  const origin = buildRendererApiOrigin(port)
+  return origin ? [`${RENDERER_API_ORIGIN_ARG_PREFIX}${origin}`] : []
+}
+
+const readRendererApiOriginFromArgv = (argv, env = process.env) => {
+  const args = Array.isArray(argv) ? argv : []
+  for (const arg of args) {
+    if (typeof arg === "string" && arg.startsWith(RENDERER_API_ORIGIN_ARG_PREFIX)) {
+      const origin = arg.slice(RENDERER_API_ORIGIN_ARG_PREFIX.length).trim().replace(/\/+$/, "")
+      if (origin) return origin
+    }
+  }
+  const fromEnv =
+    typeof env?.AX_CODE_DESKTOP_RENDERER_API_ORIGIN === "string"
+      ? env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN.trim().replace(/\/+$/, "")
+      : ""
+  return fromEnv
+}
+
+const injectPackagedRendererServerRuntime = (html, origin) => {
+  const source = typeof html === "string" ? html : ""
+  const safeOrigin = typeof origin === "string" ? origin.trim().replace(/\/+$/, "") : ""
+  if (!source || !safeOrigin) return source
+  const snippet = `<script>window.__AX_CODE_DESKTOP_DESKTOP_SERVER__={origin:${JSON.stringify(safeOrigin)},axCodePort:null,apiPrefix:"/api",cliAvailable:true};</script>`
+  if (source.includes("<head>")) return source.replace("<head>", `<head>${snippet}`)
+  return `${snippet}${source}`
 }
 
 const buildPackagedRendererCsp = () => {
@@ -149,7 +193,62 @@ const mimeForPackagedRendererAsset = (filePath) => {
   }
 }
 
-const createPackagedRendererProtocolHandler = ({ webDistPath, readFile }) => {
+const copyProxiedRequestHeaders = (request) => {
+  const headers = new Headers()
+  const source = request?.headers
+  if (!source) return headers
+  const skip = new Set(["host", "connection", "content-length"])
+  if (typeof source.forEach === "function") {
+    source.forEach((value, key) => {
+      if (skip.has(String(key).toLowerCase())) return
+      headers.set(key, value)
+    })
+    return headers
+  }
+  if (typeof source === "object") {
+    for (const [key, value] of Object.entries(source)) {
+      if (skip.has(String(key).toLowerCase()) || typeof value !== "string") continue
+      headers.set(key, value)
+    }
+  }
+  return headers
+}
+
+const isSafeLoopbackApiOrigin = (origin) => {
+  try {
+    const parsed = new URL(String(origin || ""))
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false
+    if (parsed.username || parsed.password) return false
+    return isLoopbackDesktopHostname(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
+const proxyPackagedRendererApiRequest = async (request, { getApiOrigin, fetchImpl }) => {
+  const apiOrigin = typeof getApiOrigin === "function" ? String(getApiOrigin() || "").replace(/\/+$/, "") : ""
+  if (!apiOrigin || !isSafeLoopbackApiOrigin(apiOrigin)) {
+    return new Response("Service Unavailable", { status: 503 })
+  }
+  const source = new URL(request.url)
+  const target = `${apiOrigin}${source.pathname}${source.search}`
+  const init = {
+    method: request.method || "GET",
+    headers: copyProxiedRequestHeaders(request),
+  }
+  if (init.method !== "GET" && init.method !== "HEAD" && request.body != null) {
+    init.body = request.body
+    init.duplex = "half"
+  }
+  try {
+    return await fetchImpl(target, init)
+  } catch {
+    return new Response("Bad Gateway", { status: 502 })
+  }
+}
+
+const createPackagedRendererProtocolHandler = ({ webDistPath, readFile, getApiOrigin, fetchImpl }) => {
+  const proxyFetch = typeof fetchImpl === "function" ? fetchImpl : globalThis.fetch
   return async (request) => {
     if (!isPackagedRendererUrl(request?.url)) {
       return new Response("Not Found", { status: 404 })
@@ -160,16 +259,27 @@ const createPackagedRendererProtocolHandler = ({ webDistPath, readFile }) => {
     } catch {
       return new Response("Bad Request", { status: 400 })
     }
+    if (isLoopbackApiPath(pathname)) {
+      return proxyPackagedRendererApiRequest(request, { getApiOrigin, fetchImpl: proxyFetch })
+    }
     const resolved = resolvePackagedRendererAssetPath(webDistPath, pathname)
     if (!resolved.ok) {
       return new Response("Forbidden", { status: 403 })
     }
     try {
       const body = await readFile(resolved.path)
-      return new Response(body, {
+      const contentType = mimeForPackagedRendererAsset(resolved.path)
+      const payload =
+        contentType.startsWith("text/html") && typeof getApiOrigin === "function"
+          ? injectPackagedRendererServerRuntime(
+              Buffer.isBuffer(body) ? body.toString("utf8") : String(body),
+              getApiOrigin(),
+            )
+          : body
+      return new Response(payload, {
         status: 200,
         headers: {
-          "Content-Type": mimeForPackagedRendererAsset(resolved.path),
+          "Content-Type": contentType,
           "Content-Security-Policy": buildPackagedRendererCsp(),
         },
       })
@@ -184,10 +294,17 @@ module.exports = {
   PACKAGED_RENDERER_HOST,
   PACKAGED_RENDERER_ORIGIN,
   PACKAGED_RENDERER_PRIVILEGED_SCHEMES,
+  RENDERER_API_ORIGIN_ARG_PREFIX,
+  LOOPBACK_API_PREFIXES,
   LOOPBACK_CONNECT_SRC,
   isPackagedRendererOrigin,
   isPackagedRendererUrl,
   isTrustedRendererNavigationUrl,
+  isLoopbackApiPath,
+  buildRendererApiOrigin,
+  buildRendererApiOriginAdditionalArguments,
+  readRendererApiOriginFromArgv,
+  injectPackagedRendererServerRuntime,
   buildPackagedRendererCsp,
   parseCspDirective,
   isLoopbackConnectSrc,

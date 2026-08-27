@@ -33,6 +33,16 @@ describe("createDesktopRendererWebPreferences", () => {
       webviewTag: true,
     })
   })
+
+  test("passes renderer API origin through additionalArguments", () => {
+    expect(
+      createDesktopRendererWebPreferences("/tmp/preload.js", {
+        additionalArguments: ["--ax-code-desktop-api-origin=http://127.0.0.1:50959"],
+      }),
+    ).toMatchObject({
+      additionalArguments: ["--ax-code-desktop-api-origin=http://127.0.0.1:50959"],
+    })
+  })
 })
 
 describe("isAllowedDesktopBrowserWebviewSrc", () => {

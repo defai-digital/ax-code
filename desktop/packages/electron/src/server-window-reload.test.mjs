@@ -56,6 +56,21 @@ describe("resolveServerRestartReloadUrl", () => {
     ).toBeNull()
   })
 
+  test("reloads packaged app:// renderer windows in place", () => {
+    expect(
+      resolveServerRestartReloadUrl("app://ax-code/", {
+        oldPort: 3910,
+        newPort: 3920,
+      }),
+    ).toBe("app://ax-code/")
+    expect(
+      resolveServerRestartReloadUrl("app://ax-code/mini-chat.html?mode=draft", {
+        oldPort: 3910,
+        newPort: 3920,
+      }),
+    ).toBe("app://ax-code/mini-chat.html?mode=draft")
+  })
+
   test("does not rewrite remote hosts or unrelated localhost ports", () => {
     expect(
       resolveServerRestartReloadUrl("https://remote.example.com/app", {
@@ -86,9 +101,10 @@ describe("reloadLocalRendererWindowsAfterServerRestart", () => {
     const unspecifiedAddress = mockWindow("http://0.0.0.0:3910/session/host")
     const remote = mockWindow("https://remote.example.com/app")
     const destroyed = mockWindow("http://localhost:3910/session/old", { destroyed: true })
+    const packaged = mockWindow("app://ax-code/")
 
     const result = await reloadLocalRendererWindowsAfterServerRestart(
-      [main, miniChat, loopbackAlias, unspecifiedAddress, remote, destroyed],
+      [main, miniChat, loopbackAlias, unspecifiedAddress, remote, destroyed, packaged],
       {
         oldPort: 3910,
         newPort: 3920,
@@ -96,12 +112,13 @@ describe("reloadLocalRendererWindowsAfterServerRestart", () => {
     )
 
     expect(result).toEqual({
-      attempted: 3,
+      attempted: 4,
       failed: 0,
       urls: [
         "http://localhost:3920/",
         "http://localhost:3920/mini-chat.html?mode=draft",
         "http://127.0.0.2:3920/session/alias",
+        "app://ax-code/",
       ],
     })
     expect(main.loadedUrls).toEqual(["http://localhost:3920/"])
@@ -110,6 +127,7 @@ describe("reloadLocalRendererWindowsAfterServerRestart", () => {
     expect(unspecifiedAddress.loadedUrls).toEqual([])
     expect(remote.loadedUrls).toEqual([])
     expect(destroyed.loadedUrls).toEqual([])
+    expect(packaged.loadedUrls).toEqual(["app://ax-code/"])
   })
 
   test("reports failed reload attempts without aborting remaining windows", async () => {
