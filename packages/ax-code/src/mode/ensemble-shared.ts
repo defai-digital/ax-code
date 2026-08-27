@@ -12,7 +12,7 @@ import { Auth } from "../auth"
 import { Council } from "./council"
 import { ModeMemory } from "./memory"
 import { EnsemblePreflight } from "./preflight"
-import { modelSelectableForProvider } from "../provider/model-selectability"
+import { isNonChatModelID, modelSelectableForProvider } from "../provider/model-selectability"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { isRetiredProviderID } from "../provider/retired-providers"
@@ -193,8 +193,8 @@ export namespace EnsembleShared {
         })
         continue
       }
-      if (selectable.every((m) => String(m.id).toLowerCase().includes("embed"))) {
-        excluded.push({ providerID, reason: "only embedding models available" })
+      if (selectable.every((m) => isNonChatModelID(String(m.id)))) {
+        excluded.push({ providerID, reason: "only embedding, rerank, or speech models available" })
         continue
       }
       ids.push(providerID)
@@ -246,8 +246,7 @@ export namespace EnsembleShared {
         if (!provider) continue
         selectableModels[id] = Provider.sort(
           Object.values(provider.models).filter(
-            (model) =>
-              modelSelectableForProvider(provider.id, model) && !String(model.id).toLowerCase().includes("embed"),
+            (model) => modelSelectableForProvider(provider.id, model) && !isNonChatModelID(String(model.id)),
           ),
         ).map((model) => String(model.id))
       }
@@ -281,8 +280,7 @@ export namespace EnsembleShared {
     for (const provider of Object.values(providers)) {
       const models = Provider.sort(
         Object.values(provider.models).filter(
-          (model) =>
-            modelSelectableForProvider(provider.id, model) && !String(model.id).toLowerCase().includes("embed"),
+          (model) => modelSelectableForProvider(provider.id, model) && !isNonChatModelID(String(model.id)),
         ),
       )
       const model = models[0]

@@ -1268,8 +1268,18 @@ export namespace Provider {
       if (configured) return configured
       // One-API / New-API / AX Trust style gateways expose the same SKU under
       // the custom provider ID, not the native `deepseek` / `openai` catalog.
+      // Prefer the session's own provider, then any connected provider.
       const onCurrent = await tryGetModel(providerID, parsed.modelID)
       if (onCurrent) return onCurrent
+      const moved = await resolvePinnedModel(parsed)
+      if (moved) {
+        log.warn("configured small_model moved to another provider", {
+          small_model: cfg.small_model,
+          providerID: moved.providerID,
+          modelID: moved.modelID,
+        })
+        return getModel(moved.providerID, moved.modelID)
+      }
       log.warn("configured small_model is unavailable; using provider catalog", {
         small_model: cfg.small_model,
         providerID,

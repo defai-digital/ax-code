@@ -4022,3 +4022,48 @@ test("defaultModel follows a configured model to the connected provider that ser
     },
   })
 })
+
+test("getSmallModel follows small_model to the connected provider serving the same SKU", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          small_model: "deepseek/deepseek-v4-flash",
+          disabled_providers: ["deepseek"],
+          provider: {
+            "127-0-0-1": {
+              management: "custom-api",
+              name: "127.0.0.1",
+              npm: "@ai-sdk/openai-compatible",
+              api: "http://127.0.0.1:8080/v1",
+              env: [],
+              models: {
+                "deepseek-v4-flash": {
+                  id: "deepseek-v4-flash",
+                  name: "DeepSeek V4 Flash",
+                  tool_call: true,
+                  limit: { context: 128_000, output: 16_384 },
+                },
+              },
+              options: { baseURL: "http://127.0.0.1:8080/v1" },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("GROQ_API_KEY", "test-api-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("groq"))
+      expect(String(model?.providerID)).toBe("127-0-0-1")
+      expect(String(model?.id)).toBe("deepseek-v4-flash")
+    },
+  })
+})
