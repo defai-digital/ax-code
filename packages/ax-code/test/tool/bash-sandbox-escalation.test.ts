@@ -95,6 +95,22 @@ describe("detectSandboxDenial", () => {
     expect(detectSandboxDenial({ ...base, output: "bash: foo: command not found" })).toBeUndefined()
     expect(detectSandboxDenial({ ...base, output: "npm ERR! code 1" })).toBeUndefined()
     expect(detectSandboxDenial({ ...base, output: "" })).toBeUndefined()
+    // POSIX EPERM from process-control / ownership — Seatbelt allows signal,
+    // and these fail the same way with the wrap off.
+    expect(detectSandboxDenial({ ...base, output: "kill: (1) - Operation not permitted" })).toBeUndefined()
+    expect(detectSandboxDenial({ ...base, output: "pkill: Operation not permitted" })).toBeUndefined()
+    expect(detectSandboxDenial({ ...base, output: "killall: Operation not permitted" })).toBeUndefined()
+    expect(detectSandboxDenial({ ...base, output: "renice: 123: Operation not permitted" })).toBeUndefined()
+    expect(detectSandboxDenial({ ...base, output: "chown: file: Operation not permitted" })).toBeUndefined()
+  })
+
+  test("still matches a file-write EPERM after an ordinary kill EPERM on another line", () => {
+    expect(
+      detectSandboxDenial({
+        ...base,
+        output: `kill: (1) - Operation not permitted\n${DENIAL_LINE}`,
+      })?.evidence,
+    ).toBe("Operation not permitted")
   })
 
   test("requires an active wrap, a real non-zero exit, and no timeout/abort", () => {
@@ -200,6 +216,33 @@ describe("tool.bash sandbox-denial escalation", () => {
 
         expect(result.metadata.exit).toBe(1)
         expect(result.output).toContain("boom: ordinary failure")
+        expect(asks.some((r) => r.permission === "isolation_escalation")).toBe(false)
+      },
+    })
+  })
+
+  test("ordinary kill EPERM from a wrapped run never asks", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        vi.spyOn(OsSandbox, "wrapCommand").mockReturnValue(fakeFailingWrap("kill: (1) - Operation not permitted"))
+        const asks: PermissionRequest[] = []
+        const result = await bash.execute(
+          { command: "kill -HUP 1", description: "Signal a privileged pid" },
+          {
+            ...ctx,
+            extra: { isolation },
+            ask: async (req: PermissionRequest) => {
+              asks.push(req)
+            },
+          },
+        )
+
+        expect(result.metadata.exit).toBe(1)
+        expect(result.output).toContain("Operation not permitted")
         expect(asks.some((r) => r.permission === "isolation_escalation")).toBe(false)
       },
     })

@@ -28,24 +28,30 @@ export type SandboxDenial = {
 
 // Denial signatures, in match order:
 //
-// - "Operation not permitted" is the strerror for EPERM, which is what
-//   Seatbelt returns for denied file-write*/network* operations on macOS; the
-//   wrapped command's own error text carries the phrase (e.g.
-//   `touch: /etc/x: Operation not permitted`). The EACCES strerror
-//   "Permission denied" — what ordinary file-permission failures produce —
-//   is deliberately NOT matched: it fires constantly outside any sandbox.
 // - sandbox-exec reports its own profile/load/exec failures on stderr with a
 //   line-anchored "sandbox-exec: " prefix.
 // - sandboxd-style violation lines ("deny(1) file-write-data") when a wrapped
 //   process or shell surfaces the Seatbelt violation text.
 // - bubblewrap reports every setup/runtime failure with a line-anchored
 //   "bwrap: " prefix.
-const DENIAL_PATTERNS: RegExp[] = [
-  /Operation not permitted/,
-  /^sandbox-exec: /m,
-  /\bdeny\(\d+\) [a-z][a-z-]+/,
-  /^bwrap: /m,
-]
+// - "Operation not permitted" is the strerror for EPERM, which is what
+//   Seatbelt returns for denied file-write*/network* operations on macOS; the
+//   wrapped command's own error text carries the phrase (e.g.
+//   `touch: /etc/x: Operation not permitted`). The EACCES strerror
+//   "Permission denied" — what ordinary file-permission failures produce —
+//   is deliberately NOT matched: it fires constantly outside any sandbox.
+const SANDBOX_MECHANISM_PATTERNS: RegExp[] = [/^sandbox-exec: /m, /\bdeny\(\d+\) [a-z][a-z-]+/, /^bwrap: /m]
+const EPERM_PATTERN = /Operation not permitted/g
+// Seatbelt allows `signal`; these utilities fail with EPERM for ordinary
+// permission reasons even with the wrap off. Matching them would prompt
+// isolation_escalation, then retry unsandboxed and fail the same way.
+const ORDINARY_EPERM_UTIL = /^(?:kill|pkill|killall|renice|nice|chown):/i
+
+function lineAt(output: string, index: number): string {
+  const start = output.lastIndexOf("\n", index - 1) + 1
+  const end = output.indexOf("\n", index)
+  return output.slice(start, end === -1 ? undefined : end).trim()
+}
 
 /**
  * Detect an OS-sandbox denial in a finished bash run. Returns the denial
@@ -72,9 +78,13 @@ export function detectSandboxDenial(input: {
   if (input.isolation?.mode === "read-only") return undefined
   if (input.timedOut || input.aborted) return undefined
   if (input.exit === null || input.exit === 0) return undefined
-  for (const pattern of DENIAL_PATTERNS) {
+  for (const pattern of SANDBOX_MECHANISM_PATTERNS) {
     const match = pattern.exec(input.output)
     if (match) return { mechanism: input.wrap.mechanism, evidence: match[0] }
+  }
+  for (const match of input.output.matchAll(EPERM_PATTERN)) {
+    if (ORDINARY_EPERM_UTIL.test(lineAt(input.output, match.index))) continue
+    return { mechanism: input.wrap.mechanism, evidence: match[0] }
   }
   return undefined
 }
