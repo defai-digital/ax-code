@@ -13228,7 +13228,7 @@ export type ProviderCustomUpdateData = {
     baseURL: string
     apiKey?: string
     allowInsecureHttp?: boolean
-    models: Array<{
+    models?: Array<{
       id: string
       name?: string
       contextWindow: number

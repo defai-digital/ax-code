@@ -6,6 +6,7 @@ import {
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
+  solidStoreRecordPatch,
   rememberRecentModel,
   resolveCurrentAgent,
 } from "../../../src/cli/cmd/tui/context/local-util"
@@ -143,6 +144,10 @@ describe("tui local model preferences", () => {
       "openrouter/vendor/model": "medium",
     })
     expect(result.changed).toBe(true)
+    expect(solidStoreRecordPatch({ build: model(1), plan: model(2) }, { build: model(1) })).toEqual({
+      build: model(1),
+      plan: undefined,
+    })
   })
 
   test("pruneModelPreferences keeps models that are temporarily unavailable during provider discovery", () => {

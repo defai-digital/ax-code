@@ -3,7 +3,12 @@ import { NamedError } from "@ax-code/util/error"
 import { Auth } from "@/auth"
 import { Config } from "@/config/config"
 import { ModelsDev } from "@/provider/models"
+import { findRegisteredModelCapabilities } from "@/provider/model-capabilities"
+import { modelIdFinalSegment, normalizeProviderModelId } from "@/provider/model-id"
 import { isRetiredProviderID } from "@/provider/retired-providers"
+import { isLocalHostname } from "@/util/local-host"
+import { isRecord } from "@/util/record"
+import { Ssrf } from "@/util/ssrf"
 
 export namespace CustomApiProvider {
   export const Protocol = z.enum(["openai-compatible", "anthropic-compatible"])
@@ -75,7 +80,6 @@ export namespace CustomApiProvider {
       allowInsecureHttp: z.boolean().optional().default(false),
       models: z
         .array(Model)
-        .min(1, "At least one model is required")
         .max(128, "A custom provider can declare at most 128 models")
         .superRefine((models, context) => {
           const seen = new Set<string>()
@@ -84,7 +88,8 @@ export namespace CustomApiProvider {
               context.addIssue({ code: "custom", message: `Duplicate model ID: ${model.id}`, path: [index, "id"] })
             seen.add(model.id)
           }
-        }),
+        })
+        .optional(),
     })
     .strict()
     .superRefine((input, context) => {
@@ -126,6 +131,194 @@ export namespace CustomApiProvider {
     }
   }
 
+  const DISCOVERY_TIMEOUT_MS = 8_000
+  export const DEFAULT_CONTEXT_WINDOW = 128_000
+  export const DEFAULT_OUTPUT_LIMIT = 16_384
+
+  export function identityFromBaseURL(baseURL: string): { name: string; providerID: string } {
+    let host = "custom-api"
+    try {
+      host = new URL(baseURL).hostname
+    } catch {
+      // Keep the fallback slug when the URL is still being typed.
+    }
+    const clean = host.replace(/^\[|\]$/g, "").replace(/^www\./i, "")
+    const name = (clean || "Custom API").slice(0, 120)
+    // OpenCode-style one-api/new-api IDs are slugs (`myapi`), not hostnames.
+    // Dots in `127.0.0.1` look like a model path and break preference pruning.
+    let providerID = clean
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 63)
+    if (!/^[a-z0-9]/.test(providerID)) providerID = `c${providerID}`.slice(0, 63)
+    if (!providerID) providerID = "custom-api"
+    return { name, providerID }
+  }
+
+  export function catalogModelKey(modelID: string) {
+    return normalizeProviderModelId(modelIdFinalSegment(modelID).replace(/\[\d+[mM]\]$/, ""))
+  }
+
+  function positiveSafeInt(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isInteger(value) && Number.isSafeInteger(value) && value > 0) return value
+    if (typeof value === "string" && /^\d+$/.test(value)) {
+      const parsed = Number(value)
+      if (Number.isSafeInteger(parsed) && parsed > 0) return parsed
+    }
+  }
+
+  function payloadLimits(raw?: Record<string, unknown>): { context?: number; output?: number } {
+    if (!raw) return {}
+    return {
+      context:
+        positiveSafeInt(raw.context_length) ??
+        positiveSafeInt(raw.context_window) ??
+        positiveSafeInt(raw.max_model_len) ??
+        positiveSafeInt(raw.max_input_tokens),
+      output: positiveSafeInt(raw.max_output_tokens) ?? positiveSafeInt(raw.max_output),
+    }
+  }
+
+  export function catalogLimitForModelID(
+    modelID: string,
+    catalog: Record<
+      string,
+      { models?: Record<string, { id?: string; limit?: { context?: number; output?: number } }> }
+    >,
+  ): { context: number; output: number } | undefined {
+    const needle = catalogModelKey(modelID)
+    if (!needle) return
+    let best: { context: number; output: number } | undefined
+    for (const provider of Object.values(catalog)) {
+      for (const [id, model] of Object.entries(provider.models ?? {})) {
+        if (catalogModelKey(model.id ?? id) !== needle) continue
+        const context = model.limit?.context
+        const output = model.limit?.output
+        if (!context || context <= 0 || !output || output <= 0) continue
+        if (!best || context > best.context || (context === best.context && output > best.output)) {
+          best = { context, output }
+        }
+      }
+    }
+    return best
+  }
+
+  function shouldReplaceLimit(stored: number, discoveryDefault: number, replaceDiscoveryDefaults: boolean) {
+    if (stored === 0) return true
+    return replaceDiscoveryDefaults && stored === discoveryDefault
+  }
+
+  export function inheritCustomApiModelLimit(input: {
+    modelID: string
+    limit?: { context?: number; output?: number }
+    catalog?: Record<
+      string,
+      { models?: Record<string, { id?: string; limit?: { context?: number; output?: number } }> }
+    >
+    replaceDiscoveryDefaults?: boolean
+  }): { context: number; output: number } {
+    const storedContext = input.limit?.context ?? 0
+    const storedOutput = input.limit?.output ?? 0
+    const catalog = input.catalog ? catalogLimitForModelID(input.modelID, input.catalog) : undefined
+    const caps = findRegisteredModelCapabilities(input.modelID)
+    // Registry first: reseller catalog cards for the same SKU disagree
+    // (1_000_000 vs 1_048_576) and should not inflate a known window.
+    const inheritedContext = caps?.contextWindow ?? catalog?.context
+    const inheritedOutput = catalog?.output
+    const replace = input.replaceDiscoveryDefaults === true
+    const context =
+      shouldReplaceLimit(storedContext, DEFAULT_CONTEXT_WINDOW, replace) && inheritedContext
+        ? inheritedContext
+        : storedContext || DEFAULT_CONTEXT_WINDOW
+    let output =
+      shouldReplaceLimit(storedOutput, DEFAULT_OUTPUT_LIMIT, replace) && inheritedOutput
+        ? inheritedOutput
+        : storedOutput || DEFAULT_OUTPUT_LIMIT
+    if (output > context) output = context
+    return { context, output }
+  }
+
+  export function discoveredModel(id: string, name?: string, raw?: Record<string, unknown>): Model {
+    const payload = payloadLimits(raw)
+    const inherited = inheritCustomApiModelLimit({
+      modelID: id,
+      limit: {
+        context: payload.context,
+        output: payload.output,
+      },
+    })
+    const caps = findRegisteredModelCapabilities(id)
+    return {
+      id,
+      name: name || id,
+      contextWindow: inherited.context,
+      outputLimit: inherited.output,
+      toolCall: true,
+      reasoning: caps ? caps.thinking !== "blocked" : false,
+      attachment: false,
+      temperature: true,
+    }
+  }
+
+  export function parseDiscoveredModels(payload: unknown): Model[] {
+    if (!isRecord(payload) || !Array.isArray(payload.data)) return []
+    const models: Model[] = []
+    const seen = new Set<string>()
+    for (const raw of payload.data) {
+      if (!isRecord(raw) || typeof raw.id !== "string") continue
+      const id = raw.id.trim()
+      if (!id || seen.has(id) || /\s/u.test(id) || id.length > 256) continue
+      seen.add(id)
+      const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim().slice(0, 120) : id
+      models.push(discoveredModel(id, name, raw))
+      if (models.length >= 128) break
+    }
+    return models
+  }
+
+  function modelsURL(baseURL: string) {
+    return `${baseURL.replace(/\/+$/, "")}/models`
+  }
+
+  function authorizationHeaders(apiKey: string) {
+    const token = apiKey.trim()
+    return {
+      Authorization: token.toLowerCase().startsWith("bearer ") ? token : `Bearer ${token}`,
+    }
+  }
+
+  export async function discoverModels(input: {
+    baseURL: string
+    apiKey: string
+    timeoutMs?: number
+    fetcher?: typeof fetch
+  }): Promise<Model[]> {
+    const token = input.apiKey.trim()
+    if (!token) throw new Error({ message: "API token is required to discover models" })
+    const url = modelsURL(input.baseURL)
+    const hostname = new URL(input.baseURL).hostname
+    const fetcher = input.fetcher ?? (isLocalHostname(hostname) ? fetch : Ssrf.pinnedFetch)
+    const response = await fetcher(url, {
+      method: "GET",
+      headers: authorizationHeaders(token),
+      signal: AbortSignal.timeout(input.timeoutMs ?? DISCOVERY_TIMEOUT_MS),
+    })
+    if (!response.ok) {
+      await response.arrayBuffer().catch(() => undefined)
+      throw new Error({ message: `GET ${url} returned HTTP ${response.status}` })
+    }
+    let payload: unknown
+    try {
+      payload = await response.json()
+    } catch {
+      throw new Error({ message: `GET ${url} returned invalid JSON` })
+    }
+    const models = parseDiscoveredModels(payload)
+    if (models.length === 0) throw new Error({ message: `GET ${url} returned no models` })
+    return models
+  }
+
   function npmForProtocol(protocol: Protocol) {
     return protocol === "anthropic-compatible" ? "@ai-sdk/anthropic" : "@ai-sdk/openai-compatible"
   }
@@ -136,7 +329,7 @@ export namespace CustomApiProvider {
     return undefined
   }
 
-  function providerConfig(input: Upsert): Config.Provider {
+  function providerConfig(input: Upsert & { models: Model[] }): Config.Provider {
     return {
       management: "custom-api",
       name: input.name,
@@ -229,9 +422,10 @@ export namespace CustomApiProvider {
     const previousProvider = globalConfig.provider?.[providerID]
     await assertAvailableProviderID(providerID, previousProvider)
     const previousAuth = await Auth.get(providerID)
+    const models = await resolveModels(input, previousProvider, previousAuth)
     const credentialChanged = input.apiKey !== undefined
     if (credentialChanged) await Auth.set(providerID, { type: "api", key: input.apiKey! })
-    const nextProvider = providerConfig(input)
+    const nextProvider = providerConfig({ ...input, models })
     try {
       await Config.setGlobalProvider(providerID, nextProvider)
     } catch (cause) {
@@ -239,6 +433,22 @@ export namespace CustomApiProvider {
       throw cause
     }
     return viewFromProvider(providerID, nextProvider, credentialChanged || previousAuth?.type === "api")
+  }
+
+  async function resolveModels(
+    input: Upsert,
+    previousProvider: Config.Provider | undefined,
+    previousAuth: Auth.Info | undefined,
+  ): Promise<Model[]> {
+    if (input.models && input.models.length > 0) return input.models
+    if (previousProvider?.management === "custom-api") {
+      const previous = viewFromProvider("previous", previousProvider, false)
+      const previousURL = previous.baseURL
+      if (previousURL === input.baseURL && previous.models.length > 0) return previous.models
+    }
+    const apiKey = input.apiKey ?? (previousAuth?.type === "api" ? previousAuth.key : undefined)
+    if (!apiKey) throw new Error({ message: "API token is required to discover models from the endpoint" })
+    return discoverModels({ baseURL: input.baseURL, apiKey })
   }
 
   export async function remove(rawProviderID: string): Promise<boolean> {

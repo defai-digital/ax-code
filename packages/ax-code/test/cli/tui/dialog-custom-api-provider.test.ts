@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { CustomApiProvider } from "../../../src/provider/custom-api-provider"
 import {
   isManagedCustomApiProviderConfig,
   parseCustomApiProviderModelIDs,
@@ -10,6 +11,9 @@ describe("custom API provider TUI helpers", () => {
       expect.objectContaining({ id: "model-a", contextWindow: 128_000, outputLimit: 16_384, toolCall: true }),
       expect.objectContaining({ id: "model-b", contextWindow: 128_000, outputLimit: 16_384, toolCall: true }),
       expect.objectContaining({ id: "model-c", contextWindow: 128_000, outputLimit: 16_384, toolCall: true }),
+    ])
+    expect(parseCustomApiProviderModelIDs("glm-5.3")).toEqual([
+      expect.objectContaining({ id: "glm-5.3", contextWindow: 1_000_000, reasoning: true }),
     ])
   })
 
@@ -34,6 +38,10 @@ describe("custom API provider TUI helpers", () => {
     expect(() =>
       parseCustomApiProviderModelIDs(Array.from({ length: 129 }, (_, index) => `m${index}`).join(",")),
     ).toThrow("at most 128 models")
+  })
+
+  test("connect dialog identity comes from the base URL", () => {
+    expect(CustomApiProvider.identityFromBaseURL("https://trust.example/v1").providerID).toBe("trust-example")
   })
 
   test("recognizes only editor-managed custom providers", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  findRegisteredModelCapabilities,
   getModelCapabilities,
   supportsLongAgent,
   getContextPackBudget,
@@ -88,6 +89,7 @@ describe("Model Capability Registry", () => {
       expect(caps.thinking).toBe("blocked")
       expect(caps.preserveThinking).toBe("blocked")
       expect(caps.rateLimitTier).toBe("standard")
+      expect(findRegisteredModelCapabilities("unknown-model")).toBeUndefined()
     })
 
     it("should handle model ID variations", () => {

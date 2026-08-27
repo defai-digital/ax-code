@@ -28,6 +28,7 @@ import {
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
+  solidStoreRecordPatch,
   rememberRecentModel as rememberRecentModelEntry,
   resolveCurrentAgent,
   type ModelPreferenceStatus,
@@ -354,10 +355,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             favoriteBefore: modelStore.favorite.length,
             favoriteAfter: pruned.favorite.length,
           })
-          setModelStore("model", pruned.model)
+          setModelStore("model", solidStoreRecordPatch(modelStore.model, pruned.model))
           setModelStore("recent", pruned.recent)
           setModelStore("favorite", pruned.favorite)
-          setModelStore("variant", pruned.variant)
+          setModelStore("variant", solidStoreRecordPatch(modelStore.variant, pruned.variant))
           save()
         }
       })

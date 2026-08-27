@@ -31077,7 +31077,6 @@
                     "type": "boolean"
                   },
                   "models": {
-                    "minItems": 1,
                     "maxItems": 128,
                     "type": "array",
                     "items": {
@@ -31132,8 +31131,7 @@
                 "required": [
                   "name",
                   "protocol",
-                  "baseURL",
-                  "models"
+                  "baseURL"
                 ],
                 "additionalProperties": false
               }

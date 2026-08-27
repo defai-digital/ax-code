@@ -1181,9 +1181,10 @@ export const settingsDict = {
   "settings.providers.custom.field.tokenPlaceholder": "Enter a token",
   "settings.providers.custom.field.tokenKeepPlaceholder": "Leave blank to keep the saved token",
   "settings.providers.custom.field.tokenHint":
-    "Tokens are encrypted in AX Code auth storage and never returned to this form.",
+    "Required. Tokens are encrypted in AX Code auth storage and never returned to this form.",
   "settings.providers.custom.models.title": "Models",
-  "settings.providers.custom.models.description": "Declare the model IDs and limits exposed by this endpoint.",
+  "settings.providers.custom.models.description":
+    "Optional. Leave empty to load model IDs from GET /models on the endpoint.",
   "settings.providers.custom.models.add": "Add model",
   "settings.providers.custom.models.item": "Model {index}",
   "settings.providers.custom.models.remove": "Remove",

@@ -50,6 +50,7 @@ import { isGenericCliFallbackModel } from "./cli/ids"
 import { latestAnthropicFamilyModels } from "./anthropic-families"
 import { isHiddenDeepseekLegacySku } from "./deepseek-catalog"
 import { ProviderSdkCompat } from "./sdk-compat"
+import { CustomApiProvider } from "./custom-api-provider"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -445,11 +446,21 @@ export namespace Provider {
             interleaved: model.interleaved ?? existingModel?.capabilities?.interleaved ?? false,
           },
           options: mergeDeep(existingModel?.options ?? {}, model.options ?? {}),
-          limit: {
-            context: model.limit?.context ?? existingModel?.limit?.context ?? 0,
-            input: model.limit?.input ?? existingModel?.limit?.input,
-            output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
-          },
+          limit: (() => {
+            const stored = {
+              context: model.limit?.context ?? existingModel?.limit?.context ?? 0,
+              input: model.limit?.input ?? existingModel?.limit?.input,
+              output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
+            }
+            if (provider.management !== "custom-api") return stored
+            const inherited = CustomApiProvider.inheritCustomApiModelLimit({
+              modelID: nextID,
+              limit: stored,
+              catalog: modelsDev,
+              replaceDiscoveryDefaults: true,
+            })
+            return { ...stored, ...inherited }
+          })(),
           headers: mergeDeep(existingModel?.headers ?? {}, model.headers ?? {}),
           family: model.family ?? existingModel?.family ?? "",
           release_date: model.release_date ?? existingModel?.release_date ?? "",
@@ -1120,6 +1131,15 @@ export namespace Provider {
     return info
   }
 
+  async function tryGetModel(providerID: ProviderID, modelID: ModelID) {
+    try {
+      return await getModel(providerID, modelID)
+    } catch (error) {
+      if (ModelNotFoundError.isInstance(error)) return undefined
+      throw error
+    }
+  }
+
   export async function getLanguage(model: Model, retryDepth = 0): Promise<Lang> {
     const s = await state()
     const provider = s.providers[model.providerID]
@@ -1244,7 +1264,16 @@ export namespace Provider {
 
     if (cfg.small_model) {
       const parsed = parseModel(cfg.small_model)
-      return getModel(parsed.providerID, parsed.modelID)
+      const configured = await tryGetModel(parsed.providerID, parsed.modelID)
+      if (configured) return configured
+      // One-API / New-API / AX Trust style gateways expose the same SKU under
+      // the custom provider ID, not the native `deepseek` / `openai` catalog.
+      const onCurrent = await tryGetModel(providerID, parsed.modelID)
+      if (onCurrent) return onCurrent
+      log.warn("configured small_model is unavailable; using provider catalog", {
+        small_model: cfg.small_model,
+        providerID,
+      })
     }
 
     // Await discovery so models populated solely by discovery loaders (e.g. a
@@ -1318,6 +1347,18 @@ export namespace Provider {
           .sort((a, b) => a.length - b.length || a.localeCompare(b))
         if (includes[0]) return getModel(providerID, ModelID.make(includes[0]))
       }
+      // Custom OpenAI-compatible catalogs (one-api, new-api, AX Trust) have no
+      // models.dev family tags. Prefer a flash/mini SKU, else the first
+      // selectable model so title/recap aux calls still have a lane.
+      const keys = Object.keys(provider.models)
+      for (const token of ["flash", "mini", "haiku", "small", "lite"]) {
+        const hit = keys
+          .filter((model) => model.toLowerCase().includes(token))
+          .sort((a, b) => a.length - b.length || a.localeCompare(b))
+        if (hit[0]) return getModel(providerID, ModelID.make(hit[0]))
+      }
+      const first = Object.values(provider.models).find((item) => modelSelectableForProvider(providerID, item))
+      if (first) return first
     }
 
     return undefined

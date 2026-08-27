@@ -1,12 +1,19 @@
 import z from "zod"
+import { TextareaRenderable, TextAttributes } from "@ax-code/tui"
+import { createSignal, onCleanup, onMount } from "solid-js"
+import { useKeyboard } from "@ax-code/tui/solid"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { DialogPrompt } from "@tui/ui/dialog-prompt"
-import type { DialogContext } from "@tui/ui/dialog"
+import { useDialog, type DialogContext } from "@tui/ui/dialog"
+import { useToast } from "@tui/ui/toast"
 import type { useSDK } from "@tui/context/sdk"
-import type { useTheme } from "@tui/context/theme"
+import { useTheme } from "@tui/context/theme"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
 import { urlAllowlistServerRoute } from "@tui/util/server-url"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import { focusRenderable } from "@tui/util/renderable-safety"
 import { isRecord } from "@/util/record"
+import { CustomApiProvider } from "@/provider/custom-api-provider"
 
 const Protocol = z.enum(["openai-compatible", "anthropic-compatible"])
 export type CustomApiProviderProtocol = z.infer<typeof Protocol>
@@ -99,48 +106,7 @@ export function parseCustomApiProviderModelIDs(
     if (id.length > 256 || /\s/u.test(id)) throw new Error(`Invalid model ID: ${id}`)
     if (seen.has(id)) throw new Error(`Duplicate model ID: ${id}`)
     seen.add(id)
-    return (
-      previous.get(id) ?? {
-        id,
-        name: id,
-        contextWindow: 128_000,
-        outputLimit: 16_384,
-        toolCall: true,
-        reasoning: false,
-        attachment: false,
-        temperature: true,
-      }
-    )
-  })
-}
-
-function chooseProtocol(input: {
-  dialog: DialogContext
-  current: CustomApiProviderProtocol
-}): Promise<CustomApiProviderProtocol | null> {
-  return new Promise((resolve) => {
-    input.dialog.replace(
-      () => (
-        <DialogSelect
-          title="API protocol"
-          current={input.current}
-          options={[
-            {
-              title: "OpenAI-compatible",
-              value: "openai-compatible" as const,
-              description: "Chat Completions compatible endpoint",
-            },
-            {
-              title: "Anthropic-compatible",
-              value: "anthropic-compatible" as const,
-              description: "Anthropic Messages compatible endpoint",
-            },
-          ]}
-          onSelect={(option) => resolve(option.value)}
-        />
-      ),
-      () => resolve(null),
-    )
+    return previous.get(id) ?? CustomApiProvider.discoveredModel(id)
   })
 }
 
@@ -182,81 +148,197 @@ async function confirmInsecureHttp(dialog: DialogContext, baseURL: string) {
   })
 }
 
+type CustomApiConnectFields = {
+  baseURL: string
+  apiKey: string
+}
+
+function DialogCustomApiConnect(props: {
+  existing?: CustomApiProviderView
+  onConfirm: (fields: CustomApiConnectFields) => void
+}) {
+  const dialog = useDialog()
+  const toast = useToast()
+  const { theme } = useTheme()
+  const [active, setActive] = createSignal<"baseURL" | "apiKey">("baseURL")
+  let baseURLInput: TextareaRenderable
+  let apiKeyInput: TextareaRenderable
+
+  const focusActive = () => {
+    const target = active() === "baseURL" ? baseURLInput : apiKeyInput
+    focusRenderable(target, { name: "custom-api-connect-focus" })
+    target?.gotoLineEnd()
+  }
+
+  const submit = () => {
+    const baseURL = (baseURLInput?.plainText ?? "").trim()
+    const apiKey = apiKeyInput?.plainText ?? ""
+    if (!baseURL) {
+      toast.show({ message: "Base URL is required", variant: "error" })
+      setActive("baseURL")
+      focusActive()
+      return
+    }
+    if (!apiKey.trim() && !props.existing?.hasApiKey) {
+      toast.show({ message: "API token is required", variant: "error" })
+      setActive("apiKey")
+      focusActive()
+      return
+    }
+    props.onConfirm({ baseURL, apiKey })
+  }
+
+  useKeyboard((evt) => {
+    if (evt.name === "tab") {
+      evt.preventDefault()
+      setActive((current) => (current === "baseURL" ? "apiKey" : "baseURL"))
+      scheduleMicrotaskTask(focusActive, { name: "custom-api-connect-tab" })
+      return
+    }
+    if (evt.name === "return") {
+      evt.preventDefault()
+      evt.stopPropagation()
+      if (active() === "baseURL") {
+        setActive("apiKey")
+        scheduleMicrotaskTask(focusActive, { name: "custom-api-connect-next" })
+        return
+      }
+      submit()
+    }
+  })
+
+  onMount(() => {
+    dialog.setSize("medium")
+    const cancel = scheduleMicrotaskTask(focusActive, { name: "custom-api-connect-focus" })
+    onCleanup(cancel)
+  })
+
+  const fieldLabel = (id: "baseURL" | "apiKey", label: string) => (
+    <text attributes={TextAttributes.BOLD} fg={active() === id ? theme.primary : theme.text}>
+      {label}
+    </text>
+  )
+
+  return (
+    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
+      <box flexDirection="row" justifyContent="space-between">
+        <text attributes={TextAttributes.BOLD} fg={theme.text}>
+          {props.existing ? `Update ${props.existing.name}` : "Custom API provider"}
+        </text>
+        <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+          esc
+        </text>
+      </box>
+      <box gap={1}>
+        <text fg={theme.textMuted}>OpenAI-compatible base URL and bearer token. Models load from GET /models.</text>
+        {fieldLabel("baseURL", "1. Base URL")}
+        <textarea
+          height={3}
+          keyBindings={[{ name: "return", action: "submit" }]}
+          ref={(val: TextareaRenderable) => (baseURLInput = val)}
+          initialValue={props.existing?.baseURL ?? ""}
+          placeholder="https://api.example.com/v1"
+          textColor={theme.text}
+          focusedTextColor={theme.text}
+          cursorColor={theme.text}
+        />
+        {fieldLabel("apiKey", "2. API token")}
+        <textarea
+          height={3}
+          keyBindings={[{ name: "return", action: "submit" }]}
+          ref={(val: TextareaRenderable) => (apiKeyInput = val)}
+          initialValue=""
+          placeholder={props.existing?.hasApiKey ? "Leave blank to keep saved token" : "Bearer token"}
+          textColor={theme.text}
+          focusedTextColor={theme.text}
+          cursorColor={theme.text}
+        />
+      </box>
+      <box flexDirection="row" gap={2}>
+        <text fg={theme.text}>
+          tab <span style={{ fg: theme.textMuted }}>next field</span>
+        </text>
+        <text fg={theme.text}>
+          enter <span style={{ fg: theme.textMuted }}>connect</span>
+        </text>
+      </box>
+    </box>
+  )
+}
+
+async function allocateProviderID(sdk: SDK, base: string): Promise<string> {
+  const existing = await listCustomApiProviders(sdk)
+  const used = new Set(existing.map((provider) => provider.providerID))
+  if (!used.has(base)) return base
+  for (let index = 2; index < 100; index++) {
+    const candidate = `${base.slice(0, 60)}-${index}`.slice(0, 63)
+    if (!used.has(candidate)) return candidate
+  }
+  throw new Error("Could not allocate a provider ID")
+}
+
 export async function configureCustomApiProvider(input: {
   dialog: DialogContext
   sdk: SDK
   theme: Theme
   existing?: CustomApiProviderView
 }): Promise<CustomApiProviderView | null> {
-  const name = await DialogPrompt.show(input.dialog, "Provider name", {
-    value: input.existing?.name ?? "",
-    placeholder: "Company gateway",
+  const fields = await new Promise<CustomApiConnectFields | null>((resolve) => {
+    input.dialog.replace(
+      () => <DialogCustomApiConnect existing={input.existing} onConfirm={(value) => resolve(value)} />,
+      () => resolve(null),
+    )
   })
-  if (name === null) return null
-
-  const providerID = input.existing
-    ? input.existing.providerID
-    : await DialogPrompt.show(input.dialog, "Provider ID", {
-        placeholder: "company-gateway",
-        description: () => (
-          <text fg={input.theme.textMuted}>Lowercase letters, numbers, dots, underscores, and hyphens.</text>
-        ),
-      })
-  if (providerID === null) return null
-
-  const protocol = await chooseProtocol({
-    dialog: input.dialog,
-    current: input.existing?.protocol ?? "openai-compatible",
-  })
-  if (protocol === null) return null
-
-  const baseURL = await DialogPrompt.show(input.dialog, "Base URL", {
-    value: input.existing?.baseURL ?? "",
-    placeholder: "https://api.example.com/v1",
-  })
-  if (baseURL === null) return null
-  const allowInsecureHttp = await confirmInsecureHttp(input.dialog, baseURL.trim())
+  if (!fields) return null
+  const allowInsecureHttp = await confirmInsecureHttp(input.dialog, fields.baseURL)
   if (!allowInsecureHttp) return null
 
-  const apiKey = await DialogPrompt.show(input.dialog, "API token", {
-    value: "",
-    placeholder: input.existing?.hasApiKey ? "Leave blank to keep saved token" : "Optional token",
-    description: () => (
-      <box gap={1}>
-        <text fg={input.theme.textMuted}>The token is visible while typing in this TUI prompt.</text>
-        <text fg={input.theme.textMuted}>It is encrypted in AX Code auth storage and never returned.</text>
-      </box>
-    ),
-  })
-  if (apiKey === null) return null
-
-  const modelIDs = await DialogPrompt.show(input.dialog, "Model IDs", {
-    value: input.existing?.models.map((model) => model.id).join(", ") ?? "",
-    placeholder: "model-a, model-b",
-    description: () => (
-      <box gap={1}>
-        <text fg={input.theme.textMuted}>Comma- or newline-separated IDs. New models default to 128k context.</text>
-        <text fg={input.theme.textMuted}>Use Desktop to edit per-model limits and capabilities.</text>
-      </box>
-    ),
-  })
-  if (modelIDs === null) return null
-  const models = parseCustomApiProviderModelIDs(modelIDs, input.existing?.models)
-
-  const body = {
-    name: name.trim(),
-    protocol,
-    baseURL: baseURL.trim(),
-    allowInsecureHttp: new URL(baseURL.trim()).protocol === "http:",
-    ...(apiKey.length > 0 ? { apiKey } : {}),
-    models,
+  const identity = input.existing
+    ? { name: input.existing.name, providerID: input.existing.providerID }
+    : CustomApiProvider.identityFromBaseURL(fields.baseURL)
+  const providerID = input.existing ? identity.providerID : await allocateProviderID(input.sdk, identity.providerID)
+  const body: Record<string, unknown> = {
+    name: identity.name,
+    protocol: input.existing?.protocol ?? "openai-compatible",
+    baseURL: fields.baseURL,
+    allowInsecureHttp: new URL(fields.baseURL).protocol === "http:",
+    ...(fields.apiKey.trim().length > 0 ? { apiKey: fields.apiKey } : {}),
   }
-  return View.parse(
-    await customProviderRequest(input.sdk, `/provider/custom/${encodeURIComponent(providerID.trim())}`, {
-      method: "PUT",
-      body,
-    }),
-  )
+  if (input.existing && input.existing.baseURL === fields.baseURL && input.existing.models.length > 0) {
+    body.models = input.existing.models
+  }
+
+  try {
+    return View.parse(
+      await customProviderRequest(input.sdk, `/provider/custom/${encodeURIComponent(providerID)}`, {
+        method: "PUT",
+        body,
+      }),
+    )
+  } catch (error) {
+    const modelIDs = await DialogPrompt.show(input.dialog, "Model IDs", {
+      value: input.existing?.models.map((model) => model.id).join(", ") ?? "",
+      placeholder: "model-a, model-b",
+      description: () => (
+        <box gap={1}>
+          <text fg={input.theme.textMuted}>
+            {error instanceof Error ? error.message : "Could not load models from GET /models."}
+          </text>
+          <text fg={input.theme.textMuted}>Comma- or newline-separated IDs. New models default to 128k context.</text>
+        </box>
+      ),
+    })
+    if (modelIDs === null) return null
+    return View.parse(
+      await customProviderRequest(input.sdk, `/provider/custom/${encodeURIComponent(providerID)}`, {
+        method: "PUT",
+        body: {
+          ...body,
+          models: parseCustomApiProviderModelIDs(modelIDs, input.existing?.models),
+        },
+      }),
+    )
+  }
 }
 
 export function customApiProviderManagementMenu(input: {

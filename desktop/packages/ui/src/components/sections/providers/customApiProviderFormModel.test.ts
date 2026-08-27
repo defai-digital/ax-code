@@ -80,7 +80,8 @@ describe("custom API provider form model", () => {
     draft.providerID = "remote-http"
     draft.name = "Remote HTTP"
     draft.baseURL = "http://10.0.0.5/v1"
-    draft.models[0]!.id = "model"
+    draft.apiToken = "token"
+    draft.models = [{ ...newCustomApiProviderModelDraft(), id: "model" }]
 
     expect(() => buildCustomApiProviderSubmission(draft)).toThrow("Confirm insecure HTTP")
     draft.allowInsecureHttp = true
@@ -92,11 +93,29 @@ describe("custom API provider form model", () => {
     draft.providerID = "duplicate-models"
     draft.name = "Duplicate Models"
     draft.baseURL = "https://api.example.com/v1"
-    draft.models[0]!.id = "model"
-    draft.models.push({ ...newCustomApiProviderModelDraft(), id: "model" })
+    draft.models = [
+      { ...newCustomApiProviderModelDraft(), id: "model" },
+      { ...newCustomApiProviderModelDraft(), id: "model" },
+    ]
     expect(() => buildCustomApiProviderSubmission(draft)).toThrow("Duplicate model ID")
 
     draft.models = [{ ...newCustomApiProviderModelDraft(), id: "model", contextWindow: "10", outputLimit: "11" }]
     expect(() => buildCustomApiProviderSubmission(draft)).toThrow("cannot exceed its context window")
+  })
+
+  test("derives name and ID from the base URL and omits empty models", () => {
+    const draft = createCustomApiProviderDraft()
+    draft.baseURL = "https://llm.example.com/v1"
+    draft.apiToken = "token"
+    expect(buildCustomApiProviderSubmission(draft)).toEqual({
+      providerID: "llm-example-com",
+      input: {
+        name: "llm.example.com",
+        protocol: "openai-compatible",
+        baseURL: "https://llm.example.com/v1",
+        allowInsecureHttp: false,
+        apiKey: "token",
+      },
+    })
   })
 })

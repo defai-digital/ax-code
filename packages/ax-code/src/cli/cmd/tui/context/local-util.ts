@@ -144,6 +144,18 @@ function sameModelOverrides(left: Record<string, ProviderModelKeyInput>, right: 
   })
 }
 
+/** Solid stores merge objects. Missing keys must be set to `undefined` to delete them. */
+export function solidStoreRecordPatch<T>(
+  current: Record<string, T>,
+  next: Record<string, T>,
+): Record<string, T | undefined> {
+  const patch: Record<string, T | undefined> = { ...next }
+  for (const key of Object.keys(current)) {
+    if (!Object.hasOwn(next, key)) patch[key] = undefined
+  }
+  return patch
+}
+
 export function pruneModelPreferences(
   input: ModelPreferenceStore,
   modelStatus: (model: ProviderModelKeyInput) => ModelPreferenceStatus,

@@ -67,6 +67,25 @@ export function customApiProviderNeedsInsecureHttp(value: string) {
   return url.protocol === "http:" && !isLoopbackHostname(url.hostname)
 }
 
+export function identityFromCustomApiBaseURL(baseURL: string): { name: string; providerID: string } {
+  let host = "custom-api"
+  try {
+    host = new URL(baseURL.trim()).hostname
+  } catch {
+    // Keep the fallback slug while the URL is still being typed.
+  }
+  const clean = host.replace(/^\[|\]$/g, "").replace(/^www\./i, "")
+  const name = (clean || "Custom API").slice(0, 120)
+  let providerID = clean
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 63)
+  if (!/^[a-z0-9]/.test(providerID)) providerID = `c${providerID}`.slice(0, 63)
+  if (!providerID) providerID = "custom-api"
+  return { name, providerID }
+}
+
 export function createCustomApiProviderDraft(existing?: CustomApiProviderView): CustomApiProviderDraft {
   return {
     providerID: existing?.providerID ?? "",
@@ -78,7 +97,7 @@ export function createCustomApiProviderDraft(existing?: CustomApiProviderView): 
     models:
       existing && existing.models.length > 0
         ? existing.models.map((model) => newCustomApiProviderModelDraft(model))
-        : [newCustomApiProviderModelDraft()],
+        : [],
   }
 }
 
@@ -111,19 +130,19 @@ export function buildCustomApiProviderSubmission(draft: CustomApiProviderDraft):
   providerID: string
   input: CustomApiProviderInput
 } {
-  const providerID = validateProviderID(draft.providerID)
-  const name = draft.name.trim()
-  if (!name) throw new Error("Provider name is required")
-  if (name.length > 120) throw new Error("Provider name cannot exceed 120 characters")
   const { baseURL } = parseBaseURL(draft.baseURL)
+  const identity = identityFromCustomApiBaseURL(baseURL)
+  const providerID = validateProviderID(draft.providerID.trim() || identity.providerID)
+  const name = (draft.name.trim() || identity.name).slice(0, 120)
+  if (!name) throw new Error("Provider name is required")
   if (customApiProviderNeedsInsecureHttp(baseURL) && !draft.allowInsecureHttp)
     throw new Error("Confirm insecure HTTP or use HTTPS")
   const apiKey = draft.apiToken
   if (apiKey.length > 16_384) throw new Error("API token cannot exceed 16,384 characters")
-  if (draft.models.length === 0) throw new Error("Add at least one model")
-  if (draft.models.length > 128) throw new Error("A custom provider can declare at most 128 models")
+  const declaredModels = draft.models.filter((model) => model.id.trim())
+  if (declaredModels.length > 128) throw new Error("A custom provider can declare at most 128 models")
   const seen = new Set<string>()
-  const models = draft.models.map((model) => {
+  const models = declaredModels.map((model) => {
     const id = validateModelID(model.id)
     if (seen.has(id)) throw new Error(`Duplicate model ID: ${id}`)
     seen.add(id)
@@ -151,7 +170,7 @@ export function buildCustomApiProviderSubmission(draft: CustomApiProviderDraft):
       baseURL,
       allowInsecureHttp: draft.allowInsecureHttp,
       ...(apiKey.length > 0 ? { apiKey } : {}),
-      models,
+      ...(models.length > 0 ? { models } : {}),
     },
   }
 }

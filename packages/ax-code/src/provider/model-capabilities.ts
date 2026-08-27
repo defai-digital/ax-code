@@ -733,13 +733,16 @@ function matchesProvider(providerId: string | undefined, providerIds?: string[])
  * }
  * ```
  */
-export function getModelCapabilities(modelId: string, providerId?: string): ModelCapabilities {
+export function findRegisteredModelCapabilities(modelId: string, providerId?: string): ModelCapabilities | undefined {
   for (const registration of MODEL_REGISTRY) {
     if (matchesPattern(modelId, registration.pattern) && matchesProvider(providerId, registration.providerIds)) {
       return { ...registration.capabilities }
     }
   }
-  return { ...DEFAULT_CAPABILITIES }
+}
+
+export function getModelCapabilities(modelId: string, providerId?: string): ModelCapabilities {
+  return findRegisteredModelCapabilities(modelId, providerId) ?? { ...DEFAULT_CAPABILITIES }
 }
 
 /**

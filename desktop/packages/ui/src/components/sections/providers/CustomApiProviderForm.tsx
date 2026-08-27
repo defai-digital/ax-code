@@ -8,6 +8,7 @@ import {
   buildCustomApiProviderSubmission,
   createCustomApiProviderDraft,
   customApiProviderNeedsInsecureHttp,
+  identityFromCustomApiBaseURL,
   newCustomApiProviderModelDraft,
   type CustomApiProviderDraft,
   type CustomApiProviderModelDraft,
@@ -17,17 +18,6 @@ type CustomApiProviderFormProps = {
   existing?: CustomApiProviderView
   busy?: boolean
   onSave: (providerID: string, input: CustomApiProviderInput) => Promise<void>
-}
-
-function slugifyProviderID(value: string) {
-  return (
-    value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, "-")
-      .replace(/^[._-]+|[._-]+$/g, "")
-      .slice(0, 63) || "custom-api"
-  )
 }
 
 function needsInsecureConfirmation(value: string) {
@@ -42,6 +32,7 @@ export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ ex
   const { t } = useI18n()
   const [draft, setDraft] = React.useState<CustomApiProviderDraft>(() => createCustomApiProviderDraft(existing))
   const [providerIDTouched, setProviderIDTouched] = React.useState(Boolean(existing))
+  const [nameTouched, setNameTouched] = React.useState(Boolean(existing))
   const [error, setError] = React.useState<string | null>(null)
 
   const updateDraft = <K extends keyof CustomApiProviderDraft>(key: K, value: CustomApiProviderDraft[K]) =>
@@ -61,6 +52,9 @@ export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ ex
     event.preventDefault()
     setError(null)
     try {
+      if (!existing && !draft.apiToken.trim()) {
+        throw new Error("API token is required")
+      }
       const submission = buildCustomApiProviderSubmission(draft)
       await onSave(submission.providerID, submission.input)
     } catch (cause) {
@@ -68,81 +62,28 @@ export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ ex
     }
   }
 
+  const applyBaseURL = (baseURL: string) => {
+    const identity = identityFromCustomApiBaseURL(baseURL)
+    setDraft((current) => ({
+      ...current,
+      baseURL,
+      name: !existing && !nameTouched ? identity.name : current.name,
+      providerID: !existing && !providerIDTouched ? identity.providerID : current.providerID,
+    }))
+  }
+
   return (
     <form className="space-y-5 py-1.5" onSubmit={submit}>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1.5">
-          <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.name")}</span>
-          <Input
-            value={draft.name}
-            onChange={(event) => {
-              const name = event.target.value
-              setDraft((current) => ({
-                ...current,
-                name,
-                providerID: !existing && !providerIDTouched ? slugifyProviderID(name) : current.providerID,
-              }))
-            }}
-            placeholder={t("settings.providers.custom.field.namePlaceholder")}
-            disabled={busy}
-          />
-        </label>
-        <label className="space-y-1.5">
-          <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.id")}</span>
-          <Input
-            value={draft.providerID}
-            onChange={(event) => {
-              setProviderIDTouched(true)
-              updateDraft("providerID", event.target.value)
-            }}
-            placeholder={t("settings.providers.custom.field.idPlaceholder")}
-            className="font-mono typography-micro"
-            disabled={busy || Boolean(existing)}
-          />
-          <span className="block typography-micro text-muted-foreground">
-            {t("settings.providers.custom.field.idHint")}
-          </span>
-        </label>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1.5">
-          <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.protocol")}</span>
-          <select
-            value={draft.protocol}
-            onChange={(event) => updateDraft("protocol", event.target.value as CustomApiProviderDraft["protocol"])}
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2 typography-meta text-foreground outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
-            disabled={busy}
-          >
-            <option value="openai-compatible">{t("settings.providers.custom.protocol.openai")}</option>
-            <option value="anthropic-compatible">{t("settings.providers.custom.protocol.anthropic")}</option>
-          </select>
-        </label>
-        <label className="space-y-1.5">
-          <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.url")}</span>
-          <Input
-            value={draft.baseURL}
-            onChange={(event) => updateDraft("baseURL", event.target.value)}
-            placeholder="https://api.example.com/v1"
-            className="font-mono typography-micro"
-            disabled={busy}
-          />
-        </label>
-      </div>
-
-      {needsInsecureConfirmation(draft.baseURL) && (
-        <label className="flex items-start gap-2 rounded-lg border border-[var(--status-warning)]/40 p-3">
-          <Checkbox
-            checked={draft.allowInsecureHttp}
-            onChange={(checked) => updateDraft("allowInsecureHttp", checked)}
-            disabled={busy}
-            ariaLabel={t("settings.providers.custom.field.insecureAria")}
-          />
-          <span className="typography-meta text-muted-foreground">
-            {t("settings.providers.custom.field.insecureWarning")}
-          </span>
-        </label>
-      )}
+      <label className="space-y-1.5">
+        <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.url")}</span>
+        <Input
+          value={draft.baseURL}
+          onChange={(event) => applyBaseURL(event.target.value)}
+          placeholder="https://api.example.com/v1"
+          className="font-mono typography-micro"
+          disabled={busy}
+        />
+      </label>
 
       <label className="space-y-1.5">
         <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.token")}</span>
@@ -162,6 +103,61 @@ export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ ex
         <span className="block typography-micro text-muted-foreground">
           {t("settings.providers.custom.field.tokenHint")}
         </span>
+      </label>
+
+      {needsInsecureConfirmation(draft.baseURL) && (
+        <label className="flex items-start gap-2 rounded-lg border border-[var(--status-warning)]/40 p-3">
+          <Checkbox
+            checked={draft.allowInsecureHttp}
+            onChange={(checked) => updateDraft("allowInsecureHttp", checked)}
+            disabled={busy}
+            ariaLabel={t("settings.providers.custom.field.insecureAria")}
+          />
+          <span className="typography-meta text-muted-foreground">
+            {t("settings.providers.custom.field.insecureWarning")}
+          </span>
+        </label>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1.5">
+          <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.name")}</span>
+          <Input
+            value={draft.name}
+            onChange={(event) => {
+              setNameTouched(true)
+              updateDraft("name", event.target.value)
+            }}
+            placeholder={t("settings.providers.custom.field.namePlaceholder")}
+            disabled={busy}
+          />
+        </label>
+        <label className="space-y-1.5">
+          <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.id")}</span>
+          <Input
+            value={draft.providerID}
+            onChange={(event) => {
+              setProviderIDTouched(true)
+              updateDraft("providerID", event.target.value)
+            }}
+            placeholder={t("settings.providers.custom.field.idPlaceholder")}
+            className="font-mono typography-micro"
+            disabled={busy || Boolean(existing)}
+          />
+        </label>
+      </div>
+
+      <label className="space-y-1.5">
+        <span className="typography-ui-label text-foreground">{t("settings.providers.custom.field.protocol")}</span>
+        <select
+          value={draft.protocol}
+          onChange={(event) => updateDraft("protocol", event.target.value as CustomApiProviderDraft["protocol"])}
+          className="h-8 w-full rounded-lg border border-input bg-transparent px-2 typography-meta text-foreground outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)]"
+          disabled={busy}
+        >
+          <option value="openai-compatible">{t("settings.providers.custom.protocol.openai")}</option>
+          <option value="anthropic-compatible">{t("settings.providers.custom.protocol.anthropic")}</option>
+        </select>
       </label>
 
       <div className="space-y-2">
@@ -197,7 +193,7 @@ export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ ex
                   size="xs"
                   className="!font-normal text-[var(--status-error)] hover:text-[var(--status-error)]"
                   onClick={() => removeModel(model.rowID)}
-                  disabled={busy || draft.models.length === 1}
+                  disabled={busy}
                 >
                   {t("settings.providers.custom.models.remove")}
                 </Button>

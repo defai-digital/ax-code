@@ -1669,6 +1669,73 @@ test("provider api field sets model api.url", async () => {
   })
 })
 
+test("custom-api discovery defaults inherit catalog limits at runtime", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          provider: {
+            "127-0-0-1": {
+              management: "custom-api",
+              name: "127.0.0.1",
+              npm: "@ai-sdk/openai-compatible",
+              api: "http://127.0.0.1:8080/v1",
+              env: [],
+              models: {
+                "glm-5.3": {
+                  id: "glm-5.3",
+                  name: "GLM 5.3",
+                  tool_call: true,
+                  limit: { context: 128_000, output: 16_384 },
+                },
+                coding: {
+                  id: "coding",
+                  name: "coding",
+                  tool_call: true,
+                  limit: { context: 128_000, output: 16_384 },
+                },
+              },
+              options: { baseURL: "http://127.0.0.1:8080/v1" },
+            },
+            "manual-gateway": {
+              name: "Manual Gateway",
+              npm: "@ai-sdk/openai-compatible",
+              api: "https://api.example.com/v1",
+              env: [],
+              models: {
+                "glm-5.3": {
+                  id: "glm-5.3",
+                  name: "Pinned GLM",
+                  tool_call: true,
+                  limit: { context: 200_000, output: 32_000 },
+                },
+              },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const providers = await Provider.list()
+      const customGlm = providers[ProviderID.make("127-0-0-1")].models[ModelID.make("glm-5.3")].limit
+      expect(customGlm.context).toBe(1_000_000)
+      expect(customGlm.output).toBe(131_072)
+      const customUnknown = providers[ProviderID.make("127-0-0-1")].models[ModelID.make("coding")].limit
+      expect(customUnknown.context).toBe(128_000)
+      expect(customUnknown.output).toBe(16_384)
+      const manualGlm = providers[ProviderID.make("manual-gateway")].models[ModelID.make("glm-5.3")].limit
+      expect(manualGlm.context).toBe(200_000)
+      expect(manualGlm.output).toBe(32_000)
+    },
+  })
+})
+
 test("explicit baseURL overrides api field", async () => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
   await using tmp = await tmpdir({
@@ -1982,6 +2049,31 @@ test("getSmallModel respects config small_model override", async () => {
       expect(model).toBeDefined()
       expect(String(model?.providerID)).toBe("groq")
       expect(String(model?.id)).toBe("qwen/qwen3.6-27b")
+    },
+  })
+})
+
+test("getSmallModel falls back when configured small_model is disconnected", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          small_model: "deepseek/deepseek-v4-flash",
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("GROQ_API_KEY", "test-api-key")
+    },
+    fn: async () => {
+      const model = await Provider.getSmallModel(ProviderID.make("groq"))
+      expect(model).toBeDefined()
+      expect(String(model?.providerID)).toBe("groq")
     },
   })
 })
