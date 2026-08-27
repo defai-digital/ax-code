@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.9] - 2026-08-26
+
+### Changed
+
+- Stop rewriting packaged renderer HTML on app protocol.
+
 ### Fixed
 
 - Serve packaged renderer HTML unchanged so Vite module scripts still execute on app://.
