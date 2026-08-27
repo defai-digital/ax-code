@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.7] - 2026-08-26
+
+### Fixed
+
+- Fix packaged Desktop UI session check over app protocol.
+
 ### Fixed
 
 - Fix packaged Desktop failing UI session verification over `app://ax-code` by proxying `/auth` and API paths to the local server.
