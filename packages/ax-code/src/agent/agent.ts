@@ -23,6 +23,7 @@ import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
 import PROMPT_RECAP from "./prompt/recap.txt"
 import PROMPT_PLAN_AGENT from "../session/prompt/plan-agent.txt"
+import PROMPT_GOAL_PLAN_WRITER from "../session/prompt/goal-plan-writer.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@/global"
@@ -148,6 +149,7 @@ export namespace Agent {
       "title",
       "summary",
       "recap",
+      "goal-plan-writer",
       ...Object.keys(cfg.agent ?? {}),
     ]
     await Promise.all(
@@ -378,6 +380,35 @@ export namespace Agent {
         temperature: 0.5,
         permission: Permission.merge(defaults, policy("recap"), denyAll, user),
         prompt: PROMPT_RECAP,
+      },
+      "goal-plan-writer": {
+        name: "goal-plan-writer",
+        displayName: "Goal Plan Writer",
+        description: "Internal agent that writes the frozen goal contract before implementation starts.",
+        mode: "subagent",
+        options: {},
+        native: true,
+        hidden: true,
+        tier: "internal",
+        steps: 12,
+        prompt: PROMPT_GOAL_PLAN_WRITER,
+        permission: Permission.merge(
+          defaults,
+          policy("goal-plan-writer"),
+          exploreReadOnlyWithWeb,
+          Permission.fromConfig({
+            submit_goal_plan: "allow",
+            question: "deny",
+            plan_exit: "deny",
+            todowrite: "deny",
+            todoread: "deny",
+            create_goal: "deny",
+            update_goal: "deny",
+            get_goal: "deny",
+          }),
+          denySubagentFanout,
+          user,
+        ),
       },
     }
 

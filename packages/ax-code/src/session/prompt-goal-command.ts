@@ -1,4 +1,5 @@
 import { SessionGoal } from "./goal"
+import { GoalPlanOrchestration } from "./goal-plan-orchestration"
 import type { MessageV2 } from "./message-v2"
 import { createStoppedAssistantTextResponse } from "./prompt-assistant-response"
 import { commandModel } from "./prompt-command-selection"
@@ -56,12 +57,16 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     // resume is an activation: it sets status back to "active", so it must
     // restart the prompt loop just like create does — otherwise the goal is
     // active on paper but the agent sits dormant until the next user message.
-    // If resume rejects (no goal / budget exhausted), surface the error as a
-    // control message instead of letting it escape as a 500/failed task,
-    // matching how create reports validation errors in-session.
-    let goal: SessionGoal.Info
+    // If the contract is missing (planner failure or pre-v1 goal), retry the
+    // writer fail-closed before activating. Budget / missing-goal errors stay
+    // control messages.
+    const model = await commandModel({ model: input.model, sessionID: input.sessionID })
+    let prepared: Awaited<ReturnType<typeof GoalPlanOrchestration.resumeWithPlan>>
     try {
-      goal = await SessionGoal.resume(input.sessionID)
+      prepared = await GoalPlanOrchestration.resumeWithPlan({
+        sessionID: input.sessionID,
+        model,
+      })
     } catch (error) {
       return goalControlMessage(input, toErrorMessage(error, "Goal command failed."))
     }
@@ -69,14 +74,15 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       sessionID: input.sessionID,
       messageID: input.messageID,
       agent: input.agent,
-      model: await commandModel({ model: input.model, sessionID: input.sessionID }),
+      model,
       variant: input.variant,
       parts: [
         {
           type: "text",
-          text:
-            `Goal resumed: ${goal.objective}\n\n` +
-            `Continue working toward this goal until it is complete, blocked, paused, cleared, or budget-limited.`,
+          text: GoalPlanOrchestration.resumePrompt({
+            objective: prepared.goal.objective,
+            path: prepared.path,
+          }),
         },
         ...(input.parts ?? []),
       ],
@@ -95,17 +101,18 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     throw new Error(`Unhandled goal action: ${parsed.action}`)
   }
 
-  // create() rejects when an active goal already exists or the budget is
-  // invalid (e.g. `/goal --budget 0 ...`). Surface those as a friendly control
-  // message instead of letting the raw error escape the command as a 500/failed
-  // task — matching how view/pause/resume report state in-session.
-  let goal: SessionGoal.Info
+  // activate() rejects when an active/paused goal already exists, the budget
+  // is invalid, or the plan writer fails closed. Surface those as a control
+  // message instead of a 500/failed task.
+  const model = await commandModel({ model: input.model, sessionID: input.sessionID })
+  let prepared: Awaited<ReturnType<typeof GoalPlanOrchestration.activate>>
   try {
-    goal = await SessionGoal.create({
+    prepared = await GoalPlanOrchestration.activate({
       sessionID: input.sessionID,
       objective: parsed.objective,
       tokenBudget: parsed.tokenBudget,
       replace: false,
+      model,
     })
   } catch (error) {
     return goalControlMessage(input, toErrorMessage(error, "Goal command failed."))
@@ -114,15 +121,15 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     sessionID: input.sessionID,
     messageID: input.messageID,
     agent: input.agent,
-    model: await commandModel({ model: input.model, sessionID: input.sessionID }),
+    model,
     variant: input.variant,
     parts: [
       {
         type: "text",
-        text:
-          `Goal set: ${goal.objective}\n\n` +
-          `Work toward this goal until it is complete, blocked, paused, cleared, or budget-limited. ` +
-          `Use get_goal to inspect current goal state and update_goal when the goal is complete or genuinely blocked.`,
+        text: GoalPlanOrchestration.implementerPrompt({
+          objective: prepared.goal.objective,
+          path: prepared.path,
+        }),
       },
       ...(input.parts ?? []),
     ],

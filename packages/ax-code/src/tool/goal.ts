@@ -1,6 +1,8 @@
 import z from "zod"
 import { Session } from "@/session"
 import { SessionGoal } from "@/session/goal"
+import { GoalContractVerification } from "@/session/goal-contract-verification"
+import { GoalPlanOrchestration } from "@/session/goal-plan-orchestration"
 import { GoalVerification } from "@/session/goal-verification"
 import { Todo } from "@/session/todo"
 import { Tool } from "./tool"
@@ -42,7 +44,7 @@ export const CreateGoalTool = Tool.define("create_goal", {
       .describe("Optional positive token budget for the new goal."),
   }),
   async execute(params, ctx) {
-    const goal = await SessionGoal.create({
+    const prepared = await GoalPlanOrchestration.activate({
       sessionID: ctx.sessionID,
       objective: params.objective,
       tokenBudget: params.tokenBudget,
@@ -50,9 +52,10 @@ export const CreateGoalTool = Tool.define("create_goal", {
     })
     return {
       title: "Created goal",
-      output: goalOutput(goal),
+      output: goalOutput(prepared.goal),
       metadata: {
-        goal: SessionGoal.publicInfo(goal),
+        goal: SessionGoal.publicInfo(prepared.goal),
+        planPath: prepared.path,
       },
     }
   },
@@ -60,9 +63,13 @@ export const CreateGoalTool = Tool.define("create_goal", {
 
 export const UpdateGoalTool = Tool.define("update_goal", {
   description:
-    "Update the existing goal. Use this tool only to mark the goal achieved or genuinely blocked. Set status to complete only when the objective has actually been achieved and no required work remains; completion is verified — it is rejected while todos are pending, and if files were modified you must run a verification command (tests/build) after the last change before completing. Set status to blocked only when the same blocking condition has repeated and meaningful progress cannot continue without user input or an external-state change. You cannot use this tool to pause, resume, budget-limit, usage-limit, or clear a goal.",
+    "Update the existing goal. Use this tool only to mark the goal achieved or genuinely blocked. Set status to complete only when the objective has actually been achieved and no required work remains; completion is verified — it is rejected while todos are pending, and if files were modified you must run a verification command (tests/build) after the last change before completing. When a goal plan exists, pass acceptanceEvidence for every AC id. Set status to blocked only when the same blocking condition has repeated and meaningful progress cannot continue without user input or an external-state change. You cannot use this tool to pause, resume, budget-limit, usage-limit, or clear a goal.",
   parameters: z.object({
     status: z.enum(["complete", "blocked"]),
+    acceptanceEvidence: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe("Required when a goal plan exists: map each acceptance id (AC1, AC2, …) to a short evidence string."),
   }),
   async execute(params, ctx) {
     if (params.status === "complete") {
@@ -76,6 +83,14 @@ export const UpdateGoalTool = Tool.define("update_goal", {
       // from earlier goal-less conversation (or history inherited by a fork)
       // cannot block a goal that never modified a file.
       const currentGoal = await SessionGoal.get(ctx.sessionID)
+      if (currentGoal) {
+        const contract = GoalContractVerification.decide({
+          sessionID: ctx.sessionID,
+          created: currentGoal.time.created,
+          acceptanceEvidence: params.acceptanceEvidence,
+        })
+        if (!contract.ok) throw new Error(contract.message)
+      }
       const decision = GoalVerification.decide({
         messages: await Session.messages({ sessionID: ctx.sessionID }),
         pendingTodos: Todo.active(ctx.sessionID),

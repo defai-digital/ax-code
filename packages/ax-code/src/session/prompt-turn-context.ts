@@ -1,5 +1,6 @@
 import { ScopedFlag } from "../flag/scoped"
 import { SessionGoal } from "./goal"
+import { GoalPlan } from "./goal-plan"
 import { IntelligenceNudge } from "./intelligence-nudge"
 import type { MessageV2 } from "./message-v2"
 import type { SessionID } from "./schema"
@@ -47,6 +48,8 @@ export async function buildTurnContext(input: {
         ].join("\n")
       : undefined
   const goal = input.sessionID ? await SessionGoal.get(input.sessionID) : undefined
+  const goalGuidance =
+    goal && input.sessionID ? GoalPlan.continuationGuidance(input.sessionID, goal.time.created) : undefined
   const goalSection =
     goal && goal.status !== "complete"
       ? [
@@ -56,6 +59,8 @@ export async function buildTurnContext(input: {
           goal.status === "active"
             ? `  Keep working toward this objective until it is complete, blocked, paused, cleared, or budget-limited.`
             : `  Do not start new substantive work for this goal unless the runtime resumes it.`,
+          ...(goalGuidance?.path ? [`  Plan: ${goalGuidance.path}`] : []),
+          ...(goalGuidance?.nextStep ? [`  Next checklist step: ${goalGuidance.nextStep}`] : []),
           `</session_goal>`,
         ].join("\n")
       : undefined

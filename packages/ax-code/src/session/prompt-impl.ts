@@ -16,6 +16,7 @@ import { defer } from "../util/defer"
 import { ScopedFlag } from "../flag/scoped"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
+import { GoalPlan } from "./goal-plan"
 import { Config } from "@/config/config"
 import { fn } from "@/util/fn"
 import { assertWorkSessionSendable } from "./work-session"
@@ -1564,9 +1565,17 @@ export namespace SessionPrompt {
           reason = "completed"
           break
         }
+        const goalGuidance =
+          goal && goal.status !== "complete" ? GoalPlan.continuationGuidance(sessionID, goal.time.created) : undefined
         const goalTransition = handlePromptLoopGoalContinuation({
           sessionID,
-          goal,
+          goal: goal
+            ? {
+                ...goal,
+                planPath: goalGuidance?.path,
+                nextStep: goalGuidance?.nextStep,
+              }
+            : undefined,
           continuations,
           budgetWrapUp: goalBudgetWrapUp,
         })

@@ -6,8 +6,13 @@ import { SessionGoalTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { SessionID } from "./schema"
 import type { MessageV2 } from "./message-v2"
+import { GoalPlan } from "./goal-plan"
+import { Log } from "../util/log"
+import { toErrorMessage } from "../util/error-message"
 
 export namespace SessionGoal {
+  const log = Log.create({ service: "session.goal" })
+
   export const Status = z.enum(["active", "paused", "complete", "blocked", "budget_limited"])
   export type Status = z.infer<typeof Status>
 
@@ -27,6 +32,7 @@ export namespace SessionGoal {
 
   export const PublicInfo = Info.extend({
     remainingTokens: z.number().int().min(0).optional(),
+    planPath: z.string().optional(),
   })
   export type PublicInfo = z.infer<typeof PublicInfo>
 
@@ -57,6 +63,13 @@ export namespace SessionGoal {
 
   function toPublic(goal: Info | undefined): PublicInfo | undefined {
     if (!goal) return undefined
+    let planPath: string | undefined
+    try {
+      const file = GoalPlan.pathFor(goal.sessionID, goal.time.created)
+      if (GoalPlan.readCapped(file)?.trim()) planPath = file
+    } catch {
+      planPath = undefined
+    }
     return PublicInfo.parse({
       sessionID: goal.sessionID,
       objective: goal.objective,
@@ -66,6 +79,7 @@ export namespace SessionGoal {
       remainingTokens: goal.tokenBudget === undefined ? undefined : Math.max(0, goal.tokenBudget - goal.tokensUsed),
       timeUsedSeconds: goal.timeUsedSeconds,
       time: goal.time,
+      planPath,
     })
   }
 
@@ -115,17 +129,19 @@ export namespace SessionGoal {
     objective: string
     tokenBudget?: number
     replace?: boolean
+    status?: Extract<Status, "active" | "paused">
   }): Promise<Info> {
     const objective = input.objective.trim()
     if (!objective) throw new Error("Goal objective is required")
     if (input.tokenBudget !== undefined && (!Number.isSafeInteger(input.tokenBudget) || input.tokenBudget <= 0)) {
       throw new Error("Goal token budget must be a positive integer")
     }
+    const status = input.status ?? "active"
     const now = Date.now()
     const values = {
       session_id: input.sessionID,
       objective,
-      status: "active",
+      status,
       token_budget: input.tokenBudget,
       tokens_used: 0,
       time_used_seconds: 0,
@@ -141,7 +157,7 @@ export namespace SessionGoal {
             target: SessionGoalTable.session_id,
             set: {
               objective,
-              status: "active",
+              status,
               token_budget: input.tokenBudget ?? null,
               tokens_used: 0,
               time_used_seconds: 0,
@@ -164,7 +180,7 @@ export namespace SessionGoal {
       db.update(SessionGoalTable)
         .set({
           objective,
-          status: "active",
+          status,
           token_budget: input.tokenBudget ?? null,
           tokens_used: 0,
           time_used_seconds: 0,
@@ -205,9 +221,11 @@ export namespace SessionGoal {
   }
 
   export async function clear(sessionID: SessionID) {
+    const existing = await get(sessionID)
     SessionShard.storeFor(sessionID, { write: true }).use((db) => {
       db.delete(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).run()
     })
+    if (existing) await GoalPlan.remove(sessionID, existing.time.created).catch(() => undefined)
     publish(undefined, sessionID)
   }
 
@@ -222,7 +240,7 @@ export namespace SessionGoal {
     // `from` and `to` are always the same project (fork), so resolve the store
     // once from the write target and use it for both the read and the write.
     const store = SessionShard.storeFor(input.to, { write: true })
-    const goal = store.transaction((db) => {
+    const copied = store.transaction((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.from)).get()
       if (!row) return undefined
       const values = {
@@ -238,10 +256,22 @@ export namespace SessionGoal {
         .values({ session_id: input.to, ...values })
         .onConflictDoUpdate({ target: SessionGoalTable.session_id, set: values })
         .run()
-      return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.to)).get()!)
+      return {
+        goal: fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.to)).get()!),
+        fromCreated: row.time_created,
+      }
     })
-    if (goal) publish(goal)
-    return goal
+    if (!copied) return undefined
+    await GoalPlan.copyForFork({
+      from: input.from,
+      fromCreated: copied.fromCreated,
+      to: input.to,
+      toCreated: copied.goal.time.created,
+    }).catch((error) => {
+      log.warn("failed to copy goal plan to forked session", { error: toErrorMessage(error) })
+    })
+    publish(copied.goal)
+    return copied.goal
   }
 
   export async function addUsage(input: {
@@ -328,6 +358,8 @@ export namespace SessionGoal {
     if (!goal) return "No goal is set for this session."
     const remaining =
       goal.tokenBudget === undefined ? "" : ` Remaining tokens: ${Math.max(0, goal.tokenBudget - goal.tokensUsed)}.`
-    return `Goal ${goal.status}: ${goal.objective}\nTokens used: ${goal.tokensUsed}${goal.tokenBudget === undefined ? "" : `/${goal.tokenBudget}`}.${remaining}`
+    const publicGoal = toPublic(goal)
+    const plan = publicGoal?.planPath ? `\nPlan: ${publicGoal.planPath}` : ""
+    return `Goal ${goal.status}: ${goal.objective}\nTokens used: ${goal.tokensUsed}${goal.tokenBudget === undefined ? "" : `/${goal.tokenBudget}`}.${remaining}${plan}`
   }
 }

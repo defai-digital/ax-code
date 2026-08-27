@@ -64,6 +64,23 @@ test("build agent has correct default properties", async () => {
   })
 })
 
+test("goal-plan-writer is a hidden read-only internal agent", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const writer = await Agent.get("goal-plan-writer")
+      expect(writer).toBeDefined()
+      expect(writer?.hidden).toBe(true)
+      expect(writer?.tier).toBe("internal")
+      expect(evalPerm(writer, "edit")).toBe("deny")
+      expect(evalPerm(writer, "bash")).toBe("deny")
+      expect(evalPerm(writer, "read")).toBe("allow")
+      expect(evalPerm(writer, "submit_goal_plan")).toBe("allow")
+    },
+  })
+})
+
 test("plan agent denies edits except .ax-code/plans/*", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -840,7 +857,7 @@ test("native agents have correct tier assignments", async () => {
         expect(Agent.resolveTier(agent!)).toBe("specialist")
       }
 
-      const internal = ["compaction", "title", "summary"]
+      const internal = ["compaction", "title", "summary", "recap", "goal-plan-writer"]
       for (const name of internal) {
         const agent = await Agent.get(name)
         expect(Agent.resolveTier(agent!)).toBe("internal")

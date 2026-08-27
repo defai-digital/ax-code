@@ -13,6 +13,7 @@ describe("autonomous continuation prompt builders", () => {
     expect(text).toContain("active session goal")
     expect(text).toContain("finish the migration")
     expect(text).toContain('update_goal with status "complete"')
+    expect(text).toContain("acceptanceEvidence")
     expect(text).toContain("goal auto-continuation 1")
   })
 

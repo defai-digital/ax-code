@@ -1828,6 +1828,7 @@ export type EventSessionGoal = {
         updated?: number
       }
       remainingTokens?: number
+      planPath?: string
     } | null
   }
 }
@@ -11358,6 +11359,7 @@ export type SessionGoalResponses = {
       updated?: number
     }
     remainingTokens?: number
+    planPath?: string
   } | null
 }
 

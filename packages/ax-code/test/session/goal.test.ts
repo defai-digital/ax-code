@@ -3,6 +3,7 @@ import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
+import { GoalPlanWriter } from "../../src/session/goal-plan-writer"
 import { LLM } from "../../src/session/llm"
 import { SessionPrompt } from "../../src/session/prompt"
 import { tmpdir } from "../fixture/fixture"
@@ -791,6 +792,7 @@ describe("SessionGoal", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
         await SessionGoal.create({ sessionID: session.id, objective: "resume and continue" })
         modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
         let streams = 0

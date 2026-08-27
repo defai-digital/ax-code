@@ -2,16 +2,16 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-25
+Last reviewed: 2026-08-27
 Owner: ax-code runtime
 
 AX Code has three composable automation primitives:
 
-| Primitive       | What it is                                                                                         | Lifetime                          |
-| --------------- | -------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `/goal`         | A durable objective the session keeps pursuing, with budgets and a verification gate               | Persisted per session             |
-| `/loop`         | A heartbeat that re-runs a prompt on a fixed interval while the session is idle                    | This backend process              |
-| Scheduled tasks | Durable one-time or recurring runs ("every weekday at 9am…") the agent can set up conversationally | Persisted in the project database |
+| Primitive       | What it is                                                                                            | Lifetime                          |
+| --------------- | ----------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `/goal`         | A durable objective the session keeps pursuing, with a written plan, budgets, and a verification gate | Persisted per session             |
+| `/loop`         | A heartbeat that re-runs a prompt on a fixed interval while the session is idle                       | This backend process              |
+| Scheduled tasks | Durable one-time or recurring runs ("every weekday at 9am…") the agent can set up conversationally    | Persisted in the project database |
 
 ## /loop — recurring prompts
 
@@ -45,9 +45,13 @@ Rules:
 ## Pairing /goal with /loop
 
 `/goal` owns the objective ("all tests green, no open review findings");
-`/loop` provides the heartbeat that keeps checking. Goal completion remains
-verification-gated: the agent cannot mark a goal complete after edits without
-a passing verification run.
+`/loop` provides the heartbeat that keeps checking. Creating a goal first
+runs a dedicated plan writer that stores a reviewable contract under
+`.ax-code/goals/` (or the AX data directory when the project is not a git
+worktree). If planning fails the goal stays paused — `/goal resume` retries
+it. Goal completion remains verification-gated: the agent cannot mark a goal
+complete after edits without a passing verification run, and when a plan
+exists it must also supply evidence for every acceptance criterion.
 
 ```
 /goal keep main green: fix any CI failure the loop finds

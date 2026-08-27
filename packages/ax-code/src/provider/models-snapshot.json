@@ -62578,6 +62578,44 @@
           "output": 393216
         }
       },
+      "deepseek/deepseek-v4-flash-vision-exp": {
+        "id": "deepseek/deepseek-v4-flash-vision-exp",
+        "name": "DeepSeek V4 Flash Vision Exp (DeepSeek)",
+        "description": "Experimental multimodal DeepSeek V4 Flash model for image understanding, coding, and agentic work",
+        "family": "deepseek-flash",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-21",
+        "last_updated": "2026-08-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "output": 393216
+        }
+      },
       "google-vertex/gemini-3.5-flash-lite": {
         "id": "google-vertex/gemini-3.5-flash-lite",
         "name": "Gemini 3.5 Flash Lite (Google Vertex AI)",
@@ -150417,6 +150455,42 @@
           "output": 131072
         }
       },
+      "databricks/databricks-gpt-oss-120b@eu": {
+        "id": "databricks/databricks-gpt-oss-120b@eu",
+        "name": "GPT OSS 120B (EU)",
+        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
+        "family": "gpt-oss",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2025-08-05",
+        "last_updated": "2025-08-05",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 32768
+        }
+      },
       "databricks/databricks-gpt-oss-20b": {
         "id": "databricks/databricks-gpt-oss-20b",
         "name": "GPT OSS 20B",
@@ -150456,6 +150530,42 @@
       "databricks/databricks-gpt-oss-120b": {
         "id": "databricks/databricks-gpt-oss-120b",
         "name": "GPT OSS 120B",
+        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
+        "family": "gpt-oss",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2025-08-05",
+        "last_updated": "2025-08-05",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 131072,
+          "output": 32768
+        }
+      },
+      "databricks/databricks-gpt-oss-20b@eu": {
+        "id": "databricks/databricks-gpt-oss-20b@eu",
+        "name": "GPT OSS 20B (EU)",
         "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
         "family": "gpt-oss",
         "attachment": false,
@@ -163571,6 +163681,44 @@
         "limit": {
           "context": 1000000,
           "output": 65536
+        }
+      },
+      "deepseek-v4-flash-vision-exp": {
+        "id": "deepseek-v4-flash-vision-exp",
+        "name": "DeepSeek V4 Flash Vision Exp",
+        "description": "Experimental multimodal DeepSeek V4 Flash model for image understanding, coding, and agentic work",
+        "family": "deepseek-flash",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-21",
+        "last_updated": "2026-08-21",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1050000,
+          "output": 384000
         }
       },
       "glm-5.3-flash": {
@@ -176847,7 +176995,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 81920
+          "output": 235929
         }
       },
       "qwen/qwen3-next-80b-a3b-instruct": {
@@ -180085,8 +180233,7 @@
         "modalities": {
           "input": [
             "text",
-            "image",
-            "video"
+            "image"
           ],
           "output": [
             "text"
@@ -180095,7 +180242,7 @@
         "open_weights": true,
         "limit": {
           "context": 1048576,
-          "output": 943718
+          "output": 1048576
         }
       },
       "minimax/minimax-m2.7:free": {
@@ -180129,7 +180276,7 @@
         "open_weights": true,
         "limit": {
           "context": 196608,
-          "output": 176947
+          "output": 196608
         }
       },
       "minimax/minimax-m2.1": {
@@ -185659,7 +185806,17 @@
         "family": "glm",
         "attachment": true,
         "reasoning": true,
-        "reasoning_options": [],
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        ],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,

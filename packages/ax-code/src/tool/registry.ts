@@ -58,6 +58,7 @@ import { VerifyProjectTool } from "./verify_project"
 import { ReviewCompleteTool } from "./review_complete"
 import { MemorySaveTool } from "./memory"
 import { GetGoalTool, CreateGoalTool, UpdateGoalTool } from "./goal"
+import { SubmitGoalPlanTool } from "./submit_goal_plan"
 import {
   ScheduleTaskTool,
   ListScheduledTasksTool,
@@ -255,6 +256,7 @@ export namespace ToolRegistry {
         EditTool,
         WriteTool,
         SkillTool,
+        SubmitGoalPlanTool,
       ]
     }
     // Keep local ax-engine tool schemas focused; debug-engine tools are large,
@@ -293,6 +295,7 @@ export namespace ToolRegistry {
       GetGoalTool,
       CreateGoalTool,
       UpdateGoalTool,
+      SubmitGoalPlanTool,
       ScheduleTaskTool,
       ListScheduledTasksTool,
       ManageScheduledTaskTool,

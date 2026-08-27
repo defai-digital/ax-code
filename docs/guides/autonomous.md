@@ -162,7 +162,7 @@ In a session, run **`/limits`** to print the resolved budget stack, effective TU
 
 **Auto-routing:** keyword routing may switch the session to a specialist agent (Debug, Security, DevOps, …). Specialists share the same unbounded-by-default agent model-turn policy as Dev unless you set `agent.<name>.steps`. Disable routing with `"routing": { "disable": true }` if you want the Dev agent only.
 
-**Long runs:** use `/goal` or Super-Long for multi-hour work — they lift ordinary continuation caps and use the larger cumulative ceiling (default 20,000), with verification / pause semantics documented in [Loop Mode](loop-mode.md).
+**Long runs:** use `/goal` or Super-Long for multi-hour work — they lift ordinary continuation caps and use the larger cumulative ceiling (default 20,000), with verification / pause semantics documented in [Loop Mode](loop-mode.md). `/goal` first writes a reviewable contract (acceptance criteria + verification plan) and fail-closes to paused if that plan cannot be produced.
 
 ### When a limit stops a run
 

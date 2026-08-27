@@ -43,6 +43,27 @@ describe("prompt loop goal continuation", () => {
     expect(result.budgetWrapUp).toBe("none")
     expect(result.text).toContain("finish refactor")
     expect(result.text).toContain("continuation 2")
+    expect(result.text).not.toContain("Plan:")
+  })
+
+  test("includes the plan path and next checklist step when provided", () => {
+    const result = handlePromptLoopGoalContinuation({
+      sessionID: SessionID.descending(),
+      goal: {
+        objective: "finish refactor",
+        status: "active",
+        tokensUsed: 10,
+        timeUsedSeconds: 2,
+        planPath: "/tmp/goal-plan.md",
+        nextStep: "write the tests",
+      },
+      continuations: 0,
+      budgetWrapUp: "none",
+    })
+    expect(result.action).toBe("continue")
+    if (result.action !== "continue") throw new Error("expected continuation")
+    expect(result.text).toContain("/tmp/goal-plan.md")
+    expect(result.text).toContain("write the tests")
   })
 
   test("maps budget-limited goals to one wrap-up continuation and marks it sent", () => {

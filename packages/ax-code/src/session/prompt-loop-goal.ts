@@ -9,6 +9,8 @@ type GoalContinuationInfo = {
   tokenBudget?: number
   tokensUsed: number
   timeUsedSeconds: number
+  planPath?: string
+  nextStep?: string
 }
 
 type PromptLoopGoalTransition =
@@ -47,6 +49,8 @@ export function handlePromptLoopGoalContinuation(
       text: AutonomousContinuationPrompt.goal({
         objective: decision.objective,
         continuation: decision.continuation,
+        planPath: input.goal?.planPath,
+        nextStep: input.goal?.nextStep,
       }),
       // An active goal means we're in a fresh budget cycle (new or resumed goal),
       // so clear any stale wrap-up state from a previous goal in this session.

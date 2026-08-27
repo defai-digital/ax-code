@@ -4,6 +4,7 @@ import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
 import { MessageID } from "../../src/session/schema"
 import { CreateGoalTool, GetGoalTool, UpdateGoalTool } from "../../src/tool/goal"
+import { GoalPlanWriter } from "../../src/session/goal-plan-writer"
 import { tmpdir } from "../fixture/fixture"
 
 function toolContext(sessionID: string, _directory: string) {
@@ -55,6 +56,7 @@ describe("goal tools", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
         const ctx = toolContext(session.id, tmp.path)
 
         const create = await (
@@ -66,7 +68,9 @@ describe("goal tools", () => {
         const get = await (await GetGoalTool.init()).execute({}, ctx)
         expect(get.output).toContain("remainingTokens")
 
-        const update = await (await UpdateGoalTool.init()).execute({ status: "complete" }, ctx)
+        const update = await (
+          await UpdateGoalTool.init()
+        ).execute({ status: "complete", acceptanceEvidence: { AC1: "no files changed in this test" } }, ctx)
         expect(update.output).toContain("completionBudgetReport")
         expect((await SessionGoal.get(session.id))?.status).toBe("complete")
 
@@ -82,6 +86,7 @@ describe("goal tools", () => {
       directory: tmp.path,
       fn: async () => {
         const session = await Session.create({})
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
         const ctx = toolContext(session.id, tmp.path)
         const tool = await CreateGoalTool.init()
 
