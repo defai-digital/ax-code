@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Stop importing Node path into the sandboxed Desktop preload so startup paint diagnostics still record.
+
 ## [7.8.10] - 2026-08-26
 
 ### Fixed

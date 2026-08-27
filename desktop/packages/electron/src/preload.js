@@ -3,7 +3,25 @@
 const { contextBridge, ipcRenderer } = require("electron")
 const { createElectronDesktopBootOutcome } = require("./desktop-boot-outcome")
 const { isAllowedDesktopInvokeCommand } = require("./preload-ipc-policy")
-const { readRendererApiOriginFromArgv } = require("./desktop-renderer-protocol")
+
+// Keep origin parsing in this file. Requiring desktop-renderer-protocol pulls
+// Node's `path` into the sandboxed preload bundle and crashes before
+// contextBridge runs, so renderer.first-paint is never recorded.
+const RENDERER_API_ORIGIN_ARG_PREFIX = "--ax-code-desktop-api-origin="
+const readRendererApiOriginFromArgv = (argv, env = process.env) => {
+  const args = Array.isArray(argv) ? argv : []
+  for (const arg of args) {
+    if (typeof arg === "string" && arg.startsWith(RENDERER_API_ORIGIN_ARG_PREFIX)) {
+      const origin = arg.slice(RENDERER_API_ORIGIN_ARG_PREFIX.length).trim().replace(/\/+$/, "")
+      if (origin) return origin
+    }
+  }
+  const fromEnv =
+    typeof env?.AX_CODE_DESKTOP_RENDERER_API_ORIGIN === "string"
+      ? env.AX_CODE_DESKTOP_RENDERER_API_ORIGIN.trim().replace(/\/+$/, "")
+      : ""
+  return fromEnv
+}
 
 // Bridge main-process desktop events to DOM CustomEvents. Several UI consumers
 // listen via window.addEventListener('openchamber:...') (e.g. open-session,
