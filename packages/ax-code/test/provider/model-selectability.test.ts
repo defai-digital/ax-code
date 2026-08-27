@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { modelSelectableForProvider, providerModelSelectable } from "@/provider/model-selectability"
+import { isNonChatModelID, modelSelectableForProvider, providerModelSelectable } from "@/provider/model-selectability"
 import { AX_ENGINE_MODEL_DEFINITIONS, AX_ENGINE_MODEL_IDS } from "@/provider/ax-engine/constants"
 
 describe("providerModelSelectable", () => {
@@ -53,5 +53,35 @@ describe("ax-engine local MLX model list", () => {
   test("all catalog models declare tool-call support", () => {
     const definitions: Record<string, { toolcall?: boolean }> = AX_ENGINE_MODEL_DEFINITIONS
     expect(AX_ENGINE_MODEL_IDS.filter((id) => definitions[id]?.toolcall === false)).toEqual([])
+  })
+})
+
+describe("isNonChatModelID", () => {
+  test("flags embedding, rerank, speech, and image IDs", () => {
+    for (const id of [
+      "text-embedding-3-small",
+      "bge-reranker-v2-m3",
+      "whisper-1",
+      "gpt-4o-mini-transcribe",
+      "tts-1",
+      "omni-moderation-latest",
+      "dall-e-3",
+      "gpt-image-1",
+      "gpt-4o-realtime-preview",
+    ]) {
+      expect(isNonChatModelID(id), id).toBe(true)
+    }
+  })
+
+  test("keeps chat and vision models", () => {
+    for (const id of [
+      "deepseek-v4-pro",
+      "gpt-4o-mini",
+      "glm-5.3-flash",
+      "deepseek-v4-flash-vision-exp",
+      "MiniMax-M2.7",
+    ]) {
+      expect(isNonChatModelID(id), id).toBe(false)
+    }
   })
 })

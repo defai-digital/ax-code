@@ -33,6 +33,26 @@ export function providerModelSelectable(input: { providerID: string; toolcall?: 
   return TOOLCALL_OPTIONAL_PROVIDER_IDS.has(input.providerID)
 }
 
+// Model IDs that name a non-chat modality. OpenAI-compatible gateways list
+// these next to chat models on GET /models, and they must never be offered
+// as an agent lane or picked as the auxiliary (title/summary) model.
+const NON_CHAT_ID_TOKENS = [
+  "embed",
+  "rerank",
+  "whisper",
+  "transcribe",
+  "tts",
+  "moderation",
+  "dall-e",
+  "gpt-image",
+  "realtime",
+]
+
+export function isNonChatModelID(modelID: string) {
+  const id = modelID.toLowerCase()
+  return NON_CHAT_ID_TOKENS.some((token) => id.includes(token))
+}
+
 export function modelSelectableForProvider(providerID: string, model: SelectableModel | undefined) {
   if (!model) return false
   if (modelMemoryBlockReason(providerID, model)) return false

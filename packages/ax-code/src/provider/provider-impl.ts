@@ -39,7 +39,7 @@ import {
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
-import { modelSelectableForProvider } from "./model-selectability"
+import { isNonChatModelID, modelSelectableForProvider } from "./model-selectability"
 import { CUSTOM_LOADERS, type CustomModelLoader, type CustomVarsLoader, type CustomDiscoverModels } from "./loaders"
 import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
@@ -1350,15 +1350,20 @@ export namespace Provider {
       // Custom OpenAI-compatible catalogs (one-api, new-api, AX Trust) have no
       // models.dev family tags. Prefer a flash/mini SKU, else the first
       // selectable model so title/recap aux calls still have a lane.
-      const keys = Object.keys(provider.models)
+      // Only lanes the agent loop can use: a gateway that lists
+      // `text-embedding-3-small` must not get it picked for "small".
+      const keys = Object.keys(provider.models).filter(
+        (model) =>
+          modelSelectableForProvider(providerID, provider.models[ModelID.make(model)]) && !isNonChatModelID(model),
+      )
       for (const token of ["flash", "mini", "haiku", "small", "lite"]) {
         const hit = keys
           .filter((model) => model.toLowerCase().includes(token))
           .sort((a, b) => a.length - b.length || a.localeCompare(b))
         if (hit[0]) return getModel(providerID, ModelID.make(hit[0]))
       }
-      const first = Object.values(provider.models).find((item) => modelSelectableForProvider(providerID, item))
-      if (first) return first
+      const first = keys[0]
+      if (first) return provider.models[ModelID.make(first)]
     }
 
     return undefined

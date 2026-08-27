@@ -162,3 +162,73 @@ describe("custom API provider model discovery", () => {
     ).resolves.toEqual([expect.objectContaining({ id: "coding" })])
   })
 })
+
+describe("custom API provider catalog limits", () => {
+  test("uses the median across reseller cards so one mistyped card cannot win", () => {
+    expect(
+      CustomApiProvider.catalogLimitForModelID("MiniMax-M2.7", {
+        minimax: {
+          models: { "MiniMax-M2.7": { id: "MiniMax-M2.7", limit: { context: 204_800, output: 131_072 } } },
+        },
+        nvidia: {
+          models: {
+            "minimaxai/minimax-m2.7": { id: "minimaxai/minimax-m2.7", limit: { context: 204_800, output: 131_072 } },
+          },
+        },
+        hyper: { models: { "minimax-m2.7": { id: "minimax-m2.7", limit: { context: 262_100, output: 6_553 } } } },
+        cortecs: { models: { "minimax-m2.7": { id: "minimax-m2.7", limit: { context: 196_608, output: 196_072 } } } },
+      }),
+    ).toEqual({ context: 204_800, output: 131_072 })
+  })
+
+  test("does not inherit an output equal to the context from a single outlier card", () => {
+    expect(
+      CustomApiProvider.inheritCustomApiModelLimit({
+        modelID: "MiniMax-M2.7",
+        limit: { context: 128_000, output: 16_384 },
+        catalog: {
+          minimax: {
+            models: { "MiniMax-M2.7": { id: "MiniMax-M2.7", limit: { context: 204_800, output: 131_072 } } },
+          },
+          hyper: { models: { "minimax-m2.7": { id: "minimax-m2.7", limit: { context: 262_100, output: 6_553 } } } },
+          cortecs: {
+            models: { "minimax-m2.7": { id: "minimax-m2.7", limit: { context: 196_608, output: 196_072 } } },
+          },
+        },
+        replaceDiscoveryDefaults: true,
+      }),
+    ).toEqual({ context: 204_800, output: 131_072 })
+  })
+})
+
+describe("custom API provider discovery filtering", () => {
+  test("skips embedding, rerank, and speech rows from GET /models", () => {
+    expect(
+      CustomApiProvider.parseDiscoveredModels({
+        data: [
+          { id: "text-embedding-3-small" },
+          { id: "bge-reranker-v2-m3" },
+          { id: "whisper-1" },
+          { id: "tts-1" },
+          { id: "deepseek-v4-flash" },
+        ],
+      }).map((model) => model.id),
+    ).toEqual(["deepseek-v4-flash"])
+  })
+
+  test("reports connection failures as provider errors", async () => {
+    globalThis.fetch = (async () => {
+      throw new TypeError("fetch failed")
+    }) as typeof fetch
+
+    await expect(
+      CustomApiProvider.discoverModels({
+        baseURL: "http://127.0.0.1:18080/v1",
+        apiKey: "axt_test",
+      }),
+    ).rejects.toMatchObject({
+      name: "CustomApiProviderError",
+      data: { message: "GET http://127.0.0.1:18080/v1/models failed: fetch failed" },
+    })
+  })
+})

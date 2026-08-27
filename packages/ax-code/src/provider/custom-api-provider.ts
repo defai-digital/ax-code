@@ -7,6 +7,7 @@ import { findRegisteredModelCapabilities } from "@/provider/model-capabilities"
 import { modelIdFinalSegment, normalizeProviderModelId } from "@/provider/model-id"
 import { isRetiredProviderID } from "@/provider/retired-providers"
 import { isLocalHostname } from "@/util/local-host"
+import { isNonChatModelID } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
 import { Ssrf } from "@/util/ssrf"
 
@@ -193,19 +194,34 @@ export namespace CustomApiProvider {
   ): { context: number; output: number } | undefined {
     const needle = catalogModelKey(modelID)
     if (!needle) return
-    let best: { context: number; output: number } | undefined
+    const contexts: number[] = []
+    const outputs: number[] = []
     for (const provider of Object.values(catalog)) {
       for (const [id, model] of Object.entries(provider.models ?? {})) {
         if (catalogModelKey(model.id ?? id) !== needle) continue
         const context = model.limit?.context
         const output = model.limit?.output
         if (!context || context <= 0 || !output || output <= 0) continue
-        if (!best || context > best.context || (context === best.context && output > best.output)) {
-          best = { context, output }
-        }
+        contexts.push(context)
+        outputs.push(output)
       }
     }
-    return best
+    // Reseller cards for one SKU disagree, and a single mistyped card must
+    // not become the window every custom gateway inherits: taking the card
+    // with the largest context gave MiniMax-M2.7 a 6,553-token output (one
+    // gateway lists 262100/6553) and several models an output equal to
+    // their context. The median ignores those outliers while still being a
+    // value some card actually declared.
+    const context = median(contexts)
+    const output = median(outputs)
+    if (!context || !output) return
+    return { context, output }
+  }
+
+  function median(values: number[]): number | undefined {
+    if (values.length === 0) return
+    const sorted = [...values].sort((left, right) => left - right)
+    return sorted[Math.floor(sorted.length / 2)]
   }
 
   function shouldReplaceLimit(stored: number, discoveryDefault: number, replaceDiscoveryDefaults: boolean) {
@@ -279,6 +295,9 @@ export namespace CustomApiProvider {
       if (!isRecord(raw) || typeof raw.id !== "string") continue
       const id = raw.id.trim()
       if (!id || seen.has(id) || /\s/u.test(id) || id.length > 256) continue
+      // Gateways list embedding / rerank / speech models on the same
+      // endpoint; they cannot drive a coding turn.
+      if (isNonChatModelID(id)) continue
       seen.add(id)
       const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim().slice(0, 120) : id
       models.push(discoveredModel(id, name, raw))
@@ -309,11 +328,19 @@ export namespace CustomApiProvider {
     const url = modelsURL(input.baseURL)
     const hostname = new URL(input.baseURL).hostname
     const fetcher = input.fetcher ?? (isLocalHostname(hostname) ? fetch : Ssrf.pinnedFetch)
-    const response = await fetcher(url, {
-      method: "GET",
-      headers: authorizationHeaders(token),
-      signal: AbortSignal.timeout(input.timeoutMs ?? DISCOVERY_TIMEOUT_MS),
-    })
+    let response: Response
+    try {
+      response = await fetcher(url, {
+        method: "GET",
+        headers: authorizationHeaders(token),
+        signal: AbortSignal.timeout(input.timeoutMs ?? DISCOVERY_TIMEOUT_MS),
+      })
+    } catch (cause) {
+      // Surface connection refused / DNS / timeout as a provider error so the
+      // route answers 400 with the reason instead of a generic 500.
+      const reason = cause instanceof globalThis.Error ? cause.message : String(cause)
+      throw new Error({ message: `GET ${url} failed: ${reason}` })
+    }
     if (!response.ok) {
       await response.arrayBuffer().catch(() => undefined)
       throw new Error({ message: `GET ${url} returned HTTP ${response.status}` })
