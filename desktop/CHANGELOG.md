@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.3] - 2026-08-27
+
+### Changed
+
+- Do not forward upstream SSE subscription acks to desktop clients.
+- Make event streams resumable across disconnects.
+
 ## [7.9.2] - 2026-08-27
 
 ### Changed
