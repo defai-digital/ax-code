@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.0] - 2026-08-27
+
+### Changed
+
+- Follow remaining recent, guardian, and ACP model pins to a connected SKU.
+- Resolve command and wiki model pins with the shared fallback.
+- Resolve planner_architect_model like every other pin.
+- Desktop: update the provider that already serves an endpoint and add Refresh models.
+- Reuse an existing custom provider for the same endpoint and migrate stale model preferences.
+- Follow small_model across providers and keep non-chat lanes out of ensembles.
+- Send a bounded output limit on every auxiliary AI SDK call.
+- Refresh self-scan baseline for the custom API placeholder URL.
+
 ## [7.8.12] - 2026-08-27
 
 ### Added
