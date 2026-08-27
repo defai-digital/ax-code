@@ -34,7 +34,7 @@ import { Locale } from "@/util/locale"
 import type { McpStatus } from "@ax-code/sdk/v2"
 import type { SyncedSessionQualityReadiness } from "../../context/sync-session-risk"
 import { countByWorkflow as countFindingsByWorkflow } from "@/quality/finding-counts"
-import { isRetiredProviderID } from "@/provider/retired-providers"
+import { disabledProviderIDs } from "../../component/provider-list-view-model"
 import {
   hasSidebarSignal,
   renderSessionChecksSummary,
@@ -322,20 +322,20 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
 
-  // Connected providers plus config-disabled ones (the server filters disabled
-  // providers out of every provider list, so config is the only place they
-  // still appear). Rows open the manage dialog with enable/disable/disconnect.
-  const providerRows = createMemo(() => {
-    const connectedProviders = sync.data.provider.map((provider) => ({
-      id: provider.id,
-      name: provider.name,
-      disabled: false,
-    }))
-    const disabledProviders = (sync.data.config?.disabled_providers ?? [])
-      .filter((id) => !isRetiredProviderID(id) && !sync.data.provider.some((provider) => provider.id === id))
-      .map((id) => ({ id, name: id, disabled: true }))
-    return [...connectedProviders, ...disabledProviders]
-  })
+  // Only connected providers appear in the sidebar list. Config-disabled
+  // providers (credentials kept, provider off) are filtered out here and
+  // surfaced in the manage dialog, which offers enable/disconnect — so the
+  // re-enable path stays reachable without cluttering the active list.
+  const connectedProviders = createMemo(() => sync.data.provider)
+  const disabledProviders = createMemo(() =>
+    disabledProviderIDs(
+      sync.data.config,
+      sync.data.provider.map((provider) => provider.id),
+    ),
+  )
+  // Keep the Providers section (and its "manage" link) visible even when every
+  // provider is disabled, otherwise the only path back to re-enable disappears.
+  const hasProviderSection = createMemo(() => connectedProviders().length > 0 || disabledProviders().length > 0)
 
   return (
     <Show when={session()}>
@@ -424,12 +424,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                   </Show>
                 </box>
               </Show>
-              <Show when={providerRows().length > 0}>
+              <Show when={hasProviderSection()}>
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
                       <b>Providers</b>
-                      <span style={{ fg: theme.textMuted }}> ({providerRows().length})</span>
+                      <span style={{ fg: theme.textMuted }}> ({connectedProviders().length})</span>
                     </text>
                     <text
                       fg={theme.textMuted}
@@ -441,7 +441,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                     </text>
                   </box>
                   <box border={["top"]} borderColor={theme.borderSubtle} />
-                  <For each={providerRows()}>
+                  <For each={connectedProviders()}>
                     {(provider) => (
                       <box
                         flexDirection="row"
@@ -450,16 +450,20 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                           command.trigger("provider.manage")
                         }}
                       >
-                        <text flexShrink={0} style={{ fg: provider.disabled ? theme.textMuted : theme.success }}>
+                        <text flexShrink={0} style={{ fg: theme.success }}>
                           •
                         </text>
                         <text fg={theme.text} wrapMode="word">
-                          {provider.name}{" "}
-                          <span style={{ fg: theme.textMuted }}>{provider.disabled ? "Disabled" : "Connected"}</span>
+                          {provider.name} <span style={{ fg: theme.textMuted }}>Connected</span>
                         </text>
                       </box>
                     )}
                   </For>
+                  <Show when={disabledProviders().length > 0}>
+                    <text fg={theme.textMuted} wrapMode="word">
+                      {Locale.pluralize(disabledProviders().length, "{} provider disabled", "{} providers disabled")}
+                    </text>
+                  </Show>
                 </box>
               </Show>
               {/* Debugging & Refactoring Engine section. Always shows a

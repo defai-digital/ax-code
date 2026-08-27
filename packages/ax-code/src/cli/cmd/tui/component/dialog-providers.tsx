@@ -6,7 +6,7 @@ import { useSDK } from "../context/sdk"
 import { useToast } from "../ui/toast"
 import { DialogModel } from "./dialog-model"
 import { DialogProvider, setProviderDisabled } from "./dialog-provider"
-import { isRetiredProviderID } from "@/provider/retired-providers"
+import { disabledProviderIDs } from "./provider-list-view-model"
 
 const CONNECT_NEW_VALUE = "__connect_new__"
 
@@ -25,8 +25,9 @@ export function DialogProviders() {
 
   const connected = createMemo(() => sync.data.provider)
   const disabled = createMemo(() =>
-    (sync.data.config?.disabled_providers ?? []).filter(
-      (id) => !isRetiredProviderID(id) && !connected().some((p) => p.id === id),
+    disabledProviderIDs(
+      sync.data.config,
+      connected().map((p) => p.id),
     ),
   )
 
