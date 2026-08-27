@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.2] - 2026-08-27
+
+### Changed
+
+- Publish the goal-plan digest before the plan file.
+- Ignore shell-prefixed ordinary EPERM failures.
+- Write a fail-closed goal contract before autonomous implementation starts.
+
+### Fixed
+
+- Fix explicit model routing and nested runs.
+- Fix goal contract persistence edge cases.
+
 ## [7.9.1] - 2026-08-27
 
 ### Changed
