@@ -45,7 +45,11 @@ const EPERM_PATTERN = /Operation not permitted/g
 // Seatbelt allows `signal`; these utilities fail with EPERM for ordinary
 // permission reasons even with the wrap off. Matching them would prompt
 // isolation_escalation, then retry unsandboxed and fail the same way.
-const ORDINARY_EPERM_UTIL = /^(?:kill|pkill|killall|renice|nice|chown):/i
+// The wrapped run executes `<shell> -c <command>`, so builtin failures are
+// shell-prefixed ("bash: line 0: kill: ...", "/bin/sh: line 0: kill: ...",
+// dash "sh: 1: kill: ..."); tolerate that prefix before the util name.
+const ORDINARY_EPERM_UTIL =
+  /^(?:(?:\S*\/)?(?:bash|zsh|ksh|dash|ash|sh):(?:(?:\s*line)?\s*\d+:)?\s*)?(?:kill|pkill|killall|renice|nice|chown):/i
 
 function lineAt(output: string, index: number): string {
   const start = output.lastIndexOf("\n", index - 1) + 1

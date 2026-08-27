@@ -102,6 +102,30 @@ describe("detectSandboxDenial", () => {
     expect(detectSandboxDenial({ ...base, output: "killall: Operation not permitted" })).toBeUndefined()
     expect(detectSandboxDenial({ ...base, output: "renice: 123: Operation not permitted" })).toBeUndefined()
     expect(detectSandboxDenial({ ...base, output: "chown: file: Operation not permitted" })).toBeUndefined()
+    // The wrapped run executes `<shell> -c <command>`, so builtin failures
+    // arrive shell-prefixed: bash "bash: line 0: kill: ...", an absolute
+    // "/bin/sh: line 0: kill: ...", dash "sh: 1: kill: ...".
+    expect(
+      detectSandboxDenial({ ...base, output: "bash: line 0: kill: (1) - Operation not permitted" }),
+    ).toBeUndefined()
+    expect(
+      detectSandboxDenial({ ...base, output: "/bin/sh: line 0: kill: (1) - Operation not permitted" }),
+    ).toBeUndefined()
+    expect(detectSandboxDenial({ ...base, output: "sh: 1: kill: Operation not permitted" })).toBeUndefined()
+    expect(detectSandboxDenial({ ...base, output: "bash: kill: (1) - Operation not permitted" })).toBeUndefined()
+    expect(detectSandboxDenial({ ...base, output: "zsh:1: kill: (1) - Operation not permitted" })).toBeUndefined()
+  })
+
+  test("still matches a shell-prefixed file-write EPERM", () => {
+    expect(detectSandboxDenial({ ...base, output: `bash: line 0: ${DENIAL_LINE}` })?.evidence).toBe(
+      "Operation not permitted",
+    )
+  })
+
+  test("does not mistake an arbitrary executable ending in a shell suffix for a shell prefix", () => {
+    expect(detectSandboxDenial({ ...base, output: "crash: kill: (1) - Operation not permitted" })?.evidence).toBe(
+      "Operation not permitted",
+    )
   })
 
   test("still matches a file-write EPERM after an ordinary kill EPERM on another line", () => {
@@ -221,14 +245,16 @@ describe("tool.bash sandbox-denial escalation", () => {
     })
   })
 
-  test("ordinary kill EPERM from a wrapped run never asks", async () => {
+  test("shell-prefixed ordinary kill EPERM from a wrapped run never asks", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const bash = await BashTool.init()
         const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
-        vi.spyOn(OsSandbox, "wrapCommand").mockReturnValue(fakeFailingWrap("kill: (1) - Operation not permitted"))
+        vi.spyOn(OsSandbox, "wrapCommand").mockReturnValue(
+          fakeFailingWrap("bash: line 0: kill: (1) - Operation not permitted"),
+        )
         const asks: PermissionRequest[] = []
         const result = await bash.execute(
           { command: "kill -HUP 1", description: "Signal a privileged pid" },
