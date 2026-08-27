@@ -6,7 +6,7 @@ AX Code is an open-source coding-agent runtime for reviewable, reversible work. 
 
 Built by [DEFAI Digital](https://github.com/defai-digital).
 
-[![Release v7.8.10](https://img.shields.io/badge/Release-v7.8.10-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.8.10)
+[![Release v7.8.11](https://img.shields.io/badge/Release-v7.8.11-2F6FED)](https://github.com/defai-digital/ax-code/releases/tag/v7.8.11)
 [![macOS Apple Silicon](https://img.shields.io/badge/macOS-Apple%20Silicon-000000?logo=apple&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Windows x64/ARM64](https://img.shields.io/badge/Windows-x64%20%2B%20ARM64-0078D4?logo=windows&logoColor=white)](https://github.com/defai-digital/ax-code/releases)
 [![Ubuntu 24.04+ amd64/arm64](https://img.shields.io/badge/Ubuntu%2024.04%2B-amd64%20%2B%20arm64-E95420?logo=ubuntu&logoColor=white)](https://github.com/defai-digital/ax-code/releases)

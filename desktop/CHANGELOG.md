@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.11] - 2026-08-26
+
+### Fixed
+
+- Fix sandboxed preload crash blocking renderer first paint.
+
 ### Fixed
 
 - Stop importing Node path into the sandboxed Desktop preload so startup paint diagnostics still record.
