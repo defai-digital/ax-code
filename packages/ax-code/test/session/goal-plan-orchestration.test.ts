@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
+import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
@@ -197,6 +198,40 @@ describe("GoalPlanOrchestration", () => {
           GoalPlan.digestOf(result.contract) + "\n",
         )
         await Session.remove(fork.id)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("refuses to replace a digest whose plan was never published", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        const reserved = await SessionGoal.create({
+          sessionID: session.id,
+          objective: "keep the unpublished plan fail-closed",
+          status: "paused",
+        })
+        const digestPath = GoalPlan.digestPathFor(session.id, reserved.time.created)
+        const planPath = GoalPlan.pathFor(session.id, reserved.time.created)
+        await fs.mkdir(path.dirname(digestPath), { recursive: true })
+        await fs.writeFile(digestPath, "a".repeat(64) + "\n")
+        let calls = 0
+        GoalPlanWriter.setWrite(async (input) => {
+          calls++
+          return GoalPlanWriter.stubWrite()(input)
+        })
+
+        await expect(GoalPlanOrchestration.resumeWithPlan({ sessionID: session.id })).rejects.toThrow(
+          "frozen goal contract",
+        )
+        expect(calls).toBe(0)
+        expect(await fs.readFile(digestPath, "utf8")).toBe("a".repeat(64) + "\n")
+        await expect(fs.stat(planPath)).rejects.toMatchObject({ code: "ENOENT" })
+        expect((await SessionGoal.get(session.id))?.status).toBe("paused")
         await Session.remove(session.id)
       },
     })

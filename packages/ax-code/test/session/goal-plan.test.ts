@@ -1,5 +1,9 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
+import fs from "fs"
 import { GoalPlan } from "../../src/session/goal-plan"
+import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { tmpdir } from "../fixture/fixture"
 
 describe("GoalPlan parser", () => {
   test("round-trips a code-change contract", () => {
@@ -184,5 +188,73 @@ keep it small
     expect(GoalPlan.digestOf(a)).toBe(GoalPlan.digestOf(b))
     const c = { ...a, acceptance: [{ id: "AC1", text: "different" }] }
     expect(GoalPlan.digestOf(a)).not.toBe(GoalPlan.digestOf(c))
+  })
+})
+
+describe("GoalPlan persistence", () => {
+  test("publishes the digest before the plan", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const created = Date.now()
+        const published: string[] = []
+        const rename = fs.promises.rename.bind(fs.promises)
+        const spy = vi.spyOn(fs.promises, "rename").mockImplementation(async (from, to) => {
+          published.push(String(to))
+          return rename(from, to)
+        })
+        try {
+          await GoalPlan.write(session.id, created, GoalPlan.render(GoalPlan.sample("ship the feature")))
+        } finally {
+          spy.mockRestore()
+        }
+        const plan = GoalPlan.pathFor(session.id, created)
+        const digest = GoalPlan.digestPathFor(session.id, created)
+        expect(published.indexOf(digest)).toBeGreaterThanOrEqual(0)
+        expect(published.indexOf(plan)).toBeGreaterThan(published.indexOf(digest))
+        expect(GoalPlan.hasValidContract(session.id, created)).toBe(true)
+        await GoalPlan.remove(session.id, created)
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("leaves a lone digest when the plan publish fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const created = Date.now()
+        const plan = GoalPlan.pathFor(session.id, created)
+        const digest = GoalPlan.digestPathFor(session.id, created)
+        const rename = fs.promises.rename.bind(fs.promises)
+        const spy = vi.spyOn(fs.promises, "rename").mockImplementation(async (from, to) => {
+          if (String(to) === plan) throw new Error("disk full")
+          return rename(from, to)
+        })
+        try {
+          await expect(
+            GoalPlan.write(session.id, created, GoalPlan.render(GoalPlan.sample("ship the feature"))),
+          ).rejects.toThrow(/disk full/)
+        } finally {
+          spy.mockRestore()
+        }
+        expect(GoalPlan.storedDigest(session.id, created)).toBeTruthy()
+        expect(GoalPlan.read(session.id, created).status).toBe("missing")
+        expect(GoalPlan.hasValidContract(session.id, created)).toBe(false)
+        expect(await fs.promises.stat(plan).catch((error: NodeJS.ErrnoException) => error.code)).toBe("ENOENT")
+        expect(
+          await fs.promises.stat(`${plan}.${process.pid}.tmp`).catch((error: NodeJS.ErrnoException) => error.code),
+        ).toBe("ENOENT")
+        expect(
+          await fs.promises.stat(`${digest}.${process.pid}.tmp`).catch((error: NodeJS.ErrnoException) => error.code),
+        ).toBe("ENOENT")
+        await GoalPlan.remove(session.id, created)
+        await Session.remove(session.id)
+      },
+    })
   })
 })

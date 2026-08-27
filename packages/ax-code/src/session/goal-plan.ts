@@ -302,10 +302,19 @@ export namespace GoalPlan {
     await fs.promises.mkdir(path.dirname(digestFile), { recursive: true })
     const tmp = `${file}.${process.pid}.tmp`
     const digestTmp = `${digestFile}.${process.pid}.tmp`
-    await fs.promises.writeFile(tmp, rendered, "utf8")
-    await fs.promises.writeFile(digestTmp, digestOf(contract) + "\n", "utf8")
-    await fs.promises.rename(tmp, file)
-    await fs.promises.rename(digestTmp, digestFile)
+    try {
+      await fs.promises.writeFile(tmp, rendered, "utf8")
+      await fs.promises.writeFile(digestTmp, digestOf(contract) + "\n", "utf8")
+      // Publish the digest first so a crash can never leave a plan that looks
+      // like pre-contract data and is silently replaced on resume. A lone
+      // digest makes completion and resume fail closed until the plan is restored.
+      await fs.promises.rename(digestTmp, digestFile)
+      await fs.promises.rename(tmp, file)
+    } catch (error) {
+      await fs.promises.unlink(tmp).catch(() => undefined)
+      await fs.promises.unlink(digestTmp).catch(() => undefined)
+      throw error
+    }
     return { contract, path: file }
   }
 
