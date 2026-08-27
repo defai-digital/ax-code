@@ -131,6 +131,65 @@ describe("createGlobalMessageStreamHub", () => {
       })
       // No anchor → no replay (the client does a full bootstrap instead).
       expect(hub.replayAfter("")).toMatchObject({ entries: [], resyncRequired: false })
+      // Upstream subscription acks are not client-visible history.
+      expect(hub.replayAfter("ready-3")).toMatchObject({
+        resyncRequired: true,
+        cursor: "evt-3",
+      })
+      expect(hub.replayAfter("ready-3").entries.map((entry) => entry.eventId)).toEqual(["evt-2", "evt-3"])
+    } finally {
+      hub.stop()
+    }
+  })
+
+  it("does not fan out upstream subscription acks to still-connected clients", async () => {
+    const received = []
+    let attempt = 0
+    const hub = createGlobalMessageStreamHub({
+      buildAxCodeUrl: (pathname) => `http://127.0.0.1:4096${pathname}`,
+      getAxCodeAuthHeaders: () => ({}),
+      upstreamStallTimeoutMs: 20,
+      upstreamReconnectDelayMs: 0,
+      fetchImpl: async (_url, options) => {
+        attempt += 1
+        if (attempt === 1) {
+          return createSseResponse({
+            signal: options.signal,
+            holdOpen: true,
+            blocks: [
+              'id: ready-1\ndata: {"type":"server.connected","properties":{}}\n\n',
+              'id: evt-1\ndata: {"type":"session.updated","properties":{}}\n\n',
+            ],
+          })
+        }
+        return createSseResponse({
+          signal: options.signal,
+          holdOpen: true,
+          blocks: [
+            'id: ready-2\ndata: {"type":"server.connected","properties":{}}\n\n',
+            'id: evt-2\ndata: {"type":"session.updated","properties":{}}\n\n',
+          ],
+        })
+      },
+    })
+
+    hub.subscribeEvent((event) => {
+      received.push(event.payload?.type)
+    })
+
+    try {
+      hub.start()
+      await waitForAssertion(() => {
+        expect(received).toEqual(["session.updated"])
+      })
+      await waitForAssertion(() => {
+        expect(received).toEqual(["session.updated", "session.updated"])
+      })
+      expect(received.filter((type) => type === "server.connected")).toEqual([])
+      expect(hub.replayAfter("evt-1")).toMatchObject({
+        entries: [{ eventId: "evt-2" }],
+        resyncRequired: false,
+      })
     } finally {
       hub.stop()
     }

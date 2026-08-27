@@ -1,3 +1,4 @@
+import { isUpstreamSubscriptionControl } from "./protocol.js"
 import { createUpstreamSseReader } from "./upstream-reader.js"
 
 // Raised from 512 → 2048 to improve recovery after brief disconnects during
@@ -87,6 +88,9 @@ export function createGlobalMessageStreamHub({
       },
       onEvent(event) {
         const normalized = normalizeEvent(event)
+        if (isUpstreamSubscriptionControl(normalized.payload)) {
+          return
+        }
         if (normalized.eventId) {
           replay.push(normalized)
           if (replay.length > replayLimit) {

@@ -130,18 +130,8 @@ describe("message stream websocket runtime", () => {
     expect(fetchCalls).toBe(1)
     expect(firstSocket.sent).toContainEqual({ type: "ready", scope: "global" })
     expect(secondSocket.sent).toContainEqual({ type: "ready", scope: "global" })
-    expect(firstSocket.sent).toContainEqual({
-      type: "event",
-      payload: { type: "server.connected", properties: {} },
-      eventId: "evt-1",
-      directory: "global",
-    })
-    expect(secondSocket.sent).toContainEqual({
-      type: "event",
-      payload: { type: "server.connected", properties: {} },
-      eventId: "evt-1",
-      directory: "global",
-    })
+    expect(firstSocket.sent.some((frame) => frame.payload?.type === "server.connected")).toBe(false)
+    expect(secondSocket.sent.some((frame) => frame.payload?.type === "server.connected")).toBe(false)
 
     firstSocket.close()
     secondSocket.close()
@@ -506,7 +496,7 @@ describe("message stream websocket runtime", () => {
     )
 
     expect(readyFrames).toHaveLength(1)
-    expect(eventFrames.length).toBeGreaterThanOrEqual(2)
+    expect(eventFrames).toHaveLength(0)
     expect(fetchCalls.slice(0, 2)).toEqual([null, "evt-1"])
     expect(triggerHealthCheckCalls).toBe(0)
 

@@ -1,4 +1,4 @@
-import { sendMessageStreamWsEvent, sendMessageStreamWsFrame } from "./protocol.js"
+import { isUpstreamSubscriptionControl, sendMessageStreamWsEvent, sendMessageStreamWsFrame } from "./protocol.js"
 import { shouldTriggerUpstreamHealthCheck } from "./upstream-health.js"
 import { createUpstreamSseReader } from "./upstream-reader.js"
 
@@ -94,6 +94,9 @@ export function acceptDirectoryMessageStreamWsConnection({
 
   const run = async () => {
     const forwardEvent = ({ envelope, payload }) => {
+      if (isUpstreamSubscriptionControl(payload)) {
+        return
+      }
       const directory = requestedDirectory || envelope?.directory || "global"
 
       const sent = sendMessageStreamWsEvent(socket, payload, {

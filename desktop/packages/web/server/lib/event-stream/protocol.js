@@ -1,4 +1,15 @@
 export const MESSAGE_STREAM_GLOBAL_WS_PATH = "/api/global/event/ws"
+
+// Core sends these as subscription machinery for the proxy's own SSE reader.
+// Browser clients already get `ready` from the websocket handshake; forwarding
+// `server.connected` after an upstream reconnect would look like a client
+// reconnect and re-bootstrap every project directory.
+export const UPSTREAM_SUBSCRIPTION_CONTROL_TYPES = new Set(["server.connected", "server.heartbeat"])
+
+export function isUpstreamSubscriptionControl(payload) {
+  return UPSTREAM_SUBSCRIPTION_CONTROL_TYPES.has(payload?.type)
+}
+
 export const MESSAGE_STREAM_DIRECTORY_WS_PATH = "/api/event/ws"
 export const MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS = 15 * 1000
 // Per-client pending outbound WS buffer, not a payload or stream-size limit.
