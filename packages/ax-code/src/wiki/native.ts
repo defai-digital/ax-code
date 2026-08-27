@@ -18,6 +18,7 @@ import z from "zod"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
+import { ProviderTransform } from "../provider/transform"
 import { engineConfig, resolveWikiRuntimeConfig } from "./config"
 
 const execFileAsync = promisify(execFile)
@@ -94,6 +95,7 @@ async function resolveModel(model?: string) {
     reference,
     label: `${reference.providerID}/${reference.modelID}`,
     language: await Provider.getLanguage(resolved),
+    maxOutputTokens: ProviderTransform.auxMaxOutputTokens(resolved),
   }
 }
 

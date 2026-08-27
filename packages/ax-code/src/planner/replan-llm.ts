@@ -15,6 +15,7 @@ import type { ModelID, ProviderID } from "../provider/schema"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import type { Replanner, TaskPhase } from "./types"
+import { ProviderTransform } from "@/provider/transform"
 
 // Provider + AI SDK are imported lazily inside `providerReplanGenerator` so
 // callers using only the in-memory `llmReplanner(fakeGenerator)` or
@@ -141,6 +142,7 @@ export function providerReplanGenerator(opts: ProviderReplanOptions = {}): Repla
     try {
       const result = await generateObject({
         model: language,
+        maxOutputTokens: ProviderTransform.auxMaxOutputTokens(resolved),
         schema: REPLAN_SCHEMA,
         abortSignal: abort.signal,
         messages: [

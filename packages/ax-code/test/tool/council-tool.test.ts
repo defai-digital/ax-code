@@ -264,3 +264,28 @@ describe("council timeout", () => {
     expect(result.output).toContain("timeout: member exceeded 42ms")
   })
 })
+
+describe("council request shaping", () => {
+  test("every member request carries a bounded output limit", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({
+      modes: { council: { enabled: true, maxMembers: 3, debateRounds: 0 } },
+    } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({
+      members: mkMembers(["a", "b"]),
+      rejected: [],
+    })
+    vi.mocked(generateObject).mockResolvedValue({ object: { overall: "ok", issues: [] } } as any)
+
+    const tool = await CouncilTool.init()
+    await tool.execute({ question: "Review auth" }, ctx)
+
+    // Gateways such as AX Trust reject a chat completion that carries
+    // neither max_tokens nor max_completion_tokens; the prompt path always
+    // sends one, and aux calls must too.
+    expect(vi.mocked(generateObject).mock.calls.length).toBeGreaterThan(0)
+    for (const [request] of vi.mocked(generateObject).mock.calls) {
+      expect(request.maxOutputTokens).toEqual(expect.any(Number))
+      expect(request.maxOutputTokens).toBeGreaterThan(0)
+    }
+  })
+})

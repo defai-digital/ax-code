@@ -1106,6 +1106,20 @@ export namespace ProviderTransform {
     return { [key]: options }
   }
 
+  // Output ceiling for auxiliary calls that go straight to the AI SDK
+  // (council, arena, complexity classifier, critic, guardian, planner, wiki,
+  // computer-use). The prompt path always sends max_tokens; gateways such as
+  // AX Trust reject a body that carries neither max_tokens nor
+  // max_completion_tokens, and an unbounded aux call can run away on a
+  // reasoning model. Falls back to the global cap when the model carries no
+  // limit metadata.
+  export function auxMaxOutputTokens(model: Provider.Model | undefined): number {
+    if (!model || !model.limit || typeof model.providerID !== "string" || typeof model.id !== "string") {
+      return OUTPUT_TOKEN_MAX
+    }
+    return maxOutputTokens(model)
+  }
+
   export function maxOutputTokens(model: Provider.Model): number {
     // If the model declares no output capability (0) or a missing limit,
     // fall back to OUTPUT_TOKEN_MAX. Math.min never returns nullish, so

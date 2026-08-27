@@ -3277,3 +3277,25 @@ describe("ProviderTransform.message - Ornith reasoning history", () => {
     expect(result[0].content).toEqual([{ type: "text", text: "Here is the count" }])
   })
 })
+
+describe("ProviderTransform.auxMaxOutputTokens", () => {
+  const model = (limit: { output: number } | undefined) =>
+    ({
+      id: "gateway/deepseek-v4-pro",
+      providerID: ProviderID.make("gateway"),
+      api: { id: "deepseek-v4-pro", url: "http://127.0.0.1:38080/v1", npm: "@ai-sdk/openai-compatible" },
+      capabilities: { reasoning: true },
+      limit,
+    }) as any
+
+  test("bounds auxiliary calls by the model output limit and the global cap", () => {
+    expect(ProviderTransform.auxMaxOutputTokens(model({ output: 16_384 }))).toBe(16_384)
+    expect(ProviderTransform.auxMaxOutputTokens(model({ output: 500_000 }))).toBe(OUTPUT_TOKEN_MAX)
+  })
+
+  test("falls back to the global cap when limit metadata is missing", () => {
+    expect(ProviderTransform.auxMaxOutputTokens(undefined)).toBe(OUTPUT_TOKEN_MAX)
+    expect(ProviderTransform.auxMaxOutputTokens({} as any)).toBe(OUTPUT_TOKEN_MAX)
+    expect(ProviderTransform.auxMaxOutputTokens(model(undefined))).toBe(OUTPUT_TOKEN_MAX)
+  })
+})

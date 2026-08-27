@@ -19,6 +19,7 @@ import { ModeMemory } from "../mode/memory"
 import type { ModePolicy } from "../mode/policy"
 import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
+import { ProviderTransform } from "../provider/transform"
 import { Agent } from "../agent/agent"
 import { Log } from "../util/log"
 import { FanOut } from "../util/fan-out"
@@ -144,6 +145,7 @@ async function runProposal(input: {
         const language = await Provider.getLanguage(model)
         return generateObject({
           model: language,
+          maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
           schema: ProposalSchema,
           abortSignal: signal,
           temperature: 0.3,

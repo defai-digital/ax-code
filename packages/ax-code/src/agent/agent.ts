@@ -1,6 +1,7 @@
 import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
+import { ProviderTransform } from "../provider/transform"
 import { ModelID, ProviderID } from "../provider/schema"
 import { generateObject, type ModelMessage } from "ai"
 import { Instance } from "../project/instance"
@@ -516,6 +517,7 @@ export namespace Agent {
         },
       ],
       model: language,
+      maxOutputTokens: ProviderTransform.auxMaxOutputTokens(resolved),
       schema: z.object({
         identifier: z.string(),
         whenToUse: z.string(),

@@ -15,6 +15,7 @@ import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
+import { ProviderTransform } from "../provider/transform"
 import { Log } from "../util/log"
 import { parseJsonResult } from "../util/json-value"
 import { FanOut } from "../util/fan-out"
@@ -280,6 +281,7 @@ async function runMember(input: {
         try {
           const r = await generateObject({
             model: language,
+            maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
             schema: MemberOutputSchema,
             abortSignal: signal,
             temperature: 0.2,
@@ -309,6 +311,7 @@ async function runMember(input: {
           })
           const fallback = await generateText({
             model: language,
+            maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
             abortSignal: signal,
             temperature: 0.2,
             messages: [

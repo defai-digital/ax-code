@@ -193,20 +193,25 @@ Be conservative: when uncertain, choose ask.`
   }
 
   type LanguageModel = Awaited<ReturnType<typeof import("@/provider/provider").Provider.getLanguage>>
+  type ReviewModel = { language: LanguageModel; maxOutputTokens: number }
 
   /**
    * Resolve the review model: AX_CODE_AUTONOMOUS_GUARDIAN_MODEL when set, the
    * configured default model otherwise. Returns null when no default model is
    * configured, undefined on resolution failure (both fail closed to ask).
    */
-  async function resolveModel(start: number): Promise<LanguageModel | null | undefined> {
+  async function resolveModel(start: number): Promise<ReviewModel | null | undefined> {
     try {
       const { Provider } = await import("@/provider/provider")
       const override = Flag.AX_CODE_AUTONOMOUS_GUARDIAN_MODEL
       const modelRef = override ? Provider.parseModel(override) : await Provider.defaultModel()
       if (!modelRef) return null
       const resolved = await Provider.getModel(modelRef.providerID, modelRef.modelID)
-      return await Provider.getLanguage(resolved)
+      const { ProviderTransform } = await import("@/provider/transform")
+      return {
+        language: await Provider.getLanguage(resolved),
+        maxOutputTokens: ProviderTransform.auxMaxOutputTokens(resolved),
+      }
     } catch (err) {
       log.warn("guardian model resolution failed; failing closed to ask", {
         durationMs: Date.now() - start,
@@ -224,7 +229,7 @@ Be conservative: when uncertain, choose ask.`
 
   async function attemptReview(
     input: ReviewInput,
-    language: LanguageModel,
+    model: ReviewModel,
     attempt: number,
     start: number,
   ): Promise<AttemptOutcome> {
@@ -237,7 +242,8 @@ Be conservative: when uncertain, choose ask.`
         `Patterns: ${input.patterns.join(" ")}`,
       ].filter((line): line is string => line !== null)
       const result = await generateObject({
-        model: language,
+        model: model.language,
+        maxOutputTokens: model.maxOutputTokens,
         schema: GUARDIAN_OUTPUT,
         abortSignal: abort.signal,
         messages: [
@@ -271,15 +277,15 @@ Be conservative: when uncertain, choose ask.`
 
   export async function review(input: ReviewInput): Promise<Verdict> {
     const start = Date.now()
-    const language = await resolveModel(start)
-    if (language === null) return record({ action: "ask", reason: "no default model configured" })
-    if (language === undefined) return record({ action: "ask", reason: "guardian unavailable" })
+    const model = await resolveModel(start)
+    if (model === null) return record({ action: "ask", reason: "no default model configured" })
+    if (model === undefined) return record({ action: "ask", reason: "guardian unavailable" })
 
-    const first = await attemptReview(input, language, 1, start)
+    const first = await attemptReview(input, model, 1, start)
     if (first.verdict) return record(first.verdict)
     if (!first.retryable) return record({ action: "ask", reason: first.reason })
 
-    const second = await attemptReview(input, language, 2, start)
+    const second = await attemptReview(input, model, 2, start)
     return record(second.verdict ?? { action: "ask", reason: second.reason })
   }
 }

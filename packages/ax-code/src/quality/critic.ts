@@ -17,6 +17,7 @@ import z from "zod"
 import { Config } from "@/config/config"
 import { providerModelKey } from "@/provider/model-key"
 import { Provider } from "@/provider/provider"
+import { ProviderTransform } from "@/provider/transform"
 import type { ModelID, ProviderID } from "@/provider/schema"
 import { Recorder } from "@/replay/recorder"
 import type { SessionID } from "@/session/schema"
@@ -96,6 +97,7 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
       timer = setTimeout(() => abort.abort(), input.timeoutMs ?? 60_000)
       raw = await generateObject({
         model: language,
+        maxOutputTokens: ProviderTransform.auxMaxOutputTokens(resolved),
         schema: CRITIC_OUTPUT,
         abortSignal: abort.signal,
         messages: [

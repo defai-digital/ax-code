@@ -16,6 +16,7 @@
 import { generateObject } from "ai"
 import { Log } from "../util/log"
 import { Provider } from "../provider/provider"
+import { ProviderTransform } from "../provider/transform"
 import type { ProviderID } from "../provider/schema"
 import { Config } from "../config/config"
 import { Flag } from "../flag/flag"
@@ -326,6 +327,7 @@ export async function classifyComplexity(message: string, providerID?: ProviderI
   try {
     const result = await generateObject({
       model: language,
+      maxOutputTokens: ProviderTransform.auxMaxOutputTokens(small),
       temperature: 0,
       schema: complexitySchema,
       abortSignal: abort.signal,

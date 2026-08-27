@@ -17,6 +17,7 @@ import type { Computer } from "@/computer/computer"
 import { ensureJsonModeInstruction } from "@/mode/json-mode-prompt"
 import type { ProviderModel } from "@/provider/model-info"
 import { Provider } from "@/provider/provider"
+import { ProviderTransform } from "@/provider/transform"
 import { FanOut } from "@/util/fan-out"
 import { parseJsonResult } from "@/util/json-value"
 
@@ -137,6 +138,7 @@ async function generate<T>(input: {
   try {
     const result = await generateObject({
       model: language,
+      maxOutputTokens: ProviderTransform.auxMaxOutputTokens(input.model),
       schema: input.schema,
       abortSignal: input.abortSignal,
       temperature: input.temperature,
@@ -149,6 +151,7 @@ async function generate<T>(input: {
     // strict structured-output path rejects (same pattern as council.ts).
     const fallback = await generateText({
       model: language,
+      maxOutputTokens: ProviderTransform.auxMaxOutputTokens(input.model),
       abortSignal: input.abortSignal,
       temperature: input.temperature,
       messages: [messages[0], { role: "user" as const, content: `${input.user}\n\n${JSON_FALLBACK_INSTRUCTION}` }],

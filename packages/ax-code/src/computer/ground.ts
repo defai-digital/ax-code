@@ -13,6 +13,7 @@ import { generateText } from "ai"
 import type { PixelImage } from "@ax-code/computer"
 import { Config } from "@/config/config"
 import { Provider } from "@/provider/provider"
+import { ProviderTransform } from "@/provider/transform"
 import { parseJsonResult } from "@/util/json-value"
 
 export interface GroundPoint {
@@ -107,6 +108,7 @@ async function defaultAsk(input: { system: string; prompt: string; image: PixelI
   const mime = input.image.mimeType || "image/png"
   const result = await generateText({
     model: language,
+    maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
     messages: [
       { role: "system", content: input.system },
       {
