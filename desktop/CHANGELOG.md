@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.8.10] - 2026-08-26
+
+### Fixed
+
+- Fix packaged renderer scripts broken by Chromium argv switches.
+
 ### Fixed
 
 - Keep Chromium renderer argv free of API-origin switches so packaged module scripts still run on app://.
