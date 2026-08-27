@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.1] - 2026-08-27
+
+### Changed
+
+- Do not treat ordinary kill EPERM as an OS-sandbox denial.
+- Pass wiki maxOutputTokens and keep a saved custom API key on reconnect.
+
 ## [7.9.0] - 2026-08-27
 
 ### Changed
