@@ -110,12 +110,21 @@ export async function configuredArchitectModel(): Promise<{ providerID: Provider
   const { Provider } = await import("../provider/provider")
   const ref = (await Config.get()).experimental?.planner_architect_model
   if (!ref) return null
+  let parsed: { providerID: ProviderID; modelID: ModelID }
   try {
-    return Provider.parseModel(ref)
+    parsed = Provider.parseModel(ref)
   } catch {
     log.warn("ignoring malformed planner_architect_model", { value: ref })
     return null
   }
+  // A pin whose provider was disabled follows the SKU to a connected
+  // provider; otherwise the callers fall back to the default model.
+  const resolved = await Provider.resolvePinnedModel(parsed)
+  if (!resolved) {
+    log.warn("planner_architect_model is unavailable; using the default model", { value: ref })
+    return null
+  }
+  return resolved
 }
 
 /**
