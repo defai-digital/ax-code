@@ -64,8 +64,12 @@ describe("packaged renderer protocol policy", () => {
   })
 
   test("injects the loopback server origin into packaged HTML", () => {
-    const html = injectPackagedRendererServerRuntime("<html><head></head></html>", "http://127.0.0.1:50959")
+    const html = injectPackagedRendererServerRuntime(
+      '<html><head><meta charset="UTF-8" /></head></html>',
+      "http://127.0.0.1:50959",
+    )
     expect(html).toContain('window.__AX_CODE_DESKTOP_DESKTOP_SERVER__={origin:"http://127.0.0.1:50959"')
+    expect(html.indexOf("<meta charset")).toBeLessThan(html.indexOf("__AX_CODE_DESKTOP_DESKTOP_SERVER__"))
   })
 
   test("protocol handler serves packaged assets and rejects escapes", async () => {

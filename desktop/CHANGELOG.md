@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep the packaged renderer charset meta first so module scripts still execute after injecting the loopback API origin.
+
 ## [7.8.7] - 2026-08-26
 
 ### Fixed

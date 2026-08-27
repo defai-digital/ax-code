@@ -96,6 +96,9 @@ const injectPackagedRendererServerRuntime = (html, origin) => {
   const safeOrigin = typeof origin === "string" ? origin.trim().replace(/\/+$/, "") : ""
   if (!source || !safeOrigin) return source
   const snippet = `<script>window.__AX_CODE_DESKTOP_DESKTOP_SERVER__={origin:${JSON.stringify(safeOrigin)},axCodePort:null,apiPrefix:"/api",cliAvailable:true};</script>`
+  // Keep charset as the first head child. Injecting before <meta charset>
+  // can prevent Chromium from executing later module scripts on app://.
+  if (source.includes("</head>")) return source.replace("</head>", `${snippet}</head>`)
   if (source.includes("<head>")) return source.replace("<head>", `<head>${snippet}`)
   return `${snippet}${source}`
 }
@@ -281,6 +284,7 @@ const createPackagedRendererProtocolHandler = ({ webDistPath, readFile, getApiOr
         headers: {
           "Content-Type": contentType,
           "Content-Security-Policy": buildPackagedRendererCsp(),
+          "Access-Control-Allow-Origin": PACKAGED_RENDERER_ORIGIN,
         },
       })
     } catch {
