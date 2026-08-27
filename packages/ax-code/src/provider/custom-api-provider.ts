@@ -90,6 +90,9 @@ export namespace CustomApiProvider {
           }
         })
         .optional(),
+      // Re-run GET /models even when the base URL is unchanged, replacing the
+      // stored model list with what the endpoint reports now.
+      refreshModels: z.boolean().optional(),
     })
     .strict()
     .superRefine((input, context) => {
@@ -477,7 +480,7 @@ export namespace CustomApiProvider {
     previousAuth: Auth.Info | undefined,
   ): Promise<Model[]> {
     if (input.models && input.models.length > 0) return input.models
-    if (previousProvider?.management === "custom-api") {
+    if (!input.refreshModels && previousProvider?.management === "custom-api") {
       const previous = viewFromProvider("previous", previousProvider, false)
       const previousURL = previous.baseURL
       if (previousURL === input.baseURL && previous.models.length > 0) return previous.models

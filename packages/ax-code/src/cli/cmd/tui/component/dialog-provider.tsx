@@ -48,6 +48,7 @@ import {
   configureCustomApiProvider,
   confirmCustomApiProviderDelete,
   customApiProviderManagementMenu,
+  refreshCustomApiProviderModels,
   deleteCustomApiProvider,
   isManagedCustomApiProviderConfig,
   listCustomApiProviders,
@@ -570,6 +571,16 @@ export function createDialogProviderOptions() {
                     if (!saved) return
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: `Updated ${saved.name}` })
+                    await openModelDialogForProvider(saved.providerID, saved.name)
+                    return
+                  }
+                  if (action === "refresh") {
+                    const saved = await refreshCustomApiProviderModels(sdk, existing)
+                    await sync.bootstrap()
+                    toast.show({
+                      variant: "success",
+                      message: `Loaded ${saved.models.length} models for ${saved.name}`,
+                    })
                     await openModelDialogForProvider(saved.providerID, saved.name)
                     return
                   }

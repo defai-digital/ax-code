@@ -31126,6 +31126,9 @@
                       ],
                       "additionalProperties": false
                     }
+                  },
+                  "refreshModels": {
+                    "type": "boolean"
                   }
                 },
                 "required": [

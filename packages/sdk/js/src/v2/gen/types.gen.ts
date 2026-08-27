@@ -13238,6 +13238,7 @@ export type ProviderCustomUpdateData = {
       attachment: boolean
       temperature: boolean
     }>
+    refreshModels?: boolean
   }
   path: {
     providerID: string

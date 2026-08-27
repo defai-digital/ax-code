@@ -5517,6 +5517,7 @@ export class Custom extends HeyApiClient {
         attachment: boolean
         temperature: boolean
       }>
+      refreshModels?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -5533,6 +5534,7 @@ export class Custom extends HeyApiClient {
             { in: "body", key: "apiKey" },
             { in: "body", key: "allowInsecureHttp" },
             { in: "body", key: "models" },
+            { in: "body", key: "refreshModels" },
           ],
         },
       ],

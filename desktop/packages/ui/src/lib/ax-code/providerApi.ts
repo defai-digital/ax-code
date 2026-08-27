@@ -238,6 +238,7 @@ export type CustomApiProviderInput = {
   apiKey?: string
   allowInsecureHttp?: boolean
   models?: CustomApiProviderModel[]
+  refreshModels?: boolean
 }
 
 export type CustomApiProviderView = {

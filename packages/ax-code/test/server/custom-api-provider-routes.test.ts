@@ -158,3 +158,61 @@ describe("managed custom API provider routes", () => {
     }
   })
 })
+
+describe("managed custom API provider model refresh", () => {
+  test("reloads models from GET /models in place with the stored token", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const query = `directory=${encodeURIComponent(tmp.path)}`
+    const app = Server.Default()
+
+    const create = await app.request(`/provider/custom/loopback-gateway?${query}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(providerBody({ name: "Loopback Gateway", baseURL: "http://127.0.0.1:18080/v1" })),
+    })
+    expect(create.status).toBe(200)
+
+    const originalFetch = globalThis.fetch
+    const seen: { url: string; authorization: string | null }[] = []
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      seen.push({ url: String(input), authorization: new Headers(init?.headers).get("authorization") })
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "fresh-model",
+              limit: { context: 200_000, output: 8_192 },
+              capabilities: { reasoning: true, toolcall: true, temperature: true, attachment: false },
+            },
+          ],
+        }),
+        { status: 200 },
+      )
+    }) as typeof fetch
+    try {
+      const refresh = await app.request(`/provider/custom/loopback-gateway?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Loopback Gateway",
+          protocol: "openai-compatible",
+          baseURL: "http://127.0.0.1:18080/v1",
+          refreshModels: true,
+        }),
+      })
+      expect(refresh.status).toBe(200)
+      const view = (await refresh.json()) as { hasApiKey: boolean; models: Record<string, unknown>[] }
+      expect(view.hasApiKey).toBe(true)
+      expect(view.models).toEqual([
+        expect.objectContaining({ id: "fresh-model", contextWindow: 200_000, outputLimit: 8_192, reasoning: true }),
+      ])
+      // Other loaders probe local hosts through the same global fetch; only
+      // the discovery call for this provider matters here.
+      expect(seen.filter((call) => call.url === "http://127.0.0.1:18080/v1/models")).toEqual([
+        { url: "http://127.0.0.1:18080/v1/models", authorization: "Bearer test-token" },
+      ])
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+})

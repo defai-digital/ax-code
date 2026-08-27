@@ -341,10 +341,33 @@ export async function configureCustomApiProvider(input: {
   }
 }
 
+/**
+ * Re-run GET /models for an existing provider in place: same provider ID, same
+ * token, fresh model IDs, limits, and capabilities. Deleting and re-adding
+ * would mint a new provider ID and orphan every pin and recent entry.
+ */
+export async function refreshCustomApiProviderModels(
+  sdk: SDK,
+  existing: CustomApiProviderView,
+): Promise<CustomApiProviderView> {
+  return View.parse(
+    await customProviderRequest(sdk, `/provider/custom/${encodeURIComponent(existing.providerID)}`, {
+      method: "PUT",
+      body: {
+        name: existing.name,
+        protocol: existing.protocol,
+        baseURL: existing.baseURL,
+        allowInsecureHttp: new URL(existing.baseURL).protocol === "http:",
+        refreshModels: true,
+      },
+    }),
+  )
+}
+
 export function customApiProviderManagementMenu(input: {
   dialog: DialogContext
   provider: CustomApiProviderView
-}): Promise<"use" | "update" | "delete" | null> {
+}): Promise<"use" | "update" | "refresh" | "delete" | null> {
   return new Promise((resolve) => {
     input.dialog.replace(
       () => (
@@ -353,6 +376,11 @@ export function customApiProviderManagementMenu(input: {
           options={[
             { title: "Select a model", value: "use" as const },
             { title: "Update provider", value: "update" as const, description: input.provider.baseURL },
+            {
+              title: "Refresh models",
+              value: "refresh" as const,
+              description: "Reload model IDs, limits, and capabilities from GET /models",
+            },
             {
               title: "Delete provider",
               value: "delete" as const,
