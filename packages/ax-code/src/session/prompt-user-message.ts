@@ -8,7 +8,7 @@ import { validateUserMessageForSave } from "./prompt-message-validation"
 import { PromptPartInput } from "./prompt-part-input"
 import { getLastUserInfo } from "./prompt-request"
 import { resolveUserMessageRouting } from "./prompt-routing"
-import { agentModel, lastModel } from "./prompt-command-selection"
+import { lastModel } from "./prompt-command-selection"
 import { Session } from "."
 import { MessageID, type SessionID } from "./schema"
 import type { ModelID, ProviderID } from "../provider/schema"
@@ -82,14 +82,18 @@ export async function createUserMessage(input: CreateUserMessageInput) {
   const complexityModel = route.complexityModel
   const hybridModel = route.hybridModel
 
-  const pinned = await agentModel(agent)
-  const model = complexityModel ?? hybridModel ?? input.model ?? pinned ?? (await lastModel(input.sessionID))
+  const pinned = route.pinnedModel
+  // When the router switched agents, the client's model was picked for the
+  // agent the user started on; the routed agent's own pin wins over it.
+  const routedPin = route.switched ? pinned : undefined
+  const model =
+    complexityModel ?? hybridModel ?? routedPin ?? input.model ?? pinned ?? (await lastModel(input.sessionID))
   // The agent's variant only applies while the turn runs on the agent's own
   // model (or the agent pins none); a fallback model may not accept it.
   const agentVariantApplies = !agent.model || pinned !== undefined
   const variant =
     input.variant ??
-    (!input.model && !complexityModel && !hybridModel && agentVariantApplies && agent.variant
+    ((routedPin || !input.model) && !complexityModel && !hybridModel && agentVariantApplies && agent.variant
       ? agent.variant
       : undefined)
 

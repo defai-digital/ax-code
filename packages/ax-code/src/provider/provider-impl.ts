@@ -39,7 +39,7 @@ import {
 import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
-import { isNonChatModelID, modelSelectableForProvider } from "./model-selectability"
+import { isNonChatModelID, modelSelectableForProvider, sameSkuOnConnectedProvider } from "./model-selectability"
 import { CUSTOM_LOADERS, type CustomModelLoader, type CustomVarsLoader, type CustomDiscoverModels } from "./loaders"
 import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
@@ -1418,11 +1418,8 @@ export namespace Provider {
   }): Promise<{ providerID: ProviderID; modelID: ModelID } | undefined> {
     if (await isModelAvailable(model)) return model
     const providers = await list()
-    const sameSku = Object.values(providers).find(
-      (provider) =>
-        provider.id !== model.providerID && modelSelectableForProvider(provider.id, provider.models[model.modelID]),
-    )
-    if (sameSku) return { providerID: sameSku.id, modelID: model.modelID }
+    const sameSku = sameSkuOnConnectedProvider(Object.values(providers), model)
+    if (sameSku) return { providerID: ProviderID.make(sameSku.providerID), modelID: ModelID.make(sameSku.modelID) }
     return undefined
   }
 

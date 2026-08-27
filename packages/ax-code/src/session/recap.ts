@@ -4,6 +4,7 @@ import { Token } from "@/util/token"
 import { Agent } from "../agent/agent"
 import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine"
 import { Provider } from "../provider/provider"
+import { agentModel } from "./prompt-command-selection"
 import { Log } from "../util/log"
 import { Session } from "."
 import { LLM } from "./llm"
@@ -92,7 +93,8 @@ export namespace SessionRecap {
       // Same precedence as the title agent: explicit model pin first, then
       // the provider's small tier, then the session model as fallback.
       const model = await (async () => {
-        if (agent.model) return Provider.getModel(agent.model.providerID, agent.model.modelID)
+        const pinned = await agentModel(agent)
+        if (pinned) return Provider.getModel(pinned.providerID, pinned.modelID)
         const small = await Provider.getSmallModel(lastUser.model.providerID)
         if (small) return small
         log.info("no small model for provider; recap uses the session model", {

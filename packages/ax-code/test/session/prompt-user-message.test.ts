@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { createAutonomousTextContinuation, createUserMessage } from "../../src/session/prompt-user-message"
@@ -79,6 +79,62 @@ describe("prompt user message agent model fallback", () => {
         expect(message.info.agent).toBe("build")
         expect(message.info.model.providerID).not.toBe("deepseek")
         expect(message.info.model.modelID).toBeTruthy()
+      },
+    })
+  })
+})
+
+describe("prompt user message auto-route model precedence", () => {
+  test("an auto-routed agent's pin outranks the model the client chose for the previous agent", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        disabled_providers: ["deepseek"],
+        provider: {
+          "127-0-0-1": {
+            management: "custom-api",
+            name: "127.0.0.1",
+            npm: "@ai-sdk/openai-compatible",
+            api: "http://127.0.0.1:8080/v1",
+            env: [],
+            models: {
+              "glm-5.3": {
+                id: "glm-5.3",
+                name: "GLM 5.3",
+                tool_call: true,
+                limit: { context: 128_000, output: 16_384 },
+              },
+              "deepseek-v4-pro": {
+                id: "deepseek-v4-pro",
+                name: "DeepSeek V4 Pro",
+                tool_call: true,
+                limit: { context: 128_000, output: 16_384 },
+              },
+            },
+            options: { baseURL: "http://127.0.0.1:8080/v1" },
+          },
+        },
+        agent: {
+          debug: {
+            model: "deepseek/deepseek-v4-pro",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const message = await createUserMessage({
+          sessionID: session.id,
+          agent: "build",
+          model: { providerID: "127-0-0-1" as any, modelID: "glm-5.3" as any },
+          parts: [{ type: "text", text: "debug this crash and find the bug" }],
+        })
+        expect(message.info.agent).toBe("debug")
+        expect(message.info.model).toEqual({ providerID: "127-0-0-1", modelID: "deepseek-v4-pro" })
       },
     })
   })

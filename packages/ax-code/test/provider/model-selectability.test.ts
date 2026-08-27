@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { isNonChatModelID, modelSelectableForProvider, providerModelSelectable } from "@/provider/model-selectability"
+import {
+  isNonChatModelID,
+  modelSelectableForProvider,
+  providerModelSelectable,
+  sameSkuOnConnectedProvider,
+} from "@/provider/model-selectability"
 import { AX_ENGINE_MODEL_DEFINITIONS, AX_ENGINE_MODEL_IDS } from "@/provider/ax-engine/constants"
 
 describe("providerModelSelectable", () => {
@@ -83,5 +88,42 @@ describe("isNonChatModelID", () => {
     ]) {
       expect(isNonChatModelID(id), id).toBe(false)
     }
+  })
+})
+
+describe("sameSkuOnConnectedProvider", () => {
+  const gateway = {
+    id: "127-0-0-1",
+    models: {
+      "glm-5.3": { tool_call: true },
+      "deepseek-v4-pro": { tool_call: true },
+      "zai/glm-5.2[1m]": { tool_call: true },
+      "text-embedding-3-small": { tool_call: false },
+    },
+  }
+
+  test("prefers the exact model ID on another connected provider", () => {
+    expect(sameSkuOnConnectedProvider([gateway], { providerID: "deepseek", modelID: "deepseek-v4-pro" })).toEqual({
+      providerID: "127-0-0-1",
+      modelID: "deepseek-v4-pro",
+    })
+  })
+
+  test("matches across reseller prefixes and [1m] suffixes", () => {
+    expect(sameSkuOnConnectedProvider([gateway], { providerID: "zai-coding-plan", modelID: "glm-5.2" })).toEqual({
+      providerID: "127-0-0-1",
+      modelID: "zai/glm-5.2[1m]",
+    })
+    expect(
+      sameSkuOnConnectedProvider([gateway], { providerID: "nvidia", modelID: "deepseek-ai/DeepSeek-V4-Pro" }),
+    ).toEqual({ providerID: "127-0-0-1", modelID: "deepseek-v4-pro" })
+  })
+
+  test("never returns the pinned provider itself or an unselectable lane", () => {
+    expect(sameSkuOnConnectedProvider([gateway], { providerID: "127-0-0-1", modelID: "glm-5.3" })).toBeUndefined()
+    expect(
+      sameSkuOnConnectedProvider([gateway], { providerID: "openai", modelID: "text-embedding-3-small" }),
+    ).toBeUndefined()
+    expect(sameSkuOnConnectedProvider([gateway], { providerID: "openai", modelID: "gpt-5.2" })).toBeUndefined()
   })
 })

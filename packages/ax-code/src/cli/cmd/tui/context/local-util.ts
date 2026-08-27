@@ -4,7 +4,7 @@ import {
   providerModelList,
   type ProviderModelKeyInput,
 } from "@/provider/model-key"
-import { modelSelectableForProvider } from "@/provider/model-selectability"
+import { modelSelectableForProvider, sameSkuOnConnectedProvider } from "@/provider/model-selectability"
 
 export const RECENT_MODEL_LIMIT = 5
 
@@ -22,6 +22,23 @@ export function modelPreferenceStatus(
   const info = provider.models[model.modelID]
   if (!info) return "unknown"
   return modelSelectableForProvider(model.providerID, info) ? "valid" : "invalid"
+}
+
+/**
+ * A configured or agent-pinned model resolved against the connected
+ * providers: the pin itself when valid, else the same SKU on another
+ * connected provider (the native provider was disabled after the model moved
+ * behind a custom gateway), else undefined.
+ */
+export function resolvePinnedModelPreference(
+  providers: readonly {
+    id: string
+    models: Record<string, Parameters<typeof modelSelectableForProvider>[1]>
+  }[],
+  model: ProviderModelKeyInput,
+): ProviderModelKeyInput | undefined {
+  if (modelPreferenceStatus(providers, model) === "valid") return model
+  return sameSkuOnConnectedProvider(providers, model)
 }
 
 export type ModelPreferenceStore = {

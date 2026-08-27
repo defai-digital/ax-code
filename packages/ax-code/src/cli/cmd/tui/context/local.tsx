@@ -28,6 +28,7 @@ import {
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
+  resolvePinnedModelPreference,
   solidStoreRecordPatch,
   rememberRecentModel as rememberRecentModelEntry,
   resolveCurrentAgent,
@@ -53,6 +54,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     function isModelValid(model: { providerID: string; modelID: string }) {
       return modelPreferenceStatus(model) === "valid"
+    }
+
+    // Config / agent pins outlive provider changes: follow them to the same
+    // SKU on a connected provider instead of silently dropping the pin.
+    function resolvePin(model: { providerID: string; modelID: string } | undefined) {
+      if (!model) return undefined
+      return resolvePinnedModelPreference(sync.data.provider, model)
     }
 
     function getFirstValidModel(...modelFns: (() => { providerID: string; modelID: string } | undefined)[]) {
@@ -283,13 +291,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         }
 
         if (sync.data.config.model) {
-          const { providerID, modelID } = Provider.parseModel(sync.data.config.model)
-          if (isModelValid({ providerID, modelID })) {
-            return {
-              providerID,
-              modelID,
-            }
-          }
+          const configured = resolvePin(Provider.parseModel(sync.data.config.model))
+          if (configured) return configured
         }
 
         for (const item of modelStore.recent) {
@@ -316,7 +319,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         return (
           getFirstValidModel(
             () => modelStore.model[a.name],
-            () => a.model,
+            () => resolvePin(a.model),
             fallbackModel,
           ) ?? undefined
         )

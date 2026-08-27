@@ -13,7 +13,7 @@ import { Recorder } from "../replay/recorder"
 import { Log } from "../util/log"
 import { MessageID, SessionID } from "./schema"
 import { agentInfo } from "./prompt-agent-model-info"
-import { lastModel } from "./prompt-command-selection"
+import { agentModel, lastModel } from "./prompt-command-selection"
 
 const log = Log.create({ service: "session.prompt" })
 
@@ -36,6 +36,7 @@ export async function resolveUserMessageRouting(input: {
   requestedModel?: PromptRouteModel
 }) {
   let agentName = input.agentName
+  let switched = false
   const cfg = await Config.get()
   const hasAgentPart = input.parts.some((part) => part.type === "agent")
   const routingDisabled = cfg.routing?.disable === true
@@ -58,6 +59,7 @@ export async function resolveUserMessageRouting(input: {
           matched: routeResult.matched,
         })
         agentName = routeResult.agent
+        switched = true
         log.info("auto-routed to agent", {
           command: "session.prompt.route",
           status: "ok",
@@ -78,12 +80,16 @@ export async function resolveUserMessageRouting(input: {
   }
 
   const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
+  // The agent's usable pin (same-SKU on a connected provider when the pinned
+  // provider is disabled). An auto-routed agent's pin outranks the model the
+  // client sent, which was chosen for the agent the user started on.
+  const pinnedModel = await agentModel(agent)
   // Anchor on the model the turn would actually use (same resolution order as
   // createUserMessage: requested → agent pin → session's last model → default),
   // so classification and the complexity-route small model stay on the
   // session's provider instead of crossing to the default provider.
   const anchor =
-    !input.requestedModel && !agent.model ? await lastModel(input.sessionID).catch(() => undefined) : undefined
+    !input.requestedModel && !pinnedModel ? await lastModel(input.sessionID).catch(() => undefined) : undefined
   const messageComplexity = input.messageText
     ? (await classifyComplexity(input.messageText, anchor?.providerID)).complexity
     : null
@@ -116,7 +122,7 @@ export async function resolveUserMessageRouting(input: {
   // Hybrid placement (ADR-049): only when modes.default is explicitly "hybrid"
   // and the user/agent did not pin a model. Does not override complexity small-model.
   const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
-  if (modes?.default === "hybrid" && !input.requestedModel && !agent.model && !complexityModel) {
+  if (modes?.default === "hybrid" && !input.requestedModel && !pinnedModel && !complexityModel) {
     try {
       await Provider.ready()
       const providers = await Provider.list()
@@ -160,5 +166,5 @@ export async function resolveUserMessageRouting(input: {
     }
   }
 
-  return { agentName, agent, complexityModel, hybridModel }
+  return { agentName, agent, switched, pinnedModel, complexityModel, hybridModel }
 }

@@ -4,10 +4,9 @@ import { Auth } from "@/auth"
 import { Config } from "@/config/config"
 import { ModelsDev } from "@/provider/models"
 import { findRegisteredModelCapabilities } from "@/provider/model-capabilities"
-import { modelIdFinalSegment, normalizeProviderModelId } from "@/provider/model-id"
 import { isRetiredProviderID } from "@/provider/retired-providers"
 import { isLocalHostname } from "@/util/local-host"
-import { isNonChatModelID } from "@/provider/model-selectability"
+import { isNonChatModelID, skuKey } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
 import { Ssrf } from "@/util/ssrf"
 
@@ -158,7 +157,7 @@ export namespace CustomApiProvider {
   }
 
   export function catalogModelKey(modelID: string) {
-    return normalizeProviderModelId(modelIdFinalSegment(modelID).replace(/\[\d+[mM]\]$/, ""))
+    return skuKey(modelID)
   }
 
   function positiveSafeInt(value: unknown): number | undefined {

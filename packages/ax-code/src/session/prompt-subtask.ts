@@ -44,7 +44,8 @@ export async function executeSubtask(task: MessageV2.SubtaskPart, ctx: SubtaskCo
     waitState: "llm",
   })
   const taskTool = await TaskTool.init()
-  const taskModel = task.model ? await Provider.getModel(task.model.providerID, task.model.modelID) : ctx.model
+  const taskPin = task.model ? await Provider.resolvePinnedModel(task.model) : undefined
+  const taskModel = taskPin ? await Provider.getModel(taskPin.providerID, taskPin.modelID) : ctx.model
   const assistantMessage = (await Session.updateMessage({
     id: MessageID.ascending(),
     role: "assistant",

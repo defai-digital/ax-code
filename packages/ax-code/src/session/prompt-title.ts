@@ -3,6 +3,7 @@ import { NotFoundError } from "@/storage/db"
 import { iife } from "@/util/iife"
 import { Agent } from "../agent/agent"
 import { Provider } from "../provider/provider"
+import { agentModel } from "./prompt-command-selection"
 import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine"
 import { ModelID, ProviderID } from "../provider/schema"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -159,7 +160,8 @@ export async function ensureTitle(input: {
       log.warn("title agent missing, using fallback title", { sessionID: input.session.id })
     } else {
       const model = await iife(async () => {
-        if (agent.model) return await Provider.getModel(agent.model.providerID, agent.model.modelID)
+        const pinned = await agentModel(agent)
+        if (pinned) return await Provider.getModel(pinned.providerID, pinned.modelID)
         const small = await Provider.getSmallModel(input.providerID)
         if (small) return small
         log.info("no small model for provider; title uses the session model", {
