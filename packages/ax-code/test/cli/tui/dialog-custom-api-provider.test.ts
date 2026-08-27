@@ -3,6 +3,7 @@ import { CustomApiProvider } from "../../../src/provider/custom-api-provider"
 import {
   isManagedCustomApiProviderConfig,
   parseCustomApiProviderModelIDs,
+  sameCustomApiBaseURL,
 } from "../../../src/cli/cmd/tui/component/dialog-custom-api-provider"
 
 describe("custom API provider TUI helpers", () => {
@@ -57,5 +58,14 @@ describe("custom API provider TUI helpers", () => {
         "manual",
       ),
     ).toBe(false)
+  })
+})
+
+describe("sameCustomApiBaseURL", () => {
+  test("ignores trailing slashes and host casing but not paths or ports", () => {
+    expect(sameCustomApiBaseURL("http://127.0.0.1:38080/v1", "http://127.0.0.1:38080/v1/")).toBe(true)
+    expect(sameCustomApiBaseURL("https://API.Example.com/v1", "https://api.example.com/v1")).toBe(true)
+    expect(sameCustomApiBaseURL("http://127.0.0.1:38080/v1", "http://127.0.0.1:38081/v1")).toBe(false)
+    expect(sameCustomApiBaseURL("https://api.example.com/v1", "https://api.example.com/v2")).toBe(false)
   })
 })

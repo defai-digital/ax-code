@@ -266,6 +266,19 @@ function DialogCustomApiConnect(props: {
   )
 }
 
+/** Same endpoint regardless of trailing slashes or host casing. */
+export function sameCustomApiBaseURL(left: string, right: string): boolean {
+  const normalize = (value: string) => {
+    try {
+      const url = new URL(value.trim())
+      return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`.toLowerCase()
+    } catch {
+      return value.trim().replace(/\/+$/, "").toLowerCase()
+    }
+  }
+  return normalize(left) === normalize(right)
+}
+
 async function allocateProviderID(sdk: SDK, base: string): Promise<string> {
   const existing = await listCustomApiProviders(sdk)
   const used = new Set(existing.map((provider) => provider.providerID))
@@ -293,19 +306,27 @@ export async function configureCustomApiProvider(input: {
   const allowInsecureHttp = await confirmInsecureHttp(input.dialog, fields.baseURL)
   if (!allowInsecureHttp) return null
 
-  const identity = input.existing
-    ? { name: input.existing.name, providerID: input.existing.providerID }
+  // Connecting an endpoint that is already registered updates that provider
+  // in place. Minting a second ID (`127-0-0-1` next to `127.0.0.1`) would
+  // orphan every pin, recent entry, and small_model that names the first.
+  const existing =
+    input.existing ??
+    (await listCustomApiProviders(input.sdk)).find((candidate) =>
+      sameCustomApiBaseURL(candidate.baseURL, fields.baseURL),
+    )
+  const identity = existing
+    ? { name: existing.name, providerID: existing.providerID }
     : CustomApiProvider.identityFromBaseURL(fields.baseURL)
-  const providerID = input.existing ? identity.providerID : await allocateProviderID(input.sdk, identity.providerID)
+  const providerID = existing ? identity.providerID : await allocateProviderID(input.sdk, identity.providerID)
   const body: Record<string, unknown> = {
     name: identity.name,
-    protocol: input.existing?.protocol ?? "openai-compatible",
+    protocol: existing?.protocol ?? "openai-compatible",
     baseURL: fields.baseURL,
     allowInsecureHttp: new URL(fields.baseURL).protocol === "http:",
     ...(fields.apiKey.trim().length > 0 ? { apiKey: fields.apiKey } : {}),
   }
-  if (input.existing && input.existing.baseURL === fields.baseURL && input.existing.models.length > 0) {
-    body.models = input.existing.models
+  if (existing && existing.baseURL === fields.baseURL && existing.models.length > 0) {
+    body.models = existing.models
   }
 
   try {
@@ -317,7 +338,7 @@ export async function configureCustomApiProvider(input: {
     )
   } catch (error) {
     const modelIDs = await DialogPrompt.show(input.dialog, "Model IDs", {
-      value: input.existing?.models.map((model) => model.id).join(", ") ?? "",
+      value: existing?.models.map((model) => model.id).join(", ") ?? "",
       placeholder: "model-a, model-b",
       description: () => (
         <box gap={1}>
@@ -334,7 +355,7 @@ export async function configureCustomApiProvider(input: {
         method: "PUT",
         body: {
           ...body,
-          models: parseCustomApiProviderModelIDs(modelIDs, input.existing?.models),
+          models: parseCustomApiProviderModelIDs(modelIDs, existing?.models),
         },
       }),
     )

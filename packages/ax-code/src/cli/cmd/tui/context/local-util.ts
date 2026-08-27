@@ -118,15 +118,30 @@ function parseProviderModelKey(key: string): ProviderModelKeyInput | undefined {
   }
 }
 
+type ModelMigration = (model: ProviderModelKeyInput) => ProviderModelKeyInput | undefined
+
+function keepOrMigrate(
+  item: ProviderModelKeyInput,
+  modelStatus: (model: ProviderModelKeyInput) => ModelPreferenceStatus,
+  migrate?: ModelMigration,
+): ProviderModelKeyInput | undefined {
+  if (modelStatus(item) !== "invalid") return item
+  const migrated = migrate?.(item)
+  if (!migrated || modelStatus(migrated) === "invalid") return undefined
+  return migrated
+}
+
 function filterKnownModels(
   input: readonly ProviderModelKeyInput[],
   modelStatus: (model: ProviderModelKeyInput) => ModelPreferenceStatus,
   limit?: number,
+  migrate?: ModelMigration,
 ) {
   const out: ProviderModelKeyInput[] = []
   const seen = new Set<string>()
-  for (const item of providerModelList(input)) {
-    if (modelStatus(item) === "invalid") continue
+  for (const stored of providerModelList(input)) {
+    const item = keepOrMigrate(stored, modelStatus, migrate)
+    if (!item) continue
     const key = providerModelKey(item)
     if (seen.has(key)) continue
     seen.add(key)
@@ -173,24 +188,35 @@ export function solidStoreRecordPatch<T>(
   return patch
 }
 
+/**
+ * Drop stored preferences that no longer resolve. When `migrate` is given,
+ * an invalid entry is first mapped (typically to the same SKU on a connected
+ * provider) and kept under its new identity instead of being deleted — the
+ * user's per-agent choices survive moving a model behind a custom gateway.
+ */
 export function pruneModelPreferences(
   input: ModelPreferenceStore,
   modelStatus: (model: ProviderModelKeyInput) => ModelPreferenceStatus,
   variantStatus: (model: ProviderModelKeyInput, variant: string | undefined) => ModelPreferenceStatus = modelStatus,
+  migrate?: ModelMigration,
 ): ModelPreferenceStore & { changed: boolean } {
   const model = Object.fromEntries(
-    Object.entries(input.model)
-      .filter(([_, value]) => modelStatus(value) !== "invalid")
-      .map(([key, value]) => [key, modelIdentity(value)]),
-  )
-  const recent = filterKnownModels(input.recent, modelStatus, RECENT_MODEL_LIMIT)
-  const favorite = filterKnownModels(input.favorite, modelStatus)
-  const variant = Object.fromEntries(
-    Object.entries(input.variant).filter(([key, value]) => {
-      const model = parseProviderModelKey(key)
-      return model !== undefined && modelStatus(model) !== "invalid" && variantStatus(model, value) !== "invalid"
+    Object.entries(input.model).flatMap(([key, value]) => {
+      const kept = keepOrMigrate(value, modelStatus, migrate)
+      return kept ? [[key, modelIdentity(kept)] as const] : []
     }),
   )
+  const recent = filterKnownModels(input.recent, modelStatus, RECENT_MODEL_LIMIT, migrate)
+  const favorite = filterKnownModels(input.favorite, modelStatus, undefined, migrate)
+  const variant: Record<string, string | undefined> = {}
+  for (const [key, value] of Object.entries(input.variant)) {
+    const stored = parseProviderModelKey(key)
+    if (!stored) continue
+    const kept = keepOrMigrate(stored, modelStatus, migrate)
+    if (!kept || variantStatus(kept, value) === "invalid") continue
+    const nextKey = providerModelKey(kept)
+    if (!Object.hasOwn(variant, nextKey)) variant[nextKey] = value
+  }
   return {
     model,
     recent,

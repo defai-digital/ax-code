@@ -339,6 +339,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           },
           modelPreferenceStatus,
           variantPreferenceStatus,
+          resolvePin,
         )
         if (pruned.changed) {
           for (const agentName of Object.keys(modelStore.model)) {

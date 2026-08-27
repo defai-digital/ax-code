@@ -232,3 +232,41 @@ describe("tui local model preferences", () => {
     expect(result.changed).toBe(true)
   })
 })
+
+describe("pruneModelPreferences migration", () => {
+  test("moves preferences to the same SKU on a connected provider instead of deleting them", () => {
+    const valid = new Set(["gateway/deepseek-v4-pro", "gateway/glm-5.3"])
+    const status = (item: { providerID: string; modelID: string }) =>
+      valid.has(`${item.providerID}/${item.modelID}`) ? ("valid" as const) : ("invalid" as const)
+    const migrate = (item: { providerID: string; modelID: string }) =>
+      item.providerID === "deepseek" && item.modelID === "deepseek-v4-pro"
+        ? { providerID: "gateway", modelID: "deepseek-v4-pro" }
+        : undefined
+    const pinned = { providerID: "deepseek", modelID: "deepseek-v4-pro" }
+    const gone = { providerID: "alibaba-token-plan", modelID: "qwen3.8-max" }
+    const glm = { providerID: "gateway", modelID: "glm-5.3" }
+    const moved = { providerID: "gateway", modelID: "deepseek-v4-pro" }
+
+    const result = pruneModelPreferences(
+      {
+        model: { build: pinned, plan: gone, explore: glm },
+        recent: [pinned, moved, gone, glm],
+        favorite: [pinned, gone],
+        variant: {
+          "deepseek/deepseek-v4-pro": "high",
+          "alibaba-token-plan/qwen3.8-max": "low",
+          "gateway/glm-5.3": "medium",
+        },
+      },
+      status,
+      status,
+      migrate,
+    )
+
+    expect(result.changed).toBe(true)
+    expect(result.model).toEqual({ build: moved, explore: glm })
+    expect(result.recent).toEqual([moved, glm])
+    expect(result.favorite).toEqual([moved])
+    expect(result.variant).toEqual({ "gateway/deepseek-v4-pro": "high", "gateway/glm-5.3": "medium" })
+  })
+})
