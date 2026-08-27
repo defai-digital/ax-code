@@ -1199,6 +1199,9 @@ export const settingsDict = {
   "settings.providers.custom.models.capability.temperature": "Temperature",
   "settings.providers.custom.actions.create": "Create provider",
   "settings.providers.custom.actions.update": "Update provider",
+  "settings.providers.custom.actions.refresh": "Refresh models",
+  "settings.providers.custom.hint.existingEndpoint":
+    "This endpoint is already registered as {name}. Saving updates that provider.",
   "settings.providers.custom.toast.saved": "Saved {name}",
   "settings.providers.custom.toast.deleted": "Deleted {name}",
   "settings.providers.custom.error.saveFailed": "Failed to save custom API provider",

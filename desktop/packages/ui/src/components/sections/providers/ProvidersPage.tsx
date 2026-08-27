@@ -1031,6 +1031,7 @@ export const ProvidersPage: React.FC = () => {
               {candidateProviderId === CUSTOM_API_PROVIDER_OPTION_ID ? (
                 <section className="px-2 pb-2 pt-0">
                   <CustomApiProviderForm
+                    providers={customApiProviders}
                     busy={authBusyKey?.startsWith("custom:") ?? false}
                     onSave={handleSaveCustomApiProvider}
                   />

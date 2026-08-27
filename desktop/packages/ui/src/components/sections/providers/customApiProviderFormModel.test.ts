@@ -2,7 +2,10 @@ import { describe, expect, test } from "vitest"
 import {
   buildCustomApiProviderSubmission,
   createCustomApiProviderDraft,
+  findCustomApiProviderByBaseURL,
   newCustomApiProviderModelDraft,
+  refreshCustomApiProviderInput,
+  sameCustomApiBaseURL,
 } from "./customApiProviderFormModel"
 
 describe("custom API provider form model", () => {
@@ -116,6 +119,35 @@ describe("custom API provider form model", () => {
         allowInsecureHttp: false,
         apiKey: "token",
       },
+    })
+  })
+})
+
+describe("custom API provider endpoint reuse", () => {
+  const registered = {
+    providerID: "127.0.0.1",
+    name: "127.0.0.1",
+    protocol: "openai-compatible" as const,
+    baseURL: "http://127.0.0.1:38080/v1",
+    hasApiKey: true,
+    models: [],
+  }
+
+  test("matches the same endpoint regardless of trailing slash or host casing", () => {
+    expect(sameCustomApiBaseURL("http://127.0.0.1:38080/v1", "http://127.0.0.1:38080/v1/")).toBe(true)
+    expect(sameCustomApiBaseURL("https://API.Example.com/v1", "https://api.example.com/v1")).toBe(true)
+    expect(sameCustomApiBaseURL("http://127.0.0.1:38080/v1", "http://127.0.0.1:38081/v1")).toBe(false)
+    expect(findCustomApiProviderByBaseURL([registered], "http://127.0.0.1:38080/v1/")).toBe(registered)
+    expect(findCustomApiProviderByBaseURL([registered], "")).toBeUndefined()
+  })
+
+  test("builds an in-place refresh request that keeps the provider identity", () => {
+    expect(refreshCustomApiProviderInput(registered)).toEqual({
+      name: "127.0.0.1",
+      protocol: "openai-compatible",
+      baseURL: "http://127.0.0.1:38080/v1",
+      allowInsecureHttp: false,
+      refreshModels: true,
     })
   })
 })

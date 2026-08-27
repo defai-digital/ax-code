@@ -8,14 +8,18 @@ import {
   buildCustomApiProviderSubmission,
   createCustomApiProviderDraft,
   customApiProviderNeedsInsecureHttp,
+  findCustomApiProviderByBaseURL,
   identityFromCustomApiBaseURL,
   newCustomApiProviderModelDraft,
+  refreshCustomApiProviderInput,
   type CustomApiProviderDraft,
   type CustomApiProviderModelDraft,
 } from "./customApiProviderFormModel"
 
 type CustomApiProviderFormProps = {
   existing?: CustomApiProviderView
+  /** Managed providers already registered; a matching endpoint is updated instead of duplicated. */
+  providers?: readonly CustomApiProviderView[]
   busy?: boolean
   onSave: (providerID: string, input: CustomApiProviderInput) => Promise<void>
 }
@@ -28,12 +32,19 @@ function needsInsecureConfirmation(value: string) {
   }
 }
 
-export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ existing, busy = false, onSave }) => {
+export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({
+  existing,
+  providers = [],
+  busy = false,
+  onSave,
+}) => {
   const { t } = useI18n()
   const [draft, setDraft] = React.useState<CustomApiProviderDraft>(() => createCustomApiProviderDraft(existing))
   const [providerIDTouched, setProviderIDTouched] = React.useState(Boolean(existing))
   const [nameTouched, setNameTouched] = React.useState(Boolean(existing))
   const [error, setError] = React.useState<string | null>(null)
+  // In add mode, an endpoint that is already registered is updated in place.
+  const registered = existing ? undefined : findCustomApiProviderByBaseURL(providers, draft.baseURL)
 
   const updateDraft = <K extends keyof CustomApiProviderDraft>(key: K, value: CustomApiProviderDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }))
@@ -52,11 +63,29 @@ export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ ex
     event.preventDefault()
     setError(null)
     try {
-      if (!existing && !draft.apiToken.trim()) {
+      if (!existing && !registered?.hasApiKey && !draft.apiToken.trim()) {
         throw new Error("API token is required")
       }
       const submission = buildCustomApiProviderSubmission(draft)
+      if (registered) {
+        await onSave(registered.providerID, {
+          ...submission.input,
+          name: registered.name,
+          protocol: registered.protocol,
+        })
+        return
+      }
       await onSave(submission.providerID, submission.input)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("settings.providers.custom.error.saveFailed"))
+    }
+  }
+
+  const refreshModels = async () => {
+    if (!existing) return
+    setError(null)
+    try {
+      await onSave(existing.providerID, refreshCustomApiProviderInput(existing))
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t("settings.providers.custom.error.saveFailed"))
     }
@@ -83,6 +112,11 @@ export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ ex
           className="font-mono typography-micro"
           disabled={busy}
         />
+        {registered && (
+          <p className="typography-meta text-muted-foreground">
+            {t("settings.providers.custom.hint.existingEndpoint", { name: registered.name })}
+          </p>
+        )}
       </label>
 
       <label className="space-y-1.5">
@@ -277,7 +311,19 @@ export const CustomApiProviderForm: React.FC<CustomApiProviderFormProps> = ({ ex
           {error}
         </p>
       )}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {existing?.hasApiKey && (
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="!font-normal"
+            onClick={() => void refreshModels()}
+            disabled={busy}
+          >
+            {t("settings.providers.custom.actions.refresh")}
+          </Button>
+        )}
         <Button type="submit" size="xs" className="!font-normal" disabled={busy}>
           {busy
             ? t("settings.providers.page.actions.saving")

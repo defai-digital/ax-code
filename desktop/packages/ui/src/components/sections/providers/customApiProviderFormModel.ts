@@ -67,6 +67,43 @@ export function customApiProviderNeedsInsecureHttp(value: string) {
   return url.protocol === "http:" && !isLoopbackHostname(url.hostname)
 }
 
+/** Same endpoint regardless of trailing slashes or host casing. */
+export function sameCustomApiBaseURL(left: string, right: string): boolean {
+  const normalize = (value: string) => {
+    try {
+      const url = new URL(value.trim())
+      return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, "")}`.toLowerCase()
+    } catch {
+      return value.trim().replace(/\/+$/, "").toLowerCase()
+    }
+  }
+  return normalize(left) === normalize(right)
+}
+
+/**
+ * The managed provider that already serves this endpoint, if any. Saving a
+ * second provider for the same URL would mint a new provider ID and orphan
+ * every agent pin, recent entry, and small_model that names the first.
+ */
+export function findCustomApiProviderByBaseURL<T extends { baseURL: string }>(
+  providers: readonly T[],
+  baseURL: string,
+): T | undefined {
+  if (!baseURL.trim()) return undefined
+  return providers.find((provider) => sameCustomApiBaseURL(provider.baseURL, baseURL))
+}
+
+/** Re-run GET /models for an existing provider in place, keeping its ID and token. */
+export function refreshCustomApiProviderInput(existing: CustomApiProviderView): CustomApiProviderInput {
+  return {
+    name: existing.name,
+    protocol: existing.protocol,
+    baseURL: existing.baseURL,
+    allowInsecureHttp: customApiProviderNeedsInsecureHttp(existing.baseURL),
+    refreshModels: true,
+  }
+}
+
 export function identityFromCustomApiBaseURL(baseURL: string): { name: string; providerID: string } {
   let host = "custom-api"
   try {
