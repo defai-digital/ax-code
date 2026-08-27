@@ -3948,3 +3948,29 @@ test("getSmallModel skips embedding lanes on a custom-api gateway", async () => 
     },
   })
 })
+
+test("defaultModel falls back when the configured model's provider is disabled", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          model: "alibaba-token-plan/qwen3.8-max",
+          disabled_providers: ["alibaba-token-plan"],
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("GROQ_API_KEY", "test-api-key")
+    },
+    fn: async () => {
+      const model = await Provider.defaultModel()
+      expect(String(model.providerID)).toBe("groq")
+      expect(model.modelID).toBeTruthy()
+    },
+  })
+})

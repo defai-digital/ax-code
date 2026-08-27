@@ -1391,9 +1391,30 @@ export namespace Provider {
     )
   }
 
+  // Whether a pinned model (config `model`, `agent.<name>.model`) can be
+  // used right now: its provider is connected and not disabled, and the model
+  // is selectable for the agent loop. Pins outlive provider changes — moving
+  // a SKU behind a custom gateway and disabling the native provider is the
+  // common case — so callers fall back instead of failing with ModelNotFound.
+  export async function isModelAvailable(model: { providerID: ProviderID; modelID: ModelID }) {
+    const check = async () => {
+      const provider = (await list())[model.providerID]
+      return provider !== undefined && modelSelectableForProvider(model.providerID, provider.models[model.modelID])
+    }
+    if (await check()) return true
+    // Discovery-populated providers (CLI probes, local model lists) may not
+    // have their models yet; wait once before deciding.
+    await ready()
+    return check()
+  }
+
   export async function defaultModel() {
     const cfg = await Config.get()
-    if (cfg.model) return parseModel(cfg.model)
+    if (cfg.model) {
+      const configured = parseModel(cfg.model)
+      if (await isModelAvailable(configured)) return configured
+      log.warn("configured model is unavailable; falling back to the provider catalog", { model: cfg.model })
+    }
 
     // Wait for background discovery: the persisted "recent" model may point at
     // a CLI/local provider whose `models` are only populated by discovery. On

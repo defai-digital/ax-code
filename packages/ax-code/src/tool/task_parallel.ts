@@ -5,6 +5,7 @@ import { Session } from "../session"
 import { SessionID, MessageID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { MessageV2 } from "../session/message-v2"
+import { agentModel } from "../session/prompt-command-selection"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
 import { resolvePromptParts } from "../session/prompt-helpers"
@@ -364,11 +365,11 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       })
 
       const settled = await Promise.all(
-        resolved.map(({ task, agent }) =>
+        resolved.map(async ({ task, agent }) =>
           runOneTask({
             params: task,
             ctx: toolCtx,
-            model: agent.model ?? defaultModel,
+            model: (await agentModel(agent)) ?? defaultModel,
             config,
             agent,
           }),

@@ -11,7 +11,7 @@ import { SessionRevert } from "./revert"
 import type { MessageV2 } from "./message-v2"
 import type { SessionID } from "./schema"
 import { agentInfo } from "./prompt-agent-model-info"
-import { lastModel } from "./prompt-command-selection"
+import { agentModel, lastModel } from "./prompt-command-selection"
 import type { ShellInput } from "./prompt-input"
 import { appendShellOutputChunk, shellArgs, shellOutputMetadata } from "./prompt-shell-runtime"
 import { createShellTurnMessages } from "./prompt-shell-turn"
@@ -58,7 +58,7 @@ export async function executeShellCommand(
     await SessionRevert.cleanup(session)
   }
   const agent = await agentInfo({ sessionID: input.sessionID, name: input.agent })
-  const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
+  const model = input.model ?? (await agentModel(agent)) ?? (await lastModel(input.sessionID))
   const { msg, part } = await createShellTurnMessages({
     sessionID: input.sessionID,
     agent: input.agent,

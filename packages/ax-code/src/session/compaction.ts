@@ -30,6 +30,7 @@ import {
   effectiveTokenTotal,
 } from "./compaction-budget"
 import { MediaProjection } from "./media-projection"
+import { agentModel } from "./prompt-command-selection"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -381,8 +382,9 @@ export namespace SessionCompaction {
     // Compaction is an aux call: explicit agent pin first, then the
     // provider's small tier, and only bill the session's main model as the
     // fallback (providers without a small-model mapping).
-    let model = agent?.model
-      ? await Provider.getModel(agent.model.providerID, agent.model.modelID)
+    const pinned = await agentModel(agent)
+    let model = pinned
+      ? await Provider.getModel(pinned.providerID, pinned.modelID)
       : ((await Provider.getSmallModel(userMessage.model.providerID)) ??
         (await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)))
     // C9: resolve the next ladder rung lazily — only on a transient failure —

@@ -5,6 +5,7 @@ import { Session } from "../session"
 import { SessionID, MessageID, type TaskQueueID } from "../session/schema"
 import { NotFoundError } from "../storage/db"
 import { MessageV2 } from "../session/message-v2"
+import { agentModel } from "../session/prompt-command-selection"
 import { Agent } from "../agent/agent"
 import { SessionPrompt } from "../session/prompt"
 import { resolvePromptParts } from "../session/prompt-helpers"
@@ -402,7 +403,10 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       ensureNotAborted()
       if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
 
-      const model = agent.model ?? {
+      // A subagent pinned to a disabled provider (native deepseek after the
+      // SKU moved behind a custom gateway) runs on the parent's model instead
+      // of failing the whole task with ModelNotFound.
+      const model = (await agentModel(agent)) ?? {
         modelID: msg.info.modelID,
         providerID: msg.info.providerID,
       }

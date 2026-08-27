@@ -3,6 +3,27 @@ import { Provider } from "../provider/provider"
 import type { ModelID, ProviderID } from "../provider/schema"
 import { MessageV2 } from "./message-v2"
 import type { SessionID } from "./schema"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "session.model" })
+
+type ModelRef = { providerID: ProviderID; modelID: ModelID }
+
+/**
+ * The agent's pinned model when it can be used, otherwise undefined so the
+ * caller falls back to the last selected model (then any available model).
+ * A pin left behind after its provider was disabled must not fail the turn.
+ */
+export async function agentModel(agent: { name: string; model?: ModelRef }): Promise<ModelRef | undefined> {
+  if (!agent.model) return undefined
+  if (await Provider.isModelAvailable(agent.model)) return agent.model
+  log.warn("agent model is unavailable; using the last selected model", {
+    agent: agent.name,
+    providerID: agent.model.providerID,
+    modelID: agent.model.modelID,
+  })
+  return undefined
+}
 
 export async function lastModel(sessionID: SessionID) {
   for await (const item of MessageV2.stream(sessionID)) {
@@ -21,9 +42,8 @@ export async function commandModel(input: {
   }
   if (input.command?.agent) {
     const agent = await Agent.get(input.command.agent)
-    if (agent?.model) {
-      return agent.model
-    }
+    const pinned = agent ? await agentModel(agent) : undefined
+    if (pinned) return pinned
   }
   if (input.model) return Provider.parseModel(input.model)
   return lastModel(input.sessionID)

@@ -8,7 +8,7 @@ import { validateUserMessageForSave } from "./prompt-message-validation"
 import { PromptPartInput } from "./prompt-part-input"
 import { getLastUserInfo } from "./prompt-request"
 import { resolveUserMessageRouting } from "./prompt-routing"
-import { lastModel } from "./prompt-command-selection"
+import { agentModel, lastModel } from "./prompt-command-selection"
 import { Session } from "."
 import { MessageID, type SessionID } from "./schema"
 import type { ModelID, ProviderID } from "../provider/schema"
@@ -82,9 +82,16 @@ export async function createUserMessage(input: CreateUserMessageInput) {
   const complexityModel = route.complexityModel
   const hybridModel = route.hybridModel
 
-  const model = complexityModel ?? hybridModel ?? input.model ?? agent.model ?? (await lastModel(input.sessionID))
+  const pinned = await agentModel(agent)
+  const model = complexityModel ?? hybridModel ?? input.model ?? pinned ?? (await lastModel(input.sessionID))
+  // The agent's variant only applies while the turn runs on the agent's own
+  // model (or the agent pins none); a fallback model may not accept it.
+  const agentVariantApplies = !agent.model || pinned !== undefined
   const variant =
-    input.variant ?? (!input.model && !complexityModel && !hybridModel && agent.variant ? agent.variant : undefined)
+    input.variant ??
+    (!input.model && !complexityModel && !hybridModel && agentVariantApplies && agent.variant
+      ? agent.variant
+      : undefined)
 
   const info: MessageV2.User = {
     id: messageID,

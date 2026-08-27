@@ -52,3 +52,34 @@ describe("prompt user message helpers", () => {
     })
   })
 })
+
+describe("prompt user message agent model fallback", () => {
+  test("an agent pinned to a disabled provider falls back instead of failing", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        disabled_providers: ["deepseek"],
+        agent: {
+          build: {
+            model: "deepseek/deepseek-v4-pro",
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const message = await createUserMessage({
+          sessionID: session.id,
+          agent: "build",
+          parts: [{ type: "text", text: "start" }],
+        })
+        expect(message.info.agent).toBe("build")
+        expect(message.info.model.providerID).not.toBe("deepseek")
+        expect(message.info.model.modelID).toBeTruthy()
+      },
+    })
+  })
+})
