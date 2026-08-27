@@ -10,13 +10,24 @@ const log = Log.create({ service: "session.model" })
 type ModelRef = { providerID: ProviderID; modelID: ModelID }
 
 /**
- * The agent's pinned model when it can be used, otherwise undefined so the
- * caller falls back to the last selected model (then any available model).
- * A pin left behind after its provider was disabled must not fail the turn.
+ * The agent's pinned model when it can be used; the same model ID on a
+ * connected provider when the pinned provider is disabled or disconnected;
+ * otherwise undefined so the caller falls back to the last selected model
+ * (then any available model). A pin left behind after its provider was
+ * disabled must not fail the turn.
  */
 export async function agentModel(agent: { name: string; model?: ModelRef }): Promise<ModelRef | undefined> {
   if (!agent.model) return undefined
-  if (await Provider.isModelAvailable(agent.model)) return agent.model
+  const resolved = await Provider.resolvePinnedModel(agent.model)
+  if (resolved && resolved.providerID !== agent.model.providerID) {
+    log.warn("agent model moved to another provider", {
+      agent: agent.name,
+      modelID: agent.model.modelID,
+      from: agent.model.providerID,
+      to: resolved.providerID,
+    })
+  }
+  if (resolved) return resolved
   log.warn("agent model is unavailable; using the last selected model", {
     agent: agent.name,
     providerID: agent.model.providerID,

@@ -3974,3 +3974,51 @@ test("defaultModel falls back when the configured model's provider is disabled",
     },
   })
 })
+
+test("defaultModel follows a configured model to the connected provider that serves the same SKU", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          model: "deepseek/deepseek-v4-pro",
+          disabled_providers: ["deepseek"],
+          provider: {
+            "127-0-0-1": {
+              management: "custom-api",
+              name: "127.0.0.1",
+              npm: "@ai-sdk/openai-compatible",
+              api: "http://127.0.0.1:8080/v1",
+              env: [],
+              models: {
+                "glm-5.3": {
+                  id: "glm-5.3",
+                  name: "GLM 5.3",
+                  tool_call: true,
+                  limit: { context: 128_000, output: 16_384 },
+                },
+                "deepseek-v4-pro": {
+                  id: "deepseek-v4-pro",
+                  name: "DeepSeek V4 Pro",
+                  tool_call: true,
+                  limit: { context: 128_000, output: 16_384 },
+                },
+              },
+              options: { baseURL: "http://127.0.0.1:8080/v1" },
+            },
+          },
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const model = await Provider.defaultModel()
+      expect(String(model.providerID)).toBe("127-0-0-1")
+      expect(String(model.modelID)).toBe("deepseek-v4-pro")
+    },
+  })
+})

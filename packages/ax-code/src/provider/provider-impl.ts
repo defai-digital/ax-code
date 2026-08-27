@@ -1408,11 +1408,36 @@ export namespace Provider {
     return check()
   }
 
+  // Resolve a pin to something usable: the pin itself, else the same model
+  // ID on a connected provider (the SKU moved behind a custom gateway — the
+  // user still means "that model"), else undefined so the caller falls back
+  // to the last selected model.
+  export async function resolvePinnedModel(model: {
+    providerID: ProviderID
+    modelID: ModelID
+  }): Promise<{ providerID: ProviderID; modelID: ModelID } | undefined> {
+    if (await isModelAvailable(model)) return model
+    const providers = await list()
+    const sameSku = Object.values(providers).find(
+      (provider) =>
+        provider.id !== model.providerID && modelSelectableForProvider(provider.id, provider.models[model.modelID]),
+    )
+    if (sameSku) return { providerID: sameSku.id, modelID: model.modelID }
+    return undefined
+  }
+
   export async function defaultModel() {
     const cfg = await Config.get()
     if (cfg.model) {
       const configured = parseModel(cfg.model)
-      if (await isModelAvailable(configured)) return configured
+      const resolved = await resolvePinnedModel(configured)
+      if (resolved && resolved.providerID !== configured.providerID) {
+        log.warn("configured model moved to another provider", {
+          model: cfg.model,
+          providerID: resolved.providerID,
+        })
+      }
+      if (resolved) return resolved
       log.warn("configured model is unavailable; falling back to the provider catalog", { model: cfg.model })
     }
 
