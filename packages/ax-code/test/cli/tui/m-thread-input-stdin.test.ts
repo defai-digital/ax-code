@@ -1,6 +1,6 @@
 import { describe, expect, test, vi, type Mock } from "vitest"
 import { EventEmitter } from "node:events"
-import { readNonTtyStdin, DEFAULT_TUI_STDIN_PIPE_QUIET_WINDOW_MS } from "../../../src/cli/cmd/tui/thread"
+import { readNonTtyStdin, DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS } from "../../../src/cli/stdin"
 
 function fakeStdin() {
   const ee = new EventEmitter() as EventEmitter & { pause: Mock<() => void> }
@@ -10,7 +10,7 @@ function fakeStdin() {
 
 describe("readNonTtyStdin", () => {
   test("has a sane default quiet window", () => {
-    expect(DEFAULT_TUI_STDIN_PIPE_QUIET_WINDOW_MS).toBe(300)
+    expect(DEFAULT_STDIN_PIPE_QUIET_WINDOW_MS).toBe(300)
   })
 
   test("reads a regular file fully and resolves on end without pausing", async () => {

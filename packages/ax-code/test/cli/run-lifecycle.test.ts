@@ -6,6 +6,7 @@ import {
   formatRunToolFallbackInput,
   refreshRunProvidersOnModelMiss,
   resolveRunAgentDisplayName,
+  resolveRunModel,
 } from "../../src/cli/cmd/run"
 
 test("run command fallback tool formatter handles non-json-safe input", () => {
@@ -32,6 +33,62 @@ test("run command model validation flags unknown provider or model (#405)", () =
   expect(findRunModelError({ providers, providerID: "anthropic", modelID: "nope" })).toContain(
     'Model "nope" not found for provider "anthropic"',
   )
+})
+
+test("run command follows an explicit model to the connected provider serving the same SKU", async () => {
+  // The native provider is disabled, so it is absent from the list; the
+  // gateway serves the same model ID.
+  const providers = [{ id: "127.0.0.1", models: { "deepseek-v4-pro": {}, "glm-5.3": {} } }]
+
+  expect(resolveRunModel({ providers, providerID: "127.0.0.1", modelID: "glm-5.3" })).toEqual({
+    providerID: "127.0.0.1",
+    modelID: "glm-5.3",
+  })
+  expect(resolveRunModel({ providers, providerID: "deepseek", modelID: "deepseek-v4-pro" })).toEqual({
+    providerID: "127.0.0.1",
+    modelID: "deepseek-v4-pro",
+  })
+  expect(resolveRunModel({ providers, providerID: "deepseek", modelID: "deepseek-v9" })).toBeUndefined()
+
+  // Catalog-only providers in the full list never serve a turn; only a
+  // connected provider is a valid home for the fallback.
+  const withCatalog = [{ id: "catalog-router", models: { "deepseek-v4-pro": {} } }, ...providers]
+  expect(
+    resolveRunModel({
+      providers: withCatalog,
+      connected: ["127.0.0.1"],
+      providerID: "deepseek",
+      modelID: "deepseek-v4-pro",
+    }),
+  ).toEqual({ providerID: "127.0.0.1", modelID: "deepseek-v4-pro" })
+  expect(
+    resolveRunModel({ providers: withCatalog, connected: [], providerID: "deepseek", modelID: "deepseek-v4-pro" }),
+  ).toBeUndefined()
+
+  // A model being present in the public catalog is not enough: an exact
+  // provider selection must still be connected before the run can use it.
+  expect(
+    resolveRunModel({
+      providers: [{ id: "deepseek", models: { "deepseek-v4-pro": {} } }],
+      connected: [],
+      providerID: "deepseek",
+      modelID: "deepseek-v4-pro",
+    }),
+  ).toBeUndefined()
+
+  // A same-SKU hit is not a model miss: no discovery wait, no re-list.
+  let refreshes = 0
+  const kept = await refreshRunProvidersOnModelMiss({
+    providers,
+    providerID: "deepseek",
+    modelID: "deepseek-v4-pro",
+    refresh: async () => {
+      refreshes++
+      return undefined
+    },
+  })
+  expect(kept).toBe(providers)
+  expect(refreshes).toBe(0)
 })
 
 test("run command validates an explicit model before creating a session", async () => {
@@ -204,6 +261,16 @@ test("headless-run clears the idle timer before checking timeout state", async (
   expect(callbackReset).toBeGreaterThan(-1)
   expect(clearTimer).toBeGreaterThan(runStart)
   expect(timeoutCheck).toBeGreaterThan(clearTimer)
+})
+
+test("non-interactive run entry points share bounded pipe input handling", async () => {
+  const run = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const headless = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/headless-run.ts"), "utf-8")
+
+  for (const source of [run, headless]) {
+    expect(source).toContain("await readNonTtyStdin()")
+    expect(source).not.toContain("for await (const chunk of process.stdin)")
+  }
 })
 
 test("headless-run keeps signal handlers installed until cleanup", async () => {

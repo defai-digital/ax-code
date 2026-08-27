@@ -461,6 +461,7 @@ export namespace SessionPrompt {
     // Cache agent/model info per loop to avoid repeated async lookups
     let cachedAgent: PromptCacheEntry<Agent.Info>
     let cachedModel: PromptCacheEntry<Provider.Model>
+    let resolvedUserModelCache: { source: string; model: MessageV2.User["model"] } | undefined
     let fallbackModelOverride: MessageV2.User["model"] | undefined
     // Pending user-facing notice for an automatic provider fallback (#394).
     // Persisted as a synthetic text part on the next assistant message so the
@@ -588,6 +589,22 @@ export namespace SessionPrompt {
         lastUser = {
           ...lastUser,
           model: fallbackModelOverride,
+        }
+      } else {
+        const source = providerModelKey(lastUser.model)
+        let resolved = resolvedUserModelCache?.source === source ? resolvedUserModelCache.model : undefined
+        if (!resolved) {
+          resolved = await Provider.resolveRequestedModel(lastUser.model)
+          resolvedUserModelCache = { source, model: resolved }
+        }
+        if (resolved.providerID !== lastUser.model.providerID || resolved.modelID !== lastUser.model.modelID) {
+          log.warn("session model moved to another provider", {
+            sessionID,
+            modelID: lastUser.model.modelID,
+            from: lastUser.model.providerID,
+            to: resolved.providerID,
+          })
+          lastUser = { ...lastUser, model: resolved }
         }
       }
       // Deadline check runs BEFORE the step-cap gates so `superLongActive`

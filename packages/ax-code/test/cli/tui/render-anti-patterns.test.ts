@@ -1277,8 +1277,13 @@ describe("AX Code TUI stability guardrails", () => {
     expect(prompt).toContain("input.cursorOffset = endDisplayOffset(input.plainText)")
     expect(prompt).not.toContain("stringWidth(input.plainText)")
     expect(prompt).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
-    expect(prompt).toContain("if (!sessionChanged && msg.model) local.model.set(msg.model)")
-    expect(prompt).toContain("local.model.variant.set(msg.variant)")
+    // A server-generated user message (auto-route, plan_exit) moves the agent
+    // chip but must not persist its model as that agent's override: the
+    // override would shadow the agent's config pin on every later turn.
+    expect(prompt).not.toContain("local.model.set(msg.model)")
+    expect(prompt).toContain(
+      "if (msg.model && current && providerModelEquals(current, msg.model)) local.model.variant.set(msg.variant)",
+    )
     expect(prompt).not.toContain("if (msg.variant) local.model.variant.set(msg.variant)")
     expect(prompt).toContain("sanitizePromptInput(raw)")
     expect(prompt).toContain("if (!isRenderableAlive(input)) return")

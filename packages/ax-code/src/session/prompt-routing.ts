@@ -81,8 +81,9 @@ export async function resolveUserMessageRouting(input: {
 
   const agent = await agentInfo({ sessionID: input.sessionID, name: agentName })
   // The agent's usable pin (same-SKU on a connected provider when the pinned
-  // provider is disabled). An auto-routed agent's pin outranks the model the
-  // client sent, which was chosen for the agent the user started on.
+  // provider is disabled). It is the fallback when the client did not choose
+  // a model for this turn; auto-routing changes expertise, not an explicit
+  // model selection.
   const pinnedModel = await agentModel(agent)
   // Anchor on the model the turn would actually use (same resolution order as
   // createUserMessage: requested → agent pin → session's last model → default),

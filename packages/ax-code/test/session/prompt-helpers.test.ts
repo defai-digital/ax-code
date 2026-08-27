@@ -1,8 +1,12 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Permission } from "../../src/permission"
+import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
+import { tmpdir } from "../fixture/fixture"
 import { MessageV2 } from "../../src/session/message-v2"
+import { Session } from "../../src/session"
+import { MessageID } from "../../src/session/schema"
 import {
   agentInfo,
   appendShellOutputChunk,
@@ -14,6 +18,7 @@ import {
   commandTemplateText,
   consecutiveErrorDecision,
   commandUser,
+  lastModel,
   loopMessages,
   modelInfo,
   pendingCompactionDecision,
@@ -35,6 +40,8 @@ import {
   titleContextMessages,
   zeroTokenUsage,
 } from "../../src/session/prompt-helpers"
+
+afterEach(() => vi.unstubAllEnvs())
 
 describe("session.prompt helpers", () => {
   test("bounds large first-turn title context", () => {
@@ -303,14 +310,74 @@ describe("session.prompt helpers", () => {
   })
 
   test("selects explicit command model without requiring command metadata", async () => {
-    await expect(
-      commandModel({
-        model: "openai/gpt-5.2",
-        sessionID: "ses_test" as any,
-      }),
-    ).resolves.toEqual({
-      providerID: ProviderID.make("openai"),
-      modelID: ModelID.make("gpt-5.2"),
+    // The explicit model is resolved against the connected providers (same
+    // SKU on another provider when its own is disabled), which needs an
+    // instance; a model nobody serves is kept as requested.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          commandModel({
+            model: "openai/gpt-5.2",
+            sessionID: "ses_test" as any,
+          }),
+        ).resolves.toEqual({
+          providerID: ProviderID.make("openai"),
+          modelID: ModelID.make("gpt-5.2"),
+        })
+      },
+    })
+  })
+
+  test("follows a persisted session model to the connected provider serving the same SKU", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        disabled_providers: ["deepseek"],
+        provider: {
+          "127.0.0.1": {
+            management: "custom-api",
+            name: "127.0.0.1",
+            npm: "@ai-sdk/openai-compatible",
+            api: "http://127.0.0.1:8080/v1",
+            env: [],
+            models: {
+              "deepseek-v4-pro": {
+                id: "deepseek-v4-pro",
+                name: "DeepSeek V4 Pro",
+                tool_call: true,
+                limit: { context: 128_000, output: 16_384 },
+              },
+            },
+            options: { baseURL: "http://127.0.0.1:8080/v1" },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: ProviderID.make("deepseek"), modelID: ModelID.make("deepseek-v4-pro") },
+          tools: {},
+          mode: "build",
+        } as MessageV2.User)
+
+        await expect(lastModel(session.id)).resolves.toEqual({
+          providerID: "127.0.0.1",
+          modelID: "deepseek-v4-pro",
+        })
+        await Session.remove(session.id)
+      },
     })
   })
 

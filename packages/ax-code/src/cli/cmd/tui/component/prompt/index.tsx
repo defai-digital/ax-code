@@ -22,7 +22,7 @@ import {
 } from "solid-js"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
-import { providerModelKey } from "@/provider/model-key"
+import { providerModelEquals, providerModelKey } from "@/provider/model-key"
 import { effortDisplay } from "@/provider/effort-label"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
@@ -700,13 +700,19 @@ export function Prompt(props: PromptProps) {
     setExpandedPastes(expanded ? new Set<number>(pasteViews().map((view) => view.partIndex)) : new Set<number>())
   }
 
-  // Sync local agent/model/variant from the latest user message:
+  // Sync local agent/variant from the latest user message:
   // - On session change: pick up the session's last-known agent so the chip
   //   reflects what was active when the session was last used.
   // - On new message in the same session: catch server-generated user messages
   //   that carry a different agent (e.g. plan_exit creates a synthetic user
-  //   message with agent="build" to hand off out of plan mode). Without this,
-  //   the bottom-left chip stays stale.
+  //   message with agent="build" to hand off out of plan mode, the router
+  //   switches "find the bug" to the debug agent). Without this, the
+  //   bottom-left chip stays stale.
+  // The message's model is deliberately not copied into the per-agent
+  // override slot: `local.model.current` already resolves the adopted
+  // agent's own override or config pin, and a persisted copy would shadow
+  // that pin on every later turn (the debug agent kept running on the model
+  // picked for build long after config pinned it elsewhere).
   //
   // Use `on()` so only sessionID and lastUserMessage trigger re-runs — reads
   // of local.agent inside don't add dependencies, otherwise a manual Tab-
@@ -728,8 +734,10 @@ export function Prompt(props: PromptProps) {
       const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
       if (msg.agent && isPrimaryAgent) {
         local.agent.set(msg.agent)
-        if (!sessionChanged && msg.model) local.model.set(msg.model)
-        local.model.variant.set(msg.variant)
+        // A variant belongs to the model it was chosen for; only carry it
+        // over when the chip now shows that same model.
+        const current = local.model.current()
+        if (msg.model && current && providerModelEquals(current, msg.model)) local.model.variant.set(msg.variant)
       }
     }),
   )

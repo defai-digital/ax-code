@@ -36,9 +36,42 @@ export async function agentModel(agent: { name: string; model?: ModelRef }): Pro
   return undefined
 }
 
+/**
+ * A client-requested model when it can be used; the same model ID on a
+ * connected provider when the requested provider is disabled or
+ * disconnected (`ax-code run --model deepseek/…` after the SKU moved behind
+ * a custom gateway); otherwise the request itself, so an unknown model still
+ * fails loudly at dispatch instead of silently running elsewhere.
+ */
+export async function requestedModel(model: ModelRef): Promise<ModelRef> {
+  const resolved = await Provider.resolveRequestedModel(model)
+  if (resolved.providerID !== model.providerID) {
+    log.warn("requested model moved to another provider", {
+      modelID: model.modelID,
+      from: model.providerID,
+      to: resolved.providerID,
+    })
+  }
+  return resolved
+}
+
 export async function lastModel(sessionID: SessionID) {
   for await (const item of MessageV2.stream(sessionID)) {
-    if (item.info.role === "user" && item.info.model) return item.info.model
+    if (item.info.role !== "user" || !item.info.model) continue
+    const resolved = await Provider.resolvePinnedModel(item.info.model)
+    if (resolved && resolved.providerID !== item.info.model.providerID) {
+      log.warn("last selected model moved to another provider", {
+        modelID: item.info.model.modelID,
+        from: item.info.model.providerID,
+        to: resolved.providerID,
+      })
+    }
+    if (resolved) return resolved
+    log.warn("last selected model is unavailable; using the default model", {
+      providerID: item.info.model.providerID,
+      modelID: item.info.model.modelID,
+    })
+    break
   }
   return Provider.defaultModel()
 }
@@ -60,7 +93,7 @@ export async function commandModel(input: {
     const pinned = agent ? await agentModel(agent) : undefined
     if (pinned) return pinned
   }
-  if (input.model) return Provider.parseModel(input.model)
+  if (input.model) return requestedModel(Provider.parseModel(input.model))
   return lastModel(input.sessionID)
 }
 

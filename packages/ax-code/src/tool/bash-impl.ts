@@ -47,6 +47,7 @@ import {
   isStaticPathArg,
   safeUtf8PrefixLength,
   staticallyCheckablePathArgs,
+  staticallyCreatedPathArgs,
   stripShellQuotes,
   truncateBashMetadata,
 } from "./bash-helpers"
@@ -716,7 +717,52 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // Pre-validation: check that paths referenced by read-only commands
       // actually exist before spawning the process. This saves a wasted LLM
       // turn — instead of getting a generic shell error, the model receives
-      // a structured message naming the missing path.
+      // a structured message naming the missing path. A compound command may
+      // create a path before reading it (`cat > prompt; ax-code "$(cat
+      // prompt)"`), so record ordered, statically-known creation sites first.
+      // This only suppresses the convenience preflight; normal shell errors,
+      // isolation, permissions, and blast-radius checks still apply.
+      const normalizeResolvedPath = (value: string) =>
+        process.platform === "win32" ? Filesystem.windowsPath(value).replace(/\//g, "\\") : value
+      const staticResolvedPath = (raw: string) => {
+        const staticPath = isStaticPathArg(raw)
+        if (!staticPath) return undefined
+        return normalizeResolvedPath(path.resolve(cwd, staticPath))
+      }
+      const createdAt = new Map<string, number>()
+      const recordCreation = (raw: string, position: number) => {
+        const resolved = staticResolvedPath(raw)
+        if (!resolved) return
+        const previous = createdAt.get(resolved)
+        if (previous === undefined || position < previous) createdAt.set(resolved, position)
+      }
+      for (const redirect of tree.rootNode.descendantsOfType("file_redirect")) {
+        if (!redirect || !isWriteFileRedirect(redirect)) continue
+        for (let i = 0; i < redirect.childCount; i++) {
+          const child = redirect.child(i)
+          if (!child || !["word", "string", "raw_string", "concatenation"].includes(child.type)) continue
+          const target = stripShellQuotes(child.text)
+          if (!target || /^&/.test(target)) continue
+          recordCreation(target, redirect.endIndex)
+        }
+      }
+      for (const node of tree.rootNode.descendantsOfType("command")) {
+        if (!node) continue
+        const parts: string[] = []
+        for (let i = 0; i < node.childCount; i++) {
+          const child = node.child(i)
+          if (!child) continue
+          if (["command_name", "word", "string", "raw_string", "concatenation"].includes(child.type)) {
+            parts.push(child.text)
+          }
+        }
+        const cmd = parts[0] ? stripShellQuotes(parts[0]) : undefined
+        if (!cmd) continue
+        for (const arg of staticallyCreatedPathArgs(cmd, parts.slice(1))) {
+          recordCreation(arg, node.endIndex)
+        }
+      }
+
       const missingPaths: string[] = []
       for (const node of tree.rootNode.descendantsOfType("command")) {
         if (!node) continue
@@ -731,9 +777,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         const cmd = parts[0]
         if (!cmd) continue
         for (const arg of staticallyCheckablePathArgs(cmd, parts.slice(1))) {
-          const staticPath = isStaticPathArg(arg)
-          if (!staticPath) continue
-          const resolved = path.resolve(cwd, staticPath)
+          const resolved = staticResolvedPath(arg)
+          if (!resolved) continue
+          const creation = createdAt.get(resolved)
+          if (creation !== undefined && creation < node.startIndex) continue
           const exists = await Filesystem.exists(resolved)
           if (!exists) missingPaths.push(resolved)
         }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -43,6 +44,7 @@ let streamSpy: MockInstance | undefined
 let modelSpy: MockInstance | undefined
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   streamSpy?.mockRestore()
   streamSpy = undefined
   modelSpy?.mockRestore()
@@ -91,6 +93,80 @@ describe("session.prompt resume_existing", () => {
         expect(msg.parts.some((part) => part.type === "text" && part.text.includes("resumed safely"))).toBe(true)
         expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
 
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("resolves a persisted model through the connected provider before resuming", async () => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using tmp = await tmpdir({
+      git: true,
+      config: {
+        disabled_providers: ["deepseek"],
+        provider: {
+          "127.0.0.1": {
+            management: "custom-api",
+            name: "127.0.0.1",
+            npm: "@ai-sdk/openai-compatible",
+            api: "http://127.0.0.1:8080/v1",
+            env: [],
+            models: {
+              "deepseek-v4-pro": {
+                id: "deepseek-v4-pro",
+                name: "DeepSeek V4 Pro",
+                tool_call: true,
+                limit: { context: 128_000, output: 16_384 },
+              },
+            },
+            options: { baseURL: "http://127.0.0.1:8080/v1" },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Existing session" })
+        await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: session.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: {
+            providerID: ProviderID.make("deepseek"),
+            modelID: ModelID.make("deepseek-v4-pro"),
+          },
+          tools: {},
+          mode: "build",
+        } as MessageV2.User)
+
+        modelSpy = vi.spyOn(Provider, "getModel").mockImplementation(async (providerID, modelID) => ({
+          ...model,
+          providerID,
+          id: modelID,
+        }))
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text: "resumed on the gateway" }
+            yield { type: "text-end", id: "text_1" }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any)
+
+        await SessionPrompt.loop({ sessionID: session.id, resume_existing: true })
+
+        expect(modelSpy).toHaveBeenCalledWith("127.0.0.1", "deepseek-v4-pro")
         await Session.remove(session.id)
       },
     })

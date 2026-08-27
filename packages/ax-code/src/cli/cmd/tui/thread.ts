@@ -3,7 +3,6 @@ import { cliBooleanFlagValue } from "@/cli/boolean-flag"
 import { Rpc } from "@/util/rpc"
 import { type rpc } from "./worker"
 import { createRequire } from "module"
-import { fstatSync } from "node:fs"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { UI } from "@/cli/ui"
@@ -34,6 +33,7 @@ import { createTuiRejectionHandler, registerTuiCrashHandlers, registerTuiProcess
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
+import { readNonTtyStdin } from "@/cli/stdin"
 import {
   nextTuiStartupUpgradeCheckState,
   shouldRunTuiStartupUpgradeCheck,
@@ -558,88 +558,6 @@ async function target() {
   // Source/dev layout: worker.ts is the sibling source file under src/.
   // Bun's runtime can load .ts directly, so this is the contributor path.
   return new URL("./worker.ts", import.meta.url)
-}
-
-export const DEFAULT_TUI_STDIN_PIPE_QUIET_WINDOW_MS = 300
-
-type StdinLike = {
-  on(event: "data", listener: (chunk: Buffer) => void): unknown
-  on(event: "end", listener: () => void): unknown
-  on(event: "error", listener: (error: Error) => void): unknown
-  off(event: string, listener: (...args: any[]) => void): unknown
-  pause?: () => unknown
-}
-
-function stdinIsRegularFile(fd = 0): boolean {
-  try {
-    return fstatSync(fd).isFile()
-  } catch {
-    // fstat can fail for exotic descriptors; treat as "not a regular file"
-    // so the pipe quiet-window fallback applies and startup never hangs.
-    return false
-  }
-}
-
-// Read piped (non-TTY) stdin without hanging the TUI on an open producer.
-// A regular file (`ax-code < file`) reliably delivers `end`, so we read it
-// fully. A pipe/FIFO (`tail -f x | ax-code`, `ax-code < fifo`) may stay open
-// forever and never emit `end`; awaiting it (the previous behavior) blocked
-// startup before anything rendered. For pipes we collect whatever is buffered
-// and resolve after a short quiet window with no further data, then pause the
-// stream so the still-open fd doesn't keep feeding the renderer's own stdin.
-export function readNonTtyStdin(
-  input: {
-    stdin?: StdinLike
-    isRegularFile?: boolean
-    quietWindowMs?: number
-  } = {},
-): Promise<string> {
-  const stdin = input.stdin ?? (process.stdin as unknown as StdinLike)
-  const isRegularFile = input.isRegularFile ?? stdinIsRegularFile()
-  const quietWindowMs = input.quietWindowMs ?? DEFAULT_TUI_STDIN_PIPE_QUIET_WINDOW_MS
-  return new Promise<string>((resolve, reject) => {
-    const chunks: Buffer[] = []
-    let settled = false
-    let quietTimer: ReturnType<typeof setTimeout> | undefined
-    const cleanup = () => {
-      if (quietTimer) clearTimeout(quietTimer)
-      stdin.off("data", onData)
-      stdin.off("end", onEnd)
-      stdin.off("error", onError)
-    }
-    const finish = (pause: boolean) => {
-      if (settled) return
-      settled = true
-      cleanup()
-      if (pause) stdin.pause?.()
-      resolve(Buffer.concat(chunks).toString("utf8"))
-    }
-    const armQuietTimer = () => {
-      if (isRegularFile) return
-      if (quietTimer) clearTimeout(quietTimer)
-      quietTimer = setTimeout(() => finish(true), quietWindowMs)
-      quietTimer.unref?.()
-    }
-    const onData = (chunk: Buffer) => {
-      chunks.push(chunk)
-      // Regular files EOF on their own; only pipes need the quiet-window reset.
-      armQuietTimer()
-    }
-    const onEnd = () => finish(false)
-    const onError = (error: Error) => {
-      if (settled) return
-      settled = true
-      cleanup()
-      reject(error)
-    }
-    stdin.on("data", onData)
-    stdin.on("end", onEnd)
-    stdin.on("error", onError)
-    // A pipe that is open but idle (e.g. `ax-code < fifo` with no writer yet)
-    // emits neither `data` nor `end`; arm the quiet window up front so startup
-    // still proceeds. Regular files are left to their `end`/`error` events.
-    armQuietTimer()
-  })
 }
 
 async function input(value?: string) {

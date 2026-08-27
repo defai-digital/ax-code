@@ -640,7 +640,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     })
 
-    // Automatically update model when agent changes
+    // Warn once when the current agent's configured model cannot be used,
+    // not even as the same SKU on a connected provider. `currentModel`
+    // already resolves the pin for display and submission, so the per-agent
+    // override slot is left to explicit user picks: a seeded copy of the pin
+    // would keep shadowing the config after the pin changes.
     let warnedAgentModel: string | undefined
     createEffect(() => {
       const value = agent.current()
@@ -650,28 +654,16 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       if (!sync.data.provider_loaded) return
       const status = modelPreferenceStatus(value.model)
       if (status === "unknown") return
-      if (status === "invalid") {
-        // Dedupe: the provider store rewrites re-run this effect; only warn
-        // once per agent+model combination.
-        const warnKey = `${value.name}:${value.model.providerID}/${value.model.modelID}`
-        if (warnedAgentModel !== warnKey) {
-          warnedAgentModel = warnKey
-          toast.show({
-            variant: "warning",
-            message: `Agent ${value.name}'s configured model ${value.model.providerID}/${value.model.modelID} is not valid`,
-            duration: 3000,
-          })
-        }
-        return
-      }
-      // Only seed the per-agent slot when the user has no override yet.
-      // Otherwise switching away and back to this agent would wipe their
-      // manual model choice with the config-pinned default. `currentModel`
-      // already falls back to `a.model` for display when the slot is empty.
-      if (model.hasOverride(value.name)) return
-      model.set({
-        providerID: value.model.providerID,
-        modelID: value.model.modelID,
+      if (status === "valid" || resolvePin(value.model)) return
+      // Dedupe: the provider store rewrites re-run this effect; only warn
+      // once per agent+model combination.
+      const warnKey = `${value.name}:${value.model.providerID}/${value.model.modelID}`
+      if (warnedAgentModel === warnKey) return
+      warnedAgentModel = warnKey
+      toast.show({
+        variant: "warning",
+        message: `Agent ${value.name}'s configured model ${value.model.providerID}/${value.model.modelID} is not valid`,
+        duration: 3000,
       })
     })
 

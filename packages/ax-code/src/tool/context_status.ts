@@ -15,14 +15,17 @@ import type { MessageV2 } from "../session/message-v2"
 // never a guessed one.
 async function resolveModel(initModel: { providerID: string; modelID: string } | undefined, ctx: Tool.Context) {
   if (initModel) {
-    const model = await Provider.getModel(ProviderID.make(initModel.providerID), ModelID.make(initModel.modelID)).catch(
-      () => undefined,
-    )
+    const reference = await Provider.resolveRequestedModel({
+      providerID: ProviderID.make(initModel.providerID),
+      modelID: ModelID.make(initModel.modelID),
+    })
+    const model = await Provider.getModel(reference.providerID, reference.modelID).catch(() => undefined)
     if (model) return model
   }
   const user = ctx.messages.findLast((msg) => msg.info.role === "user")
   if (user && user.info.role === "user") {
-    const model = await Provider.getModel(user.info.model.providerID, user.info.model.modelID).catch(() => undefined)
+    const reference = await Provider.resolveRequestedModel(user.info.model)
+    const model = await Provider.getModel(reference.providerID, reference.modelID).catch(() => undefined)
     if (model) return model
   }
   const fallback = await Provider.defaultModel()

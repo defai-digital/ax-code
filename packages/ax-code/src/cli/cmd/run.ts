@@ -33,6 +33,8 @@ import { internalBaseUrl, isInternalHostname } from "../../util/internal-url"
 import { isNonEmptyRecord } from "../../util/record"
 import { extractRunFinalAssistantText, handleRunStructuredOutput, resolveRunOutputFile } from "./run-output"
 import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
+import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
+import { readNonTtyStdin } from "../stdin"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -111,8 +113,10 @@ export function formatRunToolFallbackInput(input: unknown): string {
   }
 }
 
+type RunProviderList = Parameters<typeof sameSkuOnConnectedProvider>[0]
+
 export function findRunModelError(input: {
-  providers: { id: string; models: Record<string, unknown> }[]
+  providers: RunProviderList
   providerID: string
   modelID: string
 }): string | undefined {
@@ -124,15 +128,37 @@ export function findRunModelError(input: {
   return undefined
 }
 
-type RunProviderList = { id: string; models: Record<string, unknown> }[]
+/**
+ * The requested model when its provider lists it and is connected, else the
+ * same model ID on a connected provider: config and docs keep naming a SKU by its native
+ * provider (`deepseek/deepseek-v4-pro`) after that provider was disabled and
+ * a custom gateway took over serving it. `connected` narrows the fallback to
+ * providers that can actually serve a turn — the full list also carries
+ * catalog-only providers. Undefined when neither exists.
+ */
+export function resolveRunModel(input: {
+  providers: RunProviderList
+  connected?: readonly string[]
+  providerID: string
+  modelID: string
+}): { providerID: string; modelID: string } | undefined {
+  const exactIsConnected = !input.connected || input.connected.includes(input.providerID)
+  if (!findRunModelError(input) && exactIsConnected) {
+    return { providerID: input.providerID, modelID: input.modelID }
+  }
+  const connected = input.connected
+  const candidates = connected ? input.providers.filter((provider) => connected.includes(provider.id)) : input.providers
+  return sameSkuOnConnectedProvider(candidates, input)
+}
 
 export async function refreshRunProvidersOnModelMiss(input: {
   providers: RunProviderList
+  connected?: readonly string[]
   providerID: string
   modelID: string
   refresh: () => Promise<RunProviderList | undefined>
 }) {
-  if (!findRunModelError(input)) return input.providers
+  if (resolveRunModel(input)) return input.providers
   return input.refresh()
 }
 
@@ -457,11 +483,7 @@ export const RunCommand = cmd({
     }
 
     if (!process.stdin.isTTY) {
-      const chunks: Buffer[] = []
-      for await (const chunk of process.stdin) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-      }
-      message += "\n" + Buffer.concat(chunks).toString("utf8")
+      message += "\n" + (await readNonTtyStdin())
     }
 
     if (message.trim().length === 0 && !args.command) {
@@ -759,6 +781,10 @@ export const RunCommand = cmd({
       // Validate an explicitly requested model before creating a session so a
       // typo'd or removed -m/--model fails fast instead of leaving behind a
       // ghost session that only errors server-side after creation (#405).
+      // The model actually sent may differ from the request: a SKU whose
+      // native provider is disabled is followed to the connected provider
+      // that serves it.
+      let runModel: { providerID: string; modelID: string } | undefined
       if (args.model) {
         let providerID: string
         let modelID: string
@@ -769,15 +795,18 @@ export const RunCommand = cmd({
         } catch (error) {
           exitEarly(toErrorMessage(error))
         }
+        runModel = { providerID: providerID!, modelID: modelID! }
         const listProviders = (waitForDiscovery = false) =>
           sdk.provider
             .list(undefined, waitForDiscovery ? { headers: { [Provider.DISCOVERY_WAIT_HEADER]: "true" } } : undefined)
-            .then((result) => result.data?.all)
+            .then((result) => (result.data ? { all: result.data.all, connected: result.data.connected } : undefined))
             .catch(() => undefined)
         const initialProviders = await listProviders()
+        let connected = initialProviders?.connected
         const providers = initialProviders
           ? await refreshRunProvidersOnModelMiss({
-              providers: initialProviders,
+              providers: initialProviders.all,
+              connected,
               providerID: providerID!,
               modelID: modelID!,
               refresh: async () => {
@@ -785,15 +814,26 @@ export const RunCommand = cmd({
                 // in the snapshot. Only a miss waits for the complete local or
                 // attached-server list, then validates once more.
                 if (!args.attach) await Provider.ready()
-                return listProviders(Boolean(args.attach))
+                const refreshed = await listProviders(Boolean(args.attach))
+                connected = refreshed?.connected
+                return refreshed?.all
               },
             })
           : undefined
         if (!providers) {
           warnPrefix(`failed to list providers; skipping validation for model "${args.model}"`)
         } else {
-          const modelError = findRunModelError({ providers, providerID: providerID!, modelID: modelID! })
-          if (modelError) exitEarly(modelError)
+          const resolved = resolveRunModel({ providers, connected, providerID: providerID!, modelID: modelID! })
+          if (!resolved) {
+            const modelError = findRunModelError({ providers, providerID: providerID!, modelID: modelID! })
+            if (modelError) exitEarly(modelError)
+            if (connected && !connected.includes(providerID!)) {
+              exitEarly(`Provider "${providerID!}" is not connected`)
+            }
+          } else if (resolved.providerID !== providerID!) {
+            warnPrefix(`model "${args.model}" is served as "${resolved.providerID}/${resolved.modelID}"`)
+            runModel = resolved
+          }
         }
       }
 
@@ -841,17 +881,16 @@ export const RunCommand = cmd({
           await sdk.session.command({
             sessionID,
             agent,
-            model: args.model,
+            model: runModel ? `${runModel.providerID}/${runModel.modelID}` : undefined,
             command: args.command,
             arguments: message,
             variant: args.variant,
           })
         } else {
-          const model = args.model ? Provider.parseModel(args.model) : undefined
           await sdk.session.prompt({
             sessionID,
             agent,
-            model,
+            model: runModel,
             variant: args.variant,
             parts: [...files, { type: "text", text: message }],
           })

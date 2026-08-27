@@ -7,6 +7,7 @@ import { DEFAULT_SERVER_PORT } from "@/server/constants"
 import type { HeadlessEventSink, HeadlessRuntimeCommand } from "@/runtime/headless"
 import path from "node:path"
 import { assertLoopbackHttpUrl } from "@/runtime/listen-security"
+import { readNonTtyStdin } from "@/cli/stdin"
 
 type FetchHandler = (request: Request) => Response | Promise<Response>
 
@@ -125,11 +126,7 @@ export const HeadlessRunCommand = cmd({
 
     let message = [...args.message, ...(args["--"] || [])].join(" ")
     if (!process.stdin.isTTY) {
-      const chunks: Buffer[] = []
-      for await (const chunk of process.stdin) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-      }
-      message += "\n" + Buffer.concat(chunks).toString("utf8")
+      message += "\n" + (await readNonTtyStdin())
     }
     if (!message.trim() && !args.command && !args.transportSmoke && !args.commandSmoke) {
       throw new Error("headless-run requires a message, --command, --transport-smoke, or --command-smoke")

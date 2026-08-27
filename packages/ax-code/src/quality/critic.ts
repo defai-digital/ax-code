@@ -90,7 +90,9 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
     const abort = new AbortController()
     let raw: z.infer<typeof CRITIC_OUTPUT>
     try {
-      const modelRef = explicit ?? (await configuredArchitectModel()) ?? (await Provider.defaultModel())
+      const modelRef = explicit
+        ? await Provider.resolveRequestedModel(explicit)
+        : ((await configuredArchitectModel()) ?? (await Provider.defaultModel()))
       const resolved = await Provider.getModel(modelRef.providerID, modelRef.modelID)
       const language = await Provider.getLanguage(resolved)
       modelLabel = providerModelKey(modelRef)

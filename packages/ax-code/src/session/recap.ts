@@ -90,18 +90,19 @@ export namespace SessionRecap {
         log.warn("recap agent missing", { sessionID: input.sessionID })
         return undefined
       }
+      const userModel = await Provider.resolveRequestedModel(lastUser.model)
       // Same precedence as the title agent: explicit model pin first, then
       // the provider's small tier, then the session model as fallback.
       const model = await (async () => {
         const pinned = await agentModel(agent)
         if (pinned) return Provider.getModel(pinned.providerID, pinned.modelID)
-        const small = await Provider.getSmallModel(lastUser.model.providerID)
+        const small = await Provider.getSmallModel(userModel.providerID)
         if (small) return small
         log.info("no small model for provider; recap uses the session model", {
           sessionID: input.sessionID,
-          providerID: lastUser.model.providerID,
+          providerID: userModel.providerID,
         })
-        return Provider.getModel(lastUser.model.providerID, lastUser.model.modelID)
+        return Provider.getModel(userModel.providerID, userModel.modelID)
       })()
       // Dedicated timeout — do not share the prompt-loop abort controller.
       const abort = AbortSignal.timeout(RECAP_TIMEOUT_MS)

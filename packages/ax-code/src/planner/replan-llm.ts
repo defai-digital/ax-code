@@ -137,6 +137,8 @@ export function providerReplanGenerator(opts: ProviderReplanOptions = {}): Repla
     const { Provider } = await import("../provider/provider")
     const { generateObject } = await import("ai")
     let modelRef: { providerID: ProviderID; modelID: ModelID } | undefined = opts.model
+      ? await Provider.resolveRequestedModel(opts.model)
+      : undefined
     if (!modelRef && opts.useArchitectModel !== false) {
       const architect = await configuredArchitectModel()
       if (architect) modelRef = architect

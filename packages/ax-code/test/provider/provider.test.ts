@@ -994,6 +994,13 @@ test("parseModel handles model IDs with slashes", () => {
   expect(String(result.modelID)).toBe("openai/gpt-oss-20b")
 })
 
+test("parseModel preserves dotted custom provider IDs", () => {
+  expect(Provider.parseModel("127.0.0.1/glm-5.3")).toEqual({
+    providerID: "127.0.0.1",
+    modelID: "glm-5.3",
+  })
+})
+
 test("parseModel rejects a bare provider without a model id", () => {
   expect(() => Provider.parseModel("openai")).toThrow('expected "provider/model"')
 })
@@ -4079,6 +4086,19 @@ test("defaultModel follows a configured model to the connected provider that ser
       const model = await Provider.defaultModel()
       expect(String(model.providerID)).toBe("127-0-0-1")
       expect(String(model.modelID)).toBe("deepseek-v4-pro")
+
+      await expect(
+        Provider.resolveRequestedModel({
+          providerID: ProviderID.make("deepseek"),
+          modelID: ModelID.make("deepseek-v4-pro"),
+        }),
+      ).resolves.toEqual({ providerID: "127-0-0-1", modelID: "deepseek-v4-pro" })
+      await expect(
+        Provider.resolveRequestedModel({
+          providerID: ProviderID.make("deepseek"),
+          modelID: ModelID.make("unknown-model"),
+        }),
+      ).resolves.toEqual({ providerID: "deepseek", modelID: "unknown-model" })
     },
   })
 })

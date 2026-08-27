@@ -106,7 +106,7 @@ export async function checkVisualRouting(
   | { ok: true; model: ProviderModel; providerID: string; caps: ModelVisualCapabilities }
   | { ok: false; diagnostic: string }
 > {
-  const target = options?.model ?? (await Provider.defaultModel())
+  const target = options?.model ? await Provider.resolveRequestedModel(options.model) : await Provider.defaultModel()
   const model = await Provider.getModel(target.providerID, target.modelID)
   const caps = toVisualCapabilities(model)
 

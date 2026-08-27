@@ -1433,6 +1433,19 @@ export namespace Provider {
     return undefined
   }
 
+  /**
+   * Resolve an explicit model request to the connected provider serving the
+   * same SKU. Unlike a config pin, an unknown request is preserved so its
+   * eventual getModel call fails loudly instead of silently choosing a
+   * different model.
+   */
+  export async function resolveRequestedModel(model: {
+    providerID: ProviderID
+    modelID: ModelID
+  }): Promise<{ providerID: ProviderID; modelID: ModelID }> {
+    return (await resolvePinnedModel(model)) ?? model
+  }
+
   export async function defaultModel() {
     const cfg = await Config.get()
     if (cfg.model) {

@@ -82,6 +82,26 @@ export function staticallyCheckablePathArgs(cmd: string, args: string[]) {
   }
 }
 
+/**
+ * Literal paths a command is expected to create. The bash preflight uses
+ * these only to avoid rejecting a later read in the same compound command;
+ * isolation and write permissions are still enforced independently.
+ */
+export function staticallyCreatedPathArgs(cmd: string, args: string[]) {
+  const positional = positionalArgs(args)
+  switch (cmd) {
+    case "mkdir":
+    case "touch":
+    case "tee":
+      return positional
+    case "mv":
+    case "cp":
+      return positional.length > 1 ? positional.slice(-1) : []
+    default:
+      return []
+  }
+}
+
 export function hasDynamicRedirection(command: string) {
   return /(?:^|[\s&;|])\d*>>?\s*(?:\$|`)/.test(command)
 }

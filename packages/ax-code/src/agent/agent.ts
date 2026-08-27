@@ -519,7 +519,7 @@ export namespace Agent {
 
   export async function generate(input: { description: string; model?: { providerID: ProviderID; modelID: ModelID } }) {
     const cfg = await Config.get()
-    const model = input.model ?? (await Provider.defaultModel())
+    const model = input.model ? await Provider.resolveRequestedModel(input.model) : await Provider.defaultModel()
     const resolved = await Provider.getModel(model.providerID, model.modelID)
     const language = await Provider.getLanguage(resolved)
 

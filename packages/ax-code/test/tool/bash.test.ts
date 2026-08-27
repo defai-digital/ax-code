@@ -908,6 +908,51 @@ describe("tool.bash isolation", () => {
       })
     })
 
+    test("allows a compound command to create paths before reading them", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: [
+                "cat > prompt.txt <<'EOF'",
+                "nested model prompt",
+                "EOF",
+                "cp prompt.txt copied.txt",
+                "printf '%s' \"$(cat copied.txt)\"",
+              ].join("\n"),
+              description: "Create and read a nested prompt",
+            },
+            ctx,
+          )
+
+          expect(result.metadata.exit).toBe(0)
+          expect(result.output).toContain("nested model prompt")
+        },
+      })
+    })
+
+    test("still rejects a read that appears before its creator", async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(
+            bash.execute(
+              {
+                command: "cat late.txt; touch late.txt",
+                description: "Read before creating a file",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow(/Path does not exist/)
+        },
+      })
+    })
+
     test("error message includes hint about Glob tool", async () => {
       await using tmp = await tmpdir()
       await Instance.provide({

@@ -8,10 +8,11 @@ import { validateUserMessageForSave } from "./prompt-message-validation"
 import { PromptPartInput } from "./prompt-part-input"
 import { getLastUserInfo } from "./prompt-request"
 import { resolveUserMessageRouting } from "./prompt-routing"
-import { lastModel } from "./prompt-command-selection"
+import { lastModel, requestedModel } from "./prompt-command-selection"
 import { Session } from "."
 import { MessageID, type SessionID } from "./schema"
 import type { ModelID, ProviderID } from "../provider/schema"
+import { providerModelEquals } from "../provider/model-key"
 import type { PromptIsolationPolicy } from "./prompt-runtime-policy"
 
 export type CreateUserMessageInput = {
@@ -68,6 +69,10 @@ export async function createUserMessage(input: CreateUserMessageInput) {
     .map((p) => p.text)
     .join(" ")
 
+  // The client's model, followed to the connected provider serving the same
+  // SKU when its own provider is disabled: config, docs, and `run --model`
+  // keep naming a model by its native provider after a gateway took it over.
+  const requested = input.model ? await requestedModel(input.model) : undefined
   const route = await resolveUserMessageRouting({
     sessionID: input.sessionID,
     messageID,
@@ -75,7 +80,7 @@ export async function createUserMessage(input: CreateUserMessageInput) {
     messageText,
     parts: input.parts,
     agentRouting: input.agentRouting,
-    requestedModel: input.model,
+    requestedModel: requested,
   })
   agentName = route.agentName
   const agent = route.agent
@@ -83,19 +88,17 @@ export async function createUserMessage(input: CreateUserMessageInput) {
   const hybridModel = route.hybridModel
 
   const pinned = route.pinnedModel
-  // When the router switched agents, the client's model was picked for the
-  // agent the user started on; the routed agent's own pin wins over it.
-  const routedPin = route.switched ? pinned : undefined
-  const model =
-    complexityModel ?? hybridModel ?? routedPin ?? input.model ?? pinned ?? (await lastModel(input.sessionID))
+  // Auto-routing changes the agent for this turn, but it must not replace a
+  // model the user explicitly submitted. The selected agent's pin is only a
+  // fallback when no requested model exists.
+  const model = complexityModel ?? hybridModel ?? requested ?? pinned ?? (await lastModel(input.sessionID))
   // The agent's variant only applies while the turn runs on the agent's own
   // model (or the agent pins none); a fallback model may not accept it.
-  const agentVariantApplies = !agent.model || pinned !== undefined
+  const agentVariantApplies =
+    !requested && (!agent.model || (pinned !== undefined && providerModelEquals(model, pinned)))
   const variant =
     input.variant ??
-    ((routedPin || !input.model) && !complexityModel && !hybridModel && agentVariantApplies && agent.variant
-      ? agent.variant
-      : undefined)
+    (!complexityModel && !hybridModel && agentVariantApplies && agent.variant ? agent.variant : undefined)
 
   const info: MessageV2.User = {
     id: messageID,

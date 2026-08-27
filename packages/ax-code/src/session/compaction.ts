@@ -379,14 +379,15 @@ export namespace SessionCompaction {
 
     const agent = await Agent.get("compaction")
     if (!agent) throw new Error("Compaction agent is not configured or has been disabled")
+    const userModel = await Provider.resolveRequestedModel(userMessage.model)
     // Compaction is an aux call: explicit agent pin first, then the
     // provider's small tier, and only bill the session's main model as the
     // fallback (providers without a small-model mapping).
     const pinned = await agentModel(agent)
     let model = pinned
       ? await Provider.getModel(pinned.providerID, pinned.modelID)
-      : ((await Provider.getSmallModel(userMessage.model.providerID)) ??
-        (await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID)))
+      : ((await Provider.getSmallModel(userModel.providerID)) ??
+        (await Provider.getModel(userModel.providerID, userModel.modelID)))
     // C9: resolve the next ladder rung lazily — only on a transient failure —
     // so the happy path performs no extra provider lookups. Order mirrors the
     // primary selection: the provider's small tier first (when an agent pin
@@ -394,11 +395,9 @@ export namespace SessionCompaction {
     const resolveNextRung = async (current: Provider.Model): Promise<Provider.Model | undefined> => {
       const candidates: Array<Provider.Model | undefined> = []
       if (agent.model) {
-        candidates.push(await Provider.getSmallModel(userMessage.model.providerID).catch(() => undefined))
+        candidates.push(await Provider.getSmallModel(userModel.providerID).catch(() => undefined))
       }
-      candidates.push(
-        await Provider.getModel(userMessage.model.providerID, userMessage.model.modelID).catch(() => undefined),
-      )
+      candidates.push(await Provider.getModel(userModel.providerID, userModel.modelID).catch(() => undefined))
       return candidates.find(
         (candidate) => candidate && (candidate.providerID !== current.providerID || candidate.id !== current.id),
       )
