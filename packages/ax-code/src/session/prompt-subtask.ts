@@ -45,6 +45,13 @@ export async function executeSubtask(task: MessageV2.SubtaskPart, ctx: SubtaskCo
   })
   const taskTool = await TaskTool.init()
   const taskPin = task.model ? await Provider.resolvePinnedModel(task.model) : undefined
+  if (task.model && !taskPin) {
+    log.warn("subtask model is unavailable; using the session model", {
+      providerID: task.model.providerID,
+      modelID: task.model.modelID,
+      agent: task.agent,
+    })
+  }
   const taskModel = taskPin ? await Provider.getModel(taskPin.providerID, taskPin.modelID) : ctx.model
   const assistantMessage = (await Session.updateMessage({
     id: MessageID.ascending(),

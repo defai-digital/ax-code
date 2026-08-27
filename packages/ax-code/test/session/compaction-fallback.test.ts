@@ -283,6 +283,13 @@ describe("session.compaction model fallback (C9)", () => {
             models: {},
           },
         } as never)
+        // The compaction agent's pin is resolved through agentModel →
+        // resolvePinnedModel (which consults the real Provider.list() — not
+        // the spy above). Stub it directly so the pin reads as available and
+        // the privacy guard is what this test exercises.
+        const resolveSpy = vi
+          .spyOn(Provider, "resolvePinnedModel")
+          .mockResolvedValue({ providerID: ProviderID.make("local"), modelID: ModelID.make("local-small") })
         const processor = mockProcessor([
           { type: "fail", error: apiError({ message: "Internal Server Error", statusCode: 500, isRetryable: true }) },
           { type: "succeed" },
@@ -316,6 +323,7 @@ describe("session.compaction model fallback (C9)", () => {
         } finally {
           processor.spy.mockRestore()
           listSpy.mockRestore()
+          resolveSpy.mockRestore()
           smallSpy.mockRestore()
           getModel.mockRestore()
         }
