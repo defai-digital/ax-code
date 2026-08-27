@@ -11,6 +11,7 @@ vi.mock("@/provider/provider", () => ({
     getModel: vi.fn(),
     getLanguage: vi.fn(),
     parseModel: vi.fn(),
+    resolvePinnedModel: vi.fn(),
   },
 }))
 
@@ -74,6 +75,7 @@ test("review maps a deny verdict from the model", async () => {
 test("review uses the dedicated guardian model override when configured", async () => {
   vi.stubEnv("AX_CODE_AUTONOMOUS_GUARDIAN_MODEL", "openai/gpt-5-mini")
   vi.mocked(Provider.parseModel).mockReturnValue({ providerID: "openai", modelID: "gpt-5-mini" } as never)
+  vi.mocked(Provider.resolvePinnedModel).mockResolvedValue({ providerID: "openai", modelID: "gpt-5-mini" } as never)
   vi.mocked(Provider.getModel).mockResolvedValue({ id: "openai/gpt-5-mini" } as never)
   vi.mocked(Provider.getLanguage).mockResolvedValue({} as never)
   vi.mocked(generateObject).mockResolvedValue({ object: { action: "allow", reason: "safe read" } } as never)
@@ -81,8 +83,40 @@ test("review uses the dedicated guardian model override when configured", async 
   const verdict = await reviewInInstance({ permission: "bash", patterns: ["ls"] })
 
   expect(Provider.parseModel).toHaveBeenCalledWith("openai/gpt-5-mini")
+  expect(Provider.resolvePinnedModel).toHaveBeenCalledWith({ providerID: "openai", modelID: "gpt-5-mini" })
   expect(Provider.defaultModel).not.toHaveBeenCalled()
   expect(verdict.action).toBe("allow")
+})
+
+test("review follows a dedicated guardian model to the connected provider that serves the same SKU", async () => {
+  vi.stubEnv("AX_CODE_AUTONOMOUS_GUARDIAN_MODEL", "openai/gpt-5-mini")
+  vi.mocked(Provider.parseModel).mockReturnValue({ providerID: "openai", modelID: "gpt-5-mini" } as never)
+  vi.mocked(Provider.resolvePinnedModel).mockResolvedValue({
+    providerID: "127-0-0-1",
+    modelID: "gpt-5-mini",
+  } as never)
+  vi.mocked(Provider.getModel).mockResolvedValue({ id: "127-0-0-1/gpt-5-mini" } as never)
+  vi.mocked(Provider.getLanguage).mockResolvedValue({} as never)
+  vi.mocked(generateObject).mockResolvedValue({ object: { action: "allow", reason: "safe read" } } as never)
+
+  const verdict = await reviewInInstance({ permission: "bash", patterns: ["ls"] })
+
+  expect(Provider.getModel).toHaveBeenCalledWith("127-0-0-1", "gpt-5-mini")
+  expect(Provider.defaultModel).not.toHaveBeenCalled()
+  expect(verdict.action).toBe("allow")
+})
+
+test("review fails closed to ask when a dedicated guardian model cannot be resolved", async () => {
+  vi.stubEnv("AX_CODE_AUTONOMOUS_GUARDIAN_MODEL", "openai/gpt-5-mini")
+  vi.mocked(Provider.parseModel).mockReturnValue({ providerID: "openai", modelID: "gpt-5-mini" } as never)
+  vi.mocked(Provider.resolvePinnedModel).mockResolvedValue(undefined)
+
+  const verdict = await reviewInInstance({ permission: "bash", patterns: ["ls"] })
+
+  expect(Provider.getModel).not.toHaveBeenCalled()
+  expect(Provider.defaultModel).not.toHaveBeenCalled()
+  expect(verdict.action).toBe("ask")
+  expect(verdict.reason).toBe("guardian unavailable")
 })
 
 test("review retries a transient error exactly once, then fails closed to ask", async () => {

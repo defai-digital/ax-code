@@ -69,6 +69,31 @@ describe("ACP agent adapter", () => {
     await expect(defaultModel(configWithProviders([]))).rejects.toThrow("No connected provider has an available model")
   })
 
+  test("follows a configured model to the connected provider that serves the same SKU", async () => {
+    const model = await defaultModel({
+      sdk: {
+        config: {
+          get: async () => ({ data: { model: "deepseek/deepseek-v4-pro" } }),
+          providers: async () => ({
+            data: {
+              providers: [
+                {
+                  id: "127-0-0-1",
+                  models: {
+                    "glm-5.3": { id: "glm-5.3", tool_call: true },
+                    "deepseek-v4-pro": { id: "deepseek-v4-pro", tool_call: true },
+                  },
+                },
+              ],
+            },
+          }),
+        },
+      },
+    } as any)
+
+    expect(model).toEqual({ providerID: "127-0-0-1", modelID: "deepseek-v4-pro" })
+  })
+
   test("parses advertised models and variants", () => {
     const providers = [
       {

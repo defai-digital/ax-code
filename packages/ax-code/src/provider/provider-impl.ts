@@ -1454,20 +1454,28 @@ export namespace Provider {
     // pre-discovery) and silently fall through to a different default. Unlike
     // `getModel()`, this resolution has no retry, so block until complete.
     await ready()
-    const providers = await list()
     const recent = (await Filesystem.readJson<{ recent?: unknown }>(path.join(Global.Path.state, "model.json"))
       .then((x) => providerModelList(x.recent))
       .catch((error) => {
         if (Filesystem.isEnoent(error)) return []
         throw error
       })) as { providerID: ProviderID; modelID: ModelID }[]
+    // Recents are stored as provider/model pairs. After the native provider is
+    // disabled and the same SKU is served by a custom gateway, the TUI migrates
+    // the store — CLI, headless, and server sessions do not, so resolve here.
     for (const entry of recent) {
-      const provider = providers[entry.providerID]
-      if (!provider) continue
-      if (!modelSelectableForProvider(entry.providerID, provider.models[entry.modelID])) continue
-      return { providerID: entry.providerID, modelID: entry.modelID }
+      const resolved = await resolvePinnedModel(entry)
+      if (resolved && resolved.providerID !== entry.providerID) {
+        log.warn("recent model moved to another provider", {
+          modelID: entry.modelID,
+          from: entry.providerID,
+          to: resolved.providerID,
+        })
+      }
+      if (resolved) return resolved
     }
 
+    const providers = await list()
     for (const provider of Object.values(providers)) {
       if (cfg.provider && !Object.keys(cfg.provider).includes(provider.id)) continue
       const [model] = sort(

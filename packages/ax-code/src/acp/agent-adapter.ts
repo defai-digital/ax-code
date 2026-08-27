@@ -3,6 +3,7 @@ import { applyPatch } from "diff"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
 import { providerModelKey } from "../provider/model-key"
+import { sameSkuOnConnectedProvider } from "../provider/model-selectability"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { Log } from "../util/log"
@@ -95,6 +96,13 @@ export async function defaultModel(
   if (specified && providers.length) {
     const provider = providers.find((p) => p.id === specified.providerID)
     if (provider && provider.models[specified.modelID]) return specified
+    const moved = sameSkuOnConnectedProvider(providers, specified)
+    if (moved) {
+      return {
+        providerID: ProviderID.make(moved.providerID),
+        modelID: ModelID.make(moved.modelID),
+      }
+    }
   }
 
   if (specified && !providers.length) return specified

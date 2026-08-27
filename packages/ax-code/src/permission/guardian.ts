@@ -204,8 +204,10 @@ Be conservative: when uncertain, choose ask.`
     try {
       const { Provider } = await import("@/provider/provider")
       const override = Flag.AX_CODE_AUTONOMOUS_GUARDIAN_MODEL
-      const modelRef = override ? Provider.parseModel(override) : await Provider.defaultModel()
-      if (!modelRef) return null
+      const modelRef = override
+        ? await Provider.resolvePinnedModel(Provider.parseModel(override))
+        : await Provider.defaultModel()
+      if (!modelRef) return override ? undefined : null
       const resolved = await Provider.getModel(modelRef.providerID, modelRef.modelID)
       const { ProviderTransform } = await import("@/provider/transform")
       return {
