@@ -151926,34 +151926,6 @@
           "output": 65536
         }
       },
-      "google/lyria-3-clip-preview": {
-        "id": "google/lyria-3-clip-preview",
-        "name": "Lyria 3 Clip Preview",
-        "description": "Music generation model for short 30-second clips, loops, and previews from text or image prompts",
-        "family": "lyria",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-03-25",
-        "last_updated": "2026-03-25",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text",
-            "audio"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "output": 65536
-        }
-      },
       "google/gemini-flash-latest": {
         "id": "google/gemini-flash-latest",
         "name": "Gemini 3.7 Flash",
@@ -152397,6 +152369,42 @@
         "limit": {
           "context": 262144,
           "output": 128000
+        }
+      },
+      "deepinfra/tencent/Hy3": {
+        "id": "deepinfra/tencent/Hy3",
+        "name": "Hy3",
+        "description": "Tencent Hy reasoning model for coding, instruction following, and agent tasks",
+        "family": "Hy",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-07-06",
+        "last_updated": "2026-07-06",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 64000
         }
       },
       "deepinfra/nvidia/Nemotron-3-Nano-30B-A3B": {
@@ -157001,6 +157009,44 @@
         "limit": {
           "context": 262144,
           "output": 65536
+        }
+      },
+      "qwen/qwen3.8-flash": {
+        "id": "qwen/qwen3.8-flash",
+        "name": "Qwen3.8 Flash",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
         }
       },
       "qwen/qwen3-next-80b-a3b-thinking": {
@@ -173848,7 +173894,7 @@
           }
         ],
         "tool_call": true,
-        "structured_output": false,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-14",
         "last_updated": "2026-08-14",
@@ -177937,7 +177983,7 @@
         "open_weights": false,
         "limit": {
           "context": 1047576,
-          "output": 32768
+          "output": 942818
         }
       },
       "openai/o1": {
@@ -183152,7 +183198,7 @@
           }
         ],
         "tool_call": true,
-        "structured_output": false,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-08-19",
         "last_updated": "2026-08-19",
@@ -183167,7 +183213,7 @@
         "open_weights": false,
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 943718
         }
       },
       "nex-agi/nex-n2-mini": {

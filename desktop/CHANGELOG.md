@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.6] - 2026-08-28
+
+### Added
+
+- Add Qwen 3.8 Flash to Alibaba Token Plan catalogs.
+
+### Fixed
+
+- Fix council unknown-provider resolution for disabled native SKUs.
+
 ## [7.9.5] - 2026-08-28
 
 ### Changed
