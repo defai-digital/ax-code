@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.4] - 2026-08-28
+
+### Changed
+
+- Ignore empty MiniMax tool wrappers in the completion gate.
+
+### Fixed
+
+- Fix truncated tool call completion detection.
+- Fix completion gate tool wrapper detection.
+
 ## [7.9.3] - 2026-08-27
 
 ### Changed
