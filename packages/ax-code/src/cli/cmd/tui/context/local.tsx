@@ -1,5 +1,5 @@
 import { createStore } from "solid-js/store"
-import { batch, createEffect, createMemo, onCleanup } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import path from "path"
@@ -25,14 +25,19 @@ import {
   modelIdentity,
   modelPreferenceStatus as resolveModelPreferenceStatus,
   normalizeModelOverrides,
+  normalizeSessionModelPreferences,
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
+  pruneSessionModelPreferences,
+  rememberSessionModelPreference,
   resolvePinnedModelPreference,
+  sessionModelPreference,
   solidStoreRecordPatch,
   rememberRecentModel as rememberRecentModelEntry,
   resolveCurrentAgent,
   type ModelPreferenceStatus,
+  type SessionModelPreferenceStore,
 } from "./local-util"
 import { Log } from "@/util/log"
 import { modelDisplayInfo } from "@tui/component/model-vision-label"
@@ -189,6 +194,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         favorite: [],
         variant: {},
       })
+      const [sessionModels, setSessionModels] = createSignal<SessionModelPreferenceStore>({})
+      const route = useRoute()
 
       const filePath = path.join(Global.Path.state, "model.json")
       const state = {
@@ -199,6 +206,28 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       function rememberRecentModel(model: ProviderModelKeyInput) {
         setModelStore("recent", rememberRecentModelEntry(modelStore.recent, model))
+      }
+
+      function activeSessionID() {
+        return route.data.type === "session" ? route.data.sessionID : undefined
+      }
+
+      function rememberSessionModel(sessionID: string, model: ProviderModelKeyInput, agentName?: string) {
+        const current = sessionModels()
+        const next = rememberSessionModelPreference(current, sessionID, agentName, model)
+        if (next === current) return false
+        setSessionModels(next)
+        return true
+      }
+
+      function rememberActiveSessionModel(model: ProviderModelKeyInput, agentName: string) {
+        const sessionID = activeSessionID()
+        return sessionID ? rememberSessionModel(sessionID, model, agentName) : false
+      }
+
+      function setUserModel(agentName: string, model: ProviderModelKeyInput) {
+        setModelStore("model", agentName, modelIdentity(model))
+        rememberActiveSessionModel(model, agentName)
       }
 
       function variantPreferenceStatus(
@@ -229,6 +258,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         state.pending = false
         void Filesystem.writeJson(filePath, {
           model: modelStore.model,
+          session: sessionModels(),
           recent: modelStore.recent,
           favorite: modelStore.favorite,
           variant: modelStore.variant,
@@ -269,6 +299,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             return
           }
           setModelStore("model", normalizeModelOverrides(result.value?.model))
+          setSessionModels(normalizeSessionModelPreferences(result.value?.session))
           setModelStore("recent", normalizeRecentModels(result.value?.recent))
           setModelStore("favorite", providerModelList(result.value?.favorite))
           setModelStore("variant", normalizeModelVariantStore(result.value?.variant))
@@ -311,8 +342,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
       const currentModel = createMemo(() => {
         const a = agent.current()
+        const sessionID = activeSessionID()
         return (
           getFirstValidModel(
+            () => resolvePin(sessionModelPreference(sessionModels(), sessionID, a.name)),
             () => resolvePin(modelStore.model[a.name]),
             () => resolvePin(a.model),
             fallbackModel,
@@ -336,7 +369,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           variantPreferenceStatus,
           resolvePin,
         )
-        if (pruned.changed) {
+        const prunedSessions = pruneSessionModelPreferences(sessionModels(), modelPreferenceStatus, resolvePin)
+        if (pruned.changed || prunedSessions.changed) {
           for (const agentName of Object.keys(modelStore.model)) {
             if (Object.hasOwn(pruned.model, agentName)) continue
             const storedModel = modelStore.model[agentName]
@@ -353,8 +387,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             recentAfter: pruned.recent.length,
             favoriteBefore: modelStore.favorite.length,
             favoriteAfter: pruned.favorite.length,
+            sessionBefore: Object.keys(sessionModels()).length,
+            sessionAfter: Object.keys(prunedSessions.value).length,
           })
           setModelStore("model", solidStoreRecordPatch(modelStore.model, pruned.model))
+          setSessionModels(prunedSessions.value)
           setModelStore("recent", pruned.recent)
           setModelStore("favorite", pruned.favorite)
           setModelStore("variant", solidStoreRecordPatch(modelStore.variant, pruned.variant))
@@ -407,7 +444,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           if (next >= recent.length) next = 0
           const val = recent[next]
           if (!val) return
-          setModelStore("model", agent.current().name, { ...val })
+          setUserModel(agent.current().name, val)
           save()
         },
         cycleFavorite(direction: 1 | -1) {
@@ -434,7 +471,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
           const next = favorites[index]
           if (!next) return
-          setModelStore("model", agent.current().name, { ...next })
+          setUserModel(agent.current().name, next)
           rememberRecentModel(next)
           save()
         },
@@ -444,7 +481,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             // When providers haven't loaded yet, skip validation but still persist
             // the selection so the user's choice is remembered after startup.
             if (!sync.data.provider_loaded) {
-              setModelStore("model", currentAgentName, model)
+              setUserModel(currentAgentName, model)
               if (options?.recent) {
                 rememberRecentModel(model)
               }
@@ -462,12 +499,18 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               })
               return
             }
-            setModelStore("model", currentAgentName, resolved)
+            setUserModel(currentAgentName, resolved)
             if (options?.recent) {
               rememberRecentModel(resolved)
               save()
             }
           })
+        },
+        session: {
+          set(sessionID: string, model: ProviderModelKeyInput, agentName?: string) {
+            if (!rememberSessionModel(sessionID, model, agentName)) return
+            save()
+          },
         },
         toggleFavorite(model: { providerID: string; modelID: string }) {
           batch(() => {

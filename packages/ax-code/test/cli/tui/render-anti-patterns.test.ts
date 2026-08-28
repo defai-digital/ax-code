@@ -1278,9 +1278,10 @@ describe("AX Code TUI stability guardrails", () => {
     expect(prompt).not.toContain("stringWidth(input.plainText)")
     expect(prompt).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
     // A server-generated user message (auto-route, plan_exit) moves the agent
-    // chip but must not persist its model as that agent's override: the
-    // override would shadow the agent's config pin on every later turn.
+    // chip and restores its model only for this session. Persisting it as the
+    // agent's global override would shadow config pins in unrelated sessions.
     expect(prompt).not.toContain("local.model.set(msg.model)")
+    expect(prompt).toContain("local.model.session.set(sessionID, msg.model, msg.agent)")
     expect(prompt).toContain(
       "if (msg.model && current && providerModelEquals(current, msg.model)) local.model.variant.set(msg.variant)",
     )
@@ -1332,6 +1333,7 @@ describe("AX Code TUI stability guardrails", () => {
     // `--model deepseek/…` after the native provider was disabled must follow
     // the SKU onto a connected gateway, not toast "is not valid" and drop it.
     expect(local).toContain("const requested = resolvePin(Provider.parseModel(args.model))")
+    expect(local).toContain("sessionModelPreference(sessionModels(), sessionID, a.name)")
     expect(local).toContain("() => resolvePin(modelStore.model[a.name])")
     expect(local).toContain("const resolved = isModelValid(model) ? model : resolvePin(model)")
     expect(local).not.toContain("if (isModelValid({ providerID, modelID }))")
