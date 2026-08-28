@@ -191,6 +191,56 @@ describe("AutonomousCompletionGate", () => {
     })
   })
 
+  test("preserves literal brackets after MiniMax channel markers", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text: ']<]minimax[>[[debug_analyze]\npath: "."',
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
+  test("blocks non-empty tool_call bodies beyond the legacy scan limit", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [{ type: "text", text: `<tool_call>${"x".repeat(4_001)}</tool_call>` }],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "unexecutable_tool_text",
+    })
+  })
+
+  test("allows whitespace-only tool_call bodies beyond the legacy scan limit", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [{ type: "text", text: `<tool_call>${" \n".repeat(2_001)}</tool_call>` }],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
   test("ignores synthetic text when checking for unexecutable tool text", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

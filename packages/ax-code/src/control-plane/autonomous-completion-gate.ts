@@ -153,16 +153,30 @@ export namespace AutonomousCompletionGate {
   // MiniMax (and similar chat templates) leak channel wrappers around tool
   // markup, e.g. `]<]minimax[>[<tool_call>\n]<]minimax[>[</tool_call>`.
   // Strip those so an empty wrapper is not treated as an attempted tool call.
+  // The extra `[` belongs to the wrapper only when it prefixes markup; keep
+  // literal brackets in model content intact.
   function stripNativeChannelMarkers(text: string) {
-    return text.replace(/\]<\][a-z0-9_-]+\[>\[?/gi, "")
+    return text.replace(/\]<\][a-z0-9_-]+\[>(?:\[(?=<))?/gi, "")
   }
 
   function hasNonEmptyToolCallBody(text: string) {
-    const re = /<tool_call>([\s\S]{0,4000})<\/tool_call>/g
-    let match: RegExpExecArray | null
-    while ((match = re.exec(text))) {
-      if (match[1].trim().length > 0) return true
+    const openingTag = "<tool_call>"
+    const closingTag = "</tool_call>"
+    let searchFrom = 0
+
+    // Scan explicit tag boundaries so valid long tool bodies are not missed.
+    while (searchFrom < text.length) {
+      const openingIndex = text.indexOf(openingTag, searchFrom)
+      if (openingIndex === -1) return false
+
+      const bodyStart = openingIndex + openingTag.length
+      const closingIndex = text.indexOf(closingTag, bodyStart)
+      if (closingIndex === -1) return false
+      if (text.slice(bodyStart, closingIndex).trim().length > 0) return true
+
+      searchFrom = closingIndex + closingTag.length
     }
+
     return false
   }
 
