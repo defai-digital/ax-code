@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.7] - 2026-08-28
+
+### Changed
+
+- Harden MCP connect reliability and tool result handling.
+
+### Fixed
+
+- Fix overflow, lock, MCP OAuth, and path-approval closed loops.
+
 ## [7.9.6] - 2026-08-28
 
 ### Added
