@@ -34501,6 +34501,43 @@
           "output": 64000
         }
       },
+      "hy4-preview": {
+        "id": "hy4-preview",
+        "name": "Hy4 preview",
+        "description": "A next-generation productivity model with significantly enhanced Agent and complex task execution capabilities.",
+        "family": "Hy",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-08-28",
+        "last_updated": "2026-08-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1024000,
+          "output": 64000
+        }
+      },
       "hy3": {
         "id": "hy3",
         "name": "Hy3",
@@ -48986,6 +49023,46 @@
           "output": 65536
         }
       },
+      "qwen/qwen3.8-flash": {
+        "id": "qwen/qwen3.8-flash",
+        "name": "Qwen3.8 Flash",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "qwen/qwen3.6-plus": {
         "id": "qwen/qwen3.6-plus",
         "name": "Qwen3.6 Plus",
@@ -62719,6 +62796,45 @@
         },
         "status": "deprecated"
       },
+      "qwen3.8-flash": {
+        "id": "qwen3.8-flash",
+        "name": "Qwen3.8 Flash",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "provider": {
+          "npm": "@ai-sdk/anthropic"
+        }
+      },
       "glm-5.3": {
         "id": "glm-5.3",
         "name": "GLM-5.3",
@@ -62929,6 +63045,40 @@
         "limit": {
           "context": 1000000,
           "output": 65536
+        }
+      },
+      "hy4-preview": {
+        "id": "hy4-preview",
+        "name": "Hy4 preview",
+        "description": "A next-generation productivity model with significantly enhanced Agent and complex task execution capabilities.",
+        "family": "Hy",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-08-28",
+        "last_updated": "2026-08-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1024000,
+          "output": 64000
         }
       },
       "mimo-v2.5-pro": {
@@ -71898,6 +72048,51 @@
           "output": 32768
         }
       },
+      "scx-ai-gp/kimi-k2.7-code": {
+        "id": "scx-ai-gp/kimi-k2.7-code",
+        "name": "Kimi K2.7 Code (SCX.ai)",
+        "description": "Coding-focused Kimi model, stronger on long-horizon repo work with less overthinking",
+        "family": "kimi-k2",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": false,
+        "temperature": false,
+        "knowledge": "2025-01",
+        "release_date": "2026-06-12",
+        "last_updated": "2026-06-12",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 262144,
+          "output": 262144
+        }
+      },
       "scx-ai-gp/glm-5.2-fast": {
         "id": "scx-ai-gp/glm-5.2-fast",
         "name": "GLM-5.2 Turbo (SCX.ai)",
@@ -72626,6 +72821,47 @@
           "context": 1000000,
           "input": 991000,
           "output": 65536
+        }
+      },
+      "alibaba/qwen3.8-flash": {
+        "id": "alibaba/qwen3.8-flash",
+        "name": "Qwen3.8 Flash (Alibaba Cloud)",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
         }
       },
       "alibaba/qwen-flash": {
@@ -74536,173 +74772,6 @@
         "limit": {
           "context": 1024000,
           "output": 128000
-        }
-      },
-      "iceberg/gemini-3.1-pro-preview": {
-        "id": "iceberg/gemini-3.1-pro-preview",
-        "name": "Gemini 3.1 Pro (Preview) (Iceberg)",
-        "description": "Reasoning-first Gemini preview for agentic coding and complex problem solving",
-        "family": "gemini-pro",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-01",
-        "release_date": "2026-02-19",
-        "last_updated": "2026-02-19",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "output": 65536
-        }
-      },
-      "iceberg/gemini-3.6-flash": {
-        "id": "iceberg/gemini-3.6-flash",
-        "name": "Gemini 3.6 Flash (Iceberg)",
-        "description": "Fast Gemini model balancing multimodal reasoning, tool use, and cost",
-        "family": "gemini-flash",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "minimal",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2026-03",
-        "release_date": "2026-07-21",
-        "last_updated": "2026-07-21",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "output": 65536
-        }
-      },
-      "iceberg/gemini-3-flash-preview": {
-        "id": "iceberg/gemini-3-flash-preview",
-        "name": "Gemini 3 Flash (Preview) (Iceberg)",
-        "description": "New Gemini flash lane bringing frontier-style multimodal reasoning to cheaper runs",
-        "family": "gemini-flash",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "minimal",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-01",
-        "release_date": "2025-12-17",
-        "last_updated": "2025-12-17",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "output": 65535
-        }
-      },
-      "iceberg/gemini-3.7-flash": {
-        "id": "iceberg/gemini-3.7-flash",
-        "name": "Gemini 3.7 Flash (Iceberg)",
-        "description": "High-efficiency Gemini model for agentic workflows, coding, and multimodal reasoning",
-        "family": "gemini-flash",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "minimal",
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2026-03",
-        "release_date": "2026-08-13",
-        "last_updated": "2026-08-13",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 1048576,
-          "output": 65536
         }
       },
       "mistral/ministral-8b-2512": {
@@ -117529,6 +117598,37 @@
           "npm": "@ai-sdk/anthropic"
         }
       },
+      "ling-3.0-flash-fin-free": {
+        "id": "ling-3.0-flash-fin-free",
+        "name": "Ling 3.0 Flash Fin Free",
+        "description": "Finance-enhanced model for financial research, multi-step investment workflows, and long-horizon planning and execution",
+        "family": "ling",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-27",
+        "last_updated": "2026-08-27",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 262144,
+          "output": 32768
+        }
+      },
       "gpt-5.6-luna": {
         "id": "gpt-5.6-luna",
         "name": "GPT-5.6 Luna",
@@ -152334,8 +152434,8 @@
             ]
           }
         ],
-        "tool_call": false,
-        "structured_output": false,
+        "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-02-14",
         "last_updated": "2026-02-14",
@@ -152373,8 +152473,8 @@
             ]
           }
         ],
-        "tool_call": false,
-        "structured_output": false,
+        "tool_call": true,
+        "structured_output": true,
         "temperature": true,
         "release_date": "2026-02-14",
         "last_updated": "2026-02-14",
@@ -157831,6 +157931,33 @@
           "output": 262144
         }
       },
+      "mistral/voxtral-small-latest": {
+        "id": "mistral/voxtral-small-latest",
+        "name": "Voxtral Small (latest)",
+        "description": "Instruct model with native audio input for speech understanding and tool use",
+        "family": "voxtral",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2025-07-15",
+        "last_updated": "2025-07-15",
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 32768,
+          "output": 32000
+        }
+      },
       "mistral/codestral-latest": {
         "id": "mistral/codestral-latest",
         "name": "Codestral (latest)",
@@ -158204,42 +158331,6 @@
         ],
         "tool_call": true,
         "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "last_updated": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 32768
-        }
-      },
-      "fireworks_ai/gpt-oss-20b": {
-        "id": "fireworks_ai/gpt-oss-20b",
-        "name": "GPT OSS 20B",
-        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
         "temperature": true,
         "release_date": "2025-08-05",
         "last_updated": "2025-08-05",
@@ -161889,6 +161980,8 @@
           {
             "type": "effort",
             "values": [
+              "none",
+              "minimal",
               "low",
               "medium",
               "high",
@@ -164770,6 +164863,47 @@
         "limit": {
           "context": 128000,
           "output": 4096
+        }
+      },
+      "qwen3.8-flash": {
+        "id": "qwen3.8-flash",
+        "name": "Qwen3.8 Flash",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
         }
       },
       "qwen3-next-80b-a3b-thinking": {
@@ -172481,6 +172615,43 @@
     "name": "Tencent Token Plan",
     "doc": "https://cloud.tencent.com/document/product/1823/130060",
     "models": {
+      "hy4-preview": {
+        "id": "hy4-preview",
+        "name": "Hy4 preview",
+        "description": "A next-generation productivity model with significantly enhanced Agent and complex task execution capabilities.",
+        "family": "Hy",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "temperature": true,
+        "release_date": "2026-08-28",
+        "last_updated": "2026-08-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1024000,
+          "output": 64000
+        }
+      },
       "hy3": {
         "id": "hy3",
         "name": "Hy3",
@@ -172616,6 +172787,42 @@
         "limit": {
           "context": 262144,
           "output": 235929
+        }
+      },
+      "tencent/hy4-preview": {
+        "id": "tencent/hy4-preview",
+        "name": "Hy4 preview",
+        "description": "Tencent: Hy4 preview is a mixture-of-experts model from Tencent, with 49B active parameters out of 770B total. It is designed for coding agents, complex tool-use workflows, and productivity tasks that...",
+        "family": "Hy",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "low",
+              "high"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-28",
+        "last_updated": "2026-08-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 64000
         }
       },
       "tencent/hunyuan-a13b-instruct": {
@@ -173875,7 +174082,7 @@
         "open_weights": true,
         "limit": {
           "context": 163840,
-          "output": 147456
+          "output": 65536
         }
       },
       "deepseek/deepseek-chat-v3.1": {
@@ -180367,7 +180574,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 81920
+          "output": 235929
         }
       },
       "qwen/qwen3-next-80b-a3b-instruct": {
@@ -180651,7 +180858,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 81920
         }
       },
       "qwen/qwen3-coder-plus": {

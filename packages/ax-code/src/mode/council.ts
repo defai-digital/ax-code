@@ -437,11 +437,14 @@ export namespace Council {
       xai: "grok",
       grok: "grok",
       kimi: "kimi",
+      moonshot: "kimi",
       alibaba: "alibaba",
       qwen: "alibaba",
       zai: "zhipu",
       zhipu: "zhipu",
       glm: "zhipu",
+      minimax: "minimax",
+      deepseek: "deepseek",
       "ax-engine": "local",
       ollama: "local",
       local: "local",
@@ -471,6 +474,9 @@ export namespace Council {
       ["groq", "groq"],
       ["openrouter", "openrouter"],
       ["zhipu", "zhipu"],
+      ["moonshot", "kimi"],
+      ["minimax", "minimax"],
+      ["deepseek", "deepseek"],
     ]
     for (const [needle, family] of substringChecks) {
       if (id.includes(needle)) return family

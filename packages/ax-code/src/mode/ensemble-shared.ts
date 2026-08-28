@@ -9,32 +9,134 @@
  */
 
 import { Auth } from "../auth"
+import { Config } from "../config/config"
 import { Council } from "./council"
 import { ModeMemory } from "./memory"
 import { EnsemblePreflight } from "./preflight"
-import { isNonChatModelID, modelSelectableForProvider } from "../provider/model-selectability"
+import { isNonChatModelID, modelSelectableForProvider, skuKey } from "../provider/model-selectability"
 import { Provider } from "../provider/provider"
 import { ModelID, ProviderID } from "../provider/schema"
 import { isRetiredProviderID } from "../provider/retired-providers"
 
+const GROK_CLI_IDS = ["grok-build-cli"]
+const OPENAI_IDS = ["openai", "codex-cli"]
+const CLAUDE_IDS = ["anthropic", "claude-code"]
+const KIMI_IDS = ["kimi-cli", "kimi-cloud-plan"]
+const ALIBABA_PLAN_IDS = [
+  "alibaba-token-plan",
+  "alibaba-coding-plan",
+  "alibaba-token-plan-cn",
+  "alibaba-coding-plan-cn",
+]
+const ZAI_PLAN_IDS = ["zai-coding-plan", "zai", "zhipuai-coding-plan", "zhipuai"]
+const MINIMAX_PLAN_IDS = ["minimax-coding-plan", "minimax-cn-coding-plan", "minimax", "minimax-cn"]
+
 /** Colloquial names users type ("grok", "codex") → connected provider IDs. */
 const PROVIDER_ALIASES: Record<string, string[]> = {
-  grok: ["grok-build-cli"],
-  "grok-build": ["grok-build-cli"],
-  grokbuild: ["grok-build-cli"],
-  grokbuildcli: ["grok-build-cli"],
-  "grok-4": ["grok-build-cli"],
-  "grok-4.5": ["grok-build-cli"],
-  xai: ["grok-build-cli"],
+  grok: GROK_CLI_IDS,
+  "grok-build": GROK_CLI_IDS,
+  grokbuild: GROK_CLI_IDS,
+  grokbuildcli: GROK_CLI_IDS,
+  "grok-4": GROK_CLI_IDS,
+  "grok-4.5": GROK_CLI_IDS,
+  "grok-4.6": GROK_CLI_IDS,
+  xai: GROK_CLI_IDS,
   codex: ["codex-cli", "openai"],
   "codex-cli": ["codex-cli", "openai"],
-  openai: ["openai", "codex-cli"],
-  claude: ["anthropic", "claude-code"],
-  anthropic: ["anthropic", "claude-code"],
+  openai: OPENAI_IDS,
+  chatgpt: OPENAI_IDS,
+  claude: CLAUDE_IDS,
+  anthropic: CLAUDE_IDS,
   gemini: ["google"],
-  kimi: ["kimi-cli"],
-  "kimi-code": ["kimi-cli"],
-  "kimi-code-cli": ["kimi-cli"],
+  google: ["google"],
+  kimi: KIMI_IDS,
+  "kimi-code": KIMI_IDS,
+  "kimi-code-cli": KIMI_IDS,
+  moonshot: KIMI_IDS,
+  "moonshot-ai": KIMI_IDS,
+  moonshotai: KIMI_IDS,
+  minimax: MINIMAX_PLAN_IDS,
+  "minimax-coding": MINIMAX_PLAN_IDS,
+  "minimax-coding-plan": MINIMAX_PLAN_IDS,
+  "minimax-token-plan": MINIMAX_PLAN_IDS,
+  qwen: ALIBABA_PLAN_IDS,
+  alibaba: ALIBABA_PLAN_IDS,
+  dashscope: ALIBABA_PLAN_IDS,
+  tongyi: ALIBABA_PLAN_IDS,
+  "alibaba-token-plan": ALIBABA_PLAN_IDS,
+  "alibaba-coding-plan": ALIBABA_PLAN_IDS,
+  glm: ZAI_PLAN_IDS,
+  zai: ZAI_PLAN_IDS,
+  "z.ai": ZAI_PLAN_IDS,
+  "z-ai": ZAI_PLAN_IDS,
+  zhipu: ZAI_PLAN_IDS,
+  zhipuai: ZAI_PLAN_IDS,
+  chatglm: ZAI_PLAN_IDS,
+  "zai-coding-plan": ZAI_PLAN_IDS,
+  "zhipuai-coding-plan": ZAI_PLAN_IDS,
+  deepseek: ["deepseek"],
+  copilot: ["github-copilot"],
+  "github-copilot": ["github-copilot"],
+  ollama: ["ollama"],
+  "ax-engine": ["ax-engine"],
+  axengine: ["ax-engine"],
+  local: ["ax-engine", "ollama"],
+  "ax-trust": ["ax-trust-defai-digital"],
+  axtrust: ["ax-trust-defai-digital"],
+  tencent: ["tencent-coding-plan", "tencent-token-plan"],
+  xiaomi: ["xiaomi-token-plan-cn", "xiaomi-token-plan-sgp", "xiaomi-token-plan-ams"],
+}
+
+// Model-id prefixes to search on a connected gateway when the native / plan
+// provider is disabled. Keys are normalizeProviderName() results.
+const FAMILY_MODEL_PREFIXES: Record<string, string[]> = {
+  deepseek: ["deepseek"],
+  qwen: ["qwen"],
+  alibaba: ["qwen"],
+  dashscope: ["qwen"],
+  tongyi: ["qwen"],
+  "alibaba-token-plan": ["qwen"],
+  "alibaba-coding-plan": ["qwen"],
+  glm: ["glm"],
+  zai: ["glm"],
+  "z.ai": ["glm"],
+  "z-ai": ["glm"],
+  zhipu: ["glm"],
+  zhipuai: ["glm"],
+  chatglm: ["glm"],
+  "zai-coding-plan": ["glm"],
+  "zhipuai-coding-plan": ["glm"],
+  minimax: ["minimax"],
+  "minimax-coding-plan": ["minimax"],
+  "minimax-token-plan": ["minimax"],
+  kimi: ["kimi", "k3", "moonshot"],
+  "kimi-cli": ["kimi", "k3", "moonshot"],
+  "kimi-code": ["kimi", "k3", "moonshot"],
+  moonshot: ["kimi", "k3", "moonshot"],
+  moonshotai: ["kimi", "k3", "moonshot"],
+  k3: ["k3"],
+  grok: ["grok"],
+  xai: ["grok"],
+  claude: ["claude"],
+  anthropic: ["claude"],
+  gemini: ["gemini"],
+  google: ["gemini"],
+  openai: ["gpt"],
+  chatgpt: ["gpt"],
+}
+
+// Family follow matches model IDs like `deepseek-v4-pro` when the native
+// provider id is disconnected. Unmapped short names ("ai") are too collision-prone.
+const MIN_FAMILY_KEY_LENGTH = 4
+
+function familyPrefixesFor(requested: string): string[] {
+  const normalized = normalizeProviderName(requested)
+  const mapped = FAMILY_MODEL_PREFIXES[normalized]
+  if (mapped) return mapped
+  const family = skuKey(requested)
+  if (FAMILY_MODEL_PREFIXES[family]) return FAMILY_MODEL_PREFIXES[family]
+  if (family.length >= MIN_FAMILY_KEY_LENGTH) return [family]
+  return []
 }
 
 function normalizeProviderName(value: string): string {
@@ -57,12 +159,92 @@ export function resolveConnectedProviderID(requested: string, connectedIDs: read
     const match = connectedIDs.find((id) => id.toLowerCase() === alias.toLowerCase())
     if (match) return match
   }
+  // Versioned Grok SKUs used as a provider name ("grok-4.6") should hit the
+  // CLI when it is connected, instead of falling through to a gateway catalog.
+  if (normalized === "grok" || normalized.startsWith("grok-") || normalized.startsWith("grokbuild")) {
+    for (const alias of GROK_CLI_IDS) {
+      if (connectedIDs.includes(alias)) return alias
+      const match = connectedIDs.find((id) => id.toLowerCase() === alias.toLowerCase())
+      if (match) return match
+    }
+  }
   return undefined
 }
 
 export type ExplicitMemberResolution =
   | { member: { providerID: string; modelID: string }; note?: string }
   | { rejected: string }
+
+/** Keep the first member per provider; later collisions become rejections. */
+export function keepDistinctProviderMembers<T extends { providerID: string; memberId: string }>(
+  members: readonly T[],
+): { members: T[]; rejected: string[] } {
+  const unique: T[] = []
+  const rejected: string[] = []
+  const seen = new Set<string>()
+  for (const spec of members) {
+    if (seen.has(spec.providerID)) {
+      rejected.push(
+        `Council requires distinct providers — ${spec.memberId} collides with another member on ${spec.providerID}.`,
+      )
+      continue
+    }
+    seen.add(spec.providerID)
+    unique.push(spec)
+  }
+  return { members: unique, rejected }
+}
+
+function catalogsForConnectedProviders(
+  selectableModels: Readonly<Record<string, readonly string[]>>,
+  connectedIDs: readonly string[],
+): Array<{ providerID: string; models: readonly string[] }> {
+  return [...connectedIDs]
+    .sort((left, right) => left.localeCompare(right))
+    .map((providerID) => ({ providerID, models: selectableModels[providerID] ?? [] }))
+    .filter((entry) => entry.models.length > 0)
+}
+
+/**
+ * When the requested provider id is not connected (native `deepseek` disabled
+ * after the SKU moved behind a gateway), pick the same SKU — never the
+ * gateway's first model, which may be a different family.
+ */
+export function followSkuOnConnectedProviders(input: {
+  requestedProvider: string
+  requestedModel?: string
+  connectedIDs: readonly string[]
+  selectableModels: Readonly<Record<string, readonly string[]>>
+}): { providerID: string; modelID: string } | undefined {
+  const catalogs = catalogsForConnectedProviders(input.selectableModels, input.connectedIDs)
+  if (input.requestedModel) {
+    const requestedModel = input.requestedModel
+    for (const catalog of catalogs) {
+      const exact = catalog.models.find(
+        (id) => id === requestedModel || id.toLowerCase() === requestedModel.toLowerCase(),
+      )
+      if (exact) return { providerID: catalog.providerID, modelID: exact }
+    }
+    const needle = skuKey(requestedModel)
+    if (!needle) return undefined
+    for (const catalog of catalogs) {
+      const hit = catalog.models.find((id) => skuKey(id) === needle)
+      if (hit) return { providerID: catalog.providerID, modelID: hit }
+    }
+    return undefined
+  }
+
+  const prefixes = familyPrefixesFor(input.requestedProvider)
+  if (prefixes.length === 0) return undefined
+  for (const catalog of catalogs) {
+    const hit = catalog.models.find((id) => {
+      const key = skuKey(id)
+      return prefixes.some((prefix) => key === prefix || key.startsWith(prefix))
+    })
+    if (hit) return { providerID: catalog.providerID, modelID: hit }
+  }
+  return undefined
+}
 
 /**
  * Resolve a user-typed provider/model pair against connected providers.
@@ -78,11 +260,26 @@ export function resolveExplicitMemberSelection(input: {
   selectableModels: Readonly<Record<string, readonly string[]>>
   /** Provider IDs with a stored credential that failed decryption. */
   undecryptableIDs?: readonly string[]
+  /** Provider IDs in `disabled_providers` (still named in config/docs). */
+  disabledIDs?: readonly string[]
 }): ExplicitMemberResolution {
   const connected = [...input.connectedIDs].sort()
   const connectedLabel = connected.join(", ") || "(none)"
   const resolvedProvider = resolveConnectedProviderID(input.requestedProvider, input.connectedIDs)
   if (!resolvedProvider) {
+    const disabled = input.disabledIDs?.length
+      ? resolveConnectedProviderID(input.requestedProvider, input.disabledIDs)
+      : undefined
+    const followed = followSkuOnConnectedProviders(input)
+    if (followed) {
+      const reason = disabled
+        ? `Provider ${JSON.stringify(input.requestedProvider)} is disabled`
+        : `Provider ${JSON.stringify(input.requestedProvider)} is not connected`
+      return {
+        member: followed,
+        note: `${reason}; using ${followed.providerID}/${followed.modelID} (same SKU on a connected provider).`,
+      }
+    }
     // "Unknown provider" is actively misleading when the provider has a
     // credential on disk that merely failed decryption (machine key or crypto
     // runtime changed) — the user believes they are logged in. Resolve the
@@ -96,6 +293,14 @@ export function resolveExplicitMemberSelection(input: {
         rejected:
           `Provider ${JSON.stringify(undecryptable)} has a stored credential that cannot be decrypted, so it is not connected. ` +
           `Ask the user to run \`ax-code providers login --provider ${undecryptable}\` to re-enter it. Connected: ${connectedLabel}.`,
+      }
+    }
+    if (disabled) {
+      return {
+        rejected:
+          `Provider ${JSON.stringify(disabled)} is disabled. Connected: ${connectedLabel}. ` +
+          `Re-enable with \`ax-code providers enable ${disabled}\`, or name a connected provider/model that serves that SKU. ` +
+          `The connected list is authoritative — do not grep models-snapshot or re-probe credentials.`,
       }
     }
     return {
@@ -240,6 +445,9 @@ export namespace EnsembleShared {
       const undecryptableIDs = (await Auth.decryptionFailures().catch(() => [] as readonly string[])).filter(
         (providerID) => !isRetiredProviderID(providerID),
       )
+      const disabledIDs = ((await Config.get()).disabled_providers ?? []).filter(
+        (providerID) => !isRetiredProviderID(providerID),
+      )
       const selectableModels: Record<string, string[]> = {}
       for (const id of connectedIDs) {
         const provider = providers[ProviderID.make(id)]
@@ -257,6 +465,7 @@ export namespace EnsembleShared {
           connectedIDs,
           selectableModels,
           undecryptableIDs,
+          disabledIDs,
         })
         if ("rejected" in resolved) {
           rejected.push(resolved.rejected)
@@ -267,11 +476,13 @@ export namespace EnsembleShared {
         const modelID = ModelID.make(resolved.member.modelID)
         out.push({ providerID, modelID, memberId: `${providerID}/${modelID}` })
       }
+      // Schema uniqueness is on the requested names. SKU-follow can land two
+      // colloquial ids on the same connected gateway; drop the later member
+      // instead of throwing so council still returns the rest.
       if (config.requireDistinctProviders) {
-        const providerIDs = new Set(out.map((s) => s.providerID))
-        if (providerIDs.size < out.length) {
-          throw new Error("Council requires distinct providers \u2014 duplicate providerID found")
-        }
+        const distinct = keepDistinctProviderMembers(out)
+        rejected.push(...distinct.rejected)
+        return { members: Council.dedupeMembers(distinct.members).slice(0, maxMembers), rejected, notes }
       }
       return { members: Council.dedupeMembers(out).slice(0, maxMembers), rejected, notes }
     }
