@@ -142,11 +142,28 @@ export namespace AutonomousCompletionGate {
   }
 
   function looksLikeUnexecutableToolText(text: string) {
+    const normalized = stripNativeChannelMarkers(text)
+    if (hasNonEmptyToolCallBody(normalized)) return true
     return (
-      /<tool_call>[\s\S]{0,4000}<\/tool_call>/.test(text) ||
-      /<function=[A-Za-z0-9_-]+/.test(text) ||
-      /^\[([a-z][a-z0-9_]{2,64})\]\s*\n(?=[\s\S]{0,1200}(?:[A-Za-z_][A-Za-z0-9_.-]*\s*:|\{))/m.test(text)
+      /<function=[A-Za-z0-9_-]+/.test(normalized) ||
+      /^\[([a-z][a-z0-9_]{2,64})\]\s*\n(?=[\s\S]{0,1200}(?:[A-Za-z_][A-Za-z0-9_.-]*\s*:|\{))/m.test(normalized)
     )
+  }
+
+  // MiniMax (and similar chat templates) leak channel wrappers around tool
+  // markup, e.g. `]<]minimax[>[<tool_call>\n]<]minimax[>[</tool_call>`.
+  // Strip those so an empty wrapper is not treated as an attempted tool call.
+  function stripNativeChannelMarkers(text: string) {
+    return text.replace(/\]<\][a-z0-9_-]+\[>\[?/gi, "")
+  }
+
+  function hasNonEmptyToolCallBody(text: string) {
+    const re = /<tool_call>([\s\S]{0,4000})<\/tool_call>/g
+    let match: RegExpExecArray | null
+    while ((match = re.exec(text))) {
+      if (match[1].trim().length > 0) return true
+    }
+    return false
   }
 
   function hashSignature(value: string) {

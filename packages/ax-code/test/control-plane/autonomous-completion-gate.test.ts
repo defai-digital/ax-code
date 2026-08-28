@@ -136,6 +136,61 @@ describe("AutonomousCompletionGate", () => {
     ).toEqual({ status: "allow" })
   })
 
+  test("allows empty MiniMax channel wrappers around tool_call tags", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text: "]<]minimax[>[<tool_call>\n]<]minimax[>[</tool_call>",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
+  test("allows empty tool_call tags without an invocation body", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [{ type: "text", text: "<tool_call>\n</tool_call>" }],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
+  test("still blocks MiniMax-wrapped tool_call tags that contain an invocation", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [
+            {
+              type: "text",
+              text: "]<]minimax[>[<tool_call>\nname: bash\n]<]minimax[>[</tool_call>",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "unexecutable_tool_text",
+    })
+  })
+
   test("ignores synthetic text when checking for unexecutable tool text", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

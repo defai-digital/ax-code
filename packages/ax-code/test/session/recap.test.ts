@@ -8,6 +8,7 @@ import {
   lastTurnMessages,
   recapContextText,
   shouldSkipAutomaticRecap,
+  turnEndedWithAssistantError,
 } from "../../src/session/recap"
 import { MessageID, SessionID } from "../../src/session/schema"
 
@@ -29,7 +30,7 @@ function userMessage(parts: unknown[], id?: string) {
   } as unknown as MessageV2.WithParts
 }
 
-function assistantMessage(parts: unknown[], id?: string) {
+function assistantMessage(parts: unknown[], id?: string, extra?: Record<string, unknown>) {
   counter += 1
   return {
     info: {
@@ -38,6 +39,7 @@ function assistantMessage(parts: unknown[], id?: string) {
       role: "assistant",
       parentID: MessageID.make("msg_recap_parent"),
       time: { created: Date.now() },
+      ...extra,
     },
     parts,
   } as unknown as MessageV2.WithParts
@@ -51,6 +53,16 @@ describe("session recap", () => {
   test("skips automatic recap for the managed ax-engine provider", () => {
     expect(shouldSkipAutomaticRecap({ providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID) })).toBe(true)
     expect(shouldSkipAutomaticRecap({ providerID: ProviderID.make("groq") })).toBe(false)
+  })
+
+  test("skips recap when the last assistant turn ended with an error", () => {
+    const user = userMessage([text("please commit")])
+    const failed = assistantMessage([text("plain-text tool call")], undefined, {
+      error: { name: "UnknownError", data: { message: "terminated" } },
+    })
+    expect(turnEndedWithAssistantError([user, failed])).toBe(true)
+    expect(turnEndedWithAssistantError([user, assistantMessage([text("done")])])).toBe(false)
+    expect(turnEndedWithAssistantError([user])).toBe(false)
   })
 
   test("lastTurnMessages returns the slice from the last real user message onward", () => {

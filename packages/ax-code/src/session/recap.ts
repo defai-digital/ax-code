@@ -24,6 +24,18 @@ export function shouldSkipAutomaticRecap(input: { providerID: MessageV2.User["mo
   return input.providerID === AX_ENGINE_PROVIDER_ID
 }
 
+/** Recap is for completed work. A failed/aborted last assistant turn should
+ *  not fire the small-model recap lane — that looks like a sudden model switch
+ *  right as the error banner appears. */
+export function turnEndedWithAssistantError(turn: MessageV2.WithParts[]): boolean {
+  for (let i = turn.length - 1; i >= 0; i--) {
+    const info = turn[i].info
+    if (info.role !== "assistant") continue
+    return info.error !== undefined
+  }
+  return false
+}
+
 function isRealUserMessage(message: MessageV2.WithParts) {
   return message.info.role === "user" && !message.parts.every((p) => "synthetic" in p && p.synthetic)
 }
@@ -81,6 +93,7 @@ export namespace SessionRecap {
       if (!turn) return undefined
       const lastUser = turn[0].info as MessageV2.User
       if (shouldSkipAutomaticRecap({ providerID: lastUser.model.providerID })) return undefined
+      if (turnEndedWithAssistantError(turn)) return undefined
 
       const content = recapContextText(turn)
       if (!content) return undefined
