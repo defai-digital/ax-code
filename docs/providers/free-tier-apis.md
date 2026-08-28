@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-26
+Last reviewed: 2026-08-28
 Owner: ax-code runtime
 
 AX Code does not provide model quota. A “free” run uses quota or credits offered by an external model provider, whose
@@ -113,11 +113,11 @@ offers, but it is not an AX Code compatibility or endorsement list:
 
 At this page's review date, the services named by that catalog map to AX Code as follows:
 
-| AX Code relationship                  | Catalog services                                                                                                                                                                                                | Meaning                                                                                                                                                                                                  |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Default setup preset                  | Google Gemini (`google`), Groq (`groq`), OpenRouter (`openrouter`), Hugging Face (`huggingface`), UnoRouter (`unorouter`)                                                                                       | Visible in the normal provider setup flow and covered above.                                                                                                                                             |
-| Registry-backed, not a default preset | Mistral (`mistral`), Cohere (`cohere`), Zhipu AI (`zhipuai`), AnyAPI (`anyapi`), Cerebras (`cerebras`), GitHub Models (`github-models`), NVIDIA NIM (`nvidia`), Cloudflare Workers AI (`cloudflare-workers-ai`) | Metadata and an adapter exist in the bundled registry, but the provider is not part of the curated default setup flow. Explicit configuration does not guarantee that a free model supports agent tools. |
-| Custom protocol only                  | Api.Airforce, Kluster AI, LLM7.io, Pollinations AI                                                                                                                                                              | No AX Code preset. Configure the exact endpoint and model only if its current API is compatible with the [custom provider contract](custom-provider.md).                                                 |
+| AX Code relationship                  | Catalog services                                                                                                                                                               | Meaning                                                                                                                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Default setup preset                  | Google Gemini (`google`), Groq (`groq`), OpenRouter (`openrouter`), Hugging Face (`huggingface`), UnoRouter (`unorouter`)                                                      | Visible in the normal provider setup flow and covered above.                                                                                                                                             |
+| Registry-backed, not a default preset | Mistral (`mistral`), Cohere (`cohere`), Zhipu AI (`zhipuai`), AnyAPI (`anyapi`), Cerebras (`cerebras`), NVIDIA NIM (`nvidia`), Cloudflare Workers AI (`cloudflare-workers-ai`) | Metadata and an adapter exist in the bundled registry, but the provider is not part of the curated default setup flow. Explicit configuration does not guarantee that a free model supports agent tools. |
+| Custom protocol only                  | Api.Airforce, Kluster AI, LLM7.io, Pollinations AI                                                                                                                             | No AX Code preset. Configure the exact endpoint and model only if its current API is compatible with the [custom provider contract](custom-provider.md).                                                 |
 
 In particular, the `github-copilot` preset is not the `github-models` API listed by some catalogs. Do not substitute
 one provider ID or credential flow for the other. The `zai` and `zhipuai` general APIs keep GLM-4.7-Flash (Free) as

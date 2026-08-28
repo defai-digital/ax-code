@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-07-12  
+Last reviewed: 2026-08-28  
 Owner: ax-code runtime
 
 AX Code can place work on local inference, hosted/CLI providers, or both (hybrid), and can fan out high-stakes work across multiple connected providers (council review and arena best-of-N). This page documents **shipped** behavior for those modes.
@@ -64,7 +64,7 @@ In `ax-code.json`:
     "council": {
       "enabled": true,
       "maxMembers": 3,
-      "timeoutMs": 60000,
+      "timeoutMs": 180000,
       "debateRounds": 0
     },
     "arena": {

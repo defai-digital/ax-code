@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-05-26
+Last reviewed: 2026-08-28
 Owner: ax-code runtime
 
 AX Code can connect to Model Context Protocol servers for external tools, prompts, and resources. MCP is powerful, so AX Code treats MCP configuration and MCP-provided content as a trust boundary.
@@ -79,7 +79,7 @@ When working on HTML games, web apps, or any project with an `index.html` at roo
 For screenshot-based verification, connect the Playwright MCP server:
 
 ```bash
-ax-code mcp --discover   # auto-suggests playwright in web projects
+ax-code mcp list --discover   # auto-suggests playwright in web projects
 ```
 
 Or add it manually to `ax-code.json`:

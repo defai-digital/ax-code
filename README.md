@@ -165,11 +165,11 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 
 ## Providers and models
 
-| Family                   | Providers                                                                                                  | Model source                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Cloud API providers      | Google, GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI | Hosted provider model catalogs bundled with AX Code               |
-| CLI providers            | Claude Code, Codex CLI, Grok Build CLI, Kimi Code CLI                                                      | One model ID per CLI bridge, reusing the local vendor CLI session |
-| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                                 | Curated AXQ 6-bit MLX models served from the live catalog         |
+| Family                   | Providers                                                                                                                               | Model source                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Cloud API providers      | Google, DeepSeek, Meta (Muse Spark), GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI | Hosted provider model catalogs bundled with AX Code               |
+| CLI providers            | Claude Code, Codex CLI, Grok Build CLI, Kimi Code CLI                                                                                   | One model ID per CLI bridge, reusing the local vendor CLI session |
+| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                                                              | Curated AXQ 6-bit MLX models served from the live catalog         |
 
 CLI bridges reuse a local vendor CLI and its login session. AX Code records its own tool execution in full; activity that happens inside a vendor CLI process is visible only through that bridge's output.
 

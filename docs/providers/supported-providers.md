@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-18
+Last reviewed: 2026-08-28
 Owner: ax-code runtime
 
 This page lists the provider presets AX Code exposes in the default setup flows. The source of truth is the runtime provider allowlist in
@@ -32,6 +32,8 @@ These providers call hosted APIs or hosted account-plan endpoints.
 | Provider id              | Display name                | Credential environment variables                                   |
 | ------------------------ | --------------------------- | ------------------------------------------------------------------ |
 | `google`                 | Google                      | `GOOGLE_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `GEMINI_API_KEY` |
+| `deepseek`               | DeepSeek                    | `DEEPSEEK_API_KEY`                                                 |
+| `meta`                   | Meta (Muse Spark)           | `MODEL_API_KEY`, `META_MODEL_API_KEY`                              |
 | `groq`                   | GroqCloud                   | `GROQ_API_KEY`                                                     |
 | `openrouter`             | OpenRouter                  | `OPENROUTER_API_KEY`                                               |
 | `huggingface`            | Hugging Face                | `HF_TOKEN`                                                         |

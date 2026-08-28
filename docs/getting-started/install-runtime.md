@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-24
+Last reviewed: 2026-08-28
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
@@ -138,7 +138,7 @@ One-line remote execution is a convenience path, not the only path. Keep an insp
 
 ```powershell
 # Pin version in CI/images
-$env:AX_CODE_VERSION = "7.4.0"
+$env:AX_CODE_VERSION = "7.9.4"
 irm https://github.com/defai-digital/ax-code/releases/download/v$env:AX_CODE_VERSION/install.ps1 -OutFile install.ps1
 # Optional: verify install.ps1.minisig first (see SECURITY.md)
 .\install.ps1 -Version $env:AX_CODE_VERSION -NoModifyPath
