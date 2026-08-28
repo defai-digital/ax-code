@@ -281,13 +281,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       const args = useArgs()
       const fallbackModel = createMemo(() => {
         if (args.model) {
-          const { providerID, modelID } = Provider.parseModel(args.model)
-          if (isModelValid({ providerID, modelID })) {
-            return {
-              providerID,
-              modelID,
-            }
-          }
+          const requested = resolvePin(Provider.parseModel(args.model))
+          if (requested) return requested
         }
 
         if (sync.data.config.model) {
@@ -318,7 +313,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         const a = agent.current()
         return (
           getFirstValidModel(
-            () => modelStore.model[a.name],
+            () => resolvePin(modelStore.model[a.name]),
             () => resolvePin(a.model),
             fallbackModel,
           ) ?? undefined
@@ -456,7 +451,10 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               save()
               return
             }
-            if (!isModelValid(model)) {
+            // `--model deepseek/…` and a stored native pin must follow the SKU
+            // onto a connected gateway, the same way `ax-code run --model` does.
+            const resolved = isModelValid(model) ? model : resolvePin(model)
+            if (!resolved) {
               toast.show({
                 message: `Model ${providerModelKey(model)} is not valid`,
                 variant: "warning",
@@ -464,9 +462,9 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               })
               return
             }
-            setModelStore("model", currentAgentName, model)
+            setModelStore("model", currentAgentName, resolved)
             if (options?.recent) {
-              rememberRecentModel(model)
+              rememberRecentModel(resolved)
               save()
             }
           })

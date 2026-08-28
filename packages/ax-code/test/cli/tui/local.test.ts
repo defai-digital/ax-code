@@ -9,6 +9,7 @@ import {
   solidStoreRecordPatch,
   rememberRecentModel,
   resolveCurrentAgent,
+  resolvePinnedModelPreference,
 } from "../../../src/cli/cmd/tui/context/local-util"
 
 describe("tui local agent selection", () => {
@@ -268,5 +269,34 @@ describe("pruneModelPreferences migration", () => {
     expect(result.recent).toEqual([moved, glm])
     expect(result.favorite).toEqual([moved])
     expect(result.variant).toEqual({ "gateway/deepseek-v4-pro": "high", "gateway/glm-5.3": "medium" })
+  })
+})
+
+describe("resolvePinnedModelPreference", () => {
+  const providers = [
+    {
+      id: "127.0.0.1",
+      models: {
+        "deepseek-v4-pro": { capabilities: { toolcall: true } },
+      },
+    },
+  ]
+
+  test("keeps a model that is already valid on its own provider", () => {
+    expect(resolvePinnedModelPreference(providers, { providerID: "127.0.0.1", modelID: "deepseek-v4-pro" })).toEqual({
+      providerID: "127.0.0.1",
+      modelID: "deepseek-v4-pro",
+    })
+  })
+
+  test("follows a disabled native provider pin to the connected SKU", () => {
+    expect(resolvePinnedModelPreference(providers, { providerID: "deepseek", modelID: "deepseek-v4-pro" })).toEqual({
+      providerID: "127.0.0.1",
+      modelID: "deepseek-v4-pro",
+    })
+  })
+
+  test("returns undefined when the SKU is not served by any connected provider", () => {
+    expect(resolvePinnedModelPreference(providers, { providerID: "openai", modelID: "gpt-5" })).toBeUndefined()
   })
 })
