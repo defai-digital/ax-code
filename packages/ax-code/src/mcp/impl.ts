@@ -13,7 +13,7 @@ import { NamedError } from "@ax-code/util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
 import { Installation } from "../installation"
-import { withTimeout } from "@/util/timeout"
+import { sleep, withTimeout } from "@/util/timeout"
 import { Ssrf } from "@/util/ssrf"
 import { McpOAuthProvider } from "./oauth-provider"
 import { McpOAuthCallback } from "./oauth-callback"
@@ -33,7 +33,18 @@ import {
   resolveMcpToolPermissionKeys,
   type ConvertedMcpTool,
 } from "./tool-conversion"
-import { MCP_DEFAULT_TIMEOUT_MS } from "./constants"
+import {
+  MCP_CONNECT_ATTEMPTS,
+  MCP_CONNECT_RETRY_DELAY_MS,
+  MCP_DEFAULT_TIMEOUT_MS,
+  MCP_TOOLS_READY_WAIT_MS,
+} from "./constants"
+import {
+  combineTransportErrors,
+  isTransientMcpConnectError,
+  mcpClientUserAgent,
+  mergeRemoteMcpHeaders,
+} from "./connect-error"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -80,8 +91,43 @@ export namespace MCP {
     return (url: string | URL, init?: RequestInit) => Ssrf.pinnedFetch(url.toString(), { ...init, label })
   }
 
-  function remoteRequestInit(headers?: Record<string, string>): RequestInit | undefined {
-    return headers ? { headers } : undefined
+  function remoteRequestInit(headers?: Record<string, string>): RequestInit {
+    return { headers: mergeRemoteMcpHeaders(headers, mcpClientUserAgent(Installation.VERSION)) }
+  }
+
+  async function connectRemoteTransport(
+    transport: StreamableHTTPClientTransport | SSEClientTransport,
+    key: string,
+    transportName: string,
+    timeout: number,
+  ): Promise<MCPClient> {
+    let lastError: unknown
+    for (let attempt = 1; attempt <= MCP_CONNECT_ATTEMPTS; attempt++) {
+      const client = createClient()
+      try {
+        await withTimeout(client.connect(transport), timeout)
+        return client
+      } catch (error) {
+        lastError = error
+        const retry = attempt < MCP_CONNECT_ATTEMPTS && isTransientMcpConnectError(error)
+        const authError = error instanceof UnauthorizedError || toErrorMessage(error).includes("OAuth")
+        log.debug("remote MCP connect attempt failed", {
+          key,
+          transport: transportName,
+          attempt,
+          retry,
+          error: toErrorMessage(error),
+        })
+        // Auth errors leave the client/transport open so finishAuth can reuse them.
+        // Closing the SDK client here would also close the pending OAuth transport.
+        if (!authError) {
+          await closeIfPossible(client, key, `connect attempt failed (${transportName})`)
+        }
+        if (!retry) throw error
+        await sleep(MCP_CONNECT_RETRY_DELAY_MS)
+      }
+    }
+    throw lastError
   }
 
   export const Resource = z
@@ -391,6 +437,9 @@ export namespace MCP {
               clients[key] = result.mcpClient
               registerClientOnClose(key, result.mcpClient, next)
             }
+            // Late startup connects must bust any tools() cache built after the
+            // bounded first-turn wait, so the next model step sees new servers.
+            invalidateTools(next)
           }),
         )
       })()
@@ -518,12 +567,22 @@ export namespace MCP {
   // failure, key each item by `clientName:itemName`. Used by both
   // prompts() and resources() — the only thing that varies per call
   // site is the SDK fetcher and the label for the error log.
+  function requestTimeout(cfg: { experimental?: { mcp_timeout?: number } }, entry: McpEntry | undefined) {
+    const configured = entry && isConfigured(entry) ? entry.timeout : undefined
+    return configured ?? cfg.experimental?.mcp_timeout ?? DEFAULT_TIMEOUT
+  }
+
   async function fetchItemsForClient<T extends { name: string }>(
     clientName: string,
     label: string,
     fetcher: () => Promise<T[]>,
+    timeout: number,
   ): Promise<Record<string, T & { client: string }> | undefined> {
-    const items = await fetcher().catch((e) => {
+    const items = await withTimeout(
+      fetcher(),
+      timeout,
+      `listing ${label} timed out for MCP server ${clientName}`,
+    ).catch((e) => {
       log.error(`failed to get ${label}`, { clientName, error: NamedError.message(e) })
       return undefined
     })
@@ -653,14 +712,12 @@ export namespace MCP {
           },
         ]
 
-        let lastError: Error | undefined
+        const transportErrors: Array<{ name: string; error: unknown }> = []
         const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
         for (let i = 0; i < transports.length; i++) {
           const { name, transport } = transports[i]!
-          let client: MCPClient | undefined
           try {
-            client = createClient()
-            await withTimeout(client.connect(transport), connectTimeout)
+            const client = await connectRemoteTransport(transport, key, name, connectTimeout)
             rememberClientTransport(client, transport)
             registerNotificationHandlers(client, key, owner)
             mcpClient = client
@@ -680,15 +737,15 @@ export namespace MCP {
             }
             break
           } catch (error) {
-            lastError = toError(error)
+            transportErrors.push({ name, error })
+            const failed = toError(error)
 
             // Handle OAuth-specific errors.
             // The SDK throws UnauthorizedError when auth() returns 'REDIRECT',
             // but may also throw plain Errors when auth() fails internally
             // (e.g. during discovery, registration, or state generation).
             // When an authProvider is attached, treat both cases as auth-related.
-            const isAuthError =
-              error instanceof UnauthorizedError || (authProvider && lastError.message.includes("OAuth"))
+            const isAuthError = error instanceof UnauthorizedError || (authProvider && failed.message.includes("OAuth"))
             if (isAuthError) {
               log.info("mcp server requires authentication", { key, transport: name })
 
@@ -696,12 +753,7 @@ export namespace MCP {
               // case where the server rejects dynamic registration with a
               // non-JSON body (HTTP 403 Forbidden), which the SDK wraps as a
               // cryptic SyntaxError inside "Invalid OAuth error response".
-              if (isDynamicRegistrationRejection(lastError.message)) {
-                // Registration failure: nothing left to reuse — close client
-                // and the failed transport.
-                if (client) {
-                  await closeIfPossible(client, key, `connect attempt failed (${name})`)
-                }
+              if (isDynamicRegistrationRejection(failed.message)) {
                 await transport.close?.().catch((e) => {
                   log.debug("failed to close transport after registration rejection", {
                     key,
@@ -754,9 +806,6 @@ export namespace MCP {
 
             // Non-auth error: clean up everything before falling through to
             // the next transport candidate.
-            if (client) {
-              await closeIfPossible(client, key, `connect attempt failed (${name})`)
-            }
             await transport.close?.().catch((e) => {
               log.debug("failed to close transport after connection failure", {
                 key,
@@ -768,11 +817,11 @@ export namespace MCP {
               key,
               transport: name,
               url: mcp.url,
-              error: lastError.message,
+              error: failed.message,
             })
             status = {
               status: "failed" as const,
-              error: lastError.message,
+              error: combineTransportErrors(transportErrors),
             }
           }
         }
@@ -1050,8 +1099,22 @@ export namespace MCP {
     return status()
   }
 
+  async function stateForTools(): Promise<McpState> {
+    const current = rawState()
+    await Promise.race([
+      current.ready.then(
+        () => undefined,
+        (error) => {
+          log.debug("MCP startup settled with an error before tools()", { error: toErrorMessage(error) })
+        },
+      ),
+      sleep(MCP_TOOLS_READY_WAIT_MS),
+    ])
+    return current
+  }
+
   export async function tools() {
-    const s = await state()
+    const s = await stateForTools()
     if (!s.tools.unsubscribe) {
       s.tools.unsubscribe = Bus.subscribe(ToolsChanged, () => {
         // Always invalidate. The previous TTL guard suppressed
@@ -1076,7 +1139,6 @@ export namespace MCP {
       const cfg = await Config.get()
       const config = cfg.mcp ?? {}
       const clientsSnapshot = { ...s.clients }
-      const defaultTimeout = cfg.experimental?.mcp_timeout
 
       const connectedClients = Object.entries(clientsSnapshot).filter(
         ([clientName]) => s.status[clientName]?.status === "connected",
@@ -1086,7 +1148,7 @@ export namespace MCP {
         connectedClients.map(async ([clientName, client]) => {
           const mcpConfig = config[clientName]
           const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
-          const timeout = entry?.timeout ?? defaultTimeout ?? DEFAULT_TIMEOUT
+          const timeout = requestTimeout(cfg, entry)
           const toolsResult = await withTimeout(
             client.listTools(),
             timeout,
@@ -1127,7 +1189,7 @@ export namespace MCP {
       for (const [index, { clientName, client, mcpTool }] of listedTools.entries()) {
         const mcpConfig = config[clientName]
         const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
-        const timeout = entry?.timeout ?? defaultTimeout
+        const timeout = requestTimeout(cfg, entry)
         const key = permissionKeys[index]!
         conversions.push(
           convertMcpTool(mcpTool, client, timeout)
@@ -1190,14 +1252,13 @@ export namespace MCP {
     const s = await state()
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
-    const defaultTimeout = cfg.experimental?.mcp_timeout
     const clientsSnapshot = await clients()
     const results = await Promise.all(
       Object.entries(clientsSnapshot).map(async ([server, client]) => {
         if (s.status[server]?.status !== "connected") return []
         const mcpConfig = config[server]
         const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
-        const timeout = entry?.timeout ?? defaultTimeout ?? DEFAULT_TIMEOUT
+        const timeout = requestTimeout(cfg, entry)
         const listed = await withTimeout(
           client.listTools(),
           timeout,
@@ -1221,6 +1282,8 @@ export namespace MCP {
 
   export async function prompts() {
     const s = await state()
+    const cfg = await Config.get()
+    const config = cfg.mcp ?? {}
     const clientsSnapshot = await clients()
 
     const prompts = Object.fromEntries<PromptInfo & { client: string }>(
@@ -1236,6 +1299,7 @@ export namespace MCP {
                 clientName,
                 "prompts",
                 async () => (await client.listPrompts()).prompts,
+                requestTimeout(cfg, config[clientName]),
               )) ?? {},
             )
           }),
@@ -1248,6 +1312,8 @@ export namespace MCP {
 
   export async function resources() {
     const s = await state()
+    const cfg = await Config.get()
+    const config = cfg.mcp ?? {}
     const clientsSnapshot = await clients()
 
     const result = Object.fromEntries<ResourceInfo & { client: string }>(
@@ -1263,6 +1329,7 @@ export namespace MCP {
                 clientName,
                 "resources",
                 async () => (await client.listResources()).resources,
+                requestTimeout(cfg, config[clientName]),
               )) ?? {},
             )
           }),
@@ -1285,19 +1352,23 @@ export namespace MCP {
       return undefined
     }
 
-    const result = await client
-      .getPrompt({
+    const cfg = await Config.get()
+    const timeout = requestTimeout(cfg, cfg.mcp?.[clientName])
+    const result = await withTimeout(
+      client.getPrompt({
         name: name,
         arguments: args,
+      }),
+      timeout,
+      `getting prompt timed out for MCP server ${clientName}`,
+    ).catch((e) => {
+      log.error("failed to get prompt from MCP server", {
+        clientName,
+        promptName: name,
+        error: NamedError.message(e),
       })
-      .catch((e) => {
-        log.error("failed to get prompt from MCP server", {
-          clientName,
-          promptName: name,
-          error: NamedError.message(e),
-        })
-        return undefined
-      })
+      return undefined
+    })
 
     return result
   }
@@ -1314,18 +1385,22 @@ export namespace MCP {
       return undefined
     }
 
-    const result = await client
-      .readResource({
+    const cfg = await Config.get()
+    const timeout = requestTimeout(cfg, cfg.mcp?.[clientName])
+    const result = await withTimeout(
+      client.readResource({
         uri: resourceUri,
+      }),
+      timeout,
+      `reading resource timed out for MCP server ${clientName}`,
+    ).catch((e) => {
+      log.error("failed to read resource from MCP server", {
+        clientName: clientName,
+        resourceUri: resourceUri,
+        error: NamedError.message(e),
       })
-      .catch((e) => {
-        log.error("failed to read resource from MCP server", {
-          clientName: clientName,
-          resourceUri: resourceUri,
-          error: NamedError.message(e),
-        })
-        return undefined
-      })
+      return undefined
+    })
 
     return result
   }

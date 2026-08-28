@@ -25,6 +25,7 @@ import { Config } from "@/config/config"
 import { Instance } from "../project/instance"
 import { Truncate } from "@/tool/truncate"
 import { uniqueStrings } from "@/util/string-list"
+import { isRecord } from "@/util/record"
 import type { SessionProcessor } from "./processor"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { estimateToolDefinitionTokens } from "./prompt-request"
@@ -267,6 +268,38 @@ export function collectMcpToolContent(content: McpToolContentItem[]) {
   }
 
   return { textParts, attachments }
+}
+
+function formatMcpStructuredContent(value: unknown): string | undefined {
+  if (value == null) return undefined
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    return trimmed ? trimmed : undefined
+  }
+  try {
+    const json = JSON.stringify(value)
+    if (!json || json === "{}" || json === "[]") return undefined
+    return json
+  } catch {
+    return undefined
+  }
+}
+
+function mcpContentUsable(collected: { textParts: string[]; attachments: unknown[] }): boolean {
+  return collected.textParts.some((part) => part.trim().length > 0) || collected.attachments.length > 0
+}
+
+/** Prefer MCP `content`. Use `structuredContent` only when content is empty — never both. */
+export function collectMcpToolResult(result: unknown) {
+  const record = isRecord(result) ? result : {}
+  const content = Array.isArray(record.content) ? (record.content as McpToolContentItem[]) : []
+  const collected = collectMcpToolContent(content)
+  if (mcpContentUsable(collected)) return collected
+  const structured = formatMcpStructuredContent(record.structuredContent)
+  return {
+    textParts: structured ? [structured] : [],
+    attachments: collected.attachments,
+  }
 }
 
 export async function estimateRegistryToolSchemaTokens(input: {
@@ -616,7 +649,7 @@ export async function resolveTools(input: ResolveToolsInput) {
         },
       })
 
-      const { textParts, attachments } = collectMcpToolContent(result.content as McpToolContentItem[])
+      const { textParts, attachments } = collectMcpToolResult(result)
 
       const outputText = textParts.length ? `[Untrusted MCP tool content from ${key}]\n\n${textParts.join("\n\n")}` : ""
       const truncated = await Truncate.output(outputText, {}, input.agent)

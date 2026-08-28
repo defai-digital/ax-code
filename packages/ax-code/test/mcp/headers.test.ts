@@ -132,6 +132,7 @@ test("headers are passed to transports when oauth is enabled (default)", async (
         expect(call.options.requestInit?.headers).toEqual({
           Authorization: "Bearer test-token",
           "X-Custom-Header": "custom-value",
+          "User-Agent": expect.stringMatching(/^ax-code\//),
         })
         // OAuth should be enabled by default, so authProvider should exist
         expect(call.options.authProvider).toBeDefined()
@@ -166,6 +167,7 @@ test("headers are passed to transports when oauth is explicitly disabled", async
         expect(call.options.requestInit).toBeDefined()
         expect(call.options.requestInit?.headers).toEqual({
           Authorization: "Bearer test-token",
+          "User-Agent": expect.stringMatching(/^ax-code\//),
         })
         // OAuth is disabled, so no authProvider
         expect(call.options.authProvider).toBeUndefined()
@@ -175,7 +177,7 @@ test("headers are passed to transports when oauth is explicitly disabled", async
   })
 })
 
-test("no requestInit when headers are not provided", async () => {
+test("default User-Agent is sent when headers are not provided", async () => {
   await using tmp = await tmpdir()
 
   await Instance.provide({
@@ -191,10 +193,31 @@ test("no requestInit when headers are not provided", async () => {
       expect(transportCalls.length).toBeGreaterThanOrEqual(1)
 
       for (const call of transportCalls) {
-        // No headers means requestInit should be undefined
-        expect(call.options.requestInit).toBeUndefined()
+        expect(call.options.requestInit?.headers).toEqual({
+          "User-Agent": expect.stringMatching(/^ax-code\//),
+        })
         expect(call.options.fetch).toBeDefined()
       }
+    },
+  })
+})
+
+test("failed remote connect reports StreamableHTTP and SSE errors together", async () => {
+  await using tmp = await tmpdir()
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const result = await MCP.add("test-server-both-fail", {
+        type: "remote",
+        url: "https://example.com/mcp",
+        oauth: false,
+      })
+      const status = result.status["test-server-both-fail"]
+      expect(status?.status).toBe("failed")
+      if (status?.status !== "failed") return
+      expect(status.error).toContain("StreamableHTTP:")
+      expect(status.error).toContain("SSE:")
     },
   })
 })

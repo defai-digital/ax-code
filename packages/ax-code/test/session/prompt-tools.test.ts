@@ -5,6 +5,7 @@ import { ProviderTransform } from "../../src/provider/transform"
 import { Instance } from "../../src/project/instance"
 import {
   collectMcpToolContent,
+  collectMcpToolResult,
   resolveTools,
   runToolLifecycle,
   shouldBypassAgentCheck,
@@ -76,6 +77,23 @@ describe("session.prompt-tools", () => {
     expect(attachment.url).toBe(`data:image/png;base64,${b64}`)
     // Images have no filename — they render inline via the data URL
     expect(attachment.filename).toBeUndefined()
+  })
+
+  test("uses structuredContent only when MCP content is empty", () => {
+    const both = collectMcpToolResult({
+      content: [{ type: "text", text: "visible" }],
+      structuredContent: { ignored: true },
+    })
+    expect(both.textParts).toEqual(["visible"])
+
+    const structuredOnly = collectMcpToolResult({
+      content: [],
+      structuredContent: { ok: true, count: 2 },
+    })
+    expect(structuredOnly.textParts).toEqual(['{"ok":true,"count":2}'])
+
+    const empty = collectMcpToolResult({ content: [{ type: "text", text: "  " }], structuredContent: {} })
+    expect(empty.textParts).toEqual([])
   })
 
   test("browser_screenshot image block (no explicit mimeType) defaults to image/png", () => {

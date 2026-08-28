@@ -224,6 +224,33 @@ test("marks startup state disposed before a slow configured connection finishes"
   expect(createdClients[0]?.closed).toBe(true)
 })
 
+test("tools() returns before a hung startup MCP finishes connecting", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      mcp: {
+        hung: { type: "local", command: ["hung"] },
+      },
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entry = await Config.mcpEntry("hung")
+      if (!entry || !("type" in entry.config)) throw new Error("missing hung MCP fixture")
+      await McpTrust.trust("hung", entry.config, entry.source)
+
+      const started = Date.now()
+      const listed = MCP.tools()
+      await connectStarted
+      await expect(listed).resolves.toEqual({})
+      expect(Date.now() - started).toBeLessThan(8_000)
+      releaseConnect()
+    },
+  })
+})
+
 test("closes a dynamically added client that finishes after instance disposal", async () => {
   await using tmp = await tmpdir({ git: true })
 
