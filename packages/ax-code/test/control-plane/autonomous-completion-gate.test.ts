@@ -241,6 +241,37 @@ describe("AutonomousCompletionGate", () => {
     expect(decision).toEqual({ status: "allow" })
   })
 
+  test("blocks unterminated non-empty tool_call bodies", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [{ type: "text", text: "<tool_call>\nname: bash" }],
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      status: "blocked",
+      reason: "unexecutable_tool_text",
+    })
+  })
+
+  test("allows unterminated whitespace-only tool_call bodies", () => {
+    const decision = AutonomousCompletionGate.evaluate({
+      pendingTodos: [],
+      messages: [
+        {
+          info: { role: "assistant" },
+          parts: [{ type: "text", text: "<tool_call>\n  " }],
+        },
+      ],
+    })
+
+    expect(decision).toEqual({ status: "allow" })
+  })
+
   test("ignores synthetic text when checking for unexecutable tool text", () => {
     const decision = AutonomousCompletionGate.evaluate({
       pendingTodos: [],

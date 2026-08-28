@@ -171,8 +171,9 @@ export namespace AutonomousCompletionGate {
 
       const bodyStart = openingIndex + openingTag.length
       const closingIndex = text.indexOf(closingTag, bodyStart)
+      const bodyEnd = closingIndex === -1 ? text.length : closingIndex
+      if (text.slice(bodyStart, bodyEnd).trim().length > 0) return true
       if (closingIndex === -1) return false
-      if (text.slice(bodyStart, closingIndex).trim().length > 0) return true
 
       searchFrom = closingIndex + closingTag.length
     }
