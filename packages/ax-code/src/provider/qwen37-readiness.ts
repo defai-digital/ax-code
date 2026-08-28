@@ -140,3 +140,11 @@ export function isQwen37PlusModel(modelId: string): boolean {
   const normalized = normalizeProviderModelId(modelId)
   return /qwen3[789]plus/.test(normalized)
 }
+
+export function isQwen37FlashModel(modelId: string): boolean {
+  // Same 3.7–3.9 family window. qwen3.8-flash is Token Plan's cheap 1M SKU
+  // and must inherit the elevated Alibaba output/thinking ceilings instead
+  // of the generic 4k cap. 3.6-flash is excluded (different capability set).
+  const normalized = normalizeProviderModelId(modelId)
+  return /qwen3[789]flash/.test(normalized)
+}

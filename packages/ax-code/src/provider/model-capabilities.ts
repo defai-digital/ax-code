@@ -14,6 +14,7 @@
 
 import { normalizeProviderModelId } from "./model-id"
 import {
+  isQwen37FlashModel as isQwen37FlashReadinessModel,
   isQwen37MaxModel as isQwen37MaxReadinessModel,
   isQwen37PlusModel as isQwen37PlusReadinessModel,
   QWEN37_ALIBABA_PROVIDER_IDS,
@@ -285,6 +286,18 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     tier: "plus",
     contextWindow: 1_000_000,
     rateLimitTier: "standard",
+  }),
+
+  // Qwen 3.7+ Flash - Alibaba Cloud (official routes)
+  // qwen3.8-flash is Token Plan's cheap 1M SKU (2026-08-26). Same Plus
+  // readiness: vision/reasoning/tools; web search remains Max-only.
+  qwen37Registration({
+    pattern: /qwen[\.\-_]?3[\.\-_]?[789][\.\-_]?flash/i,
+    providerIds: [...QWEN37_ALIBABA_PROVIDER_IDS],
+    routeProviderId: "alibaba-coding-plan",
+    tier: "plus",
+    contextWindow: 1_000_000,
+    rateLimitTier: "extended",
   }),
 
   // Claude 3.7 Sonnet - Anthropic
@@ -824,14 +837,26 @@ export function isQwen37PlusModel(modelId: string): boolean {
 }
 
 /**
- * Check if a model is Qwen 3.7 Max or Plus.
- * Useful for shared logic that applies to both tiers (e.g. output token caps).
+ * Check if a model is Qwen 3.7–3.9 Flash.
+ *
+ * Identity predicate (not a capability lookup) — see isQwen37MaxModel.
  *
  * @param modelId - The model identifier
- * @returns true if the model is Qwen 3.7 Max or Plus
+ * @returns true if the model is Qwen 3.7–3.9 Flash
+ */
+export function isQwen37FlashModel(modelId: string): boolean {
+  return isQwen37FlashReadinessModel(modelId)
+}
+
+/**
+ * Check if a model is Qwen 3.7–3.9 Max, Plus, or Flash.
+ * Useful for shared logic that applies to the family (e.g. output token caps).
+ *
+ * @param modelId - The model identifier
+ * @returns true if the model is Qwen 3.7–3.9 Max, Plus, or Flash
  */
 export function isQwen37MaxOrPlusModel(modelId: string): boolean {
-  return isQwen37MaxModel(modelId) || isQwen37PlusModel(modelId)
+  return isQwen37MaxModel(modelId) || isQwen37PlusModel(modelId) || isQwen37FlashModel(modelId)
 }
 
 /**

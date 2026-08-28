@@ -1317,7 +1317,7 @@ export namespace Provider {
         priority = ["MiniMax-M2.7-highspeed", "MiniMax-M2.7"]
       }
       if (providerID.startsWith("alibaba")) {
-        priority = ["qwen3.6-flash", "qwen3.6-plus"]
+        priority = ["qwen3.8-flash", "qwen3.6-flash", "qwen3.6-plus"]
       }
       if (providerID === "openrouter") {
         priority = ["qwen/qwen3-coder-flash", "google/gemini-3.5-flash", "qwen/qwen3.7-plus"]

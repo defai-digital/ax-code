@@ -2005,7 +2005,8 @@ test("getSmallModel uses a supported Alibaba plan model", async () => {
       const model = await Provider.getSmallModel(ProviderID.make("alibaba-token-plan"))
       expect(model).toBeDefined()
       if (!model) throw new Error("expected Alibaba token-plan small model")
-      expect(["qwen3.6-flash", "qwen3.6-plus"]).toContain(model.id)
+      expect(["qwen3.8-flash", "qwen3.6-flash", "qwen3.6-plus"]).toContain(model.id)
+      expect(model.id).toBe("qwen3.8-flash")
     },
   })
 })
@@ -2630,6 +2631,7 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
         "qwen-image-2.0-pro",
         "qwen3.6-flash",
         "qwen3.7-plus",
+        "qwen3.8-flash",
         "qwen3.8-max",
         "wan2.7-image",
         "wan2.7-image-pro",
@@ -2640,7 +2642,11 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       expect(Object.keys(tokenPlanCn.models).sort()).toEqual(expectedTokenPlanModels)
       expect(tokenPlan.models["qwen3.8-max"].capabilities.input.image).toBe(true)
       expect(tokenPlan.models["qwen3.8-max"].capabilities.toolcall).toBe(true)
+      expect(tokenPlan.models["qwen3.8-flash"].capabilities.input.image).toBe(true)
+      expect(tokenPlan.models["qwen3.8-flash"].capabilities.toolcall).toBe(true)
       expect(tokenPlan.models["qwen3.8-max-preview"]).toBeUndefined()
+      expect(codingPlan.models["qwen3.8-flash"]).toBeUndefined()
+      expect(codingPlan.models["qwen3.8-max"]).toBeUndefined()
       expect(codingPlan.models["qwen3.6-plus"].api.url).toBe("https://coding-intl.dashscope.aliyuncs.com/v1")
       expect(codingPlanCn.models["qwen3.6-plus"].api.url).toBe("https://coding.dashscope.aliyuncs.com/v1")
       expect(tokenPlan.models["qwen3.7-plus"].api.url).toBe(

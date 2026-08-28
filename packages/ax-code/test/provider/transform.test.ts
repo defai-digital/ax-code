@@ -2493,6 +2493,17 @@ describe("ProviderTransform.maxOutputTokens", () => {
     }
   })
 
+  test("raises Alibaba quota cap to 16 384 for qwen3.8-flash on Alibaba routes", () => {
+    for (const providerID of ["alibaba-token-plan", "alibaba-token-plan-cn"]) {
+      const model = {
+        id: "qwen3.8-flash",
+        providerID: ProviderID.make(providerID),
+        limit: { output: 131_072 },
+      } as any
+      expect(ProviderTransform.maxOutputTokens(model), providerID).toBe(16_384)
+    }
+  })
+
   test("raises output cap to 65 536 for qwen3.8-max on non-Alibaba routes", () => {
     const model = {
       id: "qwen3.8-max",
@@ -2664,6 +2675,17 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
   test("raises thinking_budget to 16 384 for qwen3.8-max on Alibaba Token Plan", () => {
     const result = ProviderTransform.options({
       model: createModel("qwen3.8-max"),
+      sessionID: "session-test",
+      providerOptions: {},
+    })
+
+    expect(result.enable_thinking).toBe(true)
+    expect(result.thinking_budget).toBe(16_384)
+  })
+
+  test("raises thinking_budget to 16 384 for qwen3.8-flash on Alibaba Token Plan", () => {
+    const result = ProviderTransform.options({
+      model: createModel("qwen3.8-flash"),
       sessionID: "session-test",
       providerOptions: {},
     })

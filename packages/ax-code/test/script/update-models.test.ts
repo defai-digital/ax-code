@@ -467,6 +467,8 @@ describe("update-models script", () => {
       expect(data[id]?.models?.["deepseek-v4-flash"]).toBeUndefined()
       expect(data[id]?.models?.["qwen3.7-plus"]).toBeUndefined()
       expect(data[id]?.models?.["qwen3.8-max-preview"]).toBeUndefined()
+      expect(data[id]?.models?.["qwen3.8-max"]).toBeDefined()
+      expect(data[id]?.models?.["qwen3.8-flash"]).toBeDefined()
       expect(data[id]?.models?.["qwen3.6-plus"]).toBeUndefined()
       expect(data[id]?.models?.["kimi-k2.7-code"]).toBeUndefined()
       expect(data[id]?.models?.["qwen3.7-max"]).toBeUndefined()

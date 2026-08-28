@@ -4,6 +4,7 @@ import {
   classifyQwen37Route,
   qwen37MaxReadiness,
   qwen37PlusReadiness,
+  isQwen37FlashModel,
   isQwen37MaxModel,
   isQwen37PlusModel,
 } from "../../src/provider/qwen37-readiness"
@@ -221,5 +222,22 @@ describe("isQwen37PlusModel", () => {
     expect(isQwen37PlusModel("qwen-3-8-plus")).toBe(true)
     expect(isQwen37PlusModel("Qwen/Qwen3.8-Plus")).toBe(true)
     expect(isQwen37PlusModel("qwen3.9-plus")).toBe(true)
+  })
+})
+
+describe("isQwen37FlashModel", () => {
+  test("recognizes qwen3.8/3.9 flash spellings across providers", () => {
+    expect(isQwen37FlashModel("qwen3.8-flash")).toBe(true)
+    expect(isQwen37FlashModel("qwen-3-8-flash")).toBe(true)
+    expect(isQwen37FlashModel("Qwen/Qwen3.8-Flash")).toBe(true)
+    expect(isQwen37FlashModel("qwen3.9-flash")).toBe(true)
+    expect(isQwen37FlashModel("qwen3.7-flash")).toBe(true)
+  })
+
+  test("does not match max, plus, or 3.6 flash", () => {
+    expect(isQwen37FlashModel("qwen3.8-max")).toBe(false)
+    expect(isQwen37FlashModel("qwen3.7-plus")).toBe(false)
+    expect(isQwen37FlashModel("qwen3.6-flash")).toBe(false)
+    expect(isQwen37FlashModel("qwen3-coder-flash")).toBe(false)
   })
 })

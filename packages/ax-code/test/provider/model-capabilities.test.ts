@@ -300,6 +300,7 @@ describe("Model Capability Registry", () => {
     // long-agent profile exactly where they matter most.
     it("covers future Qwen 3.8/3.9 Max and Plus on Alibaba first-party routes", () => {
       expect(supportsLongAgent("qwen3.8-max", "alibaba-token-plan")).toBe(true)
+      expect(supportsLongAgent("qwen3.8-flash", "alibaba-token-plan")).toBe(true)
       expect(supportsLongAgent("qwen3.9-max", "alibaba-coding-plan")).toBe(true)
       expect(supportsLongAgent("qwen3.8-plus", "alibaba-coding-plan-cn")).toBe(true)
     })
@@ -469,10 +470,12 @@ describe("Model Capability Registry", () => {
     it("should detect both Max and Plus", () => {
       expect(isQwen37MaxOrPlusModel("qwen3.7-max")).toBe(true)
       expect(isQwen37MaxOrPlusModel("qwen3.7-plus")).toBe(true)
+      expect(isQwen37MaxOrPlusModel("qwen3.8-flash")).toBe(true)
     })
 
     it("should not detect other models", () => {
       expect(isQwen37MaxOrPlusModel("qwen3.6-plus")).toBe(false)
+      expect(isQwen37MaxOrPlusModel("qwen3.6-flash")).toBe(false)
       expect(isQwen37MaxOrPlusModel("claude-3-7-sonnet")).toBe(false)
     })
   })

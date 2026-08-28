@@ -36922,6 +36922,42 @@
           "context": 1000000,
           "output": 131072
         }
+      },
+      "qwen3.8-flash": {
+        "id": "qwen3.8-flash",
+        "name": "Qwen3.8 Flash 🌐",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
       }
     }
   },
@@ -169763,6 +169799,42 @@
         "temperature": true,
         "release_date": "2026-08-03",
         "last_updated": "2026-08-03",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
+      "qwen3.8-flash": {
+        "id": "qwen3.8-flash",
+        "name": "Qwen3.8 Flash 🌐",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          },
+          {
+            "type": "budget_tokens"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
         "modalities": {
           "input": [
             "text",

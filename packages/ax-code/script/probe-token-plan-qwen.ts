@@ -6,7 +6,7 @@
  * Does not print the API key. Writes a JSON summary to stdout.
  */
 const ENDPOINT = "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
-const MODELS = ["qwen3.7-plus", "qwen3.8-max-preview", "qwen3.8-max"] as const
+const MODELS = ["qwen3.7-plus", "qwen3.8-max-preview", "qwen3.8-max", "qwen3.8-flash"] as const
 // 32x32 PNG — Token Plan rejects images with height/width <= 10.
 const PIXEL = "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAADUlEQVR4nGP4z8DwHwAFgwJ/lQ0T1gAAAABJRU5ErkJggg=="
 
@@ -61,7 +61,7 @@ async function main() {
   results.push({
     name: "list-models",
     ok: modelsRes.ok,
-    detail: `http=${modelsRes.status} count=${ids.length} qwen3.8*=${qwen.join(",") || "none"} hasPreview=${ids.includes("qwen3.8-max-preview")} hasGA=${ids.includes("qwen3.8-max")}`,
+    detail: `http=${modelsRes.status} count=${ids.length} qwen3.8*=${qwen.join(",") || "none"} hasPreview=${ids.includes("qwen3.8-max-preview")} hasGA=${ids.includes("qwen3.8-max")} hasFlash=${ids.includes("qwen3.8-flash")}`,
   })
 
   for (const model of MODELS) {

@@ -723,11 +723,13 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 //     https://www.alibabacloud.com/help/en/model-studio/coding-plan
 //     qwen3.7-plus, qwen3.6-plus, qwen3.5-plus, qwen3-max-2026-01-23,
 //     qwen3-coder-next, qwen3-coder-plus, kimi-k2.5, glm-5, glm-4.7, MiniMax-M2.5
-//   Token Plan (Team Edition):
-//     https://www.alibabacloud.com/help/en/model-studio/token-plan-overview
-//     qwen3.7-max, qwen3.7-plus, qwen3.6-plus, qwen3.6-flash, deepseek-v4-*,
-//     kimi-k2.7-code/2.6/2.5, glm-5.2/5.1/5, MiniMax-M2.5,
-//     qwen-image/wan images.
+//   Token Plan (QwenCloud Personal + Team; verified 2026-08-28):
+//     https://docs.qwencloud.com/token-plan/personal/token-plan-personal-overview
+//     https://docs.qwencloud.com/token-plan/team/token-plan-team-overview
+//     qwen3.8-max, qwen3.8-flash, qwen3.7-max, qwen3.7-plus, qwen3.6-plus,
+//     qwen3.6-flash, deepseek-v4-*, kimi-k2.7-code/2.6/2.5, glm-5.2/5.1/5,
+//     MiniMax-M2.5, qwen-image/wan images.
+//     Coding Plan still has no Qwen 3.8 SKUs.
 // Superseded SKUs (kimi-k2.5/k2.6, glm-4.7, glm-5.1, deepseek-v3.2) stay
 // excluded per the global supersession filters. Token Plan also hides
 // DeepSeek / GLM / MiniMax / Kimi in ax-code so those vendors are reached
@@ -740,7 +742,9 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 // upstream catches up. Image models (qwen-image-*, wan*) are kept on
 // the Token Plan per product intent even though ax-code's chat picker
 // can't drive image generation — they show up so callers using the
-// provider via SDK / API can pick them.
+// provider via SDK / API can pick them. Qwen 3.8 Max/Flash are Token Plan
+// exclusive and injected below because the coding-plan clone never carries
+// them.
 const alibabaCodingPlanModels = [
   // Qwen text / reasoning (coding-plan exclusive coder SKUs)
   "qwen3.7-plus",
@@ -870,12 +874,16 @@ for (const [id, planModels] of Object.entries(alibabaPlanModels)) {
   fetched[id].models = kept
 }
 
-// Token Plan Team Edition allowlist (not Coding Plan): Qwen 3.8 Max.
-// Keep the GA id only; the *-preview alias is stripped below.
-const tokenPlanOnlyModels = ["qwen3.8-max"] as const
-const tokenPlanQwen38 = {
+// Token Plan allowlist (not Coding Plan): Qwen 3.8 Max and Flash.
+// Keep the GA ids only; the *-preview alias is stripped below.
+const tokenPlanOnlyModels = ["qwen3.8-max", "qwen3.8-flash"] as const
+const tokenPlanOnlyNames = {
+  "qwen3.8-max": "Qwen3.8 Max",
+  "qwen3.8-flash": "Qwen3.8 Flash",
+} as const
+const tokenPlanQwen38Max = {
   id: "qwen3.8-max",
-  name: "Qwen3.8 Max",
+  name: tokenPlanOnlyNames["qwen3.8-max"],
   description:
     "2.4-trillion-parameter multimodal flagship for coding, professional work, and long-horizon agentic workflows",
   family: "qwen",
@@ -897,20 +905,45 @@ const tokenPlanQwen38 = {
   },
   status: "active",
 } as RawModel
+const tokenPlanQwen38Flash = {
+  id: "qwen3.8-flash",
+  name: tokenPlanOnlyNames["qwen3.8-flash"],
+  description: "Multimodal Qwen model for cost-sensitive coding, agentic workflows, and visual knowledge work",
+  family: "qwen",
+  attachment: true,
+  reasoning: true,
+  tool_call: true,
+  structured_output: true,
+  temperature: true,
+  release_date: "2026-08-26",
+  last_updated: "2026-08-26",
+  modalities: {
+    input: ["text", "image", "video"],
+    output: ["text"],
+  },
+  open_weights: false,
+  limit: {
+    context: 1000000,
+    output: 131072,
+  },
+  status: "active",
+} as RawModel
+const tokenPlanOnlyDefaults = {
+  "qwen3.8-max": tokenPlanQwen38Max,
+  "qwen3.8-flash": tokenPlanQwen38Flash,
+} as const
 for (const id of ["alibaba-token-plan", "alibaba-token-plan-cn"]) {
   if (!fetched[id]) continue
   const models = fetched[id].models ?? {}
   for (const mid of tokenPlanOnlyModels) {
     if (models[mid]) continue
     const fallback =
-      fetched["opencode-go"]?.models?.["qwen3.8-max"] ??
-      existing["opencode-go"]?.models?.["qwen3.8-max"] ??
-      existing[id]?.models?.[mid]
-    const base = fallback ? cloneJsonValue(fallback) : cloneJsonValue(tokenPlanQwen38)
+      fetched["opencode-go"]?.models?.[mid] ?? existing["opencode-go"]?.models?.[mid] ?? existing[id]?.models?.[mid]
+    const base = fallback ? cloneJsonValue(fallback) : cloneJsonValue(tokenPlanOnlyDefaults[mid])
     models[mid] = {
       ...base,
       id: mid,
-      name: "Qwen3.8 Max",
+      name: tokenPlanOnlyNames[mid],
       family: "qwen",
     }
     delete (models[mid] as { provider?: unknown }).provider
