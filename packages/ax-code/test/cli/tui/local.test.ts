@@ -1,11 +1,16 @@
 import { describe, expect, test } from "vitest"
 import {
   RECENT_MODEL_LIMIT,
+  SESSION_MODEL_LIMIT,
   modelPreferenceStatus,
   normalizeModelOverrides,
+  normalizeSessionModelPreferences,
   normalizeModelVariantStore,
   normalizeRecentModels,
   pruneModelPreferences,
+  pruneSessionModelPreferences,
+  rememberSessionModelPreference,
+  sessionModelPreference,
   solidStoreRecordPatch,
   rememberRecentModel,
   resolveCurrentAgent,
@@ -94,6 +99,69 @@ describe("tui local model preferences", () => {
     expect(normalizeModelOverrides(null)).toEqual({})
     expect(normalizeModelOverrides([model(1)])).toEqual({})
     expect(normalizeModelOverrides("openai/gpt-5")).toEqual({})
+  })
+
+  test("restores the latest model per session and agent without changing global overrides", () => {
+    const qwen = model(1)
+    const minimax = model(2)
+    const globalOverrides = { build: qwen, architect: minimax }
+    let sessions = rememberSessionModelPreference({}, "session-1", "build", qwen)
+    sessions = rememberSessionModelPreference(sessions, "session-1", "architect", qwen)
+
+    expect(sessionModelPreference(sessions, "session-1", "architect")).toEqual(qwen)
+    expect(sessionModelPreference(sessions, "session-1", "build")).toEqual(qwen)
+    expect(sessionModelPreference(sessions, "session-1", "debug")).toEqual(qwen)
+    expect(sessionModelPreference(sessions, "session-2", "architect")).toBeUndefined()
+    expect(globalOverrides.architect).toEqual(minimax)
+  })
+
+  test("normalizes and caps persisted session model preferences", () => {
+    const input = Object.fromEntries(
+      Array.from({ length: SESSION_MODEL_LIMIT + 1 }, (_, index) => [
+        `session-${index}`,
+        {
+          model: model(index),
+          agents: {
+            build: model(index),
+            invalid: "bad",
+          },
+        },
+      ]),
+    )
+    const result = normalizeSessionModelPreferences(input)
+
+    expect(Object.keys(result)).toHaveLength(SESSION_MODEL_LIMIT)
+    expect(result["session-0"]).toBeUndefined()
+    expect(result["session-1"]?.agents).toEqual({ build: model(1) })
+    expect(normalizeSessionModelPreferences(null)).toEqual({})
+  })
+
+  test("prunes invalid session models while retaining valid agent selections", () => {
+    const result = pruneSessionModelPreferences(
+      {
+        "session-1": {
+          model: { providerID: "missing", modelID: "removed" },
+          agents: {
+            build: model(1),
+            architect: { providerID: "missing", modelID: "removed" },
+          },
+        },
+        "session-2": {
+          agents: {
+            debug: { providerID: "missing", modelID: "removed" },
+          },
+        },
+      },
+      (selection) => (selection.providerID === "provider" ? "valid" : "invalid"),
+    )
+
+    expect(result.value).toEqual({
+      "session-1": {
+        model: undefined,
+        agents: { build: model(1) },
+      },
+    })
+    expect(result.changed).toBe(true)
   })
 
   test("normalizes stored recent models to the most recent five entries", () => {

@@ -28365,7 +28365,7 @@
         "attachment": true,
         "reasoning": true,
         "reasoning_options": [],
-        "tool_call": false,
+        "tool_call": true,
         "structured_output": false,
         "release_date": "2026-08-28",
         "last_updated": "2026-08-28",
@@ -30385,32 +30385,6 @@
           "context": 524288,
           "input": 524288,
           "output": 32768
-        }
-      },
-      "inflection/inflection-3-pi": {
-        "id": "inflection/inflection-3-pi",
-        "name": "Inflection 3 Pi",
-        "description": "GPT model for general reasoning, writing, coding, and tool-assisted tasks",
-        "family": "gpt",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "release_date": "2025-11-21",
-        "last_updated": "2024-10-11",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 8000,
-          "input": 8000,
-          "output": 4096
         }
       },
       "inflection/inflection-3-productivity": {
@@ -67959,6 +67933,45 @@
           "output": 64000
         }
       },
+      "novita/qwen3.8-flash": {
+        "id": "novita/qwen3.8-flash",
+        "name": "Qwen3.8 Flash (NovitaAI)",
+        "description": "Qwen vision-language model for visual reasoning, documents, and agent tasks",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "none",
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "novita/qwen3-coder-480b-a35b-instruct": {
         "id": "novita/qwen3-coder-480b-a35b-instruct",
         "name": "Qwen3 Coder 480B A35B Instruct (NovitaAI)",
@@ -67984,6 +67997,42 @@
         "limit": {
           "context": 262144,
           "output": 65536
+        }
+      },
+      "novita/glm-5.3": {
+        "id": "novita/glm-5.3",
+        "name": "GLM-5.3 (NovitaAI)",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
         }
       },
       "novita/qwen3-max": {
@@ -68214,6 +68263,33 @@
         "limit": {
           "context": 131072,
           "output": 32768
+        }
+      },
+      "novita/qwen3.8-27b": {
+        "id": "novita/qwen3.8-27b",
+        "name": "Qwen3.8 27B (NovitaAI)",
+        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
+        "family": "qwen",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
         }
       },
       "novita/llama-4-maverick-17b-instruct": {
@@ -73202,6 +73278,42 @@
         "open_weights": true,
         "limit": {
           "context": 1000000,
+          "output": 131072
+        }
+      },
+      "scx-ai-gp/glm-5.3-flash": {
+        "id": "scx-ai-gp/glm-5.3-flash",
+        "name": "GLM-5.3 Flash (SCX.ai)",
+        "description": "Native multimodal GLM model for efficient coding and long-horizon agent tasks",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": false,
+        "temperature": true,
+        "release_date": "2026-08-26",
+        "last_updated": "2026-08-26",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
           "output": 131072
         }
       },
@@ -143569,8 +143681,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 256000,
-          "output": 128000
+          "context": 262144,
+          "output": 262144
         }
       },
       "fish-audio/s1-free": {
@@ -147120,7 +147232,7 @@
         "open_weights": false,
         "limit": {
           "context": 1000000,
-          "output": 12800
+          "output": 1000000
         }
       },
       "zai/glm-5.2": {
@@ -151262,6 +151374,31 @@
           "output": 0
         }
       },
+      "alibaba/wan-v3.0-video-prime": {
+        "id": "alibaba/wan-v3.0-video-prime",
+        "name": "Wan v3.0 Video Prime",
+        "description": "Video model for prompt-guided generation, editing, and motion workflows",
+        "family": "o",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "release_date": "2026-08-28",
+        "last_updated": "2026-08-28",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "video"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 0,
+          "output": 0
+        }
+      },
       "alibaba/wan-v3.0-video": {
         "id": "alibaba/wan-v3.0-video",
         "name": "Wan v3.0 Video",
@@ -151400,7 +151537,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 131072
+          "output": 128000
         }
       },
       "sakana/namazu": {
@@ -152893,8 +153030,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1000000,
-          "output": 1000000
+          "context": 512000,
+          "output": 512000
         }
       },
       "minimax/minimax-m2.7": {
@@ -155452,42 +155589,6 @@
         "limit": {
           "context": 131072,
           "output": 32768
-        }
-      },
-      "together_ai/nvidia/nemotron-3-ultra-550b-a55b": {
-        "id": "together_ai/nvidia/nemotron-3-ultra-550b-a55b",
-        "name": "Nemotron 3 Ultra 550B A55B",
-        "description": "Largest Nemotron 3 model for maximum open-weight reasoning and agent accuracy",
-        "family": "nemotron",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-04",
-        "last_updated": "2026-06-04",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 512288,
-          "output": 128000
         }
       },
       "together_ai/openai/gpt-oss-120b": {
@@ -160116,42 +160217,6 @@
         "limit": {
           "context": 1048576,
           "output": 384000
-        }
-      },
-      "fireworks_ai/accounts/fireworks/models/gpt-oss-20b": {
-        "id": "fireworks_ai/accounts/fireworks/models/gpt-oss-20b",
-        "name": "GPT OSS 20B",
-        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "last_updated": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 32768
         }
       },
       "perplexityai/sonar-deep-research": {
@@ -167556,6 +167621,35 @@
         "limit": {
           "context": 128000,
           "output": 8192
+        }
+      },
+      "qwen3.8-27b": {
+        "id": "qwen3.8-27b",
+        "name": "Qwen3.8 27B",
+        "description": "Dense 27B vision-language model for coding, agent tasks, and image and video understanding",
+        "family": "qwen",
+        "attachment": true,
+        "reasoning": true,
+        "reasoning_options": [],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1000000,
+          "output": 32768
         }
       },
       "nemotron-3-nano-omni": {
@@ -174974,7 +175068,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 131072
         }
       },
       "nvidia/nemotron-3-ultra-550b-a55b": {
@@ -176977,7 +177071,7 @@
         "open_weights": true,
         "limit": {
           "context": 131072,
-          "output": 117964
+          "output": 16384
         }
       },
       "meta/muse-spark-1.2": {
@@ -182628,8 +182722,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 262144,
+          "output": 16384
         }
       },
       "qwen/qwen3-vl-235b-a22b-instruct": {
@@ -184309,8 +184403,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 32000,
-          "output": 25600
+          "context": 32768,
+          "output": 26214
         }
       },
       "mistralai/ministral-3b-2512": {
@@ -184811,8 +184905,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1048576,
-          "output": 943718
+          "context": 262144,
+          "output": 131072
         }
       },
       "nex-agi/nex-n2-mini": {

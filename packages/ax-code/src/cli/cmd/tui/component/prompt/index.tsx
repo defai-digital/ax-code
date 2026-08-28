@@ -700,7 +700,7 @@ export function Prompt(props: PromptProps) {
     setExpandedPastes(expanded ? new Set<number>(pasteViews().map((view) => view.partIndex)) : new Set<number>())
   }
 
-  // Sync local agent/variant from the latest user message:
+  // Sync local agent/model/variant from the latest user message:
   // - On session change: pick up the session's last-known agent so the chip
   //   reflects what was active when the session was last used.
   // - On new message in the same session: catch server-generated user messages
@@ -708,31 +708,34 @@ export function Prompt(props: PromptProps) {
   //   message with agent="build" to hand off out of plan mode, the router
   //   switches "find the bug" to the debug agent). Without this, the
   //   bottom-left chip stays stale.
-  // The message's model is deliberately not copied into the per-agent
-  // override slot: `local.model.current` already resolves the adopted
-  // agent's own override or config pin, and a persisted copy would shadow
-  // that pin on every later turn (the debug agent kept running on the model
-  // picked for build long after config pinned it elsewhere).
+  // Restore the message's model only into the session-scoped selection. This
+  // keeps an explicit model stable when the server auto-routes the turn to a
+  // different agent, without copying that model into the agent's global
+  // override and shadowing its config pin in unrelated sessions.
   //
-  // Use `on()` so only sessionID and lastUserMessage trigger re-runs — reads
-  // of local.agent inside don't add dependencies, otherwise a manual Tab-
-  // switch would re-fire the effect and revert the user's choice.
+  // Use `on()` so only sessionID, lastUserMessage, and model-store readiness
+  // trigger re-runs — reads of local.agent inside don't add dependencies,
+  // otherwise a manual Tab-switch would re-fire the effect and revert the
+  // user's choice. Waiting for readiness also prevents the async preference
+  // load from overwriting a session selection restored during bootstrap.
   let syncedSessionID: string | undefined
   createEffect(
-    on([() => props.sessionID, lastUserMessage], ([sessionID, msg]) => {
+    on([() => props.sessionID, lastUserMessage, () => local.model.ready], ([sessionID, msg, modelReady]) => {
+      if (!modelReady) return
       const sessionChanged = sessionID !== syncedSessionID
       if (sessionChanged) {
         syncedSessionID = sessionID
         if (!sessionID || !msg) return
-      } else {
-        // Same session: only sync when the message agent actually differs
-        // from what the chip shows (e.g. plan_exit just handed off to build).
-        if (!msg?.agent || msg.agent === local.agent.current().name) return
       }
+
+      if (!sessionID || !msg?.agent) return
 
       // Only adopt primary-tier agents — subagent results shouldn't change the picker.
       const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
-      if (msg.agent && isPrimaryAgent) {
+      if (isPrimaryAgent) {
+        if (msg.model) local.model.session.set(sessionID, msg.model, msg.agent)
+        const shouldSyncAgent = sessionChanged || msg.agent !== local.agent.current().name
+        if (!shouldSyncAgent) return
         local.agent.set(msg.agent)
         // A variant belongs to the model it was chosen for; only carry it
         // over when the chip now shows that same model.

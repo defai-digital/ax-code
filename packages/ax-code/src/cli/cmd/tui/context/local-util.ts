@@ -7,6 +7,7 @@ import {
 import { modelSelectableForProvider, sameSkuOnConnectedProvider } from "@/provider/model-selectability"
 
 export const RECENT_MODEL_LIMIT = 5
+export const SESSION_MODEL_LIMIT = 150
 
 export type ModelPreferenceStatus = "valid" | "invalid" | "unknown"
 
@@ -47,6 +48,13 @@ export type ModelPreferenceStore = {
   favorite: ProviderModelKeyInput[]
   variant: Record<string, string | undefined>
 }
+
+export type SessionModelPreference = {
+  model?: ProviderModelKeyInput
+  agents: Record<string, ProviderModelKeyInput>
+}
+
+export type SessionModelPreferenceStore = Record<string, SessionModelPreference>
 
 export function resolveCurrentAgent<
   T extends { name: string; displayName?: string; model?: unknown } = {
@@ -91,6 +99,63 @@ export function normalizeModelOverrides(input: unknown): Record<string, Provider
       return typeof key === "string" && key.length > 0 && isProviderModelKeyInput(value)
     }),
   )
+}
+
+export function normalizeSessionModelPreferences(input: unknown): SessionModelPreferenceStore {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {}
+  const entries: [string, SessionModelPreference][] = []
+  for (const [sessionID, value] of Object.entries(input)) {
+    if (!sessionID || !value || typeof value !== "object" || Array.isArray(value)) continue
+    const record = value as { model?: unknown; agents?: unknown }
+    const model = isProviderModelKeyInput(record.model) ? modelIdentity(record.model) : undefined
+    const agents = Object.fromEntries(
+      Object.entries(normalizeModelOverrides(record.agents)).map(([agentName, selection]) => [
+        agentName,
+        modelIdentity(selection),
+      ]),
+    )
+    if (!model && Object.keys(agents).length === 0) continue
+    entries.push([sessionID, { model, agents }])
+  }
+  return Object.fromEntries(entries.slice(-SESSION_MODEL_LIMIT))
+}
+
+export function sessionModelPreference(
+  input: SessionModelPreferenceStore,
+  sessionID: string | undefined,
+  agentName: string,
+): ProviderModelKeyInput | undefined {
+  if (!sessionID) return undefined
+  const entry = input[sessionID]
+  return entry?.agents[agentName] ?? entry?.model
+}
+
+export function rememberSessionModelPreference(
+  input: SessionModelPreferenceStore,
+  sessionID: string,
+  agentName: string | undefined,
+  model: ProviderModelKeyInput,
+): SessionModelPreferenceStore {
+  if (!sessionID) return input
+  const identity = modelIdentity(model)
+  const current = input[sessionID]
+  const agents = {
+    ...(current?.agents ?? {}),
+    ...(agentName ? { [agentName]: identity } : {}),
+  }
+  const unchanged =
+    current?.model?.providerID === identity.providerID &&
+    current.model.modelID === identity.modelID &&
+    (!agentName ||
+      (current.agents[agentName]?.providerID === identity.providerID &&
+        current.agents[agentName]?.modelID === identity.modelID))
+  const keys = Object.keys(input)
+  if (unchanged && keys[keys.length - 1] === sessionID) return input
+
+  const next = { ...input }
+  delete next[sessionID]
+  next[sessionID] = { model: identity, agents }
+  return Object.fromEntries(Object.entries(next).slice(-SESSION_MODEL_LIMIT))
 }
 
 export function rememberRecentModel(
@@ -176,6 +241,24 @@ function sameModelOverrides(left: Record<string, ProviderModelKeyInput>, right: 
   })
 }
 
+function sameSessionModelPreferences(left: SessionModelPreferenceStore, right: SessionModelPreferenceStore) {
+  const leftEntries = Object.entries(left)
+  const rightEntries = Object.entries(right)
+  if (leftEntries.length !== rightEntries.length) return false
+  return leftEntries.every(([sessionID, value], index) => {
+    const otherEntry = rightEntries[index]
+    if (!otherEntry || otherEntry[0] !== sessionID) return false
+    const other = otherEntry[1]
+    const sameModel =
+      value.model === undefined
+        ? other.model === undefined
+        : other.model !== undefined &&
+          value.model.providerID === other.model.providerID &&
+          value.model.modelID === other.model.modelID
+    return sameModel && sameModelOverrides(value.agents, other.agents)
+  })
+}
+
 /** Solid stores merge objects. Missing keys must be set to `undefined` to delete them. */
 export function solidStoreRecordPatch<T>(
   current: Record<string, T>,
@@ -227,5 +310,31 @@ export function pruneModelPreferences(
       !sameModelList(input.recent, recent) ||
       !sameModelList(input.favorite, favorite) ||
       !sameVariantStore(input.variant, variant),
+  }
+}
+
+export function pruneSessionModelPreferences(
+  input: SessionModelPreferenceStore,
+  modelStatus: (model: ProviderModelKeyInput) => ModelPreferenceStatus,
+  migrate?: ModelMigration,
+): { value: SessionModelPreferenceStore; changed: boolean } {
+  const output: SessionModelPreferenceStore = {}
+  for (const [sessionID, value] of Object.entries(input).slice(-SESSION_MODEL_LIMIT)) {
+    const model = value.model ? keepOrMigrate(value.model, modelStatus, migrate) : undefined
+    const agents = Object.fromEntries(
+      Object.entries(value.agents).flatMap(([agentName, selection]) => {
+        const kept = keepOrMigrate(selection, modelStatus, migrate)
+        return kept ? [[agentName, modelIdentity(kept)] as const] : []
+      }),
+    )
+    if (!model && Object.keys(agents).length === 0) continue
+    output[sessionID] = {
+      model: model ? modelIdentity(model) : undefined,
+      agents,
+    }
+  }
+  return {
+    value: output,
+    changed: !sameSessionModelPreferences(input, output),
   }
 }
