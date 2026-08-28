@@ -23,6 +23,7 @@ import {
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
 import { providerModelEquals, providerModelKey } from "@/provider/model-key"
+import { shouldAdoptMessageModelFromHistory } from "@tui/context/local-util"
 import { effortDisplay } from "@/provider/effort-label"
 import { useLocal } from "@tui/context/local"
 import { useTheme } from "@tui/context/theme"
@@ -743,7 +744,9 @@ export function Prompt(props: PromptProps) {
         // Only adopt primary-tier agents — subagent results shouldn't change the picker.
         const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
         if (isPrimaryAgent) {
-          if (msg.model) local.model.session.set(sessionID, msg.model, msg.agent)
+          if (msg.model && shouldAdoptMessageModelFromHistory(sessionChanged, local.model.session.has(sessionID))) {
+            local.model.session.set(sessionID, msg.model, msg.agent)
+          }
           const shouldSyncAgent = sessionChanged || msg.agent !== local.agent.current().name
           if (!shouldSyncAgent) return
           local.agent.set(msg.agent)

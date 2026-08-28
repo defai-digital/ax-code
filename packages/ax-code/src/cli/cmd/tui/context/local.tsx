@@ -22,6 +22,8 @@ import { RGBA } from "@ax-code/tui"
 import { Filesystem } from "@/util/filesystem"
 import { optionalStateErrorMessage, shouldSurfaceOptionalStateError } from "@tui/util/optional-state"
 import {
+  applyExplicitModelPreference,
+  hasSessionModelPreference,
   modelIdentity,
   modelPreferenceStatus as resolveModelPreferenceStatus,
   normalizeModelOverrides,
@@ -220,14 +222,18 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         return true
       }
 
-      function rememberActiveSessionModel(model: ProviderModelKeyInput, agentName: string) {
-        const sessionID = activeSessionID()
-        return sessionID ? rememberSessionModel(sessionID, model, agentName) : false
-      }
-
       function setUserModel(agentName: string, model: ProviderModelKeyInput) {
-        setModelStore("model", agentName, modelIdentity(model))
-        rememberActiveSessionModel(model, agentName)
+        const applied = applyExplicitModelPreference(
+          sessionModels(),
+          modelStore.model,
+          activeSessionID(),
+          agentName,
+          model,
+        )
+        if (applied.sessions !== sessionModels()) setSessionModels(applied.sessions)
+        if (applied.global !== modelStore.model) {
+          setModelStore("model", solidStoreRecordPatch(modelStore.model, applied.global))
+        }
       }
 
       function variantPreferenceStatus(
@@ -502,14 +508,17 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
             setUserModel(currentAgentName, resolved)
             if (options?.recent) {
               rememberRecentModel(resolved)
-              save()
             }
+            save()
           })
         },
         session: {
           set(sessionID: string, model: ProviderModelKeyInput, agentName?: string) {
             if (!rememberSessionModel(sessionID, model, agentName)) return
             save()
+          },
+          has(sessionID: string) {
+            return hasSessionModelPreference(sessionModels(), sessionID)
           },
         },
         toggleFavorite(model: { providerID: string; modelID: string }) {

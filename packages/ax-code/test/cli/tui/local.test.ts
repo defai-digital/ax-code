@@ -11,6 +11,9 @@ import {
   pruneSessionModelPreferences,
   rememberSessionModelPreference,
   sessionModelPreference,
+  applyExplicitModelPreference,
+  hasSessionModelPreference,
+  shouldAdoptMessageModelFromHistory,
   solidStoreRecordPatch,
   rememberRecentModel,
   resolveCurrentAgent,
@@ -113,6 +116,37 @@ describe("tui local model preferences", () => {
     expect(sessionModelPreference(sessions, "session-1", "debug")).toEqual(qwen)
     expect(sessionModelPreference(sessions, "session-2", "architect")).toBeUndefined()
     expect(globalOverrides.architect).toEqual(minimax)
+  })
+
+  test("keeps an explicit in-session pick out of the global agent override", () => {
+    const qwen = model(1)
+    const minimax = model(2)
+    const global = { build: qwen }
+    const applied = applyExplicitModelPreference({}, global, "session-1", "build", minimax)
+
+    expect(sessionModelPreference(applied.sessions, "session-1", "build")).toEqual(minimax)
+    expect(applied.global).toBe(global)
+    expect(applied.global.build).toEqual(qwen)
+    expect(sessionModelPreference(applied.sessions, "session-2", "build")).toBeUndefined()
+  })
+
+  test("writes a home-screen pick to the global override so --model still applies", () => {
+    const qwen = model(1)
+    const minimax = model(2)
+    const applied = applyExplicitModelPreference({}, { build: qwen }, undefined, "build", minimax)
+
+    expect(applied.sessions).toEqual({})
+    expect(applied.global).toEqual({ build: minimax })
+  })
+
+  test("does not restore last-message models over an existing session pick", () => {
+    const sessions = rememberSessionModelPreference({}, "session-1", "build", model(2))
+
+    expect(hasSessionModelPreference(sessions, "session-1")).toBe(true)
+    expect(hasSessionModelPreference(sessions, "session-2")).toBe(false)
+    expect(shouldAdoptMessageModelFromHistory(true, true)).toBe(false)
+    expect(shouldAdoptMessageModelFromHistory(true, false)).toBe(true)
+    expect(shouldAdoptMessageModelFromHistory(false, true)).toBe(true)
   })
 
   test("normalizes and caps persisted session model preferences", () => {

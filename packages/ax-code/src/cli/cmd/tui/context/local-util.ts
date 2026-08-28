@@ -159,6 +159,41 @@ export function rememberSessionModelPreference(
   return Object.fromEntries(Object.entries(next).slice(-SESSION_MODEL_LIMIT))
 }
 
+export function hasSessionModelPreference(input: SessionModelPreferenceStore, sessionID: string | undefined): boolean {
+  if (!sessionID) return false
+  const entry = input[sessionID]
+  if (!entry) return false
+  return entry.model !== undefined || Object.keys(entry.agents).length > 0
+}
+
+export function shouldAdoptMessageModelFromHistory(sessionChanged: boolean, hasSessionPreference: boolean): boolean {
+  return !sessionChanged || !hasSessionPreference
+}
+
+export function applyExplicitModelPreference(
+  sessions: SessionModelPreferenceStore,
+  global: Record<string, ProviderModelKeyInput>,
+  sessionID: string | undefined,
+  agentName: string,
+  model: ProviderModelKeyInput,
+): { sessions: SessionModelPreferenceStore; global: Record<string, ProviderModelKeyInput> } {
+  if (sessionID) {
+    return {
+      sessions: rememberSessionModelPreference(sessions, sessionID, agentName, model),
+      global,
+    }
+  }
+  const identity = modelIdentity(model)
+  const current = global[agentName]
+  if (current?.providerID === identity.providerID && current.modelID === identity.modelID) {
+    return { sessions, global }
+  }
+  return {
+    sessions,
+    global: { ...global, [agentName]: identity },
+  }
+}
+
 export function rememberRecentModel(
   recent: readonly ProviderModelKeyInput[],
   model: ProviderModelKeyInput,

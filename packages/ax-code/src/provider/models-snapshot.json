@@ -14535,6 +14535,42 @@
           "output": 128000
         }
       },
+      "glm-5.3": {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        }
+      },
       "hermes-4-405b": {
         "id": "hermes-4-405b",
         "name": "hermes-4-405b",
@@ -43091,6 +43127,42 @@
           "input": [
             "text",
             "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        }
+      },
+      "zai-org/GLM-5.3": {
+        "id": "zai-org/GLM-5.3",
+        "name": "GLM-5.3",
+        "description": "Flagship GLM model for hybrid reasoning, coding, and agentic engineering",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
           ],
           "output": [
             "text"
@@ -123598,6 +123670,42 @@
           "output": 131072
         }
       },
+      "glm-5.3@eu": {
+        "id": "glm-5.3@eu",
+        "name": "GLM-5.3 (EU)",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-14",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        }
+      },
       "fugu-ultra": {
         "id": "fugu-ultra",
         "name": "Fugu Ultra",
@@ -155591,42 +155699,6 @@
           "output": 32768
         }
       },
-      "together_ai/nvidia/nemotron-3-ultra-550b-a55b": {
-        "id": "together_ai/nvidia/nemotron-3-ultra-550b-a55b",
-        "name": "Nemotron 3 Ultra 550B A55B",
-        "description": "Largest Nemotron 3 model for maximum open-weight reasoning and agent accuracy",
-        "family": "nemotron",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "none",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-06-04",
-        "last_updated": "2026-06-04",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 512288,
-          "output": 128000
-        }
-      },
       "together_ai/openai/gpt-oss-120b": {
         "id": "together_ai/openai/gpt-oss-120b",
         "name": "GPT OSS 120B",
@@ -160253,42 +160325,6 @@
         "limit": {
           "context": 1048576,
           "output": 384000
-        }
-      },
-      "fireworks_ai/accounts/fireworks/models/gpt-oss-20b": {
-        "id": "fireworks_ai/accounts/fireworks/models/gpt-oss-20b",
-        "name": "GPT OSS 20B",
-        "description": "Open GPT reasoning model for self-hosted agents and controllable deployments",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "medium",
-              "high"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "last_updated": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 131072,
-          "output": 32768
         }
       },
       "perplexityai/sonar-deep-research": {
@@ -176270,31 +176306,6 @@
           "output": 235929
         }
       },
-      "arcee-ai/virtuoso-large": {
-        "id": "arcee-ai/virtuoso-large",
-        "name": "Arcee AI: Virtuoso Large",
-        "description": "Flagship model for demanding analysis, coding, and production agent workflows",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "structured_output": false,
-        "temperature": true,
-        "release_date": "2025-05-05",
-        "last_updated": "2025-05-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 131072,
-          "output": 64000
-        }
-      },
       "google/gemma-2-27b-it": {
         "id": "google/gemma-2-27b-it",
         "name": "Google: Gemma 2 27B",
@@ -182948,8 +182959,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 262144,
-          "output": 131072
+          "context": 1000000,
+          "output": 262144
         }
       },
       "liquid/lfm-2.5-2.6b:free": {
@@ -182984,40 +182995,6 @@
         "limit": {
           "context": 65536,
           "output": 8192
-        }
-      },
-      "allenai/olmo-3-32b-think": {
-        "id": "allenai/olmo-3-32b-think",
-        "name": "AllenAI: Olmo 3 32B Think",
-        "description": "Reasoning model for deliberate analysis, multi-step problem solving, and tool use",
-        "family": "allenai",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "high"
-            ]
-          }
-        ],
-        "tool_call": false,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2025-11-21",
-        "last_updated": "2025-11-21",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 65536,
-          "output": 58982
         }
       },
       "xiaomi/mimo-v2.5": {
@@ -191330,16 +191307,7 @@
         "family": "glm",
         "attachment": false,
         "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "effort",
-            "values": [
-              "low",
-              "high",
-              "max"
-            ]
-          }
-        ],
+        "reasoning_options": [],
         "tool_call": true,
         "structured_output": true,
         "temperature": true,
@@ -192353,48 +192321,6 @@
           "output": 131072
         }
       },
-      "accounts/fireworks/models/deepseek-v4-flash": {
-        "id": "accounts/fireworks/models/deepseek-v4-flash",
-        "name": "DeepSeek V4 Flash",
-        "description": "Fast DeepSeek V4 lane for economical reasoning, coding, and long-context work",
-        "family": "deepseek-flash",
-        "attachment": false,
-        "reasoning": true,
-        "reasoning_options": [
-          {
-            "type": "toggle"
-          },
-          {
-            "type": "effort",
-            "values": [
-              "high",
-              "max"
-            ]
-          }
-        ],
-        "tool_call": true,
-        "interleaved": {
-          "field": "reasoning_content"
-        },
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-05",
-        "release_date": "2026-04-24",
-        "last_updated": "2026-06-16",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 1000000,
-          "output": 384000
-        }
-      },
       "accounts/fireworks/models/qwen3p8-max": {
         "id": "accounts/fireworks/models/qwen3p8-max",
         "name": "Qwen3.8 Max",
@@ -192786,6 +192712,44 @@
           "output": 65536
         }
       },
+      "accounts/fireworks/models/glm-5p3": {
+        "id": "accounts/fireworks/models/glm-5p3",
+        "name": "GLM 5.3",
+        "description": "Flagship GLM model for long-horizon coding, agents, and complex project delivery",
+        "family": "glm",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "high",
+              "max"
+            ]
+          }
+        ],
+        "tool_call": true,
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-14",
+        "last_updated": "2026-08-28",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": false,
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        }
+      },
       "accounts/fireworks/models/deepseek-v4-flash-0731": {
         "id": "accounts/fireworks/models/deepseek-v4-flash-0731",
         "name": "DeepSeek V4 Flash 0731",
@@ -193161,6 +193125,37 @@
           "output": 161000
         }
       },
+      "deepseek-ai/DeepSeek-V4-Pro-0813": {
+        "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
+        "name": "DeepSeek V4 Pro 0813",
+        "description": "DeepSeek V4-Pro-0813 is a 1.6T-parameter MoE model excelling at advanced reasoning, coding, and complex agentic workloads.",
+        "family": "deepseek",
+        "attachment": false,
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "toggle"
+          }
+        ],
+        "tool_call": true,
+        "structured_output": true,
+        "temperature": true,
+        "release_date": "2026-08-13",
+        "last_updated": "2026-08-13",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "open_weights": true,
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        }
+      },
       "deepseek-ai/DeepSeek-V4-Flash": {
         "id": "deepseek-ai/DeepSeek-V4-Flash",
         "name": "DeepSeek V4 Flash",
@@ -193345,34 +193340,6 @@
         "limit": {
           "context": 262144,
           "output": 262144
-        }
-      },
-      "zai-org/GLM-5.3-Flash": {
-        "id": "zai-org/GLM-5.3-Flash",
-        "name": "GLM 5.3 Flash",
-        "description": "GLM-5.3-Flash is a natively multimodal model with 320B total parameters and 18B active parameters.",
-        "family": "glm",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "release_date": "2026-08-26",
-        "last_updated": "2026-08-26",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 1048576,
-          "output": 1048576
         }
       },
       "zai-org/GLM-5.2": {

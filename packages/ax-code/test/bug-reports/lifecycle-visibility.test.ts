@@ -147,7 +147,8 @@ describe("bug report lifecycle visibility guards", () => {
     const local = await source("cli/cmd/tui/context/local.tsx")
 
     expect(local).toContain("if (!sync.data.provider_loaded) {")
-    expect(local).toContain('setModelStore("model", currentAgentName, model)')
+    expect(local).toContain("setUserModel(currentAgentName, model)")
+    expect(local).toContain("applyExplicitModelPreference(")
     expect(local).toContain("rememberRecentModelEntry(modelStore.recent, model)")
     expect(local).toContain("save()\n              return")
     expect(local).toContain("removing invalid model override after providers loaded")
