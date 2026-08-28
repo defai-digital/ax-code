@@ -89,23 +89,53 @@ function background(input: {
   fireAndForget(input.label, () => runtimeTask({ ...input, task: (signal) => input.task(signal) }))
 }
 
+const restartRecoveryState = Instance.state(
+  () => ({ timer: undefined as ReturnType<typeof setTimeout> | undefined }),
+  async (state) => {
+    if (state.timer) clearTimeout(state.timer)
+    state.timer = undefined
+  },
+)
+
+async function recoverInterruptedTaskQueue() {
+  const result = await TaskQueue.recoverInterrupted()
+  // Requeued items are reset to "queued" but never auto-started —
+  // drainNextForSession() only fires after a task completes, so the
+  // first recovered item would sit idle forever without an explicit
+  // start.
+  if (result.requeued.length > 0) {
+    const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
+    for (const item of result.requeued) {
+      await TaskQueueExecutor.start(item)
+    }
+  }
+  // Rows with a fresh heartbeat are owned by another live backend serving
+  // this project (a `ax-code run` spawned from a TUI session, a second
+  // terminal, the desktop app). They are not interrupted, so leave them
+  // alone — but keep re-checking: if that peer really did die, its rows go
+  // stale within one liveness window and the next pass recovers them.
+  const state = restartRecoveryState()
+  if (state.timer) clearTimeout(state.timer)
+  state.timer = undefined
+  if (result.live.length === 0) return result
+  state.timer = setTimeout(() => {
+    state.timer = undefined
+    recoverInterruptedTaskQueue().catch((error) => {
+      if (isHarmlessInterrupt(error)) return
+      Log.Default.warn("deferred task queue restart recovery failed", { error: toErrorMessage(error) })
+    })
+  }, TaskQueue.RESTART_RECOVERY_LIVENESS_MS)
+  state.timer.unref?.()
+  return result
+}
+
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
   await runtimeTask({
     service: "TaskQueue.recoverInterrupted",
     label: "task queue restart recovery",
     task: async () => {
-      const result = await TaskQueue.recoverInterrupted()
-      // Requeued items are reset to "queued" but never auto-started —
-      // drainNextForSession() only fires after a task completes, so the
-      // first recovered item would sit idle forever without an explicit
-      // start.
-      if (result.requeued.length > 0) {
-        const { TaskQueueExecutor } = await import("@/session/task-queue-executor")
-        for (const item of result.requeued) {
-          await TaskQueueExecutor.start(item)
-        }
-      }
+      await recoverInterruptedTaskQueue()
       // A scheduled occurrence is committed to the durable task queue before
       // its detached executor is started. If the process exits in that narrow
       // post-commit window, the row remains queued and must be resumed here;

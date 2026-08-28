@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import z from "zod"
 import { HTTPException } from "hono/http-exception"
 import { Bus } from "@/bus"
@@ -458,6 +459,10 @@ export namespace TaskQueue {
     if (input.status === "completed" || input.status === "cancelled" || input.status === "failed") {
       updates.time_completed = now
     }
+    if (ownedStatuses.includes(input.status)) {
+      const payload = withExecutorOwner(current.payload, now)
+      if (payload) updates.payload = payload
+    }
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, input.id)).returning().get()
       if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
@@ -908,6 +913,83 @@ export namespace TaskQueue {
     return item
   }
 
+  /**
+   * Identity of the backend instance that owns an active queue row, stored in
+   * `payload.executorOwner`. The shard schema has no ALTER path, so this rides
+   * on the JSON payload like the delivery bookkeeping does. Restart recovery
+   * uses it to tell "my previous life died" (recover now) from "another live
+   * backend for this project is driving the row" (leave it alone).
+   */
+  export const ExecutorOwner = z.object({
+    pid: z.number().int(),
+    boot: z.string().min(1),
+    time: z.number(),
+  })
+  export type ExecutorOwner = z.infer<typeof ExecutorOwner>
+  export const EXECUTOR_OWNER_KEY = "executorOwner"
+
+  const ownedStatuses: readonly Status[] = ["running", "blocked_permission", "blocked_question", "waiting_for_idle"]
+  const liveBoots = new Set<string>()
+  const bootToken = Instance.state(
+    () => {
+      const boot = randomUUID()
+      liveBoots.add(boot)
+      return boot
+    },
+    async (boot) => {
+      liveBoots.delete(boot)
+    },
+  )
+
+  export function executorOwner(payload: Payload): ExecutorOwner | undefined {
+    const parsed = ExecutorOwner.safeParse(payload[EXECUTOR_OWNER_KEY])
+    return parsed.success ? parsed.data : undefined
+  }
+
+  export function currentExecutorOwner(now = Date.now()): ExecutorOwner {
+    return { pid: process.pid, boot: bootToken(), time: now }
+  }
+
+  export function executorOwnerAlive(owner: ExecutorOwner): boolean {
+    // Same process: the owning Instance is alive iff its boot token has not
+    // been disposed. A disposed-and-recreated instance (server restart of the
+    // project, tests) gets a fresh token, so its old rows read as orphaned.
+    if (owner.pid === process.pid) return liveBoots.has(owner.boot)
+    return processAlive(owner.pid)
+  }
+
+  function processAlive(pid: number): boolean {
+    if (!Number.isInteger(pid) || pid <= 0) return false
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch (error) {
+      // EPERM: the process exists but belongs to another user.
+      return (error as NodeJS.ErrnoException | undefined)?.code === "EPERM"
+    }
+  }
+
+  function withExecutorOwner(payload: Payload, now: number): Payload | undefined {
+    const mine = currentExecutorOwner(now)
+    const existing = executorOwner(payload)
+    if (existing && existing.pid === mine.pid && existing.boot === mine.boot) return undefined
+    return { ...payload, [EXECUTOR_OWNER_KEY]: mine }
+  }
+
+  /**
+   * Whether a recoverable row is still being driven by a live backend. Rows
+   * with a dead owner are interrupted no matter how fresh they look. Rows in a
+   * heartbeated status must also have a fresh beat (a live-but-hung owner is
+   * treated as interrupted). `waiting_for_idle` is never heartbeated, so a
+   * live owner is enough there.
+   */
+  function isLiveRow(row: typeof TaskQueueTable.$inferSelect, now: number, livenessMs: number): boolean {
+    const owner = executorOwner(row.payload)
+    if (owner && !executorOwnerAlive(owner)) return false
+    if (row.status === "waiting_for_idle") return owner !== undefined
+    return typeof row.time_updated === "number" && now - row.time_updated < livenessMs
+  }
+
   export function heartbeat(id: TaskQueueID, now = Date.now()): boolean {
     return SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const result = db
@@ -997,6 +1079,7 @@ export namespace TaskQueue {
     assertActionStatus(current, "retry", ["failed", "cancelled"])
     const now = Date.now()
     const payload: Payload = { ...current.payload }
+    delete payload[EXECUTOR_OWNER_KEY]
     if (current.kind === "subagent" && current.payload["source"] === "task") {
       payload["deliveryStatus"] = "pending"
       delete payload["resultDelivery"]
@@ -1026,8 +1109,28 @@ export namespace TaskQueue {
     return item
   }
 
-  export async function recoverInterrupted(): Promise<{ failed: Info[]; requeued: Info[]; preserved: Info[] }> {
-    const now = Date.now()
+  /**
+   * The executor refreshes `time_updated` every 30 s while an item is running
+   * or blocked (see `heartbeat`). A row touched more recently than this is
+   * being driven by a live backend and must not be treated as interrupted.
+   * Three missed beats is well past any single stalled write.
+   */
+  export const RESTART_RECOVERY_LIVENESS_MS = 90_000
+
+  export type RecoverInterruptedResult = {
+    failed: Info[]
+    requeued: Info[]
+    preserved: Info[]
+    /** Rows with a fresh heartbeat: another backend for this project still owns them. Re-check after the window. */
+    live: Info[]
+  }
+
+  export async function recoverInterrupted(options?: {
+    now?: number
+    livenessMs?: number
+  }): Promise<RecoverInterruptedResult> {
+    const now = options?.now ?? Date.now()
+    const livenessMs = options?.livenessMs ?? RESTART_RECOVERY_LIVENESS_MS
     const interruptedStatuses = ["running", "blocked_permission", "blocked_question"] as const
     const recoverableStatuses = [...interruptedStatuses, "waiting_for_idle"] as const
     const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
@@ -1042,7 +1145,18 @@ export namespace TaskQueue {
       const failed: Info[] = []
       const requeued: Info[] = []
       const preserved: Info[] = []
+      const live: Info[] = []
       for (const row of rows) {
+        // Every InstanceBootstrap runs this sweep, and more than one backend
+        // can serve the same project at once (a TUI backend plus `ax-code run`
+        // launched from inside one of its sessions, a second terminal, the
+        // desktop app). A row whose owner is alive and still heartbeating
+        // belongs to one of those live processes; failing or requeueing it
+        // here would kill a task that is actively running elsewhere.
+        if (isLiveRow(row, now, livenessMs)) {
+          live.push(fromRow(row))
+          continue
+        }
         const workflowItem = hasWorkflowPayload(row.payload)
         const liveTaskSubagent = isLiveTaskSubagentPayload(row.payload) && row.kind === "subagent"
         const scheduledBeforePrompt =
@@ -1092,7 +1206,7 @@ export namespace TaskQueue {
         if (updated) failed.push(fromRow(updated))
       }
 
-      return { failed, requeued, preserved }
+      return { failed, requeued, preserved, live }
     })
 
     for (const item of [...changed.failed, ...changed.requeued]) {
@@ -1101,6 +1215,13 @@ export namespace TaskQueue {
     }
     for (const item of changed.preserved) {
       await syncWorkflowStatusIfNeeded(item)
+    }
+    if (changed.live.length > 0) {
+      log.info("restart recovery skipped live task queue items", {
+        count: changed.live.length,
+        ids: changed.live.map((item) => item.id),
+        livenessMs,
+      })
     }
     return changed
   }

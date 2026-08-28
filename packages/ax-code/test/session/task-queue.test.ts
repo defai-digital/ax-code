@@ -8,6 +8,7 @@ import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { MessageID, PartID, TaskQueueID } from "../../src/session/schema"
 import { TaskQueueTable } from "../../src/session/session.sql"
+import { SessionShard } from "../../src/session/shard"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { Database, eq } from "../../src/storage/db"
@@ -17,6 +18,14 @@ import { tmpdir } from "../fixture/fixture"
 afterEach(async () => {
   await Instance.disposeAll()
 })
+
+// Restart recovery only touches rows whose owning backend instance is gone.
+// Disposing the instance between two provides is what a backend restart looks
+// like to the queue: same shard, fresh boot token.
+async function restartInstance(directory: string) {
+  await Instance.disposeAll()
+  return Instance.provide({ directory, fn: async () => TaskQueue.recoverInterrupted() })
+}
 
 describe("TaskQueue", () => {
   test("persists lifecycle state and publishes durable queue events", async () => {
@@ -164,7 +173,7 @@ describe("TaskQueue", () => {
   test("recovers interrupted active items after backend restart", async () => {
     await using tmp = await tmpdir({ git: true })
 
-    await Instance.provide({
+    const { running, blocked, waiting, queued, workflowRunning, workflowBlocked } = await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const running = await TaskQueue.enqueue({ kind: "prompt", title: "Interrupted prompt" })
@@ -193,8 +202,16 @@ describe("TaskQueue", () => {
           error: "workflow approval required",
         })
 
-        const recovered = await TaskQueue.recoverInterrupted()
+        return { running, blocked, waiting, queued, workflowRunning, workflowBlocked }
+      },
+    })
 
+    const recovered = await restartInstance(tmp.path)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(recovered.live).toEqual([])
         expect(recovered.failed.map((item) => item.id).sort()).toEqual([blocked.id, running.id].sort())
         expect(recovered.requeued.map((item) => item.id).sort()).toEqual([waiting.id, workflowRunning.id].sort())
         expect(recovered.preserved.map((item) => item.id)).toEqual([workflowBlocked.id])
@@ -232,7 +249,7 @@ describe("TaskQueue", () => {
   test("requeues interrupted live task-tool subagents so they can resume", async () => {
     await using tmp = await tmpdir({ git: true })
 
-    await Instance.provide({
+    const { running, blocked } = await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const child = await Session.create({ title: "Live subagent" })
@@ -250,9 +267,15 @@ describe("TaskQueue", () => {
         })
         await TaskQueue.setStatus({ id: running.id, status: "running" })
         await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission", error: "approval required" })
+        return { running, blocked }
+      },
+    })
 
-        const recovered = await TaskQueue.recoverInterrupted()
+    const recovered = await restartInstance(tmp.path)
 
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
         expect(recovered.requeued.map((item) => item.id).sort()).toEqual([blocked.id, running.id].sort())
         expect((await TaskQueue.get(running.id)).status).toBe("queued")
         expect((await TaskQueue.get(blocked.id)).status).toBe("queued")
@@ -294,7 +317,7 @@ describe("TaskQueue", () => {
   test("requeues scheduled automation interrupted before session creation", async () => {
     await using tmp = await tmpdir({ git: true })
 
-    await Instance.provide({
+    const item = await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const item = await TaskQueue.enqueue({
@@ -307,11 +330,139 @@ describe("TaskQueue", () => {
           },
         })
         await TaskQueue.setStatus({ id: item.id, status: "running" })
+        return item
+      },
+    })
 
-        const recovered = await TaskQueue.recoverInterrupted()
+    const recovered = await restartInstance(tmp.path)
 
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
         expect(recovered.requeued.map((candidate) => candidate.id)).toContain(item.id)
         expect((await TaskQueue.get(item.id)).status).toBe("queued")
+      },
+    })
+  })
+
+  test("restart recovery leaves items owned by a live backend alone", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const running = await TaskQueue.enqueue({ sessionID: session.id, kind: "prompt", title: "Live prompt" })
+        const blocked = await TaskQueue.enqueue({ kind: "review", title: "Live review" })
+        const waiting = await TaskQueue.enqueue({ kind: "automation", title: "Live wait" })
+        await TaskQueue.setStatus({ id: running.id, status: "running" })
+        await TaskQueue.setStatus({ id: blocked.id, status: "blocked_permission", error: "approval required" })
+        await TaskQueue.setStatus({ id: waiting.id, status: "waiting_for_idle" })
+
+        const owner = TaskQueue.executorOwner((await TaskQueue.get(running.id)).payload)
+        expect(owner).toMatchObject({ pid: process.pid })
+        expect(TaskQueue.executorOwner((await TaskQueue.get(waiting.id)).payload)).toMatchObject({ pid: process.pid })
+
+        const updates: string[] = []
+        const unsubscribe = Bus.subscribe(TaskQueue.Event.Updated, (event) => {
+          updates.push(`${event.properties.item.id}:${event.properties.item.status}`)
+        })
+        try {
+          // A second backend bootstrapping against the same project (for
+          // example `ax-code run` launched from inside a TUI session) must not
+          // fail or requeue rows the first backend is still driving.
+          const recovered = await TaskQueue.recoverInterrupted()
+          expect(recovered.live.map((item) => item.id).sort()).toEqual([blocked.id, running.id, waiting.id].sort())
+          expect(recovered.failed).toEqual([])
+          expect(recovered.requeued).toEqual([])
+          expect(updates).toEqual([])
+
+          const stillRunning = await TaskQueue.get(running.id)
+          expect(stillRunning.status).toBe("running")
+          expect(stillRunning.error).toBeUndefined()
+          expect((await TaskQueue.get(blocked.id)).status).toBe("blocked_permission")
+          expect((await TaskQueue.get(waiting.id)).status).toBe("waiting_for_idle")
+          expect((await Session.get(session.id)).metadata?.queue).toMatchObject({ queueItemId: running.id })
+
+          // The executor heartbeat keeps a running row alive across windows;
+          // a live-but-silent owner is treated as hung and recovered. Rows
+          // waiting for idle are never heartbeated, so the owner is enough.
+          const beat = Date.now() + TaskQueue.RESTART_RECOVERY_LIVENESS_MS
+          expect(TaskQueue.heartbeat(running.id, beat)).toBe(true)
+          const afterBeat = await TaskQueue.recoverInterrupted({ now: beat + 1_000 })
+          expect(afterBeat.live.map((item) => item.id).sort()).toEqual([running.id, waiting.id].sort())
+          expect(afterBeat.failed.map((item) => item.id)).toEqual([blocked.id])
+
+          const stale = await TaskQueue.recoverInterrupted({ now: beat + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1 })
+          expect(stale.live.map((item) => item.id)).toEqual([waiting.id])
+          expect(stale.failed.map((item) => item.id)).toEqual([running.id])
+          const failed = await TaskQueue.get(running.id)
+          expect(failed.status).toBe("failed")
+          expect(failed.error).toContain("backend restart")
+        } finally {
+          unsubscribe()
+        }
+        return waiting
+      },
+    })
+
+    // Once the owning instance is gone the waiting row is interrupted too.
+    const restarted = await restartInstance(tmp.path)
+    expect(restarted.live).toEqual([])
+    expect(restarted.requeued.map((item) => item.status)).toEqual(["queued"])
+  })
+
+  test("restart recovery recovers rows whose owning process is dead", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const deadProcess = await TaskQueue.enqueue({ kind: "prompt", title: "Owned by a dead pid" })
+        const deadBoot = await TaskQueue.enqueue({ kind: "prompt", title: "Owned by a disposed instance" })
+        const legacy = await TaskQueue.enqueue({ kind: "prompt", title: "Written before ownership existed" })
+        for (const item of [deadProcess, deadBoot, legacy]) {
+          await TaskQueue.setStatus({ id: item.id, status: "running" })
+        }
+        const now = Date.now()
+        SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+          db.update(TaskQueueTable)
+            .set({ payload: { executorOwner: { pid: 2_147_483_647, boot: "gone", time: now } } })
+            .where(eq(TaskQueueTable.id, deadProcess.id))
+            .run()
+          db.update(TaskQueueTable)
+            .set({ payload: { executorOwner: { pid: process.pid, boot: "disposed-boot", time: now } } })
+            .where(eq(TaskQueueTable.id, deadBoot.id))
+            .run()
+          db.update(TaskQueueTable).set({ payload: {} }).where(eq(TaskQueueTable.id, legacy.id)).run()
+        })
+
+        // Fresh heartbeats do not protect rows whose owner is verifiably gone;
+        // a legacy row without an owner falls back to heartbeat freshness.
+        const recovered = await TaskQueue.recoverInterrupted({ now })
+        expect(recovered.failed.map((item) => item.id).sort()).toEqual([deadBoot.id, deadProcess.id].sort())
+        expect(recovered.live.map((item) => item.id)).toEqual([legacy.id])
+
+        const stale = await TaskQueue.recoverInterrupted({ now: now + TaskQueue.RESTART_RECOVERY_LIVENESS_MS })
+        expect(stale.failed.map((item) => item.id)).toEqual([legacy.id])
+      },
+    })
+  })
+
+  test("retry clears the previous executor owner", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const item = await TaskQueue.enqueue({ kind: "prompt", title: "Retry me" })
+        await TaskQueue.setStatus({ id: item.id, status: "running" })
+        await TaskQueue.setStatus({ id: item.id, status: "failed", error: "boom" })
+        expect(TaskQueue.executorOwner((await TaskQueue.get(item.id)).payload)).toBeDefined()
+
+        const retried = await TaskQueue.retry(item.id)
+        expect(retried.status).toBe("queued")
+        expect(TaskQueue.executorOwner(retried.payload)).toBeUndefined()
       },
     })
   })
