@@ -103,28 +103,28 @@ export namespace GoalPlan {
     const acceptance = input.acceptance
       .map((item, index) => ({
         id: validAcceptanceId(item.id) ?? `AC${index + 1}`,
-        text: item.text.trim(),
+        text: oneLine(item.text),
       }))
       .filter((item) => item.text.length > 0)
     const verification = input.verification
       .map((item) => ({
         tag: item.tag === "evidence" ? ("evidence" as const) : ("gating" as const),
-        action: item.action.trim(),
-        observation: item.observation.trim(),
+        action: oneLine(item.action),
+        observation: oneLine(item.observation),
       }))
       .filter((item) => item.action.length > 0)
-    const nonGoals = input.nonGoals.map((item) => item.trim()).filter(Boolean)
-    const taskChecklist = input.taskChecklist?.map((item) => item.trim()).filter(Boolean)
+    const nonGoals = input.nonGoals.map((item) => oneLine(item)).filter(Boolean)
+    const taskChecklist = input.taskChecklist?.map((item) => oneLine(item)).filter(Boolean)
     const contract: Contract = {
       kind: input.kind,
-      title: (input.title ?? "Goal plan").trim() || "Goal plan",
+      title: oneLine(input.title ?? "Goal plan") || "Goal plan",
       acceptance,
       verification,
       nonGoals,
-      assumedScope: input.assumedScope.trim(),
-      implementationApproach: input.implementationApproach?.trim() || undefined,
+      assumedScope: oneLine(input.assumedScope),
+      implementationApproach: oneLine(input.implementationApproach ?? "") || undefined,
       taskChecklist: taskChecklist && taskChecklist.length > 0 ? taskChecklist : undefined,
-      risks: input.risks?.map((item) => item.trim()).filter(Boolean),
+      risks: input.risks?.map((item) => oneLine(item)).filter(Boolean),
     }
     assertValid(contract)
     return contract
@@ -417,6 +417,16 @@ export namespace GoalPlan {
     if (Buffer.byteLength(markdown, "utf8") > MAX_READ_BYTES) {
       throw new Error("invalid", `Goal plan exceeds ${MAX_READ_BYTES} bytes`)
     }
+  }
+
+  // The rendered plan format is line-based (numbered items, bullets, section
+  // headers), so a field carrying an embedded newline would split across
+  // lines and parse back as a different contract — silently truncating or
+  // duplicating acceptance criteria, verification steps, or non-goals when
+  // write() re-parses its own render output. Collapse newlines to spaces so
+  // every constructed contract round-trips render -> parse unchanged.
+  function oneLine(value: string): string {
+    return value.replace(/\s*\r?\n+\s*/g, " ").trim()
   }
 
   function validAcceptanceId(id: string | undefined) {

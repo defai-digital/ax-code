@@ -58,6 +58,38 @@ describe("GoalPlan parser", () => {
     expect(GoalPlan.digestOf(parsed)).toBe(GoalPlan.digestOf(contract))
   })
 
+  test("collapses embedded newlines so multi-line fields round-trip", () => {
+    const contract = GoalPlan.fromFields({
+      kind: "code-change",
+      title: "fix the login bug\nand add a regression test",
+      acceptance: [{ text: "login works\nand stays fast" }],
+      verification: [
+        {
+          tag: "gating",
+          action: "run pnpm test\nthen typecheck",
+          observation: "both pass\nwith no warnings",
+        },
+      ],
+      nonGoals: ["no refactors\nno new deps"],
+      assumedScope: "src/session\ntest/session",
+      implementationApproach: "keep it small\nno new helpers",
+      taskChecklist: ["implement the fix\nwith care", "run verification"],
+      risks: ["flaky test\non windows"],
+    })
+
+    // Fields are single-line after construction, so the line-based render
+    // format parses back to the identical contract and digest.
+    expect(contract.acceptance).toEqual([{ id: "AC1", text: "login works and stays fast" }])
+    expect(contract.verification).toEqual([
+      { tag: "gating", action: "run pnpm test then typecheck", observation: "both pass with no warnings" },
+    ])
+    expect(contract.nonGoals).toEqual(["no refactors no new deps"])
+
+    const parsed = GoalPlan.parse(GoalPlan.render(contract))
+    expect(parsed).toEqual(contract)
+    expect(GoalPlan.digestOf(parsed)).toBe(GoalPlan.digestOf(contract))
+  })
+
   test("splits a legacy verification line once and preserves the observation", () => {
     const markdown = GoalPlan.render(GoalPlan.sample("ship it")).replace(
       "1. gating: run the relevant tests or verify_project — the checks pass after the last change",
