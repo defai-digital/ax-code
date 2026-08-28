@@ -37793,6 +37793,14 @@
             "type": "toggle"
           },
           {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          },
+          {
             "type": "budget_tokens",
             "max": 262144
           }
@@ -37828,6 +37836,14 @@
         "reasoning_options": [
           {
             "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
           },
           {
             "type": "budget_tokens"
@@ -63631,6 +63647,14 @@
             "type": "toggle"
           },
           {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          },
+          {
             "type": "budget_tokens",
             "max": 262144
           }
@@ -63774,6 +63798,14 @@
         "reasoning_options": [
           {
             "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
           },
           {
             "type": "budget_tokens"
@@ -171387,6 +171419,14 @@
             "type": "toggle"
           },
           {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
+          },
+          {
             "type": "budget_tokens",
             "max": 262144
           }
@@ -171422,6 +171462,14 @@
         "reasoning_options": [
           {
             "type": "toggle"
+          },
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "xhigh"
+            ]
           },
           {
             "type": "budget_tokens"

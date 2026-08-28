@@ -318,9 +318,10 @@ export namespace LLM {
     // a 36k system prefix with cache.read = 0.
     //
     // For providers whose chat template collapses all system turns into a single
-    // leading system message (Qwen 3.x / Ornith / Holo3), keep only the stable
-    // blocks in system. Append dynamic blocks to the last user message so they
-    // are not merged into the cached system prefix and re-written every turn.
+    // leading system message (Qwen 3.x / Ornith / Holo3 / MiniMax), keep only
+    // the stable blocks in system. Append dynamic blocks to the last user
+    // message so they are not merged into the cached system prefix and
+    // re-written every turn.
     const cacheCaps = getModelCapabilities(input.model.id, input.model.providerID)
     const promptCacheEligible = cacheCaps.promptCache === "supported" || cacheCaps.promptCache === "experimental"
     const collapseSystem = ProviderTransform.requiresSingleLeadingSystem(input.model)

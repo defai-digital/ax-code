@@ -88,13 +88,21 @@ export namespace ProviderTransform {
     model: Provider.Model,
     _options: Record<string, unknown>,
   ): ModelMessage[] {
+    // Anthropic thinking blocks (signatures, redacted data) must stay as
+    // reasoning parts. Mapping them through openaiCompatible.reasoning_content
+    // drops interleaved thinking on MiniMax Token Plan / minimax.io.
     const interleavedField =
-      typeof model.capabilities.interleaved === "object" ? model.capabilities.interleaved.field : undefined
+      isAnthropicSdk(model.api.npm) || typeof model.capabilities.interleaved !== "object"
+        ? undefined
+        : model.capabilities.interleaved.field
 
     // MiniMax on OpenAI-compat / private GPU emits <mm:think> in the text
     // stream. We parse those into reasoning parts for the UI, then fold them
     // back into tagged text on the next turn so vLLM does not see
-    // `reasoning_content` (which MiniMax-M3 on PAI rejects).
+    // `reasoning_content` (which MiniMax-M3 on PAI rejects). First-party
+    // MiniMax uses Anthropic thinking blocks instead — do not fold those.
+    // Return here so interleaved.field stripping cannot re-emit an empty
+    // reasoning_content after the fold.
     if (usesThinkTags(model)) return foldThinkTagReasoning(msgs)
 
     // DeepSeek requires a reasoning part on every assistant message, even when
@@ -121,53 +129,58 @@ export namespace ProviderTransform {
     // cross-turn reasoning carry-over. Stripping would silently degrade their
     // quality, so we do NOT strip by default.
     const mustStrip = Boolean(interleavedField) || rejectsReasoningContentOnInput(model)
-    if (!mustStrip) return msgs
+    if (mustStrip) {
+      const field = interleavedField
+      msgs = msgs.map((msg) => {
+        if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg
 
-    const field = interleavedField
-    return msgs.map((msg) => {
-      if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg
-
-      // Single pass: collect reasoning text and the non-reasoning content
-      // simultaneously. The previous impl ran two filter() passes over the
-      // same array — visible on long assistant turns with many parts.
-      let reasoningText = ""
-      const filteredContent: typeof msg.content = []
-      for (const part of msg.content as Array<{ type: string; text?: string }>) {
-        if (part.type === "reasoning") {
-          if (part.text) reasoningText += part.text
-        } else {
-          filteredContent.push(part as (typeof msg.content)[number])
+        // Single pass: collect reasoning text and the non-reasoning content
+        // simultaneously. The previous impl ran two filter() passes over the
+        // same array — visible on long assistant turns with many parts.
+        let reasoningText = ""
+        const filteredContent: typeof msg.content = []
+        for (const part of msg.content as Array<{ type: string; text?: string }>) {
+          if (part.type === "reasoning") {
+            if (part.text) reasoningText += part.text
+          } else {
+            filteredContent.push(part as (typeof msg.content)[number])
+          }
         }
-      }
 
-      // When an interleaved field is declared, carry the reasoning text
-      // through providerOptions so the provider receives it in its expected
-      // top-level position. Otherwise the parts are simply dropped (the
-      // provider rejects reasoning_content, so there is nothing to carry).
-      if (field) {
-        // Always set the interleaved field, including when empty. DeepSeek
-        // (and some GLM/Kimi routes) reject a missing reasoning_content on
-        // follow-up assistant turns even if this turn had no thinking.
-        const existing = (msg.providerOptions as { openaiCompatible?: Record<string, string> } | undefined)
-          ?.openaiCompatible
+        // When an interleaved field is declared, carry the reasoning text
+        // through providerOptions so the provider receives it in its expected
+        // top-level position. Otherwise the parts are simply dropped (the
+        // provider rejects reasoning_content, so there is nothing to carry).
+        if (field) {
+          // Always set the interleaved field, including when empty. DeepSeek
+          // (and some GLM/Kimi routes) reject a missing reasoning_content on
+          // follow-up assistant turns even if this turn had no thinking.
+          const existing = (msg.providerOptions as { openaiCompatible?: Record<string, string> } | undefined)
+            ?.openaiCompatible
+          return {
+            ...msg,
+            content: filteredContent,
+            providerOptions: {
+              ...msg.providerOptions,
+              openaiCompatible: {
+                ...existing,
+                [field]: reasoningText,
+              },
+            },
+          }
+        }
+
         return {
           ...msg,
           content: filteredContent,
-          providerOptions: {
-            ...msg.providerOptions,
-            openaiCompatible: {
-              ...existing,
-              [field]: reasoningText,
-            },
-          },
         }
-      }
+      })
+    }
 
-      return {
-        ...msg,
-        content: filteredContent,
-      }
-    })
+    // Anthropic (and MiniMax's Anthropic-compatible API) reject empty
+    // assistant content. OpenCode filters these before the wire.
+    if (isAnthropicSdk(model.api.npm)) msgs = filterEmptyAnthropicContent(msgs)
+    return msgs
   }
 
   // Providers whose API rejects `reasoning_content` on INPUT assistant messages.
@@ -249,9 +262,11 @@ export namespace ProviderTransform {
   export function message(msgs: ModelMessage[], model: Provider.Model, options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
     msgs = normalizeMessages(msgs, model, options)
-    // Official Qwen 3.x / Ornith / Holo3 jinja raises "System message must
-    // be at the beginning" when any system turn is not messages[0]. AX Code
-    // emits several system blocks (env, family prompt, craft, cache slices).
+    // Official Qwen 3.x / Ornith / Holo3 / MiniMax jinja raise when system
+    // turns are not a single leading message. MiniMax's chat template only
+    // extracts messages[0] if it is system; extra system turns leak into
+    // conversation and produce garbled tool markup / abnormal replies.
+    // AX Code emits several system blocks (env, family prompt, craft, cache).
     if (requiresSingleLeadingSystem(model)) msgs = collapseToSingleLeadingSystem(msgs)
     if (shouldApplyCaching(model, options, msgs)) {
       msgs = applyCaching(msgs, model)
@@ -437,7 +452,9 @@ export namespace ProviderTransform {
   }
 
   // Official Qwen 3.x ChatML (and Ornith / Holo3 fine-tunes) reject any
-  // system turn that is not messages[0]. Same 400 Ornith-397B hit on PAI.
+  // system turn that is not messages[0]. MiniMax's jinja does the same by
+  // only extracting the first system message and treating the rest as
+  // conversation. Same 400 Ornith-397B hit on PAI.
   // Check the raw blob AND the separator-normalized form so dashed spellings
   // (`qwen-3-7-max`, `holo-3`) trigger the collapse exactly like `qwen3.7-max`.
   export function requiresSingleLeadingSystem(model: {
@@ -453,8 +470,10 @@ export namespace ProviderTransform {
       blob.includes("qwen3") ||
       blob.includes("holo3") ||
       blob.includes("holo-3") ||
+      blob.includes("minimax") ||
       normalized.includes("qwen3") ||
-      normalized.includes("holo3")
+      normalized.includes("holo3") ||
+      normalized.includes("minimax")
     )
   }
 
@@ -610,12 +629,46 @@ export namespace ProviderTransform {
     })
   }
 
+  function isAnthropicSdk(npm: string): boolean {
+    return npm === "@ai-sdk/anthropic" || npm === "@ai-sdk/google-vertex/anthropic"
+  }
+
   // Tag-style thinking: MiniMax-M3 on dedicated GPU (PAI/vLLM) writes
   // `<mm:think>` into the text stream. DashScope MiniMax uses enable_thinking
-  // instead and must keep the existing Alibaba path.
+  // instead and must keep the existing Alibaba path. First-party MiniMax
+  // (minimax.io / Token Plan) uses Anthropic thinking blocks — folding those
+  // into tagged text drops signatures and breaks interleaved thinking.
   function usesThinkTags(model: Provider.Model): boolean {
     if (isAlibabaPlanProvider(model.providerID)) return false
+    if (isAnthropicSdk(model.api.npm)) return false
     return isMinimax(model)
+  }
+
+  // Mirrors OpenCode: Anthropic-compatible APIs 400 on empty string content
+  // and empty text/reasoning parts that have no signature to replay.
+  function filterEmptyAnthropicContent(msgs: ModelMessage[]): ModelMessage[] {
+    return msgs
+      .map((msg) => {
+        if (typeof msg.content === "string") {
+          if (msg.content === "") return undefined
+          return msg
+        }
+        if (!Array.isArray(msg.content)) return msg
+        const filtered = msg.content.filter((part) => {
+          if (part.type === "text") return part.text !== ""
+          if (part.type === "reasoning") {
+            return (
+              part.text.trim().length > 0 ||
+              part.providerOptions?.anthropic?.signature != null ||
+              part.providerOptions?.anthropic?.redactedData != null
+            )
+          }
+          return true
+        })
+        if (filtered.length === 0) return undefined
+        return { ...msg, content: filtered }
+      })
+      .filter((msg): msg is ModelMessage => msg !== undefined && msg.content !== "")
   }
 
   function foldThinkTagReasoning(msgs: ModelMessage[]): ModelMessage[] {

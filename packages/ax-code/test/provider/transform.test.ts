@@ -272,14 +272,43 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     }
   })
 
-  test("does not collapse MiniMax, GLM, or DeepSeek system messages", () => {
+  test("collapses MiniMax system messages the same way as Qwen/Ornith", () => {
+    const prompt = [
+      { role: "system" as const, content: "env block" },
+      { role: "system" as const, content: "family prompt" },
+      { role: "user" as const, content: "hello" },
+    ]
+    for (const [id, providerID, apiID, npm] of [
+      ["alibaba-pai/MiniMax-M3-MXFP8", "alibaba-pai", "MiniMax-M3-MXFP8", "@ai-sdk/openai-compatible"],
+      ["minimax-coding-plan/MiniMax-M3", "minimax-coding-plan", "MiniMax-M3", "@ai-sdk/anthropic"],
+      ["minimax/MiniMax-M2.7", "minimax", "MiniMax-M2.7", "@ai-sdk/anthropic"],
+    ] as const) {
+      const result = ProviderTransform.message(
+        prompt,
+        {
+          id,
+          providerID: ProviderID.make(providerID),
+          api: { id: apiID, url: "https://api.minimax.io/anthropic/v1", npm },
+          capabilities: {
+            reasoning: true,
+            input: { text: true, audio: false, image: false, video: false, pdf: false },
+          },
+        } as any,
+        {},
+      )
+      expect(result, id).toHaveLength(2)
+      expect(result[0], id).toMatchObject({ role: "system", content: "env block\n\nfamily prompt" })
+      expect(result[1], id).toMatchObject({ role: "user", content: "hello" })
+    }
+  })
+
+  test("does not collapse GLM or DeepSeek system messages", () => {
     const prompt = [
       { role: "system" as const, content: "env block" },
       { role: "system" as const, content: "family prompt" },
       { role: "user" as const, content: "hello" },
     ]
     for (const [id, apiID] of [
-      ["alibaba-pai/MiniMax-M3-MXFP8", "MiniMax-M3-MXFP8"],
       ["alibaba-pai/GLM-5.2-FP8", "GLM-5.2-FP8"],
       ["alibaba-pai/DeepSeek-V3", "DeepSeek-V3"],
     ]) {
@@ -1206,6 +1235,99 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
     expect(result[0].content).toHaveLength(1)
     expect(result[0].content[0]).toMatchObject({ type: "text", text: "Done." })
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
+  test("MiniMax on Anthropic keeps thinking blocks instead of folding <mm:think> text", () => {
+    const reasoning = {
+      type: "reasoning" as const,
+      text: "plan the edit",
+      providerOptions: { anthropic: { signature: "sig-1" } },
+    }
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [
+            reasoning,
+            { type: "text", text: "Now call bash" },
+            {
+              type: "tool-call",
+              toolCallId: "test",
+              toolName: "bash",
+              input: { command: "echo hello" },
+            },
+          ],
+        },
+      ] as any[],
+      {
+        id: ModelID.make("minimax-coding-plan/MiniMax-M3"),
+        providerID: ProviderID.make("minimax-coding-plan"),
+        api: {
+          id: "MiniMax-M3",
+          url: "https://api.minimax.io/anthropic/v1",
+          npm: "@ai-sdk/anthropic",
+        },
+        capabilities: {
+          reasoning: true,
+          interleaved: { field: "reasoning_content" },
+          input: { text: true, audio: false, image: true, video: true, pdf: false },
+        },
+        limit: { context: 1_000_000, output: 128_000 },
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      {},
+    )
+
+    expect(result[0].content).toEqual([
+      reasoning,
+      { type: "text", text: "Now call bash" },
+      {
+        type: "tool-call",
+        toolCallId: "test",
+        toolName: "bash",
+        input: { command: "echo hello" },
+      },
+    ])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
+  test("Anthropic-compatible MiniMax drops empty reasoning parts without signatures", () => {
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "" },
+            { type: "text", text: "Done." },
+            { type: "text", text: "" },
+          ],
+        },
+      ] as any[],
+      {
+        id: ModelID.make("minimax/MiniMax-M2.7"),
+        providerID: ProviderID.make("minimax"),
+        api: {
+          id: "MiniMax-M2.7",
+          url: "https://api.minimax.io/anthropic/v1",
+          npm: "@ai-sdk/anthropic",
+        },
+        capabilities: {
+          reasoning: true,
+          interleaved: false,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+        },
+        limit: { context: 204_800, output: 131_072 },
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      {},
+    )
+
+    expect(result[0].content).toHaveLength(1)
+    expect(result[0].content[0]).toMatchObject({ type: "text", text: "Done." })
   })
 
   test("Non-DeepSeek providers leave reasoning content unchanged", () => {
