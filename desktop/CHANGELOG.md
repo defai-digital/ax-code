@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.8] - 2026-08-28
+
+### Fixed
+
+- Fix MiniMax-M2 think-tag folding and family path false-positives.
+- Fix remaining family templates for Muse and DeepSeek.
+- Fix Kimi prompt language conflict and official short-id matching.
+- Fix MiniMax Anthropic thinking and system-message template handling.
+
 ## [7.9.7] - 2026-08-28
 
 ### Changed
