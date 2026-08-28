@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.5] - 2026-08-28
+
+### Changed
+
+- Follow TUI --model pins to a connected same-SKU provider.
+- Keep restart recovery from failing queue tasks owned by a live peer backend.
+- Collapse embedded newlines in goal plan contract fields.
+- Fix provider table gaps, mcp discover flag, and stale examples.
+
 ## [7.9.4] - 2026-08-28
 
 ### Changed
