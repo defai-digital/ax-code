@@ -213,6 +213,15 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     }
   })
 
+  test("Kimi family match ignores kimi tokens in the provider path", () => {
+    const model = {
+      id: "accounts/kimi-tools/models/custom-model",
+      providerID: ProviderID.make("togetherai"),
+      api: { id: "custom-model", url: "https://api.together.xyz/v1", npm: "@ai-sdk/openai-compatible" },
+    } as any
+    expect(ProviderTransform.isKimiFamily(model)).toBe(false)
+  })
+
   test("DeepSeek V4 Flash uses topP 0.95", () => {
     const model = {
       id: "deepseek/deepseek-v4-flash",
@@ -318,6 +327,50 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
       expect(result[0], id).toMatchObject({ role: "system", content: "env block\n\nfamily prompt" })
       expect(result[1], id).toMatchObject({ role: "user", content: "hello" })
     }
+  })
+
+  test("does not collapse when family tokens only appear in the provider path", () => {
+    const prompt = [
+      { role: "system" as const, content: "env block" },
+      { role: "system" as const, content: "family prompt" },
+      { role: "user" as const, content: "hello" },
+    ]
+    const result = ProviderTransform.message(
+      prompt,
+      {
+        id: "accounts/deepseek-tools/models/custom-model",
+        providerID: ProviderID.make("togetherai"),
+        api: { id: "custom-model", url: "https://api.together.xyz/v1", npm: "@ai-sdk/openai-compatible" },
+        capabilities: {
+          reasoning: true,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+        },
+      } as any,
+      {},
+    )
+    expect(result.filter((msg) => msg.role === "system")).toHaveLength(2)
+  })
+
+  test("moves a lone system message to the front for single-leading-system families", () => {
+    const result = ProviderTransform.message(
+      [
+        { role: "user" as const, content: "hello" },
+        { role: "system" as const, content: "family prompt" },
+      ],
+      {
+        id: "minimax-coding-plan/MiniMax-M3",
+        providerID: ProviderID.make("minimax-coding-plan"),
+        api: { id: "MiniMax-M3", url: "https://api.minimax.io/anthropic/v1", npm: "@ai-sdk/anthropic" },
+        capabilities: {
+          reasoning: true,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+        },
+      } as any,
+      {},
+    )
+    expect(result).toHaveLength(2)
+    expect(result[0]).toMatchObject({ role: "system", content: "family prompt" })
+    expect(result[1]).toMatchObject({ role: "user", content: "hello" })
   })
 
   test("does not collapse GLM system messages", () => {
@@ -1215,6 +1268,42 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
   })
 
+  test("MiniMax-M2 on OpenAI-compat keeps reasoning_content instead of folding <mm:think> text", () => {
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "plan the edit" },
+            { type: "text", text: "Now call bash" },
+          ],
+        },
+      ] as any[],
+      {
+        id: ModelID.make("cortecs/minimax-m2.5"),
+        providerID: ProviderID.make("cortecs"),
+        api: {
+          id: "minimax-m2.5",
+          url: "https://api.cortecs.ai/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        capabilities: {
+          reasoning: true,
+          interleaved: { field: "reasoning_content" },
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+        },
+        limit: { context: 128000, output: 8192 },
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      {},
+    )
+
+    expect(result[0].content).toEqual([{ type: "text", text: "Now call bash" }])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("plan the edit")
+  })
+
   test("MiniMax on PAI strips empty reasoning parts so reasoning_content is not emitted", () => {
     const result = ProviderTransform.message(
       [
@@ -1576,6 +1665,28 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
     )
     expect(result[0].content).toEqual([{ type: "text", text: "ok" }])
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBe("")
+  })
+
+  test("does not pad DeepSeek reasoning when family tokens only appear in the provider path", () => {
+    const result = ProviderTransform.message(
+      [{ role: "assistant", content: [{ type: "text", text: "ok" }] }] as any,
+      {
+        id: ModelID.make("accounts/deepseek-tools/models/custom-model"),
+        providerID: ProviderID.make("togetherai"),
+        api: { id: "custom-model", url: "https://api.together.xyz/v1", npm: "@ai-sdk/openai-compatible" },
+        capabilities: {
+          reasoning: true,
+          interleaved: false,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+        },
+        limit: { context: 128000, output: 8192 },
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      {},
+    )
+    expect(result[0].content).toEqual([{ type: "text", text: "ok" }])
   })
 })
 
@@ -2299,6 +2410,16 @@ describe("ProviderTransform.variants", () => {
       expect(result.low).toEqual({ reasoningEffort: "low" })
       expect(result.medium).toEqual({ reasoningEffort: "medium" })
       expect(result.high).toEqual({ reasoningEffort: "high" })
+    })
+
+    test("Muse family match ignores muse tokens in the provider path", () => {
+      const gateway = createMockModel({
+        id: "accounts/muse-tools/models/custom-model",
+        providerID: "togetherai",
+        api: { id: "custom-model", url: "https://api.together.xyz/v1", npm: "@ai-sdk/openai" },
+      })
+      expect(ProviderTransform.isMuseFamily(gateway)).toBe(false)
+      expect(ProviderTransform.variants(gateway)).toEqual({})
     })
 
     test("Meta Muse returns reasoning variants with encrypted reasoning continuity", () => {

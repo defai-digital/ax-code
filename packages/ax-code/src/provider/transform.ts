@@ -296,7 +296,10 @@ export namespace ProviderTransform {
 
   function collapseToSingleLeadingSystem(msgs: ModelMessage[]): ModelMessage[] {
     const systems = msgs.filter((msg) => msg.role === "system")
-    if (systems.length <= 1) return msgs
+    if (systems.length === 0) return msgs
+    // MiniMax / Qwen / DeepSeek jinja only treat messages[0] as system.
+    // A lone system that is not already first still has to move to the front.
+    if (systems.length === 1 && msgs[0] === systems[0]) return msgs
     const merged = systems
       .map((msg) => systemText(msg.content).trim())
       .filter(Boolean)
@@ -410,7 +413,7 @@ export namespace ProviderTransform {
     ) {
       return true
     }
-    const ids = [model.providerID, model.api.id, model.id, model.family]
+    const ids = [model.providerID, model.api.id, model.id ? modelIdFinalSegment(model.id) : undefined, model.family]
     if (
       ids.some((id) => {
         if (!id) return false
@@ -433,7 +436,8 @@ export namespace ProviderTransform {
     family?: string
   }): boolean {
     if (model.providerID === "meta") return true
-    const blob = `${model.id ?? ""} ${model.api.id} ${model.family ?? ""}`.toLowerCase()
+    const segment = model.id ? modelIdFinalSegment(model.id).toLowerCase() : ""
+    const blob = `${segment} ${model.api.id} ${model.family ?? ""}`.toLowerCase()
     return blob.includes("muse")
   }
 
@@ -481,9 +485,13 @@ export namespace ProviderTransform {
   // Official Qwen 3.x ChatML (and Ornith / Holo3 fine-tunes) reject any
   // system turn that is not messages[0]. MiniMax's jinja does the same by
   // only extracting the first system message and treating the rest as
-  // conversation. Same 400 Ornith-397B hit on PAI.
-  // Check the raw blob AND the separator-normalized form so dashed spellings
-  // (`qwen-3-7-max`, `holo-3`) trigger the collapse exactly like `qwen3.7-max`.
+  // conversation. DeepSeek V3/V4 concatenates every system turn into one
+  // prefix — collapsing client-side matches that encoder. Same 400
+  // Ornith-397B hit on PAI.
+  // Match the final model-id segment, api id, and declared family — not the
+  // full `provider/model` path — so prefixes like `accounts/deepseek-tools/...`
+  // cannot steal family-specific collapse. Dashed/dashless spellings still
+  // match after separator normalization (`qwen-3-7-max` == `qwen3.7-max`).
   export function requiresSingleLeadingSystem(model: {
     id?: string
     providerID: string
@@ -491,7 +499,8 @@ export namespace ProviderTransform {
     family?: string
   }): boolean {
     if (isOrnithFamily(model)) return true
-    const blob = `${model.id ?? ""} ${model.api.id} ${model.family ?? ""}`.toLowerCase()
+    const segment = model.id ? modelIdFinalSegment(model.id).toLowerCase() : ""
+    const blob = `${segment} ${model.api.id} ${model.family ?? ""}`.toLowerCase()
     const normalized = normalizeProviderModelId(blob)
     return (
       blob.includes("qwen3") ||
@@ -607,8 +616,9 @@ export namespace ProviderTransform {
   }
 
   function isMinimaxM3(model: Provider.Model): boolean {
-    const id = `${model.id} ${model.api.id}`.toLowerCase()
-    return id.includes("minimax-m3")
+    const segment = modelIdFinalSegment(model.id).toLowerCase()
+    const api = model.api.id.toLowerCase()
+    return segment.includes("minimax-m3") || api.includes("minimax-m3")
   }
 
   // GLM 5.2 across every catalog spelling: `glm-5.2`, `glm-5-2`, `glm5.2`,
@@ -637,8 +647,8 @@ export namespace ProviderTransform {
 
   function isDeepSeekFamily(model: Provider.Model): boolean {
     if (hasFamily(model, "deepseek")) return true
-    const id = `${model.id} ${model.api.id}`.toLowerCase()
-    return id.includes("deepseek")
+    const segment = model.id ? modelIdFinalSegment(model.id).toLowerCase() : ""
+    return `${segment} ${model.api.id}`.toLowerCase().includes("deepseek")
   }
 
   function padDeepSeekReasoning(msgs: ModelMessage[]): ModelMessage[] {
@@ -663,14 +673,17 @@ export namespace ProviderTransform {
   }
 
   // Tag-style thinking: MiniMax-M3 on dedicated GPU (PAI/vLLM) writes
-  // `<mm:think>` into the text stream. DashScope MiniMax uses enable_thinking
-  // instead and must keep the existing Alibaba path. First-party MiniMax
-  // (minimax.io / Token Plan) uses Anthropic thinking blocks — folding those
-  // into tagged text drops signatures and breaks interleaved thinking.
+  // `<mm:think>` into the text stream. MiniMax-M2.x gateways use native
+  // `reasoning_content`; folding those into tags drops the interleaved
+  // field and garbles follow-up turns. DashScope MiniMax uses
+  // enable_thinking instead. First-party MiniMax (minimax.io / Token Plan)
+  // uses Anthropic thinking blocks — folding those into tagged text drops
+  // signatures and breaks interleaved thinking.
   function usesThinkTags(model: Provider.Model): boolean {
     if (isAlibabaPlanProvider(model.providerID)) return false
     if (isAnthropicSdk(model.api.npm)) return false
-    return isMinimax(model)
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return false
+    return isMinimaxM3(model)
   }
 
   // Mirrors OpenCode: Anthropic-compatible APIs 400 on empty string content
