@@ -426,6 +426,17 @@ export namespace ProviderTransform {
     )
   }
 
+  export function isMuseFamily(model: {
+    id?: string
+    providerID: string
+    api: { id: string }
+    family?: string
+  }): boolean {
+    if (model.providerID === "meta") return true
+    const blob = `${model.id ?? ""} ${model.api.id} ${model.family ?? ""}`.toLowerCase()
+    return blob.includes("muse")
+  }
+
   export function isOrnithFamily(model: {
     id?: string
     providerID: string
@@ -487,9 +498,11 @@ export namespace ProviderTransform {
       blob.includes("holo3") ||
       blob.includes("holo-3") ||
       blob.includes("minimax") ||
+      blob.includes("deepseek") ||
       normalized.includes("qwen3") ||
       normalized.includes("holo3") ||
-      normalized.includes("minimax")
+      normalized.includes("minimax") ||
+      normalized.includes("deepseek")
     )
   }
 
@@ -940,7 +953,7 @@ export namespace ProviderTransform {
         if (model.providerID === "openai") {
           return Object.fromEntries(WIDELY_SUPPORTED_EFFORTS.map((effort) => [effort, { reasoningEffort: effort }]))
         }
-        if (model.providerID === "meta" || hasFamily(model, "muse")) {
+        if (isMuseFamily(model)) {
           const efforts = ["minimal", "low", "medium", "high", "xhigh"] as const
           return Object.fromEntries(
             efforts.map((effort) => [

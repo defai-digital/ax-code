@@ -9,6 +9,7 @@ import PROMPT_AX_ENGINE from "./prompt/ax-engine.txt"
 import PROMPT_BEAST from "./prompt/beast.txt"
 import PROMPT_GEMINI from "./prompt/gemini.txt"
 import PROMPT_KIMI from "./prompt/kimi.txt"
+import PROMPT_META from "./prompt/meta.txt"
 import PROMPT_ORNITH from "./prompt/ornith.txt"
 import PROMPT_CRAFT from "./prompt/craft.txt"
 
@@ -86,6 +87,12 @@ export namespace SystemPrompt {
     // family prompt. Match the model id before the ax-engine provider blanket.
     if (ProviderTransform.isOrnithFamily(model)) return withCraft(PROMPT_ORNITH)
     if (model.providerID === "ax-engine") return withCraft(PROMPT_AX_ENGINE)
+    // OpenCode routes Muse Spark / Glimmer to a Meta-family prompt. Match
+    // before the gpt* blanket so a future "muse-gpt" alias cannot steal it.
+    if (ProviderTransform.isMuseFamily(model)) {
+      const name = `${model.id ?? ""} ${model.api.id}`.toLowerCase().includes("glimmer") ? "Muse Glimmer" : "Muse Spark"
+      return withCraft(PROMPT_META.replaceAll("{{MODEL_NAME}}", name))
+    }
     if (
       model.api.id.includes("gpt-4") ||
       model.api.id.includes("o1") ||

@@ -288,7 +288,7 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     }
   })
 
-  test("collapses MiniMax system messages the same way as Qwen/Ornith", () => {
+  test("collapses MiniMax and DeepSeek system messages the same way as Qwen/Ornith", () => {
     const prompt = [
       { role: "system" as const, content: "env block" },
       { role: "system" as const, content: "family prompt" },
@@ -298,6 +298,8 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
       ["alibaba-pai/MiniMax-M3-MXFP8", "alibaba-pai", "MiniMax-M3-MXFP8", "@ai-sdk/openai-compatible"],
       ["minimax-coding-plan/MiniMax-M3", "minimax-coding-plan", "MiniMax-M3", "@ai-sdk/anthropic"],
       ["minimax/MiniMax-M2.7", "minimax", "MiniMax-M2.7", "@ai-sdk/anthropic"],
+      ["alibaba-pai/DeepSeek-V3", "alibaba-pai", "DeepSeek-V3", "@ai-sdk/openai-compatible"],
+      ["deepseek/deepseek-v4-pro", "deepseek", "deepseek-v4-pro", "@ai-sdk/openai-compatible"],
     ] as const) {
       const result = ProviderTransform.message(
         prompt,
@@ -318,16 +320,13 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     }
   })
 
-  test("does not collapse GLM or DeepSeek system messages", () => {
+  test("does not collapse GLM system messages", () => {
     const prompt = [
       { role: "system" as const, content: "env block" },
       { role: "system" as const, content: "family prompt" },
       { role: "user" as const, content: "hello" },
     ]
-    for (const [id, apiID] of [
-      ["alibaba-pai/GLM-5.2-FP8", "GLM-5.2-FP8"],
-      ["alibaba-pai/DeepSeek-V3", "DeepSeek-V3"],
-    ]) {
+    for (const [id, apiID] of [["alibaba-pai/GLM-5.2-FP8", "GLM-5.2-FP8"]]) {
       const result = ProviderTransform.message(
         prompt,
         {

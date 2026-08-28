@@ -17,6 +17,7 @@ import PROMPT_BEAST from "../../src/session/prompt/beast.txt"
 import PROMPT_TRINITY from "../../src/session/prompt/trinity.txt"
 import PROMPT_ANTHROPIC from "../../src/session/prompt/anthropic.txt"
 import PROMPT_GEMINI from "../../src/session/prompt/gemini.txt"
+import PROMPT_META from "../../src/session/prompt/meta.txt"
 
 describe("session.system", () => {
   test("routes Kimi / Moonshot models to the Kimi action-first prompt", () => {
@@ -162,6 +163,28 @@ describe("session.system", () => {
     expect(PROMPT_GEMINI).not.toContain("create-react-app")
     expect(PROMPT_GEMINI).not.toContain("Solicit Feedback")
     expect(PROMPT_GEMINI).toContain("Never ask permission questions")
+
+    const spark = SystemPrompt.provider({
+      id: "meta/muse-spark-1.2",
+      providerID: "meta",
+      family: "muse",
+      api: { id: "muse-spark-1.2", url: "https://api.meta.ai/v1" },
+    } as any)
+    expect(spark[0]).toContain("powered by Muse Spark")
+    expect(spark[0]).toContain("trained by Meta MSL")
+    expect(spark[0]).not.toContain("{{MODEL_NAME}}")
+    expect(spark).toEqual([PROMPT_META.replaceAll("{{MODEL_NAME}}", "Muse Spark"), PROMPT_CRAFT])
+    expect(PROMPT_META).toContain("Default to doing the work")
+    expect(PROMPT_META).not.toContain("Use these tools VERY frequently")
+    expect(PROMPT_META).toContain("Never ask permission questions")
+
+    const glimmer = SystemPrompt.provider({
+      id: "meta/muse-glimmer-30b",
+      providerID: "meta",
+      api: { id: "muse-glimmer-30b", url: "https://api.meta.ai/v1" },
+    } as any)
+    expect(glimmer[0]).toContain("powered by Muse Glimmer")
+    expect(glimmer[0]).not.toContain("{{MODEL_NAME}}")
   })
 
   test("extractFilePaths extracts paths from tool call inputs", async () => {
