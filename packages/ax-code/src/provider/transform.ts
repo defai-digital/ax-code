@@ -393,8 +393,24 @@ export namespace ProviderTransform {
     )
   }
 
-  export function isKimiFamily(model: { id?: string; providerID: string; api: { id: string; url?: string } }): boolean {
-    const ids = [model.providerID, model.api.id, model.id]
+  export function isKimiFamily(model: {
+    id?: string
+    providerID: string
+    api: { id: string; url?: string }
+    family?: string
+  }): boolean {
+    // OpenCode also selects the Kimi prompt for official coding providers
+    // whose catalog ids are short (`k3`, `k2p7`) and do not contain "kimi".
+    if (
+      model.providerID === "kimi-for-coding" ||
+      model.providerID === "kimi-cloud-plan" ||
+      model.providerID === "kimi-cli" ||
+      model.providerID === "moonshotai" ||
+      model.providerID === "moonshotai-cn"
+    ) {
+      return true
+    }
+    const ids = [model.providerID, model.api.id, model.id, model.family]
     if (
       ids.some((id) => {
         if (!id) return false

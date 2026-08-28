@@ -197,6 +197,22 @@ describe("ProviderTransform sampling - Kimi / DeepSeek", () => {
     expect(ProviderTransform.temperature(model)).toBe(0.6)
   })
 
+  test("official Kimi coding providers match on short catalog ids", () => {
+    for (const [providerID, apiID] of [
+      ["kimi-for-coding", "k3"],
+      ["kimi-for-coding", "k2p7"],
+      ["kimi-cloud-plan", "k3"],
+      ["moonshotai-cn", "k2p5"],
+    ] as const) {
+      const model = {
+        id: `${providerID}/${apiID}`,
+        providerID: ProviderID.make(providerID),
+        api: { id: apiID, url: "https://api.kimi.com/coding/v1", npm: "@ai-sdk/anthropic" },
+      } as any
+      expect(ProviderTransform.isKimiFamily(model), `${providerID}/${apiID}`).toBe(true)
+    }
+  })
+
   test("DeepSeek V4 Flash uses topP 0.95", () => {
     const model = {
       id: "deepseek/deepseek-v4-flash",

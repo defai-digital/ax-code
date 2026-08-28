@@ -36,6 +36,20 @@ describe("session.system", () => {
     } as any)
     expect(moonshot).toEqual([PROMPT_KIMI, PROMPT_CRAFT])
 
+    // Official Kimi coding catalogs use short ids (`k3`, `k2p7`) that do not
+    // contain "kimi". OpenCode keys prompt selection on the provider id.
+    for (const providerID of ["kimi-for-coding", "moonshotai", "moonshotai-cn", "kimi-cloud-plan"]) {
+      const short = SystemPrompt.provider({
+        id: `${providerID}/k3`,
+        providerID,
+        api: { id: "k3", url: "https://api.kimi.com/coding/v1" },
+      } as any)
+      expect(short, providerID).toEqual([PROMPT_KIMI, PROMPT_CRAFT])
+    }
+
+    expect(PROMPT_KIMI).toContain("MUST use the SAME language as the user")
+    expect(PROMPT_KIMI).not.toContain("Respond in English by default")
+
     const qwen = SystemPrompt.provider({
       id: "alibaba-coding-plan/qwen3.7-max",
       providerID: "alibaba-coding-plan",
