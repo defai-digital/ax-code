@@ -10,6 +10,10 @@ export function isLocalHostname(hostname: string) {
   if (host === "localhost" || host === "0.0.0.0" || host === "::1") return true
   if (host.endsWith(".localhost")) return true
   if (isIPv4Loopback(host)) return true
+  // IPv4-mapped IPv6 form ("::ffff:127.0.0.1") is loopback too — some stacks
+  // report local addresses this way, and treating them as remote would apply
+  // remote pacing/quota logic to the local machine.
+  if (host.startsWith("::ffff:") && isIPv4Loopback(host.slice("::ffff:".length))) return true
   return false
 }
 

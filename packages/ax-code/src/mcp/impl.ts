@@ -1551,6 +1551,13 @@ export namespace MCP {
       // when the IdP has an active SSO session and redirects immediately
       const callbackPromise = McpOAuthCallback.waitForCallback(oauthState, oauthFlowKey(mcpName))
 
+      // Browser opening failed (e.g., in remote/headless sessions like SSH,
+      // devcontainers) — emit an event so the CLI can display the URL for
+      // manual opening.
+      const reportBrowserOpenFailed = (error: unknown) => {
+        log.warn("failed to open browser, user must open URL manually", { mcpName, error })
+        Bus.publishDetached(BrowserOpenFailed, { mcpName, url: authorizationUrl })
+      }
       try {
         const subprocess = await open(authorizationUrl)
         // The open package spawns a detached process and returns immediately.
@@ -1562,24 +1569,35 @@ export namespace MCP {
             on(event: "error", listener: (error: Error) => void): void
             on(event: "exit", listener: (code: number | null) => void): void
           }
-          // Give the process a moment to fail if it's going to
-          const timeout = setTimeout(() => resolve(), 500)
-          proc.on("error", (error) => {
+          let settled = false
+          const fail = (error: Error) => {
             clearTimeout(timeout)
+            if (settled) {
+              // The grace window already resolved the wait, so reject() would
+              // be a no-op and the catch below would never run. Surface the
+              // manual-open fallback directly instead of silently waiting for
+              // an OAuth callback that can never arrive because the browser
+              // never opened.
+              reportBrowserOpenFailed(error)
+              return
+            }
+            settled = true
             reject(error)
-          })
+          }
+          // Give the process a moment to fail if it's going to
+          const timeout = setTimeout(() => {
+            settled = true
+            resolve()
+          }, 500)
+          proc.on("error", fail)
           proc.on("exit", (code) => {
             if (code !== null && code !== 0) {
-              clearTimeout(timeout)
-              reject(new Error(`Browser open failed with exit code ${code}`))
+              fail(new Error(`Browser open failed with exit code ${code}`))
             }
           })
         })
       } catch (error) {
-        // Browser opening failed (e.g., in remote/headless sessions like SSH, devcontainers)
-        // Emit event so CLI can display the URL for manual opening
-        log.warn("failed to open browser, user must open URL manually", { mcpName, error })
-        Bus.publishDetached(BrowserOpenFailed, { mcpName, url: authorizationUrl })
+        reportBrowserOpenFailed(error)
       }
 
       // Wait for callback using the already-registered promise

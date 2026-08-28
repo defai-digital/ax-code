@@ -61,6 +61,18 @@ describe("util.filelock", () => {
     }
   })
 
+  test("does not steal a freshly created empty lockfile", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const lockpath = filepath + ".lock"
+    await fs.writeFile(lockpath, "")
+
+    await expect(FileLock.acquire(filepath, { timeoutMs: 120, staleMs: 60_000 })).rejects.toThrow(
+      "timed out waiting for file lock",
+    )
+    expect(await fs.readFile(lockpath, "utf-8")).toBe("")
+  })
+
   test("steals a lock older than the configured stale age", async () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "state.json")

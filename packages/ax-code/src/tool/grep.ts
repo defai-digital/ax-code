@@ -110,7 +110,10 @@ export const GrepTool = Tool.define("grep", {
           }
         }
 
-        const totalMatches = visibleMatches.length
+        // Report the pre-truncation count like the ripgrep path below —
+        // `visibleMatches.length` would always read RESULT_LIMIT when
+        // truncated, understating how many matches were actually found.
+        const totalMatches = matches.length
         const outputLines = [`Found ${totalMatches} matches${truncated ? ` (showing first ${RESULT_LIMIT})` : ""}`]
         let currentFile = ""
         for (const match of visibleMatches) {

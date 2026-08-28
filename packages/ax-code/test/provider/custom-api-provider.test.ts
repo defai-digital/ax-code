@@ -102,7 +102,7 @@ describe("custom API provider model discovery", () => {
         zai: { models: { "glm-5.3": { id: "glm-5.3", limit: { context: 1_000_000, output: 131_072 } } } },
         requesty: { models: { "glm-5.3": { id: "glm-5.3", limit: { context: 1_000_000, output: 128_000 } } } },
       }),
-    ).toEqual({ context: 1_000_000, output: 131_072 })
+    ).toEqual({ context: 1_000_000, output: 129_536 })
   })
 
   test("replaces persisted discovery defaults but keeps explicit non-default limits", () => {
@@ -164,6 +164,21 @@ describe("custom API provider model discovery", () => {
 })
 
 describe("custom API provider catalog limits", () => {
+  test("averages the two middle catalog limits when an even number of cards exist", () => {
+    expect(
+      CustomApiProvider.catalogLimitForModelID("MiniMax-M2.7", {
+        minimax: {
+          models: { "MiniMax-M2.7": { id: "MiniMax-M2.7", limit: { context: 100_000, output: 10_000 } } },
+        },
+        nvidia: {
+          models: {
+            "minimaxai/minimax-m2.7": { id: "minimaxai/minimax-m2.7", limit: { context: 200_000, output: 20_000 } },
+          },
+        },
+      }),
+    ).toEqual({ context: 150_000, output: 15_000 })
+  })
+
   test("uses the median across reseller cards so one mistyped card cannot win", () => {
     expect(
       CustomApiProvider.catalogLimitForModelID("MiniMax-M2.7", {

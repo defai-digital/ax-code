@@ -28,6 +28,14 @@ describe("Truncate", () => {
       expect(result.content).toBe(content)
     })
 
+    test("does not treat a trailing newline as an extra line", async () => {
+      const content = "only-one-line\n"
+      const result = await Truncate.output(content, { maxLines: 1 })
+
+      expect(result.truncated).toBe(false)
+      expect(result.content).toBe(content)
+    })
+
     test("truncates by line count", async () => {
       const lines = Array.from({ length: 100 }, (_, i) => `line${i}`).join("\n")
       const result = await Truncate.output(lines, { maxLines: 10 })

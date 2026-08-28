@@ -37,11 +37,15 @@ export namespace ProviderError {
 
   // Providers not reliably handled in this function:
   // - z.ai: can accept overflow silently (needs token-count/context-window checks)
-  function isOverflow(message: string) {
+  function isOverflow(message: string, providerID?: ProviderID) {
     if (OVERFLOW_PATTERNS.some((p) => p.test(message))) return true
 
     // Mistral can report a context overflow as a bare 400. A bare 413 is
-    // classified separately as request-body overflow below.
+    // classified separately as request-body overflow below. Keep the bare-400
+    // fallback Mistral-specific: an empty-body 400 from any other provider is
+    // usually a gateway or parameter rejection, and classifying it as context
+    // overflow would disable retries and trigger unwarranted compaction.
+    if (providerID !== undefined && providerID !== "mistral") return false
     return /^400\s*(status code)?\s*\(no body\)/i.test(message)
   }
 
@@ -54,14 +58,14 @@ export namespace ProviderError {
   }
 
   /** Classifies context overflow shapes outside the standard APICallError. */
-  export function isContextOverflow(input: unknown) {
-    if (typeof input === "string") return isOverflow(input)
+  export function isContextOverflow(input: unknown, providerID?: ProviderID) {
+    if (typeof input === "string") return isOverflow(input, providerID)
     if (!isRecord(input)) return false
     const nested = isRecord(input.error) ? input.error : undefined
     if (input.code === "context_length_exceeded" || nested?.code === "context_length_exceeded") return true
     const message =
       typeof nested?.message === "string" ? nested.message : typeof input.message === "string" ? input.message : ""
-    return isOverflow(message)
+    return isOverflow(message, providerID)
   }
 
   /** Classifies non-standard SDK errors that did not arrive as APICallError. */
@@ -300,7 +304,7 @@ export namespace ProviderError {
     // use HTTP 413. Generic 413/request-entity errors are request-body limits
     // (commonly accumulated base64 media) and need a media projection before
     // token-driven compaction.
-    if (isOverflow(m) || bodyError?.code === "context_length_exceeded") {
+    if (isOverflow(m, input.providerID) || bodyError?.code === "context_length_exceeded") {
       return {
         type: "context_overflow",
         message: m,

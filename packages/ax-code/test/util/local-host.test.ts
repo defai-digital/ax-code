@@ -14,6 +14,8 @@ describe("isLocalHostname", () => {
       "[::1]",
       "127.0.0.1",
       "127.12.0.1",
+      "::ffff:127.0.0.1",
+      "::FFFF:127.0.0.1",
     ]) {
       expect(isLocalHostname(hostname)).toBe(true)
     }

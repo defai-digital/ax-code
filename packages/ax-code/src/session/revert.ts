@@ -298,7 +298,14 @@ export namespace SessionRevert {
     let target: MessageV2.WithParts | undefined
     const targetIndex = msgs.findIndex((msg) => msg.info.id === messageID)
     if (targetIndex === -1) {
-      log.warn("revert boundary message is missing during cleanup", { sessionID, messageID })
+      // The boundary message is gone, so we can no longer determine which
+      // trailing messages the revert meant to delete. Leaving `session.revert`
+      // in place would wedge the session: every later prompt re-runs this
+      // cleanup, re-logs the same warning, and the pending-revert state never
+      // clears. Drop the revert bookkeeping instead — the surviving messages
+      // stay visible, which is safer than guessing a deletion range.
+      log.warn("revert boundary message is missing during cleanup, clearing revert state", { sessionID, messageID })
+      await Session.clearRevert(sessionID)
       return
     }
     preserve.push(...msgs.slice(0, targetIndex))

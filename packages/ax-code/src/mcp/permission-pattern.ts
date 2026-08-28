@@ -53,8 +53,11 @@ function normalizePath(value: string, worktree?: string): Candidate {
   if (!worktree) return { pattern: `path:${cap(value)}`, durable: false }
 
   const relative = path.relative(worktree, absolute)
-  if (relative && !isOutsideRelativePath(relative)) {
-    return { pattern: `path:${cap(relative)}`, durable: true }
+  // `path.relative(worktree, worktree)` is "" — the worktree root itself is
+  // the most inside-project path there is, so it must not fall through to the
+  // external bucket (which is non-durable and forces re-approval).
+  if (!isOutsideRelativePath(relative)) {
+    return { pattern: `path:${cap(relative || ".")}`, durable: true }
   }
 
   return { pattern: "path:<external>", durable: false }

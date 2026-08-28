@@ -40,6 +40,23 @@ describe("provider error decoding", () => {
     })
   })
 
+  test("does not treat a bare empty-body 400 as overflow except for Mistral", () => {
+    const empty400 = new APICallError({
+      message: "400 status code (no body)",
+      url: "https://example.com",
+      requestBodyValues: {},
+      statusCode: 400,
+      responseHeaders: {},
+      isRetryable: false,
+    })
+    expect(ProviderError.parseAPICallError({ providerID: ProviderID.make("openai"), error: empty400 }).type).toBe(
+      "api_error",
+    )
+    expect(ProviderError.parseAPICallError({ providerID: ProviderID.make("mistral"), error: empty400 }).type).toBe(
+      "context_overflow",
+    )
+  })
+
   test("classifies generic HTTP 413 as request-body overflow", () => {
     const parsed = ProviderError.parseAPICallError({
       providerID: ProviderID.make("openai"),

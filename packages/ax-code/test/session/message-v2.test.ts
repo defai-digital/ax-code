@@ -1062,7 +1062,6 @@ describe("session.message-v2.fromError", () => {
       "Your input exceeds the context window of this model",
       "The input token count (1196265) exceeds the maximum number of tokens allowed (1048575)",
       "Please reduce the length of the messages or completion",
-      "400 status code (no body)",
     ]
 
     cases.forEach((message) => {
@@ -1158,6 +1157,23 @@ describe("session.message-v2.fromError", () => {
     })
     const result = MessageV2.fromError(error, { providerID })
     expect(MessageV2.ContextOverflowError.isInstance(result)).toBe(true)
+  })
+
+  test("does not classify a bare 400 no-body as context overflow except for Mistral", () => {
+    const empty400 = new APICallError({
+      message: "400 status code (no body)",
+      url: "https://example.com",
+      requestBodyValues: {},
+      statusCode: 400,
+      responseHeaders: { "content-type": "application/json" },
+      isRetryable: false,
+    })
+    expect(MessageV2.ContextOverflowError.isInstance(MessageV2.fromError(empty400, { providerID }))).toBe(false)
+    expect(
+      MessageV2.ContextOverflowError.isInstance(
+        MessageV2.fromError(empty400, { providerID: ProviderID.make("mistral") }),
+      ),
+    ).toBe(true)
   })
 
   test("does not classify 429 no body as context overflow", () => {

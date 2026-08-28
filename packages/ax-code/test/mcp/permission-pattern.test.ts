@@ -39,6 +39,15 @@ describe("McpPermissionPattern.derive", () => {
     expect(result.durable).toBe(true)
   })
 
+  test("treats the worktree root itself as a durable in-project path", () => {
+    const worktree = path.join(path.sep, "tmp", "repo")
+    const result = McpPermissionPattern.derive("fs_read", { filePath: worktree }, { worktree })
+
+    expect(result.patterns).toEqual(["path:."])
+    expect(result.always).toEqual(["path:."])
+    expect(result.durable).toBe(true)
+  })
+
   test("keeps worktree-local paths whose first segment starts with dots", () => {
     const worktree = path.join(path.sep, "tmp", "repo")
     const result = McpPermissionPattern.derive(

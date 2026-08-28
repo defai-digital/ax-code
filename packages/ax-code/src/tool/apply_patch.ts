@@ -385,7 +385,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               await assertSymlinkInsideProject(change.filePath)
 
               const current = await readFileIfExists(change.filePath)
-              if (current !== undefined && current !== change.oldContent)
+              // Match the move/delete branches: an update target must still
+              // exist with the verified content. A file deleted between
+              // verification and write is a conflict, not something to
+              // silently recreate.
+              if (current !== change.oldContent)
                 throw new Error(`apply_patch conflict: ${change.filePath} was modified between verification and write`)
               activeDirty = true
               await Filesystem.write(change.filePath, change.newContent)

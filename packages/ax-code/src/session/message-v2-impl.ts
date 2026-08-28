@@ -1308,7 +1308,7 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
-      case (e instanceof Error || typeof e === "string") && ProviderError.isContextOverflow(e):
+      case (e instanceof Error || typeof e === "string") && ProviderError.isContextOverflow(e, ctx.providerID):
         return new MessageV2.ContextOverflowError(
           {
             message: toErrorMessage(e, "Input exceeds context window of this model"),
@@ -1393,7 +1393,7 @@ export namespace MessageV2 {
           // Preserve parseStreamError priority above so canonical stream
           // records retain their serialized responseBody, then classify the
           // remaining record shapes before falling back to UnknownError.
-          if (ProviderError.isContextOverflow(e)) {
+          if (ProviderError.isContextOverflow(e, ctx.providerID)) {
             return new MessageV2.ContextOverflowError(
               {
                 message: providerRecordMessage(e, "Input exceeds context window of this model"),

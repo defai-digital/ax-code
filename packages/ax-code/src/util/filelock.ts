@@ -64,6 +64,23 @@ export namespace FileLock {
   async function maybeSteal(target: string, staleMs: number): Promise<boolean> {
     const body = await readLockBody(target)
     if (!body) {
+      // An empty lockfile is ambiguous: the holder may have crashed between
+      // the atomic O_EXCL creation and the body write, or another process may
+      // have just created the file and not written its body yet. Stealing a
+      // freshly created file lets two processes believe they hold the same
+      // lock at once, so only steal once the file's mtime proves it was
+      // abandoned (the body write lands within microseconds of creation, so
+      // any file still empty after the stale window is not mid-write).
+      // A missing file (deleted between our EEXIST and this read) means the
+      // lock is already free — report it stealable so the caller retries.
+      const mtimeMs = await fs
+        .stat(target)
+        .then((stats) => stats.mtimeMs)
+        .catch((err: NodeJS.ErrnoException) => {
+          if (err?.code === "ENOENT") return undefined
+          throw err
+        })
+      if (mtimeMs !== undefined && Date.now() - mtimeMs <= staleMs) return false
       await removeLockFile(target)
       return true
     }

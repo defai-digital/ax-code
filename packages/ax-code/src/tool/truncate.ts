@@ -129,6 +129,11 @@ export namespace Truncate {
     const maxBytes = options.maxBytes ?? MAX_BYTES
     const direction = options.direction ?? "head"
     const lines = text.split("\n")
+    // A trailing newline produces a phantom "" element that counts as a line
+    // in the budget below. In tail direction it displaces a real line from
+    // the preview; in both directions it can mark single-line text as
+    // needing truncation. Drop it — the full text is preserved on disk.
+    if (lines.length > 1 && lines[lines.length - 1] === "") lines.pop()
     const totalBytes = Buffer.byteLength(text, "utf-8")
 
     if (lines.length <= maxLines && totalBytes <= maxBytes) {

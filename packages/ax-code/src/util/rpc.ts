@@ -300,7 +300,22 @@ export namespace Rpc {
         const handlers = listeners.get(parsed.event)
         if (handlers) {
           for (const handler of handlers) {
-            handler(parsed.data)
+            // A throwing handler would reject this async onmessage with no
+            // listener attached — an unhandled rejection that can kill the
+            // client process (the server side in `listen` already guards its
+            // dispatch for the same reason). Isolate each handler so one bad
+            // consumer cannot take down the wire.
+            try {
+              // Promise.resolve passes void returns through untouched and
+              // adopts Promise returns so their rejections are handled too.
+              void Promise.resolve(handler(parsed.data)).catch((error) => {
+                // eslint-disable-next-line no-console
+                console.error("rpc event handler rejection", { event: parsed.event, error: toErrorMessage(error) })
+              })
+            } catch (error) {
+              // eslint-disable-next-line no-console
+              console.error("rpc event handler failed", { event: parsed.event, error: toErrorMessage(error) })
+            }
           }
         }
       }

@@ -51,7 +51,11 @@ export function createRateLimitMiddleware(log: Log.Logger): MiddlewareHandler {
         return true
       },
     })
-    const ip = socketAddr ?? `unknown:${crypto.randomUUID()}`
+    // Unidentified clients share one fallback bucket per method/path. A
+    // per-request UUID key gave every such request a fresh bucket, so the
+    // `count >= limit` branch could never fire — silently disabling rate
+    // limiting whenever the socket address was unavailable.
+    const ip = socketAddr ?? "unknown"
     const key = `${ip}:${c.req.method}:${c.req.path.startsWith("/session/") ? "/session" : c.req.path}`
     const now = Date.now()
     // Periodically evict expired buckets so stale keys do not accumulate
@@ -95,9 +99,14 @@ export function createRequestLoggingMiddleware(log: Log.Logger): MiddlewareHandl
       method: c.req.method,
       path: c.req.path,
     })
-    await next()
-    if (!skipLogging) {
-      timer.stop()
+    try {
+      await next()
+    } finally {
+      // Stop the timer on error paths too — otherwise every rejected request
+      // leaves an orphaned "started" entry that never reports completion.
+      if (!skipLogging) {
+        timer.stop()
+      }
     }
   }
 }

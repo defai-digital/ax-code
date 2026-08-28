@@ -223,7 +223,13 @@ export namespace CustomApiProvider {
   function median(values: number[]): number | undefined {
     if (values.length === 0) return
     const sorted = [...values].sort((left, right) => left - right)
-    return sorted[Math.floor(sorted.length / 2)]
+    // Standard median: average the two middle values for even-length lists.
+    // Always taking the upper middle value systematically inherited the
+    // larger card — exactly the inflated reseller limit this aggregation is
+    // meant to suppress (and for two cards it behaved like the old max).
+    const mid = Math.floor(sorted.length / 2)
+    if (sorted.length % 2 === 0) return Math.floor((sorted[mid - 1] + sorted[mid]) / 2)
+    return sorted[mid]
   }
 
   function shouldReplaceLimit(stored: number, discoveryDefault: number, replaceDiscoveryDefaults: boolean) {
