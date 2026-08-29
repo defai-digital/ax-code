@@ -183964,7 +183964,7 @@
         "open_weights": true,
         "limit": {
           "context": 524288,
-          "output": 262144
+          "output": 471859
         }
       },
       "thinkingmachines/inkling-small:free": {

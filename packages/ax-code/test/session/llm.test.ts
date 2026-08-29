@@ -2757,4 +2757,24 @@ describe("session.llm.streamIdleWatchdog", () => {
       else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev
     }
   })
+
+  test("streamIdleTimeoutMs honors the per-agent override below the CLI window", () => {
+    const prev = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+    try {
+      delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+      const agent = { streamIdleTimeoutMs: 120_000 }
+      // Agent override beats provider defaults, including the 15min CLI window.
+      expect(LLM.streamIdleTimeoutMs("claude-code", agent)).toBe(120_000)
+      expect(LLM.streamIdleTimeoutMs("openai", agent)).toBe(120_000)
+      expect(LLM.streamIdleTimeoutMs(undefined, agent)).toBe(120_000)
+      // No override on the agent falls back to provider defaults.
+      expect(LLM.streamIdleTimeoutMs("claude-code", {})).toBe(900_000)
+      // Explicit env still wins over the agent override.
+      process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = "45000"
+      expect(LLM.streamIdleTimeoutMs("claude-code", agent)).toBe(45_000)
+    } finally {
+      if (prev === undefined) delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
+      else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev
+    }
+  })
 })

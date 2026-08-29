@@ -59,6 +59,11 @@ export namespace Agent {
       displayName: z.string().optional(),
       options: z.record(z.string(), z.any()),
       steps: SafeInteger.positive().optional(),
+      // Per-model-turn stall watchdog override (ms). Bounded internal agents
+      // (e.g. goal-plan-writer, total budget 10min) set this below the
+      // CLI-provider idle window (15min) so a stalled stream is detected and
+      // retried instead of burning the whole budget as a generic timeout.
+      streamIdleTimeoutMs: SafeInteger.positive().optional(),
     })
     .meta({
       ref: "Agent",
@@ -391,6 +396,12 @@ export namespace Agent {
         hidden: true,
         tier: "internal",
         steps: 12,
+        // This agent's read-only exploration turns take seconds and its total
+        // budget (WRITER_TIMEOUT_MS, 10min) is shorter than the 15min
+        // CLI-provider stream idle window — without a tighter per-turn
+        // watchdog a stalled CLI stream burns the whole budget and surfaces
+        // as a generic "Goal plan writer timed out" with no chance to retry.
+        streamIdleTimeoutMs: 120_000,
         prompt: PROMPT_GOAL_PLAN_WRITER,
         permission: Permission.merge(
           defaults,

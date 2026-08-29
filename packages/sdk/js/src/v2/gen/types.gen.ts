@@ -42,6 +42,7 @@ export type Agent = {
     [key: string]: unknown
   }
   steps?: number
+  streamIdleTimeoutMs?: number
 }
 
 export type AgentConfig = {

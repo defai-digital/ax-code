@@ -502,7 +502,7 @@ export namespace LLM {
     // closing the connection or keep producing runaway reasoning forever.
     // Bound both failure modes while allowing local tool execution to pause
     // the clocks below.
-    const idleTimeoutMs = streamIdleTimeoutMs(input.model.providerID)
+    const idleTimeoutMs = streamIdleTimeoutMs(input.model.providerID, input.agent)
     const maxDurationMs = streamMaxDurationMs(input.model.providerID)
     const idleAbort = new AbortController()
     const streamAbort = input.abort ? AbortSignal.any([input.abort, idleAbort.signal]) : idleAbort.signal
@@ -735,12 +735,13 @@ export namespace LLM {
     return providerID.endsWith("-cli") || isKnownCliProviderID(providerID)
   }
 
-  export function streamIdleTimeoutMs(providerID?: string): number {
+  export function streamIdleTimeoutMs(providerID?: string, agent?: { streamIdleTimeoutMs?: number }): number {
     const raw = process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
     if (raw !== undefined && raw !== "") {
       const parsed = Number(raw)
       if (Number.isFinite(parsed) && parsed >= 0) return parsed
     }
+    if (agent?.streamIdleTimeoutMs !== undefined) return agent.streamIdleTimeoutMs
     if (providerID === AX_ENGINE_PROVIDER_ID) return AX_ENGINE_STREAM_IDLE_TIMEOUT_MS
     if (isCliProviderID(providerID)) return CLI_STREAM_IDLE_TIMEOUT_MS
     return STREAM_IDLE_TIMEOUT_MS

@@ -77,6 +77,9 @@ test("goal-plan-writer is a hidden read-only internal agent", async () => {
       expect(evalPerm(writer, "bash")).toBe("deny")
       expect(evalPerm(writer, "read")).toBe("allow")
       expect(evalPerm(writer, "submit_goal_plan")).toBe("allow")
+      // Per-turn stall watchdog below the 15min CLI-provider idle window, so
+      // a stalled CLI stream is retried instead of hitting the 10min budget.
+      expect(writer?.streamIdleTimeoutMs).toBe(120_000)
     },
   })
 })
