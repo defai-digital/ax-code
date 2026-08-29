@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.11] - 2026-08-29
+
+### Changed
+
+- Extract shared useSidebarResize hook from sidebar components.
+- Cut re-render and re-highlight costs in chat rendering.
+- Remove dead desktop UI components, hooks, and stores.
+- Keep Error fields out of the JSON log's {} black hole.
+- Stop classifying a mid-turn cancel as a consecutive provider error.
+
+### Fixed
+
+- Fix runaway model streams.
+- Fix optimistic send status rollback and shadow-map leak.
+- Fix goal plan writer killed mid-submission by miscalibrated timeout.
+
 ## [7.9.10] - 2026-08-29
 
 ### Fixed
