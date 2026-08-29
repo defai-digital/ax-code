@@ -161,6 +161,46 @@ describe("Log.create", () => {
     expect(lines.join("")).toContain('metadata={"name":"root","self":"[Circular]"}')
   })
 
+  test("serializes Error extras in the JSON log instead of dropping them as {}", async () => {
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "json-error-test" })
+
+    Log.create({ service: "test-json-error" }).warn("session resync after reconnect failed", {
+      error: new Error("resync failed", { cause: new Error("root cause") }),
+      sessionID: "ses_test",
+    })
+
+    const content = await fs.readFile(path.join(tmp.path, "json-error-test.json.log"), "utf8")
+    const line = content
+      .trim()
+      .split("\n")
+      .find((entry) => entry.includes("session resync after reconnect failed"))
+    expect(line).toBeDefined()
+    const entry = JSON.parse(line!)
+    expect(entry.error).toEqual({
+      name: "Error",
+      message: "resync failed Caused by: root cause",
+    })
+    expect(entry.sessionID).toBe("ses_test")
+  })
+
+  test("leaves the err key to pino's own serializer", async () => {
+    await using tmp = await tmpdir()
+    await Log.init({ print: false, dir: tmp.path, name: "json-err-key-test" })
+
+    Log.create({ service: "test-json-err-key" }).warn("plain boom", { err: new Error("kept") })
+
+    const content = await fs.readFile(path.join(tmp.path, "json-err-key-test.json.log"), "utf8")
+    const line = content
+      .trim()
+      .split("\n")
+      .find((entry) => entry.includes("plain boom"))
+    expect(line).toBeDefined()
+    const entry = JSON.parse(line!)
+    expect(entry.err.message).toBe("kept")
+    expect(typeof entry.err.stack).toBe("string")
+  })
+
   test("does not throw when log messages or extras cannot be stringified", async () => {
     const lines: string[] = []
     await Log.init(

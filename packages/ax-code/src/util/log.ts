@@ -340,6 +340,23 @@ export namespace Log {
       : result
   }
 
+  // Pino's built-in error serializer only applies to the `err` key. This
+  // codebase mostly logs errors under `error`, where the JSON log receives
+  // `{}` because Error properties are non-enumerable — the reconnect resync
+  // failures on 2026-08-29 were recorded as "error":{} with zero usable
+  // diagnostics. Normalize Error values under any other key into a plain
+  // object so the JSON log keeps name + message (cause chain folded into
+  // the message, matching the text log's formatError). `err` is left for
+  // pino's richer serializer (stack included).
+  function pinoExtra(extra: Record<string, unknown> | undefined): Record<string, unknown> {
+    const fields = extra || {}
+    const out: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(fields)) {
+      out[key] = key !== "err" && value instanceof Error ? { name: value.name, message: formatError(value) } : value
+    }
+    return out
+  }
+
   function stringifyLogObject(value: object): string {
     const seen = new WeakSet<object>()
     try {
@@ -409,25 +426,25 @@ export namespace Log {
       debug(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("DEBUG")) {
           write("DEBUG " + build(message, extra))
-          pino_child()?.debug(extra || {}, safeLogString(message ?? ""))
+          pino_child()?.debug(pinoExtra(extra), safeLogString(message ?? ""))
         }
       },
       info(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("INFO")) {
           write("INFO  " + build(message, extra))
-          pino_child()?.info(extra || {}, safeLogString(message ?? ""))
+          pino_child()?.info(pinoExtra(extra), safeLogString(message ?? ""))
         }
       },
       error(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("ERROR")) {
           write("ERROR " + build(message, extra))
-          pino_child()?.error(extra || {}, safeLogString(message ?? ""))
+          pino_child()?.error(pinoExtra(extra), safeLogString(message ?? ""))
         }
       },
       warn(message?: unknown, extra?: Record<string, unknown>) {
         if (shouldLog("WARN")) {
           write("WARN  " + build(message, extra))
-          pino_child()?.warn(extra || {}, safeLogString(message ?? ""))
+          pino_child()?.warn(pinoExtra(extra), safeLogString(message ?? ""))
         }
       },
       tag(key: string, value: string) {
