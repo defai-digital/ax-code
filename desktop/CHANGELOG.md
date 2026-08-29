@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.10] - 2026-08-29
+
+### Fixed
+
+- Fix apply_patch overwrite guard and bash wrapper/curl -O scan gaps.
+- Fix eight confirmed bugs from DeepSeek/MiniMax bug hunt.
+
 ## [7.9.9] - 2026-08-28
 
 ### Changed

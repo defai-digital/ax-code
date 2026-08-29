@@ -270,7 +270,7 @@ test("first connect to OAuth server shows needs_auth instead of failed", async (
   })
 })
 
-test("connect path closes unused SSE transport when StreamableHTTP path is selected first", async () => {
+test("connect path leaves untried transport candidates unconstructed when StreamableHTTP needs auth", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeFile(
@@ -296,10 +296,12 @@ test("connect path closes unused SSE transport when StreamableHTTP path is selec
       expect(serverStatus["test-oauth-close"].status).toBe("needs_auth")
 
       const streamable = transportInstances[0]
-      const sse = transportInstances[1]
       const firstClient = clientInstances[0]
+      // Transports are lazy factories: once the StreamableHTTP candidate
+      // reaches needs_auth, the SSE candidate is never constructed, so
+      // there is nothing to close for it.
+      expect(transportInstances).toHaveLength(1)
       expect(streamable?.closeCalls).toBe(0)
-      expect(sse?.closeCalls).toBe(1)
       // The first client is intentionally NOT closed in the needs_auth
       // path. In the real MCP SDK `client.close()` chains down to
       // `transport.close()`, so closing the client would also close the
