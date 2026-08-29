@@ -3,6 +3,7 @@ import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
 import { isDesktopShell, isWebRuntime } from "@/lib/desktop"
 import { useUIStore } from "@/stores/useUIStore"
 import { API_ENDPOINTS } from "@/lib/http"
+import { subscribeEventStream } from "@/lib/event-stream/subscribe"
 import type { NotificationPayload } from "@/lib/api/types"
 
 const isFocused = () => {
@@ -37,28 +38,22 @@ export const useWebNotificationStream = (options?: { enabled?: boolean }) => {
       return
     }
 
-    const source = new EventSource(API_ENDPOINTS.notifications.stream)
-    source.onmessage = (event) => {
-      let data: unknown
-      try {
-        data = JSON.parse(event.data) as unknown
-      } catch {
-        return
-      }
+    // No heartbeat: the notification stream has never timed out — silence is
+    // normal (notifications are rare) and must not trigger reconnects.
+    return subscribeEventStream({
+      url: API_ENDPOINTS.notifications.stream,
+      heartbeatTimeoutMs: undefined,
+      onEnvelope: (envelope) => {
+        const settings = useUIStore.getState()
+        if (!settings.nativeNotificationsEnabled) return
+        if (settings.notificationMode !== "always" && isFocused()) return
 
-      const settings = useUIStore.getState()
-      if (!settings.nativeNotificationsEnabled) return
-      if (settings.notificationMode !== "always" && isFocused()) return
+        const payload = toNotificationPayload(envelope)
+        if (!payload) return
 
-      const payload = toNotificationPayload(data)
-      if (!payload) return
-
-      const apis = getRegisteredRuntimeAPIs()
-      void apis?.notifications?.notifyAgentCompletion(payload)
-    }
-
-    return () => {
-      source.close()
-    }
+        const apis = getRegisteredRuntimeAPIs()
+        void apis?.notifications?.notifyAgentCompletion(payload)
+      },
+    })
   }, [enabled])
 }

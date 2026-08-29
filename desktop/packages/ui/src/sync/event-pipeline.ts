@@ -17,6 +17,10 @@ import { axCodeClient } from "@/lib/ax-code/client"
 import { syncDebug } from "./debug"
 import { API_PATHS } from "@/lib/http"
 import { createMetricsTracker, type MetricsTracker } from "./streaming-metrics"
+import { createEventTransport } from "@/lib/event-stream/client"
+import { isAbortError, type SdkSseDriver, type TransportError, type WsDriver } from "@/lib/event-stream/types"
+import type { MessageStreamWsFrame } from "@/lib/event-stream/adapters/websocket"
+import { SYNC_RETRY_NOW_EVENT as TRANSPORT_SYNC_RETRY_NOW_EVENT } from "@/lib/event-stream/visibility"
 
 export type QueuedEvent = {
   directory: string
@@ -28,19 +32,16 @@ export type FlushHandler = (events: QueuedEvent[]) => void
 const FLUSH_FRAME_MS = 33
 const BACKPRESSURE_FLUSH_FRAME_MS = 200
 const BACKPRESSURE_MODE_MS = 10_000
-const STREAM_YIELD_MS = 8
-const DEFAULT_RECONNECT_DELAY_MS = 250
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000
-const WS_FALLBACK_WINDOW_MS = 60_000
 const DEFAULT_WS_READY_TIMEOUT_MS = 2_000
 const ACTIVE_TOOL_STATUSES = new Set(["pending", "running", "started"])
 const FINAL_TOOL_STATUSES = new Set(["completed", "error", "aborted", "failed", "timeout", "cancelled"])
-// Retry pacing. Visible+online tabs probe quickly so the user sees connection
-// recovery in under a second of real outage; hidden/offline tabs back off
-// further so a backgrounded browser tab on a flaky link doesn't burn battery
-// probing a dead network every few seconds. The browser would throttle
-// hidden-tab timers anyway, but this keeps the intent explicit and shrinks
-// server load from idle tabs.
+// Retry pacing, handed to the event transport verbatim. Visible+online tabs
+// probe quickly so the user sees connection recovery in under a second of
+// real outage; hidden/offline tabs back off further so a backgrounded browser
+// tab on a flaky link doesn't burn battery probing a dead network every few
+// seconds. The browser would throttle hidden-tab timers anyway, but this
+// keeps the intent explicit and shrinks server load from idle tabs.
 const RETRY_BACKOFF_BASE_MS = 250
 const RETRY_BACKOFF_CAP_VISIBLE_MS = 5_000
 const RETRY_BACKOFF_CAP_HIDDEN_OR_OFFLINE_MS = 60_000
@@ -52,7 +53,7 @@ const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//
  * an immediate reconnect attempt (e.g. a "retry now" action on the reconnect
  * banner). Handled exactly like `openchamber:system-resume`.
  */
-export const SYNC_RETRY_NOW_EVENT = "openchamber:sync-retry-now"
+export const SYNC_RETRY_NOW_EVENT = TRANSPORT_SYNC_RETRY_NOW_EVENT
 
 /** Ask the active event pipeline to reconnect immediately. */
 export function requestSyncRetryNow(): void {
@@ -81,15 +82,6 @@ export type EventPipeline = {
   cleanup: () => void
   reconnect: (reason?: string) => void
   metrics: MetricsTracker
-}
-
-type MessageStreamWsFrame = {
-  type: "ready" | "event" | "error" | "backpressure"
-  payload?: unknown
-  eventId?: string
-  directory?: string
-  message?: string
-  scope?: "global" | "directory"
 }
 
 const normalizeOpenChamberSessionStatus = (payload: Event): Event | null => {
@@ -264,8 +256,6 @@ type DirectoryQueue = {
   last: number
 }
 
-type AttemptAbortReason = "pipeline_stopped" | `${"ws" | "sse"}_${string}` | null
-
 type CoalescedPart = {
   type?: unknown
   state?: {
@@ -378,14 +368,11 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     routeDirectory,
     transport = "auto",
     heartbeatTimeoutMs = DEFAULT_HEARTBEAT_TIMEOUT_MS,
-    reconnectDelayMs = DEFAULT_RECONNECT_DELAY_MS,
     wsReadyTimeoutMs = DEFAULT_WS_READY_TIMEOUT_MS,
   } = input
-  const abort = new AbortController()
   const metrics = createMetricsTracker()
   let disconnected = false
-  let lastEventId: string | undefined
-  let wsFallbackUntil = 0
+  let backpressureUntil = 0
 
   // One entry per connected workspace directory. Cardinality is bounded by
   // the number of workspace roots open in the desktop (typically 1-3).
@@ -524,112 +511,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     d.timer = setTimeout(() => flushDir(directory), Math.max(0, flushFrameMs - elapsed))
   }
 
-  const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
-  const isAbortError = (error: unknown): boolean =>
-    (error instanceof DOMException && error.name === "AbortError") ||
-    (typeof error === "object" && error !== null && (error as { name?: string }).name === "AbortError")
-
-  const isOffline = (): boolean => typeof navigator === "object" && navigator !== null && navigator.onLine === false
-
-  const isHidden = (): boolean => typeof document !== "undefined" && document.visibilityState !== "visible"
-
-  // Extract an HTTP status code from anywhere it might be hiding on the
-  // error object. The SDK's unwrap pattern stashes it on `.status`; raw
-  // fetch failures may carry `.response.status`; some SDKs also use `.code`.
-  const extractStatus = (error: unknown): number | undefined => {
-    if (!error || typeof error !== "object") return undefined
-    const direct = (error as { status?: unknown }).status
-    if (typeof direct === "number") return direct
-    const fromResponse = (error as { response?: { status?: unknown } }).response?.status
-    if (typeof fromResponse === "number") return fromResponse
-    return undefined
-  }
-
-  // 4xx errors don't recover from blind retry — wrong path, expired auth,
-  // bad request body. Keep retrying anyway (a remote reconfigure or reauth
-  // can fix the underlying problem) but at the long cap so we're not
-  // hammering the server at 5s intervals indefinitely. 408 (timeout) and
-  // 429 (rate limit) are retryable in spirit — let them through to the
-  // normal exponential path.
-  const isPermanentHttpStatus = (status: number): boolean => {
-    if (status < 400 || status >= 500) return false
-    if (status === 408 || status === 429) return false
-    return true
-  }
-
-  /**
-   * Wait between reconnect attempts. Resolves early when:
-   *   - the browser fires `online` (network came back — probe immediately),
-   *   - the desktop shell fires `openchamber:system-resume` (wake from sleep),
-   *   - the UI fires `openchamber:sync-retry-now` (user asked to retry now),
-   *   - the tab becomes visible (user came back — probe immediately),
-   *   - the pipeline is being torn down (cleanup aborts).
-   * Otherwise resolves after `ms` like a plain timer.
-   */
-  const waitForRetry = (ms: number) =>
-    new Promise<void>((resolve) => {
-      if (ms <= 0 || abort.signal.aborted) {
-        resolve()
-        return
-      }
-
-      const cleanup = () => {
-        if (timer !== undefined) {
-          clearTimeout(timer)
-          timer = undefined
-        }
-        if (typeof globalThis.window !== "undefined") {
-          globalThis.window.removeEventListener("online", onInterrupt)
-          globalThis.window.removeEventListener("openchamber:system-resume", onInterrupt)
-          globalThis.window.removeEventListener(SYNC_RETRY_NOW_EVENT, onInterrupt)
-        }
-        if (typeof document !== "undefined") {
-          document.removeEventListener("visibilitychange", onVisibilityInterrupt)
-        }
-        abort.signal.removeEventListener("abort", onInterrupt)
-      }
-      const onInterrupt = () => {
-        cleanup()
-        resolve()
-      }
-      const onVisibilityInterrupt = () => {
-        if (typeof document !== "undefined" && document.visibilityState === "visible") {
-          onInterrupt()
-        }
-      }
-
-      let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(onInterrupt, ms)
-      if (typeof globalThis.window !== "undefined") {
-        globalThis.window.addEventListener("online", onInterrupt, { once: true })
-        globalThis.window.addEventListener("openchamber:system-resume", onInterrupt, { once: true })
-        globalThis.window.addEventListener(SYNC_RETRY_NOW_EVENT, onInterrupt, { once: true })
-      }
-      if (typeof document !== "undefined") {
-        document.addEventListener("visibilitychange", onVisibilityInterrupt)
-      }
-      abort.signal.addEventListener("abort", onInterrupt, { once: true })
-    })
-
-  const computeRetryDelay = (failures: number): number => {
-    if (failures <= 0) return 0
-    // Offline: don't spin probing a dead network. Use the long cap and rely on
-    // waitForRetry to resolve early when the `online` event fires. The cap is
-    // also a fallback for browsers that miss `online`.
-    if (isOffline()) return RETRY_BACKOFF_CAP_HIDDEN_OR_OFFLINE_MS
-    const cap = isHidden() ? RETRY_BACKOFF_CAP_HIDDEN_OR_OFFLINE_MS : RETRY_BACKOFF_CAP_VISIBLE_MS
-    const exponent = Math.min(failures - 1, RETRY_BACKOFF_MAX_EXPONENT)
-    return Math.min(cap, RETRY_BACKOFF_BASE_MS * 2 ** exponent)
-  }
-
   let streamErrorLogged = false
-  let attempt: AbortController | undefined
-  let lastEventAt = Date.now()
-  let heartbeat: ReturnType<typeof setTimeout> | undefined
-  let activeTransport: "ws" | "sse" = transport === "ws" ? "ws" : "sse"
-  let attemptAbortReason: AttemptAbortReason = null
-  let consecutiveFailures = 0
-  let backpressureUntil = 0
-
   const notifyDisconnected = (reason: string) => {
     if (disconnected) {
       return
@@ -640,7 +522,6 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
 
   const markConnected = () => {
     disconnected = false
-    consecutiveFailures = 0
     // Fire onReconnect on every successful connect — including the very
     // first one. Consumer state (isConnected) starts at false and needs
     // to be flipped positively; without this the send button throws
@@ -715,407 +596,161 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     scheduleDir(routedDirectory)
   }
 
-  const resetHeartbeat = () => {
-    lastEventAt = Date.now()
-    if (heartbeat) clearTimeout(heartbeat)
-    heartbeat = setTimeout(() => {
-      attemptAbortReason = `${activeTransport}_heartbeat_timeout`
-      attempt?.abort()
-    }, heartbeatTimeoutMs)
+  const wsDriver: WsDriver = {
+    kind: "ws",
+    url: (cursor) => buildGlobalEventWsUrl(cursor),
   }
 
-  const clearHeartbeat = () => {
-    if (!heartbeat) return
-    clearTimeout(heartbeat)
-    heartbeat = undefined
+  const sseDriver: SdkSseDriver = {
+    kind: "sse-sdk",
+    open: async (opts) => {
+      // The SDK's SSE client is lazy: the fetch happens inside the generator
+      // and, with sseMaxRetryAttempts: 0, an HTTP/network failure is reported
+      // through onSseError and the generator then ends CLEANLY. Capture that
+      // error; if the stream ends without delivering a single frame, rethrow
+      // it so the transport classifies the failure (permanent 4xx → long
+      // backoff cap + disconnect notification) instead of treating a dead
+      // stream as a clean completion and hot-looping on the base delay. A
+      // stream that delivered frames before ending stays a clean completion —
+      // a mid-stream server close is a normal reconnect case.
+      let sseFailure: unknown
+      let hasSseFailure = false
+      const result = await sdk.global.event({
+        signal: opts.signal,
+        sseMaxRetryAttempts: 0,
+        ...(opts.headers ? { headers: opts.headers } : {}),
+        onSseEvent: (event: { id?: unknown }) => {
+          opts.onSseEvent({ id: typeof event.id === "string" && event.id.length > 0 ? event.id : undefined })
+        },
+        onSseError: (error: unknown) => {
+          if (isAbortError(error)) return
+          if (!hasSseFailure) {
+            hasSseFailure = true
+            sseFailure = error
+          }
+          if (streamErrorLogged) return
+          streamErrorLogged = true
+          console.error("[event-pipeline] SSE stream error", error)
+        },
+      })
+      const upstream = result.stream
+      return {
+        stream: (async function* () {
+          let delivered = false
+          for await (const event of upstream) {
+            delivered = true
+            yield event
+          }
+          if (!delivered && hasSseFailure) {
+            throw sseFailure
+          }
+        })(),
+      }
+    },
   }
 
-  const runSseAttempt = async (signal: AbortSignal) => {
-    const events = await sdk.global.event({
-      signal,
-      sseMaxRetryAttempts: 0,
-      ...(lastEventId && lastEventId.length > 0 ? { headers: { "Last-Event-ID": lastEventId } } : {}),
-      onSseEvent: (event: { id?: unknown }) => {
-        resetHeartbeat()
-        if (typeof event.id === "string" && event.id.length > 0) {
-          lastEventId = event.id
-        }
-      },
-      onSseError: (error: unknown) => {
-        if (isAbortError(error)) return
-        if (streamErrorLogged) return
-        streamErrorLogged = true
-        console.error("[event-pipeline] SSE stream error", error)
-      },
-    })
-
-    let yielded = Date.now()
-    resetHeartbeat()
-
-    for await (const event of events.stream) {
-      resetHeartbeat()
-      streamErrorLogged = false
-
-      const payload = resolveEventPayload((event as { payload?: Event }).payload ?? event)
-      if (!payload) {
-        continue
-      }
-      const directory = resolveEventDirectory(event, payload)
-      enqueueEvent(directory, payload)
-
-      if (payload.type === "server.connected") {
-        // The SDK returns a lazy async generator before it performs fetch.
-        // This frame is the server's actual subscription acknowledgement.
-        // Flush any replayed events first, then let reconnect recovery fetch
-        // authoritative snapshots without racing ahead of the subscription.
-        flushAll()
-        markConnected()
-      }
-
-      if (Date.now() - yielded < STREAM_YIELD_MS) continue
-      yielded = Date.now()
-      await wait(0)
+  // Map the transport's error taxonomy back onto the reason strings the
+  // pipeline has always reported to onDisconnect consumers.
+  const reasonFromTransportError = (error: TransportError): string => {
+    switch (error.code) {
+      case "ws_closed":
+        return `ws_closed:code=${error.closeCode ?? "?"}`
+      case "ws_closed_before_ready":
+        return "ws_closed_before_ready"
+      case "ws_error_frame":
+        return `ws_error_frame:${error.message || "unknown"}`
+      case "ws_ready_timeout":
+        // Legacy display string in WS-only mode (no fallback): the untagged
+        // error message under the generic `<transport>_error:` prefix.
+        return `${error.transport}_error:${error.message.slice(0, 80)}`
+      case "heartbeat_timeout":
+      case "system_resume":
+      case "offline":
+        return `${error.transport}_${error.code}`
+      case "manual_retry":
+        return `${error.transport}_${error.message || "manual"}`
+      default:
+        return error.message.length > 0
+          ? `${error.transport}_error:${error.message.slice(0, 80)}`
+          : `${error.transport}_error:unknown`
     }
   }
 
-  const runWsAttempt = async (signal: AbortSignal) => {
-    await new Promise<void>((resolve, reject) => {
-      let settled = false
-      let opened = false
-      let readyAt = 0
-      const socket = new WebSocket(buildGlobalEventWsUrl(lastEventId))
-      const setFallbackCode = (error: Error, force = false) => {
-        if ((force || !opened) && transport === "auto") {
-          wsFallbackUntil = Date.now() + WS_FALLBACK_WINDOW_MS
-          ;(error as Error & { code?: string }).code = "WS_FALLBACK"
-        }
-      }
-
-      let readyTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
-        readyTimer = undefined
-        const error = new Error("Message stream WebSocket ready timeout")
-        setFallbackCode(error)
-        settleReject(error)
-        try {
-          socket.close()
-        } catch {
-          // ignore
-        }
-      }, wsReadyTimeoutMs)
-
-      const cleanup = () => {
-        if (readyTimer) {
-          clearTimeout(readyTimer)
-          readyTimer = undefined
-        }
-        socket.onopen = null
-        socket.onmessage = null
-        socket.onerror = null
-        socket.onclose = null
-      }
-
-      const settleResolve = () => {
-        if (settled) return
-        settled = true
-        signal.removeEventListener("abort", handleAbort)
-        cleanup()
-        resolve()
-      }
-
-      const settleReject = (error: unknown) => {
-        if (settled) return
-        settled = true
-        signal.removeEventListener("abort", handleAbort)
-        cleanup()
-        reject(error)
-      }
-
-      const handleAbort = () => {
-        try {
-          socket.close()
-        } catch {
-          // ignore close failures during abort
-        }
-        settleResolve()
-      }
-
-      signal.addEventListener("abort", handleAbort, { once: true })
-
-      socket.onopen = () => {
-        // Don't clear streamErrorLogged here. If the socket immediately closes
-        // before sending the ready frame, clearing would cause log spam.
-      }
-
-      socket.onmessage = (messageEvent) => {
-        resetHeartbeat()
+  const transportHandle = createEventTransport(
+    {
+      drivers: transport === "sse" ? { primary: sseDriver } : { primary: wsDriver, fallback: sseDriver },
+      transport,
+      heartbeatTimeoutMs,
+      backoff: {
+        baseMs: RETRY_BACKOFF_BASE_MS,
+        capVisibleMs: RETRY_BACKOFF_CAP_VISIBLE_MS,
+        capHiddenMs: RETRY_BACKOFF_CAP_HIDDEN_OR_OFFLINE_MS,
+        maxExponent: RETRY_BACKOFF_MAX_EXPONENT,
+      },
+      wsReadyTimeoutMs,
+    },
+    {
+      onFrame: (frame, meta) => {
         streamErrorLogged = false
-
-        let frame: MessageStreamWsFrame | null = null
-        try {
-          frame = JSON.parse(String(messageEvent.data)) as MessageStreamWsFrame
-        } catch (error) {
-          console.warn("[event-pipeline] Failed to parse WS frame", error)
-          return
-        }
-
-        if (!frame || typeof frame.type !== "string") {
-          return
-        }
-
-        if (frame.type === "ready") {
-          opened = true
-          readyAt = Date.now()
-          if (readyTimer) {
-            clearTimeout(readyTimer)
-            readyTimer = undefined
+        if (meta.transport === "ws") {
+          const wsFrame = frame as MessageStreamWsFrame
+          if (wsFrame.type === "backpressure") {
+            backpressureUntil = Date.now() + BACKPRESSURE_MODE_MS
+            return
           }
-          streamErrorLogged = false
-          flushAll()
-          markConnected()
-          return
-        }
-
-        if (frame.type === "error") {
-          const error = new Error(frame.message || "Message stream WebSocket error")
-          ;(error as Error & { reason?: string }).reason = `ws_error_frame:${frame.message || "unknown"}`
-          setFallbackCode(error)
-          settleReject(error)
-          try {
-            socket.close()
-          } catch {
-            // ignore
+          if (wsFrame.type !== "event") {
+            return
           }
+          const payload = resolveEventPayload(wsFrame.payload)
+          if (!payload) {
+            return
+          }
+          const directory = resolveEventDirectory({ directory: wsFrame.directory, payload }, payload)
+          enqueueEvent(directory, payload)
           return
         }
 
-        if (frame.type === "backpressure") {
-          backpressureUntil = Date.now() + BACKPRESSURE_MODE_MS
-          return
-        }
-
-        if (frame.type !== "event") {
-          return
-        }
-
-        const payload = resolveEventPayload(frame.payload)
+        const payload = resolveEventPayload((frame as { payload?: Event }).payload ?? frame)
         if (!payload) {
           return
         }
-
-        if (typeof frame.eventId === "string" && frame.eventId.length > 0) {
-          lastEventId = frame.eventId
-        }
-
-        const directory = resolveEventDirectory({ directory: frame.directory, payload }, payload)
+        const directory = resolveEventDirectory(frame, payload)
         enqueueEvent(directory, payload)
-      }
 
-      socket.onerror = () => {
-        void 0
-      }
-
-      socket.onclose = (event) => {
-        if (signal.aborted) {
-          settleResolve()
+        if (payload.type === "server.connected") {
+          // The SDK returns a lazy async generator before it performs fetch.
+          // This frame is the server's actual subscription acknowledgement.
+          // Flush any replayed events first, then let reconnect recovery
+          // fetch authoritative snapshots without racing ahead of the
+          // subscription.
+          flushAll()
+          markConnected()
+        }
+      },
+      onConnected: (info) => {
+        // WS: the ready frame is the subscription acknowledgement. (The SSE
+        // acknowledgement is the server.connected frame, handled in onFrame.)
+        if (info.transport !== "ws") {
           return
         }
-
-        const error = new Error("Global message stream WebSocket closed")
-        ;(error as Error & { reason?: string }).reason = opened
-          ? `ws_closed:code=${event?.code ?? "?"}`
-          : "ws_closed_before_ready"
-
-        // If the WS stream connects (ready) but then drops quickly, prefer SSE for a while.
-        // This avoids tight reconnect loops with repeated console spam.
-        const livedMs = readyAt > 0 ? Date.now() - readyAt : 0
-        const unstableAfterReady = opened && livedMs > 0 && livedMs < 2_000
-        setFallbackCode(error, unstableAfterReady)
-        settleReject(error)
-      }
-    })
-  }
-
-  const resolveTransport = (): "ws" | "sse" => {
-    if (typeof WebSocket !== "function") {
-      return "sse"
-    }
-    if (transport === "ws") {
-      return "ws"
-    }
-    if (transport === "sse") {
-      return "sse"
-    }
-    return wsFallbackUntil > Date.now() ? "sse" : "ws"
-  }
-
-  void (async () => {
-    while (!abort.signal.aborted) {
-      attempt = new AbortController()
-      lastEventAt = Date.now()
-      attemptAbortReason = null
-      let retryDelayMs = reconnectDelayMs
-      const currentTransport = resolveTransport()
-      activeTransport = currentTransport
-      const onAbort = () => {
-        attemptAbortReason = "pipeline_stopped"
-        attempt?.abort()
-      }
-      abort.signal.addEventListener("abort", onAbort)
-
-      try {
-        if (currentTransport === "ws") {
-          await runWsAttempt(attempt.signal)
-        } else {
-          await runSseAttempt(attempt.signal)
-        }
-      } catch (error) {
-        const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined
-        if (currentTransport === "ws" && code === "WS_FALLBACK") {
-          retryDelayMs = 0
-          // Transport switch (WS → SSE fallback), not a real disconnection.
-          // The consumer still gets a hook so it can resync authoritative
-          // state; real networks can lose/buffer events around transport flips.
-          onTransportSwitch?.()
-        } else if (!isAbortError(error)) {
-          consecutiveFailures += 1
-          if (!streamErrorLogged) {
-            streamErrorLogged = true
-            console.error("[event-pipeline] stream failed")
-          }
-          // Notify consumer that the stream has disconnected, so it can
-          // update connection state (e.g. set isConnected = false).
-          // Guard: only fire once per disconnection cycle to avoid repeated
-          // setState calls on every failed retry attempt.
-          const taggedReason =
-            typeof error === "object" && error !== null ? (error as { reason?: unknown }).reason : undefined
-          const message =
-            typeof error === "object" && error !== null ? (error as { message?: unknown }).message : undefined
-          const reason =
-            typeof taggedReason === "string" && taggedReason.length > 0
-              ? taggedReason
-              : typeof message === "string" && message.length > 0
-                ? `${currentTransport}_error:${message.slice(0, 80)}`
-                : `${currentTransport}_error:unknown`
-          notifyDisconnected(reason)
-
-          // Exponential backoff so a hard-down server / dead network doesn't
-          // spin the event loop. Caps lower (5s) when the user is foreground
-          // and the browser thinks it's online; caps higher (60s) when hidden
-          // or offline so a backgrounded browser tab on a flaky link doesn't
-          // burn battery. waitForRetry below resolves early on `online` or
-          // visibility-visible so recovery is still under a second.
-          //
-          // Override for permanent 4xx errors: stuck-path / bad-auth scenarios
-          // won't recover from blind retry. Use the long cap immediately so
-          // the client doesn't pound the server log at 12 reqs/min. The
-          // waitForRetry interrupters still apply, so a fix on the other end
-          // followed by `online`/visibility recovery probes promptly.
-          const status = extractStatus(error)
-          if (status !== undefined && isPermanentHttpStatus(status)) {
-            retryDelayMs = RETRY_BACKOFF_CAP_HIDDEN_OR_OFFLINE_MS
-          } else {
-            retryDelayMs = computeRetryDelay(consecutiveFailures)
-          }
-        }
-      } finally {
-        abort.signal.removeEventListener("abort", onAbort)
-        attempt = undefined
-        clearHeartbeat()
-      }
-
-      if (abort.signal.aborted) return
-      if (attemptAbortReason && attemptAbortReason !== "pipeline_stopped") {
-        const offlineAbort = attemptAbortReason === "ws_offline" || attemptAbortReason === "sse_offline"
-        const abortReason = attemptAbortReason
-        notifyDisconnected(abortReason)
-        retryDelayMs = offlineAbort ? computeRetryDelay(Math.max(1, consecutiveFailures)) : 0
-        attemptAbortReason = null
-      }
-      if (retryDelayMs > 0) {
-        await waitForRetry(retryDelayMs)
-      }
-    }
-  })().finally(flushAll)
-
-  const onVisibility = () => {
-    if (typeof document === "undefined") return
-    if (document.visibilityState !== "visible") return
-    if (Date.now() - lastEventAt < heartbeatTimeoutMs) return
-    attempt?.abort()
-  }
-
-  const onPageShow = (event: PageTransitionEvent) => {
-    if (!event.persisted) return
-    attempt?.abort()
-  }
-
-  // OS wake-from-sleep (Electron powerMonitor.resume). The SSE connection
-  // is almost certainly dead after sleep — abort immediately so the
-  // reconnect loop fires on the next tick with retryDelayMs = 0.
-  const onSystemResume = () => {
-    attemptAbortReason = `${activeTransport}_system_resume`
-    attempt?.abort()
-  }
-
-  // UI-triggered "retry now" (e.g. the reconnect banner). Same effect as
-  // system-resume: abort any in-flight attempt so the loop reconnects
-  // immediately; waitForRetry also listens for the event, so an
-  // inter-attempt backoff sleep ends now too.
-  const onRetryNow = () => {
-    attemptAbortReason = `${activeTransport}_manual_retry`
-    attempt?.abort()
-  }
-
-  // Browser told us the network is back. If we're already in a disconnected
-  // cycle, abort the (stale) attempt and let the loop probe immediately;
-  // waitForRetry also resolves early on `online`, so any inter-attempt sleep
-  // ends now. Guard on `disconnected` so a spurious `online` from the browser
-  // doesn't disrupt a healthy connection.
-  const onOnline = () => {
-    if (!disconnected) return
-    attempt?.abort()
-  }
-
-  // Browser told us we're offline. Abort the current attempt — its socket /
-  // fetch will throw soon anyway, this just stops sooner. computeRetryDelay
-  // then returns the long cap so we wait for `online` instead of hammering
-  // a dead network.
-  const onOffline = () => {
-    attemptAbortReason = `${activeTransport}_offline`
-    attempt?.abort()
-  }
+        flushAll()
+        markConnected()
+      },
+      onDisconnected: (error) => {
+        notifyDisconnected(reasonFromTransportError(error))
+      },
+      onTransportSwitch: () => {
+        onTransportSwitch?.()
+      },
+    },
+  )
 
   const reconnect = (reason = "manual") => {
-    attemptAbortReason = `${activeTransport}_${reason}`
-    attempt?.abort()
-  }
-
-  if (typeof document !== "undefined") {
-    document.addEventListener("visibilitychange", onVisibility)
-    window.addEventListener("pageshow", onPageShow)
-  }
-
-  // Use globalThis (not window) for the system-resume listener so that
-  // test environments can replace globalThis.window with a stub.
-  if (typeof globalThis.window !== "undefined") {
-    globalThis.window.addEventListener("openchamber:system-resume", onSystemResume)
-    globalThis.window.addEventListener(SYNC_RETRY_NOW_EVENT, onRetryNow)
-    globalThis.window.addEventListener("online", onOnline)
-    globalThis.window.addEventListener("offline", onOffline)
+    transportHandle.reconnect(reason)
   }
 
   const cleanup = () => {
-    if (typeof document !== "undefined") {
-      document.removeEventListener("visibilitychange", onVisibility)
-      window.removeEventListener("pageshow", onPageShow)
-    }
-    if (typeof globalThis.window !== "undefined") {
-      globalThis.window.removeEventListener("openchamber:system-resume", onSystemResume)
-      globalThis.window.removeEventListener(SYNC_RETRY_NOW_EVENT, onRetryNow)
-      globalThis.window.removeEventListener("online", onOnline)
-      globalThis.window.removeEventListener("offline", onOffline)
-    }
-    abort.abort()
+    transportHandle.close()
     flushAll()
   }
 
