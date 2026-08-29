@@ -32,6 +32,7 @@ const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
 const { createServerRestartPolicy, shouldRecoverAfterServerExit } = require("./server-restart-policy")
 const { buildComputerUseServerEnv } = require("./computer-use-server-env")
+const { applyBundledAxCodeEnv, buildBundledAxCodeEnv } = require("./bundled-ax-code-env")
 const { createRendererCrashPolicy } = require("./renderer-crash-policy")
 const { loadUrlWithTimeout } = require("./load-url-timeout")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
@@ -248,23 +249,34 @@ function launchServer() {
     recordStartupEvent("server.utilityProcess.launch", {}, { once: false })
     serverChild = utilityProcess.fork(serverEntry, [], {
       serviceName: "ax-code-server",
-      env: {
-        ...process.env,
-        // The server reads these at module-init time; previously set on the
-        // main process before require, now passed into the forked process.
-        AX_CODE_DESKTOP_DIST_DIR: getWebDistPath(),
-        AX_CODE_DESKTOP_RUNTIME: "desktop",
-        AX_CODE_DESKTOP_SHUTDOWN_TIMEOUT_MS: "4000",
-        AX_CODE_DESKTOP_STARTUP_SNAPSHOT: JSON.stringify(startupDiagnostics.snapshot()),
-        // Bundled computer-use server (packaged macOS builds with a staged
-        // artifact only); no-op in dev/OSS builds.
-        ...buildComputerUseServerEnv({
+      env: applyBundledAxCodeEnv(
+        {
+          ...process.env,
+          // The server reads these at module-init time; previously set on the
+          // main process before require, now passed into the forked process.
+          AX_CODE_DESKTOP_DIST_DIR: getWebDistPath(),
+          AX_CODE_DESKTOP_RUNTIME: "desktop",
+          AX_CODE_DESKTOP_SHUTDOWN_TIMEOUT_MS: "4000",
+          AX_CODE_DESKTOP_STARTUP_SNAPSHOT: JSON.stringify(startupDiagnostics.snapshot()),
+          // Bundled computer-use server (packaged macOS builds with a staged
+          // artifact only); no-op in dev/OSS builds.
+          ...buildComputerUseServerEnv({
+            platform: process.platform,
+            isPackaged: app.isPackaged,
+            resourcesPath: process.resourcesPath,
+            execPath: process.execPath,
+          }),
+        },
+        // Bundled ax-code runtime (packaged builds with a staged CLI tree
+        // only). Also strips any inherited AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY
+        // when this build has no staged runtime, so a user export cannot leak
+        // through ...process.env and masquerade as a bundled runtime.
+        buildBundledAxCodeEnv({
           platform: process.platform,
           isPackaged: app.isPackaged,
           resourcesPath: process.resourcesPath,
-          execPath: process.execPath,
         }),
-      },
+      ),
     })
 
     let settled = false

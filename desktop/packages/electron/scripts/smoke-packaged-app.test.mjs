@@ -2,8 +2,10 @@ import { describe, expect, test } from "vitest"
 import {
   buildSmokeAppArgs,
   buildSmokeBundleIdentifier,
+  bundledAxCodeLauncherPath,
   findMissingStartupEvents,
   parseArgs,
+  resolveBundledPhaseAction,
 } from "./smoke-packaged-app.mjs"
 
 describe("smoke-packaged-app args", () => {
@@ -29,6 +31,31 @@ describe("smoke-packaged-app args", () => {
 
   test("requires a temporary Electron profile", () => {
     expect(() => buildSmokeAppArgs({ userDataDir: "" })).toThrow("temporary Electron user-data directory")
+  })
+
+  test("locates the bundled runtime launcher inside a packaged app", () => {
+    expect(bundledAxCodeLauncherPath("/tmp/AX Code.app")).toBe(
+      "/tmp/AX Code.app/Contents/Resources/ax-code/bin/ax-code",
+    )
+  })
+
+  test("bundled phase runs when the launcher is executable", () => {
+    expect(resolveBundledPhaseAction({ launcherExecutable: true, env: {} })).toBe("run")
+    expect(resolveBundledPhaseAction({ launcherExecutable: true, env: { AX_CODE_STAGE_REQUIRED: "true" } })).toBe("run")
+  })
+
+  test("bundled phase skips on a placeholder tree outside release builds", () => {
+    expect(resolveBundledPhaseAction({ launcherExecutable: false, env: {} })).toBe("skip")
+    expect(resolveBundledPhaseAction({ launcherExecutable: false, env: { AX_CODE_STAGE_REQUIRED: "false" } })).toBe(
+      "skip",
+    )
+  })
+
+  test("bundled phase fails on a missing/broken launcher in release builds", () => {
+    expect(resolveBundledPhaseAction({ launcherExecutable: false, env: { AX_CODE_STAGE_REQUIRED: "true" } })).toBe(
+      "fail",
+    )
+    expect(resolveBundledPhaseAction({ launcherExecutable: false, env: { AX_CODE_STAGE_REQUIRED: "1" } })).toBe("fail")
   })
 
   test("uses environment defaults", () => {

@@ -32,14 +32,18 @@ contracts change:
 
 5. **Review the minimum supported runtime version.**
    `MIN_SUPPORTED_AX_CODE_VERSION` in
-   `packages/web/server/lib/ax-code/version-compat.js` gates the installed
-   ax-code CLI. Raise the minimum and note why in the constant's comment
-   whenever the app starts depending on a server route or response shape that a
-   newer ax-code introduced — this includes UI calls proxied straight to the
-   runtime (e.g. `/api/provider/ax-engine/*` for the Models tab), not just SDK
-   reads. Set it to the first ax-code release that ships the route. Skipping
-   this turns a missing route into a bare "Provider request failed (404)"
-   instead of the incompatible-runtime warning.
+   `packages/web/server/lib/ax-code/version-compat.js` gates **override-mode**
+   runtimes only — the ax-code CLI resolved from `settings.axCodeBinary`, the
+   `AX_CODE_*` env vars, or PATH, which can be arbitrarily old. The bundled
+   runtime shipped inside packaged builds is pinned to the app version and
+   compatible by construction, so it is not gated by this constant. Raise the
+   minimum and note why in the constant's comment whenever the app starts
+   depending on a server route or response shape that a newer ax-code
+   introduced — this includes UI calls proxied straight to the runtime (e.g.
+   `/api/provider/ax-engine/*` for the Models tab), not just SDK reads. Set it
+   to the first ax-code release that ships the route. Skipping this turns a
+   missing route into a bare "Provider request failed (404)" instead of the
+   incompatible-runtime warning.
 
 6. **Run the full gate from the monorepo root.** `pnpm run
 check:desktop-boundaries && pnpm run desktop:test && pnpm run

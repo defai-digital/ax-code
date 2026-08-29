@@ -459,6 +459,18 @@ export const createAxCodeEnvRuntime = (deps) => {
       }
     }
 
+    // Bundled runtime staged inside the packaged app (injected by Electron
+    // main as AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY). Lower precedence than
+    // settings/explicit env overrides, higher than PATH. Dev builds and
+    // placeholder-staged builds never set the variable, so this is a no-op
+    // outside packaged releases.
+    const bundled = asTrimmedString(process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY)
+    if (bundled && isExecutable(bundled)) {
+      clearWslAxCodeResolution()
+      state.resolvedAxCodeBinarySource = "bundled"
+      return bundled
+    }
+
     const resolvedFromPath = searchPathFor("ax-code")
     if (resolvedFromPath) {
       clearWslAxCodeResolution()

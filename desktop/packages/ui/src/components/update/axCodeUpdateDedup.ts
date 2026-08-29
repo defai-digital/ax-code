@@ -55,6 +55,12 @@ export interface AxCodeUpgradeStatusLike {
   readonly currentVersion?: string | null
   readonly minSupportedVersion?: string | null
   readonly compatible?: boolean | null
+  /**
+   * How the server resolved the ax-code runtime (`settings` / `env` /
+   * `bundled` / `path` / ...). `bundled` runtimes are pinned to the app and
+   * managed by app updates, so the self-upgrade action is hidden for them.
+   */
+  readonly binarySource?: string | null
 }
 
 /**

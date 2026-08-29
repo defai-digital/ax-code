@@ -17,6 +17,7 @@ const createApp = (overrides = {}, { parseJson = true } = {}) => {
     crypto: globalThis.crypto,
     clientReloadDelayMs: 25,
     getAxCodeResolutionSnapshot: vi.fn(() => ({})),
+    getAxCodeBinarySource: vi.fn(() => null),
     formatSettingsResponse: vi.fn((settings) => settings),
     readSettingsFromDisk: vi.fn(async () => ({})),
     readSettingsFromDiskMigrated: vi.fn(async () => ({})),
@@ -178,6 +179,67 @@ describe("ax-code routes", () => {
 
       expect(response.body.currentVersion).toBeNull()
       expect(response.body.compatible).toBeNull()
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("reports the resolved binary source in upgrade status", async () => {
+    const { app } = createApp({
+      getAxCodeBinarySource: vi.fn(() => "bundled"),
+    })
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ healthy: true, version: "7.9.12" }),
+    }))
+
+    try {
+      const response = await request(app).get("/api/ax-code/upgrade-status").expect(200)
+
+      expect(response.body.binarySource).toBe("bundled")
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("refuses to upgrade a bundled runtime with 409", async () => {
+    const { app } = createApp({
+      getAxCodeBinarySource: vi.fn(() => "bundled"),
+    })
+    const originalFetch = globalThis.fetch
+    const mockFetch = vi.fn()
+    globalThis.fetch = mockFetch
+
+    try {
+      const response = await request(app).post("/api/ax-code/upgrade").send({}).expect(409)
+
+      expect(response.body).toMatchObject({
+        success: false,
+        managedByAppUpdate: true,
+      })
+      // The upstream runtime must not receive an upgrade request.
+      expect(mockFetch).not.toHaveBeenCalled()
+    } finally {
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it("allows upgrades for non-bundled runtimes", async () => {
+    const { app, dependencies } = createApp({
+      getAxCodeBinarySource: vi.fn(() => "path"),
+    })
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ success: true }),
+    }))
+
+    try {
+      const response = await request(app).post("/api/ax-code/upgrade").send({}).expect(200)
+
+      expect(response.body).toMatchObject({ success: true, restarted: true })
+      expect(dependencies.refreshAxCodeAfterConfigChange).toHaveBeenCalledWith("ax-code upgrade")
     } finally {
       globalThis.fetch = originalFetch
     }

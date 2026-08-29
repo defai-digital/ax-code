@@ -33,6 +33,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
     crypto,
     clientReloadDelayMs,
     getAxCodeResolutionSnapshot,
+    getAxCodeBinarySource,
     formatSettingsResponse,
     readSettingsFromDisk,
     readSettingsFromDiskMigrated,
@@ -73,6 +74,9 @@ export const registerAxCodeRoutes = (app, dependencies) => {
     // Version update checks are disabled.
     return null
   }
+
+  const resolvedBinarySource = () =>
+    typeof getAxCodeBinarySource === "function" ? getAxCodeBinarySource() || null : null
 
   const pruneExpiredPendingMcpAuthContexts = () => {
     const now = Date.now()
@@ -292,6 +296,15 @@ export const registerAxCodeRoutes = (app, dependencies) => {
 
   app.post("/api/ax-code/upgrade", async (req, res) => {
     try {
+      // The bundled runtime ships inside the installer and is pinned to the
+      // app version; only an app update may replace it.
+      if (typeof getAxCodeBinarySource === "function" && getAxCodeBinarySource() === "bundled") {
+        return res.status(409).json({
+          success: false,
+          managedByAppUpdate: true,
+          error: "The bundled ax-code runtime is managed by the app update and cannot be upgraded separately",
+        })
+      }
       const target = normalizePendingString(req.body?.target) || undefined
       const response = await fetch(buildAxCodeUrl("/global/upgrade", ""), {
         method: "POST",
@@ -358,6 +371,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
           latestVersion: latestVersion || null,
           minSupportedVersion: MIN_SUPPORTED_AX_CODE_VERSION,
           compatible: compatibility.compatible,
+          binarySource: resolvedBinarySource(),
         })
       }
       const available = compareVersions(latestVersion, currentVersion) > 0
@@ -367,6 +381,7 @@ export const registerAxCodeRoutes = (app, dependencies) => {
         latestVersion,
         minSupportedVersion: MIN_SUPPORTED_AX_CODE_VERSION,
         compatible: compatibility.compatible,
+        binarySource: resolvedBinarySource(),
       })
     } catch (error) {
       return res.status(500).json({

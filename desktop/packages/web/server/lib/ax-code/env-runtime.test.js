@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { createAxCodeEnvRuntime } from "./env-runtime.js"
 
 const originalAxCodeBinary = process.env.AX_CODE_BINARY
+const originalBundledAxCodeBinary = process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY
 const originalComSpec = process.env.ComSpec
 const originalPath = process.env.PATH
 const originalSystemRoot = process.env.SystemRoot
@@ -40,6 +41,12 @@ afterEach(() => {
     process.env.AX_CODE_BINARY = originalAxCodeBinary
   } else {
     delete process.env.AX_CODE_BINARY
+  }
+
+  if (typeof originalBundledAxCodeBinary === "string") {
+    process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY = originalBundledAxCodeBinary
+  } else {
+    delete process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY
   }
 
   if (typeof originalComSpec === "string") {
@@ -278,5 +285,78 @@ describe("AX Code env runtime", () => {
       args: [],
       wrapperType: "native-wrapper",
     })
+  })
+})
+
+// Bundled runtime resolution: chmod-based executability only works on POSIX,
+// so the matrix skips Windows hosts (the probe itself is platform-agnostic).
+const describePosix = process.platform === "win32" ? describe.skip : describe
+
+describePosix("bundled ax-code runtime resolution", () => {
+  const createExecutable = (prefix, name = "ax-code") => {
+    const dir = createTempDir(prefix)
+    const bin = path.join(dir, name)
+    fs.writeFileSync(bin, "#!/bin/sh\nexit 0\n")
+    fs.chmodSync(bin, 0o755)
+    return { dir, bin }
+  }
+
+  it("resolves the bundled runtime with source 'bundled' ahead of PATH", () => {
+    const bundled = createExecutable("ax-bundled-bin-")
+    const onPath = createExecutable("ax-bundled-path-")
+    delete process.env.AX_CODE_BINARY
+    process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY = bundled.bin
+    process.env.PATH = onPath.dir
+    const { runtime, state } = createRuntime({})
+
+    expect(runtime.resolveAxCodeCliPath()).toBe(bundled.bin)
+    expect(state.resolvedAxCodeBinarySource).toBe("bundled")
+  })
+
+  it("keeps explicit env vars ahead of the bundled runtime", () => {
+    const explicit = createExecutable("ax-bundled-env-")
+    const bundled = createExecutable("ax-bundled-bundled-")
+    process.env.AX_CODE_BINARY = explicit.bin
+    process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY = bundled.bin
+    const { runtime, state } = createRuntime({})
+
+    expect(runtime.resolveAxCodeCliPath()).toBe(explicit.bin)
+    expect(state.resolvedAxCodeBinarySource).toBe("env")
+  })
+
+  it("keeps settings.axCodeBinary ahead of the bundled runtime", async () => {
+    const fromSettings = createExecutable("ax-bundled-settings-")
+    const bundled = createExecutable("ax-bundled-bundled-")
+    delete process.env.AX_CODE_BINARY
+    process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY = bundled.bin
+    const { runtime, state } = createRuntime({ axCodeBinary: fromSettings.bin })
+
+    await expect(runtime.applyAxCodeBinaryFromSettings({ strict: true })).resolves.toBe(fromSettings.bin)
+    expect(state.resolvedAxCodeBinarySource).toBe("settings")
+  })
+
+  it("skips a non-executable bundled launcher and falls back to PATH", () => {
+    const dir = createTempDir("ax-bundled-not-exec-")
+    const notExecutable = path.join(dir, "ax-code")
+    fs.writeFileSync(notExecutable, "not a binary\n", { mode: 0o644 })
+    const onPath = createExecutable("ax-bundled-path-")
+    delete process.env.AX_CODE_BINARY
+    process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY = notExecutable
+    process.env.PATH = onPath.dir
+    const { runtime, state } = createRuntime({})
+
+    expect(runtime.resolveAxCodeCliPath()).toBe(onPath.bin)
+    expect(state.resolvedAxCodeBinarySource).toBe("path")
+  })
+
+  it("falls back to PATH when the bundled env var is absent", () => {
+    const onPath = createExecutable("ax-bundled-path-")
+    delete process.env.AX_CODE_BINARY
+    delete process.env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY
+    process.env.PATH = onPath.dir
+    const { runtime, state } = createRuntime({})
+
+    expect(runtime.resolveAxCodeCliPath()).toBe(onPath.bin)
+    expect(state.resolvedAxCodeBinarySource).toBe("path")
   })
 })

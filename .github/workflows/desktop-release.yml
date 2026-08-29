@@ -55,6 +55,12 @@ jobs:
       - name: Check Desktop package test scripts
         run: pnpm run check:desktop-package-tests
 
+      # The installer bundles the CLI runtime pinned to the app version; the
+      # staging step downloads the sibling v<version> CLI release and fails
+      # closed, so all four manifests must agree before packaging starts.
+      - name: Check CLI/Desktop version lockstep
+        run: pnpm run check:desktop-version-lockstep
+
       - name: Validate Desktop docs
         run: node desktop/scripts/docs/validate-docs.mjs
 
@@ -266,11 +272,17 @@ jobs:
             echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
           } >> "$GITHUB_ENV"
 
+      - name: Install minisign
+        run: brew install minisign
+
       - name: Build macOS Electron app
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           ELECTRON_BUILDER_ARCH: arm64
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.HAS_APPLE_CERT }}
+          # Fail closed when the pinned CLI runtime cannot be staged — never
+          # ship a runtime-less installer.
+          AX_CODE_STAGE_REQUIRED: "true"
         run: |
           set -euo pipefail
           pnpm --filter @ax-code/electron run build
@@ -315,6 +327,10 @@ jobs:
             --metadata desktop/packages/electron/dist/latest-mac.yml
 
       - name: Packaged app smoke
+        env:
+          # Release CI staged a real CLI tree; the bundled-runtime phase must
+          # fail (not skip) when the sidecar is missing or broken.
+          AX_CODE_STAGE_REQUIRED: "true"
         run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs --artifacts "$RUNNER_TEMP/desktop-smoke"
 
       - name: Upload macOS smoke logs
@@ -380,6 +396,18 @@ jobs:
           if (-not (Test-Path $tool)) { throw "AzureSignTool not found at $tool" }
           "AZURE_SIGNTOOL_PATH=$tool" | Out-File $env:GITHUB_ENV -Append
 
+      - name: Install minisign
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $zip = Join-Path $env:RUNNER_TEMP "minisign.zip"
+          Invoke-WebRequest -Uri "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip" -OutFile $zip
+          $dir = Join-Path $env:RUNNER_TEMP "minisign-bin"
+          Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force
+          $exe = Get-ChildItem -Recurse -Filter minisign.exe $dir | Select-Object -First 1
+          if (-not $exe) { throw "minisign.exe not found in $dir" }
+          $exe.Directory.FullName | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Build Windows Electron app
         shell: bash
         env:
@@ -390,6 +418,9 @@ jobs:
           AZURE_KEY_VAULT_CERTIFICATE: cert-defai
           WINDOWS_CERTIFICATE_SHA1: FC40F1109912C025E751E804AA9BD1538A2D12EF
           WINDOWS_SIGNING_REQUIRED: "true"
+          # Fail closed when the pinned CLI runtime cannot be staged — never
+          # ship a runtime-less installer.
+          AX_CODE_STAGE_REQUIRED: "true"
         run: |
           set -euo pipefail
           pnpm --filter @ax-code/electron run build
@@ -458,6 +489,18 @@ jobs:
           if (-not (Test-Path $tool)) { throw "AzureSignTool not found at $tool" }
           "AZURE_SIGNTOOL_PATH=$tool" | Out-File $env:GITHUB_ENV -Append
 
+      - name: Install minisign
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $zip = Join-Path $env:RUNNER_TEMP "minisign.zip"
+          Invoke-WebRequest -Uri "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip" -OutFile $zip
+          $dir = Join-Path $env:RUNNER_TEMP "minisign-bin"
+          Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force
+          $exe = Get-ChildItem -Recurse -Filter minisign.exe $dir | Select-Object -First 1
+          if (-not $exe) { throw "minisign.exe not found in $dir" }
+          $exe.Directory.FullName | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+
       - name: Build Windows Electron app
         shell: bash
         env:
@@ -468,6 +511,9 @@ jobs:
           AZURE_KEY_VAULT_CERTIFICATE: cert-defai
           WINDOWS_CERTIFICATE_SHA1: FC40F1109912C025E751E804AA9BD1538A2D12EF
           WINDOWS_SIGNING_REQUIRED: "true"
+          # Fail closed when the pinned CLI runtime cannot be staged — never
+          # ship a runtime-less installer.
+          AX_CODE_STAGE_REQUIRED: "true"
         run: |
           set -euo pipefail
           pnpm --filter @ax-code/electron run build
@@ -554,7 +600,8 @@ jobs:
             build-essential python3 \
             libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
             xdg-utils libatspi2.0-0 libuuid1 \
-            rpm
+            rpm \
+            minisign
 
       - name: Build SDK
         run: pnpm --dir packages/sdk/js run build
@@ -562,6 +609,9 @@ jobs:
       - name: Build Linux Electron app (x64)
         env:
           ELECTRON_BUILDER_ARCH: x64
+          # Fail closed when the pinned CLI runtime cannot be staged — never
+          # ship a runtime-less installer.
+          AX_CODE_STAGE_REQUIRED: "true"
         run: |
           set -euo pipefail
           pnpm --filter @ax-code/electron run build
@@ -608,7 +658,8 @@ jobs:
             build-essential python3 \
             libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 \
             xdg-utils libatspi2.0-0 libuuid1 \
-            rpm
+            rpm \
+            minisign
 
       - name: Build SDK
         run: pnpm --dir packages/sdk/js run build
@@ -616,6 +667,9 @@ jobs:
       - name: Build Linux Electron app (arm64)
         env:
           ELECTRON_BUILDER_ARCH: arm64
+          # Fail closed when the pinned CLI runtime cannot be staged — never
+          # ship a runtime-less installer.
+          AX_CODE_STAGE_REQUIRED: "true"
         run: |
           set -euo pipefail
           pnpm --filter @ax-code/electron run build

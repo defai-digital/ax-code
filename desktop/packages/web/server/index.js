@@ -1304,6 +1304,7 @@ async function main(options = {}) {
     readCustomThemesFromDisk,
     refreshAxCodeAfterConfigChange,
     getAxCodeResolutionSnapshot,
+    getAxCodeBinarySource: () => resolvedAxCodeBinarySource || null,
     formatSettingsResponse,
     readSettingsFromDisk,
     readSettingsFromDiskMigrated,

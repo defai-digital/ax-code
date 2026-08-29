@@ -28,6 +28,7 @@
     "check:desktop-endpoint-contracts": "node desktop/scripts/check-endpoint-contracts.mjs",
     "check:desktop-ipc-contracts": "node desktop/scripts/check-desktop-ipc-contracts.mjs",
     "check:desktop-package-tests": "node desktop/scripts/check-package-test-scripts.mjs",
+    "check:desktop-version-lockstep": "tsx script/check-desktop-version-lockstep.ts",
     "desktop:dev": "turbo run dev --filter=@ax-code/electron",
     "desktop:build": "turbo run build --filter=@ax-code/electron",
     "desktop:typecheck": "pnpm --dir packages/sdk/js run build && pnpm --filter \"./desktop/packages/*\" --if-present run type-check",

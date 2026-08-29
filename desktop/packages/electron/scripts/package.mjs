@@ -39,6 +39,19 @@ const stage = spawnSync("bash", [path.join(__dirname, "stage-ax-computer.sh")], 
 if (stage.error) throw stage.error
 if (stage.status !== 0) process.exit(stage.status ?? 1)
 
+// Stage the pinned ax-code CLI runtime into resources/ax-code so
+// electron-builder's extraResources entry resolves. The electron-builder CLI
+// args are forwarded so the staging script derives the same platform/arch
+// target. Release builds (AX_CODE_STAGE_REQUIRED=true) fail closed when the
+// pinned CLI release archive or its minisign signature is missing/invalid;
+// dev/OSS builds stage a README.txt placeholder instead.
+const stageAxCode = spawnSync("bash", [path.join(__dirname, "stage-ax-code.sh"), ...args], {
+  stdio: "inherit",
+  cwd: electronDir,
+})
+if (stageAxCode.error) throw stageAxCode.error
+if (stageAxCode.status !== 0) process.exit(stageAxCode.status ?? 1)
+
 // Resolve electron-builder via npx (it's hoisted to the workspace root, not
 // packages/electron/node_modules/.bin), matching how the macOS job invokes it.
 // shell:true so `npx` resolves on the Windows runner.

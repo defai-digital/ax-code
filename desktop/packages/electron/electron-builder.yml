@@ -37,6 +37,11 @@ extraResources:
   # scripts/stage-ax-computer.sh (placeholder README.txt in OSS/dev builds).
   - from: resources/ax-computer
     to: ax-computer
+  # Pinned ax-code CLI runtime, staged by scripts/stage-ax-code.sh
+  # (placeholder README.txt in OSS/dev builds). extraResources never enter
+  # the asar, so no asarUnpack entry is needed for the runtime tree.
+  - from: resources/ax-code
+    to: ax-code
 
 # Unpack native .node files — they cannot be required() from inside an asar.
 asarUnpack:

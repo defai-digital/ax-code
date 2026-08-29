@@ -61,6 +61,20 @@ export const findMissingStartupEvents = (requiredEvents, events) => {
   return requiredEvents.filter((required) => !names.has(required))
 }
 
+/** Launcher of the bundled CLI runtime inside a packaged macOS app. */
+export const bundledAxCodeLauncherPath = (appPath) =>
+  path.join(appPath, "Contents", "Resources", "ax-code", "bin", "ax-code")
+
+// What the bundled phase should do when the sidecar launcher is missing or
+// not executable. Release CI (AX_CODE_STAGE_REQUIRED=true) must FAIL — a
+// graceful skip there would mask a broken runtime-less installer; dev and
+// placeholder-staged builds skip.
+export const resolveBundledPhaseAction = ({ launcherExecutable, env = process.env }) => {
+  if (launcherExecutable) return "run"
+  const value = typeof env.AX_CODE_STAGE_REQUIRED === "string" ? env.AX_CODE_STAGE_REQUIRED.trim().toLowerCase() : ""
+  return value === "true" || value === "1" || value === "yes" ? "fail" : "skip"
+}
+
 const pathExists = async (candidate) => {
   try {
     await fs.access(candidate, fsConstants.F_OK)
@@ -286,6 +300,98 @@ const terminateChild = async (child) => {
   await waitForChildExit(child, 3_000)
 }
 
+const isExecutableFile = async (candidate) => {
+  try {
+    const stat = await fs.stat(candidate)
+    if (!stat.isFile()) return false
+    await fs.access(candidate, fsConstants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// The bundled runtime is pinned to the Desktop app version (lockstep check in
+// script/check-desktop-version-lockstep.ts). AX_CODE_DESKTOP_SMOKE_EXPECTED_AX_CODE_VERSION
+// overrides the expectation when smoke runs against a mismatched tree on purpose.
+const readExpectedBundledAxCodeVersion = async () => {
+  const override = process.env.AX_CODE_DESKTOP_SMOKE_EXPECTED_AX_CODE_VERSION
+  if (typeof override === "string" && override.trim()) return override.trim().replace(/^v/, "")
+  const manifest = JSON.parse(await fs.readFile(path.join(desktopRoot, "packages/electron/package.json"), "utf8"))
+  return String(manifest?.version || "")
+    .trim()
+    .replace(/^v/, "")
+}
+
+// Bundled-runtime phase: launch the packaged app WITHOUT the AX_CODE_BINARY
+// stub override and assert the server resolves the staged sidecar. Only runs
+// when release CI staged a real CLI tree; dev/placeholder builds skip.
+const runBundledAxCodePhase = async ({ args, smokeAppPath, executable, tmpDir }) => {
+  const launcher = bundledAxCodeLauncherPath(smokeAppPath)
+  const action = resolveBundledPhaseAction({ launcherExecutable: await isExecutableFile(launcher) })
+  if (action === "skip") {
+    console.log("Bundled ax-code runtime not staged (placeholder only); skipping bundled runtime smoke")
+    return
+  }
+  if (action === "fail") {
+    throw new Error(
+      `AX_CODE_STAGE_REQUIRED=true but the packaged app has no executable bundled launcher at ${launcher}`,
+    )
+  }
+
+  const expectedVersion = await readExpectedBundledAxCodeVersion()
+  const userDataDir = path.join(tmpDir, "electron-user-data-bundled")
+  const serverPort = await allocatePort()
+  const env = {
+    ...process.env,
+    AX_CODE_DESKTOP_ELECTRON_SERVER_PORT: String(serverPort),
+    AX_CODE_DESKTOP_AX_CODE_HEALTH_TIMEOUT_MS: "1500",
+    AX_CODE_DESKTOP_AX_CODE_HEALTH_INTERVAL_MS: "0",
+    AX_CODE_DESKTOP_DISABLE_AUTO_UPDATE: "1",
+  }
+  // No developer overrides: resolution must land on the bundled sidecar.
+  delete env.AX_CODE_BINARY
+  delete env.AX_CODE_PATH
+  delete env.AX_CODE_DESKTOP_AX_CODE_PATH
+  delete env.AX_CODE_DESKTOP_AX_CODE_BIN
+  delete env.AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY
+
+  const stdout = []
+  const stderr = []
+  const child = spawn(executable, buildSmokeAppArgs({ userDataDir }), {
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+  })
+  child.stdout.on("data", (chunk) => stdout.push(chunk.toString()))
+  child.stderr.on("data", (chunk) => stderr.push(chunk.toString()))
+
+  try {
+    await waitFor(
+      async () => {
+        const { response, body } = await fetchJson(`http://127.0.0.1:${serverPort}/health`)
+        return response.ok && (body?.axCodeRunning === true || body?.isAxCodeReady === true)
+      },
+      args.timeoutMs,
+      "/health readiness (bundled runtime)",
+    )
+
+    const { response, body } = await fetchJson(`http://127.0.0.1:${serverPort}/health`)
+    if (!response.ok) {
+      throw new Error(`/health failed with status ${response.status} (bundled runtime)`)
+    }
+    if (body?.axCodeBinarySource !== "bundled") {
+      throw new Error(`expected axCodeBinarySource "bundled", got ${JSON.stringify(body?.axCodeBinarySource ?? null)}`)
+    }
+    const version = String(body?.axCodeVersion || "").replace(/^v/, "")
+    if (expectedVersion && version !== expectedVersion) {
+      throw new Error(`bundled runtime version ${version || "(unknown)"} does not match the pinned ${expectedVersion}`)
+    }
+    console.log(`Bundled ax-code runtime smoke passed (v${version || "unknown"})`)
+  } finally {
+    await terminateChild(child)
+  }
+}
+
 const main = async () => {
   const args = parseArgs(process.argv.slice(2))
   const appPath = args.app || (await resolveDefaultAppPath())
@@ -411,6 +517,11 @@ const main = async () => {
     if (/Cannot find module|Module did not self-register|ERR_DLOPEN_FAILED/i.test(combinedOutput)) {
       throw new Error("packaged app emitted native module load failure")
     }
+
+    // Stop the stub-driven instance before relaunching the same app copy for
+    // the bundled-runtime phase (finally still terminates idempotently).
+    await terminateChild(child)
+    await runBundledAxCodePhase({ args, smokeAppPath, executable, tmpDir })
 
     console.log("Packaged app smoke passed")
   } catch (error) {

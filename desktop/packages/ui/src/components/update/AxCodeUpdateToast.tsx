@@ -176,7 +176,10 @@ export const AxCodeUpdateToast: React.FC = () => {
           showIncompatibleToast(incompatibility)
         }
 
-        const version = resolveAxCodeUpgradeStatusVersion(status)
+        // Bundled runtimes are pinned to the app version and replaced by app
+        // updates; the self-upgrade action does not apply to them.
+        const bundled = status?.binarySource === "bundled"
+        const version = bundled ? "" : resolveAxCodeUpgradeStatusVersion(status)
         if (version) {
           showUpdateAvailableToast(version)
         }

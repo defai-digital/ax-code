@@ -49,11 +49,30 @@ Two version axes move independently:
 
 - **SDK** (`@ax-code/sdk`): consumed from the monorepo workspace. See
   `docs/AX_CODE_REVENDOR_CHECKLIST.md` for the workspace SDK contract checklist.
-- **Runtime/CLI** (`ax-code`): installed by the user, updates independently.
+- **Runtime/CLI** (`ax-code`): packaged releases bundle a CLI runtime pinned to
+  the app version (`packages/electron/resources/ax-code`, staged from the
+  sibling `v<version>` CLI release by `packages/electron/scripts/stage-ax-code.sh`
+  and minisign-verified). The runtime is replaced atomically by app updates —
+  there is no separate runtime self-upgrade for bundled builds
+  (`POST /api/ax-code/upgrade` returns 409 when the resolved source is
+  `bundled`, and the UI hides the upgrade action). Runtime resolution order
+  (`packages/web/server/lib/ax-code/env-runtime.js`):
+
+  1. `settings.axCodeBinary` (user-configured path).
+  2. Explicit env vars (`AX_CODE_BINARY`, `AX_CODE_PATH`,
+     `AX_CODE_DESKTOP_AX_CODE_PATH`, `AX_CODE_DESKTOP_AX_CODE_BIN`) — the
+     documented developer-mode override; works in dev and packaged builds.
+  3. The bundled sidecar (`AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY`, injected by
+     Electron main only in packaged builds with a staged tree).
+  4. PATH / platform fallbacks / `where` / WSL / login shell — the degraded
+     fallback for dev and OSS builds with no staged tree.
+
   `packages/web/server/lib/ax-code/version-compat.js` defines
-  `MIN_SUPPORTED_AX_CODE_VERSION`; the server reports compatibility through
+  `MIN_SUPPORTED_AX_CODE_VERSION`; it gates override-mode runtimes
+  (settings/env/PATH), which can be arbitrarily old. Bundled runtimes are
+  compatible by construction. The server reports compatibility through
   `/api/ax-code/upgrade-status` and `/health`, logs a startup warning, and the
-  UI raises a persistent toast when the installed runtime is too old.
+  UI raises a persistent toast when an override-mode runtime is too old.
 
 ## Upstream feature requests to file
 
