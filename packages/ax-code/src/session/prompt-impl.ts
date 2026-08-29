@@ -247,10 +247,17 @@ export namespace SessionPrompt {
   // (prompt-loop drain, Session.remove cascade, error/timeout teardown) call
   // cancel() without it so the Interrupt hook does not fire on normal turn
   // completion or background cleanup.
-  export async function cancel(sessionID: SessionID, opts?: { interrupt?: boolean }) {
+  //
+  // `opts.cancelQueueItems === false` skips the task-queue cascade for this
+  // session. The prompt-loop drain uses it: when a loop that IS a queue
+  // execution ends (scheduled automation, async prompt, subagent task), the
+  // item is still `running` and owned by the queue executor, which records
+  // the terminal outcome itself. Cancelling it here would race the executor
+  // and turn every successful run into "cancelled".
+  export async function cancel(sessionID: SessionID, opts?: { interrupt?: boolean; cancelQueueItems?: boolean }) {
     log.info("cancel", { command: "session.prompt.cancel", status: "started", sessionID })
     await runState.cancel(sessionID)
-    await cancelDescendantSessions(sessionID)
+    await cancelDescendantSessions(sessionID, { cancelQueueItems: opts?.cancelQueueItems })
     if (opts?.interrupt !== true) return
     // User lifecycle hooks (Interrupt) — observational only, fire-and-forget:
     // hook latency/failures must never delay or break cancellation.
@@ -261,7 +268,7 @@ export namespace SessionPrompt {
       .catch((error) => log.warn("Interrupt lifecycle hooks failed", { sessionID, error }))
   }
 
-  async function cancelDescendantSessions(sessionID: SessionID) {
+  async function cancelDescendantSessions(sessionID: SessionID, opts?: { cancelQueueItems?: boolean }) {
     const { Session } = await import(".")
     const { TaskQueue } = await import("./task-queue")
     const children = await Session.children(sessionID).catch((error) => {
@@ -273,6 +280,10 @@ export namespace SessionPrompt {
         log.warn("failed to cancel child session", { sessionID, childID: child.id, error })
       })
     }
+    // Genuine stops only. Loop-completion cleanup passes cancelQueueItems:false
+    // because the session's active items belong to the queue executor driving
+    // that very loop — it settles them to their real outcome.
+    if (opts?.cancelQueueItems === false) return
     await TaskQueue.cancelForSession(sessionID, "Cancelled because the parent session stopped.").catch((error) => {
       log.warn("failed to cancel task queue items during session abort", { sessionID, error })
     })
@@ -309,7 +320,11 @@ export namespace SessionPrompt {
         reason,
         queuedCallbacks: runState.queuedCallbacks,
         markIdle: runState.markIdle,
-        cancel,
+        // Loop-completion cleanup must not cancel this session's task-queue
+        // items: when the loop itself is a queue execution the executor owns
+        // the item's terminal outcome (completed/failed), and pending items
+        // stay queued so the executor can drain them next.
+        cancel: (id) => cancel(id, { cancelQueueItems: false }),
         resumeLoop: loop,
       })
     })

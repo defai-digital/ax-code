@@ -314,6 +314,33 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("loop-completion cancel preserves executor-owned queue items", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Queue cleanup cancel" })
+        const item = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "automation",
+          title: "Scheduled prompt",
+          payload: { scheduledTaskID: "sch_cleanup_cancel", prompt: "run" },
+        })
+        await TaskQueue.setStatus({ id: item.id, status: "running" })
+
+        // The prompt-loop drain cancels with cancelQueueItems:false so the
+        // queue executor — not the loop teardown — settles the item it drove.
+        await SessionPrompt.cancel(session.id, { cancelQueueItems: false })
+        expect((await TaskQueue.get(item.id)).status).toBe("running")
+
+        // A genuine stop still cascades into the session's queue items.
+        await SessionPrompt.cancel(session.id)
+        expect((await TaskQueue.get(item.id)).status).toBe("cancelled")
+      },
+    })
+  })
+
   test("requeues scheduled automation interrupted before session creation", async () => {
     await using tmp = await tmpdir({ git: true })
 
