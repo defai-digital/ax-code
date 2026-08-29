@@ -8,7 +8,13 @@ import { GoalPlan } from "./goal-plan"
 import type { SessionID } from "./schema"
 import type { ModelID, ProviderID } from "../provider/schema"
 
-const WRITER_TIMEOUT_MS = 120_000
+// The writer's turn budget is `steps: 12` with up to 3 auto-continuations
+// (48 model turns worst case). Exploration turns run 5–10s each and the final
+// plan-drafting/submission turns 20–30s+ on mid-latency providers, so a
+// healthy writer needs several minutes. The previous 120s cap only covered
+// ~14 fast exploration turns and killed healthy writers mid-submission
+// (observed 2026-08-29: cancel landed while submit_goal_plan was executing).
+const WRITER_TIMEOUT_MS = 600_000
 const WRITER_AGENT = "goal-plan-writer"
 
 export namespace GoalPlanWriter {
@@ -93,6 +99,12 @@ export namespace GoalPlanWriter {
         log.warn("failed to cancel goal plan writer", { error: toErrorMessage(cancelError) })
       })
       if (error instanceof GoalPlan.Error) throw error
+      // The deadline can fire while the writer is winding down after a
+      // successful submit_goal_plan (the loop only ends when the model stops
+      // calling tools). Honor a completed submission instead of failing the
+      // goal over work that already landed.
+      const salvaged = await extractSubmittedPlan(child.id).catch(() => undefined)
+      if (salvaged) return salvaged
       throw new GoalPlan.Error(
         "writer",
         `Goal plan writer failed: ${toErrorMessage(error)}. The goal is paused — /goal resume retries planning, or /goal clear to discard.`,
