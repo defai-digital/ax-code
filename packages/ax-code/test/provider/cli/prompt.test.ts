@@ -26,6 +26,20 @@ describe("promptToText", () => {
     expect(promptToText(prompt, { providerID: "qoder-cli" })).not.toContain("built-in web search")
   })
 
+  test("warns CLI providers that background tasks die with the per-turn process", () => {
+    const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "scan the repo" }] }]
+
+    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli"]) {
+      const result = promptToText(prompt, { providerID })
+      expect(result).toContain("<cli_background_tasks>")
+      expect(result).toContain("background task you started")
+      expect(result).toContain("never delivered across turns")
+    }
+    // Non-CLI and unknown providers get no process-model hint.
+    expect(promptToText(prompt, { providerID: "qoder-cli" })).not.toContain("<cli_background_tasks>")
+    expect(promptToText(prompt)).not.toContain("<cli_background_tasks>")
+  })
+
   test("lists attachments so the CLI agent reads them", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "what is this?" }] }]
     const result = promptToText(prompt, {
