@@ -545,6 +545,33 @@ describe("prompt loop error transitions", () => {
     })
   })
 
+  test("stops as aborted without consuming the error budget when a cancel lands mid-turn", async () => {
+    const transition = await resolvePromptLoopErrorTransition(
+      {
+        sessionID: SessionID.descending(),
+        currentModel: primaryModel,
+        // Serialized shape as persisted on the assistant message.
+        error: { name: "MessageAbortedError", data: { message: "This operation was aborted" } },
+        consecutiveErrors: 2,
+        fallbackModelOverride: fallbackModel,
+        step: 6,
+      },
+      {
+        handleError: async () => {
+          throw new Error("handlePromptLoopError must not run for an aborted turn")
+        },
+      },
+    )
+
+    expect(transition).toEqual({
+      action: "stop",
+      reason: "aborted",
+      consecutiveErrors: 2,
+      fallbackModelOverride: fallbackModel,
+      resetCachedModel: false,
+    })
+  })
+
   test("clears fallback override when no fallback was active", async () => {
     const transition = await resolvePromptLoopErrorTransition({
       sessionID: SessionID.descending(),

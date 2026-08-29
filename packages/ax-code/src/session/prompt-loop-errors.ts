@@ -1,7 +1,7 @@
 import { MAX_CONSECUTIVE_ERRORS } from "@/constants/session"
 import { Log } from "../util/log"
 import { Session } from "."
-import type { MessageV2 } from "./message-v2"
+import { MessageV2 } from "./message-v2"
 import { findFallbackModel, isLocalProvider } from "./prompt-provider-fallback"
 import {
   consecutiveErrorDecision,
@@ -42,7 +42,7 @@ type PromptLoopErrorTransition =
     }
   | {
       action: "stop"
-      reason: "error"
+      reason: "error" | "aborted"
       consecutiveErrors: number
       fallbackModelOverride: MessageV2.User["model"] | undefined
       resetCachedModel: boolean
@@ -369,6 +369,23 @@ export async function resolvePromptLoopErrorTransition(
     return {
       action: "continue",
       consecutiveErrors: 0,
+      fallbackModelOverride: input.fallbackModelOverride,
+      resetCachedModel: false,
+    }
+  }
+
+  // A cancel that lands mid-turn surfaces as MessageAbortedError on the
+  // assistant message. It must not consume the consecutive-error budget,
+  // trigger provider-fallback lookup, publish a session error, or log a
+  // backoff retry — the run was deliberately stopped, so end it as aborted
+  // (observed 2026-08-29: a cancelled goal plan writer turn logged
+  // CONSECUTIVE_ERROR + "backing off before outer prompt retry" and only
+  // the abort-aware retry sleep kept it from re-entering the loop).
+  if (MessageV2.AbortedError.isInstance(input.error)) {
+    return {
+      action: "stop",
+      reason: "aborted",
+      consecutiveErrors: input.consecutiveErrors,
       fallbackModelOverride: input.fallbackModelOverride,
       resetCachedModel: false,
     }
