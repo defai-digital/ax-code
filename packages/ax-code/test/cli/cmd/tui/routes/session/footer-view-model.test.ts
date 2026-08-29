@@ -3,6 +3,7 @@ import {
   footerGoalChip,
   footerSessionStatusOrIdle,
   footerTokenChip,
+  hasActiveSubagentInSessionTree,
 } from "@/cli/cmd/tui/routes/session/footer-view-model"
 
 describe("footerTokenChip", () => {
@@ -188,5 +189,72 @@ describe("footerSessionStatusOrIdle", () => {
     expect(footerSessionStatusOrIdle({ type: "running" })).toEqual({ type: "idle" })
     expect(footerSessionStatusOrIdle(undefined)).toEqual({ type: "idle" })
     expect(footerSessionStatusOrIdle("idle")).toEqual({ type: "idle" })
+  })
+})
+
+describe("hasActiveSubagentInSessionTree", () => {
+  const parent = { id: "ses_parent" }
+  const child = { id: "ses_child", parentID: "ses_parent" }
+  const other = { id: "ses_other" }
+
+  test("returns true while a child session is busy (goal plan writer case)", () => {
+    expect(
+      hasActiveSubagentInSessionTree({
+        sessions: [parent, child, other],
+        statuses: { ses_parent: { type: "idle" }, ses_child: { type: "busy" } },
+        parentSessionID: "ses_parent",
+      }),
+    ).toBe(true)
+  })
+
+  test("returns true while a child session is retrying", () => {
+    expect(
+      hasActiveSubagentInSessionTree({
+        sessions: [parent, child],
+        statuses: { ses_child: { type: "retry" } },
+        parentSessionID: "ses_parent",
+      }),
+    ).toBe(true)
+  })
+
+  test("returns false once every child session is idle", () => {
+    expect(
+      hasActiveSubagentInSessionTree({
+        sessions: [parent, child],
+        statuses: { ses_child: { type: "idle" } },
+        parentSessionID: "ses_parent",
+      }),
+    ).toBe(false)
+  })
+
+  test("returns false when children have no recorded status", () => {
+    expect(
+      hasActiveSubagentInSessionTree({
+        sessions: [parent, child],
+        statuses: {},
+        parentSessionID: "ses_parent",
+      }),
+    ).toBe(false)
+    expect(hasActiveSubagentInSessionTree({ sessions: [parent, child], parentSessionID: "ses_parent" })).toBe(false)
+  })
+
+  test("ignores busy sessions outside the tree", () => {
+    expect(
+      hasActiveSubagentInSessionTree({
+        sessions: [parent, child, other],
+        statuses: { ses_other: { type: "busy" } },
+        parentSessionID: "ses_parent",
+      }),
+    ).toBe(false)
+  })
+
+  test("does not count the parent session itself", () => {
+    expect(
+      hasActiveSubagentInSessionTree({
+        sessions: [parent],
+        statuses: { ses_parent: { type: "busy" } },
+        parentSessionID: "ses_parent",
+      }),
+    ).toBe(false)
   })
 })

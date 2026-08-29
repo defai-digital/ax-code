@@ -316,3 +316,18 @@ function isFooterSessionStatus(value: unknown): value is FooterSessionStatus {
 export function footerSessionStatusOrIdle(value: unknown): FooterSessionStatus {
   return isFooterSessionStatus(value) ? value : { type: "idle" }
 }
+
+// Subagents (/goal planning, the task tool) run in child sessions, so the
+// parent session reports "idle" while they work. The footer must not render
+// "Finished" until every child session in the tree has settled.
+export function hasActiveSubagentInSessionTree(input: {
+  sessions: readonly { id: string; parentID?: string }[]
+  statuses?: Record<string, { type: string } | undefined>
+  parentSessionID: string
+}): boolean {
+  return input.sessions.some((session) => {
+    if (session.parentID !== input.parentSessionID) return false
+    const status = input.statuses?.[session.id]
+    return status !== undefined && status.type !== "idle"
+  })
+}

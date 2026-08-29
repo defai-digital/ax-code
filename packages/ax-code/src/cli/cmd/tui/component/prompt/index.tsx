@@ -91,7 +91,12 @@ import { AxTuiSpinner } from "../spinner"
 import { upsert } from "../../context/sync-util"
 import { summarizedPasteViews } from "./paste-view-model"
 import { withTimeout } from "@/util/timeout"
-import { footerContextGauge, footerSessionStatusView, footerTokenChip } from "../../routes/session/footer-view-model"
+import {
+  footerContextGauge,
+  footerSessionStatusView,
+  footerTokenChip,
+  hasActiveSubagentInSessionTree,
+} from "../../routes/session/footer-view-model"
 import { calculateCompactionBudget, effectiveTokenTotal } from "@/session/compaction-budget"
 import { Gauge } from "@tui/ui/primitives/gauge"
 import { KeyHint } from "@tui/ui/primitives/key-hint"
@@ -1879,6 +1884,19 @@ export function Prompt(props: PromptProps) {
     if (!props.sessionID) return false
     if (status().type !== "idle") return false
     if (submitPending()) return false
+
+    // /goal planning and task subagents run in child sessions: the parent
+    // stays "idle" while they work, so suppress "Finished" until the whole
+    // session tree has settled.
+    const self = sync.data.session.find((item) => item.id === props.sessionID)
+    if (
+      hasActiveSubagentInSessionTree({
+        sessions: sync.data.session,
+        statuses: sync.data.session_status,
+        parentSessionID: self?.parentID ?? props.sessionID,
+      })
+    )
+      return false
 
     const msgs = sync.data.message[props.sessionID]
     const lastMessage = msgs?.at(-1)
