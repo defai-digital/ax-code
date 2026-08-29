@@ -32,6 +32,12 @@ const MAX_SEEN_DIRS = 30
 // session recency, not whichever component happened to call sync first.
 const seenByDirectory = new Map<string, Set<string>>()
 
+// Shared across useSync() instances. Optimistic sends are registered through
+// the SyncOptimisticBridge's instance but cleared by whichever instance loads
+// the session; a per-instance map would never be reconciled and would grow
+// for the app's lifetime.
+const optimisticByKey = new Map<string, Map<string, OptimisticItem>>()
+
 // Shared across useSync() hook instances. Chat, model controls, and sidebar can
 // all request the same session during startup; coalesce them into one HTTP load.
 const syncSessionInflightByKey = new Map<string, Promise<void>>()
@@ -74,7 +80,6 @@ export function useSync() {
   const childStores = useChildStoreManager()
 
   // Refs for mutable tracking (no re-renders)
-  const optimistic = useRef(new Map<string, Map<string, OptimisticItem>>())
   const meta = useRef(new Map<string, SyncMeta>())
 
   const keyFor = useCallback((sessionID: string) => `${directory}\n${sessionID}`, [directory])
@@ -131,7 +136,7 @@ export function useSync() {
 
       // Clear meta + optimistic + prefetch cache for evicted sessions
       for (const id of sessionIDs) {
-        optimistic.current.delete(`${dir}\n${id}`)
+        optimisticByKey.delete(`${dir}\n${id}`)
         meta.current.delete(`${dir}\n${id}`)
       }
       clearSessionPrefetch(dir, sessionIDs)
@@ -185,7 +190,7 @@ export function useSync() {
   const getOptimistic = useCallback(
     (sessionID: string): OptimisticItem[] => {
       const key = `${directory}\n${sessionID}`
-      return [...(optimistic.current.get(key)?.values() ?? [])]
+      return [...(optimisticByKey.get(key)?.values() ?? [])]
     },
     [directory],
   )
@@ -193,12 +198,12 @@ export function useSync() {
   const setOptimistic = useCallback(
     (sessionID: string, item: OptimisticItem) => {
       const key = `${directory}\n${sessionID}`
-      const list = optimistic.current.get(key)
+      const list = optimisticByKey.get(key)
       const sorted: OptimisticItem = { message: item.message, parts: sortPartsById(item.parts) }
       if (list) {
         list.set(item.message.id, sorted)
       } else {
-        optimistic.current.set(key, new Map([[item.message.id, sorted]]))
+        optimisticByKey.set(key, new Map([[item.message.id, sorted]]))
       }
     },
     [directory],
@@ -208,13 +213,13 @@ export function useSync() {
     (sessionID: string, messageID?: string) => {
       const key = `${directory}\n${sessionID}`
       if (!messageID) {
-        optimistic.current.delete(key)
+        optimisticByKey.delete(key)
         return
       }
-      const list = optimistic.current.get(key)
+      const list = optimisticByKey.get(key)
       if (!list) return
       list.delete(messageID)
-      if (list.size === 0) optimistic.current.delete(key)
+      if (list.size === 0) optimisticByKey.delete(key)
     },
     [directory],
   )

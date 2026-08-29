@@ -874,6 +874,7 @@ export async function optimisticSend(input: {
   // so any status poll that fires during the connection wait or POST round-trip
   // sees promptRecentlyAccepted=true and preserves busy via resolveResyncedSessionStatus.
   const current = store.getState()
+  const previousStatus = current.session_status[input.sessionId]
   store.setState({
     session_status: {
       ...current.session_status,
@@ -893,12 +894,19 @@ export async function optimisticSend(input: {
       messageID,
     })
     const s = store.getState()
-    store.setState({
-      session_status: {
-        ...s.session_status,
-        [input.sessionId]: { type: "idle" as const },
-      },
-    })
+    // Restore the status snapshot taken before the optimistic busy write instead
+    // of forcing idle — the server-side turn may still be running. If the server
+    // has already published a non-busy status since, keep it.
+    const currentStatus = s.session_status[input.sessionId]
+    if (currentStatus?.type === "busy") {
+      const restored = { ...s.session_status }
+      if (previousStatus === undefined) {
+        delete restored[input.sessionId]
+      } else {
+        restored[input.sessionId] = previousStatus
+      }
+      store.setState({ session_status: restored })
+    }
     throw error
   }
 }
