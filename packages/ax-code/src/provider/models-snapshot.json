@@ -183950,7 +183950,7 @@
         "open_weights": false,
         "limit": {
           "context": 1048576,
-          "output": 131072
+          "output": 262144
         }
       },
       "inclusionai/ling-3.0-flash-fin:free": {
