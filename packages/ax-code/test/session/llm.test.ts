@@ -1829,7 +1829,10 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
 
         const capture = await request
         const messages = capture.body.messages as Array<{ role: string; content: string }>
-        const allSystemText = messages.filter((m) => m.role === "system").map((m) => m.content).join("\n")
+        const allSystemText = messages
+          .filter((m) => m.role === "system")
+          .map((m) => m.content)
+          .join("\n")
         // Supervision text is provider-agnostic and must fire for every
         // Super-Long run; only request shaping (preserve_thinking,
         // promptCacheKey) stays model-gated.
@@ -2580,6 +2583,31 @@ describe("session.llm.streamIdleWatchdog", () => {
     expect(idleAbort.signal.aborted).toBe(false)
   })
 
+  test("aborts a stream that keeps producing chunks past the active-duration limit", async () => {
+    let yielded = 0
+    const iterator: AsyncIterator<unknown> = {
+      next: () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ done: false, value: ++yielded }), 10)
+        }),
+    }
+    const idleAbort = new AbortController()
+    const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
+      idleAbort,
+      idleTimeoutMs: 100,
+      maxDurationMs: 35,
+      providerID: "test",
+      modelID: "runaway",
+    })
+    await expect(async () => {
+      for await (const _ of guarded.fullStream) {
+        // Chunks stay inside the idle window but must not extend total duration.
+      }
+    }).rejects.toThrow(/maximum active duration.*test\/runaway/)
+    expect(yielded).toBeGreaterThan(1)
+    expect(idleAbort.signal.aborted).toBe(true)
+  })
+
   test("does not abort while a local tool call is executing", async () => {
     // tool-call arrives, then the stream goes silent past the idle window
     // while the tool runs locally (long command, permission prompt), then
@@ -2601,6 +2629,7 @@ describe("session.llm.streamIdleWatchdog", () => {
     const guarded = LLM.attachStreamIdleWatchdog(makeOutput(iterator), {
       idleAbort,
       idleTimeoutMs: 25,
+      maxDurationMs: 40,
       providerID: "test",
       modelID: "m",
     })
@@ -2687,6 +2716,25 @@ describe("session.llm.streamIdleWatchdog", () => {
     } finally {
       if (prev === undefined) delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
       else process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"] = prev
+    }
+  })
+
+  test("streamMaxDurationMs honors provider defaults and the env override", () => {
+    const prev = process.env["AX_CODE_STREAM_MAX_DURATION_MS"]
+    try {
+      delete process.env["AX_CODE_STREAM_MAX_DURATION_MS"]
+      expect(LLM.streamMaxDurationMs("openai")).toBe(600_000)
+      expect(LLM.streamMaxDurationMs("ax-engine")).toBe(3_600_000)
+      expect(LLM.streamMaxDurationMs("kimi-cli")).toBe(3_600_000)
+      process.env["AX_CODE_STREAM_MAX_DURATION_MS"] = "1234"
+      expect(LLM.streamMaxDurationMs("openai")).toBe(1_234)
+      process.env["AX_CODE_STREAM_MAX_DURATION_MS"] = "0"
+      expect(LLM.streamMaxDurationMs("openai")).toBe(0)
+      process.env["AX_CODE_STREAM_MAX_DURATION_MS"] = "not-a-number"
+      expect(LLM.streamMaxDurationMs("openai")).toBe(600_000)
+    } finally {
+      if (prev === undefined) delete process.env["AX_CODE_STREAM_MAX_DURATION_MS"]
+      else process.env["AX_CODE_STREAM_MAX_DURATION_MS"] = prev
     }
   })
 

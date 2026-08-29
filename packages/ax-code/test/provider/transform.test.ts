@@ -2780,7 +2780,7 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model)).toBe(4_096)
   })
 
-  test("raises output cap to 131 072 for GLM 5.x including the [1m] variant", () => {
+  test("uses the generic request cap for GLM 5.x despite the larger model capability", () => {
     for (const [providerID, id] of [
       ["zai-coding-plan", "glm-5.2"],
       ["zai-coding-plan", "glm-5.2[1m]"],
@@ -2794,7 +2794,7 @@ describe("ProviderTransform.maxOutputTokens", () => {
         providerID: ProviderID.make(providerID),
         limit: { output: 131_072 },
       } as any
-      expect(ProviderTransform.maxOutputTokens(model)).toBe(131_072)
+      expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
     }
   })
 
@@ -2809,7 +2809,7 @@ describe("ProviderTransform.maxOutputTokens", () => {
     expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
   })
 
-  test("grants GLM 5 the 131 072 fallback when output metadata is missing", () => {
+  test("uses the generic request cap for GLM 5 when output metadata is missing", () => {
     const model = {
       id: "glm-5.2",
       family: "glm",
@@ -2817,10 +2817,10 @@ describe("ProviderTransform.maxOutputTokens", () => {
       api: { id: "glm-5.2", npm: "@ai-sdk/openai-compatible" },
       limit: { output: 0 },
     } as any
-    expect(ProviderTransform.maxOutputTokens(model)).toBe(131_072)
+    expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
   })
 
-  test("dashless and dashed GLM 5 spellings inherit the 131 072 ceiling without a declared family", () => {
+  test("dashless and dashed GLM 5 spellings use the generic request cap", () => {
     for (const id of ["glm5.2", "glm-5-2", "glm52", "glm_5_2"]) {
       const model = {
         id,
@@ -2828,9 +2828,9 @@ describe("ProviderTransform.maxOutputTokens", () => {
         api: { id, npm: "@ai-sdk/openai-compatible" },
         limit: { output: 131_072 },
       } as any
-      expect(ProviderTransform.maxOutputTokens(model), id).toBe(131_072)
+      expect(ProviderTransform.maxOutputTokens(model), id).toBe(OUTPUT_TOKEN_MAX)
       const missingMeta = { ...model, limit: { output: 0 } } as any
-      expect(ProviderTransform.maxOutputTokens(missingMeta), id).toBe(131_072)
+      expect(ProviderTransform.maxOutputTokens(missingMeta), id).toBe(OUTPUT_TOKEN_MAX)
     }
   })
 
@@ -2843,9 +2843,9 @@ describe("ProviderTransform.maxOutputTokens", () => {
       limit: { output: 0 },
     } as any
     expect(ProviderTransform.maxOutputTokens(model)).toBe(OUTPUT_TOKEN_MAX)
-    // A snapshot-declared limit stays authoritative for the same alias.
+    // A snapshot-declared capability is still bounded by the request cap.
     const withLimit = { ...model, limit: { output: 131_072 } } as any
-    expect(ProviderTransform.maxOutputTokens(withLimit)).toBe(131_072)
+    expect(ProviderTransform.maxOutputTokens(withLimit)).toBe(OUTPUT_TOKEN_MAX)
   })
 
   test("does not apply DashScope short-window cap to dedicated PAI-EAS GPUs", () => {

@@ -498,12 +498,12 @@ export namespace LLM {
       ...headers,
     }
     const streamErrorHolder: { error?: unknown } = {}
-    // Idle watchdog: OpenAI-compatible providers (GLM/z.ai, Qwen/DashScope,
-    // gateways) can stall mid-stream without closing the connection — no
-    // chunk, no error, no finish. The bare `for await` over fullStream then
-    // waits forever and the turn hangs until the user aborts. Abort the
-    // request ourselves when no chunk arrives within the idle window.
+    // Stream watchdog: providers can either stop producing chunks without
+    // closing the connection or keep producing runaway reasoning forever.
+    // Bound both failure modes while allowing local tool execution to pause
+    // the clocks below.
     const idleTimeoutMs = streamIdleTimeoutMs(input.model.providerID)
+    const maxDurationMs = streamMaxDurationMs(input.model.providerID)
     const idleAbort = new AbortController()
     const streamAbort = input.abort ? AbortSignal.any([input.abort, idleAbort.signal]) : idleAbort.signal
     let output: StreamOutput
@@ -587,6 +587,7 @@ export namespace LLM {
     const guarded = attachStreamIdleWatchdog(output, {
       idleAbort,
       idleTimeoutMs,
+      maxDurationMs,
       providerID: input.model.providerID,
       modelID: input.model.id,
     })
@@ -721,6 +722,13 @@ export namespace LLM {
   // is still healthy. Use a longer default idle window so live-runs are not
   // aborted as "stalled" mid-server-start (#382). Env override still wins.
   const CLI_STREAM_IDLE_TIMEOUT_MS = 900_000
+  // A stream that continuously emits chunks never trips the idle watchdog.
+  // Bound active model-generation time as a second line of defense. Local and
+  // CLI providers get a wider window because they can generate substantially
+  // more slowly than hosted APIs. Local tool execution pauses this deadline.
+  const STREAM_MAX_DURATION_MS = 600_000
+  const AX_ENGINE_STREAM_MAX_DURATION_MS = 3_600_000
+  const CLI_STREAM_MAX_DURATION_MS = 3_600_000
 
   export function isCliProviderID(providerID: string | undefined): boolean {
     if (!providerID || isRetiredProviderID(providerID)) return false
@@ -738,16 +746,29 @@ export namespace LLM {
     return STREAM_IDLE_TIMEOUT_MS
   }
 
+  export function streamMaxDurationMs(providerID?: string): number {
+    const raw = process.env["AX_CODE_STREAM_MAX_DURATION_MS"]
+    if (raw !== undefined && raw !== "") {
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed) && parsed >= 0) return parsed
+    }
+    if (providerID === AX_ENGINE_PROVIDER_ID) return AX_ENGINE_STREAM_MAX_DURATION_MS
+    if (isCliProviderID(providerID)) return CLI_STREAM_MAX_DURATION_MS
+    return STREAM_MAX_DURATION_MS
+  }
+
   export function attachStreamIdleWatchdog<T extends { fullStream: AsyncIterable<unknown> }>(
     output: T,
     options: {
       idleAbort: AbortController
       idleTimeoutMs: number
+      maxDurationMs?: number
       providerID: string
       modelID: string
     },
   ): T {
-    if (options.idleTimeoutMs <= 0) return output
+    const maxDurationMs = options.maxDurationMs ?? 0
+    if (options.idleTimeoutMs <= 0 && maxDurationMs <= 0) return output
 
     // Locally-executing tool calls observed on the stream: a `tool-call`
     // chunk has arrived but its `tool-result`/`tool-error` has not. While
@@ -757,27 +778,42 @@ export namespace LLM {
     // of aborting. Provider-executed tools stay on the provider's clock and
     // are not exempted. See .internal/bugs BUG-005.
     let executingToolCalls = 0
+    let toolPauseStartedAt: number | undefined
+    let maxDeadline = Date.now() + maxDurationMs
     const trackChunk = (chunk: unknown) => {
       if (!chunk || typeof chunk !== "object") return
       const value = chunk as { type?: unknown; providerExecuted?: unknown }
       if (value.providerExecuted === true) return
-      if (value.type === "tool-call") executingToolCalls++
-      else if ((value.type === "tool-result" || value.type === "tool-error") && executingToolCalls > 0)
+      if (value.type === "tool-call") {
+        if (executingToolCalls === 0) toolPauseStartedAt = Date.now()
+        executingToolCalls++
+      } else if ((value.type === "tool-result" || value.type === "tool-error") && executingToolCalls > 0) {
         executingToolCalls--
+        if (executingToolCalls === 0 && toolPauseStartedAt !== undefined) {
+          maxDeadline += Date.now() - toolPauseStartedAt
+          toolPauseStartedAt = undefined
+        }
+      }
     }
 
     // Manual race (see util/timeout.ts): once the watchdog fires, the still-
     // pending inner next() must not become an unhandled rejection when the
     // aborted fetch later rejects it.
-    const raceIdle = <R>(op: Promise<R>): Promise<R> =>
+    const raceWatchdog = <R>(op: Promise<R>): Promise<R> =>
       new Promise<R>((resolve, reject) => {
         let settled = false
-        let timer: ReturnType<typeof setTimeout> | undefined
-        const arm = () => {
-          timer = setTimeout(() => {
+        let idleTimer: ReturnType<typeof setTimeout> | undefined
+        let durationTimer: ReturnType<typeof setTimeout> | undefined
+        const clearTimers = () => {
+          if (idleTimer) clearTimeout(idleTimer)
+          if (durationTimer) clearTimeout(durationTimer)
+        }
+        const armIdle = () => {
+          if (options.idleTimeoutMs <= 0) return
+          idleTimer = setTimeout(() => {
             if (settled) return
             if (executingToolCalls > 0) {
-              arm()
+              armIdle()
               return
             }
             settled = true
@@ -788,20 +824,38 @@ export namespace LLM {
               ),
             )
           }, options.idleTimeoutMs)
-          timer.unref?.()
+          idleTimer.unref?.()
         }
-        arm()
+        const armDuration = () => {
+          if (maxDurationMs <= 0 || executingToolCalls > 0) return
+          durationTimer = setTimeout(
+            () => {
+              if (settled) return
+              settled = true
+              options.idleAbort.abort()
+              reject(
+                new Error(
+                  `Model stream exceeded the maximum active duration of ${Math.round(maxDurationMs / 1000)}s for ${options.providerID}/${options.modelID}; the request was aborted while it was still producing data. Retry with a smaller scope, switch models, or raise AX_CODE_STREAM_MAX_DURATION_MS.`,
+                ),
+              )
+            },
+            Math.max(0, maxDeadline - Date.now()),
+          )
+          durationTimer.unref?.()
+        }
+        armIdle()
+        armDuration()
         op.then(
           (value) => {
             if (settled) return
             settled = true
-            if (timer) clearTimeout(timer)
+            clearTimers()
             resolve(value)
           },
           (error) => {
             if (settled) return
             settled = true
-            if (timer) clearTimeout(timer)
+            clearTimers()
             reject(error)
           },
         )
@@ -812,7 +866,7 @@ export namespace LLM {
         const inner = output.fullStream[Symbol.asyncIterator]()
         return {
           next: () =>
-            raceIdle(inner.next()).then((result) => {
+            raceWatchdog(inner.next()).then((result) => {
               const iteration = result as IteratorResult<unknown>
               if (!iteration.done) trackChunk(iteration.value)
               return result

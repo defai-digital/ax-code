@@ -8,7 +8,6 @@ import { Flag } from "@/flag/flag"
 import { isRecord } from "@/util/record"
 import { isQwen37MaxOrPlusModel } from "./model-capabilities"
 import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
-import { buildModelProbes, probesHaveGlmMajorVersion } from "./model-support"
 import { isDedicatedPrivateGpuProviderID } from "./private-gpu/presets"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { cliEffortVariants } from "./cli/effort"
@@ -32,13 +31,6 @@ export namespace ProviderTransform {
   // specifically for this model so callers get the full generation budget
   // without lifting OUTPUT_TOKEN_MAX for every other model.
   const QWEN37_MAX_OUTPUT_TOKENS = 65_536
-  // GLM 5.x (Z.AI / Zhipu coding + general endpoints) documents a 131 072-token
-  // output limit. Raise the cap to that ceiling for the glm family so the large
-  // coding generations the model is built for aren't clipped at the 32k default,
-  // without lifting OUTPUT_TOKEN_MAX for every other provider. The Alibaba
-  // short-window guard runs first, so GLM routed through a DashScope plan still
-  // gets the conservative reservation cap.
-  const GLM_OUTPUT_TOKEN_MAX = 131_072
   // DashScope and Token Plan both reserve `prompt + max_tokens` against a
   // sliding short-window quota *before* generation. Defaulting to 4k keeps
   // headroom for parallel agents and long-context requests while still letting
@@ -1233,26 +1225,13 @@ export namespace ProviderTransform {
       return Math.min(limit, OUTPUT_TOKEN_MAX, GROQ_OUTPUT_TOKEN_MAX)
     }
     const limit = model.limit.output
-    const cap = isQwen37MaxOrPlusModel(model.id ?? "")
-      ? QWEN37_MAX_OUTPUT_TOKENS
-      : hasFamily(model, "glm")
-        ? GLM_OUTPUT_TOKEN_MAX
-        : OUTPUT_TOKEN_MAX
+    const cap = isQwen37MaxOrPlusModel(model.id ?? "") ? QWEN37_MAX_OUTPUT_TOKENS : OUTPUT_TOKEN_MAX
     if (limit > 0) return Math.min(limit, cap)
-    // Missing/zero output metadata: the 131 072 GLM ceiling is documented for
-    // GLM 5.x only. Older or unversioned glm ids (glm-4.x, glm-zero, a bare
-    // family "glm") must not inherit it as a fabricated default — they fall
-    // back to the generic cap. `limit > 0` above stays authoritative, so any
-    // snapshot-declared output limit is still honored for every glm model.
+    // Missing/zero output metadata falls back to the request cap. Model catalog
+    // limits describe capability, not a sensible budget for every ordinary
+    // turn; using GLM's 131k capability as the default allowed a malformed
+    // reasoning stream to run for many minutes on a trivial prompt.
     if (isQwen37MaxOrPlusModel(model.id ?? "")) return QWEN37_MAX_OUTPUT_TOKENS
-    if (hasFamily(model, "glm")) {
-      const probes = buildModelProbes(model.id ?? "", {
-        id: model.api.id,
-        name: model.name,
-        family: model.family,
-      })
-      if (probesHaveGlmMajorVersion(probes, 5)) return GLM_OUTPUT_TOKEN_MAX
-    }
     return OUTPUT_TOKEN_MAX
   }
 
