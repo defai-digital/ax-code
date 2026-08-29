@@ -118,6 +118,12 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
               throw new Error(`apply_patch verification failed: Failed to read existing file: ${filePath}`)
             }
           }
+          if (existed) {
+            // Add File against an existing file overwrites it — enforce the
+            // same must-read-before-write / modified-since-read protection
+            // as the update and delete branches.
+            await FileTime.assert(ctx.sessionID, filePath)
+          }
           const newContent =
             hunk.contents.length === 0 || hunk.contents.endsWith("\n") ? hunk.contents : `${hunk.contents}\n`
           const diff = trimDiff(createTwoFilesPatch(filePath, filePath, oldContent, newContent))

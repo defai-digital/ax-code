@@ -62,7 +62,7 @@ function isRootishTarget(arg: string): boolean {
 // Locates the first argv entry that is a real command, looking through
 // wrapper commands (sudo, env, xargs, ...) and skipping wrapper flags and
 // env assignments (VAR=value).
-function findWrappedCommand(parts: string[]): { name: string; args: string[] } | undefined {
+export function findWrappedCommand(parts: string[]): { name: string; args: string[] } | undefined {
   let index = 0
   while (index < parts.length) {
     const part = parts[index]

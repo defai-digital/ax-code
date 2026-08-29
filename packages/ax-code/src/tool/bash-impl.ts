@@ -33,7 +33,7 @@ import { Isolation } from "@/isolation"
 import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
-import { classifyDestructiveCommand } from "./bash-destructive"
+import { classifyDestructiveCommand, findWrappedCommand } from "./bash-destructive"
 import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
@@ -454,19 +454,42 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         }
 
         if (["curl", "wget"].includes(name)) {
+          let remoteName = false
           for (let i = 0; i < args.length; i++) {
             const arg = args[i]
             if (!arg) continue
-            if (arg === "-o" || arg === "-O" || arg === "--output" || arg === "--output-document") {
+            // curl's -O is --remote-name and takes NO value: the download is
+            // written to the URL basename in the cwd. Only wget's -O takes
+            // an output path, so treat -O as value-taking for wget alone.
+            const takesOutputValue =
+              arg === "-o" || arg === "--output" || arg === "--output-document" || (name === "wget" && arg === "-O")
+            if (takesOutputValue) {
               const next = args[i + 1]
               const output = next ? await recordResolvedPath(next) : undefined
               if (output) redirectWritePaths.add(output)
               i++
               continue
             }
+            if (name === "curl" && (arg === "-O" || arg === "--remote-name")) {
+              remoteName = true
+              continue
+            }
             const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1]
             if (inline) {
               const output = await recordResolvedPath(inline)
+              if (output) redirectWritePaths.add(output)
+            }
+          }
+          if (remoteName) {
+            // Record the real download target <cwd>/<url basename> so the
+            // blast-radius and autonomous line-budget checks see it. The URL
+            // is the first arg with a scheme (falls back to the first
+            // non-flag arg); query strings are not part of the file name.
+            const url =
+              args.find((a) => a && /^[a-z][a-z0-9+.-]*:\/\//i.test(a)) ?? args.find((a) => a && !a.startsWith("-"))
+            const basename = url?.split("/").pop()?.split("?")[0]
+            if (basename) {
+              const output = await recordResolvedPath(basename)
               if (output) redirectWritePaths.add(output)
             }
           }
@@ -583,26 +606,36 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         const destructiveReason = classifyDestructiveCommand(command.map(stripShellQuotes))
         if (destructiveReason) destructiveCommands.set(commandText, destructiveReason)
 
+        // Look through wrapper commands (sudo, env, nohup, xargs, ...) so a
+        // wrapped `bash -c` / `eval` gets the same inner-string path,
+        // redirect, and network scanning as an unwrapped invocation —
+        // mirroring how classifyDestructiveCommand already sees through
+        // wrappers via findWrappedCommand.
+        const unwrappedCommand = findWrappedCommand(command.map(stripShellQuotes))
+        const scanParts = unwrappedCommand
+          ? [unwrappedCommand.name, ...unwrappedCommand.args]
+          : command.map(stripShellQuotes)
+
         // Commands that wrap or delegate to other commands.
         // For shell invocations with -c, and eval, we parse the inner
         // command string to extract paths. For source/., we resolve
         // the script path. Arguments containing command substitution
         // ($(...), `...`, ${...}) are opaque — flag the whole command.
-        if (["eval", "bash", "sh", "zsh", "source", "."].includes(command[0])) {
-          const isShellWithC = ["bash", "sh", "zsh"].includes(command[0]) && command.includes("-c")
-          const isEval = command[0] === "eval"
+        if (["eval", "bash", "sh", "zsh", "source", "."].includes(scanParts[0])) {
+          const isShellWithC = ["bash", "sh", "zsh"].includes(scanParts[0]) && scanParts.includes("-c")
+          const isEval = scanParts[0] === "eval"
 
           // Collect the inner command string for eval / shell -c
           let innerCmd: string | undefined
           if (isShellWithC) {
-            const cIdx = command.indexOf("-c")
-            if (cIdx >= 0 && cIdx + 1 < command.length) {
+            const cIdx = scanParts.indexOf("-c")
+            if (cIdx >= 0 && cIdx + 1 < scanParts.length) {
               // Strip surrounding quotes that tree-sitter may preserve
-              innerCmd = stripShellQuotes(command[cIdx + 1])
+              innerCmd = stripShellQuotes(scanParts[cIdx + 1])
             }
           } else if (isEval) {
             // eval concatenates all its arguments into a single command
-            const evalArgs = command.slice(1).map(stripShellQuotes)
+            const evalArgs = scanParts.slice(1).map(stripShellQuotes)
             if (evalArgs.length > 0) innerCmd = evalArgs.join(" ")
           }
 
@@ -653,19 +686,19 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
 
           // For source/. (not eval or shell -c), resolve args as file paths
           if (!isShellWithC && !isEval) {
-            for (const arg of command.slice(1)) {
+            for (const arg of scanParts.slice(1)) {
               if (arg.startsWith("-")) continue
               await recordResolvedPath(arg)
             }
           }
         } else {
-          await recordInnerCommandPaths(command)
+          await recordInnerCommandPaths(scanParts)
         }
 
         // not an exhaustive list, but covers most common cases
-        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
-          for (const arg of command.slice(1)) {
-            if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
+        if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(scanParts[0])) {
+          for (const arg of scanParts.slice(1)) {
+            if (arg.startsWith("-") || (scanParts[0] === "chmod" && arg.startsWith("+"))) continue
             await recordResolvedPath(arg)
           }
         }

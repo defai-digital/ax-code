@@ -501,7 +501,7 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
-  test("adds file overwriting existing file", async () => {
+  test("adds file overwriting existing file only after a session read", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
 
@@ -513,6 +513,13 @@ describe("tool.apply_patch freeform", () => {
 
         const patchText = "*** Begin Patch\n*** Add File: duplicate.txt\n+new content\n*** End Patch"
 
+        // Add File against an existing file is an overwrite: it must be
+        // rejected until the session has read the file, matching the
+        // update/delete branches.
+        await expect(execute({ patchText }, ctx)).rejects.toThrow("before overwriting it")
+        expect(await fs.readFile(target, "utf-8")).toBe("old content\n")
+
+        await FileTime.read(SESSION, target)
         await execute({ patchText }, ctx)
         expect(await fs.readFile(target, "utf-8")).toBe("new content\n")
       },
