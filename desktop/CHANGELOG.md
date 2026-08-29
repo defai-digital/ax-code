@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.13] - 2026-08-29
+
+### Added
+
+- Add per-agent streamIdleTimeoutMs override.
+
+### Changed
+
+- Add knip config and hoist @clack/prompts to static imports.
+- Bundle and pin the ax-code runtime in the desktop installer.
+
+### Fixed
+
+- Warn CLI agents about one-shot background task lifecycle.
+- Suppress footer Finished while subagents are active.
+
 ## [7.9.12] - 2026-08-29
 
 ### Changed
