@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { ErrorBoundary } from "../ui/ErrorBoundary"
 import { useI18n } from "@/lib/i18n"
 import { useUIStore } from "@/stores/useUIStore"
+import { useSidebarResize } from "@/hooks/useSidebarResize"
 
 export const SIDEBAR_CONTENT_WIDTH = 280
 const SIDEBAR_MIN_WIDTH = 280
@@ -19,127 +20,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, cl
   const { t } = useI18n()
   const sidebarWidth = useUIStore((state) => state.sidebarWidth)
   const setSidebarWidth = useUIStore((state) => state.setSidebarWidth)
-  const [isResizing, setIsResizing] = React.useState(false)
-  const startXRef = React.useRef(0)
-  const startWidthRef = React.useRef(sidebarWidth || SIDEBAR_CONTENT_WIDTH)
-  const resizingWidthRef = React.useRef<number | null>(null)
-  const activeResizePointerIDRef = React.useRef<number | null>(null)
-  const sidebarRef = React.useRef<HTMLElement | null>(null)
 
-  const clampSidebarWidth = React.useCallback((value: number) => {
-    return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, value))
-  }, [])
-
-  const applyLiveWidth = React.useCallback((nextWidth: number) => {
-    const sidebar = sidebarRef.current
-    if (!sidebar) {
-      return
-    }
-
-    sidebar.style.width = `${nextWidth}px`
-    sidebar.style.minWidth = `${nextWidth}px`
-    sidebar.style.maxWidth = `${nextWidth}px`
-    sidebar.style.setProperty("--oc-left-sidebar-width", `${nextWidth}px`)
-  }, [])
-
-  React.useEffect(() => {
-    if (isMobile && isResizing) {
-      setIsResizing(false)
-    }
-  }, [isMobile, isResizing])
-
-  React.useEffect(() => {
-    if (!isResizing) {
-      resizingWidthRef.current = null
-      activeResizePointerIDRef.current = null
-    }
-  }, [isResizing])
+  const {
+    sidebarRef,
+    isResizing,
+    openWidth,
+    appliedWidth,
+    currentWidth,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerEnd,
+    handleResizeKeyDown,
+  } = useSidebarResize({
+    edge: "left",
+    isOpen,
+    isMobile,
+    width: sidebarWidth,
+    setWidth: setSidebarWidth,
+    defaultWidth: SIDEBAR_CONTENT_WIDTH,
+    minWidth: SIDEBAR_MIN_WIDTH,
+    maxWidth: SIDEBAR_MAX_WIDTH,
+    cssVariable: "--oc-left-sidebar-width",
+  })
 
   if (isMobile) {
     return null
-  }
-
-  const openWidth = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, sidebarWidth || SIDEBAR_CONTENT_WIDTH))
-  const appliedWidth = isOpen ? openWidth : 0
-
-  const handlePointerDown = (event: React.PointerEvent) => {
-    if (!isOpen) {
-      return
-    }
-
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      // ignore
-    }
-
-    activeResizePointerIDRef.current = event.pointerId
-    setIsResizing(true)
-    startXRef.current = event.clientX
-    startWidthRef.current = appliedWidth
-    resizingWidthRef.current = appliedWidth
-    applyLiveWidth(appliedWidth)
-    event.preventDefault()
-  }
-
-  const handlePointerMove = (event: React.PointerEvent) => {
-    if (isMobile || !isResizing || activeResizePointerIDRef.current !== event.pointerId) {
-      return
-    }
-
-    const delta = event.clientX - startXRef.current
-    const nextWidth = clampSidebarWidth(startWidthRef.current + delta)
-    if (resizingWidthRef.current === nextWidth) {
-      return
-    }
-
-    resizingWidthRef.current = nextWidth
-    applyLiveWidth(nextWidth)
-  }
-
-  const handlePointerEnd = (event: React.PointerEvent) => {
-    if (activeResizePointerIDRef.current !== event.pointerId || isMobile) {
-      return
-    }
-
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    } catch {
-      // ignore
-    }
-
-    const finalWidth = clampSidebarWidth(resizingWidthRef.current ?? appliedWidth)
-    activeResizePointerIDRef.current = null
-    resizingWidthRef.current = null
-    setIsResizing(false)
-    setSidebarWidth(finalWidth)
-  }
-
-  const currentWidth = isResizing ? (resizingWidthRef.current ?? appliedWidth) : appliedWidth
-
-  const handleResizeKeyDown = (event: React.KeyboardEvent) => {
-    const step = event.shiftKey ? 64 : 16
-    let nextWidth: number
-
-    switch (event.key) {
-      case "ArrowLeft":
-        nextWidth = openWidth - step
-        break
-      case "ArrowRight":
-        nextWidth = openWidth + step
-        break
-      case "Home":
-        nextWidth = SIDEBAR_MIN_WIDTH
-        break
-      case "End":
-        nextWidth = SIDEBAR_MAX_WIDTH
-        break
-      default:
-        return
-    }
-
-    event.preventDefault()
-    setSidebarWidth(clampSidebarWidth(nextWidth))
   }
 
   return (

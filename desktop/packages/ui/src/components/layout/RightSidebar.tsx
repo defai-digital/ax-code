@@ -2,6 +2,7 @@ import React from "react"
 import { cn } from "@/lib/utils"
 import { useUIStore } from "@/stores/useUIStore"
 import { useI18n } from "@/lib/i18n"
+import { useSidebarResize } from "@/hooks/useSidebarResize"
 
 export const RIGHT_SIDEBAR_CONTENT_WIDTH = 420
 const RIGHT_SIDEBAR_MIN_WIDTH = 360
@@ -17,122 +18,27 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
   const { t } = useI18n()
   const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth)
   const setRightSidebarWidth = useUIStore((state) => state.setRightSidebarWidth)
-  const [isResizing, setIsResizing] = React.useState(false)
-  const startXRef = React.useRef(0)
-  const startWidthRef = React.useRef(rightSidebarWidth || RIGHT_SIDEBAR_CONTENT_WIDTH)
-  const resizingWidthRef = React.useRef<number | null>(null)
-  const activeResizePointerIDRef = React.useRef<number | null>(null)
-  const sidebarRef = React.useRef<HTMLElement | null>(null)
 
-  const clampRightSidebarWidth = React.useCallback((value: number) => {
-    return Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, value))
-  }, [])
-
-  const applyLiveWidth = React.useCallback((nextWidth: number) => {
-    const sidebar = sidebarRef.current
-    if (!sidebar) {
-      return
-    }
-
-    sidebar.style.width = `${nextWidth}px`
-    sidebar.style.minWidth = `${nextWidth}px`
-    sidebar.style.maxWidth = `${nextWidth}px`
-    sidebar.style.setProperty("--oc-right-sidebar-width", `${nextWidth}px`)
-  }, [])
-
-  const openWidth = Math.min(
-    RIGHT_SIDEBAR_MAX_WIDTH,
-    Math.max(RIGHT_SIDEBAR_MIN_WIDTH, rightSidebarWidth || RIGHT_SIDEBAR_CONTENT_WIDTH),
-  )
-  const appliedWidth = isOpen ? openWidth : 0
-
-  const handlePointerDown = (event: React.PointerEvent) => {
-    if (!isOpen) {
-      return
-    }
-
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId)
-    } catch {
-      // ignore
-    }
-
-    activeResizePointerIDRef.current = event.pointerId
-    setIsResizing(true)
-    startXRef.current = event.clientX
-    startWidthRef.current = appliedWidth
-    resizingWidthRef.current = appliedWidth
-    applyLiveWidth(appliedWidth)
-    event.preventDefault()
-  }
-
-  const handlePointerMove = (event: React.PointerEvent) => {
-    if (!isResizing || activeResizePointerIDRef.current !== event.pointerId) {
-      return
-    }
-
-    const delta = startXRef.current - event.clientX
-    const nextWidth = clampRightSidebarWidth(startWidthRef.current + delta)
-    if (resizingWidthRef.current === nextWidth) {
-      return
-    }
-
-    resizingWidthRef.current = nextWidth
-    applyLiveWidth(nextWidth)
-  }
-
-  const handlePointerEnd = (event: React.PointerEvent) => {
-    if (activeResizePointerIDRef.current !== event.pointerId) {
-      return
-    }
-
-    try {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    } catch {
-      // ignore
-    }
-
-    const finalWidth = clampRightSidebarWidth(resizingWidthRef.current ?? appliedWidth)
-    activeResizePointerIDRef.current = null
-    resizingWidthRef.current = null
-    setIsResizing(false)
-    setRightSidebarWidth(finalWidth)
-  }
-
-  React.useEffect(() => {
-    if (!isResizing) {
-      resizingWidthRef.current = null
-      activeResizePointerIDRef.current = null
-    }
-  }, [isResizing])
-
-  const currentWidth = isResizing ? (resizingWidthRef.current ?? appliedWidth) : appliedWidth
-
-  // ArrowLeft widens the panel (it grows leftward), ArrowRight narrows it.
-  const handleResizeKeyDown = (event: React.KeyboardEvent) => {
-    const step = event.shiftKey ? 64 : 16
-    let nextWidth: number
-
-    switch (event.key) {
-      case "ArrowLeft":
-        nextWidth = openWidth + step
-        break
-      case "ArrowRight":
-        nextWidth = openWidth - step
-        break
-      case "Home":
-        nextWidth = RIGHT_SIDEBAR_MIN_WIDTH
-        break
-      case "End":
-        nextWidth = RIGHT_SIDEBAR_MAX_WIDTH
-        break
-      default:
-        return
-    }
-
-    event.preventDefault()
-    setRightSidebarWidth(clampRightSidebarWidth(nextWidth))
-  }
+  const {
+    sidebarRef,
+    isResizing,
+    openWidth,
+    appliedWidth,
+    currentWidth,
+    handlePointerDown,
+    handlePointerMove,
+    handlePointerEnd,
+    handleResizeKeyDown,
+  } = useSidebarResize({
+    edge: "right",
+    isOpen,
+    width: rightSidebarWidth,
+    setWidth: setRightSidebarWidth,
+    defaultWidth: RIGHT_SIDEBAR_CONTENT_WIDTH,
+    minWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+    maxWidth: RIGHT_SIDEBAR_MAX_WIDTH,
+    cssVariable: "--oc-right-sidebar-width",
+  })
 
   return (
     <aside
