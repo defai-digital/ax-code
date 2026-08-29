@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.12] - 2026-08-29
+
+### Changed
+
+- Unify desktop event transport behind one client.
+
+### Fixed
+
+- Fix session task queue handling.
+
 ## [7.9.11] - 2026-08-29
 
 ### Changed
