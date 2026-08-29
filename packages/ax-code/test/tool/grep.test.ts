@@ -141,8 +141,12 @@ describe("tool.grep", () => {
           const result = await grep.execute({ pattern: "needle", include: "*.ts" }, ctx)
 
           expect(JSON.parse(searchContent.mock.calls[0]![2])).toMatchObject({ glob: "*.ts", limit: 101 })
-          expect(result.metadata.matches).toBe(100)
+          // The native scan stops at the 101 cap, so the metadata carries the
+          // capped lower bound and the output labels it as such — mirroring
+          // the ripgrep path, which reports its (uncapped) pre-truncation count.
+          expect(result.metadata.matches).toBe(101)
           expect(result.metadata.truncated).toBe(true)
+          expect(result.output).toContain("Found 101+ matches")
           expect(result.output).toContain("showing first 100")
           expect(result.output).not.toContain("Line 101")
         },

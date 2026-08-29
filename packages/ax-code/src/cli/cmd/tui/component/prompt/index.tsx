@@ -751,9 +751,12 @@ export function Prompt(props: PromptProps) {
           if (!shouldSyncAgent) return
           local.agent.set(msg.agent)
           // A variant belongs to the model it was chosen for; only carry it
-          // over when the chip now shows that same model.
+          // over when the chip now shows that same model. A message without
+          // a variant must not clear the stored one — it only means the
+          // message predates the variant choice.
           const current = local.model.current()
-          if (msg.model && current && providerModelEquals(current, msg.model)) local.model.variant.set(msg.variant)
+          if (msg.model && msg.variant !== undefined && current && providerModelEquals(current, msg.model))
+            local.model.variant.set(msg.variant)
         }
       },
     ),

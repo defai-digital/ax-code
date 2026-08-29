@@ -136,7 +136,12 @@ export class ThinkTagParser {
   }
 }
 
-const THINK_TAG_BLOCK_RE = /<(?:mm:think|think|thinking)>[\s\S]*?<\/(?:mm:think|think|thinking)>\s*/gi
+// Trailing whitespace is only consumed when it contains a newline: a
+// block followed by a blank line should not drag the next line's text up
+// against the previous word, but an inline block surrounded by plain
+// spaces ("A  B") must not glue the words into "AB".
+const THINK_TAG_BLOCK_RE =
+  /<(?:mm:think|think|thinking)>[\s\S]*?<\/(?:mm:think|think|thinking)>(?:[ \t]*(?:\r\n|\n|\r)[ \t\r\n]*)?/gi
 
 /** Strip complete think-tag blocks. Incomplete tails are left in place. */
 export function stripThinkTags(text: string) {

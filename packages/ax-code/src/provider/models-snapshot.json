@@ -176001,7 +176001,7 @@
         "open_weights": true,
         "limit": {
           "context": 163840,
-          "output": 65536
+          "output": 147456
         }
       },
       "deepseek/deepseek-chat-v3.1": {
@@ -184954,8 +184954,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 262144,
-          "output": 131072
+          "context": 1048576,
+          "output": 943718
         }
       },
       "nex-agi/nex-n2-mini": {

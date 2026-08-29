@@ -63,6 +63,13 @@ describe("stripThinkTags / wrapThinkTagText", () => {
     expect(stripThinkTags("<think>only thinking</think>")).toBe("")
     expect(wrapThinkTagText("plan")).toBe("<mm:think>plan</mm:think>")
   })
+
+  test("does not glue words around an inline block separated by spaces", () => {
+    expect(stripThinkTags("A <mm:think>inline</mm:think> B")).toBe("A  B")
+    expect(stripThinkTags("A <think>inline</think> B")).toBe("A  B")
+    // Newline-separated text keeps the historical newline consumption.
+    expect(stripThinkTags("A <think>inline</think>\nB")).toBe("A B")
+  })
 })
 
 describe("attachThinkTagStream", () => {

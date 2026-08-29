@@ -95,7 +95,8 @@ export const GrepTool = Tool.define("grep", {
         // `path` is absolute so `Filesystem.contains` works, and `line` +
         // `matchText` are the field names the native emits. `modTime` was
         // never populated and its old sort was a no-op — dropped.
-        const matches = parseNativeSearchMatches(json).filter(
+        const rawMatches = parseNativeSearchMatches(json)
+        const matches = rawMatches.filter(
           (match) =>
             !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path),
         )
@@ -113,8 +114,13 @@ export const GrepTool = Tool.define("grep", {
         // Report the pre-truncation count like the ripgrep path below —
         // `visibleMatches.length` would always read RESULT_LIMIT when
         // truncated, understating how many matches were actually found.
+        // The native scan stops at NATIVE_SCAN_LIMIT, so when the raw scan
+        // hit that cap the true total is unknown — report a lower bound
+        // instead of presenting the capped number as the exact count.
         const totalMatches = matches.length
-        const outputLines = [`Found ${totalMatches} matches${truncated ? ` (showing first ${RESULT_LIMIT})` : ""}`]
+        const scanCapped = rawMatches.length >= NATIVE_SCAN_LIMIT
+        const countLabel = scanCapped ? `${totalMatches}+` : `${totalMatches}`
+        const outputLines = [`Found ${countLabel} matches${truncated ? ` (showing first ${RESULT_LIMIT})` : ""}`]
         let currentFile = ""
         for (const match of visibleMatches) {
           if (currentFile !== match.path) {

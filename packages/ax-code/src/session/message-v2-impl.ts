@@ -1159,24 +1159,37 @@ export namespace MessageV2 {
     // and could trigger context overflow on the next turn.
     const result = [] as MessageV2.WithParts[]
     const completed = new Set<string>()
+    const responded = new Set<string>()
     let latestMarkerEnd = -1 // result length immediately after the latest marker we've seen
+    let latestMarkerResponded = false
     for await (const msg of stream) {
       result.push(msg)
       if (msg.info.role === "user" && msg.parts.some((part) => part.type === "compaction")) {
-        if (latestMarkerEnd === -1) latestMarkerEnd = result.length
+        if (latestMarkerEnd === -1) {
+          latestMarkerEnd = result.length
+          // The stream is newest-first, so the marker's summary assistant
+          // (created after the marker) was already processed — we know here
+          // whether the latest marker has any response at all.
+          latestMarkerResponded = responded.has(msg.info.id)
+        }
         if (completed.has(msg.info.id)) {
           // Happy path: marker + completed summary → break here.
           result.reverse()
           return result
         }
       }
-      if (msg.info.role === "assistant" && msg.info.summary && msg.info.finish && !msg.info.error)
-        completed.add(msg.info.parentID)
+      if (msg.info.role === "assistant" && msg.info.summary) {
+        responded.add(msg.info.parentID)
+        if (msg.info.finish && !msg.info.error) completed.add(msg.info.parentID)
+      }
     }
-    // No successful compaction found. Only truncate if a completed
-    // compaction exists (even if errored); orphaned markers with no
-    // assistant response should be ignored to avoid losing context.
-    const truncated = latestMarkerEnd > -1 && completed.size > 0 ? result.slice(0, latestMarkerEnd) : result
+    // No successful compaction found. Truncate to the latest marker when it
+    // has an assistant response — even an errored or unfinished one bounds
+    // the history, and the response sits after the marker in the stream so
+    // it stays in the truncated prefix. Orphaned markers with no assistant
+    // response are ignored to avoid losing context with no summary to
+    // replace it.
+    const truncated = latestMarkerEnd > -1 && latestMarkerResponded ? result.slice(0, latestMarkerEnd) : result
     truncated.reverse()
     return truncated
   }

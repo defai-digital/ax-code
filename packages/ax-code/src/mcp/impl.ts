@@ -95,18 +95,23 @@ export namespace MCP {
     return { headers: mergeRemoteMcpHeaders(headers, mcpClientUserAgent(Installation.VERSION)) }
   }
 
+  type RemoteConnectOutcome =
+    | { ok: true; client: MCPClient; transport: TransportWithAuth }
+    | { ok: false; error: unknown; transport: TransportWithAuth }
+
   async function connectRemoteTransport(
-    transport: StreamableHTTPClientTransport | SSEClientTransport,
+    createTransport: () => TransportWithAuth,
     key: string,
     transportName: string,
     timeout: number,
-  ): Promise<MCPClient> {
+  ): Promise<RemoteConnectOutcome> {
+    let transport = createTransport()
     let lastError: unknown
     for (let attempt = 1; attempt <= MCP_CONNECT_ATTEMPTS; attempt++) {
       const client = createClient()
       try {
         await withTimeout(client.connect(transport), timeout)
-        return client
+        return { ok: true, client, transport }
       } catch (error) {
         lastError = error
         const retry = attempt < MCP_CONNECT_ATTEMPTS && isTransientMcpConnectError(error)
@@ -122,12 +127,16 @@ export namespace MCP {
         // Closing the SDK client here would also close the pending OAuth transport.
         if (!authError) {
           await closeIfPossible(client, key, `connect attempt failed (${transportName})`)
+          // Closing the SDK client chains to the transport and leaves it
+          // unusable, so the transient-error retry must build a fresh one —
+          // reusing the closed transport made the retry unwinnable.
+          if (retry) transport = createTransport()
         }
-        if (!retry) throw error
+        if (!retry) return { ok: false, error, transport }
         await sleep(MCP_CONNECT_RETRY_DELAY_MS)
       }
     }
-    throw lastError
+    return { ok: false, error: lastError, transport }
   }
 
   export const Resource = z
@@ -693,136 +702,122 @@ export namespace MCP {
         const requestInit = remoteRequestInit(mcp.headers)
         const fetch = pinnedMcpFetch("mcp")
 
-        const transports: Array<{ name: string; transport: TransportWithAuth }> = [
+        // Lazy factories: a transport is only constructed when its candidate
+        // is actually tried, so untried candidates leak no sockets and a
+        // retry inside connectRemoteTransport can build a fresh transport.
+        const transports: Array<{ name: string; create: () => TransportWithAuth }> = [
           {
             name: "StreamableHTTP",
-            transport: new StreamableHTTPClientTransport(new URL(mcp.url), {
-              authProvider,
-              requestInit,
-              fetch,
-            }),
+            create: () =>
+              new StreamableHTTPClientTransport(new URL(mcp.url), {
+                authProvider,
+                requestInit,
+                fetch,
+              }),
           },
           {
             name: "SSE",
-            transport: new SSEClientTransport(new URL(mcp.url), {
-              authProvider,
-              requestInit,
-              fetch,
-            }),
+            create: () =>
+              new SSEClientTransport(new URL(mcp.url), {
+                authProvider,
+                requestInit,
+                fetch,
+              }),
           },
         ]
 
         const transportErrors: Array<{ name: string; error: unknown }> = []
         const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
         for (let i = 0; i < transports.length; i++) {
-          const { name, transport } = transports[i]!
-          try {
-            const client = await connectRemoteTransport(transport, key, name, connectTimeout)
-            rememberClientTransport(client, transport)
+          const { name, create } = transports[i]!
+          const outcome = await connectRemoteTransport(create, key, name, connectTimeout)
+          if (outcome.ok) {
+            const client = outcome.client
+            rememberClientTransport(client, outcome.transport)
             registerNotificationHandlers(client, key, owner)
             mcpClient = client
             log.info("connected", { key, transport: name })
             status = { status: "connected" }
+            break
+          }
+          const error = outcome.error
+          const transport = outcome.transport
+          transportErrors.push({ name, error })
+          const failed = toError(error)
 
-            // Close transports that were never tried. This keeps constructor-created
-            // clients from leaking sockets (notably SSE when StreamableHTTP succeeds).
-            for (let j = i + 1; j < transports.length; j++) {
-              await transports[j].transport.close?.().catch((e) => {
-                log.debug("failed to close unused transport", {
+          // Handle OAuth-specific errors.
+          // The SDK throws UnauthorizedError when auth() returns 'REDIRECT',
+          // but may also throw plain Errors when auth() fails internally
+          // (e.g. during discovery, registration, or state generation).
+          // When an authProvider is attached, treat both cases as auth-related.
+          const isAuthError = error instanceof UnauthorizedError || (authProvider && failed.message.includes("OAuth"))
+          if (isAuthError) {
+            log.info("mcp server requires authentication", { key, transport: name })
+
+            // Check if this is a "needs registration" error — includes the
+            // case where the server rejects dynamic registration with a
+            // non-JSON body (HTTP 403 Forbidden), which the SDK wraps as a
+            // cryptic SyntaxError inside "Invalid OAuth error response".
+            if (isDynamicRegistrationRejection(failed.message)) {
+              await transport.close?.().catch((e) => {
+                log.debug("failed to close transport after registration rejection", {
                   key,
-                  transport: transports[j].name,
+                  transport: name,
                   error: toErrorMessage(e),
                 })
               })
+              status = {
+                status: "needs_client_registration" as const,
+                error: "Server does not support dynamic client registration. Please provide clientId in config.",
+              }
+              // Show toast for needs_client_registration
+              Bus.publishDetached(NotificationEvent.ToastShow, {
+                title: "MCP Authentication Required",
+                message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
+                variant: "warning",
+                duration: TOAST_DURATION_LONG_MS,
+              })
+            } else {
+              // needs_auth path: the client/transport will be reused by
+              // `finishAuth` once the user completes the OAuth flow.
+              // Closing the client here would close the underlying
+              // transport too (the SDK chains close), so by the time
+              // finishAuth tried to call `transport.finishAuth(code)` the
+              // transport would already be dead. Leave both open; untried
+              // candidates are lazy factories with nothing to close.
+              await closePendingOAuthTransport(key)
+              pendingOAuthState()
+              pendingOAuthTransports.set(oauthFlowKey(key), transport)
+              status = { status: "needs_auth" as const }
+              // Show toast for needs_auth
+              Bus.publishDetached(NotificationEvent.ToastShow, {
+                title: "MCP Authentication Required",
+                message: `Server "${key}" requires authentication. Run: ax-code mcp auth ${key}`,
+                variant: "warning",
+                duration: TOAST_DURATION_LONG_MS,
+              })
             }
             break
-          } catch (error) {
-            transportErrors.push({ name, error })
-            const failed = toError(error)
+          }
 
-            // Handle OAuth-specific errors.
-            // The SDK throws UnauthorizedError when auth() returns 'REDIRECT',
-            // but may also throw plain Errors when auth() fails internally
-            // (e.g. during discovery, registration, or state generation).
-            // When an authProvider is attached, treat both cases as auth-related.
-            const isAuthError = error instanceof UnauthorizedError || (authProvider && failed.message.includes("OAuth"))
-            if (isAuthError) {
-              log.info("mcp server requires authentication", { key, transport: name })
-
-              // Check if this is a "needs registration" error — includes the
-              // case where the server rejects dynamic registration with a
-              // non-JSON body (HTTP 403 Forbidden), which the SDK wraps as a
-              // cryptic SyntaxError inside "Invalid OAuth error response".
-              if (isDynamicRegistrationRejection(failed.message)) {
-                await transport.close?.().catch((e) => {
-                  log.debug("failed to close transport after registration rejection", {
-                    key,
-                    transport: name,
-                    error: toErrorMessage(e),
-                  })
-                })
-                status = {
-                  status: "needs_client_registration" as const,
-                  error: "Server does not support dynamic client registration. Please provide clientId in config.",
-                }
-                // Show toast for needs_client_registration
-                Bus.publishDetached(NotificationEvent.ToastShow, {
-                  title: "MCP Authentication Required",
-                  message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
-                  variant: "warning",
-                  duration: TOAST_DURATION_LONG_MS,
-                })
-              } else {
-                // needs_auth path: the client/transport will be reused by
-                // `finishAuth` once the user completes the OAuth flow.
-                // Closing the client here would close the underlying
-                // transport too (the SDK chains close), so by the time
-                // finishAuth tried to call `transport.finishAuth(code)` the
-                // transport would already be dead. Leave both open and only
-                // close the *other* untried candidates.
-                for (let j = i + 1; j < transports.length; j++) {
-                  await transports[j].transport.close?.().catch((e) => {
-                    log.debug("failed to close unused transport during auth flow", {
-                      key,
-                      transport: transports[j].name,
-                      error: toErrorMessage(e),
-                    })
-                  })
-                }
-                await closePendingOAuthTransport(key)
-                pendingOAuthState()
-                pendingOAuthTransports.set(oauthFlowKey(key), transport)
-                status = { status: "needs_auth" as const }
-                // Show toast for needs_auth
-                Bus.publishDetached(NotificationEvent.ToastShow, {
-                  title: "MCP Authentication Required",
-                  message: `Server "${key}" requires authentication. Run: ax-code mcp auth ${key}`,
-                  variant: "warning",
-                  duration: TOAST_DURATION_LONG_MS,
-                })
-              }
-              break
-            }
-
-            // Non-auth error: clean up everything before falling through to
-            // the next transport candidate.
-            await transport.close?.().catch((e) => {
-              log.debug("failed to close transport after connection failure", {
-                key,
-                transport: name,
-                error: toErrorMessage(e),
-              })
-            })
-            log.debug("transport connection failed", {
+          // Non-auth error: clean up everything before falling through to
+          // the next transport candidate.
+          await transport.close?.().catch((e) => {
+            log.debug("failed to close transport after connection failure", {
               key,
               transport: name,
-              url: mcp.url,
-              error: failed.message,
+              error: toErrorMessage(e),
             })
-            status = {
-              status: "failed" as const,
-              error: combineTransportErrors(transportErrors),
-            }
+          })
+          log.debug("transport connection failed", {
+            key,
+            transport: name,
+            url: mcp.url,
+            error: failed.message,
+          })
+          status = {
+            status: "failed" as const,
+            error: combineTransportErrors(transportErrors),
           }
         }
       } finally {

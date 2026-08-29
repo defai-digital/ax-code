@@ -88,13 +88,14 @@ export function createRateLimitMiddleware(log: Log.Logger): MiddlewareHandler {
 
 export function createRequestLoggingMiddleware(log: Log.Logger): MiddlewareHandler {
   return async (c, next) => {
-    const skipLogging = c.req.path === "/log"
-    if (!skipLogging) {
-      log.info("request", {
-        method: c.req.method,
-        path: c.req.path,
-      })
-    }
+    // Skip logging AND timing for /log: log.time emits a "started" entry on
+    // creation, so creating the timer on this path would leave an orphaned
+    // started entry that the skipLogging guard below never stops.
+    if (c.req.path === "/log") return next()
+    log.info("request", {
+      method: c.req.method,
+      path: c.req.path,
+    })
     const timer = log.time("request", {
       method: c.req.method,
       path: c.req.path,
@@ -104,9 +105,7 @@ export function createRequestLoggingMiddleware(log: Log.Logger): MiddlewareHandl
     } finally {
       // Stop the timer on error paths too — otherwise every rejected request
       // leaves an orphaned "started" entry that never reports completion.
-      if (!skipLogging) {
-        timer.stop()
-      }
+      timer.stop()
     }
   }
 }

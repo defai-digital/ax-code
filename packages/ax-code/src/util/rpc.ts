@@ -331,7 +331,16 @@ export namespace Rpc {
             reject(new Error(`RPC call "${String(method)}" timed out after ${RPC_TIMEOUT_MS}ms`))
           }, RPC_TIMEOUT_MS)
           pending.set(requestId, { resolve, reject, timer })
-          target.postMessage(JSON.stringify({ type: "rpc.request", method, input, id: requestId }))
+          try {
+            target.postMessage(JSON.stringify({ type: "rpc.request", method, input, id: requestId }))
+          } catch (error) {
+            // A dead/closed transport throws synchronously on send. Without
+            // cleanup the pending entry and its timer would leak until the
+            // 60s timeout fires, keeping the event loop alive.
+            clearTimeout(timer)
+            pending.delete(requestId)
+            reject(error instanceof Error ? error : new Error(toErrorMessage(error)))
+          }
         })
       },
       on<Data>(event: string, handler: (data: Data) => void) {

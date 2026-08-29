@@ -1284,9 +1284,13 @@ describe("AX Code TUI stability guardrails", () => {
     expect(prompt).toContain("shouldAdoptMessageModelFromHistory(sessionChanged, local.model.session.has(sessionID))")
     expect(prompt).toContain("local.model.session.set(sessionID, msg.model, msg.agent)")
     expect(prompt).toContain(
-      "if (msg.model && current && providerModelEquals(current, msg.model)) local.model.variant.set(msg.variant)",
+      "if (msg.model && msg.variant !== undefined && current && providerModelEquals(current, msg.model))",
     )
     expect(prompt).not.toContain("if (msg.variant) local.model.variant.set(msg.variant)")
+    // A history message without a variant must not wipe the stored variant.
+    expect(prompt).not.toContain(
+      "if (msg.model && current && providerModelEquals(current, msg.model)) local.model.variant.set(msg.variant)",
+    )
     expect(prompt).toContain("sanitizePromptInput(raw)")
     expect(prompt).toContain("if (!isRenderableAlive(input)) return")
     expect(prompt).toContain("syncInputCursorColor()")
