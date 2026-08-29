@@ -55,6 +55,13 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
   const time = partWithText.time
   const isFinalized = Boolean(time && typeof time.end !== "undefined")
 
+  // Memoized: the probe regex-scans and JSON-parses the full text; without a
+  // memo it re-runs on every re-render of a finalized part.
+  const generatedResult = React.useMemo(
+    () => (!isStreaming && isFinalized ? parseGeneratedJsonResult(displayTextContent) : null),
+    [displayTextContent, isStreaming, isFinalized],
+  )
+
   const isRenderableTextPart = part.type === "text" || part.type === "reasoning"
   if (!isRenderableTextPart) {
     return null
@@ -69,7 +76,6 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     return null
   }
 
-  const generatedResult = !isStreaming && isFinalized ? parseGeneratedJsonResult(displayTextContent) : null
   if (generatedResult) {
     return (
       <div

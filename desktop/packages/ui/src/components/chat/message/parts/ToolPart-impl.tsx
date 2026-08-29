@@ -3,6 +3,7 @@ import type { AnimationPlaybackControls } from "motion"
 import { RuntimeAPIContext } from "@/contexts/runtimeAPIContext"
 import { cn } from "@/lib/utils"
 import { SimpleMarkdownRenderer } from "../../MarkdownRenderer"
+import { useStreamingTextThrottle } from "../../hooks/useStreamingTextThrottle"
 import { getToolMetadata } from "@/lib/toolHelpers"
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from "@ax-code/sdk/v2"
 import { toolDisplayStyles } from "@/lib/typography"
@@ -246,10 +247,22 @@ const ToolScrollableTextOutput: React.FC<{
   metadata: Record<string, unknown> | undefined
   input: Record<string, unknown> | undefined
   syntaxTheme: { [key: string]: React.CSSProperties }
-}> = ({ output, part, metadata, input, syntaxTheme }) => {
+}> = React.memo(({ output, part, metadata, input, syntaxTheme }) => {
   const renderedOutput = getToolOutputText(output, part, metadata)
   const outputLanguage = getToolOutputLanguage(output, part, metadata, input)
-  const jsonResult = React.useMemo(() => tryParseJsonOutput(renderedOutput), [renderedOutput])
+  // While the tool is still streaming, Prism re-tokenization and the JSON probe
+  // are O(output size) per event-flush frame; throttle the text they see so a
+  // long bash output does not re-highlight ~30 times per second. The final
+  // render always receives the full text (the hook passes it through once
+  // isStreaming is false).
+  const isStreaming = part.state.status === "running" || part.state.status === "pending"
+  const displayOutput = useStreamingTextThrottle({
+    text: renderedOutput,
+    isStreaming,
+    throttleMs: 250,
+    identityKey: part.id,
+  })
+  const jsonResult = React.useMemo(() => tryParseJsonOutput(displayOutput), [displayOutput])
 
   if (jsonResult.isJson) {
     return (
@@ -269,11 +282,11 @@ const ToolScrollableTextOutput: React.FC<{
         codeTagProps={CODE_TAG_PROPS}
         wrapLongLines
       >
-        {renderedOutput}
+        {displayOutput}
       </SyntaxHighlighter>
     </div>
   )
-}
+})
 
 ToolScrollableTextOutput.displayName = "ToolScrollableTextOutput"
 

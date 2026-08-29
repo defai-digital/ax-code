@@ -701,21 +701,37 @@ export function ThemeSystemProvider({ children, defaultThemeId }: ThemeSystemPro
     [availableThemes],
   )
 
-  const value: ThemeContextValue = {
-    currentTheme,
-    availableThemes,
-    setTheme,
-    customThemesLoading,
-    reloadCustomThemes,
-    isSystemPreference: preferences.themeMode === "system",
-    setSystemPreference: setSystemPreferenceHandler,
-    themeMode: preferences.themeMode,
-    setThemeMode: setThemeModeHandler,
-    lightThemeId: preferences.lightThemeId,
-    darkThemeId: preferences.darkThemeId,
-    setLightThemePreference,
-    setDarkThemePreference,
-  }
+  const value: ThemeContextValue = useMemo(
+    () => ({
+      currentTheme,
+      availableThemes,
+      setTheme,
+      customThemesLoading,
+      reloadCustomThemes,
+      isSystemPreference: preferences.themeMode === "system",
+      setSystemPreference: setSystemPreferenceHandler,
+      themeMode: preferences.themeMode,
+      setThemeMode: setThemeModeHandler,
+      lightThemeId: preferences.lightThemeId,
+      darkThemeId: preferences.darkThemeId,
+      setLightThemePreference,
+      setDarkThemePreference,
+    }),
+    [
+      currentTheme,
+      availableThemes,
+      setTheme,
+      customThemesLoading,
+      reloadCustomThemes,
+      preferences.themeMode,
+      preferences.lightThemeId,
+      preferences.darkThemeId,
+      setSystemPreferenceHandler,
+      setThemeModeHandler,
+      setLightThemePreference,
+      setDarkThemePreference,
+    ],
+  )
 
   return <ThemeSystemContext.Provider value={value}>{children}</ThemeSystemContext.Provider>
 }

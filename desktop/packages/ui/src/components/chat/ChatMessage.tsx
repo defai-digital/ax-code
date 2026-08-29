@@ -159,7 +159,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     streamPerfCount("ui.chat_message.render.streaming")
   }
 
-  const providers = useConfigStore.getState().providers
+  const providers = useConfigStore((s) => s.providers)
   const { showReasoningTraces, stickyUserHeader, chatRenderMode, showExpandedBashTools, showExpandedEditTools } =
     useUIStore(
       useShallow((state) => ({
