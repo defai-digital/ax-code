@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.9] - 2026-08-28
+
+### Changed
+
+- Keep TUI model selection scoped to the current session.
+- Keep routed model selections scoped to TUI sessions.
+
+### Fixed
+
+- Fix TUI model picks leaking across sessions and reverting on revisit.
+
 ## [7.9.8] - 2026-08-28
 
 ### Fixed
