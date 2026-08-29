@@ -1,4 +1,5 @@
 import { cmd } from "./cmd"
+import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
 import { MCP } from "../../mcp"
 import { McpAuth } from "../../mcp/auth"
@@ -110,7 +111,6 @@ export const McpListCommand = cmd({
         default: false,
       }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     const { available: discoverAvailable } = await import("../../mcp/discovery")
     await Instance.provide({
       directory: process.cwd(),
@@ -260,7 +260,6 @@ export const McpAuthCommand = cmd({
       })
       .command(McpAuthListCommand),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -398,7 +397,6 @@ export const McpAuthListCommand = cmd({
   aliases: ["ls"],
   describe: "list OAuth-capable MCP servers and their auth status",
   async handler() {
-    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -443,7 +441,6 @@ export const McpLogoutCommand = cmd({
       type: "string",
     }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -506,7 +503,6 @@ export const McpTrustCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -542,7 +538,6 @@ export const McpUntrustCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -599,7 +594,6 @@ export const McpAddCommand = cmd({
   command: "add",
   describe: "add an MCP server",
   async handler() {
-    const prompts = await import("@clack/prompts")
     const McpTemplates = await import("../../mcp/templates")
     await Instance.provide({
       directory: process.cwd(),
@@ -837,7 +831,6 @@ export const McpDebugCommand = cmd({
       demandOption: true,
     }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     const { Client } = await import("@modelcontextprotocol/sdk/client/index.js")
     const { StreamableHTTPClientTransport } = await import("@modelcontextprotocol/sdk/client/streamableHttp.js")
     const { UnauthorizedError } = await import("@modelcontextprotocol/sdk/client/auth.js")

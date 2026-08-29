@@ -1,4 +1,5 @@
 import { Auth } from "../../auth"
+import * as prompts from "@clack/prompts"
 import { cmd } from "./cmd"
 import { GITHUB_REPO_URL } from "@/constants/project"
 import { UI } from "../ui"
@@ -46,7 +47,6 @@ async function removeProviderAuth(provider: string) {
 }
 
 async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string, methodName?: string): Promise<boolean> {
-  const prompts = await import("@clack/prompts")
   let index = 0
   if (methodName) {
     const match = plugin.auth.methods.findIndex((x) => x.label.toLowerCase() === methodName.toLowerCase())
@@ -249,7 +249,6 @@ export const ProvidersCommand = cmd({
 })
 
 async function printAxEngineStatus(status: any) {
-  const prompts = await import("@clack/prompts")
   prompts.intro("AX Engine")
   if (status.lifecycle?.phase) {
     prompts.log.info(`Lifecycle: ${status.lifecycle.phase} [${status.lifecycle.backend ?? "sidecar_http"}]`)
@@ -326,7 +325,6 @@ export const ProvidersAxEngineCommand = cmd({
         type: "boolean",
       }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     const {
       getAxEngineStatus,
       installAxEngineBinary,
@@ -435,7 +433,6 @@ export const ProvidersListCommand = cmd({
   aliases: ["ls"],
   describe: "list providers and credentials",
   async handler(_args) {
-    const prompts = await import("@clack/prompts")
     const { ModelsDev } = await import("../../provider/models")
     const { getCliProviderDefinition } = await import("../../provider/cli/config")
     UI.empty()
@@ -536,7 +533,6 @@ export const ProvidersLoginCommand = cmd({
         type: "string",
       }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     const { ModelsDev } = await import("../../provider/models")
     const { getCliProviderDefinition } = await import("../../provider/cli/config")
     const { probeCliProvider } = await import("../../provider/cli/connect")
@@ -826,7 +822,6 @@ export const ProvidersLogoutCommand = cmd({
         type: "string",
       }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     const credentials = await Auth.all().then((x) => Object.entries(x))
@@ -893,7 +888,6 @@ export const ProvidersDisableCommand = cmd({
       type: "string",
     }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     prompts.intro("Disable provider")
@@ -961,7 +955,6 @@ export const ProvidersEnableCommand = cmd({
       type: "string",
     }),
   async handler(args) {
-    const prompts = await import("@clack/prompts")
     const { ModelsDev } = await import("../../provider/models")
     UI.empty()
     prompts.intro("Enable provider")

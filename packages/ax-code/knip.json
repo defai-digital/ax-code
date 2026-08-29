@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/index-node-tui.ts", "src/index-node.ts", "src/index-compiled.ts", "src/index.ts"],
+  "project": ["src/**/*.{ts,tsx}"],
+  "ignore": ["src/**/*.test.{ts,tsx}", "**/*.d.ts"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": ["@ax-code/script"]
+}
