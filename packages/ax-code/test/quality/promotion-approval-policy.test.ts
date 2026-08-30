@@ -1196,4 +1196,45 @@ describe("QualityPromotionApprovalPolicy", () => {
     expect(rotated.approvalConcentrationScore).toBe(0)
     expect(rotated.gates.find((gate) => gate.name === "approval-concentration")?.status).toBe("pass")
   })
+
+  test("does not fail prior reporting chain context when the prior promotion recorded no reporting chains", () => {
+    const decisionBundle = bundle("none", {
+      reentryRollbackID: "rollback-12",
+      remediationAuthor: "author@example.com",
+      priorPromotionID: "promotion-legacy",
+      priorPromotionApprovers: ["latest@example.com"],
+      reportingChainCarryoverHistory: [
+        {
+          reportingChain: "eng/platform/director-a",
+          weightedReuseScore: 1,
+          appearances: 1,
+          mostRecentPromotionID: "promotion-reentry-legacy",
+          mostRecentPromotedAt: "2026-04-20T12:25:00.000Z",
+        },
+      ],
+    })
+
+    const summary = QualityPromotionApprovalPolicy.evaluate({
+      bundle: decisionBundle,
+      approvals: [
+        approval({
+          bundle: decisionBundle,
+          approver: "fresh-a@example.com",
+          role: "staff-engineer",
+          team: "quality-platform",
+          reportingChain: "eng/security/director-c",
+        }),
+        approval({
+          bundle: decisionBundle,
+          approver: "fresh-b@example.com",
+          role: "director",
+          team: "release",
+          reportingChain: "eng/data/director-d",
+        }),
+      ],
+    })
+
+    expect(summary.gates.find((gate) => gate.name === "prior-reporting-chain-context")?.status).toBe("pass")
+    expect(summary.overallStatus).toBe("pass")
+  })
 })

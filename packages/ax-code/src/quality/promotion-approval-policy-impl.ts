@@ -724,8 +724,7 @@ export namespace QualityPromotionApprovalPolicy {
         status:
           maxPriorReportingChainOverlapRatio === null ||
           reportingChainCarryoverHistory.length === 0 ||
-          priorPromotionID === null ||
-          priorPromotionReportingChains.length > 0
+          priorPromotionID !== null
             ? "pass"
             : "fail",
         detail:
