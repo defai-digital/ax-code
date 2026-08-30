@@ -49,12 +49,28 @@ function configuredModel(config: Config.Info | undefined, explicitModel?: string
 }
 
 function autonomousEnabled(config: Config.Info | undefined) {
-  // Same precedence as the config-load reconciliation: an explicit env
-  // value wins (with config `autonomous: false` still able to veto),
-  // otherwise the project config decides with the default being on.
-  // Reading the project config directly keeps this GET correct even when
-  // the in-process env was last synced for a different project.
-  const env = Env.parseBoolean(process.env["AX_CODE_AUTONOMOUS"])
+  // Same precedence as the config-load reconciliation (config-impl.ts):
+  // an explicit, PRISTINE env value wins (with config `autonomous: false`
+  // still able to veto); otherwise the project config decides with the
+  // default being on.
+  //
+  // process.env["AX_CODE_AUTONOMOUS"] is process-global and last-writer-
+  // wins across every project this server is concurrently serving, so it
+  // must not be read directly here: reconciling one project (a `PUT
+  // /autonomous`, or any `Config.get()` reconciliation) rewrites it, and
+  // that write would otherwise leak into every *other* open project's
+  // Super-Long availability check, even when that project's own config
+  // has autonomous enabled. Prefer this directory's own scoped
+  // resolution; only fall back to the raw env when no directory has
+  // (re)written it yet in this process, i.e. it can still be trusted as
+  // a real, pristine user override rather than another project's mirror.
+  const scoped = ScopedFlag.peek("AX_CODE_AUTONOMOUS")
+  const env =
+    scoped !== undefined
+      ? scoped
+      : ScopedFlag.isManaged("AX_CODE_AUTONOMOUS")
+        ? undefined
+        : Env.parseBoolean(process.env["AX_CODE_AUTONOMOUS"])
   if (env !== undefined) return env && config?.autonomous !== false
   return config?.autonomous !== false
 }

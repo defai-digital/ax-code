@@ -251,6 +251,44 @@ describe("super-long route", () => {
     })
   })
 
+  test("does not leak another project's disabled autonomous mode into this project's Super-Long gate", async () => {
+    await withCleanSuperLongEnv(async () => {
+      await using tmpA = await tmpdir({ git: true })
+      await using tmpB = await tmpdir({ git: true })
+      // Project A explicitly disables autonomous mode.
+      await writeFile(path.join(tmpA.path, "ax-code.json"), JSON.stringify({ model: "qwen3.7-max", autonomous: false }))
+      // Project B explicitly enables it — a different, concurrently-open project.
+      await writeFile(path.join(tmpB.path, "ax-code.json"), JSON.stringify({ model: "qwen3.7-max", autonomous: true }))
+
+      // A request against project A reconciles AX_CODE_AUTONOMOUS to "false"
+      // in the process-global env (this is the mechanism the leak rode on).
+      await Instance.provide({
+        directory: tmpA.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/autonomous?directory=${encodeURIComponent(tmpA.path)}`)
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ enabled: false })
+        },
+      })
+
+      // Project B must still be able to enable Super-Long: its own config
+      // has autonomous enabled, and project A's reconciliation must not
+      // gate it via the shared process.env mirror.
+      await Instance.provide({
+        directory: tmpB.path,
+        fn: async () => {
+          const response = await Server.Default().request(`/super-long?directory=${encodeURIComponent(tmpB.path)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: true }),
+          })
+          expect(response.status).toBe(200)
+          expect(await response.json()).toEqual({ enabled: true })
+        },
+      })
+    })
+  })
+
   test("status reports duration from object config and per-session timing", async () => {
     await withCleanSuperLongEnv(async () => {
       await using tmp = await tmpdir({ git: true })
