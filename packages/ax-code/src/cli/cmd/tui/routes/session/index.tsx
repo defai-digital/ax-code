@@ -1334,7 +1334,9 @@ export function Session() {
         get width() {
           return contentWidth()
         },
-        sessionID: route.sessionID,
+        get sessionID() {
+          return route.sessionID
+        },
         conceal,
         showThinking,
         showTimestamps,
