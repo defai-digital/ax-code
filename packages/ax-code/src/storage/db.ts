@@ -188,8 +188,20 @@ export namespace Database {
           error: toErrorMessage(error),
         })
       }
-      client.$client.close()
-      Client.reset()
+      // `close()` is followed by NativeStore/Shard teardown below (BUG-008):
+      // an uncaught throw here must not skip them, or the exact fd/WAL leak
+      // this function exists to prevent reappears on a database that just
+      // happens to fail its own close (e.g. a still-finalizing statement).
+      try {
+        client.$client.close()
+      } catch (error) {
+        log.warn("failed to close database handle during shutdown", {
+          path: Path,
+          error: toErrorMessage(error),
+        })
+      } finally {
+        Client.reset()
+      }
     }
     // Release the native code-intelligence index store's SQLite handle
     // alongside the main DB. Without this, `ax-code-index.db` and its WAL
@@ -251,6 +263,16 @@ export namespace Database {
   const ctx = Context.create<{
     tx: TxOrDb
     effects: Effect[]
+    // True only when this context's `tx` is a real, currently-open SQLite
+    // transaction (established by `transaction()`). `use()` also provides a
+    // context (so nested `use()`/`effect()` calls share its `tx`/`effects`),
+    // but its `tx` is just the plain client — no BEGIN is active. Without
+    // this flag, `transaction()` nested inside `use()` would reuse that
+    // non-transactional `tx` and silently skip BEGIN IMMEDIATE, turning a
+    // supposedly atomic multi-statement write into an unguarded one (partial
+    // writes survive a mid-way failure, and the upfront write-lock ordering
+    // that avoids the reserved-lock deadlock described below is lost).
+    inTransaction: boolean
   }>("database")
 
   function runEffects(effects: Effect[]) {
@@ -321,17 +343,14 @@ export namespace Database {
   }
 
   export function use<T>(callback: (trx: TxOrDb) => T): T {
-    try {
-      return requireSyncTransactionResult(callback(ctx.use().tx))
-    } catch (err) {
-      if (err instanceof Context.NotFound) {
-        const effects: Effect[] = []
-        const result = ctx.provide({ effects, tx: Client() }, () => callback(Client()))
-        runEffects(effects)
-        return result
-      }
-      throw err
+    const current = ctx.peek()
+    if (current) {
+      return requireSyncTransactionResult(callback(current.tx))
     }
+    const effects: Effect[] = []
+    const result = ctx.provide({ effects, tx: Client(), inTransaction: false }, () => callback(Client()))
+    runEffects(effects)
+    return result
   }
 
   export function effect<F extends () => unknown>(fn: F & SyncEffect<F>) {
@@ -351,31 +370,34 @@ export namespace Database {
   }
 
   export function transaction<T>(callback: (tx: TxOrDb) => T): SyncTransactionResult<T> {
-    try {
-      return requireSyncTransactionResult(callback(ctx.use().tx)) as SyncTransactionResult<T>
-    } catch (err) {
-      if (err instanceof Context.NotFound) {
-        const effects: Effect[] = []
-        // BEGIN IMMEDIATE (not the driver's default deferred BEGIN) so the
-        // RESERVED write lock is acquired up front rather than at the first
-        // write statement. Under a deferred BEGIN two processes can both open
-        // a read snapshot and then deadlock upgrading to writer — one hits
-        // SQLITE_BUSY at its first write even though the other hasn't
-        // committed. Acquiring the write lock immediately closes that window
-        // for every write transaction at this single choke point.
-        const result = Client().transaction<T>(
-          (tx) => {
-            return requireSyncTransactionResult(
-              ctx.provide({ tx, effects }, () => callback(tx)) as SyncTransactionResult<T>,
-            ) as SyncTransactionResult<T>
-          },
-          { behavior: "immediate" },
-        ) as SyncTransactionResult<T>
-        runEffects(effects)
-        return result
-      }
-      throw err
+    const current = ctx.peek()
+    if (current?.inTransaction) {
+      return requireSyncTransactionResult(callback(current.tx)) as SyncTransactionResult<T>
     }
+    const effects: Effect[] = []
+    // BEGIN IMMEDIATE (not the driver's default deferred BEGIN) so the
+    // RESERVED write lock is acquired up front rather than at the first
+    // write statement. Under a deferred BEGIN two processes can both open
+    // a read snapshot and then deadlock upgrading to writer — one hits
+    // SQLITE_BUSY at its first write even though the other hasn't
+    // committed. Acquiring the write lock immediately closes that window
+    // for every write transaction at this single choke point.
+    //
+    // This also runs (rather than flattening into the surrounding context)
+    // when nested inside `Database.use()`: that context exists but is not
+    // `inTransaction`, so its `tx` is only the plain client. Starting a real
+    // transaction here is exactly the top-level behavior — `use()`'s tx never
+    // had a BEGIN of its own to conflict with.
+    const result = Client().transaction<T>(
+      (tx) => {
+        return requireSyncTransactionResult(
+          ctx.provide({ tx, effects, inTransaction: true }, () => callback(tx)) as SyncTransactionResult<T>,
+        ) as SyncTransactionResult<T>
+      },
+      { behavior: "immediate" },
+    ) as SyncTransactionResult<T>
+    runEffects(effects)
+    return result
   }
 
   export type BusyRetryOptions = {
