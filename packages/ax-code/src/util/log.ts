@@ -323,10 +323,16 @@ export namespace Log {
         absolute: true,
         include: "file",
       })
-    ).filter((file) => {
-      const name = path.basename(file)
-      return isStampedLogName(name)
-    })
+    )
+      .filter((file) => {
+        const name = path.basename(file)
+        return isStampedLogName(name)
+      })
+      // fast-glob returns results in arbitrary (filesystem-dependent) order, not
+      // sorted by name — without this sort, `slice(0, -5)` below could delete the
+      // newest logs and keep stale ones instead of the intended "keep the 5 most
+      // recent". The stamped filename format sorts lexicographically by time.
+      .sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
     if (files.length <= 5) return
 
     const filesToDelete = files.slice(0, -5)
