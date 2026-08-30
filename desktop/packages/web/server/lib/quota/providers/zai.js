@@ -46,6 +46,7 @@ export const fetchQuota = async () => {
     })
 
     if (!response.ok) {
+      response.body?.cancel()
       return buildResult({
         providerId,
         providerName,

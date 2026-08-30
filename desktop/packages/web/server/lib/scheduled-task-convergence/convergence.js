@@ -191,27 +191,42 @@ export const createScheduledTaskConvergence = (deps) => {
         }
         continue
       }
+      let created
       try {
-        const created = await createRuntimeTask(projectPath, payload)
-        const createdID = typeof created?.id === "string" ? created.id : null
-        existingByTitle.set(payload.title, { id: createdID, status: "active" })
-        if (result.pause) {
-          if (createdID) {
-            await pauseRuntimeTask(projectPath, createdID)
-            existingByTitle.set(payload.title, { id: createdID, status: "paused" })
-          } else {
-            warnings.push({
-              project: projectID,
-              task: taskLabel,
-              warning: "created without a readable id; pause was skipped and the task is active",
-            })
-          }
-        }
+        created = await createRuntimeTask(projectPath, payload)
       } catch (error) {
         if (isRetryableRuntimeError(error)) {
           return { outcome: "retry", reason: error.message, taskLabel, warnings }
         }
         return { outcome: "skipped", reason: error.message, taskLabel, warnings }
+      }
+      const createdID = typeof created?.id === "string" ? created.id : null
+      existingByTitle.set(payload.title, { id: createdID, status: "active" })
+      if (result.pause) {
+        if (createdID) {
+          try {
+            await pauseRuntimeTask(projectPath, createdID)
+            existingByTitle.set(payload.title, { id: createdID, status: "paused" })
+          } catch (error) {
+            // The task was already created (and is tracked in existingByTitle),
+            // so a retry would hit the idempotent "existing" branch above
+            // rather than creating a duplicate.
+            if (isRetryableRuntimeError(error)) {
+              return { outcome: "retry", reason: error.message, taskLabel, warnings }
+            }
+            warnings.push({
+              project: projectID,
+              task: taskLabel,
+              warning: `created but pause failed permanently: ${error.message}`,
+            })
+          }
+        } else {
+          warnings.push({
+            project: projectID,
+            task: taskLabel,
+            warning: "created without a readable id; pause was skipped and the task is active",
+          })
+        }
       }
     }
     return { outcome: "migrated", taskLabel, warnings }
