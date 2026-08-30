@@ -20,6 +20,7 @@ import { ProviderTransform } from "../provider/transform"
 import type { ProviderID } from "../provider/schema"
 import { Config } from "../config/config"
 import { Flag } from "../flag/flag"
+import { ScopedFlag } from "../flag/scoped"
 import { toErrorMessage } from "../util/error-message"
 import z from "zod"
 
@@ -307,8 +308,16 @@ export async function classifyComplexity(message: string, providerID?: ProviderI
   // routing.llm (persisted via the smart-llm server route) takes precedence
   // over the flag, matching what the route's GET reports. Without Instance
   // context Config.get() rejects and the flag alone decides.
+  //
+  // The bare Flag.AX_CODE_SMART_LLM fallback reads a process-global env var
+  // that the smart-llm route's GET rewrites via FeatureFlag.set on every
+  // call (see scoped.ts's doc comment on this exact hazard for autonomous/
+  // super-long) — last-writer-wins across every directory a server hosts at
+  // once. A project with no routing.llm of its own would otherwise pick up
+  // whichever other concurrently-open project's smart-LLM toggle ran last.
+  // Prefer this directory's own scoped value first.
   const cfg = await Config.get().catch(() => undefined)
-  if (!(cfg?.routing?.llm ?? Flag.AX_CODE_SMART_LLM)) return { complexity: null }
+  if (!(cfg?.routing?.llm ?? ScopedFlag.smartLlm() ?? Flag.AX_CODE_SMART_LLM)) return { complexity: null }
   if (message.length < 30) return { complexity: "low" }
 
   // Anchor on the session's provider when given so classification stays on

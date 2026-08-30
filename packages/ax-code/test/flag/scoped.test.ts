@@ -13,6 +13,7 @@ describe("ScopedFlag", () => {
   test("isScopedFlagName accepts only the scoped feature flags", () => {
     expect(isScopedFlagName("AX_CODE_AUTONOMOUS")).toBe(true)
     expect(isScopedFlagName("AX_CODE_SUPER_LONG")).toBe(true)
+    expect(isScopedFlagName("AX_CODE_SMART_LLM")).toBe(true)
     expect(isScopedFlagName("AX_CODE_ISOLATION_MODE")).toBe(false)
   })
 
@@ -59,5 +60,20 @@ describe("ScopedFlag", () => {
     currentDirectory = "/project-a"
     ScopedFlag.recordCurrent("AX_CODE_SUPER_LONG", true)
     expect(ScopedFlag.isManaged("AX_CODE_SUPER_LONG")).toBe(true)
+  })
+
+  test("smartLlm shields a directory from another directory's env write", () => {
+    currentDirectory = "/project-b"
+    ScopedFlag.recordCurrent("AX_CODE_SMART_LLM", true)
+
+    // Directory A's smart-LLM route GET rewrites the process-global env
+    // (FeatureFlag.set, last-writer-wins). B must keep its own value.
+    currentDirectory = "/project-a"
+    ScopedFlag.recordCurrent("AX_CODE_SMART_LLM", false)
+    process.env["AX_CODE_SMART_LLM"] = "false"
+
+    expect(ScopedFlag.smartLlm()).toBe(false)
+    currentDirectory = "/project-b"
+    expect(ScopedFlag.smartLlm()).toBe(true)
   })
 })

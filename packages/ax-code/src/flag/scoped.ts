@@ -18,7 +18,7 @@ import { Flag } from "./flag"
  * behavior.
  */
 
-export type ScopedFlagName = "AX_CODE_AUTONOMOUS" | "AX_CODE_SUPER_LONG"
+export type ScopedFlagName = "AX_CODE_AUTONOMOUS" | "AX_CODE_SUPER_LONG" | "AX_CODE_SMART_LLM"
 
 let resolveDirectory: (() => string | undefined) | undefined
 const valuesByDirectory = new Map<string, Map<ScopedFlagName, boolean>>()
@@ -28,7 +28,7 @@ const valuesByDirectory = new Map<string, Map<ScopedFlagName, boolean>>()
 // merely mirrors whichever directory wrote it last.
 const managed = new Set<ScopedFlagName>()
 
-const SCOPED_FLAG_NAMES: ReadonlySet<string> = new Set(["AX_CODE_AUTONOMOUS", "AX_CODE_SUPER_LONG"])
+const SCOPED_FLAG_NAMES: ReadonlySet<string> = new Set(["AX_CODE_AUTONOMOUS", "AX_CODE_SUPER_LONG", "AX_CODE_SMART_LLM"])
 
 export function isScopedFlagName(name: string): name is ScopedFlagName {
   return SCOPED_FLAG_NAMES.has(name)
@@ -87,5 +87,14 @@ export namespace ScopedFlag {
    */
   export function superLong(): boolean | undefined {
     return peek("AX_CODE_SUPER_LONG")
+  }
+
+  /**
+   * Smart-LLM routing for the current instance directory, or undefined when
+   * no scoped value is known. Callers feed this in ahead of the process-
+   * global flag fallback.
+   */
+  export function smartLlm(): boolean | undefined {
+    return peek("AX_CODE_SMART_LLM")
   }
 }

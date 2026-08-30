@@ -4,6 +4,7 @@ import fs from "fs/promises"
 import { readFile } from "fs/promises"
 import { route, classifyComplexity, formatComplexityFailureError } from "../../src/agent/router"
 import { Instance } from "../../src/project/instance"
+import { ScopedFlag } from "../../src/flag/scoped"
 import { tmpdir } from "../fixture/fixture"
 
 describe("v2-style keyword route", () => {
@@ -194,6 +195,44 @@ describe("classifyComplexity routing.llm config gating", () => {
     await withRoutingConfig(true, async () => {
       const result = await classifyComplexity("what is 2+2?")
       expect(result.complexity).toBe("low")
+    })
+  })
+})
+
+describe("classifyComplexity cross-directory env leak", () => {
+  const origEnv = process.env["AX_CODE_SMART_LLM"]
+
+  afterEach(() => {
+    if (origEnv === undefined) delete process.env["AX_CODE_SMART_LLM"]
+    else process.env["AX_CODE_SMART_LLM"] = origEnv
+  })
+
+  test("a directory's own scoped value wins over another directory's env write", async () => {
+    await using dirA = await tmpdir({})
+    await using dirB = await tmpdir({})
+
+    // Directory A's smart-llm route GET resolves to enabled and (like the
+    // real route) records its own scoped value while also stamping the
+    // process-global env — last-writer-wins across every directory a server
+    // hosts at once.
+    await Instance.provide({
+      directory: dirA.path,
+      fn: async () => {
+        ScopedFlag.recordCurrent("AX_CODE_SMART_LLM", true)
+      },
+    })
+    process.env["AX_CODE_SMART_LLM"] = "true"
+
+    // Directory B's own GET previously resolved to disabled and recorded
+    // that. A classifyComplexity call in B's context later must not pick up
+    // A's stale env write instead of B's own recorded value.
+    await Instance.provide({
+      directory: dirB.path,
+      fn: async () => {
+        ScopedFlag.recordCurrent("AX_CODE_SMART_LLM", false)
+        const result = await classifyComplexity("what is 2+2?")
+        expect(result.complexity).toBeNull()
+      },
     })
   })
 })
