@@ -572,6 +572,15 @@ export function displayCommands(input: {
             dialog.clear()
             return
           }
+          // Snapshot the transcript alongside the session record now: the
+          // options dialog below awaits user input, and `input.messages`/
+          // `input.parts` are live accessors tied to whatever session route
+          // is current when they're read. Without pinning them here, a
+          // session switch while the dialog is open would export the
+          // original session's title/id with a different session's
+          // messages.
+          const messagesSnapshot = input.messages()
+          const partsSnapshot = { ...input.parts }
           const options = await DialogExportOptions.show(
             dialog,
             transcriptFilename(data.id),
@@ -583,7 +592,7 @@ export function displayCommands(input: {
 
           if (options === null) return
 
-          const transcript = formatTranscript(data, transcriptItems(input.messages(), input.parts), {
+          const transcript = formatTranscript(data, transcriptItems(messagesSnapshot, partsSnapshot), {
             thinking: options.thinking,
             toolDetails: options.toolDetails,
             assistantMetadata: options.assistantMetadata,

@@ -813,21 +813,30 @@ export function Session() {
               // the typed prompt while the server never reverted. Thrown
               // errors are toasted by DialogRollback, which keeps the dialog
               // open for retry.
-              const status = sync.data.session_status?.[route.sessionID]
+              //
+              // Capture the target session now: route.sessionID is live, and
+              // the abort below awaits — a session switch while it's in
+              // flight would otherwise send the revert (with this point's
+              // messageID/partID from the original session) to whatever
+              // session the user has since navigated to. The abort call
+              // itself runs before any await, so reading route.sessionID
+              // there directly is still safe.
+              const sessionID = route.sessionID
+              const status = sync.data.session_status?.[sessionID]
               if (status?.type !== "idle") {
                 const aborted = await sdk.client.session.abort({ sessionID: route.sessionID })
                 if (aborted.error) {
-                  log.warn("session rollback abort failed", { error: aborted.error, sessionID: route.sessionID })
+                  log.warn("session rollback abort failed", { error: aborted.error, sessionID })
                   throw new Error(sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback"))
                 }
               }
               const result = await sdk.client.session.revert({
-                sessionID: route.sessionID,
+                sessionID,
                 messageID: point.messageID,
                 partID: point.partID,
               })
               if (result.error) {
-                log.warn("session rollback revert failed", { error: result.error, sessionID: route.sessionID })
+                log.warn("session rollback revert failed", { error: result.error, sessionID })
                 throw new Error(sdkErrorMessage(result.error, "Failed to rollback to selected step"))
               }
               const messageID = SessionRollbackView.promptID(messagesWithParts(), point)
@@ -1050,11 +1059,23 @@ export function Session() {
         // calls must check the result — a failed abort or revert would
         // otherwise fall through to the success path and clobber the typed
         // prompt while the server never reverted.
-        const status = sync.data.session_status?.[route.sessionID]
+        //
+        // Capture the target session and undo point now, before the abort
+        // below awaits: route.sessionID / messages() / session() are live
+        // and would reflect a different session if the user navigates away
+        // while the abort is in flight, silently undoing whatever session
+        // they've switched to instead of the one they asked to undo.
+        const sessionID = route.sessionID
+        const messageID = undoMessageID(messages(), session()?.revert?.messageID)
+        if (!messageID) {
+          dialog.clear()
+          return
+        }
+        const status = sync.data.session_status?.[sessionID]
         if (status?.type !== "idle") {
-          const aborted = await sdk.client.session.abort({ sessionID: route.sessionID })
+          const aborted = await sdk.client.session.abort({ sessionID })
           if (aborted.error) {
-            log.warn("session undo abort failed", { error: aborted.error, sessionID: route.sessionID })
+            log.warn("session undo abort failed", { error: aborted.error, sessionID })
             toast.show({
               message: sdkErrorMessage(aborted.error, "Failed to stop the running session before undo"),
               variant: "error",
@@ -1062,17 +1083,12 @@ export function Session() {
             return
           }
         }
-        const messageID = undoMessageID(messages(), session()?.revert?.messageID)
-        if (!messageID) {
-          dialog.clear()
-          return
-        }
         const result = await sdk.client.session.revert({
-          sessionID: route.sessionID,
+          sessionID,
           messageID,
         })
         if (result.error) {
-          log.warn("session undo failed", { error: result.error, sessionID: route.sessionID, messageID })
+          log.warn("session undo failed", { error: result.error, sessionID, messageID })
           toast.show({
             message: sdkErrorMessage(result.error, "Failed to undo previous message"),
             variant: "error",
