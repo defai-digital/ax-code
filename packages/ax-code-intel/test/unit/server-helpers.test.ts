@@ -597,6 +597,23 @@ describe("lsp server helpers", () => {
     expect(bin).toBe(legacyBin)
   })
 
+  test("treats a PATH install under a sibling dir sharing binDir's prefix as external", async () => {
+    // A raw `installedBin.startsWith(binDir())` check would wrongly treat this
+    // as "inside" the shared bin (no path-segment boundary between "bin" and
+    // "bin-tools"), silently discarding a real external install in favor of
+    // the pinned managed copy.
+    const managedBin = path.join(Global.Path.bin, ".managed", "terraform-ls")
+    const siblingInstall = `${Global.Path.bin}-tools/terraform-ls`
+    const bin = await resolveManagedToolBin({
+      toolName: "terraform-ls",
+      managedBin,
+      installedBin: siblingInstall,
+      exists: async () => true,
+    })
+
+    expect(bin).toBe(siblingInstall)
+  })
+
   test("resolves the TypeScript server module from the project directory", () => {
     const calls: Array<[string, string]> = []
     const tsserver = resolveTypescriptServer({
