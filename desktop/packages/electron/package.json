@@ -1,6 +1,6 @@
 {
   "name": "@ax-code/electron",
-  "version": "7.9.14",
+  "version": "7.9.15",
   "private": true,
   "description": "AX Code — Electron desktop shell",
   "author": "DEFAI Private Limited",

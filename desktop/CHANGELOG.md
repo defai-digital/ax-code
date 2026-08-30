@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.15] - 2026-08-30
+
+### Added
+
+- Add goal indicator chip to the session sidebar.
+
+### Changed
+
+- Make the subagent status panel noticeable and width-aware.
+- Show footer progress while subagents run in child sessions.
+- Sanitize bundled Desktop runtime symlinks.
+- Refresh baseline line anchors for v7.9.14.
+
+### Fixed
+
+- Fix lost TUI upgrade notifications on cross-directory sessions.
+- Fix desktop auto-update resolving CLI releases instead of desktop ones.
+- Fix ctrl+c exiting TUI on parts-only prompt draft.
+- Fix stale provider generation label for in-flight init.
+- Fix bundled Desktop runtime packaging.
+- Fix Desktop release asset staging.
+
 ## [7.9.14] - 2026-08-30
 
 ### Added
