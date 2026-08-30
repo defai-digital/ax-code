@@ -2,6 +2,8 @@ import { createMemo, createSignal, For, Show } from "solid-js"
 import type { MouseEvent } from "@ax-code/tui"
 import { useRenderer } from "@ax-code/tui/solid"
 import { Spinner } from "@tui/component/spinner"
+import { shouldUseTuiAnimations } from "@tui/component/spinner-profile"
+import { useKV } from "@tui/context/kv"
 import { useTheme } from "@tui/context/theme"
 import { stringWidth } from "@/bun/node-compat"
 import { truncateToCellWidth } from "./last-input-view-model"
@@ -28,6 +30,8 @@ export function SubagentStatusPanel(props: {
 }) {
   const { theme } = useTheme()
   const renderer = useRenderer()
+  const kv = useKV()
+  const animated = createMemo(() => shouldUseTuiAnimations({ userEnabled: kv.get("animations_enabled", true) }))
   const [hovered, setHovered] = createSignal<string>()
   const active = createMemo(() => props.view.items.filter((item) => item.active))
   const stale = createMemo(() => active().filter((item) => item.stale).length)
@@ -60,8 +64,13 @@ export function SubagentStatusPanel(props: {
     // Elapsed text (up to ~6 cols) + 2 gaps + "[↗]" + "[×]" = 14; plus the
     // model column (truncated to 22 cols) and its gap when shown.
     const right = 14 + (showModel() && item.model ? 26 : 0)
-    // Spinner glyph + its gap (2) precede the agent name in the same row.
-    const left = 2 + stringWidth(`${item.agent ?? "Agent"} `) + stringWidth(` — ${activity}`)
+    // Panel left border (1) + panel padding (1+1) + this row's paddingLeft
+    // (2) = 5 columns of chrome around the row, on top of its own content.
+    const outerChrome = 5
+    // Animated spinner glyph + its gap (2) precede the agent name; the
+    // non-animated fallback keeps its default "... " prefix (4) instead.
+    const spinnerChrome = animated() ? 2 : 4
+    const left = outerChrome + spinnerChrome + stringWidth(`${item.agent ?? "Agent"} `) + stringWidth(` — ${activity}`)
     return Math.max(8, props.width - right - left)
   }
 
