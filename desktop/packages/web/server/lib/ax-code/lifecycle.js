@@ -67,18 +67,29 @@ export const createAxCodeLifecycleRuntime = (deps) => {
   // port assigned (ready/restart/external), port cleared (down) — deduped,
   // plus one forced initial report after bootstrap. null means "runtime
   // unavailable". The origin never carries credentials.
+  //
+  // The report also carries the bootstrap retry-exhausted flag so main's
+  // protocol handler can mirror the web proxy readiness gate: 503
+  // {restarting:true} while retrying, {restarting:false} once the retry
+  // budget is exhausted (otherwise the renderer would spin on "restarting"
+  // forever after a permanent bootstrap failure). The flag is part of the
+  // dedupe key so an exhausted transition re-reports even when the origin
+  // (null) did not change.
   let lastReportedRuntimeOrigin
+  let lastReportedRuntimeExhausted
   const reportRuntimeOrigin = () => {
     if (typeof onRuntimeOriginChange !== "function") return
     const origin = state.axCodePort
       ? String(state.axCodeBaseUrl || `http://127.0.0.1:${state.axCodePort}`).replace(/\/+$/, "")
       : null
+    const exhausted = Boolean(state.axCodeRetryExhausted)
     // lastReportedRuntimeOrigin starts undefined so the first report — even a
     // null "unavailable" — always fires once.
-    if (origin === lastReportedRuntimeOrigin) return
+    if (origin === lastReportedRuntimeOrigin && exhausted === lastReportedRuntimeExhausted) return
     lastReportedRuntimeOrigin = origin
+    lastReportedRuntimeExhausted = exhausted
     try {
-      onRuntimeOriginChange(origin)
+      onRuntimeOriginChange(origin, { exhausted })
     } catch {}
   }
 
@@ -1097,6 +1108,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     bootstrapRetryAttempt = 0
     state.axCodeNextRetryAt = 0
     state.axCodeRetryExhausted = false
+    reportRuntimeOrigin()
   }
 
   const runBootstrapRetry = async () => {
@@ -1129,6 +1141,9 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     if (bootstrapRetryAttempt >= BOOTSTRAP_RETRY_MAX_ATTEMPTS) {
       state.axCodeNextRetryAt = 0
       state.axCodeRetryExhausted = true
+      // The readiness gate flips to {restarting:false} from this flag; report
+      // it so main's protocol handler mirrors the same terminal state.
+      reportRuntimeOrigin()
       console.error(
         `[lifecycle] ax-code did not start after ${BOOTSTRAP_RETRY_MAX_ATTEMPTS} retries; giving up (a manual restart can still recover it)`,
       )
@@ -1142,6 +1157,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     )
     state.axCodeRetryExhausted = false
     state.axCodeNextRetryAt = Date.now() + delayMs
+    reportRuntimeOrigin()
     console.log(
       `[lifecycle] retrying ax-code start in ${Math.round(delayMs / 1000)}s (attempt ${bootstrapRetryAttempt}/${BOOTSTRAP_RETRY_MAX_ATTEMPTS})`,
     )

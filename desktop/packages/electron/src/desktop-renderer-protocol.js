@@ -240,22 +240,48 @@ const proxyPackagedRendererApiRequest = async (request, { getApiOrigin, fetchImp
 }
 
 // Runtime-target 503 shape matches the readiness semantics the renderer
-// already handles from the web proxy (503 + JSON { restarting: true }), so
-// polling loaders keep retrying while the runtime restarts.
-const buildRuntimeUnavailableResponse = () =>
-  new Response(JSON.stringify({ error: "ax-code is restarting", restarting: true }), {
-    status: 503,
-    headers: { "Content-Type": "application/json" },
-  })
+// already handles from the web proxy readiness gate
+// (desktop/packages/web/server/lib/ax-code/proxy.js): 503 + JSON
+// { error: "ax-code is restarting", restarting: true } while the runtime is
+// starting/restarting, flipping to { error: "ax-code failed to start",
+// restarting: false } once the bootstrap retry budget is exhausted. The
+// renderer polls while `restarting` is true and switches to the failure UI
+// when it flips false.
+const buildRuntimeUnavailableResponse = ({ exhausted = false } = {}) =>
+  new Response(
+    JSON.stringify(
+      exhausted
+        ? { error: "ax-code failed to start", restarting: false }
+        : { error: "ax-code is restarting", restarting: true },
+    ),
+    {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    },
+  )
 
 // Forward a runtime-classified request straight to the ax-code runtime.
-// getRuntimeUpstream() returns { origin, authorization } from main, or null
-// when the runtime origin is unknown (runtime down/restarting).
-const proxyPackagedRuntimeRequest = async (request, { route, getRuntimeUpstream, fetchImpl }) => {
+// getRuntimeUpstream() returns { origin, authorization, exhausted } from
+// main; a null/empty origin means the runtime is down or restarting, and
+// `exhausted` mirrors the web proxy readiness gate's retry-exhausted state.
+const proxyPackagedRuntimeRequest = async (request, { route, getRuntimeUpstream, getApiOrigin, fetchImpl }) => {
   const upstream = typeof getRuntimeUpstream === "function" ? getRuntimeUpstream() : null
   const origin = typeof upstream?.origin === "string" ? upstream.origin.replace(/\/+$/, "") : ""
-  if (!origin || !isSafeLoopbackApiOrigin(origin)) {
-    return buildRuntimeUnavailableResponse()
+  if (!origin) {
+    return buildRuntimeUnavailableResponse({ exhausted: upstream?.exhausted === true })
+  }
+  if (!isSafeLoopbackApiOrigin(origin)) {
+    // An explicit remote (non-loopback) runtime cannot be proxied from main —
+    // main must never send the per-boot credential off-loopback. Such configs
+    // worked pre-S2.4 through the web server hop, which still handles remote
+    // runtimes correctly, so fall back to it instead of 503ing.
+    return proxyPackagedRendererApiRequest(request, { getApiOrigin, fetchImpl })
+  }
+  // Fail closed: never forward to the runtime without the injected
+  // credential. Unreachable via main.js today (main always builds the header
+  // when an origin exists), but the handler itself must not depend on that.
+  if (typeof upstream.authorization !== "string" || !upstream.authorization) {
+    return buildRuntimeUnavailableResponse({ exhausted: upstream.exhausted === true })
   }
   const source = new URL(request.url)
   const target = `${origin}${route.upstreamPath}${source.search}`
@@ -264,9 +290,7 @@ const proxyPackagedRuntimeRequest = async (request, { route, getRuntimeUpstream,
   // incoming Authorization and inject main's per-boot Basic header instead.
   // The value is never logged or included in diagnostics.
   headers.delete("authorization")
-  if (typeof upstream.authorization === "string" && upstream.authorization) {
-    headers.set("authorization", upstream.authorization)
-  }
+  headers.set("authorization", upstream.authorization)
   // Server-to-server proxy traffic carries no browser Origin; the runtime
   // enforces loopback origins and rejects mismatches, so strip it here the
   // same way the web proxy does.
@@ -319,7 +343,12 @@ const createPackagedRendererProtocolHandler = ({
       if (typeof getRuntimeUpstream === "function") {
         const route = routeApiRequest(pathname, request.method)
         if (route.target === "runtime") {
-          return proxyPackagedRuntimeRequest(request, { route, getRuntimeUpstream, fetchImpl: proxyFetch })
+          return proxyPackagedRuntimeRequest(request, {
+            route,
+            getRuntimeUpstream,
+            getApiOrigin,
+            fetchImpl: proxyFetch,
+          })
         }
       }
       return proxyPackagedRendererApiRequest(request, { getApiOrigin, fetchImpl: proxyFetch })

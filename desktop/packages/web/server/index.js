@@ -965,12 +965,14 @@ Object.defineProperties(axCodeLifecycleState, {
 // app:// protocol handler reverse-proxies runtime-shaped prefixes straight to
 // this origin; null means the runtime is unavailable. process.parentPort only
 // exists inside the Electron utilityProcess; standalone web mode skips this.
-// The origin never carries credentials.
-const reportRuntimeOriginToMain = (origin) => {
+// The origin never carries credentials. `exhausted` mirrors the lifecycle's
+// bootstrap retry-exhausted flag so main's 503 payload matches the web
+// proxy's readiness gate ({restarting:false} once retries are exhausted).
+const reportRuntimeOriginToMain = (origin, details = {}) => {
   const parentPort = process.parentPort ?? null
   if (!parentPort || typeof parentPort.postMessage !== "function") return
   try {
-    parentPort.postMessage({ type: "runtime-origin", origin })
+    parentPort.postMessage({ type: "runtime-origin", origin, exhausted: Boolean(details.exhausted) })
   } catch {}
 }
 
@@ -988,8 +990,12 @@ const devRuntimeUpstreamWriter = createDevRuntimeUpstreamWriter({
   getAxCodeAuthHeaders,
 })
 
-const handleRuntimeOriginChange = (origin) => {
-  reportRuntimeOriginToMain(origin)
+const handleRuntimeOriginChange = (origin, details = {}) => {
+  reportRuntimeOriginToMain(origin, details)
+  // The dev upstream file deliberately stays origin+credential only: in dev
+  // the Vite proxy falls back to the web-server hop when the origin is
+  // unavailable, and that hop's readiness gate already flips to
+  // {restarting:false} on exhaustion.
   devRuntimeUpstreamWriter.publish(origin)
 }
 

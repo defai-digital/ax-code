@@ -514,7 +514,7 @@ describe("ax-code lifecycle", () => {
     const runtime = createRuntime({ onRuntimeOriginChange })
     const server = await runtime.startAxCode()
 
-    expect(onRuntimeOriginChange).toHaveBeenCalledWith("http://127.0.0.1:45678")
+    expect(onRuntimeOriginChange).toHaveBeenCalledWith("http://127.0.0.1:45678", { exhausted: false })
 
     await server.close()
   })
@@ -531,7 +531,7 @@ describe("ax-code lifecycle", () => {
     await expect(runtime.startAxCode()).rejects.toThrow("spawn failed")
 
     expect(state.axCodePort).toBe(null)
-    expect(onRuntimeOriginChange).toHaveBeenCalledWith(null)
+    expect(onRuntimeOriginChange).toHaveBeenCalledWith(null, { exhausted: false })
   })
 
   it("dedupes repeat reports and forces one initial report after bootstrap (S2.4a)", async () => {
@@ -560,7 +560,7 @@ describe("ax-code lifecycle", () => {
       // report after bootstrap — deduped, so the same origin is not re-sent.
       const originCalls = onRuntimeOriginChange.mock.calls.filter(([origin]) => origin === "http://127.0.0.1:45678")
       expect(originCalls.length).toBe(1)
-      expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual(["http://127.0.0.1:45678"])
+      expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual(["http://127.0.0.1:45678", { exhausted: false }])
 
       runtime.shutdown()
     } finally {
@@ -578,9 +578,38 @@ describe("ax-code lifecycle", () => {
 
     await runtime.bootstrapAxCodeAtStartup()
 
-    expect(onRuntimeOriginChange).toHaveBeenCalledWith(null)
-    expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual([null])
+    expect(onRuntimeOriginChange).toHaveBeenCalledWith(null, { exhausted: false })
+    expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual([null, { exhausted: false }])
 
     runtime.shutdown()
   })
+
+  it("reports exhausted:true once the bootstrap retry budget is spent (S2.4a)", async () => {
+    delete process.env.AX_CODE_BINARY
+    startHeadlessBackendMock.mockRejectedValue(new Error("spawn failed"))
+
+    const onRuntimeOriginChange = vi.fn()
+    const state = createLifecycleState()
+    const runtime = createRuntime({ state, onRuntimeOriginChange })
+
+    await runtime.bootstrapAxCodeAtStartup()
+
+    // Retries run on short test delays (50ms/100ms), but each failed restart
+    // attempt takes ~750ms; the budget exhausts after
+    // BOOTSTRAP_RETRY_MAX_ATTEMPTS (10) failed attempts.
+    await vi.waitFor(
+      () => {
+        expect(state.axCodeRetryExhausted).toBe(true)
+      },
+      { timeout: 20000 },
+    )
+
+    // Main's protocol handler mirrors the readiness gate: while retrying the
+    // reports carry exhausted:false; the terminal report flips it so the 503
+    // payload becomes {restarting:false} instead of spinning forever.
+    expect(onRuntimeOriginChange).toHaveBeenCalledWith(null, { exhausted: false })
+    expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual([null, { exhausted: true }])
+
+    runtime.shutdown()
+  }, 30000)
 })

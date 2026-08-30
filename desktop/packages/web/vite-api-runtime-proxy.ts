@@ -196,6 +196,12 @@ export interface ForwardTarget {
   headers?: Record<string, string>
   // Strip the renderer Origin header (runtime target, mirrors packaged mode).
   stripOrigin?: boolean
+  // Strip the incoming Authorization header (runtime target). The renderer
+  // never holds the runtime credential, so its Authorization must never reach
+  // the runtime upstream — the injected credential (target.headers), applied
+  // afterwards, is the only one allowed through. Mirrors the packaged
+  // handler's delete-then-inject order.
+  stripAuthorization?: boolean
 }
 
 // Streams one request to a loopback target. Response bodies — SSE included —
@@ -223,6 +229,7 @@ export function forwardDesktopDevApiRequest(
     if (HOP_BY_HOP_HEADERS.has(lowerKey)) continue
     if (lowerKey === "host" || lowerKey === "accept-encoding") continue
     if (target.stripOrigin && lowerKey === "origin") continue
+    if (target.stripAuthorization && lowerKey === "authorization") continue
     headers[key] = value
   }
   headers["host"] = targetUrl.host
@@ -335,6 +342,7 @@ export function createDesktopApiRuntimeProxyPlugin(options: { upstreamFilePath?:
                 origin: upstream.origin,
                 path: `${route.upstreamPath}${query}`,
                 stripOrigin: true,
+                stripAuthorization: true,
                 headers: upstream.authorization ? { Authorization: upstream.authorization } : undefined,
               },
               (error) => {

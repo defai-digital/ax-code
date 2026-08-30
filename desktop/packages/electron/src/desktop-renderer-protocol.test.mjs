@@ -211,6 +211,36 @@ describe("packaged renderer protocol runtime routing (S2.4a)", () => {
     expect(await response.json()).toEqual({ error: "ax-code is restarting", restarting: true })
   })
 
+  test("runtime origin unknown after exhausted bootstrap retries returns restarting:false", async () => {
+    // Mirrors the web proxy readiness gate: once the lifecycle's bootstrap
+    // retry budget is spent, the 503 flips to {restarting:false} so the
+    // renderer switches from the "restarting" loader to the failure UI.
+    const handle = createRoutedHandler({
+      runtimeUpstream: { origin: null, authorization: "", exhausted: true },
+      fetchImpl: async () => {
+        throw new Error("should not fetch")
+      },
+    })
+    const response = await handle({ url: "app://ax-code/api/session", method: "GET", headers: new Headers() })
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: "ax-code failed to start", restarting: false })
+  })
+
+  test("runtime origin without a credential fails closed (no forward)", async () => {
+    // Unreachable via main.js (main always builds the Basic header when an
+    // origin exists), but the handler itself must never forward to the
+    // runtime without the injected credential.
+    const handle = createRoutedHandler({
+      runtimeUpstream: { origin: "http://127.0.0.1:46001", authorization: "" },
+      fetchImpl: async () => {
+        throw new Error("should not fetch")
+      },
+    })
+    const response = await handle({ url: "app://ax-code/api/session", method: "GET", headers: new Headers() })
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: "ax-code is restarting", restarting: true })
+  })
+
   test("runtime fetch failure returns 503 with restarting JSON (not 502)", async () => {
     const handle = createRoutedHandler({
       runtimeUpstream: { origin: "http://127.0.0.1:46001", authorization: "Basic injected-by-main" },
@@ -258,14 +288,20 @@ describe("packaged renderer protocol runtime routing (S2.4a)", () => {
     expect(seen).toEqual(["http://127.0.0.1:46001/global/event"])
   })
 
-  test("non-loopback runtime origins are rejected as unavailable", async () => {
+  test("non-loopback runtime origins fall back to the web-server hop", async () => {
+    // Explicit remote-runtime configs worked pre-S2.4 via the web proxy; the
+    // direct path must not 503 them (main never sends the credential
+    // off-loopback). The web hop forwards verbatim — no ^/api rewrite.
+    const seen = []
     const handle = createRoutedHandler({
-      runtimeUpstream: { origin: "http://example.com", authorization: "Basic injected-by-main" },
-      fetchImpl: async () => {
-        throw new Error("should not fetch")
+      runtimeUpstream: { origin: "https://runtime.example.com", authorization: "Basic injected-by-main" },
+      fetchImpl: async (url, init) => {
+        seen.push({ url, authorization: init.headers.get("authorization") })
+        return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } })
       },
     })
     const response = await handle({ url: "app://ax-code/api/session", method: "GET", headers: new Headers() })
-    expect(response.status).toBe(503)
+    expect(response.status).toBe(200)
+    expect(seen).toEqual([{ url: "http://127.0.0.1:50959/api/session", authorization: null }])
   })
 })

@@ -324,6 +324,59 @@ describe("desktop API runtime proxy middleware", () => {
     expect(forwarded.headers.host).toBe(`127.0.0.1:${runtime.port}`)
   })
 
+  it("never forwards the renderer's own Authorization to the runtime (injected credential wins)", async () => {
+    const runtime = await startRecordingServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ ok: true }))
+    })
+    const web = await startRecordingServer((_req, res) => {
+      res.writeHead(500)
+      res.end()
+    })
+
+    const dir = makeTmpDir()
+    const upstreamFile = path.join(dir, "upstream.json")
+    fs.writeFileSync(
+      upstreamFile,
+      JSON.stringify({ version: 1, origin: `http://127.0.0.1:${runtime.port}`, authorization: "Basic c2VjcmV0" }),
+      { mode: 0o600 },
+    )
+
+    const proxy = await startProxyServer(upstreamFile, web.port)
+    const result = await getJson(proxy.port, "/api/session", { Authorization: "Basic evil" })
+
+    expect(result.status).toBe(200)
+    expect(runtime.recorded).toHaveLength(1)
+    // Node collapses duplicate case-variant Authorization keys into one
+    // comma-joined header, so an exact equality assertion proves the
+    // renderer's header was dropped, not just shadowed.
+    expect(runtime.recorded[0].headers.authorization).toBe("Basic c2VjcmV0")
+  })
+
+  it("strips the renderer's Authorization even when no runtime credential is configured", async () => {
+    const runtime = await startRecordingServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ ok: true }))
+    })
+    const web = await startRecordingServer((_req, res) => {
+      res.writeHead(500)
+      res.end()
+    })
+
+    const dir = makeTmpDir()
+    const upstreamFile = path.join(dir, "upstream.json")
+    fs.writeFileSync(upstreamFile, JSON.stringify({ version: 1, origin: `http://127.0.0.1:${runtime.port}` }), {
+      mode: 0o600,
+    })
+
+    const proxy = await startProxyServer(upstreamFile, web.port)
+    const result = await getJson(proxy.port, "/api/session", { Authorization: "Basic evil" })
+
+    expect(result.status).toBe(200)
+    expect(runtime.recorded).toHaveLength(1)
+    expect(runtime.recorded[0].headers.authorization).toBeUndefined()
+  })
+
   it("streams runtime SSE responses through unbuffered", async () => {
     const runtime = await startRecordingServer((_req, res) => {
       res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" })

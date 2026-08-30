@@ -104,6 +104,13 @@ describe("api prefix router", () => {
       upstreamPath: "/api/auth/anthropic",
     })
     expect(routeApiRequest("/api/auth/reset", "POST")).toEqual({ target: "web", upstreamPath: "/api/auth/reset" })
+    // Deferred (S2.4 review finding #9): DELETE /api/auth/:id stays on the web
+    // surface, so a runtime-credential delete double-hops (main → web →
+    // runtime). Pinned as expected for now; the web proxy forwards it correctly.
+    expect(routeApiRequest("/api/auth/anthropic", "DELETE")).toEqual({
+      target: "web",
+      upstreamPath: "/api/auth/anthropic",
+    })
     expect(routeApiRequest("/auth/session", "GET")).toEqual({ target: "web", upstreamPath: "/auth/session" })
     expect(routeApiRequest("/auth/passkey/status", "GET")).toEqual({
       target: "web",
