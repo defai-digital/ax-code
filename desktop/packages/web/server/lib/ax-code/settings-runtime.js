@@ -89,6 +89,20 @@ export const createSettingsRuntime = (deps) => {
   const projectIconBaseName = (projectId) => `project-${sha1Hex(projectId)}`
   const PROJECT_ICON_EXTENSIONS = ["png", "jpg", "svg", "webp", "ico"]
 
+  // `project.id` is client-controlled (it round-trips through PUT
+  // /api/config/settings) and legacy entries can hold arbitrary strings —
+  // only newly-migrated ids are guaranteed to be the safe `path_<base64url>`
+  // form. migrateProjectScopedStorage joins it directly into
+  // PROJECTS_ROOT_DIR-relative paths that are then read, moved, and deleted,
+  // so a value like "../../../../etc" would escape PROJECTS_ROOT_DIR
+  // entirely. Confine every id-derived path to PROJECTS_ROOT_DIR before any
+  // filesystem operation touches it.
+  const isWithinProjectsRoot = (candidatePath) => {
+    if (typeof candidatePath !== "string" || !candidatePath) return false
+    const relative = path.relative(PROJECTS_ROOT_DIR, candidatePath)
+    return relative === "" ? false : !relative.startsWith("..") && !path.isAbsolute(relative)
+  }
+
   const readJsonFile = async (filePath) => {
     try {
       const raw = await fsPromises.readFile(filePath, "utf8")
@@ -273,6 +287,16 @@ export const createSettingsRuntime = (deps) => {
     const newConfigPath = path.join(PROJECTS_ROOT_DIR, `${newId}.json`)
     const oldStorageDir = path.join(PROJECTS_ROOT_DIR, oldId)
     const newStorageDir = path.join(PROJECTS_ROOT_DIR, newId)
+
+    if (
+      !isWithinProjectsRoot(oldConfigPath) ||
+      !isWithinProjectsRoot(newConfigPath) ||
+      !isWithinProjectsRoot(oldStorageDir) ||
+      !isWithinProjectsRoot(newStorageDir)
+    ) {
+      console.warn("[projects] Refusing to migrate project storage: id escapes projects root", { oldId, newId })
+      return
+    }
 
     const [oldConfig, newConfig] = await Promise.all([readJsonFile(oldConfigPath), readJsonFile(newConfigPath)])
 

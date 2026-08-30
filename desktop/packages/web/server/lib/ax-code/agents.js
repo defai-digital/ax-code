@@ -8,6 +8,7 @@ import {
   ensureProjectAxCodeResourceDirs,
   resolveProjectAxCodeResourcePath,
   resolveUserAxCodeResourcePath,
+  assertSafeResourceName,
   parseMdFile,
   writeMdFile,
   readConfigLayers,
@@ -34,6 +35,7 @@ function ensureProjectAgentDir(workingDirectory) {
  * Get project-level agent path
  */
 function getProjectAgentPath(workingDirectory, agentName) {
+  assertSafeResourceName(agentName, "Agent")
   return resolveProjectAxCodeResourcePath(workingDirectory, ["agents", `${agentName}.md`], ["agent", `${agentName}.md`])
 }
 
@@ -99,6 +101,7 @@ function getIndexedUserAgentPath(agentName, cache) {
  * e.g. ~/.config/ax-code/agents/business/ceo-diginno.md
  */
 function getUserAgentPath(agentName, lookupCache = null) {
+  assertSafeResourceName(agentName, "Agent")
   // 1. Check flat path first (legacy / newly created agents)
   const pluralPath = resolveUserAxCodeResourcePath(["agents", `${agentName}.md`], ["agent", `${agentName}.md`])
   if (fs.existsSync(pluralPath)) return pluralPath

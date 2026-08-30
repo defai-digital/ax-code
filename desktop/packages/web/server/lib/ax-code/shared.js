@@ -78,6 +78,24 @@ function resolveUserAxCodeResourcePath(primarySegments, legacySegments) {
   return preferExistingLegacyPath(primaryPath, legacyPath)
 }
 
+// Agent/command entity names come straight from request route params
+// (e.g. `/api/config/agents/:name`) and are interpolated into filenames via
+// resolveProjectAxCodeResourcePath / resolveUserAxCodeResourcePath. Express
+// decodes %2F in a matched param into a literal "/", so an unvalidated name
+// like "..%2F..%2Fetc%2Fpasswd" becomes "../../etc/passwd" and — after
+// path.join normalizes the ".." segments — escapes the intended agents/
+// commands directory entirely. Reject any name that isn't a single, safe
+// path segment before it reaches path.join.
+function assertSafeResourceName(name, label) {
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error(`${label} name is required`)
+  }
+  if (name === "." || name === ".." || name.includes("/") || name.includes("\\") || name.includes("\0")) {
+    throw new Error(`Invalid ${label} name`)
+  }
+  return name
+}
+
 // ============== MARKDOWN FILE OPERATIONS ==============
 
 function parseMdFile(filePath) {
@@ -436,14 +454,31 @@ function resolvePromptFilePath(reference) {
     return null
   }
 
-  if (target.startsWith("./")) {
-    target = target.slice(2)
-    target = path.join(AX_CODE_CONFIG_DIR, target)
-  } else if (!path.isAbsolute(target)) {
-    target = path.join(AX_CODE_CONFIG_DIR, target)
+  // `{file:...}` references are read from agent/command JSON config and can
+  // be *written* to via this desktop web API's PATCH routes (see
+  // updateAgent/updateCommand: a client sets prompt/template to a
+  // `{file:...}` string, then a later update writes attacker-controlled
+  // content to whatever path it resolves to). Unlike ax-code core's
+  // "trusted" config resolution, requests reaching this API must be treated
+  // as untrusted: reject absolute paths and home-directory references, and
+  // confine the resolved path to AX_CODE_CONFIG_DIR — otherwise
+  // `{file:/etc/cron.d/x}` or `{file:~/.ssh/authorized_keys}` would let a
+  // caller overwrite an arbitrary file on disk.
+  if (path.isAbsolute(target) || target.startsWith("~")) {
+    return null
   }
 
-  return target
+  if (target.startsWith("./")) {
+    target = target.slice(2)
+  }
+
+  const resolved = path.resolve(AX_CODE_CONFIG_DIR, target)
+  const relativeToConfigDir = path.relative(AX_CODE_CONFIG_DIR, resolved)
+  if (relativeToConfigDir === "" || relativeToConfigDir.startsWith("..") || path.isAbsolute(relativeToConfigDir)) {
+    return null
+  }
+
+  return resolved
 }
 
 function writePromptFile(filePath, content) {
@@ -629,6 +664,7 @@ export {
   ensureProjectAxCodeResourceDirs,
   resolveProjectAxCodeResourcePath,
   resolveUserAxCodeResourcePath,
+  assertSafeResourceName,
   parseMdFile,
   writeMdFile,
   getProjectConfigCandidates,

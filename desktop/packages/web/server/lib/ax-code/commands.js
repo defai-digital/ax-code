@@ -6,6 +6,7 @@ import {
   ensureProjectAxCodeResourceDirs,
   resolveProjectAxCodeResourcePath,
   resolveUserAxCodeResourcePath,
+  assertSafeResourceName,
   parseMdFile,
   writeMdFile,
   readConfigLayers,
@@ -31,6 +32,7 @@ function ensureProjectCommandDir(workingDirectory) {
  * Get project-level command path
  */
 function getProjectCommandPath(workingDirectory, commandName) {
+  assertSafeResourceName(commandName, "Command")
   return resolveProjectAxCodeResourcePath(
     workingDirectory,
     ["commands", `${commandName}.md`],
@@ -42,6 +44,7 @@ function getProjectCommandPath(workingDirectory, commandName) {
  * Get user-level command path
  */
 function getUserCommandPath(commandName) {
+  assertSafeResourceName(commandName, "Command")
   return resolveUserAxCodeResourcePath(["commands", `${commandName}.md`], ["command", `${commandName}.md`])
 }
 
