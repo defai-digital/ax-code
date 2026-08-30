@@ -113,11 +113,15 @@ export const ComputerWatchTool = Tool.define("computer_watch", {
         if (err instanceof ComputerUseError && err.code === "superseded_observation") continue
         throw err
       }
-      observation = polled
       polls++
-      // Providers that support passive observe report unchanged frames
-      // without a screenshot; do not treat a missing screenshot as a change.
-      if (observation.unchanged === true) continue
+      // Providers that support passive observe report unchanged frames with
+      // empty elements and no screenshot. Skip before overwriting `observation`
+      // so the final render / elementCount keep reflecting the last full frame
+      // instead of an empty stub (BUG: an unchanged final poll was wiping the
+      // watch's own result — elements and screenshot both went missing even
+      // though nothing changed).
+      if (polled.unchanged === true) continue
+      observation = polled
       const next = signatureOf(observation)
       if (next === signature) continue
       const nextCount = observation.elements.length

@@ -539,6 +539,29 @@ describe("computer_watch tool", () => {
       expect(result.output).toContain("ok")
     })
   })
+
+  test("an unchanged final poll does not wipe the reported elements/screenshot", async () => {
+    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
+      let calls = 0
+      const original = provider.observe.bind(provider)
+      vi.spyOn(provider, "observe").mockImplementation(async (scope) => {
+        calls++
+        const observation = await original(scope)
+        // Passive dedup: every poll after the first reports no change, which
+        // per the protocol carries empty elements and no screenshot.
+        if (calls >= 2) return { ...observation, elements: [], screenshot: undefined, unchanged: true }
+        return observation
+      })
+
+      const tool = await ComputerWatchTool.init()
+      const result = await tool.execute({ durationMs: 500, intervalMs: 200, includeScreenshot: true }, makeCtx([]))
+
+      expect(result.metadata.changes).toBe(0)
+      expect(result.metadata.elementCount).toBe(2)
+      expect(result.output).toContain("[save-btn]")
+      expect(result.attachments?.length).toBeGreaterThan(0)
+    })
+  })
 })
 
 describe("computer_plan tool", () => {
