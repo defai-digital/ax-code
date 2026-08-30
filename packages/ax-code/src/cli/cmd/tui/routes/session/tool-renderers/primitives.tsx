@@ -90,6 +90,7 @@ export function InlineTool(props: {
           setMargin(1)
           return
         }
+        setMargin(0)
       }}
     >
       <Switch>
