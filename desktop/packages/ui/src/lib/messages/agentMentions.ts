@@ -58,7 +58,9 @@ export const parseAgentMentions = (rawText: string, agents: Agent[]): ParsedAgen
         },
       }
 
-      if (!firstMention) {
+      // Keep whichever mention occurs earliest in the text, not whichever
+      // agent's pattern happened to run first in the outer loop.
+      if (!firstMention || start < firstMention.source!.start) {
         firstMention = mention
       }
     }
