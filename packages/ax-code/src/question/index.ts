@@ -242,6 +242,12 @@ export namespace Question {
       log.warn("reply for unknown request", { requestID: input.requestID })
       return false
     }
+    // Remove before resolving so a concurrent reply/reject racing on the
+    // same requestID (e.g. a duplicate client request) sees it as already
+    // gone instead of also acting on it — `ask()`'s own cleanup only runs
+    // after this deferred settles, which is too late to close that window.
+    // Mirrors the permission module's fix for the same race (#341).
+    pending.delete(input.requestID)
     log.info("replied", { requestID: input.requestID, answers: input.answers })
     Bus.publishDetached(Event.Replied, {
       sessionID: existing.info.sessionID,
@@ -259,6 +265,9 @@ export namespace Question {
       log.warn("reject for unknown request", { requestID })
       return false
     }
+    // See the matching comment in reply() — remove before rejecting so a
+    // racing reply/reject on the same requestID cannot also act on it.
+    pending.delete(requestID)
     log.info("rejected", { requestID })
     Bus.publishDetached(Event.Rejected, {
       sessionID: existing.info.sessionID,
