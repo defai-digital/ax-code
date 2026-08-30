@@ -4,6 +4,92 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.16] - 2026-08-30
+
+### Added
+
+- Add regression tests for the atomic-write, fingerprint, and $-pattern fixes.
+
+### Changed
+
+- Apply Prettier formatting to a previous fix's test file.
+- Apply Prettier formatting to two previous fixes.
+- Apply Prettier formatting to two previous fixes.
+- Clamp negative durations in audit report formatting.
+
+### Fixed
+
+- Fix unused queued auto-send variable.
+- Fix streaming-text throttle reinstating stale text within the same commit.
+- Fix leaked pending-scroll-request promise and missing hook dependency.
+- Fix chat send targeting the wrong session and cross-session composer clobber.
+- Fix multi-file patch splitting on any "---"-prefixed body line.
+- Fix diff-hunk parsing: wrong line numbers and content bleeding across files.
+- Fix deeply-nested sessions failing to render and folder-membership invariant.
+- Fix stale connection-error banner surviving a terminal session switch.
+- Fix stale commit draft and remote data surviving a directory switch.
+- Fix stale staged-diff cache surviving a directory switch.
+- Fix FilesView save clobbering a different file's content after a fast switch.
+- Fix dangling defaultGitIdentityId reference after deleting the default profile.
+- Fix concurrent git-mutating commands racing across expanded commit rows.
+- Fix unsaved skill edits clobbered by an unrelated global config reload.
+- Fix cross-project AX_CODE_SMART_LLM leak into complexity-classification gating.
+- Fix protected-section restore corrupting content with $-patterns.
+- Fix wiki pages not regenerating when config/generator/model changes.
+- Fix writeWikiCards not using atomic writes like every other wiki write path.
+- Fix spurious observation supersession when act() rejects a stale target.
+- Fix terminal close/restart tearing down transport before server confirms.
+- Fix unreachable Files-tab shortcut colliding with search-mode default.
+- Fix worktree validation/canonicalization hitting the wrong origin in Electron.
+- Fix spurious re-renders from reference-equality check on session.permission.
+- Fix unbounded file-content cache growth when protected paths outnumber cache.
+- Fix persisted "restore last session" pointer wiped for archived sessions.
+- Fix sorted-invariant break and stale-directory closure in session actions.
+- Fix session.deleted event routing reading a nonexistent payload field.
+- Fix bootstrap/reconnect question-permission resync clobbering fresher SSE state.
+- Fix ax-engine download toast tracker only polling one project's jobs.
+- Fix ReferenceError crash in plugin publish script's stale-tarball cleanup.
+- Fix disk hydration wiping a session folder created during startup.
+- Fix new/updated session disappearing when a background reload fails.
+- Fix create_symbol refactor edits losing file attribution.
+- Fix wrong intermediate symbol in cross-file root-cause chain.
+- Fix path-prefix collision misclassifying external LSP tool installs.
+- Fix LSP incremental-sync out-of-bounds range on newline-less EOF edits.
+- Fix orphaned ax-code subprocess when shutdown races initial bootstrap.
+- Fix same TTL cache directory-leak in skills/commands, plus missing cache invalidation on mutation.
+- Fix TTL cache serving wrong project directory's plugins/MCP config.
+- Fix two color-math bugs in theme CSS generation.
+- Fix worktree integration silently discarding uncommitted work.
+- Fix agent-mention routing picking wrong "first" mention.
+- Fix double-decoded diff-file path in route parsing.
+- Fix stranded queued-message auto-send when a session's drain is held.
+- Fix panic-crash in diff indentation-matching on multi-byte indentation.
+- Fix cross-project AX_CODE_AUTONOMOUS leak into Super-Long availability.
+- Fix GET /global/event crashing on every real client connection.
+- Fix Mistral-only overflow guard being skipped when providerID is unknown.
+- Fix ax-engine download subprocess inheriting unsanitized parent env.
+- Fix CLI-bridge subprocess tree leak on abort/timeout.
+- Fix two stale-prompt bugs: autonomous-toggle cache and plan-switch reminder.
+- Fix missing-provider errors being misclassified as generic init failures.
+- Fix orphaned CLI provider subprocess on early stdin/stdout setup failure.
+- Fix browser_evaluate always crashing on 2+ element arguments.
+- Fix git-config hooksPath protection bypass via leading global flags.
+- Fix task-queue claimForExecution not stamping executorOwner on running rows.
+- Fix autonomy budget precedence: profile presets wrongly beat session/caps overrides.
+- Fix lost write atomicity in processor-impl when session sharding is on.
+- Fix stale tool-error guidance surviving a success on the paired tool name.
+- Fix OTLP session export using export-time instead of recorded event timestamps.
+- Fix cross-project data corruption and lost atomicity in shard context.
+- Fix code-intelligence prefix-boundary and extensioned-import bugs.
+- Fix snapshot add/diff scoping to session directory instead of the git worktree.
+- Fix two config precedence bugs allowing lower-trust sources to override protections.
+- Fix risk scorer missing Go/Rust/Deno/Swift/.NET test failures.
+- Fix lost transaction atomicity when Database.transaction is nested in use().
+- Fix zombie subprocess on local MCP server connect failure.
+- Fix computer_watch overwriting the last real observation with an unchanged stub.
+- Fix residual subagent row width-budget under-count.
+- Fix subagent status panel width truncation and spinner prefix regressions.
+
 ## [7.9.15] - 2026-08-30
 
 ### Added
