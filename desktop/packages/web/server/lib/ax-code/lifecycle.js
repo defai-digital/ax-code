@@ -53,6 +53,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     recordStartupEvent = null,
     healthCheckIntervalMs = 15000,
     onRuntimeOriginChange = null,
+    requestMainRuntimeRestart = null,
   } = deps
 
   const markStartup = (name, details = {}, options = {}) => {
@@ -1071,6 +1072,16 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     console.log(`Refreshing ax-code after ${reason}`)
     clearResolvedAxCodeBinary()
     await applyAxCodeBinaryFromSettings()
+
+    // S2.5c: in external mode under the Electron utilityProcess, main
+    // supervises the runtime — a settings.axCodeBinary change can only take
+    // effect if MAIN restarts the supervised process (a local re-probe keeps
+    // talking to the old binary). Ask main to restart with re-resolution
+    // (serialized/rate-limited there); the re-probe below then converges on
+    // the restarted runtime via the fixed port.
+    if (state.isExternalAxCode && typeof requestMainRuntimeRestart === "function") {
+      requestMainRuntimeRestart(reason)
+    }
 
     await restartAxCode()
 

@@ -93,7 +93,7 @@ This module provides ax-code server integration utilities for the web server run
 
 ## Public exports (session-runtime.js)
 
-- `createSessionRuntime({ writeSseEvent, getNotificationClients, broadcastEvent? })`: creates runtime-owned state machine and APIs for session status.
+- `createSessionRuntime({ writeSseEvent, getNotificationClients, broadcastEvent?, onActivityChange? })`: creates runtime-owned state machine and APIs for session status. Optional `onActivityChange` (S2.5c) fires on every session-activity phase transition (including the cooldown-timer driven cooldown→idle one); the web server uses it to drive `runtime-busy-reporter.js`.
 - Returned API:
   - `processAxCodeSsePayload(payload)`
   - `getSessionActivitySnapshot()`
@@ -111,6 +111,7 @@ This module provides ax-code server integration utilities for the web server run
 
 - `createAxCodeLifecycleRuntime(dependencies)`: creates lifecycle runtime for managed/external ax-code process orchestration.
   - Optional `onRuntimeOriginChange(origin, details)` dependency (S2.4a): invoked, deduped, whenever the managed runtime's loopback origin is assigned (ready/restart/external), cleared (down), when the bootstrap retry-exhausted flag changes, and once after bootstrap. `origin` is `"http://127.0.0.1:<port>"`-shaped (or the external base URL) and `null` when the runtime is unavailable; it never carries credentials. `details.exhausted` mirrors the readiness gate's retry-exhausted state so main's 503 payload can flip from `{restarting:true}` to `{restarting:false}` once the bootstrap retry budget is spent. In desktop mode the web server forwards these as `{ type: "runtime-origin", origin, exhausted }` messages to Electron main over the utilityProcess channel (same channel as "ready"/"settings-write") so main's app:// protocol handler can reverse-proxy runtime-shaped prefixes straight to the runtime. In dev (S2.4b), the same transitions additionally drive `dev-runtime-upstream.js`: the origin plus the current Basic credential are mirrored to the `AX_CODE_DESKTOP_DEV_UPSTREAM_FILE` JSON file the Vite dev proxy re-reads (the file stays origin+credential only — the dev proxy falls back to the web-server hop, whose readiness gate already carries the exhausted semantics).
+  - Optional `requestMainRuntimeRestart(reason)` dependency (S2.5c): invoked by `refreshAxCodeAfterConfigChange` when the runtime is external and main-supervised — a `settings.axCodeBinary` change can only take effect if main restarts the supervised runtime with re-resolution. The web server forwards it as a `{ type: "runtime-restart-request", reason }` utilityProcess message; main serializes restarts. Inert outside the Electron utilityProcess.
 - Returned API:
   - `startAxCode()`
   - `restartAxCode()`
@@ -122,8 +123,12 @@ This module provides ax-code server integration utilities for the web server run
   - `waitForPortRelease(port, timeoutMs, hostname?)`
   - `killProcessOnPort(port)`
 
-## Public exports (dev-runtime-upstream.js)
+## Public exports (runtime-busy-reporter.js)
 
+- `createRuntimeBusyReporter({ getProcess?, getActiveSessionCount })`: S2.5c reporter that posts the web-local busy-session count to Electron main as `{ type: "runtime-busy", count }` utilityProcess messages, deduped by count. Main feeds the count to the runtime supervisor's busy-session restart grace (the pre-S2.5 web-local `shouldSkipRestartForBusySessions` policy). Inert outside the Electron utilityProcess.
+  - `report()`: recompute the count and post it when it changed.
+
+## Public exports (dev-runtime-upstream.js)
 - `createDevRuntimeUpstreamWriter({ filePath, getAxCodeAuthHeaders, processRef? })`: dev-only (S2.4b) publisher of the runtime's current loopback origin + Basic credential for the Vite dev proxy. Active only when `AX_CODE_DESKTOP_DEV_UPSTREAM_FILE` is set (the Electron dev orchestrator sets it for the whole stack; packaged/production runs never do). Wired into the same `onRuntimeOriginChange` transitions as the S2.4a utilityProcess message.
   - `publish(origin)`: writes `{ version: 1, origin, authorization?, updatedAt }` via atomic tmp+rename with mode 0600; `publish(null)` removes the file so the Vite proxy falls back to the web server. Contents are never logged.
   - `remove()`: idempotent delete; also registered on process exit (best effort — SIGKILL leaves a stale file, which the Vite side tolerates by falling back to the web server on proxy errors).

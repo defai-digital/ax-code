@@ -49,6 +49,7 @@ import { createSettingsWriter } from "./lib/ax-code/settings-writer.js"
 import { createAxCodeResolutionRuntime } from "./lib/ax-code/ax-code-resolution-runtime.js"
 import { createBootstrapRuntime } from "./lib/ax-code/bootstrap-runtime.js"
 import { createSessionRuntime } from "./lib/ax-code/session-runtime.js"
+import { createRuntimeBusyReporter } from "./lib/ax-code/runtime-busy-reporter.js"
 import { createAxCodeWatcherRuntime } from "./lib/ax-code/watcher.js"
 import { createScheduledTasksRuntime } from "./lib/scheduled-tasks/runtime.js"
 import { createServerStartupRuntime } from "./lib/ax-code/server-startup-runtime.js"
@@ -314,16 +315,27 @@ const broadcastGlobalUiEvent = createGlobalUiEventBroadcaster({
 })
 const broadcastUiNotification = (...args) => notificationEmitterRuntime.broadcastUiNotification(...args)
 
+// S2.5c (SPEC-2026-08-29-desktop-process-model-collapse §5 S2.5): report the
+// busy-session count to Electron main so the main-supervised runtime's
+// wedged-kill honors the busy-session restart grace (the pre-S2.5 web-local
+// policy). getActiveSessionCount is defined just below; the reporter is only
+// invoked from the activity-change hook after that definition runs.
+let reportRuntimeBusyCount = () => {}
+
 const sessionRuntime = createSessionRuntime({
   writeSseEvent,
   getNotificationClients: () => uiNotificationClients,
   broadcastEvent: broadcastGlobalUiEvent,
+  onActivityChange: () => reportRuntimeBusyCount(),
 })
 
 const getActiveSessionCount = () => {
   const snapshot = sessionRuntime.getSessionActivitySnapshot()
   return Object.values(snapshot).filter((entry) => entry.type === "busy").length
 }
+
+const runtimeBusyReporter = createRuntimeBusyReporter({ getActiveSessionCount })
+reportRuntimeBusyCount = runtimeBusyReporter.report
 
 const getUpstreamStallTimeoutMs = () =>
   getActiveSessionCount() > 1 ? UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS : DEFAULT_UPSTREAM_STALL_TIMEOUT_MS
@@ -976,6 +988,20 @@ const reportRuntimeOriginToMain = (origin, details = {}) => {
   } catch {}
 }
 
+// S2.5c (SPEC-2026-08-29-desktop-process-model-collapse §5 S2.5): when main
+// supervises the runtime the web lifecycle runs in external mode and cannot
+// restart the process itself — a settings.axCodeBinary change can only take
+// effect if main restarts the supervised runtime with re-resolution. The
+// lifecycle's refresh path posts this request; main serializes restarts.
+// Inert outside the Electron utilityProcess.
+const requestMainRuntimeRestart = (reason) => {
+  const parentPort = process.parentPort ?? null
+  if (!parentPort || typeof parentPort.postMessage !== "function") return
+  try {
+    parentPort.postMessage({ type: "runtime-restart-request", reason: String(reason || "configuration change") })
+  } catch {}
+}
+
 // S2.4b (SPEC-2026-08-29-desktop-process-model-collapse §2 D3): in dev, the
 // Vite dev server is a separate process tree, so the utilityProcess channel
 // above cannot reach it. The dev orchestrator
@@ -1032,6 +1058,7 @@ const axCodeLifecycleRuntime = createAxCodeLifecycleRuntime({
   recordStartupEvent,
   healthCheckIntervalMs: HEALTH_CHECK_INTERVAL,
   onRuntimeOriginChange: handleRuntimeOriginChange,
+  requestMainRuntimeRestart,
 })
 
 const restartAxCode = (...args) => axCodeLifecycleRuntime.restartAxCode(...args)

@@ -35,6 +35,7 @@ const { buildComputerUseServerEnv } = require("./computer-use-server-env")
 const { applyBundledAxCodeEnv, buildBundledAxCodeEnv } = require("./bundled-ax-code-env")
 const { getRuntimeAuthPassword } = require("./runtime-auth-password")
 const { createAxCodeRuntimeSupervision } = require("./axcode-runtime-supervisor")
+const { createRuntimeRestartRequestHandler } = require("./runtime-restart-request")
 const { createRendererCrashPolicy } = require("./renderer-crash-policy")
 const { createSettingsWriteHandler } = require("./settings-write-handler")
 const { loadUrlWithTimeout } = require("./load-url-timeout")
@@ -230,6 +231,12 @@ const bundledAxCodeEnv = buildBundledAxCodeEnv({
 // Created unless the S2.5 escape hatch is set; the supervision owns the
 // runtime origin/exhausted state in that mode.
 let runtimeSupervision = null
+// S2.5c: the web server asks main to restart the supervised runtime (with
+// binary re-resolution) after settings.axCodeBinary changes; serialized here.
+const runtimeRestartRequests = createRuntimeRestartRequestHandler({
+  getSupervision: () => runtimeSupervision,
+  logger: console,
+})
 
 // The web server runs in a dedicated utilityProcess (dist/server-process.js)
 // rather than in-process, so its CPU/IO never blocks the main event loop that
@@ -377,6 +384,18 @@ function spawnServerProcess(wire) {
   child.on("message", (msg) => {
     // settings-write requests are consumed by the sole-writer handler (S2.3).
     if (settingsWriteHandler.handleMessage(msg)) return
+    // S2.5c: configuration-driven runtime restart requests (settings.
+    // axCodeBinary changes) restart the main-supervised runtime with
+    // re-resolution; serialized and a no-op in escape-hatch mode.
+    if (runtimeRestartRequests.handleMessage(msg)) return
+    if (msg?.type === "runtime-busy") {
+      // S2.5c: the web server reports its active-session count so the
+      // supervisor's wedged-kill can honor the busy-session restart grace.
+      if (runtimeSupervision && Number.isInteger(msg.count) && msg.count >= 0) {
+        runtimeSupervision.setActiveSessionCount(msg.count)
+      }
+      return
+    }
     if (msg?.type === "runtime-origin") {
       // S2.5: when main supervises the runtime it owns the origin directly;
       // web reports describe the web's external view and are ignored here.

@@ -225,6 +225,8 @@ describe("supervision FSM crash recovery", () => {
     clock.advance(600_000)
     expect(driver.spawns).toHaveLength(6)
     expect(exhausted).toHaveLength(1)
+    // Timer hygiene: no residual backoff/stability/boot timers linger.
+    expect(clock.pendingCount()).toBe(0)
   })
 
   test("a successful restart reports recovery and resets the budget after 60 s of stability", async () => {
@@ -309,6 +311,8 @@ describe("supervision FSM stop", () => {
     clock.advance(600_000)
     expect(driver.spawns).toHaveLength(1)
     expect(fsm.state).toBe("stopped")
+    // Timer hygiene: stop() cleared every FSM timer (stability, boot, probe).
+    expect(clock.pendingCount()).toBe(0)
   })
 
   test("stop during restarting cancels the pending restart", async () => {
@@ -407,6 +411,199 @@ describe("supervision FSM health probe (optional driver)", () => {
     spawns[0].wire.exited(1)
     spawns[1].wire.ready({ port: 4100 })
     expect(fsm.state).toBe("healthy")
+  })
+})
+
+describe("supervision FSM busy-session restart deferral", () => {
+  // Probe threshold 2, interval 100 ms: failures land at +100 (1st) and +200
+  // (2nd = threshold). The deferral grace is measured from the first
+  // deferral, so with grace 250 ms the kill lands at +500.
+  function createDeferralFsm({
+    defer = () => true,
+    deferralGraceMs = 1_000,
+    check = () => Promise.resolve(false),
+  } = {}) {
+    const clock = createFakeClock()
+    const fake = createFakeDriver()
+    const ctx = createFsm({
+      clock,
+      driver: fake,
+      probe: {
+        intervalMs: 100,
+        timeoutMs: 5_000,
+        maxConsecutiveFailures: 2,
+        check,
+        shouldDeferRestart: defer,
+        deferralGraceMs,
+      },
+    })
+    return { ...ctx, clock, fake }
+  }
+
+  test("the wedged kill is deferred while sessions are busy and the probe cycle re-arms", async () => {
+    const { fsm, events, fake, clock } = createDeferralFsm()
+    await startHealthy(fsm, fake)
+
+    clock.advance(100) // failure 1
+    await flushMicrotasks()
+    clock.advance(100) // failure 2 = threshold → deferred instead of killed
+    await flushMicrotasks()
+
+    expect(fake.spawns[0].terminated).toBe(0)
+    expect(fsm.state).toBe("healthy")
+    const deferred = events.filter((event) => event.type === "restart-deferred")
+    expect(deferred).toHaveLength(1)
+    expect(deferred[0].consecutiveFailures).toBe(2)
+
+    // The probe cycle re-armed: the next failure defers again (grace 1 s).
+    clock.advance(100)
+    await flushMicrotasks()
+    expect(events.filter((event) => event.type === "restart-deferred")).toHaveLength(2)
+    expect(fsm.state).toBe("healthy")
+    expect(fake.spawns).toHaveLength(1)
+  })
+
+  test("the kill proceeds once the stale-busy grace expires", async () => {
+    const { fsm, events, fake, clock } = createDeferralFsm({ deferralGraceMs: 250 })
+    await startHealthy(fsm, fake)
+
+    // +100: fail 1; +200: fail 2 → deferral starts; +300/+400: still within
+    // the 250 ms grace → deferred; +500: grace expired → wedged kill.
+    for (let i = 0; i < 4; i += 1) {
+      clock.advance(100)
+      await flushMicrotasks()
+    }
+    expect(fsm.state).toBe("healthy")
+    expect(events.filter((event) => event.type === "restart-deferred")).toHaveLength(3)
+    expect(fake.spawns[0].terminated).toBe(0)
+
+    clock.advance(100)
+    await flushMicrotasks()
+    expect(fake.spawns[0].terminated).toBe(1)
+    expect(fsm.state).toBe("restarting")
+    clock.advance(0)
+    expect(fake.spawns).toHaveLength(2)
+    expect(fsm.crashRestarts).toBe(1)
+  })
+
+  test("a hook reporting no busy sessions kills immediately at the threshold", async () => {
+    const { fsm, events, fake, clock } = createDeferralFsm({ defer: () => false })
+    await startHealthy(fsm, fake)
+
+    clock.advance(100)
+    await flushMicrotasks()
+    clock.advance(100)
+    await flushMicrotasks()
+
+    expect(events.filter((event) => event.type === "restart-deferred")).toHaveLength(0)
+    expect(fake.spawns[0].terminated).toBe(1)
+    expect(fsm.state).toBe("restarting")
+  })
+
+  test("a probe success resets the failure streak AND the deferral grace window", async () => {
+    let results = [false]
+    const { fsm, events, fake, clock } = createDeferralFsm({
+      deferralGraceMs: 250,
+      check: () => Promise.resolve(results.shift() ?? true),
+    })
+    await startHealthy(fsm, fake)
+
+    clock.advance(100) // failure 1
+    await flushMicrotasks()
+    results = [false] // failure 2 → deferral starts at +200
+    clock.advance(100)
+    await flushMicrotasks()
+    expect(events.filter((event) => event.type === "restart-deferred")).toHaveLength(1)
+
+    // A success at +300 resets the streak and the grace window.
+    results = [true]
+    clock.advance(100)
+    await flushMicrotasks()
+    expect(fsm.state).toBe("healthy")
+
+    // Fresh failures start a NEW grace window: threshold at +500, deferral
+    // restart; the kill lands no earlier than +500 + 250 ms.
+    results = [false, false, false, false]
+    clock.advance(100) // fail 1
+    await flushMicrotasks()
+    clock.advance(100) // fail 2 → deferral starts at +500
+    await flushMicrotasks()
+    const deferred = events.filter((event) => event.type === "restart-deferred")
+    expect(deferred).toHaveLength(2)
+    expect(deferred[1].deferralStartedAt).toBe(deferred[0].deferralStartedAt + 300)
+    expect(fake.spawns[0].terminated).toBe(0)
+  })
+
+  test("malformed deferral config throws at construction", () => {
+    expect(() =>
+      createFsm({
+        probe: {
+          intervalMs: 100,
+          timeoutMs: 100,
+          maxConsecutiveFailures: 1,
+          check: () => true,
+          shouldDeferRestart: true,
+        },
+      }),
+    ).toThrow(TypeError)
+    expect(() =>
+      createFsm({
+        probe: {
+          intervalMs: 100,
+          timeoutMs: 100,
+          maxConsecutiveFailures: 1,
+          check: () => true,
+          deferralGraceMs: 0,
+        },
+      }),
+    ).toThrow(TypeError)
+  })
+})
+
+describe("supervision FSM start() lingering-handle cleanup", () => {
+  test("start() from idle after wire.failed terminates the still-alive handle", async () => {
+    const { fsm, driver } = createFsm()
+
+    const started = fsm.start()
+    driver.spawns[0].wire.failed(new Error("EADDRINUSE"))
+    await expect(started).rejects.toThrow("EADDRINUSE")
+    expect(fsm.state).toBe("idle")
+    // wire.failed means the process is still alive — and nothing killed it.
+    expect(driver.spawns[0].terminated).toBe(0)
+
+    // A fresh start must not leave the old process running next to its
+    // replacement.
+    const restarted = fsm.start()
+    expect(driver.spawns[0].terminated).toBe(1)
+    expect(driver.spawns).toHaveLength(2)
+    driver.spawns[1].wire.ready({ port: 4099 })
+    await expect(restarted).resolves.toEqual({ port: 4099 })
+    expect(fsm.state).toBe("healthy")
+  })
+
+  test("start() from exhausted terminates a lingering handle of the old attempt", async () => {
+    const clock = createFakeClock()
+    const fake = createFakeDriver()
+    const { fsm } = createFsm({ clock, driver: fake, policy: { ...TEST_POLICY, maxCrashRestarts: 1 } })
+    await startHealthy(fsm, fake)
+
+    fake.spawns[0].wire.exited(1)
+    clock.advance(0)
+    expect(fake.spawns).toHaveLength(2)
+    // Attempt 1 reports a boot error but stays alive; the budget then blocks
+    // the next attempt → exhausted with a live lingering handle.
+    fake.spawns[1].wire.failed(new Error("EADDRINUSE"))
+    clock.advance(500)
+    expect(fsm.state).toBe("exhausted")
+    expect(fake.spawns[1].terminated).toBe(0)
+
+    const restarted = fsm.start()
+    expect(fake.spawns[1].terminated).toBe(1)
+    expect(fake.spawns).toHaveLength(3)
+    fake.spawns[2].wire.ready({ port: 4102 })
+    await expect(restarted).resolves.toEqual({ port: 4102 })
+    expect(fsm.state).toBe("healthy")
+    expect(fsm.crashRestarts).toBe(0)
   })
 })
 

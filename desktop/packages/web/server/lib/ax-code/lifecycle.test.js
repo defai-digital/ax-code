@@ -679,4 +679,62 @@ describe("ax-code lifecycle", () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it("asks main to restart the runtime on a config change when external and main-supervised (S2.5c)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        body: { cancel: vi.fn(async () => undefined) },
+        json: async () => ({ healthy: true }),
+      })),
+    )
+
+    try {
+      const requestMainRuntimeRestart = vi.fn()
+      const state = createLifecycleState()
+      state.isExternalAxCode = true
+      state.axCodePort = 45678
+      state.axCodeBaseUrl = "http://127.0.0.1:45678"
+      const runtime = createRuntime({ state, requestMainRuntimeRestart })
+
+      await runtime.refreshAxCodeAfterConfigChange("settings saved")
+
+      // The restart request goes to main alongside the local re-probe: only
+      // main can make a settings.axCodeBinary change take effect.
+      expect(requestMainRuntimeRestart).toHaveBeenCalledWith("settings saved")
+      expect(state.isAxCodeReady).toBe(true)
+
+      runtime.shutdown()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it("does not request a main restart when the dependency is absent (standalone web mode)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        body: { cancel: vi.fn(async () => undefined) },
+        json: async () => ({ healthy: true }),
+      })),
+    )
+
+    try {
+      const state = createLifecycleState()
+      state.isExternalAxCode = true
+      state.axCodePort = 45678
+      state.axCodeBaseUrl = "http://127.0.0.1:45678"
+      // No requestMainRuntimeRestart passed: the refresh must still work.
+      const runtime = createRuntime({ state })
+
+      await runtime.refreshAxCodeAfterConfigChange("settings saved")
+      expect(state.isAxCodeReady).toBe(true)
+
+      runtime.shutdown()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

@@ -48,7 +48,7 @@ const deriveSessionActivityTransitions = (payload) => {
   return []
 }
 
-export const createSessionRuntime = ({ writeSseEvent, getNotificationClients, broadcastEvent }) => {
+export const createSessionRuntime = ({ writeSseEvent, getNotificationClients, broadcastEvent, onActivityChange }) => {
   const sessionActivityPhases = new Map()
   const sessionActivityCooldowns = new Map()
   const sessionStates = new Map()
@@ -108,6 +108,15 @@ export const createSessionRuntime = ({ writeSseEvent, getNotificationClients, br
           phase,
         },
       })
+    }
+
+    // S2.5c: consumers that track the busy-session count (the runtime-busy
+    // reporter feeding Electron main's restart grace) need every transition,
+    // including the cooldown-timer driven cooldown→idle one.
+    if (typeof onActivityChange === "function") {
+      try {
+        onActivityChange()
+      } catch {}
     }
 
     return true

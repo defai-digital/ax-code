@@ -12,6 +12,49 @@ describe("session runtime", () => {
     runtimes.length = 0
   })
 
+  it("invokes onActivityChange on every phase transition, including cooldown expiry", async () => {
+    vi.useFakeTimers()
+    try {
+      const changes = []
+      const runtime = createSessionRuntime({
+        writeSseEvent() {},
+        getNotificationClients: () => new Set(),
+        broadcastEvent() {},
+        onActivityChange: () => changes.push(Date.now()),
+      })
+      runtimes.push(runtime)
+
+      const busy = {
+        type: "session.status",
+        properties: { sessionID: "session-1", status: { type: "busy" } },
+      }
+      const idle = {
+        type: "session.status",
+        properties: { sessionID: "session-1", status: { type: "idle" } },
+      }
+
+      runtime.processAxCodeSsePayload(busy)
+      expect(changes).toHaveLength(1) // idle -> busy
+      expect(runtime.getSessionActivitySnapshot()["session-1"].type).toBe("busy")
+
+      runtime.processAxCodeSsePayload(idle)
+      expect(changes).toHaveLength(2) // busy -> cooldown
+      expect(runtime.getSessionActivitySnapshot()["session-1"].type).toBe("cooldown")
+
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(changes).toHaveLength(3) // cooldown timer -> idle
+      expect(runtime.getSessionActivitySnapshot()["session-1"].type).toBe("idle")
+
+      // A repeated busy status with no phase change does not fire again.
+      runtime.processAxCodeSsePayload(busy)
+      const afterBusy = changes.length
+      runtime.processAxCodeSsePayload(busy)
+      expect(changes.length).toBe(afterBusy)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it("broadcasts attention clears through the shared broadcaster", () => {
     const events = []
     const runtime = createSessionRuntime({

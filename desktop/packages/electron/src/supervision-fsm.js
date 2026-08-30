@@ -48,6 +48,14 @@
 // All delays go through the injected clock ({ setTimeout, clearTimeout, now }),
 // and every state change is emitted as a structured event to `onEvent` so
 // diagnostics can consume them.
+//
+// Busy-session restart grace (optional probe config): when the liveness probe
+// reaches maxConsecutiveFailures but `probe.shouldDeferRestart()` returns
+// true, the wedged kill is deferred and the probe cycle re-arms (event
+// "restart-deferred"). Deferral is capped by `probe.deferralGraceMs`
+// (default 2 min) measured from the first deferral of the streak; once the
+// grace expires the kill proceeds regardless. A probe success resets the
+// streak.
 
 const { createServerRestartPolicy, shouldRecoverAfterServerExit } = require("./server-restart-policy")
 
@@ -87,6 +95,13 @@ function toError(value, fallbackMessage) {
   return new Error(fallbackMessage || "unknown supervision error")
 }
 
+// Default stale-busy grace for the busy-session restart deferral (former web
+// lifecycle policy, lifecycle.js shouldSkipRestartForBusySessions): while the
+// probe says the process is wedged but sessions are still busy, the wedged
+// kill is deferred; once deferrals have continued for this long, the kill
+// proceeds regardless (a stuck busy flag must not pin a dead process forever).
+const DEFAULT_PROBE_DEFERRAL_GRACE_MS = 2 * 60 * 1000
+
 // The probe config is validated eagerly: a missing/invalid interval or
 // timeout would otherwise collapse into a ~1 ms hot probe loop.
 function normalizeProbe(probe) {
@@ -99,7 +114,14 @@ function normalizeProbe(probe) {
       throw new TypeError(`supervision FSM probe requires ${key} to be a positive integer`)
     }
   }
-  return probe
+  if (probe.shouldDeferRestart != null && typeof probe.shouldDeferRestart !== "function") {
+    throw new TypeError("supervision FSM probe shouldDeferRestart must be a function when provided")
+  }
+  const deferralGraceMs = probe.deferralGraceMs == null ? DEFAULT_PROBE_DEFERRAL_GRACE_MS : probe.deferralGraceMs
+  if (!Number.isInteger(deferralGraceMs) || deferralGraceMs <= 0) {
+    throw new TypeError("supervision FSM probe deferralGraceMs must be a positive integer when provided")
+  }
+  return { ...probe, deferralGraceMs }
 }
 
 // Same eager-validation rationale as normalizeProbe, for the boot readiness
@@ -158,6 +180,9 @@ function createSupervisionFsm(options = {}) {
   let stabilityTimer = null
   let probeTimer = null
   let probeFailures = 0
+  // First time the current wedged-kill deferral streak began (busy-session
+  // grace). Reset on probe success, stop, and when the kill finally proceeds.
+  let probeDeferralStartedAt = null
   let readinessTimer = null
   let startSettlement = null
   let stopPromise = null
@@ -220,6 +245,7 @@ function createSupervisionFsm(options = {}) {
       probeTimer = null
     }
     probeFailures = 0
+    probeDeferralStartedAt = null
   }
 
   function clearReadinessTimer() {
@@ -306,10 +332,32 @@ function createSupervisionFsm(options = {}) {
     if (state !== "healthy" || !attempt) return
     if (ok) {
       probeFailures = 0
+      probeDeferralStartedAt = null
     } else {
       probeFailures += 1
       emit({ type: "health-probe-failed", consecutiveFailures: probeFailures })
       if (probeFailures >= probe.maxConsecutiveFailures) {
+        // Busy-session restart grace (former web lifecycle policy): while the
+        // injected hook reports active sessions, defer the wedged kill and
+        // re-arm the probe cycle — a busy server can fail health checks under
+        // load without being dead. Deferral is capped by the stale-busy grace
+        // (probe.deferralGraceMs, default 2 min) measured from the FIRST
+        // deferral of this streak; afterwards the kill proceeds regardless.
+        if (typeof probe.shouldDeferRestart === "function" && probe.shouldDeferRestart()) {
+          const at = now()
+          if (probeDeferralStartedAt === null) probeDeferralStartedAt = at
+          if (at - probeDeferralStartedAt < probe.deferralGraceMs) {
+            emit({
+              type: "restart-deferred",
+              consecutiveFailures: probeFailures,
+              deferralStartedAt: probeDeferralStartedAt,
+            })
+            probeTimer = setTimer(runProbe, probe.intervalMs)
+            unref(probeTimer)
+            return
+          }
+        }
+        probeDeferralStartedAt = null
         // Wedged process: kill it and run the normal crash-recovery path.
         // Its exit event is ignored (attempt is detached) and the restart
         // counts against the crash budget like any other recovery.
@@ -559,6 +607,13 @@ function createSupervisionFsm(options = {}) {
     if (state !== "idle" && state !== "exhausted" && state !== "stopped") {
       return Promise.reject(new Error(`${label} supervision cannot start from state "${state}"`))
     }
+    // A previous attempt may still hold a LIVE handle here (an attempt that
+    // reported wire.failed with terminate: false and never exited, kept so
+    // stop() could still gracefully stop it). Terminate it before spawning
+    // anew — the old process must never linger next to its replacement.
+    const lingering = attempt
+    attempt = null
+    if (lingering && lingering.handle) safeTerminate(lingering.handle)
     if (state !== "idle") {
       // Manual restart escape from exhausted/stopped: fresh budget.
       restartPolicy.markStable()
