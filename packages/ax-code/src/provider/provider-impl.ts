@@ -803,18 +803,26 @@ export namespace Provider {
   const providerInstallFailures = new Map<string, { at: number; error: unknown }>()
 
   async function getSDK(model: Model) {
+    // Provider-existence is checked here, outside the try/catch below, so a
+    // missing provider surfaces as ModelNotFoundError (400, with suggestions)
+    // instead of being rewrapped into InitError by the catch-all. Without
+    // this split, a provider that disappears between getLanguage()'s own
+    // check and this one (e.g. a concurrent Auth.set/invalidate) produced a
+    // misleading "failed to initialize provider" error and skipped every
+    // ModelNotFoundError-specific handler (server HTTP mapping, CLI
+    // suggestions, session "model not found" event).
+    const s = await state()
+    const provider = s.providers[model.providerID]
+    if (!provider) {
+      throw new ModelNotFoundError({
+        providerID: model.providerID,
+        modelID: model.id,
+      })
+    }
     try {
       using _ = log.time("getSDK", {
         providerID: model.providerID,
       })
-      const s = await state()
-      const provider = s.providers[model.providerID]
-      if (!provider) {
-        throw new ModelNotFoundError({
-          providerID: model.providerID,
-          modelID: model.id,
-        })
-      }
       const options = { ...provider.options }
 
       if (model.api.npm.includes("@ai-sdk/openai-compatible") && options["includeUsage"] !== false) {
