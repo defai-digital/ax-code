@@ -223,29 +223,19 @@ describe("insertReminders turn context", () => {
           session,
         })
         const firstReminded = firstResult.find((m) => m.info.id === firstBuildUser.info.id)!
-        expect(
-          firstReminded.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH),
-        ).toBe(true)
+        expect(firstReminded.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH)).toBe(true)
 
         // A later build turn — further from the switch, with another build
         // turn already in between — must NOT repeat the reminder on every
         // subsequent build turn for the rest of the session.
         const laterBuildUser = userMessage("m4", session.id)
         const laterResult = await insertReminders({
-          messages: [
-            userMessage("m1", session.id),
-            planAssistant,
-            firstBuildUser,
-            buildAssistant,
-            laterBuildUser,
-          ],
+          messages: [userMessage("m1", session.id), planAssistant, firstBuildUser, buildAssistant, laterBuildUser],
           agent: { name: "build" } as any,
           session,
         })
         const laterReminded = laterResult.find((m) => m.info.id === laterBuildUser.info.id)!
-        expect(
-          laterReminded.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH),
-        ).toBe(false)
+        expect(laterReminded.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH)).toBe(false)
       },
     })
   })

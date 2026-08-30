@@ -391,10 +391,7 @@ export namespace CodeGraphQuery {
         .where(
           and(
             eq(CodeFileTable.project_id, projectID),
-            or(
-              eq(CodeFileTable.path, scopePrefix),
-              sql`${CodeFileTable.path} LIKE ${boundary + "%"} ESCAPE '\\'`,
-            ),
+            or(eq(CodeFileTable.path, scopePrefix), sql`${CodeFileTable.path} LIKE ${boundary + "%"} ESCAPE '\\'`),
           ),
         )
         .all()
