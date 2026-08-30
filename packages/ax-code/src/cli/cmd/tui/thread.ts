@@ -525,7 +525,25 @@ export function createEventSource(client: RpcClient, wire?: RpcWireTarget): Even
   }
 
   return {
-    on: (handler) => client.on<Event>("event", handler),
+    on: (handler) => {
+      const offEvent = client.on<Event>("event", handler)
+      // The worker forwards its local GlobalBus events — including the
+      // installation.updated / installation.update-available events that
+      // cli/upgrade.ts publishes via Bus.publish → emitGlobal — on the
+      // "global.event" RPC channel. The per-directory "/event" SSE stream only
+      // carries events for the current workspace directory, so an update
+      // notification would be lost when the active session lives in a
+      // different directory (e.g. a worktree). Forward the global payloads
+      // into the same handler so upgrade events reach the TUI regardless of
+      // the active workspace.
+      const offGlobal = client.on<{ directory?: string; payload: Event }>("global.event", (event) =>
+        handler(event.payload),
+      )
+      return () => {
+        offEvent()
+        offGlobal()
+      }
+    },
     onStatus: (handler) => {
       if (lastStatus) handler(lastStatus)
       statusListeners.add(handler)
