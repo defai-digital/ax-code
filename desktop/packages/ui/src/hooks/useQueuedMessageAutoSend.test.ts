@@ -136,7 +136,12 @@ describe("computeQueuedAutoSendStatusUpdate", () => {
     const previous = new Map([["session-b", "busy" as const]])
     const statusRecord = { "session-b": { type: "idle" } }
 
-    const { nextStatusMap, sessionIdsToDispatch } = computeQueuedAutoSendStatusUpdate({}, statusRecord, previous, () => true)
+    const { nextStatusMap, sessionIdsToDispatch } = computeQueuedAutoSendStatusUpdate(
+      {},
+      statusRecord,
+      previous,
+      () => true,
+    )
 
     expect(sessionIdsToDispatch).toEqual([])
     expect(nextStatusMap.get("session-b")).toBe("idle")
@@ -148,7 +153,12 @@ describe("computeQueuedAutoSendStatusUpdate", () => {
       ["session-stale", "busy" as const],
     ])
 
-    const { nextStatusMap } = computeQueuedAutoSendStatusUpdate({}, { "session-a": { type: "idle" } }, previous, () => false)
+    const { nextStatusMap } = computeQueuedAutoSendStatusUpdate(
+      {},
+      { "session-a": { type: "idle" } },
+      previous,
+      () => false,
+    )
 
     expect(nextStatusMap.has("session-stale")).toBe(false)
     expect(nextStatusMap.get("session-a")).toBe("idle")
