@@ -750,6 +750,49 @@ test("migrates mode field to agent field", async () => {
   })
 })
 
+test("higher-precedence agent config is not clobbered by a lower-precedence deprecated mode field", async () => {
+  // Global config is lower precedence than project config. It sets the
+  // legacy `mode` field for an agent name that the project also configures
+  // via the modern `agent` field. Regression check: the deprecated `mode`
+  // migration must not unconditionally overwrite `agent` at the end of the
+  // merge pipeline, discarding a higher-precedence source's explicit value.
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, {
+      mode: {
+        shared_agent: {
+          model: "global-mode/model",
+          temperature: 0.9,
+        },
+      },
+    })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, {
+          agent: {
+            shared_agent: {
+              model: "project-agent/model",
+            },
+          },
+        })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.agent?.["shared_agent"]?.model).toBe("project-agent/model")
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
+})
+
 test("loads config from .ax-code directory", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
@@ -1826,6 +1869,42 @@ test("untrusted project config cannot select executables, packages, endpoints, o
       expect(config.formatter).toEqual({ prettier: { disabled: true } })
     },
   })
+})
+
+test("project config can only add to, never replace, a trusted global isolation.protected list", async () => {
+  // Config merging replaces array fields wholesale by default, and project
+  // config merges with higher precedence than global. If a committed,
+  // untrusted project ax-code.json setting isolation.protected replaced
+  // rather than added to the accumulated list, it could silently discard
+  // every path a trusted global/managed config protected from agent writes.
+  // Project config may still tighten (add its own extra protected paths).
+  await using globalTmp = await tmpdir()
+  const prevConfig = Global.Path.config
+  ;(Global.Path as { config: string }).config = globalTmp.path
+  Config.global.reset()
+  try {
+    await writeConfig(globalTmp.path, {
+      isolation: { protected: ["global-secret.env"] },
+    })
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeConfig(dir, {
+          isolation: { protected: ["project-secret.env"] },
+        })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const config = await Config.get()
+        expect(config.isolation?.protected).toContain("global-secret.env")
+        expect(config.isolation?.protected).toContain("project-secret.env")
+      },
+    })
+  } finally {
+    ;(Global.Path as { config: string }).config = prevConfig
+    Config.global.reset()
+  }
 })
 
 test("migrates legacy tools config to permissions - allow", async () => {

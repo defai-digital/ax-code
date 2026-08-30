@@ -212,6 +212,11 @@ export namespace Config {
       const isolation = { ...copy.isolation }
       if (isolation.mode === "full-access") delete isolation.mode
       if (isolation.network === true) delete isolation.network
+      // `protected` itself is intentionally left alone here: it is a
+      // tightening-only, additive list (see mergeConfigConcatArrays, which
+      // concatenates it across sources instead of letting a later source
+      // replace it), so an untrusted config can only add protected paths,
+      // never drop ones a trusted lower-precedence source added.
       copy.isolation = isolation
     }
     if (isRecord(copy.autonomy) && isRecord(copy.autonomy.budget) && isRecord(copy.autonomy.budget.changes)) {
@@ -334,7 +339,37 @@ export namespace Config {
     if (instructions) {
       merged.instructions = instructions
     }
+    // isolation.protected is a tightening-only safety list: entries only add
+    // extra protected paths, they never remove the caller's DEFAULT_PROTECTED
+    // set (see Isolation.resolve). mergeDeep treats arrays as opaque values
+    // and lets `source` replace `target` wholesale, which would let a
+    // higher-precedence-but-lower-trust source (e.g. a committed project
+    // ax-code.json) silently discard protected paths a trusted global/managed
+    // config added earlier. Concatenate instead, same as plugin/instructions.
+    const protectedPaths = mergeUniqueStrings(target.isolation?.protected, source.isolation?.protected)
+    if (protectedPaths) {
+      merged.isolation = { ...merged.isolation, protected: protectedPaths }
+    }
     return merged
+  }
+
+  // Fold a single source's deprecated top-level `mode` field into its own
+  // `agent` field, tagging each entry `mode: "primary"`. This must run once
+  // per source, before that source is merged into the accumulated result —
+  // not once at the very end of loadState() against the fully-merged config.
+  // Doing it at the end let ANY source's `mode.<name>` unconditionally
+  // clobber `agent.<name>` set by a higher-precedence source, since the
+  // migration ignored where each value actually came from (e.g. a lower
+  // trust remote well-known config's `mode.build.model` could overwrite the
+  // user's own trusted `agent.build.model`). Folding per-source lets the
+  // normal precedence-ordered merge in mergeFromSource decide the winner.
+  function migrateDeprecatedModeIntoAgent(config: Info): Info {
+    if (!config.mode) return config
+    const patch: Record<string, Agent> = {}
+    for (const [name, mode] of Object.entries(config.mode)) {
+      patch[name] = { ...mode, mode: "primary" as const }
+    }
+    return { ...config, agent: mergeDeep(config.agent ?? {}, patch) }
   }
 
   export const state = Instance.state(() => NativePerf.runAsync("config.load", undefined, loadState))
@@ -352,7 +387,7 @@ export namespace Config {
 
     function mergeFromSource(source: McpSource, config: Info) {
       recordMcpSources(config, source)
-      result = mergeConfigConcatArrays(result, config)
+      result = mergeConfigConcatArrays(result, migrateDeprecatedModeIntoAgent(config))
     }
 
     // Config loading order (low -> high precedence): https://github.com/defai-digital/ax-code#config-precedence-order
@@ -694,15 +729,10 @@ export namespace Config {
       }
     }
 
-    // Migrate deprecated mode field to agent field
-    for (const [name, mode] of Object.entries(result.mode ?? {})) {
-      result.agent = mergeDeep(result.agent ?? {}, {
-        [name]: {
-          ...mode,
-          mode: "primary" as const,
-        },
-      })
-    }
+    // The deprecated top-level `mode` field is folded into `agent` per
+    // source inside mergeFromSource (see migrateDeprecatedModeIntoAgent)
+    // so precedence between sources is respected. `result.mode` itself is
+    // left as the plain merged value for backward-compatible introspection.
 
     if (Flag.AX_CODE_PERMISSION) {
       const parsed = parsePermissionEnv(Flag.AX_CODE_PERMISSION)
