@@ -621,6 +621,11 @@ async function collectResult(
       }
 
       if (event.type === "session.error") {
+        // `sdk.event.subscribe()` is a single instance-wide stream, not
+        // scoped to this session — an unrelated concurrent session's error
+        // must not abort this run. A missing sessionID is a genuine
+        // instance-level error and still propagates.
+        if (event.properties.sessionID !== undefined && event.properties.sessionID !== sessionID) continue
         const err = classifyError(getErrorMessage(event.properties.error))
         if (hooks?.onError) hooks.onError(err)
         throw err
@@ -735,6 +740,9 @@ async function* streamEvents(
     }
 
     if (event.type === "session.error") {
+      // See the matching guard in collectResult(): the event stream is
+      // instance-wide, so ignore errors tagged to a different session.
+      if (event.properties.sessionID !== undefined && event.properties.sessionID !== sessionID) continue
       const err = classifyError(getErrorMessage(event.properties.error))
       if (hooks?.onError) hooks.onError(err)
       yield { type: "error", error: err }
@@ -1131,28 +1139,31 @@ export async function createAgent(options?: AgentOptions): Promise<Agent> {
         throw new ToolError(name, `Not found. Available: ${available.join(", ")}`)
       }
       const sessionID = await createTrackedSession("create")
-      const events = await sdk.event.subscribe()
-      const resultPromise = collectResult(sdk, events, sessionID, opts.hooks)
       try {
-        await sdk.session.prompt({
-          sessionID,
-          agent: "build",
-          parts: [
-            {
-              type: "text",
-              text: `Use the ${name} tool with these arguments: ${formatToolArgumentsForPrompt(input)}. Only use this one tool, nothing else.`,
-            },
-          ],
-        })
-      } catch (err) {
-        await closeEvents(events)
-        throw toError(err)
-      }
-      try {
+        const events = await sdk.event.subscribe()
+        const resultPromise = collectResult(sdk, events, sessionID, opts.hooks)
+        try {
+          await sdk.session.prompt({
+            sessionID,
+            agent: "build",
+            parts: [
+              {
+                type: "text",
+                text: `Use the ${name} tool with these arguments: ${formatToolArgumentsForPrompt(input)}. Only use this one tool, nothing else.`,
+              },
+            ],
+          })
+        } catch (err) {
+          await closeEvents(events)
+          throw toError(err)
+        }
         const result = await resultPromise
         const toolResult = result.toolCalls.find((t) => t.tool === name)
         return toolResult?.output ?? result.text
       } finally {
+        // Covers the prompt-failure path too — previously that threw before
+        // reaching the cleanup below, leaking the session out of
+        // `activeSessions` (and its server-side session) until dispose().
         activeSessions.delete(sessionID)
       }
     },
