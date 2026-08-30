@@ -195,7 +195,7 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: "open_right_sidebar_files",
-    defaultCombo: "mod+shift+f",
+    defaultCombo: "mod+shift+u",
     label: "Open right sidebar Files tab",
     description: "Open right sidebar and select Files",
     customizable: true,
