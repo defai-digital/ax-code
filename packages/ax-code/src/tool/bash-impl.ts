@@ -757,26 +757,72 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // isolation, permissions, and blast-radius checks still apply.
       const normalizeResolvedPath = (value: string) =>
         process.platform === "win32" ? Filesystem.windowsPath(value).replace(/\//g, "\\") : value
-      const staticResolvedPath = (raw: string) => {
+      const staticResolvedPath = (raw: string, base: string) => {
         const staticPath = isStaticPathArg(raw)
         if (!staticPath) return undefined
-        return normalizeResolvedPath(path.resolve(cwd, staticPath))
+        return normalizeResolvedPath(path.resolve(base, staticPath))
       }
+
+      // Track top-level `cd` commands so relative paths in a compound command
+      // resolve against the directory in effect at that point (`cd sub && cat
+      // file.txt`). Fail-open: a cd with anything other than exactly one
+      // static path argument, or any cd inside a subshell / command
+      // substitution, disables tracking entirely and every path resolves
+      // against the base cwd (the previous behavior).
+      const effectiveCwdAt = new Map<number, string>()
+      {
+        let effectiveCwd = cwd
+        for (const node of tree.rootNode.descendantsOfType("command")) {
+          if (!node) continue
+          effectiveCwdAt.set(node.id, effectiveCwd)
+          const parts: string[] = []
+          for (let i = 0; i < node.childCount; i++) {
+            const child = node.child(i)
+            if (!child) continue
+            if (["command_name", "word", "string", "raw_string", "concatenation"].includes(child.type)) {
+              parts.push(child.text)
+            }
+          }
+          if (parts.length === 0 || stripShellQuotes(parts[0]!) !== "cd") continue
+          let nested = false
+          for (let p = node.parent; p; p = p.parent) {
+            if (p.type === "subshell" || p.type === "command_substitution") {
+              nested = true
+              break
+            }
+          }
+          const target = parts.length === 2 && !parts[1]!.startsWith("-") ? isStaticPathArg(parts[1]!) : undefined
+          if (nested || target === undefined) {
+            effectiveCwdAt.clear()
+            break
+          }
+          effectiveCwd = path.resolve(effectiveCwd, target)
+        }
+      }
+      const cwdFor = (node: { id: number }) => effectiveCwdAt.get(node.id) ?? cwd
+
       const createdAt = new Map<string, number>()
-      const recordCreation = (raw: string, position: number) => {
-        const resolved = staticResolvedPath(raw)
+      const recordCreation = (raw: string, position: number, base: string) => {
+        const resolved = staticResolvedPath(raw, base)
         if (!resolved) return
         const previous = createdAt.get(resolved)
         if (previous === undefined || position < previous) createdAt.set(resolved, position)
       }
       for (const redirect of tree.rootNode.descendantsOfType("file_redirect")) {
         if (!redirect || !isWriteFileRedirect(redirect)) continue
+        let base = cwd
+        for (let p = redirect.parent; p; p = p.parent) {
+          if (p.type === "command") {
+            base = cwdFor(p)
+            break
+          }
+        }
         for (let i = 0; i < redirect.childCount; i++) {
           const child = redirect.child(i)
           if (!child || !["word", "string", "raw_string", "concatenation"].includes(child.type)) continue
           const target = stripShellQuotes(child.text)
           if (!target || /^&/.test(target)) continue
-          recordCreation(target, redirect.endIndex)
+          recordCreation(target, redirect.endIndex, base)
         }
       }
       for (const node of tree.rootNode.descendantsOfType("command")) {
@@ -792,7 +838,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         const cmd = parts[0] ? stripShellQuotes(parts[0]) : undefined
         if (!cmd) continue
         for (const arg of staticallyCreatedPathArgs(cmd, parts.slice(1))) {
-          recordCreation(arg, node.endIndex)
+          recordCreation(arg, node.endIndex, cwdFor(node))
         }
       }
 
@@ -810,7 +856,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         const cmd = parts[0]
         if (!cmd) continue
         for (const arg of staticallyCheckablePathArgs(cmd, parts.slice(1))) {
-          const resolved = staticResolvedPath(arg)
+          const resolved = staticResolvedPath(arg, cwdFor(node))
           if (!resolved) continue
           const creation = createdAt.get(resolved)
           if (creation !== undefined && creation < node.startIndex) continue

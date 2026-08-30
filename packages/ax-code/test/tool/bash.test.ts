@@ -1017,5 +1017,77 @@ describe("tool.bash isolation", () => {
         },
       })
     })
+
+    test("resolves relative paths against a preceding top-level cd", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "sub"))
+      await fs.writeFile(path.join(tmp.path, "sub", "file.txt"), "nested\n")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: "cd sub && cat file.txt",
+              description: "Read a file relative to a cd target",
+            },
+            ctx,
+          )
+          expect(result.metadata.exit).toBe(0)
+          expect(result.output).toContain("nested")
+        },
+      })
+    })
+
+    test("rejects a missing path under a preceding cd target", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "sub"))
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          try {
+            await bash.execute(
+              {
+                command: "cd sub && cat other.txt",
+                description: "Read a missing file relative to a cd target",
+              },
+              ctx,
+            )
+            throw new Error("should have thrown")
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            expect(msg).toContain("Path does not exist")
+            expect(msg).toContain(path.join(tmp.path, "sub", "other.txt"))
+          }
+        },
+      })
+    })
+
+    test("ignores cd inside a subshell and resolves against the base directory", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "sub"))
+      await fs.writeFile(path.join(tmp.path, "sub", "file.txt"), "nested\n")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          try {
+            await bash.execute(
+              {
+                command: "(cd sub && cat file.txt)",
+                description: "Read a file inside a subshell",
+              },
+              ctx,
+            )
+            throw new Error("should have thrown")
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            expect(msg).toContain("Path does not exist")
+            expect(msg).toContain(path.join(tmp.path, "file.txt"))
+          }
+        },
+      })
+    })
   })
 })
