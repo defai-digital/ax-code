@@ -28,6 +28,7 @@ function createMockLocator() {
     dragTo: vi.fn().mockResolvedValue(undefined),
     count: vi.fn().mockResolvedValue(1),
     boundingBox: vi.fn().mockResolvedValue({ x: 0, y: 0, width: 200, height: 100 }),
+    elementHandle: vi.fn().mockResolvedValue({ dispose: vi.fn().mockResolvedValue(undefined) }),
   }
 }
 
@@ -531,6 +532,46 @@ describe("browser runtime", () => {
     const result = await runtime.evaluate("latest", "(el) => el.innerText", [{ uid: "uid_1" }])
     expect(result).toBe("element text")
     expect(page.locator).toHaveBeenCalledWith('[data-uid="uid_1"]')
+  })
+
+  // Regression: the multi-uid path previously embedded a live Function
+  // object and bare Locators inside page.evaluate's `arg`, which
+  // playwright-core's argument serializer cannot handle (it only special-
+  // cases JSHandle/ElementHandle) — every call on this path threw
+  // "Unexpected value". Element handles must now be resolved first and the
+  // function passed across as a source string.
+  test("evaluate with multiple uid args resolves element handles and disposes them", async () => {
+    const page = createMockPage()
+    const ctx = createMockContext()
+    injectPage(runtime, "page_1", page, ctx)
+
+    page.evaluate.mockImplementationOnce(async (fn: unknown, arg: { source: string; elements: unknown[] }) => {
+      expect(typeof fn).toBe("function")
+      expect(arg.source).toBe("(a, b) => a === b")
+      expect(arg.elements).toHaveLength(2)
+      return true
+    })
+
+    const result = await runtime.evaluate("latest", "(a, b) => a === b", [{ uid: "uid_1" }, { uid: "uid_2" }])
+
+    expect(result).toBe(true)
+    expect(page.locator).toHaveBeenCalledWith('[data-uid="uid_1"]')
+    expect(page.locator).toHaveBeenCalledWith('[data-uid="uid_2"]')
+    expect(page._locator.elementHandle).toHaveBeenCalledTimes(2)
+    const resolvedHandle = await page._locator.elementHandle.mock.results[0]!.value
+    expect(resolvedHandle.dispose).toHaveBeenCalled()
+  })
+
+  test("evaluate with multiple uid args throws a clear error when an element is missing", async () => {
+    const page = createMockPage()
+    const ctx = createMockContext()
+    injectPage(runtime, "page_1", page, ctx)
+    page._locator.elementHandle.mockResolvedValueOnce(null)
+
+    await expect(runtime.evaluate("latest", "(a, b) => a === b", [{ uid: "uid_1" }, { uid: "uid_2" }])).rejects.toThrow(
+      /uid_1.*not found/,
+    )
+    expect(page.evaluate).not.toHaveBeenCalled()
   })
 
   // -- close tests --

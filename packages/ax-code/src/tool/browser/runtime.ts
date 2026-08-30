@@ -701,12 +701,38 @@ export class BrowserRuntime {
       if (locators.length === 1) {
         return locators[0]!.evaluate(parsedFn as (el: Element) => unknown)
       }
-      // Multiple args: evaluate on page, passing element handles
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return entry.pwPage.evaluate(
-        (([f, ...els]: any[]) => (f as (...args: unknown[]) => unknown)(...els)) as () => unknown,
-        [parsedFn, ...locators] as any,
+      // Multiple args: Playwright's argument serializer (serializeArgument /
+      // serializeValue in playwright-core) only special-cases JSHandle /
+      // ElementHandle instances — passing a live Function object (as the
+      // previous code did for `parsedFn`) or a bare Locator (as it did for
+      // each element) throws "Unexpected value" or silently serializes the
+      // Locator's internal channel fields instead of the element, so this
+      // branch always failed. Resolve every uid to a real ElementHandle
+      // first, and hand the function SOURCE (a plain string, always
+      // serializable) across the boundary — it is reconstructed inside the
+      // page and invoked with the elements spread as positional arguments.
+      const handles = await Promise.all(
+        locators.map(async (locator, index) => {
+          const handle = await locator.elementHandle()
+          if (!handle) {
+            throw new Error(`Element with uid "${args[index]!.uid}" not found on page.`)
+          }
+          return handle
+        }),
       )
+      try {
+        return await entry.pwPage.evaluate(
+          ({ source, elements }: { source: string; elements: Element[] }) => {
+            // eslint-disable-next-line @typescript-eslint/no-implied-eval
+            const f = new Function(`return (${source})`)() as (...values: unknown[]) => unknown
+            return f(...elements)
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { source: fn, elements: handles } as any,
+        )
+      } finally {
+        await Promise.all(handles.map((handle) => handle.dispose().catch(() => {})))
+      }
     }
 
     // No-args: pass string directly to page.evaluate (runs in browser sandbox, not Node.js)
