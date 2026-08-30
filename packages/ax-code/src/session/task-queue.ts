@@ -869,6 +869,14 @@ export namespace TaskQueue {
     if (current.status !== "queued" && current.status !== "waiting_for_idle") return undefined
 
     const now = Date.now()
+    // "running" is an owned status (see ownedStatuses): restart recovery's
+    // dead-owner fast path depends on payload.executorOwner being stamped
+    // here, since this is the only path that transitions queued/waiting rows
+    // to "running" in production (setStatus is only exercised directly by
+    // tests). Without it, recoverInterrupted falls back to heartbeat
+    // freshness alone and never fast-fails a row whose owning process has
+    // verifiably died.
+    const ownerPayload = withExecutorOwner(current.payload, now)
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const row = db
         .update(TaskQueueTable)
@@ -876,6 +884,7 @@ export namespace TaskQueue {
           status: "running",
           time_updated: now,
           time_started: current.time.started ?? now,
+          ...(ownerPayload ? { payload: ownerPayload } : {}),
         })
         .where(
           and(
