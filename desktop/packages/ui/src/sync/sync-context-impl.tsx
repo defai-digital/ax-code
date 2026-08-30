@@ -8,7 +8,7 @@ import type { AxCodeClient } from "@ax-code/sdk/v2/client"
 import { Binary } from "./binary"
 import { createEventPipeline } from "./event-pipeline"
 import { setActiveMetricsTracker } from "./streaming-metrics"
-import { reduceGlobalEvent, applyGlobalProject, applyDirectoryEvent } from "./event-reducer"
+import { reduceGlobalEvent, applyGlobalProject, applyDirectoryEvent, prepareEventDraft } from "./event-reducer"
 import {
   createEventRoutingIndex,
   EMPTY_MESSAGES,
@@ -996,75 +996,12 @@ function handleEvent(
     }
   }
 
-  // Read live state, create targeted draft cloning ONLY fields that event
-  // type will mutate. This preserves reference identity for untouched slices
-  // so Zustand selectors skip re-renders for unrelated subscribers.
+  // Read live state, create targeted draft cloning ONLY the fields this event
+  // type will mutate (see prepareEventDraft). This preserves reference identity
+  // for untouched slices so Zustand selectors skip re-renders for unrelated
+  // subscribers.
   const current = store.getState()
-  const draft: State = { ...current }
-
-  switch (payload.type) {
-    case "session.created":
-    case "session.updated":
-    case "session.deleted": {
-      draft.session = [...current.session]
-      draft.permission = { ...current.permission }
-      draft.todo = { ...current.todo }
-      draft.part = { ...current.part }
-      // Archive and delete additionally run cleanupSessionCaches, which
-      // deletes from four more slices. Those must be cloned too — deleting
-      // through the un-cloned reference mutates the PREVIOUS state object in
-      // place, so reference-equality memos over these slices (e.g. the
-      // running-session status counts) keep serving stale data after a busy
-      // session is archived or deleted.
-      const lifecycleInfo = (payload.properties as { info?: Session } | undefined)?.info
-      if (payload.type === "session.deleted" || (payload.type === "session.updated" && lifecycleInfo?.time?.archived)) {
-        draft.message = { ...current.message }
-        draft.session_diff = { ...current.session_diff }
-        draft.session_status = { ...(current.session_status ?? {}) }
-        draft.question = { ...current.question }
-      }
-      break
-    }
-    case "session.diff":
-      draft.session_diff = { ...current.session_diff }
-      break
-    case "session.status":
-    case "session.idle":
-    case "session.error":
-      draft.session_status = { ...(current.session_status ?? {}) }
-      break
-    case "todo.updated":
-      draft.todo = { ...current.todo }
-      break
-    case "message.updated":
-      draft.message = { ...current.message }
-      break
-    case "message.removed":
-      draft.message = { ...current.message }
-      draft.part = { ...current.part }
-      break
-    case "message.part.updated":
-    case "message.part.removed":
-    case "message.part.delta":
-      draft.part = { ...current.part }
-      break
-    case "vcs.branch.updated":
-      break
-    case "permission.asked":
-    case "permission.replied":
-      draft.permission = { ...current.permission }
-      break
-    case "question.asked":
-    case "question.replied":
-    case "question.rejected":
-      draft.question = { ...current.question }
-      break
-    case "lsp.updated":
-      draft.lsp = [...current.lsp]
-      break
-    default:
-      break
-  }
+  const draft = prepareEventDraft(current, payload)
 
   const reducerResult = applyDirectoryEvent(draft, payload, {
     onSetSessionTodo: (sessionID, todos) => {
@@ -1469,7 +1406,7 @@ export function useGlobalSyncSelector<T>(selector: (state: GlobalSyncStore) => T
 }
 
 /** Get the child store for a directory (defaults to current) */
-export function useDirectoryStore(directory?: string): StoreApi<DirectoryStore> {
+export function useDirectoryChildStore(directory?: string): StoreApi<DirectoryStore> {
   const system = useSyncSystem()
   const dir = directory ?? system.directory
   return system.childStores.ensureChild(dir)
@@ -1477,7 +1414,7 @@ export function useDirectoryStore(directory?: string): StoreApi<DirectoryStore> 
 
 /** Select from the current directory's store */
 export function useDirectorySync<T>(selector: (state: State) => T, directory?: string): T {
-  const store = useDirectoryStore(directory)
+  const store = useDirectoryChildStore(directory)
   return useStore(store, selector)
 }
 
@@ -1497,7 +1434,7 @@ export function useSessionRevertMessageID(sessionID: string, directory?: string)
 
 /** Get session messages for a specific session */
 export function useSessionMessages(sessionID: string, directory?: string) {
-  const store = useDirectoryStore(directory)
+  const store = useDirectoryChildStore(directory)
   const getSnapshot = useCallback(() => {
     if (!sessionID) return EMPTY_MESSAGES
     return store.getState().message[sessionID] ?? EMPTY_MESSAGES
@@ -1556,7 +1493,7 @@ export function useSessionParts(messageID: string, directory?: string) {
 
 /** Get status for a specific session */
 export function useSessionStatus(sessionID: string, directory?: string) {
-  const store = useDirectoryStore(directory)
+  const store = useDirectoryChildStore(directory)
   const getSnapshot = useCallback(() => {
     if (!sessionID) return undefined
     return store.getState().session_status?.[sessionID]
@@ -1579,7 +1516,7 @@ export function useSessionStatus(sessionID: string, directory?: string) {
 
 /** Get permissions for a specific session */
 export function useSessionPermissions(sessionID: string, directory?: string) {
-  const store = useDirectoryStore(directory)
+  const store = useDirectoryChildStore(directory)
   const getSnapshot = useCallback(() => {
     if (!sessionID) return EMPTY_PERMISSION_REQUESTS
     return store.getState().permission[sessionID] ?? EMPTY_PERMISSION_REQUESTS
@@ -1637,7 +1574,7 @@ const getSidebarSessionSignature = (session: Session, stableUpdatedAt: number): 
 
 /** Get sessions stabilized for sidebar tree rendering */
 export function useSidebarSessions(directory?: string): Session[] {
-  const store = useDirectoryStore(directory)
+  const store = useDirectoryChildStore(directory)
   const cacheRef = React.useRef<{
     source: Session[]
     sessionStatus: State["session_status"]
@@ -2072,7 +2009,7 @@ export function useSessionMessageRecords(
   directory?: string,
   options?: { suspendPartUpdates?: boolean },
 ) {
-  const store = useDirectoryStore(directory)
+  const store = useDirectoryChildStore(directory)
   const snapshotRef = useRef<SessionMessageRecordsSnapshot>({
     sessionID,
     sourceMessages: EMPTY_MESSAGES,
@@ -2171,7 +2108,7 @@ export function useSessionMessageRecords(
 const _ensureMessagesLoading = new Set<string>()
 
 export function useEnsureSessionMessages(sessionID: string, directory?: string) {
-  const store = useDirectoryStore(directory)
+  const store = useDirectoryChildStore(directory)
 
   React.useEffect(() => {
     if (!sessionID) return

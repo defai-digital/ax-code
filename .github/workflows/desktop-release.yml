@@ -46,6 +46,9 @@ jobs:
       - name: Check Desktop boundaries
         run: pnpm run check:desktop-boundaries:strict
 
+      - name: Check Desktop store boundaries
+        run: pnpm run check:desktop-store-boundaries
+
       - name: Check Desktop IPC contracts
         run: pnpm run check:desktop-ipc-contracts
 

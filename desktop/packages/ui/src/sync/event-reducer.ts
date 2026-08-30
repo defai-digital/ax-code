@@ -407,6 +407,85 @@ export function applyGlobalProject(state: GlobalState, project: Project): Global
 // Caller MUST pass a mutable copy of State (e.g. structuredClone or spread).
 // ---------------------------------------------------------------------------
 
+/**
+ * Build the mutable draft for a directory event, cloning ONLY the slices the
+ * event type will mutate. This preserves reference identity for untouched
+ * slices so Zustand selectors skip re-renders for unrelated subscribers.
+ *
+ * The event → slice table below is the code side of the contract documented
+ * in src/sync/DOCUMENTATION.md ("Event → field mapping") and pinned by
+ * src/sync/event-coverage.test.ts — update all three together.
+ */
+export function prepareEventDraft(current: State, event: Event): State {
+  const draft: State = { ...current }
+
+  switch (event.type) {
+    case "session.created":
+    case "session.updated":
+    case "session.deleted": {
+      draft.session = [...current.session]
+      draft.permission = { ...current.permission }
+      draft.todo = { ...current.todo }
+      draft.part = { ...current.part }
+      // Archive and delete additionally run cleanupSessionCaches, which
+      // deletes from four more slices. Those must be cloned too — deleting
+      // through the un-cloned reference mutates the PREVIOUS state object in
+      // place, so reference-equality memos over these slices (e.g. the
+      // running-session status counts) keep serving stale data after a busy
+      // session is archived or deleted.
+      const lifecycleInfo = (event.properties as { info?: Session } | undefined)?.info
+      if (event.type === "session.deleted" || (event.type === "session.updated" && lifecycleInfo?.time?.archived)) {
+        draft.message = { ...current.message }
+        draft.session_diff = { ...current.session_diff }
+        draft.session_status = { ...(current.session_status ?? {}) }
+        draft.question = { ...current.question }
+      }
+      break
+    }
+    case "session.diff":
+      draft.session_diff = { ...current.session_diff }
+      break
+    case "session.status":
+    case "session.idle":
+    case "session.error":
+      draft.session_status = { ...(current.session_status ?? {}) }
+      break
+    case "todo.updated":
+      draft.todo = { ...current.todo }
+      break
+    case "message.updated":
+      draft.message = { ...current.message }
+      break
+    case "message.removed":
+      draft.message = { ...current.message }
+      draft.part = { ...current.part }
+      break
+    case "message.part.updated":
+    case "message.part.removed":
+    case "message.part.delta":
+      draft.part = { ...current.part }
+      break
+    case "vcs.branch.updated":
+      break
+    case "permission.asked":
+    case "permission.replied":
+      draft.permission = { ...current.permission }
+      break
+    case "question.asked":
+    case "question.replied":
+    case "question.rejected":
+      draft.question = { ...current.question }
+      break
+    case "lsp.updated":
+      draft.lsp = [...current.lsp]
+      break
+    default:
+      break
+  }
+
+  return draft
+}
+
 export function applyDirectoryEvent(
   draft: State,
   event: Event,

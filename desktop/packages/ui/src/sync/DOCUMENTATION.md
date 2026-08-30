@@ -147,27 +147,35 @@ During streaming, `message.part.delta` fires ~60 times/sec. Eagerly cloning all 
 
 ## Event → field mapping
 
-Keep this in sync with `handleDirectoryEvent` in `sync-context.tsx`:
+This table is enforced, not advisory: `src/sync/event-coverage.test.ts` encodes
+it as a fixture and asserts that `prepareEventDraft` (the cloning switch in
+`event-reducer.ts`, called from `handleEvent` in `sync-context-impl.tsx`)
+clones exactly these slices per event type, and that a `message.part.delta`
+burst leaves every other slice reference-identical.
 
-| Event type                           | Fields to clone                         |
-| ------------------------------------ | --------------------------------------- |
-| `session.created/updated/deleted`    | `session`, `permission`, `todo`, `part` |
-| `session.diff`                       | `session_diff`                          |
-| `session.status`                     | `session_status`                        |
-| `todo.updated`                       | `todo`                                  |
-| `message.updated`                    | `message`                               |
-| `message.removed`                    | `message`, `part`                       |
-| `message.part.updated/removed/delta` | `part`                                  |
-| `vcs.branch.updated`                 | (none — mutates `draft.vcs` directly)   |
-| `permission.asked/replied`           | `permission`                            |
-| `question.asked/replied/rejected`    | `question`                              |
-| `lsp.updated`                        | `lsp`                                   |
+| Event type                           | Fields to clone                                                                                                                |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `session.created/updated/deleted`    | `session`, `permission`, `todo`, `part` (plus `message`, `session_diff`, `session_status`, `question` when archiving/deleting) |
+| `session.diff`                       | `session_diff`                                                                                                                 |
+| `session.status`                     | `session_status`                                                                                                               |
+| `session.idle/error`                 | `session_status`                                                                                                               |
+| `todo.updated`                       | `todo`                                                                                                                         |
+| `message.updated`                    | `message`                                                                                                                      |
+| `message.removed`                    | `message`, `part`                                                                                                              |
+| `message.part.updated/removed/delta` | `part`                                                                                                                         |
+| `vcs.branch.updated`                 | (none — mutates `draft.vcs` directly)                                                                                          |
+| `permission.asked/replied`           | `permission`                                                                                                                   |
+| `question.asked/replied/rejected`    | `question`                                                                                                                     |
+| `lsp.updated`                        | `lsp`                                                                                                                          |
 
 ## Adding a new event type
 
 1. Add the case to the event reducer (`event-reducer.ts`)
-2. Add a corresponding case to the switch in `handleDirectoryEvent` (`sync-context.tsx`) that clones **only** the fields your reducer writes to
-3. If your event fires frequently (more than a few times per second), verify that unrelated components don't re-render — check with the stream perf counters
+2. Add a corresponding case to the cloning switch in `prepareEventDraft`
+   (`event-reducer.ts`) that clones **only** the fields your reducer writes to
+3. Add the event → field row to the table above — `event-coverage.test.ts`
+   fails until the documented table and the code agree
+4. If your event fires frequently (more than a few times per second), verify that unrelated components don't re-render — check with the stream perf counters
 
 ## Cross-store selector memoization
 

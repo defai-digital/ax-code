@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { defineStore } from "@/lib/store-registry"
 import { getSafeStorage } from "./utils/safeStorage"
 
 const SESSION_PINNED_STORAGE_KEY = "oc.sessions.pinned"
@@ -31,24 +32,28 @@ type SessionPinnedStore = {
 
 const safeStorage = getSafeStorage()
 
-export const useSessionPinnedStore = create<SessionPinnedStore>((set, get) => ({
-  ids: readPinned(safeStorage),
-  setIds: (next) => {
-    const current = get().ids
-    const resolved = typeof next === "function" ? next(current) : next
-    if (resolved === current) return
-    set({ ids: resolved })
-    persistPinned(safeStorage, resolved)
-  },
-  toggle: (sessionId) => {
-    const current = get().ids
-    const next = new Set(current)
-    if (next.has(sessionId)) {
-      next.delete(sessionId)
-    } else {
-      next.add(sessionId)
-    }
-    set({ ids: next })
-    persistPinned(safeStorage, next)
-  },
-}))
+export const useSessionPinnedStore = defineStore(
+  "useSessionPinnedStore",
+  { domain: "sessions", tier: "app" },
+  create<SessionPinnedStore>((set, get) => ({
+    ids: readPinned(safeStorage),
+    setIds: (next) => {
+      const current = get().ids
+      const resolved = typeof next === "function" ? next(current) : next
+      if (resolved === current) return
+      set({ ids: resolved })
+      persistPinned(safeStorage, resolved)
+    },
+    toggle: (sessionId) => {
+      const current = get().ids
+      const next = new Set(current)
+      if (next.has(sessionId)) {
+        next.delete(sessionId)
+      } else {
+        next.add(sessionId)
+      }
+      set({ ids: next })
+      persistPinned(safeStorage, next)
+    },
+  })),
+)

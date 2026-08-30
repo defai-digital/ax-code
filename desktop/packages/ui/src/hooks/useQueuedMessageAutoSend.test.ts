@@ -60,7 +60,7 @@ vi.doMock("@/sync/session-ui-store", () => ({
 
 const { buildQueuedAutoSendPayload, isQueuedAutoSendHeld, sendQueuedAutoSendPayload, shouldDispatchQueuedAutoSend } =
   await import("./useQueuedMessageAutoSend")
-const { useNotificationStore } = await import("@/sync/notification-store")
+const { useSyncNotificationStore } = await import("@/sync/notification-store")
 
 describe("shouldDispatchQueuedAutoSend", () => {
   test("dispatches only after an active session becomes idle", () => {
@@ -78,7 +78,7 @@ describe("isQueuedAutoSendHeld", () => {
   test("holds auto-send while the session has an unseen error, matching the chips' Held label", () => {
     expect(isQueuedAutoSendHeld("session-err")).toBe(false)
 
-    useNotificationStore.getState().append({
+    useSyncNotificationStore.getState().append({
       type: "error",
       session: "session-err",
       time: Date.now(),
@@ -88,7 +88,7 @@ describe("isQueuedAutoSendHeld", () => {
     expect(isQueuedAutoSendHeld("session-err")).toBe(true)
 
     // Viewing the session clears the unseen error and releases the hold.
-    useNotificationStore.getState().markSessionViewed("session-err")
+    useSyncNotificationStore.getState().markSessionViewed("session-err")
     expect(isQueuedAutoSendHeld("session-err")).toBe(false)
   })
 })

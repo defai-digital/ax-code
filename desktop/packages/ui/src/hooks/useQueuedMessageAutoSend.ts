@@ -6,7 +6,7 @@ import { useConfigStore } from "@/stores/useConfigStore"
 import { parseAgentMentions } from "@/lib/messages/agentMentions"
 import { getSyncSessionStatus } from "@/sync/sync-refs"
 import { useDirectorySync } from "@/sync/sync-context"
-import { useNotificationStore } from "@/sync/notification-store"
+import { useSyncNotificationStore } from "@/sync/notification-store"
 
 type SessionStatusType = "idle" | "busy" | "retry"
 
@@ -27,7 +27,7 @@ const hasRecentAbort = (sessionId: string): boolean => {
 // while the UI claims it is parked. Manual send from the chip stays
 // available, and viewing the session clears the flag (markSessionViewed).
 export const isQueuedAutoSendHeld = (sessionId: string): boolean =>
-  useNotificationStore.getState().sessionHasError(sessionId)
+  useSyncNotificationStore.getState().sessionHasError(sessionId)
 
 export const buildQueuedAutoSendPayload = (queue: QueuedMessage[]) => {
   const queued = queue[0]

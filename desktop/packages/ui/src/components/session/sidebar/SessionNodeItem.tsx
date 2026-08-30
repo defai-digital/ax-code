@@ -35,7 +35,7 @@ import {
 import type { ChildSessionExport } from "@/lib/exportSession"
 import {
   buildSessionMessageRecordsSnapshot,
-  useDirectoryStore,
+  useDirectoryChildStore,
   useGlobalSessionStatus,
   useSession,
   useSessionPermissions,
@@ -340,7 +340,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const sessionDirectory =
     normalizePath((session as Session & { directory?: string | null }).directory ?? null) ??
     normalizePath(groupDirectory ?? null)
-  const directoryStore = useDirectoryStore(sessionDirectory ?? undefined)
+  const directoryStore = useDirectoryChildStore(sessionDirectory ?? undefined)
   const sync = useSync()
 
   const selectionModeEnabled = useSessionMultiSelectStore((state) => state.enabled)

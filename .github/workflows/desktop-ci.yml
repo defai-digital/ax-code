@@ -10,6 +10,7 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "script/check-desktop-boundaries.ts"
+      - "script/check-desktop-store-boundaries.ts"
       - "script/import-specifiers.ts"
       - "desktop/**"
       - "packages/sdk/**"
@@ -28,6 +29,7 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
       - "script/check-desktop-boundaries.ts"
+      - "script/check-desktop-store-boundaries.ts"
       - "script/import-specifiers.ts"
       - "desktop/**"
       - "packages/sdk/**"
@@ -61,6 +63,9 @@ jobs:
 
       - name: Check Desktop boundaries
         run: pnpm run check:desktop-boundaries:strict
+
+      - name: Check Desktop store boundaries
+        run: pnpm run check:desktop-store-boundaries
 
       - name: Check Desktop IPC contracts
         run: pnpm run check:desktop-ipc-contracts

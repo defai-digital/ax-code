@@ -24,6 +24,7 @@
     "check:self-scan": "pnpm --dir packages/ax-code run check:self-scan",
     "check:desktop-boundaries": "tsx script/check-desktop-boundaries.ts",
     "check:desktop-boundaries:strict": "tsx script/check-desktop-boundaries.ts --fail-on-violation",
+    "check:desktop-store-boundaries": "tsx script/check-desktop-store-boundaries.ts",
     "check:desktop-electron-runtime": "node desktop/scripts/check-electron-runtime.mjs",
     "check:desktop-endpoint-contracts": "node desktop/scripts/check-endpoint-contracts.mjs",
     "check:desktop-ipc-contracts": "node desktop/scripts/check-desktop-ipc-contracts.mjs",

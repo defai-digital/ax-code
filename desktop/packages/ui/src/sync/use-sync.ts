@@ -8,7 +8,7 @@ import { pickSessionCacheEvictions } from "./session-cache"
 import { mergeOptimisticPage, type OptimisticItem } from "./optimistic"
 import {
   dropCachedSessionMessageRecordsSnapshots,
-  useDirectoryStore,
+  useDirectoryChildStore,
   useSyncSDK,
   useSyncDirectory,
   useChildStoreManager,
@@ -76,7 +76,7 @@ function getPrefetchMeta(directory: string, sessionID: string): SyncMeta | undef
 export function useSync() {
   const sdk = useSyncSDK()
   const directory = useSyncDirectory()
-  const store = useDirectoryStore()
+  const store = useDirectoryChildStore()
   const childStores = useChildStoreManager()
 
   // Refs for mutable tracking (no re-renders)

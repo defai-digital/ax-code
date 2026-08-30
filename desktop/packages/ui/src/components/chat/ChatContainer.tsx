@@ -40,7 +40,7 @@ import {
   useSessionMessageCount,
   useSessionMessageRecords,
   useDirectorySync,
-  useDirectoryStore,
+  useDirectoryChildStore,
   useSyncDirectory,
   useSessionStatus,
 } from "@/sync/sync-context"
@@ -475,7 +475,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({ autoOpenDraft = tr
   }, [sessionLinkKey, currentSessionId])
 
   // Leaf subscriptions: only re-render when permission/question arrays for scoped sessions change.
-  const directoryStore = useDirectoryStore()
+  const directoryStore = useDirectoryChildStore()
   const sessionPermissions = useScopedPermissions(directoryStore, scopedSessionIds)
   const sessionQuestions = useScopedQuestions(directoryStore, scopedSessionIds)
   const sessionIsWorking = React.useMemo(() => {

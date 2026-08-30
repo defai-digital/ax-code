@@ -176858,7 +176858,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 80000
         }
       },
       "google/gemma-2-27b-it": {

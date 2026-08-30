@@ -102,6 +102,34 @@ Important properties:
 - `refreshTargets()` supports one-shot multi-target bootstrap without turning on live watching
 - persisted cache is for page refresh continuity, not for broad background syncing
 
+## Store boundary enforcement
+
+Store boundaries are enforced by `script/check-desktop-store-boundaries.ts`
+(repo check `pnpm run check:desktop-store-boundaries`, also wired into the
+desktop CI workflows), not just by convention:
+
+- **R1 store→store import ratchet** — a top-level module in `src/stores/` may
+  not import another top-level `src/stores/` module unless the edge is in the
+  script's frozen allowlist. The allowlist may only shrink. To share logic,
+  extract a helper into `src/lib/` (or `src/stores/utils/`) or read the other
+  store imperatively via `.getState()` at the call site.
+- **R2 sync internals encapsulation** — code outside `src/sync/` may not
+  import `src/sync/child-store`, `src/sync/event-reducer`,
+  `src/sync/event-pipeline`, or `src/sync/sync-context-impl`. Use the public
+  surface instead: `sync-context` hooks, `sync-refs`, `session-actions`, and
+  the other documented sync modules.
+- **R3 transport consumer registry** — `src/lib/event-stream/client` may only
+  be imported by its registered consumers (currently the sync pipeline,
+  `lib/event-stream/subscribe.ts`, and its own test). Everything else uses
+  `subscribe.ts`.
+- **R4 no duplicate exported hook names** — two modules under `src/stores/`
+  and `src/sync/` may not export the same `useX` identifier.
+
+Related: `src/lib/store-registry.ts` provides `defineStore(name, meta)` for
+machine-readable store names/domains/tiers; new stores should register
+through it. The event → field contract for sync child stores is pinned by
+`src/sync/event-coverage.test.ts` against `src/sync/DOCUMENTATION.md`.
+
 ## Ownership Rules
 
 These rules are important. Breaking them tends to reintroduce idle CPU churn, stale UI, or rerender fanout.

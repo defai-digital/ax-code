@@ -3,9 +3,13 @@
 //
 // Tracks session turn-complete and error notifications with viewed/unviewed
 // state. Replaces the old sessionAttentionStates polling system.
+//
+// The hook is named `useSyncNotificationStore` to stay distinct from
+// `stores/useNotificationStore.ts`, which owns the notification-center panel.
 // ---------------------------------------------------------------------------
 
 import { create } from "zustand"
+import { defineStore } from "@/lib/store-registry"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -100,53 +104,57 @@ interface NotificationStore {
   projectHasError: (directory: string) => boolean
 }
 
-export const useNotificationStore = create<NotificationStore>((set, get) => ({
-  list: [],
-  index: {
-    session: { unseenCount: {}, unseenHasError: {} },
-    project: { unseenCount: {}, unseenHasError: {} },
-  },
+export const useSyncNotificationStore = defineStore(
+  "useSyncNotificationStore",
+  { domain: "notifications", tier: "live" },
+  create<NotificationStore>((set, get) => ({
+    list: [],
+    index: {
+      session: { unseenCount: {}, unseenHasError: {} },
+      project: { unseenCount: {}, unseenHasError: {} },
+    },
 
-  append: (notification) => {
-    const current = get().list
-    const next = pruneNotifications([...current, notification])
-    set({ list: next, index: buildIndex(next) })
-  },
+    append: (notification) => {
+      const current = get().list
+      const next = pruneNotifications([...current, notification])
+      set({ list: next, index: buildIndex(next) })
+    },
 
-  markSessionViewed: (sessionId) => {
-    const current = get()
-    const count = current.index.session.unseenCount[sessionId] ?? 0
-    if (count === 0) return
+    markSessionViewed: (sessionId) => {
+      const current = get()
+      const count = current.index.session.unseenCount[sessionId] ?? 0
+      if (count === 0) return
 
-    const next = current.list.map((n) => (n.session === sessionId && !n.viewed ? { ...n, viewed: true } : n))
-    set({ list: next, index: buildIndex(next) })
-  },
+      const next = current.list.map((n) => (n.session === sessionId && !n.viewed ? { ...n, viewed: true } : n))
+      set({ list: next, index: buildIndex(next) })
+    },
 
-  markProjectViewed: (directory) => {
-    const current = get()
-    const count = current.index.project.unseenCount[directory] ?? 0
-    if (count === 0) return
+    markProjectViewed: (directory) => {
+      const current = get()
+      const count = current.index.project.unseenCount[directory] ?? 0
+      if (count === 0) return
 
-    const next = current.list.map((n) => (n.directory === directory && !n.viewed ? { ...n, viewed: true } : n))
-    set({ list: next, index: buildIndex(next) })
-  },
+      const next = current.list.map((n) => (n.directory === directory && !n.viewed ? { ...n, viewed: true } : n))
+      set({ list: next, index: buildIndex(next) })
+    },
 
-  sessionUnseenCount: (sessionId) => get().index.session.unseenCount[sessionId] ?? 0,
-  sessionHasError: (sessionId) => get().index.session.unseenHasError[sessionId] ?? false,
-  projectUnseenCount: (directory) => get().index.project.unseenCount[directory] ?? 0,
-  projectHasError: (directory) => get().index.project.unseenHasError[directory] ?? false,
-}))
+    sessionUnseenCount: (sessionId) => get().index.session.unseenCount[sessionId] ?? 0,
+    sessionHasError: (sessionId) => get().index.session.unseenHasError[sessionId] ?? false,
+    projectUnseenCount: (directory) => get().index.project.unseenCount[directory] ?? 0,
+    projectHasError: (directory) => get().index.project.unseenHasError[directory] ?? false,
+  })),
+)
 
 // ---------------------------------------------------------------------------
 // Imperative API for non-React code (event handler in sync-context)
 // ---------------------------------------------------------------------------
 
 export function appendNotification(notification: Notification) {
-  useNotificationStore.getState().append(notification)
+  useSyncNotificationStore.getState().append(notification)
 }
 
 export function markSessionViewed(sessionId: string) {
-  useNotificationStore.getState().markSessionViewed(sessionId)
+  useSyncNotificationStore.getState().markSessionViewed(sessionId)
 }
 
 // ---------------------------------------------------------------------------
@@ -154,13 +162,13 @@ export function markSessionViewed(sessionId: string) {
 // ---------------------------------------------------------------------------
 
 export function useSessionUnseenCount(sessionId: string): number {
-  return useNotificationStore((s) => s.index.session.unseenCount[sessionId] ?? 0)
+  return useSyncNotificationStore((s) => s.index.session.unseenCount[sessionId] ?? 0)
 }
 
 export function useSessionHasError(sessionId: string): boolean {
-  return useNotificationStore((s) => s.index.session.unseenHasError[sessionId] ?? false)
+  return useSyncNotificationStore((s) => s.index.session.unseenHasError[sessionId] ?? false)
 }
 
 export function useProjectUnseenCount(directory: string): number {
-  return useNotificationStore((s) => s.index.project.unseenCount[directory] ?? 0)
+  return useSyncNotificationStore((s) => s.index.project.unseenCount[directory] ?? 0)
 }
