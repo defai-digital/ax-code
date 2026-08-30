@@ -1139,8 +1139,6 @@ export async function resizeTerminal(sessionId: string, cols: number, rows: numb
 }
 
 export async function closeTerminal(sessionId: string): Promise<void> {
-  closeTerminalTransportForSession(sessionId)
-
   const response = await fetch(`${HTTP_DEFAULTS.apiPath.terminal}/${sessionId}`, {
     method: HTTP_DEFAULTS.method.delete,
   })
@@ -1149,14 +1147,20 @@ export async function closeTerminal(sessionId: string): Promise<void> {
     const error = await response.json().catch(() => ({ error: "Failed to close terminal" }))
     throw new Error(error.error || "Failed to close terminal")
   }
+
+  // Only tear down the client-side transport (replay cursor + shared WS
+  // manager, which silently drops any other live subscriber for this
+  // session with no exit/error event) once the server has actually
+  // confirmed the close. Doing this before the request settles orphans a
+  // still-alive server-side PTY on failure and kills other open views of
+  // the same session for no reason. Matches forceKillTerminal below.
+  closeTerminalTransportForSession(sessionId)
 }
 
 export async function restartTerminalSession(
   currentSessionId: string,
   options: { cwd: string; cols?: number; rows?: number },
 ): Promise<TerminalSession> {
-  closeTerminalTransportForSession(currentSessionId)
-
   const response = await fetch(`${HTTP_DEFAULTS.apiPath.terminal}/${currentSessionId}/restart`, {
     method: HTTP_DEFAULTS.method.post,
     headers: HTTP_DEFAULTS.headers.contentTypeJson,
@@ -1171,6 +1175,11 @@ export async function restartTerminalSession(
     const error = await response.json().catch(() => ({ error: "Failed to restart terminal" }))
     throw new Error(error.error || "Failed to restart terminal")
   }
+
+  // See closeTerminal above: only tear down the old session's transport once
+  // the server has confirmed the restart, so a failed request doesn't orphan
+  // a still-alive PTY or silently kill other open views of the old session.
+  closeTerminalTransportForSession(currentSessionId)
 
   const session = (await response.json()) as TerminalSession
   applyTerminalTransportCapabilities(session.capabilities)
