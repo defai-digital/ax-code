@@ -22,6 +22,7 @@ import {
 } from "solid-js"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
+import { stringWidth } from "@/bun/node-compat"
 import { providerModelEquals, providerModelKey } from "@/provider/model-key"
 import { shouldAdoptMessageModelFromHistory } from "@tui/context/local-util"
 import { effortDisplay } from "@/provider/effort-label"
@@ -1564,7 +1565,10 @@ export function Prompt(props: PromptProps) {
   function pasteText(text: string, virtualText: string) {
     const currentOffset = input.visualCursor.offset
     const extmarkStart = currentOffset
-    const extmarkEnd = extmarkStart + virtualText.length
+    // extmark offsets are display-width (cell) units, not UTF-16 length —
+    // a non-ASCII filename in the SVG placeholder would otherwise misplace
+    // extmarkEnd and desync the highlighted range from the inserted text.
+    const extmarkEnd = extmarkStart + stringWidth(virtualText)
 
     suppressAutocompleteForNextContentChange()
     input.insertText(virtualText + " ")
