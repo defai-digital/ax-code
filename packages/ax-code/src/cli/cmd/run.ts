@@ -564,10 +564,13 @@ export const RunCommand = cmd({
     }
 
     try {
-      resolveRunOutputFile({
-        outputFile: args["output-file"],
-        outputLastMessage: args["output-last-message"],
-      })
+      resolveRunOutputFile(
+        {
+          outputFile: args["output-file"],
+          outputLastMessage: args["output-last-message"],
+        },
+        callerCwd,
+      )
     } catch (error) {
       exitEarly(toErrorMessage(error))
     }
