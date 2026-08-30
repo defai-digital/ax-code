@@ -619,4 +619,15 @@ mod tests {
         assert!(err.reason.contains("must not be empty"));
         assert!(strategy_multi_occurrence("abc", "").is_empty());
     }
+
+    #[test]
+    fn strategy_indentation_flexible_handles_multibyte_indentation_without_panic() {
+        // Mixed indentation using a multi-byte ideographic space (U+3000) on one
+        // line and ASCII spaces on another used to panic on a non-char-boundary
+        // slice when computing the common indentation prefix.
+        let content = "\u{3000}foo\n  bar\n  baz\n";
+        let find = "\u{3000}foo\nbar";
+        // Should not panic; exact match isn't expected, just no crash.
+        let _ = strategy_indentation_flexible(content, find);
+    }
 }

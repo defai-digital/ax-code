@@ -356,7 +356,17 @@ pub(crate) fn strategy_indentation_flexible(content: &str, find: &str) -> Vec<St
                 if l.trim().is_empty() {
                     l.to_string()
                 } else if l.len() >= min_indent {
-                    l[min_indent..].to_string()
+                    // `min_indent` is a byte count derived from the shortest
+                    // leading-whitespace run across all lines. A line whose own
+                    // indentation uses multi-byte whitespace (e.g. U+3000
+                    // ideographic space, U+00A0 nbsp) may not have a char
+                    // boundary at that exact byte offset, which would panic on
+                    // a raw slice. Advance to the next valid boundary instead.
+                    let mut idx = min_indent;
+                    while idx < l.len() && !l.is_char_boundary(idx) {
+                        idx += 1;
+                    }
+                    l[idx..].to_string()
                 } else {
                     l.to_string()
                 }
