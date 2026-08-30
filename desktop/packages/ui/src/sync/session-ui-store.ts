@@ -831,7 +831,14 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     const globalStore = useGlobalSessionsStore.getState()
     if (globalStore.hasLoaded && globalStore.status === "ready") {
-      const sessionExists = globalStore.activeSessions.some((session) => session.id === target.sessionId)
+      // Archived sessions are valid restore targets too (getDirectoryForSession
+      // and sendMessage's existingSession lookup both check archivedSessions) —
+      // checking only activeSessions here would clear a perfectly valid
+      // persisted target whenever the user reloads while viewing an archived
+      // session, permanently losing the "restore last session" behavior for it.
+      const sessionExists =
+        globalStore.activeSessions.some((session) => session.id === target.sessionId) ||
+        globalStore.archivedSessions.some((session) => session.id === target.sessionId)
       if (!sessionExists) {
         clearPersistedActiveSessionTarget()
         return false

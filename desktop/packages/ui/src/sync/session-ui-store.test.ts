@@ -238,6 +238,32 @@ describe("session-worktree-store worktree routing", () => {
     expect(useSessionUIStore.getState().currentSessionId).toBe(session.id)
   })
 
+  test("restores a persisted session that is archived (not just active)", () => {
+    // getDirectoryForSession and sendMessage's existingSession lookup both
+    // treat archivedSessions as valid; restorePersistedCurrentSession must not
+    // clear a perfectly valid persisted target just because the session was
+    // archived before the app reloaded.
+    const session = {
+      id: "ses_archived",
+      title: "Archived session",
+      directory: "/repo/a",
+      time: { created: 1, updated: 2, archived: 3 },
+    } as Session
+
+    useGlobalSessionsStore.setState({
+      activeSessions: [],
+      archivedSessions: [session],
+      hasLoaded: true,
+      status: "ready",
+    })
+
+    useSessionUIStore.getState().setCurrentSession(session.id, "/repo/a")
+    useSessionUIStore.setState({ currentSessionId: null })
+
+    expect(useSessionUIStore.getState().restorePersistedCurrentSession()).toBe(true)
+    expect(useSessionUIStore.getState().currentSessionId).toBe(session.id)
+  })
+
   test("does not restore a persisted session missing from a ready global snapshot", () => {
     useSessionUIStore.getState().setCurrentSession("ses_missing", "/repo/missing")
     useSessionUIStore.setState({ currentSessionId: null })
