@@ -75,29 +75,42 @@ export namespace Telemetry {
 
     const { trace, context } = await import("@opentelemetry/api")
     const tracer = trace.getTracer("ax-code")
-    const events = EventQuery.bySession(sessionID)
-    if (events.length === 0) return
+    // Exported sessions are historical (this is a batch/backfill export, see
+    // `ax-code audit otlp`, often run long after the session finished) so span
+    // start/end times must come from the recorded event timestamps. Using
+    // `bySession` (no timestamp) previously left every span's start/end at
+    // whatever instant `startSpan`/`end()` defaulted to (export time), which
+    // collapsed the entire trace into a single moment and destroyed all
+    // duration/latency information — the whole point of exporting a trace.
+    const rows = EventQuery.bySessionWithTimestamp(sessionID)
+    if (rows.length === 0) return
 
-    const stepFinishes = new Map<number, Extract<ReplayEvent, { type: "step.finish" }>>()
-    const toolResults = new Map<string, Extract<ReplayEvent, { type: "tool.result" }>>()
-    for (const event of events) {
+    const stepFinishes = new Map<number, { event: Extract<ReplayEvent, { type: "step.finish" }>; time: number }>()
+    const toolResults = new Map<string, { event: Extract<ReplayEvent, { type: "tool.result" }>; time: number }>()
+    for (const row of rows) {
+      const event = row.event_data
       if (event.type === "step.finish" && !stepFinishes.has(event.stepIndex)) {
-        stepFinishes.set(event.stepIndex, event)
+        stepFinishes.set(event.stepIndex, { event, time: row.time_created })
       }
       if (event.type === "tool.result" && !toolResults.has(event.callID)) {
-        toolResults.set(event.callID, event)
+        toolResults.set(event.callID, { event, time: row.time_created })
       }
     }
 
+    const sessionStart = rows[0].time_created
+    const sessionEnd = rows[rows.length - 1].time_created
     const sessionSpan = tracer.startSpan("session", {
       attributes: { "session.id": sessionID },
+      startTime: sessionStart,
     })
     const sessionCtx = trace.setSpan(context.active(), sessionSpan)
     // Tool spans nest under the most recent step span (falling back to the
     // session span for tool calls seen before any step).
     let stepCtx = sessionCtx
 
-    for (const event of events) {
+    for (const row of rows) {
+      const event = row.event_data
+      const time = row.time_created
       switch (event.type) {
         case "session.start":
           sessionSpan.setAttribute("session.agent", event.agent)
@@ -109,20 +122,22 @@ export namespace Telemetry {
             `step.${event.stepIndex}`,
             {
               attributes: { "step.index": event.stepIndex },
+              startTime: time,
             },
             sessionCtx,
           )
           const finish = stepFinishes.get(event.stepIndex)
-          if (finish && finish.type === "step.finish") {
-            stepSpan.setAttribute("step.finish_reason", finish.finishReason)
-            stepSpan.setAttribute("step.tokens.input", finish.tokens.input)
-            stepSpan.setAttribute("step.tokens.output", finish.tokens.output)
+          if (finish) {
+            stepSpan.setAttribute("step.finish_reason", finish.event.finishReason)
+            stepSpan.setAttribute("step.tokens.input", finish.event.tokens.input)
+            stepSpan.setAttribute("step.tokens.output", finish.event.tokens.output)
           }
-          stepSpan.end()
+          stepSpan.end(finish ? finish.time : time)
           stepCtx = trace.setSpan(sessionCtx, stepSpan)
           break
         }
         case "tool.call": {
+          const result = toolResults.get(event.callID)
           const toolSpan = tracer.startSpan(
             `tool.${event.tool}`,
             {
@@ -130,16 +145,16 @@ export namespace Telemetry {
                 "tool.name": event.tool,
                 "tool.call_id": event.callID,
               },
+              startTime: time,
             },
             stepCtx,
           )
-          const result = toolResults.get(event.callID)
-          if (result && result.type === "tool.result") {
-            toolSpan.setAttribute("tool.status", result.status)
-            toolSpan.setAttribute("tool.duration_ms", result.durationMs)
-            if (result.error) toolSpan.setAttribute("tool.error", result.error)
+          if (result) {
+            toolSpan.setAttribute("tool.status", result.event.status)
+            toolSpan.setAttribute("tool.duration_ms", result.event.durationMs)
+            if (result.event.error) toolSpan.setAttribute("tool.error", result.event.error)
           }
-          toolSpan.end()
+          toolSpan.end(result ? result.time : time)
           break
         }
         case "error":
@@ -155,8 +170,8 @@ export namespace Telemetry {
       }
     }
 
-    sessionSpan.end()
-    log.info("exported session as OTLP trace", { sessionID, events: events.length })
+    sessionSpan.end(sessionEnd)
+    log.info("exported session as OTLP trace", { sessionID, events: rows.length })
   }
 
   export async function shutdown() {
