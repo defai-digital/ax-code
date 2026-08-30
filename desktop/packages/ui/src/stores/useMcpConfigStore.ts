@@ -86,6 +86,7 @@ const trimOptionalString = (value: string | undefined): string | undefined => {
 const CLIENT_RELOAD_DELAY_MS = 800
 const MCP_LOAD_CACHE_TTL_MS = 5000
 const mcpLastLoadedAt = new Map<string, number>()
+const mcpCacheByKey = new Map<string, McpServerWithScope[]>()
 const mcpLoadInFlight = new Map<string, Promise<boolean>>()
 const mcpLoadRequestIds = new Map<string, number>()
 let mcpLoadSequence = 0
@@ -108,7 +109,9 @@ interface McpConfigStore {
 }
 
 const invalidateMcpCache = (directory: string | null) => {
-  mcpLastLoadedAt.delete(getDirectoryCacheKey(directory))
+  const cacheKey = getDirectoryCacheKey(directory)
+  mcpLastLoadedAt.delete(cacheKey)
+  mcpCacheByKey.delete(cacheKey)
 }
 
 export const useMcpConfigStore = create<McpConfigStore>()(
@@ -129,9 +132,10 @@ export const useMcpConfigStore = create<McpConfigStore>()(
           const cacheKey = getDirectoryCacheKey(configDirectory)
           const now = Date.now()
           const loadedAt = mcpLastLoadedAt.get(cacheKey) ?? 0
-          const hasCachedConfigs = get().mcpServers.length > 0
+          const cachedConfigs = mcpCacheByKey.get(cacheKey)
 
-          if (!options?.force && hasCachedConfigs && now - loadedAt < MCP_LOAD_CACHE_TTL_MS) {
+          if (!options?.force && cachedConfigs && now - loadedAt < MCP_LOAD_CACHE_TTL_MS) {
+            set({ mcpServers: cachedConfigs })
             return true
           }
 
@@ -157,6 +161,7 @@ export const useMcpConfigStore = create<McpConfigStore>()(
               const data: McpServerWithScope[] = await response.json()
               if (!isCurrentLoad()) return true
               set({ mcpServers: data, isLoading: false })
+              mcpCacheByKey.set(cacheKey, data)
               mcpLastLoadedAt.set(cacheKey, Date.now())
               return true
             } catch (error) {

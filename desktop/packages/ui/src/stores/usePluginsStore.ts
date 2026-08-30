@@ -128,6 +128,7 @@ const getConfigDirectory = (): string | null => getActiveConfigDirectory("Plugin
 const CLIENT_RELOAD_DELAY_MS = 800
 export const PLUGINS_LOAD_CACHE_TTL_MS = 5000
 const pluginsLastLoadedAt = new Map<string, number>()
+const pluginsCacheByKey = new Map<string, { entries: PluginEntry[]; files: PluginFile[] }>()
 const pluginsLoadInFlight = new Map<string, Promise<boolean>>()
 const pluginsLoadRequestIds = new Map<string, number>()
 let pluginsLoadSequence = 0
@@ -137,7 +138,9 @@ let pluginRegistryActiveLoads = 0
 const REGISTRY_SPECS_CHUNK_LIMIT = 1500
 
 const invalidatePluginCache = (directory: string | null) => {
-  pluginsLastLoadedAt.delete(getDirectoryCacheKey(directory))
+  const cacheKey = getDirectoryCacheKey(directory)
+  pluginsLastLoadedAt.delete(cacheKey)
+  pluginsCacheByKey.delete(cacheKey)
 }
 
 export const usePluginsStore = create<PluginsStore>()(
@@ -161,9 +164,10 @@ export const usePluginsStore = create<PluginsStore>()(
           const cacheKey = getDirectoryCacheKey(configDirectory)
           const now = Date.now()
           const loadedAt = pluginsLastLoadedAt.get(cacheKey) ?? 0
-          const hasCachedPlugins = get().entries.length > 0 || get().files.length > 0
+          const cached = pluginsCacheByKey.get(cacheKey)
 
-          if (!options?.force && hasCachedPlugins && now - loadedAt < PLUGINS_LOAD_CACHE_TTL_MS) {
+          if (!options?.force && cached && now - loadedAt < PLUGINS_LOAD_CACHE_TTL_MS) {
+            set({ entries: cached.entries, files: cached.files })
             return true
           }
 
@@ -188,7 +192,10 @@ export const usePluginsStore = create<PluginsStore>()(
               }
               const data = await readJson<PluginsListResponse>(response)
               if (!isCurrentLoad()) return true
-              set({ entries: data.entries ?? [], files: data.files ?? [], isLoading: false })
+              const entries = data.entries ?? []
+              const files = data.files ?? []
+              set({ entries, files, isLoading: false })
+              pluginsCacheByKey.set(cacheKey, { entries, files })
               pluginsLastLoadedAt.set(cacheKey, Date.now())
               if (!options?.force) {
                 void get().loadRegistryInfo()

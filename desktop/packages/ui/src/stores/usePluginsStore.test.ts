@@ -36,7 +36,7 @@ vi.doMock("@/lib/configUpdate", () => ({
   getConfigUpdateSnapshot: vi.fn(() => ({ isUpdating: false, message: null })),
 }))
 
-const { usePluginsStore } = await import("./usePluginsStore")
+let usePluginsStore: (typeof import("./usePluginsStore"))["usePluginsStore"]
 
 const entry: PluginEntry = {
   id: "config:user:plugin-a",
@@ -133,7 +133,9 @@ const requestBody = (callIndex: number): unknown => {
 }
 
 describe("usePluginsStore", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    ;({ usePluginsStore } = await import("./usePluginsStore"))
     activeProjectPath = "/workspace/project"
     resetStore()
     fetchCalls.length = 0

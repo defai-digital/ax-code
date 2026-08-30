@@ -29,7 +29,7 @@ vi.doMock("@/lib/configUpdate", () => ({
   getConfigUpdateSnapshot: vi.fn(() => ({ isUpdating: false, message: null })),
 }))
 
-const { useMcpConfigStore } = await import("./useMcpConfigStore")
+let useMcpConfigStore: (typeof import("./useMcpConfigStore"))["useMcpConfigStore"]
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -77,7 +77,9 @@ const resetStore = () => {
 }
 
 describe("useMcpConfigStore", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    ;({ useMcpConfigStore } = await import("./useMcpConfigStore"))
     activeProjectPath = "/workspace/project"
     resetStore()
     fetchCalls.length = 0
