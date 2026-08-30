@@ -202,9 +202,21 @@ export async function installSkillsFromClawdHub({
           continue
         }
 
-        // Move to target directory
+        // Move to target directory. tempDir lives under os.tmpdir(), which on
+        // many Linux setups is a separate (tmpfs) filesystem from the target
+        // skill directory, so a plain rename can fail with EXDEV. Fall back to
+        // a recursive copy + cleanup in that case instead of surfacing a
+        // spurious "failed to install" error for a perfectly good download.
         await ensureDir(path.dirname(targetDir))
-        await fs.promises.rename(tempDir, targetDir)
+        try {
+          await fs.promises.rename(tempDir, targetDir)
+        } catch (renameError) {
+          if (renameError?.code !== "EXDEV") {
+            throw renameError
+          }
+          await fs.promises.cp(tempDir, targetDir, { recursive: true })
+          await safeRm(tempDir)
+        }
         movedToTarget = true
 
         installed.push({ skillName: plan.slug, scope, source: targetSource === "agents" ? "agents" : "ax-code" })
