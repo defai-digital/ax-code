@@ -195,13 +195,25 @@ export namespace ToolErrorPatternTracker {
     }
   }
 
+  /** Categories that errorCategory() buckets under a shared "bash:" key even
+   *  though more than one tool name can produce them (bash/read for
+   *  fileNotFound, bash/cd for dirNotFound). recordSuccess must clear the
+   *  same shared bucket for every tool name that can write to it, or a
+   *  successful call from the non-"bash" side of the pair never resets the
+   *  pattern count and stale guidance keeps firing indefinitely. */
+  const SHARED_CATEGORY_PREFIXES: Record<string, string[]> = {
+    bash: ["bash:fileNotFound", "bash:dirNotFound"],
+    read: ["bash:fileNotFound"],
+    cd: ["bash:dirNotFound"],
+  }
+
   /** Record a successful tool execution to reset the pattern count. */
   export function recordSuccess(sessionID: string, toolName: string) {
     const s = sessions.get(sessionID)
     if (!s) return
-    const prefix = `${toolName}:`
+    const prefixes = [`${toolName}:`, ...(SHARED_CATEGORY_PREFIXES[toolName] ?? [])]
     for (const [k] of s.patterns) {
-      if (k.startsWith(prefix)) s.patterns.delete(k)
+      if (prefixes.some((prefix) => k.startsWith(prefix))) s.patterns.delete(k)
     }
   }
 
