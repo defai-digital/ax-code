@@ -43,8 +43,8 @@ export namespace Context {
     let existingContent: string | undefined
     if (!opts.force) {
       try {
-        log.info("AGENTS.md already exists, use --force to regenerate")
         existingContent = await readFile(outputPath, "utf-8")
+        log.info("AGENTS.md already exists, use --force to regenerate")
         const info = await analyze(root)
         return {
           path: outputPath,
