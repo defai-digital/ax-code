@@ -157,6 +157,11 @@ const SkillsInstalledPage: React.FC = () => {
   const [isDeletingFile, setIsDeletingFile] = React.useState(false)
   const skillDetailRequestRef = React.useRef(0)
   const fileLoadRequestRef = React.useRef(0)
+  // Tracks which skill's detail is currently loaded into the edit fields so an
+  // unrelated background refresh of `skills` (e.g. another settings page
+  // triggering a global "Reload AX Code") doesn't re-fetch and clobber
+  // in-progress, unsaved edits to the same skill.
+  const loadedSkillNameRef = React.useRef<string | null>(null)
 
   const hasSkillChanges = isNewSkill
     ? draftName.trim() !== "" || description.trim() !== "" || instructions.trim() !== "" || pendingFiles.length > 0
@@ -207,6 +212,7 @@ const SkillsInstalledPage: React.FC = () => {
   React.useEffect(() => {
     const loadSkillDetails = async () => {
       if (isNewSkill && skillDraft) {
+        loadedSkillNameRef.current = null
         skillDetailRequestRef.current += 1
         const nextDescription = skillDraft.description || ""
         const nextInstructions = skillDraft.instructions || ""
@@ -221,6 +227,15 @@ const SkillsInstalledPage: React.FC = () => {
         setSupportingFiles([])
         setPendingFiles(skillDraft.pendingFiles || [])
       } else if (selectedSkillName && selectedSkill) {
+        if (loadedSkillNameRef.current === selectedSkillName) {
+          // Detail for this skill is already loaded into the edit fields. A
+          // background refresh of the `skills` list (e.g. an unrelated "Reload
+          // AX Code") re-runs this effect via the `selectedSkill` identity
+          // change, but re-fetching here would silently overwrite whatever the
+          // user is currently typing. Skip it — saving already updates the
+          // "original" baseline directly without needing a reload.
+          return
+        }
         const requestId = skillDetailRequestRef.current + 1
         skillDetailRequestRef.current = requestId
         setIsLoading(true)
@@ -239,6 +254,7 @@ const SkillsInstalledPage: React.FC = () => {
           setOriginalDescription(nextDescription)
           setOriginalInstructions(nextInstructions)
           setSupportingFiles(md.supportingFiles || [])
+          loadedSkillNameRef.current = selectedSkillName
         } else if (result.status === "failed") {
           console.error("Failed to load skill details:", result.error)
         }
@@ -246,6 +262,7 @@ const SkillsInstalledPage: React.FC = () => {
           setIsLoading(false)
         }
       } else {
+        loadedSkillNameRef.current = null
         skillDetailRequestRef.current += 1
         setIsLoading(false)
       }
