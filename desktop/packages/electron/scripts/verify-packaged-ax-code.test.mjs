@@ -10,6 +10,7 @@ const { dependencyManifestPath, resolvePackagedAxCodeRoot, verifyPackagedAxCode 
   require("./verify-packaged-ax-code.cjs").__test
 
 const tempDirs = []
+const testSymlinks = process.platform === "win32" ? test.skip : test
 
 const makeContext = (platform) => {
   const appOutDir = fs.mkdtempSync(path.join(os.tmpdir(), "ax-packaged-runtime-"))
@@ -61,6 +62,20 @@ describe("packaged ax-code runtime verification", () => {
     fs.writeFileSync(dependencyManifestPath(runtimeRoot, "solid-js"), "{}")
 
     expect(() => verifyPackagedAxCode(context)).toThrow("@ax-code/util")
+  })
+
+  testSymlinks("fails before signing when a runtime symlink escapes the app bundle", () => {
+    const context = makeContext("darwin")
+    const runtimeRoot = writeRuntime(context, { "solid-js": "1.9.9" })
+    const dependency = dependencyManifestPath(runtimeRoot, "solid-js")
+    fs.mkdirSync(path.dirname(dependency), { recursive: true })
+    fs.writeFileSync(dependency, "{}")
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "ax-packaged-runtime-outside-"))
+    tempDirs.push(outside)
+    const link = path.join(runtimeRoot, "node_modules", "workspace-only")
+    fs.symlinkSync(outside, link)
+
+    expect(() => verifyPackagedAxCode(context)).toThrow("unsafe symlinks: node_modules/workspace-only")
   })
 
   test("accepts a runtime with every direct dependency", () => {

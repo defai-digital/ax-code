@@ -13,6 +13,9 @@
 import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import runtimeSymlinks from "./runtime-symlinks.cjs"
+
+export const { removeUnsafeRuntimeSymlinks } = runtimeSymlinks
 
 const defaultElectronDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
@@ -133,8 +136,16 @@ if (isMain) {
     }
   } else if (command === "placeholder") {
     process.stdout.write(placeholderReadme(readPinnedAxCodeVersion()))
+  } else if (command === "sanitize-symlinks") {
+    const runtimeRoot = rest[0] ? path.resolve(rest[0]) : path.join(defaultElectronDir, "resources", "ax-code")
+    const removed = removeUnsafeRuntimeSymlinks(runtimeRoot)
+    if (removed.length > 0) {
+      console.log(`[stage-ax-code] removed ${removed.length} unsafe runtime symlink(s)`)
+    }
   } else {
-    console.error("usage: node stage-ax-code.mjs plan [electron-builder flags] | placeholder")
+    console.error(
+      "usage: node stage-ax-code.mjs plan [electron-builder flags] | placeholder | sanitize-symlinks [runtime-root]",
+    )
     process.exit(2)
   }
 }

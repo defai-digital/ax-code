@@ -2,6 +2,7 @@
 
 const fs = require("node:fs")
 const path = require("node:path")
+const { findUnsafeRuntimeSymlinks } = require("./runtime-symlinks.cjs")
 
 const isStageRequired = (env = process.env) => {
   const value = typeof env.AX_CODE_STAGE_REQUIRED === "string" ? env.AX_CODE_STAGE_REQUIRED.trim().toLowerCase() : ""
@@ -41,6 +42,13 @@ const verifyPackagedAxCode = (
   const dependencies = Object.keys(manifest.dependencies || {})
   if (dependencies.length === 0) {
     throw new Error(`Packaged ax-code runtime manifest has no dependencies: ${manifestPath}`)
+  }
+
+  const unsafeSymlinks = findUnsafeRuntimeSymlinks(runtimeRoot)
+  if (unsafeSymlinks.length > 0) {
+    throw new Error(
+      `Packaged ax-code runtime contains ${unsafeSymlinks.length} unsafe symlinks: ${unsafeSymlinks.join(", ")}`,
+    )
   }
 
   const missing = dependencies.filter((dependency) => !exists(dependencyManifestPath(runtimeRoot, dependency)))

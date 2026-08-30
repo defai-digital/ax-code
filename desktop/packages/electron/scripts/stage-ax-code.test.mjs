@@ -184,6 +184,23 @@ describeBash("stage-ax-code.sh policy", () => {
     expect(fs.existsSync(path.join(stagedTreeDir, "bin", "ax-code"))).toBe(true)
   })
 
+  it("removes AX_CODE_DIST symlinks whose destinations escape the staged tree", () => {
+    const dist = makeShellTempDir("ax-stage-dist-")
+    const outside = makeShellTempDir("ax-stage-outside-")
+    fs.mkdirSync(path.join(dist, "bin"), { recursive: true })
+    fs.writeFileSync(path.join(dist, "bin", "ax-code"), "#!/bin/sh\necho fake\n", { mode: 0o755 })
+    fs.chmodSync(path.join(dist, "bin", "ax-code"), 0o755)
+    const link = path.join(dist, "node_modules", "workspace-only")
+    fs.mkdirSync(path.dirname(link), { recursive: true })
+    fs.symlinkSync(outside, link)
+
+    const result = runStage({ AX_CODE_DIST: dist, AX_CODE_STAGE_REQUIRED: "false" })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain("removed 1 unsafe runtime symlink(s)")
+    expect(fs.existsSync(path.join(stagedTreeDir, "node_modules", "workspace-only"))).toBe(false)
+  })
+
   it("falls back to the placeholder when the AX_CODE_DIST tree has no launcher", () => {
     const dist = makeShellTempDir("ax-stage-dist-")
 

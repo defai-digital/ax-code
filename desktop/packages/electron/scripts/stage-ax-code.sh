@@ -66,6 +66,15 @@ launcher_usable() {
   return 0
 }
 
+# Release archives can contain workspace-only symlinks left by pnpm deploy.
+# They cannot resolve on an end-user machine, and macOS rejects links whose
+# final destination escapes the signed app bundle.
+sanitize_staged_tree() {
+  if ! node "$node_helpers" sanitize-symlinks; then
+    stage_placeholder "failed to sanitize unsafe runtime symlinks"
+  fi
+}
+
 rm -rf "$dest"
 mkdir -p "$dest"
 
@@ -82,6 +91,7 @@ if [ -n "${AX_CODE_DIST:-}" ]; then
     exit 1
   fi
   cp -R "$AX_CODE_DIST"/. "$dest"/
+  sanitize_staged_tree
   if ! launcher_usable; then
     stage_placeholder "AX_CODE_DIST tree at $AX_CODE_DIST has no usable launcher $launcher"
   fi
@@ -146,6 +156,8 @@ extract_archive() {
 if ! extract_archive; then
   stage_placeholder "failed to extract $asset"
 fi
+
+sanitize_staged_tree
 
 # Zip archives do not preserve exec bits; restore them on unix launchers.
 if [ -d "$dest/bin" ]; then
