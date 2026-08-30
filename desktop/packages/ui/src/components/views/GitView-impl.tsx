@@ -237,6 +237,11 @@ export const GitView: React.FC = () => {
   const worktreeMap = useSessionUIStore((s) => s.worktreeMetadata)
   const availableWorktrees = useSessionUIStore((s) => s.availableWorktrees)
   const normalizedCurrentDirectory = normalizePath(currentDirectory)
+  // Mirrors `currentDirectory` for async callbacks that need the *latest* value at
+  // resolution time (a `useCallback`'s own closure only has the value from when it
+  // was (re)created, which can lag behind a fast directory switch).
+  const currentDirectoryRef = React.useRef(currentDirectory)
+  currentDirectoryRef.current = currentDirectory
   const inferredWorktreeMetadata = React.useMemo(() => {
     if (!normalizedCurrentDirectory) {
       return undefined
@@ -571,6 +576,20 @@ export const GitView: React.FC = () => {
   const [generatedHighlights, setGeneratedHighlights] = React.useState<string[]>(
     initialSnapshot?.generatedHighlights ?? [],
   )
+  // GitView is never remounted when the active session/directory changes (no `key`
+  // ties it to one), so `commitMessage`/`generatedHighlights` above — seeded from
+  // `gitViewSnapshots` only in the `useState` initializer — would otherwise keep
+  // showing the previous directory's draft commit message after a fast switch,
+  // right up until a `createGitCommit(currentDirectory, commitMessage, ...)` call
+  // commits it into the wrong repository. Re-sync from the snapshot map whenever
+  // `currentDirectory` changes, using the render-phase "adjust state while
+  // rendering" pattern so this can never race with the snapshot-save effect below.
+  const [commitDraftDirectory, setCommitDraftDirectory] = React.useState(currentDirectory ?? null)
+  if ((currentDirectory ?? null) !== commitDraftDirectory) {
+    setCommitDraftDirectory(currentDirectory ?? null)
+    setCommitMessage(initialSnapshot?.commitMessage ?? "")
+    setGeneratedHighlights(initialSnapshot?.generatedHighlights ?? [])
+  }
   const hasPendingIndexMutation =
     movingChangePaths.size > 0 || gitIndexMutationQueue.size() > 0 || gitIndexMutationQueue.isRunning()
 
@@ -781,10 +800,20 @@ export const GitView: React.FC = () => {
       setRemoteUrl(null)
       return
     }
+    let cancelled = false
     git
       .getRemoteUrl(currentDirectory)
-      .then(setRemoteUrl)
-      .catch(() => setRemoteUrl(null))
+      .then((url) => {
+        // Guard against a slower fetch for a previous directory resolving after the
+        // user has already switched to a different one and clobbering its remote URL.
+        if (!cancelled) setRemoteUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) setRemoteUrl(null)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [currentDirectory, git])
 
   const refreshRemotes = React.useCallback(async () => {
@@ -792,10 +821,14 @@ export const GitView: React.FC = () => {
       setRemotes([])
       return
     }
+    const requestedDirectory = currentDirectory
     try {
-      const remoteList = await git.getRemotes(currentDirectory)
+      const remoteList = await git.getRemotes(requestedDirectory)
+      // Same guard as above: only apply the result if it's still for the active directory.
+      if (currentDirectoryRef.current !== requestedDirectory) return
       setRemotes(remoteList)
     } catch {
+      if (currentDirectoryRef.current !== requestedDirectory) return
       setRemotes([])
     }
   }, [currentDirectory, git])
