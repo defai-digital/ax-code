@@ -51,4 +51,31 @@ describe("text document synchronization", () => {
     ])
     expect(computeIncrementalChanges("x", "y")).toBeNull()
   })
+
+  test("clamps the end range when the edited hunk reaches a final line with no trailing newline", () => {
+    // "one\ntwo" has exactly two lines (0: "one", 1: "two") and no line 2 —
+    // the end position must land inside line 1, not name a nonexistent
+    // line 2, or the server receives an out-of-bounds range.
+    expect(computeIncrementalChanges("one\ntwo", "one\nthree")).toEqual([
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 3 },
+        },
+        text: "three",
+      },
+    ])
+
+    // Same shape, but the removed region spans multiple lines before
+    // reaching the newline-less end of the document.
+    expect(computeIncrementalChanges("a\nb\nc", "a\nB\nC")).toEqual([
+      {
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 2, character: 1 },
+        },
+        text: "B\nC",
+      },
+    ])
+  })
 })

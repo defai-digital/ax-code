@@ -77,6 +77,7 @@ export function computeIncrementalChanges(oldText: string, newText: string): Lsp
 
   const parts = diffLines(oldText, newText)
   const changes: LspContentChange[] = []
+  const oldEndsWithNewline = oldText.endsWith("\n")
 
   let oldLine = 0
   let i = 0
@@ -92,18 +93,35 @@ export function computeIncrementalChanges(oldText: string, newText: string): Lsp
 
     const hunkStartLine = oldLine
     let removedLines = 0
+    let removedText = ""
     let addedText = ""
     while (i < parts.length && (parts[i].added || parts[i].removed)) {
       const p = parts[i]
-      if (p.removed) removedLines += p.count ?? 0
+      if (p.removed) {
+        removedLines += p.count ?? 0
+        removedText += p.value
+      }
       if (p.added) addedText += p.value
       i++
     }
-    const hunkEndLine = hunkStartLine + removedLines
+    let hunkEndLine = hunkStartLine + removedLines
+    let endCharacter = 0
+    // When this hunk removes all the way through the end of `oldText` and
+    // `oldText` has no trailing newline, the removed region ends mid-line —
+    // there is no "line after the last removed line" to point at (a
+    // document with no final newline has no such line, so `{line:
+    // hunkEndLine, character: 0}` would name a line index past the end of
+    // the document). Point at the actual end of the last removed line
+    // instead: one line up, at the column where that line's text ends.
+    if (i === parts.length && removedLines > 0 && !oldEndsWithNewline) {
+      hunkEndLine -= 1
+      const lastNewline = removedText.lastIndexOf("\n")
+      endCharacter = lastNewline === -1 ? removedText.length : removedText.length - lastNewline - 1
+    }
     changes.push({
       range: {
         start: { line: hunkStartLine, character: 0 },
-        end: { line: hunkEndLine, character: 0 },
+        end: { line: hunkEndLine, character: endCharacter },
       },
       text: addedText,
     })
