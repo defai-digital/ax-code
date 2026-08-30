@@ -90,8 +90,7 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
       input.promotion.promotionMode === embeddedReleasePacket.summary.promotionMode &&
       input.promotion.authorizedPromotion === embeddedReleasePacket.summary.authorizedPromotion
     const signedArchiveLinkagePass =
-      (input.promotion.signedArchiveID ?? input.attestationRecord.signedArchive.signedArchiveID) ===
-      input.attestationRecord.signedArchive.signedArchiveID
+      input.promotion.signedArchiveID === input.attestationRecord.signedArchive.signedArchiveID
 
     const gates: QualityPromotionSignedArchiveTrust.Gate[] = [
       {
