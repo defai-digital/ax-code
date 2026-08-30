@@ -217,8 +217,7 @@ async function recoverAcceptedPromptFromServer(
 function scheduleAcceptedPromptWatchdog(sessionId: string, messageID: string): void {
   const stores = _childStores
   if (!stores) return
-  const directory = getSessionDirectory(sessionId) || dir()
-  if (!directory) return
+  if (!(getSessionDirectory(sessionId) || dir())) return
 
   // Cancel any stale watchdog from a previous prompt for this session.
   // Without this, the previous prompt's watchdog fires during the next
@@ -231,6 +230,15 @@ function scheduleAcceptedPromptWatchdog(sessionId: string, messageID: string): v
   }
 
   const runWatchdogCheck = async () => {
+    // Re-resolve the directory on every fire (including grace-window re-arms)
+    // instead of capturing it once at schedule time. If the session was moved
+    // (moveSession) while this watchdog was pending, its message/status state
+    // now lives in the TARGET directory's store — moveSessionLocalState
+    // deletes it from the source store — so a captured stale directory would
+    // look up an empty store, silently no-op (userMessage never found), and
+    // leave a truly dead turn with no fallback error forever.
+    const directory = getSessionDirectory(sessionId) || dir()
+    if (!directory) return
     const store = stores.children.get(directory)
     if (!store) return
     const state = store.getState()
@@ -393,14 +401,20 @@ function getDirectoryStore(directory?: string) {
   return _childStores.ensureChild(resolvedDirectory)
 }
 
+// All Binary.search/findIndex call sites in this file assume `sessions` stays
+// sorted by id (see ./binary.ts). Insert via Binary.search so a moved session
+// lands at its sorted position instead of breaking that invariant — an
+// unsorted array makes every later Binary lookup on this directory's session
+// list (delete/archive/revert/fork/etc.) silently miss existing entries.
 function upsertSessionList(sessions: Session[], session: Session): Session[] {
   const next = [...sessions]
-  const idx = next.findIndex((item) => item.id === session.id)
-  if (idx >= 0) {
-    next[idx] = session
+  const result = Binary.search(next, session.id, (s) => s.id)
+  if (result.found) {
+    next[result.index] = session
     return next
   }
-  return [session, ...next]
+  next.splice(result.index, 0, session)
+  return next
 }
 
 function removeRecordKey<T>(record: Record<string, T>, key: string): Record<string, T> {

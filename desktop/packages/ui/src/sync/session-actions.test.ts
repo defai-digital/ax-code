@@ -737,6 +737,45 @@ describe("rollback and fork actions use the session directory", () => {
     expect(registeredSessionDirectories).toContainEqual({ sessionID: "session-b", directory: "/target/project" })
     expect(setCurrentSessionMock).toHaveBeenCalledWith("session-b", "/target/project")
   })
+
+  test("moveSession keeps the target directory's session list sorted by id (Binary.search invariant)", async () => {
+    // Every Binary.search/findIndex call in session-actions.ts (delete, revert,
+    // fork, feedback, ...) assumes `session` stays sorted by id. Regression
+    // test for upsertSessionList prepending unsorted, which silently broke
+    // later lookups on the target directory after a move.
+    // "session-b" is the id the mocked useSessionUIStore maps to "/other/project"
+    // (see the ./session-ui-store mock above) — it sorts between the two
+    // pre-existing target-directory sessions below.
+    const sourceStore = createStore({})
+    const targetStore = createStore({})
+    sourceStore.setState({
+      session: [{ id: "session-b", directory: "/other/project", time: { created: 1, updated: 1 } } as unknown as Session],
+    })
+    targetStore.setState({
+      session: [
+        { id: "session-a", directory: "/target/project", time: { created: 1, updated: 1 } } as unknown as Session,
+        { id: "session-z", directory: "/target/project", time: { created: 1, updated: 1 } } as unknown as Session,
+      ],
+    })
+
+    const { moveSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(
+      mockSdk as unknown as AxCodeClient,
+      createChildStores([
+        ["/other/project", sourceStore],
+        ["/target/project", targetStore],
+      ]),
+      () => "/test/project",
+    )
+
+    await moveSession("session-b", "/target/project")
+
+    expect(targetStore.getState().session.map((session) => session.id)).toEqual([
+      "session-a",
+      "session-b",
+      "session-z",
+    ])
+  })
 })
 
 describe("dismissPermission passes directory", () => {
