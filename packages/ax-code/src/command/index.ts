@@ -350,6 +350,7 @@ export namespace Command {
     }
 
     for (const [name, prompt] of Object.entries(await MCP.prompts())) {
+      if (commands[name] && !isOverridableBuiltin(commands[name])) continue
       commands[name] = {
         name,
         source: "mcp",
