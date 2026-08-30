@@ -196,7 +196,8 @@ export const resolveManagedToolBin = async (input: {
   installedBin?: string | null
   exists?: (path: string) => Promise<boolean>
 }) => {
-  if (input.installedBin && !Filesystem.contains(codeIntelHost().binDir(), input.installedBin)) return input.installedBin
+  if (input.installedBin && !Filesystem.contains(codeIntelHost().binDir(), input.installedBin))
+    return input.installedBin
 
   if (await (input.exists ?? pathExists)(input.managedBin)) return input.managedBin
 

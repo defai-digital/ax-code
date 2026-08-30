@@ -285,8 +285,7 @@ export async function planRefactorImpl(
     // via the symbol lookup first; fall back to treating it as a file path
     // directly so those ops still get file attribution.
     const targetFile =
-      resolved.find((t) => t.id === edit.target)?.file ??
-      (affectedFileSet.has(edit.target) ? edit.target : undefined)
+      resolved.find((t) => t.id === edit.target)?.file ?? (affectedFileSet.has(edit.target) ? edit.target : undefined)
     return {
       id: `g${index}`,
       kind: "atomic" as const,
