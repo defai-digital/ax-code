@@ -24,6 +24,20 @@ if [ -z "${RELEASE_TAG}" ]; then
 fi
 
 VERSION="${RELEASE_TAG#v}"
+# VERSION is interpolated, unescaped, into a Ruby heredoc below (the
+# generated formula's `version "${VERSION}"` and `url` lines) that gets
+# committed to a public Homebrew tap and later *executed* as Ruby by every
+# user's `brew install`/`brew upgrade`. RELEASE_TAG can originate from the
+# release workflow's free-text workflow_dispatch `tag` input with no format
+# validation upstream, so an unchecked value here would let a crafted tag
+# (e.g. containing an unescaped `"`) inject arbitrary Ruby into a formula
+# that runs on end-user machines, not just this CI runner. Enforce the same
+# strict semver shape validate-install-matrix-inputs.sh uses before VERSION
+# is used anywhere.
+if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z-]+)*$ ]]; then
+  echo "::error::AX_CODE_RELEASE_TAG/GITHUB_REF_NAME must resolve to a semver version (e.g. v5.2.0), got '${RELEASE_TAG}'"
+  exit 1
+fi
 TAG="v${VERSION}"
 RELEASE_BASE="https://github.com/defai-digital/ax-code/releases/download/${TAG}"
 SOURCE_REPO="${GITHUB_REPOSITORY:-defai-digital/ax-code}"
