@@ -135,6 +135,26 @@ describe("haveEquivalentSyncSnapshots", () => {
       expect(haveEquivalentSyncSnapshots(withMeta, createSession("s"))).toBe(false)
     })
 
+    test("permission compares structurally, not by reference", () => {
+      const rule = { permission: "bash", pattern: "*", action: "allow" as const }
+      const withPermission = createSession("s", { permission: [rule] })
+      // Same content, different array/object references (e.g. re-fetched from the wire).
+      expect(
+        haveEquivalentSyncSnapshots(
+          withPermission,
+          createSession("s", { permission: [{ permission: "bash", pattern: "*", action: "allow" }] }),
+        ),
+      ).toBe(true)
+      expect(
+        haveEquivalentSyncSnapshots(
+          withPermission,
+          createSession("s", { permission: [{ permission: "bash", pattern: "*", action: "deny" }] }),
+        ),
+      ).toBe(false)
+      expect(haveEquivalentSyncSnapshots(withPermission, createSession("s"))).toBe(false)
+      expect(haveEquivalentSyncSnapshots(createSession("s"), createSession("s"))).toBe(true)
+    })
+
     test("unknown keys outside the snapshot key set must match", () => {
       const base = createSession("s", { custom: 1 })
       expect(haveEquivalentSyncSnapshots(base, createSession("s", { custom: 1 }))).toBe(true)

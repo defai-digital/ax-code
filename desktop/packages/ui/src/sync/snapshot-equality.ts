@@ -79,7 +79,7 @@ function areSessionSnapshotsEqual(left: Session, right: Session): boolean {
     areSessionTimesEqual(left.time, right.time) &&
     areSessionSummariesEqual(left.summary, right.summary) &&
     left.share?.url === right.share?.url &&
-    left.permission === right.permission &&
+    areSessionPermissionsEqual(left.permission, right.permission) &&
     areSessionRevertsEqual(left.revert, right.revert) &&
     areFlatUnknownRecordsEqual(left.metadata, right.metadata) &&
     areUnknownSessionKeysEqual(left, right)
@@ -109,6 +109,27 @@ function areSessionSummariesEqual(
     left.files === right.files &&
     left.diffs === right.diffs
   )
+}
+
+function areSessionPermissionsEqual(
+  left: Session["permission"] | undefined,
+  right: Session["permission"] | undefined,
+): boolean {
+  if (left === right) return true
+  if (!left || !right) return false
+  if (left.length !== right.length) return false
+  for (let index = 0; index < left.length; index += 1) {
+    const leftRule = left[index]
+    const rightRule = right[index]
+    if (
+      leftRule.permission !== rightRule.permission ||
+      leftRule.pattern !== rightRule.pattern ||
+      leftRule.action !== rightRule.action
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
 function areSessionRevertsEqual(left: Session["revert"] | undefined, right: Session["revert"] | undefined): boolean {
