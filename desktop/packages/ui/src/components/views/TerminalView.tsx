@@ -543,11 +543,19 @@ export const TerminalView: React.FC = () => {
 
       if (!terminalId) {
         if (terminalLifecycle === "exited") {
+          // Switching here from a tab/session that had a fatal connection error must not
+          // leave that stale banner showing over this (unrelated, already-exited) tab.
+          setConnectionError(null)
+          setIsFatalError(false)
+          setIsReconnectPending(false)
           setConnecting(directory, tabId, false)
           return
         }
 
         if (isActionTab && hasBufferedOutput) {
+          setConnectionError(null)
+          setIsFatalError(false)
+          setIsReconnectPending(false)
           setConnecting(directory, tabId, false)
           return
         }
