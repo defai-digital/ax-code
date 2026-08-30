@@ -89,6 +89,24 @@ function changedSources(previous: WikiManifest | undefined, current: Record<stri
   return changed
 }
 
+function pageFingerprint(input: {
+  config: AxWikiConfig
+  sourceHashes: Record<string, string>
+  generatorIdentity?: GeneratorIdentity
+  model?: string
+  semanticRevision?: string
+}): string {
+  return sha256(
+    stableJson({
+      config: input.config,
+      sourceHashes: input.sourceHashes,
+      generatorIdentity: input.generatorIdentity ?? null,
+      model: input.model ?? null,
+      semanticRevision: input.semanticRevision ?? null,
+    }),
+  )
+}
+
 function pageNeedsGeneration(input: {
   action: "generate" | "update"
   page: WikiPlanPage
@@ -96,10 +114,12 @@ function pageNeedsGeneration(input: {
   planHash: string
   changed: Set<string>
   exists: boolean
+  fingerprintChanged: boolean
 }): boolean {
   if (!input.exists || !input.previous) return true
   if (input.action === "generate") return true
   if (input.previous.planHash !== input.planHash) return true
+  if (input.fingerprintChanged) return true
   return [...input.changed].some((file) => sourceMatchesPage(file, input.page))
 }
 
@@ -129,11 +149,40 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     if (content !== undefined) existing.set(page, content)
   }
 
+  const prospectiveFingerprints = new Map<string, string>()
+  for (const page of plan.pages) {
+    const selected = selectPageSources(sources, page, config.maxSourcesPerPage ?? 80)
+    prospectiveFingerprints.set(
+      page.path,
+      pageFingerprint({
+        config,
+        sourceHashes: Object.fromEntries(selected.map((source) => [source.path, source.hash])),
+        generatorIdentity: input.generatorIdentity,
+        model: input.model,
+        semanticRevision: input.semanticRevision,
+      }),
+    )
+  }
+
   const conflicts: string[] = []
   const targets: WikiPlanPage[] = []
   for (const page of plan.pages) {
     const content = existing.get(page.path)
-    if (!pageNeedsGeneration({ action, page, previous, planHash, changed, exists: content !== undefined })) continue
+    const previousPage = previous?.pages[page.path]
+    const fingerprintChanged =
+      previousPage !== undefined && previousPage.fingerprint !== prospectiveFingerprints.get(page.path)
+    if (
+      !pageNeedsGeneration({
+        action,
+        page,
+        previous,
+        planHash,
+        changed,
+        exists: content !== undefined,
+        fingerprintChanged,
+      })
+    )
+      continue
     if (
       content !== undefined &&
       previous?.pages[page.path] &&
