@@ -593,6 +593,16 @@ export interface SideBySideDiffHunk {
   lines: SideBySideDiffLine[]
 }
 
+// A real unified-diff file header is a "--- a/x" line immediately followed by
+// a "+++ b/x" line, not just any line that happens to start with those
+// characters (a removed/added line can legitimately start with "---"/"+++"
+// if the original file content itself began with those characters).
+const isUnifiedFileHeaderPair = (lines: string[], index: number): boolean => {
+  const line = lines[index]
+  const next = lines[index + 1]
+  return typeof line === "string" && line.startsWith("---") && typeof next === "string" && next.startsWith("+++")
+}
+
 export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
   const lines = diffText.split("\n")
   let currentFile = ""
@@ -602,7 +612,7 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
   while (i < lines.length) {
     const line = lines[i]
 
-    if (line.startsWith("Index:") || line.startsWith("===") || line.startsWith("---") || line.startsWith("+++")) {
+    if (line.startsWith("Index:") || line.startsWith("===") || isUnifiedFileHeaderPair(lines, i)) {
       if (line.startsWith("Index:")) {
         currentFile = line.split(" ")[1].split("/").pop() || "file"
       }
@@ -611,7 +621,7 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
     }
 
     if (line.startsWith("@@")) {
-      const match = line.match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/)
+      const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
       const oldStart = match ? parseInt(match[1]) : 0
       const newStart = match ? parseInt(match[2]) : 0
 
@@ -620,7 +630,12 @@ export const parseDiffToUnified = (diffText: string): UnifiedDiffHunk[] => {
       let newLineNum = newStart
       let j = i + 1
 
-      while (j < lines.length && !lines[j].startsWith("@@") && !lines[j].startsWith("Index:")) {
+      while (
+        j < lines.length &&
+        !lines[j].startsWith("@@") &&
+        !lines[j].startsWith("Index:") &&
+        !isUnifiedFileHeaderPair(lines, j)
+      ) {
         const contentLine = lines[j]
         if (contentLine.startsWith("+")) {
           unifiedLines.push({ type: "added", lineNumber: newLineNum, content: contentLine.substring(1) })
@@ -671,7 +686,7 @@ export const parseDiffToLines = (diffText: string): SideBySideDiffHunk[] => {
     }
 
     if (line.startsWith("@@")) {
-      const match = line.match(/@@ -(\d+),\d+ \+(\d+),\d+ @@/)
+      const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
       const oldStart = match ? parseInt(match[1]) : 0
       const newStart = match ? parseInt(match[2]) : 0
 
