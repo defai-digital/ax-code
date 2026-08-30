@@ -29,6 +29,7 @@ export const McpResourceBrowser: React.FC<McpResourceBrowserProps> = ({ serverNa
   const [previewError, setPreviewError] = React.useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = React.useState(false)
   const [isReading, setIsReading] = React.useState(false)
+  const selectedUriRef = React.useRef<string | null>(null)
 
   const serverResources = React.useMemo(() => resourcesForServer(resources, serverName), [resources, serverName])
   const selectedResource = React.useMemo(
@@ -60,17 +61,20 @@ export const McpResourceBrowser: React.FC<McpResourceBrowserProps> = ({ serverNa
   const handleSelectResource = React.useCallback(
     async (resource: McpResource) => {
       setSelectedUri(resource.uri)
+      selectedUriRef.current = resource.uri
       setPreview(null)
       setPreviewError(null)
       setIsReading(true)
       try {
         const result = await readResource(resource.client, resource.uri, directory)
+        if (selectedUriRef.current !== resource.uri) return
         setPreview(resourcePreview(result, (mime) => t("settings.mcp.page.resources.preview.binary", { mime })))
       } catch (error) {
+        if (selectedUriRef.current !== resource.uri) return
         const message = error instanceof Error ? error.message : t("settings.mcp.page.resources.preview.readFailed")
         setPreviewError(message)
       } finally {
-        setIsReading(false)
+        if (selectedUriRef.current === resource.uri) setIsReading(false)
       }
     },
     [directory, readResource, t],

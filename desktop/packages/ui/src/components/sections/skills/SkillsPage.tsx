@@ -461,8 +461,9 @@ const SkillsInstalledPage: React.FC = () => {
       return
     }
 
+    const skillName = selectedSkillName
     const { writeSupportingFile } = useSkillsStore.getState()
-    const success = await writeSupportingFile(selectedSkillName, filePath, newFileContent)
+    const success = await writeSupportingFile(skillName, filePath, newFileContent)
 
     if (success) {
       toast.success(
@@ -472,8 +473,8 @@ const SkillsInstalledPage: React.FC = () => {
       )
       setIsFileDialogOpen(false)
       setEditingFilePath(null)
-      const detail = await getSkillDetail(selectedSkillName)
-      if (detail) {
+      const detail = await getSkillDetail(skillName)
+      if (detail && useSkillsStore.getState().selectedSkillName === skillName) {
         setSupportingFiles(detail.sources.md.supportingFiles || [])
       }
     } else {

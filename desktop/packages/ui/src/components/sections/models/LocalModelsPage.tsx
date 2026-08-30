@@ -112,6 +112,10 @@ export const LocalModelsPage: React.FC = () => {
   }, [directory])
 
   React.useEffect(() => {
+    connectionInitializedRef.current = false
+  }, [directory])
+
+  React.useEffect(() => {
     mountedRef.current = true
     setLoading(true)
     void load()

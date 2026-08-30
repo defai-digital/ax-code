@@ -18,6 +18,7 @@ import { PROJECT_ACTION_ICON_MAP, PROJECT_ACTION_ICONS, PROJECT_ACTIONS_UPDATED_
 import { dispatchProjectScopedEvent } from "@/lib/projectScopedEvents"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { isCurrentProjectOperationTarget } from "./projectOperationTarget"
 
 type EditableProjectAction = OpenChamberProjectAction
 
@@ -47,6 +48,8 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
   const [isSaving, setIsSaving] = React.useState(false)
   const [initialSnapshot, setInitialSnapshot] = React.useState<string | null>(null)
   const [expandedActions, setExpandedActions] = React.useState<Record<string, boolean>>({})
+  const projectRefRef = React.useRef(projectRef)
+  projectRefRef.current = projectRef
 
   React.useEffect(() => {
     let cancelled = false
@@ -124,20 +127,27 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
       toast.error(validationError)
       return
     }
+    const targetProjectRef = projectRef
     setIsSaving(true)
     try {
       const ok = await saveProjectActionsState(projectRef, {
         actions,
         primaryActionId: null,
       })
+      if (!isCurrentProjectOperationTarget(targetProjectRef, projectRefRef.current)) {
+        return
+      }
       if (!ok) {
         toast.error(t("settings.projects.actions.toast.saveFailed"))
         return
       }
       setInitialSnapshot(JSON.stringify({ actions }))
-      dispatchProjectScopedEvent(PROJECT_ACTIONS_UPDATED_EVENT, projectRef.id)
+      dispatchProjectScopedEvent(PROJECT_ACTIONS_UPDATED_EVENT, targetProjectRef.id)
       toast.success(t("settings.projects.actions.toast.saved"))
     } catch {
+      if (!isCurrentProjectOperationTarget(targetProjectRef, projectRefRef.current)) {
+        return
+      }
       toast.error(t("settings.projects.actions.toast.saveFailed"))
     } finally {
       setIsSaving(false)

@@ -50,11 +50,16 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({
     return { id: activeProject.id, path: projectPath }
   }, [activeProject?.id, projectPath, projectRefProp?.id, projectRefProp?.path])
 
+  const projectRefIdLiveRef = React.useRef<string | null>(projectRef?.id ?? null)
+  projectRefIdLiveRef.current = projectRef?.id ?? null
+
   const refreshWorktrees = React.useCallback(async () => {
     if (!projectRef || isGitRepoLocal === false) return
 
+    const requestedProjectId = projectRef.id
     try {
       const worktrees = await listProjectWorktrees(projectRef)
+      if (projectRefIdLiveRef.current !== requestedProjectId) return
       setAvailableWorktrees(worktrees)
     } catch {
       // Ignore errors
