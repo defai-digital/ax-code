@@ -525,9 +525,17 @@ export namespace Risk {
   }
 
   function testCommand(input: string) {
-    return [/\b(?:bun|pnpm|npm|yarn)\s+(?:run\s+)?test\b/i, /\b(?:vitest|jest|mocha|ava|pytest|rspec|phpunit)\b/i].some(
-      (pat) => pat.test(input),
-    )
+    // Must track the test-runner patterns in isValidation() above: any
+    // command isValidation() recognizes as a test run has to be checked here
+    // too, or validationFailed() silently treats a failing run as "not a
+    // test command" and reports it as passed for anything but a nonzero
+    // exit code (e.g. Go/Rust/Deno/Swift/.NET test failures printed to
+    // stdout with an exit code the harness doesn't observe as an error).
+    return [
+      /\b(?:bun|pnpm|npm|yarn)\s+(?:run\s+)?test\b/i,
+      /\b(?:vitest|jest|mocha|ava|pytest|rspec|phpunit)\b/i,
+      /\b(?:go test|cargo test|deno test|swift test|dotnet test)\b/i,
+    ].some((pat) => pat.test(input))
   }
 
   function validationFailed(input: { command: string; status: "completed" | "error"; output: string }) {
