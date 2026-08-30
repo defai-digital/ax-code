@@ -506,8 +506,6 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     set((state) => (state.status === "loading" ? state : { status: "loading" }))
 
     inflightLoad = (async () => {
-      const current = get()
-
       try {
         const sdk = axCodeClient.getSdkClient()
         const [activeResult, archivedResult] = await Promise.allSettled([
@@ -515,10 +513,15 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
           listGlobalSessionPages(sdk, { archived: true, pageSize: PAGE_SIZE }),
         ])
 
-        const fallbackSnapshot = mergeSessionLists(current.activeSessions, fallbackActive)
+        // Read fresh state after the await (not a pre-fetch snapshot): a
+        // session.created/updated event may have landed via applySessionEvent
+        // while the request was in flight, and the fallback merge below must
+        // not drop it just because it predates this reload.
+        const live = get()
+        const fallbackSnapshot = mergeSessionLists(live.activeSessions, fallbackActive)
         const nextActiveSessions = activeResult.status === "fulfilled" ? activeResult.value : fallbackSnapshot
         const nextArchivedSessions =
-          archivedResult.status === "fulfilled" ? archivedResult.value : current.archivedSessions
+          archivedResult.status === "fulfilled" ? archivedResult.value : live.archivedSessions
 
         if (activeResult.status === "rejected") {
           console.warn(
@@ -536,8 +539,9 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         set((state) => applySnapshot(state, nextActiveSessions, nextArchivedSessions, "ready"))
         return { activeSessions: nextActiveSessions, archivedSessions: nextArchivedSessions }
       } catch (error) {
-        const nextActiveSessions = mergeSessionLists(current.activeSessions, fallbackActive)
-        const nextArchivedSessions = current.archivedSessions
+        const live = get()
+        const nextActiveSessions = mergeSessionLists(live.activeSessions, fallbackActive)
+        const nextArchivedSessions = live.archivedSessions
         console.warn("[GlobalSessions] Failed to load sessions, using fallback snapshot:", error)
         set((state) => applySnapshot(state, nextActiveSessions, nextArchivedSessions, "error"))
         return { activeSessions: nextActiveSessions, archivedSessions: nextArchivedSessions }
