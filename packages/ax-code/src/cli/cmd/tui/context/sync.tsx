@@ -186,6 +186,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       recoverBootstrap: bootstrap,
     })
 
+    // `provider.updated` and `server.connected` can each trigger their own
+    // refreshProviders() call in close succession (see the comment below);
+    // neither awaits the other, so a slower response from the first request
+    // could otherwise land after a faster, more complete response from the
+    // second and clobber the store with stale provider data. Only the
+    // response of the most recently issued request is applied.
+    let providerRefreshGeneration = 0
     const unsubscribeEvents = subscribeStoreBackedSyncEvents<
       Session,
       Todo,
@@ -218,7 +225,9 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       // store so the model picker gains discovered models without re-running
       // the full bootstrap.
       async refreshProviders() {
+        const requestID = ++providerRefreshGeneration
         const response = await sdk.client.config.providers({}, { throwOnError: true })
+        if (requestID !== providerRefreshGeneration) return
         const data = normalizeProviderBootstrapPayload<Provider>(response.data)
         setStore(
           produce((draft) => {
