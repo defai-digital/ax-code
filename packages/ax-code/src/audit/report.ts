@@ -22,7 +22,13 @@ export function formatAuditReportTimestamp(ms: number): string {
     .replace(/\.\d+Z$/, "")
 }
 
-function formatDuration(ms: number): string {
+function formatDuration(rawMs: number): string {
+  // Clamp negative durations to 0 instead of letting them flow through the
+  // floor/modulo math below, which produces nonsense like "-1h -1m -1s" for
+  // a malformed or out-of-order event log (e.g. a session.end timestamp
+  // recorded before session.start, or a corrupted durationMs on a
+  // tool.result event).
+  const ms = Number.isFinite(rawMs) && rawMs > 0 ? rawMs : 0
   const total = Math.floor(ms / MS_PER_SECOND)
   const h = Math.floor(total / SECONDS_PER_HOUR)
   const m = Math.floor((total % SECONDS_PER_HOUR) / 60)
