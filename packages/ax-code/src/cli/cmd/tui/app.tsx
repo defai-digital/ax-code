@@ -1748,10 +1748,10 @@ function ErrorComponent(props: {
   }
 
   if (props.error.stack) {
-    issueURL.searchParams.set(
-      "description",
-      "```\n" + props.error.stack.substring(0, 6000 - issueURL.toString().length) + "...\n```",
-    )
+    const maxStackLength = Math.max(0, 6000 - issueURL.toString().length)
+    const stack = props.error.stack.substring(0, maxStackLength)
+    const truncated = stack.length < props.error.stack.length
+    issueURL.searchParams.set("description", "```\n" + stack + (truncated ? "...\n```" : "\n```"))
   }
 
   issueURL.searchParams.set("ax-code-version", Installation.VERSION)
