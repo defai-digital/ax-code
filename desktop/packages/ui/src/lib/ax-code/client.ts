@@ -838,6 +838,13 @@ class AxCodeService {
       retryCount?: number
     }
   }): Promise<string> {
+    // Snapshot the directory up front: this method awaits multiple times below
+    // (file normalization, worktree bootstrap, the fetch itself), and a
+    // concurrent project switch can mutate `this.currentDirectory` mid-flight.
+    // Using a local snapshot consistently ensures the whole request routes to
+    // the directory that was active when the send started.
+    const directory = this.currentDirectory
+
     // Guard against an unselected/stale model. The backend rejects an empty or
     // missing providerID/modelID with an opaque `InvalidRequestError` (400);
     // surfacing a clear, actionable error here protects every caller (the
@@ -924,8 +931,8 @@ class AxCodeService {
       throw new Error("Message must have at least one part (text or file)")
     }
 
-    if (this.currentDirectory) {
-      await waitForWorktreeBootstrap(this.currentDirectory)
+    if (directory) {
+      await waitForWorktreeBootstrap(directory)
     }
 
     // Use async prompt endpoint so the client doesn't block waiting
@@ -936,15 +943,15 @@ class AxCodeService {
     let url: URL
     try {
       url = new URL(path, `${base}/`)
-      if (this.currentDirectory) {
-        url.searchParams.set("directory", this.currentDirectory)
+      if (directory) {
+        url.searchParams.set("directory", directory)
       }
     } catch (error) {
       console.error("[git-generation][browser] failed to build prompt_async URL", {
         baseUrl: this.baseUrl,
         normalizedBase: base,
         sessionId: params.id,
-        directory: this.currentDirectory,
+        directory,
         message: error instanceof Error ? error.message : String(error),
         error,
       })
@@ -958,7 +965,7 @@ class AxCodeService {
         modelID: params.modelID,
         agent: params.agent,
         variant: params.variant,
-        directory: this.currentDirectory,
+        directory,
         baseUrl: this.baseUrl,
         formatType: params.format.type,
       })
@@ -1037,7 +1044,7 @@ class AxCodeService {
       console.error("[prompt] send rejected by backend", {
         status: response.status,
         sessionId: params.id,
-        directory: this.currentDirectory,
+        directory,
         providerID: params.providerID,
         modelID: params.modelID,
         agent: params.agent ?? null,
@@ -1078,6 +1085,12 @@ class AxCodeService {
     files?: Array<FileInputLite>
     messageId?: string
   }): Promise<string> {
+    // Snapshot the directory up front: file normalization below awaits, and a
+    // concurrent project switch can mutate `this.currentDirectory` mid-flight.
+    // Use this snapshot consistently so the request routes to the directory
+    // that was active when the command was issued.
+    const directory = this.currentDirectory
+
     const tempMessageId = params.messageId ?? ascendingId("msg")
 
     const parts: FilePartInput[] = []
@@ -1090,8 +1103,8 @@ class AxCodeService {
     const base = this.baseUrl.replace(/\/+$/, "")
     const path = replacePathParams(API_ENDPOINTS.session.commandForSession, { sessionId: params.id })
     const url = new URL(path, `${base}/`)
-    if (this.currentDirectory) {
-      url.searchParams.set("directory", this.currentDirectory)
+    if (directory) {
+      url.searchParams.set("directory", directory)
     }
 
     const payload: Record<string, unknown> = {
