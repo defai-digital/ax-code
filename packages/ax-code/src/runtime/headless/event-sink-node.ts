@@ -10,10 +10,27 @@ export async function createHeadlessJsonlFileEventSink(file: string): Promise<He
 
 export function createHeadlessFileJsonlEventSink(file: string): HeadlessEventSink {
   const stream = createWriteStream(file, { flags: "w" })
-  const sink = createHeadlessJsonlEventSink((line) => writeLineToStream(stream, line))
+  let streamError: Error | undefined
+  // Writable streams throw and crash the process if they emit "error" while
+  // no listener is attached. writeLineToStream/endStream only listen for
+  // "error" while a write or close is in flight, so an I/O failure between
+  // calls (e.g. ENOSPC, permission revoked mid-run) would otherwise take
+  // down the whole headless process instead of failing this sink. Keep a
+  // permanent listener so such errors are captured and surfaced on the next
+  // write/close instead of crashing.
+  stream.on("error", (error) => {
+    streamError = error
+  })
+  const sink = createHeadlessJsonlEventSink((line) => {
+    if (streamError) throw streamError
+    return writeLineToStream(stream, line)
+  })
   return {
     write: sink.write,
-    close: () => endStream(stream),
+    close: async () => {
+      await endStream(stream)
+      if (streamError) throw streamError
+    },
   }
 }
 
