@@ -162,6 +162,36 @@ describe("footerGoalChip", () => {
     expect(chip?.resumeHint).toBeUndefined()
     expect(chip?.label).not.toContain("/goal resume")
   })
+
+  test("compact mode drops the resume hint and the tok suffix", () => {
+    const chip = footerGoalChip({
+      compact: true,
+      goal: {
+        objective: "wait for user input",
+        status: "paused",
+        tokensUsed: 1200,
+        tokenBudget: 2400,
+      },
+    })
+    expect(chip).toEqual({
+      label: "Goal paused: wait for user input · 1.2k/2.4k",
+      tone: "warning",
+      resumeHint: undefined,
+    })
+  })
+
+  test("compact mode keeps goals without a budget short", () => {
+    expect(
+      footerGoalChip({
+        compact: true,
+        goal: { objective: "finish all phases", status: "active" },
+      }),
+    ).toEqual({
+      label: "Goal: finish all phases",
+      tone: "working",
+      resumeHint: undefined,
+    })
+  })
 })
 
 describe("footerSessionStatusOrIdle", () => {

@@ -183,6 +183,10 @@ function goalStatusLabel(status: FooterGoalStatus) {
 export function footerGoalChip(input: {
   goal?: FooterGoalInfo | null
   maxObjective?: number
+  // Compact drops the resume hint and the " tok" suffix for space-starved
+  // surfaces (the sidebar goal row), where the chip itself is clickable and
+  // the hint would force a second line.
+  compact?: boolean
 }): FooterGoalChip | undefined {
   const goal = input.goal
   if (!goal) return
@@ -192,13 +196,15 @@ export function footerGoalChip(input: {
   const tokens =
     goal.tokenBudget === undefined || goal.tokensUsed === undefined
       ? ""
-      : ` · ${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget)} tok`
+      : ` · ${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget)}${input.compact ? "" : " tok"}`
   // Don't hint "/goal resume" once the token budget is exhausted — resuming
   // such a goal is refused server-side, so the hint would point at an action
   // that errors. The goal can still be cleared or replaced.
   const budgetExhausted = goal.tokenBudget !== undefined && (goal.remainingTokens ?? 0) <= 0
   const resumeHint =
-    (goal.status === "paused" || goal.status === "blocked") && !budgetExhausted ? "/goal resume" : undefined
+    !input.compact && (goal.status === "paused" || goal.status === "blocked") && !budgetExhausted
+      ? "/goal resume"
+      : undefined
   const resume = resumeHint ? ` · ${resumeHint}` : ""
   const tone: FooterSessionStatusTone =
     goal.status === "complete" ? "success" : goal.status === "active" ? "working" : "warning"

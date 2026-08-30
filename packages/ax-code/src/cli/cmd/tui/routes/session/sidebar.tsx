@@ -7,6 +7,7 @@ import { Installation } from "@/installation"
 import { useDirectory } from "../../context/directory"
 import { useKV } from "../../context/kv"
 import { ModeChips } from "../../component/mode-chips"
+import { GoalChip } from "../../component/goal-chip"
 import { TodoItem } from "../../component/todo-item"
 import { useCommandDialog } from "../../component/dialog-command"
 import { useSDK } from "@tui/context/sdk"
@@ -1038,6 +1039,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               Sidebar <span style={{ fg: theme.text }}>/sidebar on</span>
             </text>
             <ModeChips />
+            <GoalChip sessionID={props.sessionID} />
             <text fg={theme.textMuted}>
               <span style={{ fg: theme.success }}>•</span> <b>AX</b>
               <span style={{ fg: theme.text }}>
