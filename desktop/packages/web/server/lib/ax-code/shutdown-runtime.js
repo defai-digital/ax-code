@@ -24,6 +24,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     getUiAuthController,
     setUiAuthController,
     destroyAllClientConnections,
+    stopAxCodeLifecycle,
   } = dependencies
 
   const gracefulShutdown = async (options = {}) => {
@@ -35,6 +36,14 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     const exitProcess = typeof options.exitProcess === "boolean" ? options.exitProcess : getExitOnShutdown()
 
     // Phase 1: synchronous teardown (fast, immediate)
+    // Abort any in-flight ax-code launch FIRST: without this, a shutdown that
+    // races the initial bootstrap (or a config-change restart) never cancels
+    // the SDK's in-progress spawn — phase 3 below only closes an already
+    // assigned axCodeProcess, so the process that spawn eventually resolves
+    // to would be orphaned with its port bound.
+    if (typeof stopAxCodeLifecycle === "function") {
+      stopAxCodeLifecycle()
+    }
     axCodeWatcherRuntime.stop()
     sessionRuntime.dispose()
 

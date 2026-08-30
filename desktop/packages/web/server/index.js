@@ -1151,6 +1151,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   setUiAuthController: (value) => {
     uiAuthController = value
   },
+  stopAxCodeLifecycle: () => axCodeLifecycleRuntime.shutdown(),
   destroyAllClientConnections: () => {
     // Stop the shared global event hub first: nothing else ever calls
     // stop() on it, so without this its upstream reader keeps reconnecting
