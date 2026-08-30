@@ -74,6 +74,13 @@ interface HistoryCommitRowProps {
     operation: "cherry-pick" | "revert" | "merge" | "rebase"
   }) => void
   onActionSuccess?: () => void
+  /** True while a mutating action (checkout/cherry-pick/revert/merge/rebase/reset) is
+   * running on a *different* row. Repo-mutating git commands are not safe to run
+   * concurrently, so this row's action buttons are disabled while that's the case. */
+  disableActions?: boolean
+  /** Reports whether this row currently has a mutating action in flight, so the
+   * parent can lock out every other row's actions for the duration. */
+  onBusyChange?: (busy: boolean) => void
 }
 
 function formatCommitDate(date: string) {
@@ -144,6 +151,8 @@ export const HistoryCommitRow = React.memo(
     directory,
     onConflict,
     onActionSuccess,
+    disableActions = false,
+    onBusyChange,
   }: HistoryCommitRowProps) => {
     const { t } = useI18n()
     const isGraphMode = mode === "graph"
@@ -167,8 +176,9 @@ export const HistoryCommitRow = React.memo(
     const [forceRenderLargePaths, setForceRenderLargePaths] = React.useState<Set<string>>(new Set())
 
     const handleCheckout = async () => {
-      if (!directory) return
+      if (!directory || disableActions) return
       setActionLoading("checkout")
+      onBusyChange?.(true)
       try {
         await git.checkoutCommit(directory, entry.hash)
         toast.success(t("gitView.history.actions.detachedHead"))
@@ -177,12 +187,14 @@ export const HistoryCommitRow = React.memo(
         toast.error(String((e as Error).message))
       } finally {
         setActionLoading(null)
+        onBusyChange?.(false)
       }
     }
 
     const handleCreateBranch = async () => {
-      if (!directory || !newBranchName.trim()) return
+      if (!directory || !newBranchName.trim() || disableActions) return
       setActionLoading("createBranch")
+      onBusyChange?.(true)
       try {
         await git.createBranch(directory, newBranchName.trim(), entry.hash)
         setShowCreateBranch(false)
@@ -192,12 +204,14 @@ export const HistoryCommitRow = React.memo(
         toast.error(String((e as Error).message))
       } finally {
         setActionLoading(null)
+        onBusyChange?.(false)
       }
     }
 
     const handleCherryPick = async () => {
-      if (!directory) return
+      if (!directory || disableActions) return
       setActionLoading("cherryPick")
+      onBusyChange?.(true)
       try {
         const result = await git.cherryPick(directory, entry.hash)
         if (result.conflict) {
@@ -209,12 +223,14 @@ export const HistoryCommitRow = React.memo(
         toast.error(String((e as Error).message))
       } finally {
         setActionLoading(null)
+        onBusyChange?.(false)
       }
     }
 
     const handleRevert = async () => {
-      if (!directory) return
+      if (!directory || disableActions) return
       setActionLoading("revert")
+      onBusyChange?.(true)
       try {
         const result = await git.revertCommit(directory, entry.hash)
         if (result.conflict) {
@@ -226,12 +242,14 @@ export const HistoryCommitRow = React.memo(
         toast.error(String((e as Error).message))
       } finally {
         setActionLoading(null)
+        onBusyChange?.(false)
       }
     }
 
     const handleReset = async (mode: "soft" | "mixed" | "hard", force = false) => {
-      if (!directory || actionLoading !== null) return
+      if (!directory || actionLoading !== null || disableActions) return
       setActionLoading("reset")
+      onBusyChange?.(true)
       try {
         await git.resetToCommit(directory, entry.hash, mode, force)
         onActionSuccess?.()
@@ -239,6 +257,7 @@ export const HistoryCommitRow = React.memo(
         toast.error(String((e as Error).message))
       } finally {
         setActionLoading(null)
+        onBusyChange?.(false)
       }
     }
 
@@ -268,8 +287,9 @@ export const HistoryCommitRow = React.memo(
     }
 
     const handleMerge = async () => {
-      if (!directory) return
+      if (!directory || disableActions) return
       setActionLoading("merge")
+      onBusyChange?.(true)
       try {
         const result = await git.merge(directory, { branch: entry.hash })
         if (result.conflict) {
@@ -281,12 +301,14 @@ export const HistoryCommitRow = React.memo(
         toast.error(String((e as Error).message))
       } finally {
         setActionLoading(null)
+        onBusyChange?.(false)
       }
     }
 
     const handleRebase = async () => {
-      if (!directory) return
+      if (!directory || disableActions) return
       setActionLoading("rebase")
+      onBusyChange?.(true)
       try {
         const result = await git.rebase(directory, { onto: entry.hash })
         if (result.conflict) {
@@ -298,6 +320,7 @@ export const HistoryCommitRow = React.memo(
         toast.error(String((e as Error).message))
       } finally {
         setActionLoading(null)
+        onBusyChange?.(false)
       }
     }
 
@@ -467,7 +490,7 @@ export const HistoryCommitRow = React.memo(
                   variant="destructive"
                   size="xs"
                   className="h-6 shrink-0"
-                  disabled={actionLoading !== null}
+                  disabled={actionLoading !== null || disableActions}
                   onClick={(e) => {
                     e.stopPropagation()
                     void confirmPendingAction()
@@ -480,7 +503,7 @@ export const HistoryCommitRow = React.memo(
                   variant="ghost"
                   size="xs"
                   className="h-6 shrink-0"
-                  disabled={actionLoading !== null}
+                  disabled={actionLoading !== null || disableActions}
                   onClick={(e) => {
                     e.stopPropagation()
                     setPendingAction(null)
@@ -495,7 +518,7 @@ export const HistoryCommitRow = React.memo(
                   variant="outline"
                   size="xs"
                   className="h-6"
-                  disabled={actionLoading !== null}
+                  disabled={actionLoading !== null || disableActions}
                   onClick={(e) => {
                     e.stopPropagation()
                     setPendingAction("checkout")
@@ -524,7 +547,7 @@ export const HistoryCommitRow = React.memo(
                       variant="outline"
                       size="xs"
                       className="h-6"
-                      disabled={!newBranchName.trim() || actionLoading !== null}
+                      disabled={!newBranchName.trim() || actionLoading !== null || disableActions}
                       onClick={(e) => {
                         e.stopPropagation()
                         void handleCreateBranch()
@@ -554,7 +577,7 @@ export const HistoryCommitRow = React.memo(
                   variant="outline"
                   size="xs"
                   className="h-6"
-                  disabled={actionLoading !== null}
+                  disabled={actionLoading !== null || disableActions}
                   onClick={(e) => {
                     e.stopPropagation()
                     setPendingAction("cherryPick")
@@ -567,7 +590,7 @@ export const HistoryCommitRow = React.memo(
                   variant="outline"
                   size="xs"
                   className="h-6"
-                  disabled={actionLoading !== null}
+                  disabled={actionLoading !== null || disableActions}
                   onClick={(e) => {
                     e.stopPropagation()
                     setPendingAction("revert")
@@ -583,7 +606,7 @@ export const HistoryCommitRow = React.memo(
                       variant="outline"
                       size="xs"
                       className="h-6"
-                      disabled={actionLoading !== null}
+                      disabled={actionLoading !== null || disableActions}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {actionLoading === "reset" ? <Icon name="loader-4" className="size-3 animate-spin mr-1" /> : null}
@@ -594,7 +617,7 @@ export const HistoryCommitRow = React.memo(
                     {(["soft", "mixed", "hard"] as const).map((mode) => (
                       <DropdownMenuItem
                         key={mode}
-                        disabled={actionLoading !== null}
+                        disabled={actionLoading !== null || disableActions}
                         onSelect={(e) => {
                           e.stopPropagation()
                           setPendingAction(`reset${mode.charAt(0).toUpperCase() + mode.slice(1)}` as PendingAction)
@@ -610,7 +633,7 @@ export const HistoryCommitRow = React.memo(
                   variant="outline"
                   size="xs"
                   className="h-6"
-                  disabled={actionLoading !== null}
+                  disabled={actionLoading !== null || disableActions}
                   onClick={(e) => {
                     e.stopPropagation()
                     setPendingAction("merge")
@@ -623,7 +646,7 @@ export const HistoryCommitRow = React.memo(
                   variant="outline"
                   size="xs"
                   className="h-6"
-                  disabled={actionLoading !== null}
+                  disabled={actionLoading !== null || disableActions}
                   onClick={(e) => {
                     e.stopPropagation()
                     setPendingAction("rebase")

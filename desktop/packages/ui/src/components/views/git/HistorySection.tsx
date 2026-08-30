@@ -64,6 +64,18 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
   const { t } = useI18n()
   const [isOpen, setIsOpen] = React.useState(true)
   const isGraphMode = mode === "graph"
+  // Repo-mutating commit actions (checkout/cherry-pick/revert/merge/rebase/reset) are not
+  // safe to run concurrently against the same working directory, but each row tracks its
+  // own loading state independently since multiple rows can be expanded at once. Track
+  // which single commit (if any) currently has a mutation in flight here so every other
+  // row's action buttons can be locked out for the duration.
+  const [busyCommitHash, setBusyCommitHash] = React.useState<string | null>(null)
+  const handleBusyChange = React.useCallback((hash: string, busy: boolean) => {
+    setBusyCommitHash((previous) => {
+      if (busy) return hash
+      return previous === hash ? null : previous
+    })
+  }, [])
 
   const laned: LanedCommit[] = React.useMemo(() => (isGraphMode && log ? assignLanes(log.all) : []), [isGraphMode, log])
 
@@ -112,6 +124,8 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
           directory={directory}
           onConflict={onConflict}
           onActionSuccess={onActionSuccess}
+          disableActions={busyCommitHash !== null && busyCommitHash !== entry.hash}
+          onBusyChange={(busy) => handleBusyChange(entry.hash, busy)}
         />
       ))}
     </ul>
