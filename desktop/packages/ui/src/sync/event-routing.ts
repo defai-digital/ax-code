@@ -53,13 +53,14 @@ export const getSessionIdFromPayload = (event: Event): string | null => {
   if (
     event.type === "message.removed" ||
     event.type === "session.status" ||
+    event.type === "session.idle" ||
+    event.type === "session.error" ||
     event.type === "todo.updated" ||
     event.type === "permission.asked" ||
     event.type === "permission.replied" ||
     event.type === "question.asked" ||
     event.type === "question.replied" ||
-    event.type === "question.rejected" ||
-    event.type === "session.deleted"
+    event.type === "question.rejected"
   ) {
     const sessionID = props.sessionID
     return typeof sessionID === "string" && sessionID.length > 0 ? sessionID : null
@@ -74,7 +75,9 @@ export const getSessionIdFromPayload = (event: Event): string | null => {
     return typeof sessionID === "string" && sessionID.length > 0 ? sessionID : null
   }
 
-  if (event.type === "session.created" || event.type === "session.updated") {
+  if (event.type === "session.created" || event.type === "session.updated" || event.type === "session.deleted") {
+    // session.deleted's payload is `{ info: Session }` (like created/updated),
+    // NOT `{ sessionID }` — there is no top-level sessionID field on this event.
     const info = props.info
     if (!info || typeof info !== "object") {
       return null
@@ -390,9 +393,10 @@ export const updateRoutingIndexFromEvent = (routingIndex: EventRoutingIndex, dir
     }
 
     case "session.deleted": {
-      const deletedSessionID = (payload.properties as { sessionID?: string }).sessionID
-      if (deletedSessionID) {
-        removeIndexedSession(routingIndex, deletedSessionID)
+      // session.deleted's payload is `{ info: Session }`, not `{ sessionID }`.
+      const info = (payload.properties as { info?: Session }).info
+      if (info?.id) {
+        removeIndexedSession(routingIndex, info.id)
       }
       return
     }

@@ -72,13 +72,14 @@ describe("getSessionIdFromPayload", () => {
     for (const type of [
       "message.removed",
       "session.status",
+      "session.idle",
+      "session.error",
       "todo.updated",
       "permission.asked",
       "permission.replied",
       "question.asked",
       "question.replied",
       "question.rejected",
-      "session.deleted",
     ]) {
       expect(getSessionIdFromPayload(createEvent(type, { sessionID: "s2" }))).toBe("s2")
     }
@@ -90,10 +91,13 @@ describe("getSessionIdFromPayload", () => {
     expect(getSessionIdFromPayload(createEvent("message.part.updated", { part: null }))).toBeNull()
   })
 
-  test("extracts session.created/updated session from info.id", () => {
+  test("extracts session.created/updated/deleted session from info.id", () => {
     expect(getSessionIdFromPayload(createEvent("session.created", { info: { id: "s4" } }))).toBe("s4")
     expect(getSessionIdFromPayload(createEvent("session.updated", { info: { id: "s5" } }))).toBe("s5")
     expect(getSessionIdFromPayload(createEvent("session.created", { info: {} }))).toBeNull()
+    // session.deleted's real payload is `{ info: Session }`, not `{ sessionID }`.
+    expect(getSessionIdFromPayload(createEvent("session.deleted", { info: { id: "s6" } }))).toBe("s6")
+    expect(getSessionIdFromPayload(createEvent("session.deleted", { sessionID: "s7" }))).toBeNull()
   })
 
   test("returns null for unrouted event types and missing properties", () => {
@@ -289,7 +293,8 @@ describe("updateRoutingIndexFromEvent", () => {
     const index = createEventRoutingIndex()
     updateRoutingIndexFromEvent(index, "/repo", createEvent("session.updated", { info: { id: "s1" } }))
     updateRoutingIndexFromEvent(index, "/repo", createEvent("message.updated", { info: { id: "m1", sessionID: "s1" } }))
-    updateRoutingIndexFromEvent(index, "/repo", createEvent("session.deleted", { sessionID: "s1" }))
+    // session.deleted's real payload is `{ info: Session }`, not `{ sessionID }`.
+    updateRoutingIndexFromEvent(index, "/repo", createEvent("session.deleted", { info: { id: "s1" } }))
 
     expect(index.sessionDirectoryById.has("s1")).toBe(false)
     expect(index.messageSessionById.has("m1")).toBe(false)
