@@ -55,7 +55,10 @@ export function mergeProtectedSections(generated: string, existing?: string): st
   const missing: ProtectedSection[] = []
   for (const section of preserved) {
     const current = extractProtectedSections(output).find((candidate) => candidate.id === section.id)
-    if (current) output = output.replace(current.raw, section.raw)
+    // Use a replacer function, not a string, so `$&`, `$$`, `` $` ``, `$'`
+    // sequences in the preserved section's raw content are inserted verbatim
+    // instead of being interpreted as replacement patterns by String#replace.
+    if (current) output = output.replace(current.raw, () => section.raw)
     else missing.push(section)
   }
   if (missing.length === 0) return output
