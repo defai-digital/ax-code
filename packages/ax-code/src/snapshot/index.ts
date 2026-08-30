@@ -259,10 +259,17 @@ export namespace Snapshot {
 
   async function add(current: State) {
     await syncExclude(current)
-    const result = await runGit([...cfg, ...args(current, ["add", "."])], { cwd: current.directory })
+    // Stage the whole worktree, not just `current.directory` — a session's
+    // working directory can be a subdirectory of the git worktree (e.g. a
+    // monorepo package), and edits outside it are explicitly permitted (see
+    // Instance.isPathInProject). Scoping this to `current.directory` would
+    // silently drop those files from every snapshot: `write-tree` never sees
+    // them, so track()/patch()/diff() miss them and restore()/revert() can
+    // never roll them back.
+    const result = await runGit([...cfg, ...args(current, ["add", "."])], { cwd: current.worktree })
     if (result.code === 0) return
     log.error("failed to stage snapshot files", {
-      cwd: current.directory,
+      cwd: current.worktree,
       exitCode: result.code,
       stderr: result.stderr,
     })
@@ -414,10 +421,13 @@ export namespace Snapshot {
         return { hash, files: [] }
       }
       await add(current)
+      // Diff the whole worktree (see add() above) — a "." pathspec scoped to
+      // current.directory would silently exclude files changed outside the
+      // session's working directory from the returned patch.
       const result = await runGit(
         [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-only", "-z", hash, "--", "."])],
         {
-          cwd: current.directory,
+          cwd: current.worktree,
         },
       )
       if (result.code !== 0) {
@@ -737,9 +747,11 @@ export namespace Snapshot {
       const result: Snapshot.FileDiff[] = []
       const status = new Map<string, "added" | "deleted" | "modified">()
 
+      // Diff the whole worktree — see add() for why this must not be scoped
+      // to current.directory.
       const statuses = await runGit(
         [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-status", "--no-renames", from, to, "--", "."])],
-        { cwd: current.directory },
+        { cwd: current.worktree },
       )
       if (statuses.code !== 0) {
         log.error("failed to get snapshot name-status diff", {
@@ -761,7 +773,7 @@ export namespace Snapshot {
 
       const numstat = await runGit(
         [...quote, ...args(current, ["diff", "--no-ext-diff", "--no-renames", "--numstat", from, to, "--", "."])],
-        { cwd: current.directory },
+        { cwd: current.worktree },
       )
       if (numstat.code !== 0) {
         log.error("failed to get snapshot numstat diff", {
