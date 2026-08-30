@@ -27,6 +27,17 @@ type GlobalSessionsState = {
   status: GlobalSessionsStatus
   loadSessions: (fallbackActive?: Session[]) => Promise<LoadResult>
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void
+  /**
+   * Apply a `session.created` / `session.updated` / `session.deleted` bus
+   * event to the global index (SPEC-2026-08-30 S4.4). This is the reconcile
+   * authority: the payload is shape-validated before any state is touched,
+   * sessions inside their pendingRemoval undo window are never resurrected,
+   * and out-of-order events older than the current entry are ignored so
+   * newer optimistic/local data is preserved. Archive transitions arrive as
+   * `session.updated` with `time.archived` set. Unrelated event types and
+   * malformed payloads are a no-op.
+   */
+  applySessionEvent: (payload: unknown) => void
   upsertSession: (session: Session) => void
   removeSessions: (ids: Iterable<string>) => void
   archiveSessions: (ids: Iterable<string>, archivedAt?: number) => void
@@ -154,6 +165,88 @@ const sameSessionList = (prev: Session[], next: Session[]): boolean => {
 
 const getSessionFreshness = (session: Session): number => {
   return Math.max(session.time?.created ?? 0, session.time?.updated ?? 0, session.time?.archived ?? 0)
+}
+
+// ---------------------------------------------------------------------------
+// Session lifecycle events (S4.4) — the event-fed path.
+//
+// `session.created` / `session.updated` / `session.deleted` are published to
+// the global bus for every directory (core `Bus.publish*` emits to GlobalBus
+// unconditionally), so the sync pipeline forwards them here for ALL
+// directories — including ones without a per-directory child store. Archive
+// transitions arrive as `session.updated` with `time.archived` set; there is
+// no dedicated `session.archived` event.
+// ---------------------------------------------------------------------------
+
+const SESSION_LIFECYCLE_EVENT_TYPES = new Set(["session.created", "session.updated", "session.deleted"])
+
+export const isSessionLifecycleEventType = (type: unknown): type is string =>
+  typeof type === "string" && SESSION_LIFECYCLE_EVENT_TYPES.has(type)
+
+/**
+ * Shape-validate a session lifecycle event payload before it touches the
+ * store. Events cross a process/network boundary, so only the fields the
+ * reducer actually reads are required: a non-empty `info.id` and numeric
+ * `time.created` / `time.updated` (`time.archived` numeric when present).
+ */
+const parseSessionLifecycleInfo = (payload: unknown): { type: string; info: Session } | null => {
+  if (!payload || typeof payload !== "object") return null
+  const record = payload as { type?: unknown; properties?: unknown }
+  if (!isSessionLifecycleEventType(record.type)) return null
+  const info =
+    record.properties && typeof record.properties === "object"
+      ? (record.properties as { info?: unknown }).info
+      : undefined
+  if (!info || typeof info !== "object") return null
+  const candidate = info as Session
+  if (typeof candidate.id !== "string" || candidate.id.length === 0) return null
+  const time = candidate.time as { created?: unknown; updated?: unknown; archived?: unknown } | undefined
+  if (typeof time?.created !== "number" || typeof time?.updated !== "number") return null
+  if (time.archived !== undefined && typeof time.archived !== "number") return null
+  return { type: record.type, info: candidate }
+}
+
+/** What a session lifecycle event would do to the current state. */
+export type SessionLifecyclePlan =
+  | { kind: "invalid" }
+  | { kind: "pending-removal"; session: Session }
+  | { kind: "stale"; session: Session; current: Session }
+  | { kind: "unchanged"; session: Session; current: Session }
+  | { kind: "delete"; session: Session }
+  | { kind: "upsert"; session: Session; current?: Session }
+
+/**
+ * Decide how a session lifecycle event applies to the given state, without
+ * mutating anything. Shared by `applySessionEvent` (which executes the plan)
+ * and the dev-mode dual-source diff logger (which describes it) so the two
+ * can never drift apart.
+ */
+export const planSessionLifecycleEvent = (
+  state: Pick<GlobalSessionsState, "activeSessions" | "archivedSessions" | "pendingRemoval">,
+  payload: unknown,
+): SessionLifecyclePlan => {
+  const parsed = parseSessionLifecycleInfo(payload)
+  if (!parsed) return { kind: "invalid" }
+  const { type, info } = parsed
+
+  // A session inside its soft-removal undo window must not be resurrected
+  // (or otherwise mutated) by events — the window owns it until commit/undo.
+  if (state.pendingRemoval.has(info.id)) return { kind: "pending-removal", session: info }
+
+  if (type === "session.deleted") return { kind: "delete", session: info }
+
+  const current =
+    state.activeSessions.find((candidate) => candidate.id === info.id) ??
+    state.archivedSessions.find((candidate) => candidate.id === info.id)
+  // Out-of-order delivery: never overwrite a NEWER optimistic/local entry
+  // with an older event (preserveNewerSessions semantics, per-session).
+  if (current && getSessionFreshness(current) > getSessionFreshness(info)) {
+    return { kind: "stale", session: info, current }
+  }
+  if (current && getSessionSignature(current) === getSessionSignature(info)) {
+    return { kind: "unchanged", session: info, current }
+  }
+  return current ? { kind: "upsert", session: info, current } : { kind: "upsert", session: info }
 }
 
 const preserveNewerSessions = (incoming: Session[], current: Session[]): Session[] => {
@@ -292,6 +385,21 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
 
   applySnapshot: (activeSessions, archivedSessions, status = "ready") => {
     set((state) => applySnapshot(state, activeSessions, archivedSessions, status))
+  },
+
+  applySessionEvent: (payload) => {
+    const plan = planSessionLifecycleEvent(get(), payload)
+    switch (plan.kind) {
+      case "delete":
+        get().removeSessions([plan.session.id])
+        return
+      case "upsert":
+        get().upsertSession(plan.session)
+        return
+      default:
+        // invalid / pending-removal / stale / unchanged — no state change
+        return
+    }
   },
 
   loadSessions: async (fallbackActive) => {

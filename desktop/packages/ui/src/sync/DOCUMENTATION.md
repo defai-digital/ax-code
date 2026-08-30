@@ -103,17 +103,28 @@ Current consumers:
 
 ### Mutation responsibility
 
-`useGlobalSessionsStore` is not maintained by SSE directly. It is kept correct by:
+`useGlobalSessionsStore` is event-fed (SPEC-2026-08-30, S4.4). It is kept correct by:
 
-1. shared global fetch/reconciliation via `loadSessions()` / `refreshGlobalSessions()`
-2. direct mutation from session actions after successful SDK calls:
-   - create
-   - title update
-   - share
-   - unshare
-   - archive
-   - delete
-   - retention cleanup batch archive/delete
+1. `session.created` / `session.updated` / `session.deleted` bus events, applied
+   via `sync/global-session-events.ts` (`applySessionLifecycleEventToGlobalStore`)
+   from `handleEvent` for EVERY directory — including directories with no child
+   store, whose session events used to be dropped. Archive transitions arrive as
+   `session.updated` with `time.archived` set (there is no `session.archived`
+   event). The store's `applySessionEvent` shape-validates the payload, never
+   resurrects a session inside its `pendingRemoval` undo window, and ignores
+   out-of-order events older than the current entry
+   (`preserveNewerSessions` semantics, per session).
+2. HTTP catch-up via `loadSessions()` (full active+archived snapshot) on
+   reconnect (`server.connected` / WS ready and transport switch) and on
+   `server.resync_required`; `applySnapshot`'s `preserveNewerSessions` keeps
+   newer event-fed entries when a stale snapshot lands.
+3. Direct mutation from session actions after successful SDK calls
+   (`session-actions.ts` / `soft-removal.ts`) — during the S4.4 dual-source
+   transition these are OPTIMISTIC writes only: the event is the reconcile
+   authority. They are removed in S4.5; do not add new ones. In dev mode the
+   fan-out logs a single-line diff whenever an event would change the store
+   entry, which is exactly the signal that an optimistic write missed
+   something.
 
 This keeps cold/global lists responsive without requiring a refetch after every change.
 
@@ -125,7 +136,7 @@ Session actions live in `session-actions.ts` and are the canonical place for SDK
 
 Rules:
 
-1. If an action mutates session list membership or visible session metadata, update `useGlobalSessionsStore` there.
+1. If an action mutates session list membership or visible session metadata, update `useGlobalSessionsStore` there. These writes are OPTIMISTIC during the S4.4 dual-source transition (see "Mutation responsibility") and are removed in S4.5 — prefer relying on the session lifecycle event when adding new actions.
 2. If an action targets a session by ID, resolve the **session's own directory**. Do not assume the current directory is correct.
 3. `session-ui-store.ts` should delegate to `session-actions.ts` for these mutations instead of duplicating SDK calls.
 
@@ -189,6 +200,14 @@ burst leaves every other slice reference-identical.
 | `permission.asked/replied`           | `permission`                                                                                                                   |
 | `question.asked/replied/rejected`    | `question`                                                                                                                     |
 | `lsp.updated`                        | `lsp`                                                                                                                          |
+
+Note (S4.4): `session.created/updated/deleted` ADDITIONALLY fan out to
+`useGlobalSessionsStore` via `sync/global-session-events.ts` for every
+directory — including directories with no child store, whose events
+previously fell through `handleEvent` untouched. That write targets a
+different store, so it is intentionally OUTSIDE the child-store slice-clone
+contract above: the cloned-slice set per event type is unchanged and the
+`event-coverage.test.ts` fixture needs no new rows for it.
 
 ## Adding a new event type
 

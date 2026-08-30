@@ -50,6 +50,24 @@ Examples:
 
 These stores coordinate persistent project/session metadata across multiple views.
 
+### `useGlobalSessionsStore.ts` ownership (S4.4 transition)
+
+The global session index (active + archived, plus `sessionsByDirectory`) is
+**event-fed**: `session.created` / `session.updated` / `session.deleted` bus
+events reach it via `src/sync/global-session-events.ts` for every directory —
+including directories with no per-directory child store — and reconnects catch
+up through `loadSessions()` (full HTTP active+archived snapshot).
+`applySessionEvent` shape-validates payloads, keeps no-op events referentially
+stable, never resurrects sessions inside their `pendingRemoval` undo window,
+and ignores out-of-order events older than the current entry.
+
+During the dual-source transition the manual writes in
+`src/sync/session-actions.ts` / `src/sync/soft-removal.ts` /
+`useMultiRunStore` / `useSessionAutoCleanup` remain as **optimistic** writes
+(the event is the reconcile authority); they are removed in S4.5. Dev mode
+logs a single-line diff whenever an event would change the store entry —
+that log is the regression signal for the removal.
+
 ## Git / PR Stores
 
 The Git and PR stores are the most important stores to understand before editing this directory.

@@ -9,6 +9,7 @@ import { Binary } from "./binary"
 import { createEventPipeline } from "./event-pipeline"
 import { setActiveMetricsTracker } from "./streaming-metrics"
 import { reduceGlobalEvent, applyGlobalProject, applyDirectoryEvent, prepareEventDraft } from "./event-reducer"
+import { applySessionLifecycleEventToGlobalStore } from "./global-session-events"
 import {
   createEventRoutingIndex,
   EMPTY_MESSAGES,
@@ -57,6 +58,7 @@ import {
 import { axCodeClient } from "@/lib/ax-code/client"
 import { usePermissionStore } from "@/stores/permissionStore"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useTodosPersistStore } from "@/stores/useTodosPersistStore"
 import { toast } from "@/components/ui"
 import { appendNotification } from "./notification-store"
@@ -796,6 +798,14 @@ function handleEvent(
 ) {
   const directory = resolveDirectoryFromRoutingIndex(routingIndex, rawDirectory, payload, childStores)
 
+  // S4.4: session lifecycle events feed the global sessions store for EVERY
+  // directory — including directories with no child store, whose events used
+  // to be dropped in the fall-through branch below. This runs ALONGSIDE the
+  // per-directory reducer (the child store stays authoritative for the live
+  // list) and is a no-op for non-lifecycle event types. Global-store writes
+  // are outside the child-store slice-clone path (see sync/DOCUMENTATION.md).
+  applySessionLifecycleEventToGlobalStore(payload)
+
   // Global events
   if (directory === "global" || !directory) {
     const recent = isRecentBoot()
@@ -807,6 +817,13 @@ function handleEvent(
       // attached, even when an earlier bootstrap just completed.
       if (!recent || requiresResync) {
         useGlobalSyncStore.setState({ reload: "pending" })
+      }
+      // A replay gap means session lifecycle events may have been lost for
+      // any directory — including ones without a child store. Catch the
+      // global session index up over HTTP; preserveNewerSessions keeps
+      // newer event-fed entries (S4.4).
+      if (requiresResync) {
+        void useGlobalSessionsStore.getState().loadSessions()
       }
     } else if (result.type === "project") {
       const current = useGlobalSyncStore.getState()
@@ -858,6 +875,10 @@ function handleEvent(
     const result = reduceGlobalEvent(payload)
     if (result?.type === "refresh") {
       useGlobalSyncStore.setState({ reload: "pending" })
+      // Same replay-gap catch-up as the global branch above (S4.4).
+      if (payload.type === "server.resync_required") {
+        void useGlobalSessionsStore.getState().loadSessions()
+      }
     } else if (result?.type === "project") {
       const current = useGlobalSyncStore.getState()
       useGlobalSyncStore.setState({
@@ -1254,6 +1275,11 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
         if (isRecentBoot()) {
           return
         }
+        // Global session index catch-up (S4.4): the HTTP snapshot is the
+        // reconnect authority; applySnapshot's preserveNewerSessions keeps
+        // any newer event-fed entries. Wired alongside the per-directory
+        // resync below.
+        void useGlobalSessionsStore.getState().loadSessions()
         for (const dir of childStores.children.keys()) {
           triggerDirectoryResync(dir)
         }
@@ -1274,6 +1300,9 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
           hasEverConnected: true,
           connectionPhase: "connected",
         })
+        // Transport switches are gap-prone; catch the global session index
+        // up alongside the per-directory resync (S4.4).
+        void useGlobalSessionsStore.getState().loadSessions()
         for (const dir of childStores.children.keys()) {
           triggerDirectoryResync(dir)
         }

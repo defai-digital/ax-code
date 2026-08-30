@@ -17,6 +17,13 @@ import { useSessionUIStore } from "./session-ui-store"
 import { useInputStore } from "./input-store"
 import type { ChildStoreManager } from "./child-store"
 import { axCodeClient, ascendingId } from "@/lib/ax-code/client"
+// NOTE (SPEC-2026-08-30, S4.4 dual-source transition): the
+// `useGlobalSessionsStore` writes below (upsertSession / removeSessions /
+// archiveSessions after successful SDK calls) are now OPTIMISTIC writes.
+// `session.created/updated/deleted` bus events applied via
+// `sync/global-session-events.ts` are the reconcile authority; these writes
+// only keep the global index responsive until the event lands. They are
+// removed in S4.5 — do not add new ones.
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"

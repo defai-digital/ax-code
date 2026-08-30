@@ -151,4 +151,227 @@ describe("useGlobalSessionsStore", () => {
       expect(useGlobalSessionsStore.getState().activeSessions.map((s) => s.id)).toEqual(["ses_c"])
     })
   })
+
+  describe("applySessionEvent", () => {
+    const sessionEvent = (type: string, session: Session) => ({ type, properties: { info: session } })
+
+    test("session.created adds a session for a known directory", () => {
+      const existing = makeSession("ses_a", { directory: "/repo" })
+      useGlobalSessionsStore.getState().upsertSession(existing)
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(sessionEvent("session.created", makeSession("ses_b", { directory: "/repo" })))
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.activeSessions.map((s) => s.id).sort()).toEqual(["ses_a", "ses_b"])
+      expect(
+        state.sessionsByDirectory
+          .get("/repo")
+          ?.map((s) => s.id)
+          .sort(),
+      ).toEqual(["ses_a", "ses_b"])
+    })
+
+    test("session.created adds a session for a directory no child store ever opened", () => {
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(sessionEvent("session.created", makeSession("ses_x", { directory: "/unopened" })))
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.activeSessions.map((s) => s.id)).toEqual(["ses_x"])
+      expect(state.sessionsByDirectory.get("/unopened")?.map((s) => s.id)).toEqual(["ses_x"])
+    })
+
+    test("session.updated replaces the existing entry", () => {
+      useGlobalSessionsStore
+        .getState()
+        .upsertSession(makeSession("ses_a", { directory: "/repo", time: { created: 1, updated: 2 } }))
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(
+          sessionEvent(
+            "session.updated",
+            makeSession("ses_a", { title: "Renamed", directory: "/repo", time: { created: 1, updated: 3 } }),
+          ),
+        )
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.activeSessions).toHaveLength(1)
+      expect(state.activeSessions[0]?.title).toBe("Renamed")
+    })
+
+    test("session.updated with time.archived moves the session to the archived bucket", () => {
+      useGlobalSessionsStore.getState().upsertSession(makeSession("ses_a", { directory: "/repo" }))
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(
+          sessionEvent(
+            "session.updated",
+            makeSession("ses_a", { directory: "/repo", time: { created: 1, updated: 2, archived: 5 } }),
+          ),
+        )
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.activeSessions).toHaveLength(0)
+      expect(state.archivedSessions.map((s) => s.id)).toEqual(["ses_a"])
+      expect(state.sessionsByDirectory.has("/repo")).toBe(false)
+    })
+
+    test("session.updated without time.archived un-archives the session", () => {
+      useGlobalSessionsStore
+        .getState()
+        .upsertSession(makeSession("ses_a", { directory: "/repo", time: { created: 1, updated: 2, archived: 5 } }))
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(
+          sessionEvent(
+            "session.updated",
+            makeSession("ses_a", { directory: "/repo", time: { created: 1, updated: 6 } }),
+          ),
+        )
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.archivedSessions).toHaveLength(0)
+      expect(state.activeSessions.map((s) => s.id)).toEqual(["ses_a"])
+      expect(state.sessionsByDirectory.get("/repo")?.map((s) => s.id)).toEqual(["ses_a"])
+    })
+
+    test("session.deleted removes the session from both lists and the directory map", () => {
+      useGlobalSessionsStore.getState().upsertSession(makeSession("ses_a", { directory: "/repo" }))
+      useGlobalSessionsStore
+        .getState()
+        .upsertSession(makeSession("ses_b", { directory: "/repo", time: { created: 1, updated: 2, archived: 3 } }))
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(sessionEvent("session.deleted", makeSession("ses_a", { directory: "/repo" })))
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(sessionEvent("session.deleted", makeSession("ses_b", { directory: "/repo" })))
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.activeSessions).toHaveLength(0)
+      expect(state.archivedSessions).toHaveLength(0)
+      expect(state.sessionsByDirectory.has("/repo")).toBe(false)
+    })
+
+    test("a repeated identical event keeps every list reference stable", () => {
+      const event = sessionEvent("session.created", makeSession("ses_a", { directory: "/repo" }))
+      useGlobalSessionsStore.getState().applySessionEvent(event)
+      const before = useGlobalSessionsStore.getState()
+
+      useGlobalSessionsStore.getState().applySessionEvent(event)
+
+      const after = useGlobalSessionsStore.getState()
+      expect(after.activeSessions).toBe(before.activeSessions)
+      expect(after.archivedSessions).toBe(before.archivedSessions)
+      expect(after.sessionsByDirectory).toBe(before.sessionsByDirectory)
+    })
+
+    test("events do not resurrect a session inside its pendingRemoval window", () => {
+      const pending = makeSession("ses_a", { directory: "/repo" })
+      useGlobalSessionsStore.getState().markPendingRemoval([{ session: pending, kind: "delete" }])
+      const before = useGlobalSessionsStore.getState()
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(
+          sessionEvent(
+            "session.updated",
+            makeSession("ses_a", { directory: "/repo", time: { created: 1, updated: 9 } }),
+          ),
+        )
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(sessionEvent("session.created", makeSession("ses_a", { directory: "/repo" })))
+
+      const after = useGlobalSessionsStore.getState()
+      expect(after.activeSessions).toHaveLength(0)
+      expect(after.archivedSessions).toHaveLength(0)
+      expect(after.activeSessions).toBe(before.activeSessions)
+      expect(after.pendingRemoval.has("ses_a")).toBe(true)
+    })
+
+    test("session.deleted during the pendingRemoval window keeps the undo entry", () => {
+      const pending = makeSession("ses_a", { directory: "/repo" })
+      useGlobalSessionsStore.getState().markPendingRemoval([{ session: pending, kind: "delete" }])
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(sessionEvent("session.deleted", makeSession("ses_a", { directory: "/repo" })))
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.pendingRemoval.has("ses_a")).toBe(true)
+      // Undo still restores the session the user chose to keep.
+      useGlobalSessionsStore.getState().undoPendingRemoval(["ses_a"])
+      expect(useGlobalSessionsStore.getState().activeSessions.map((s) => s.id)).toEqual(["ses_a"])
+    })
+
+    test("an out-of-order older event does not overwrite newer local data", () => {
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(
+          sessionEvent(
+            "session.updated",
+            makeSession("ses_a", { title: "Newer", directory: "/repo", time: { created: 1, updated: 20 } }),
+          ),
+        )
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(
+          sessionEvent(
+            "session.updated",
+            makeSession("ses_a", { title: "Older", directory: "/repo", time: { created: 1, updated: 10 } }),
+          ),
+        )
+
+      expect(useGlobalSessionsStore.getState().activeSessions[0]?.title).toBe("Newer")
+    })
+
+    test("a reconnect snapshot does not overwrite newer event-fed data", () => {
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(
+          sessionEvent(
+            "session.updated",
+            makeSession("ses_a", { title: "Event title", directory: "/repo", time: { created: 1, updated: 20 } }),
+          ),
+        )
+
+      useGlobalSessionsStore
+        .getState()
+        .applySnapshot(
+          [makeSession("ses_a", { title: "Snapshot title", directory: "/repo", time: { created: 1, updated: 10 } })],
+          [],
+        )
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.activeSessions[0]?.title).toBe("Event title")
+    })
+
+    test("malformed payloads and unrelated event types are a no-op", () => {
+      const before = useGlobalSessionsStore.getState()
+
+      expect(() => {
+        useGlobalSessionsStore.getState().applySessionEvent(null)
+        useGlobalSessionsStore.getState().applySessionEvent({ type: "session.updated" })
+        useGlobalSessionsStore.getState().applySessionEvent({ type: "session.updated", properties: { info: {} } })
+        useGlobalSessionsStore
+          .getState()
+          .applySessionEvent({ type: "session.updated", properties: { info: { id: "ses_a" } } })
+        useGlobalSessionsStore
+          .getState()
+          .applySessionEvent({ type: "message.updated", properties: { info: makeSession("ses_a") } })
+      }).not.toThrow()
+
+      const after = useGlobalSessionsStore.getState()
+      expect(after.activeSessions).toBe(before.activeSessions)
+      expect(after.archivedSessions).toBe(before.archivedSessions)
+    })
+  })
 })
