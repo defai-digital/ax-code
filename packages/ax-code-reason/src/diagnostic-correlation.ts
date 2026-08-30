@@ -344,7 +344,7 @@ function findCrossFileRootCause(
   // Depth-2 expansion: for each depth-1 caller in a different file, find
   // its callers too. This catches "A calls B calls C, error in C but root
   // cause in A" patterns.
-  const allCandidates: { sym: Graph.Symbol; depth: number }[] = []
+  const allCandidates: { sym: Graph.Symbol; depth: number; via?: Graph.Symbol }[] = []
   for (const caller of callers) {
     allCandidates.push({ sym: caller.symbol, depth: 1 })
     if (caller.symbol.file !== file && allCandidates.length < MAX_CALLERS_PER_SYMBOL * 2) {
@@ -352,7 +352,7 @@ function findCrossFileRootCause(
         .graph.findCallers(projectID, caller.symbol.id, { scope: "worktree" })
         .slice(0, 3)
       for (const dc of deeperCallers) {
-        allCandidates.push({ sym: dc.symbol, depth: 2 })
+        allCandidates.push({ sym: dc.symbol, depth: 2, via: caller.symbol })
       }
     }
   }
@@ -404,10 +404,10 @@ function findCrossFileRootCause(
 
   // Build the chain: seed symbol -> ... -> root cause symbol.
   const chain = [symbol.qualifiedName]
-  if (best.depth === 2) {
-    // Insert the intermediate depth-1 caller if we can identify it.
-    const intermediate = callers.find((c) => c.symbol.file === best.sym.file || c.symbol.id === best.sym.id)
-    if (intermediate) chain.push(intermediate.symbol.qualifiedName)
+  if (best.depth === 2 && best.via) {
+    // Insert the actual depth-1 caller that led to this depth-2 candidate
+    // (recorded when the candidate was discovered, above).
+    chain.push(best.via.qualifiedName)
   }
   chain.push(best.sym.qualifiedName)
 
