@@ -30,9 +30,9 @@ export type FooterSessionStatus =
       waitState?: "llm" | "tool"
     }
 
-type FooterSessionStatusTone = "muted" | "working" | "success" | "warning"
+export type FooterSessionStatusTone = "muted" | "working" | "success" | "warning"
 
-type FooterSessionStatusView = {
+export type FooterSessionStatusView = {
   label?: string
   stale: boolean
   tone: FooterSessionStatusTone
@@ -330,4 +330,46 @@ export function hasActiveSubagentInSessionTree(input: {
     const status = input.statuses?.[session.id]
     return status !== undefined && status.type !== "idle"
   })
+}
+
+function subagentActivityTime(status: FooterSessionStatus) {
+  if (status.type === "busy") return status.lastActivityAt ?? status.startedAt ?? 0
+  if (status.type === "retry") return status.next
+  return 0
+}
+
+// While subagents work, the parent's own status stays "idle" and the footer
+// would otherwise render nothing — no spinner, no label, no elapsed time.
+// Project the most recently active child session into the same busy-style
+// footer view the parent's own status gets, prefixed with the subagent
+// count, so the footer keeps showing live progress for the whole tree.
+export function footerSubagentStatusView(input: {
+  sessions: readonly { id: string; parentID?: string }[]
+  statuses?: Record<string, FooterSessionStatus | undefined>
+  parentSessionID: string
+  now?: number
+}): (FooterSessionStatusView & { running: number }) | undefined {
+  const now = input.now ?? Date.now()
+  const active: FooterSessionStatus[] = []
+  for (const session of input.sessions) {
+    if (session.parentID !== input.parentSessionID) continue
+    const status = input.statuses?.[session.id]
+    if (!status || status.type === "idle") continue
+    active.push(status)
+  }
+  if (active.length === 0) return undefined
+
+  // A busy child is more informative than a retrying one; within the busy
+  // group, the child with the freshest activity is the one the user is
+  // most likely watching.
+  const busy = active.filter((status) => status.type === "busy")
+  const representative =
+    busy.length > 0 ? busy.reduce((a, b) => (subagentActivityTime(a) >= subagentActivityTime(b) ? a : b)) : active[0]
+  const view = footerSessionStatusView({ status: representative, now })
+  const prefix = active.length === 1 ? "Subagent" : `${active.length} subagents`
+  return {
+    ...view,
+    label: view.label ? `${prefix}: ${view.label}` : prefix,
+    running: active.length,
+  }
 }

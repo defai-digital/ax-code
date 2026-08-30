@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   footerGoalChip,
   footerSessionStatusOrIdle,
+  footerSubagentStatusView,
   footerTokenChip,
   hasActiveSubagentInSessionTree,
 } from "@/cli/cmd/tui/routes/session/footer-view-model"
@@ -256,5 +257,137 @@ describe("hasActiveSubagentInSessionTree", () => {
         parentSessionID: "ses_parent",
       }),
     ).toBe(false)
+  })
+})
+
+describe("footerSubagentStatusView", () => {
+  const now = 1_000_000
+  const parent = { id: "ses_parent" }
+  const childA = { id: "ses_child_a", parentID: "ses_parent" }
+  const childB = { id: "ses_child_b", parentID: "ses_parent" }
+  const other = { id: "ses_other" }
+
+  test("returns undefined when no child session is active", () => {
+    expect(
+      footerSubagentStatusView({
+        sessions: [parent, childA],
+        statuses: { ses_child_a: { type: "idle" } },
+        parentSessionID: "ses_parent",
+        now,
+      }),
+    ).toBeUndefined()
+    expect(
+      footerSubagentStatusView({ sessions: [parent, childA], statuses: {}, parentSessionID: "ses_parent", now }),
+    ).toBeUndefined()
+  })
+
+  test("ignores busy sessions outside the parent's tree", () => {
+    expect(
+      footerSubagentStatusView({
+        sessions: [parent, childA, other],
+        statuses: { ses_other: { type: "busy" } },
+        parentSessionID: "ses_parent",
+        now,
+      }),
+    ).toBeUndefined()
+  })
+
+  test("projects a single busy child into a working footer row", () => {
+    const view = footerSubagentStatusView({
+      sessions: [parent, childA],
+      statuses: {
+        ses_child_a: {
+          type: "busy",
+          waitState: "tool",
+          activeTool: "bash",
+          startedAt: now - 30_000,
+          lastActivityAt: now - 5_000,
+        },
+      },
+      parentSessionID: "ses_parent",
+      now,
+    })
+    expect(view).toEqual({
+      label: "Subagent: Running command · 30s",
+      stale: false,
+      tone: "working",
+      running: 1,
+    })
+  })
+
+  test("prefixes the active count when several children run", () => {
+    const view = footerSubagentStatusView({
+      sessions: [parent, childA, childB],
+      statuses: {
+        ses_child_a: {
+          type: "busy",
+          waitState: "llm",
+          startedAt: now - 50_000,
+          lastActivityAt: now - 20_000,
+        },
+        ses_child_b: {
+          type: "busy",
+          waitState: "tool",
+          activeTool: "read",
+          startedAt: now - 10_000,
+          lastActivityAt: now - 1_000,
+        },
+      },
+      parentSessionID: "ses_parent",
+      now,
+    })
+    // The child with the freshest activity represents the group.
+    expect(view?.label).toBe("2 subagents: Scanning files · 10s")
+    expect(view?.running).toBe(2)
+    expect(view?.tone).toBe("working")
+  })
+
+  test("surfaces the stale warning of the representative child", () => {
+    const view = footerSubagentStatusView({
+      sessions: [parent, childA],
+      statuses: {
+        ses_child_a: {
+          type: "busy",
+          waitState: "llm",
+          startedAt: now - 120_000,
+          lastActivityAt: now - 70_000,
+        },
+      },
+      parentSessionID: "ses_parent",
+      now,
+    })
+    expect(view?.stale).toBe(true)
+    expect(view?.tone).toBe("warning")
+    expect(view?.label).toBe("Subagent: Still waiting for model · 2m")
+  })
+
+  test("shows the retry countdown when the child is retrying", () => {
+    const view = footerSubagentStatusView({
+      sessions: [parent, childA],
+      statuses: { ses_child_a: { type: "retry", attempt: 2, message: "boom", next: now + 5_000 } },
+      parentSessionID: "ses_parent",
+      now,
+    })
+    expect(view?.label).toBe("Subagent: Retrying in 5s")
+    expect(view?.tone).toBe("warning")
+  })
+
+  test("prefers a busy child over a retrying one as the representative", () => {
+    const view = footerSubagentStatusView({
+      sessions: [parent, childA, childB],
+      statuses: {
+        ses_child_a: { type: "retry", attempt: 1, message: "boom", next: now + 5_000 },
+        ses_child_b: {
+          type: "busy",
+          waitState: "llm",
+          startedAt: now - 8_000,
+          lastActivityAt: now - 2_000,
+        },
+      },
+      parentSessionID: "ses_parent",
+      now,
+    })
+    expect(view?.label).toBe("2 subagents: Thinking · 8s")
+    expect(view?.running).toBe(2)
   })
 })

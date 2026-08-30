@@ -88,7 +88,7 @@ describe("tui console hygiene", () => {
   test("keeps stalled prompt status static and interrupt copy direct", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
-    expect(prompt).toContain('when={status().type === "busy" && busyStatus()?.stale}')
+    expect(prompt).toContain("when={busyStatus()?.stale}")
     expect(prompt).toContain('keys="esc" label="interrupt"')
   })
 

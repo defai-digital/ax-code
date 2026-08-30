@@ -94,6 +94,7 @@ import { withTimeout } from "@/util/timeout"
 import {
   footerContextGauge,
   footerSessionStatusView,
+  footerSubagentStatusView,
   footerTokenChip,
   hasActiveSubagentInSessionTree,
 } from "../../routes/session/footer-view-model"
@@ -1843,10 +1844,26 @@ export function Prompt(props: PromptProps) {
     return count
   })
 
+  // Subagents run in child sessions: while they work the parent reports
+  // "idle" and the footer would otherwise render a blank row. Project the
+  // most recently active child into the busy row so the spinner and label
+  // keep moving until the whole session tree settles.
+  const subagentStatus = createMemo(() => {
+    statusTick()
+    if (!props.sessionID) return
+    if (status().type !== "idle") return
+    const self = sync.data.session.find((item) => item.id === props.sessionID)
+    return footerSubagentStatusView({
+      sessions: sync.data.session,
+      statuses: sync.data.session_status,
+      parentSessionID: self?.parentID ?? props.sessionID,
+      now: Date.now(),
+    })
+  })
   const busyStatus = createMemo(() => {
     statusTick()
     const current = status()
-    if (current.type !== "busy") return
+    if (current.type !== "busy") return subagentStatus()
     return footerSessionStatusView({
       status: current,
       now: Date.now(),
@@ -2280,7 +2297,7 @@ export function Prompt(props: PromptProps) {
           gap={footerLayout().stacked ? 1 : 0}
         >
           <Show
-            when={status().type !== "idle"}
+            when={status().type !== "idle" || subagentStatus() !== undefined}
             fallback={
               <Show
                 when={submitPending()}
@@ -2315,7 +2332,7 @@ export function Prompt(props: PromptProps) {
                   >
                     <AxTuiSpinner color={spinnerDef().color} frames={spinnerDef().frames} interval={160} />
                   </Show>
-                  <Show when={status().type === "busy" && busyStatus()?.stale}>
+                  <Show when={busyStatus()?.stale}>
                     <text fg={theme.warning}>!</text>
                   </Show>
                 </box>
@@ -2396,7 +2413,12 @@ export function Prompt(props: PromptProps) {
                   })()}
                 </box>
               </box>
-              <KeyHint keys="esc" label="interrupt" />
+              {/* The interrupt command targets the parent session and is
+                  disabled while it is idle, so only hint esc when the
+                  parent's own status row is what keeps the footer busy. */}
+              <Show when={status().type !== "idle"}>
+                <KeyHint keys="esc" label="interrupt" />
+              </Show>
             </box>
           </Show>
           <Show when={status().type !== "retry"}>
