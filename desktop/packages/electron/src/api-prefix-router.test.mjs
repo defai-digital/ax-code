@@ -86,6 +86,21 @@ describe("api prefix router", () => {
     expect(routeApiRequest("/dre-graph/view", "GET")).toEqual({ target: "runtime", upstreamPath: "/dre-graph/view" })
   })
 
+  test("S2.6: /api/scheduled-task is runtime-classified (desktop engine deleted)", () => {
+    expect(routeApiRequest("/api/scheduled-task", "GET")).toEqual({
+      target: "runtime",
+      upstreamPath: "/scheduled-task",
+    })
+    expect(routeApiRequest("/api/scheduled-task/st_123/run-now", "POST")).toEqual({
+      target: "runtime",
+      upstreamPath: "/scheduled-task/st_123/run-now",
+    })
+    expect(routeApiRequest("/api/scheduled-task/st_123/runs", "GET")).toEqual({
+      target: "runtime",
+      upstreamPath: "/scheduled-task/st_123/runs",
+    })
+  })
+
   test("desktop overrides win over runtime prefixes (conflict cases)", () => {
     // /api/session/* is runtime, except the two desktop wrappers.
     expect(routeApiRequest("/api/session/abc/prompt_async", "POST")).toEqual({

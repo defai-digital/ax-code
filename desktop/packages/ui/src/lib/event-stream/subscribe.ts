@@ -1,9 +1,9 @@
 /**
  * subscribeEventStream — ref-counted simple facade over createEventTransport
- * for the two small EventSource consumers (openchamber app events and web
- * notifications). Lazily connects on the first subscriber and closes on the
- * last unsubscribe. Entries are keyed by URL; the first subscriber's profile
- * (heartbeat / backoff) wins for the lifetime of the entry.
+ * for the small EventSource consumer (web notifications). Lazily connects on
+ * the first subscriber and closes on the last unsubscribe. Entries are keyed
+ * by URL; the first subscriber's profile (heartbeat / backoff) wins for the
+ * lifetime of the entry.
  *
  * The facade parses the openchamber envelope protocol ({ type, properties }):
  * unparseable frames are dropped, the `openchamber:event-stream-ready`

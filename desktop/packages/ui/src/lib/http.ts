@@ -79,7 +79,6 @@ export const API_ENDPOINTS = {
   },
   magicPrompts: `${API_PATHS.base}/magic-prompts`,
   openchamber: {
-    events: `${API_PATHS.openchamber}/events`,
     modelsMetadata: `${API_PATHS.openchamber}/models-metadata`,
   },
   passkeys: `${API_PATHS.passkeys}`,
@@ -157,9 +156,6 @@ export const API_ENDPOINTS = {
     targets: `${API_PATHS.preview}/targets`,
   },
   projects: {
-    scheduledTasksBase: `${API_PATHS.projects}/:projectId/scheduled-tasks`,
-    scheduledTaskById: `${API_PATHS.projects}/:projectId/scheduled-tasks/:taskId`,
-    scheduledTaskRun: `${API_PATHS.projects}/:projectId/scheduled-tasks/:taskId/run`,
     icon: `${API_PATHS.projects}/:projectId/icon`,
     iconDiscover: `${API_PATHS.projects}/:projectId/icon/discover`,
     discoverExternal: `${API_PATHS.projects}/discover-external`,

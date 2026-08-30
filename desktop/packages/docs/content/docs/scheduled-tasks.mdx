@@ -5,7 +5,7 @@ description: Run a prompt automatically on a schedule.
 
 # Scheduled Tasks
 
-A scheduled task runs a prompt for you on a schedule — for example, a daily "summarize yesterday's changes" or a weekly cleanup. When it runs, AX Code Desktop starts a new session and sends the prompt on its own. Open the scheduler from the button at the top of the session sidebar.
+A scheduled task runs a prompt for you on a schedule — for example, a daily "summarize yesterday's changes" or a weekly cleanup. When it runs, AX Code starts a new session and sends the prompt on its own. Open the scheduler from the button at the top of the session sidebar.
 
 ## Create a task
 
@@ -15,23 +15,23 @@ A scheduled task runs a prompt for you on a schedule — for example, a daily "s
    - **daily** — at one or more times each day
    - **weekly** — on chosen weekdays and times
    - **once** — a single date and time
-4. Set what it does: the prompt to send, and the provider, model, and agent to use. The prompt can be a slash command, like `/review`.
+4. Set what it does: the prompt to send, and the provider, model, and agent to use.
 5. Save, and make sure the task is enabled.
+
+Tasks are stored and run by the AX Code runtime (its `/scheduled-task` API), so they also fire when the runtime is up but the Desktop window is closed. A task with several times or weekdays is saved as one runtime task per time/weekday, named like "Cleanup (2/3)".
 
 You can run any task immediately with **run now** to check it does what you expect.
 
 ## What success looks like
 
-After a run, the task shows when it last ran, whether it succeeded, and a link to the session it created. If a run fails, the error is shown there too.
-
-Desktop keeps the core task-queue ID for an active run and waits for that queue item to finish. An HTTP 202 response only means the run was accepted; it does not count as success. If Desktop restarts, it reconnects to the same queue item instead of submitting a duplicate.
+After a run, the task shows when it last ran and whether it succeeded; if a run fails, the error is shown there too. The runtime keeps a bounded run history per task, protects against overlapping runs of the same task, and automatically pauses a task after repeated consecutive failures.
 
 ## Keep in mind
 
-Tasks only fire while the AX Code Desktop server is running. If you close it, scheduled runs are paused until it's back up. By default, missed times are coalesced into one catch-up run after restart rather than replaying every missed interval.
+Tasks only fire while the AX Code runtime is running. If it is down, missed times are coalesced into one catch-up run after restart rather than replaying every missed interval.
 
-If an older Desktop version was interrupted after it marked a task running but before it stored a durable queue ID, the task is shown as failed for inspection. Desktop does not automatically replay work whose external side effects are unknown.
+Tasks created by older Desktop versions are migrated automatically on first launch after the upgrade. Prompts that were slash commands (like `/review`) and cron expressions outside the runtime's supported subset are not migrated; they are recorded in the migration report (`scheduled-tasks-migrated.json` next to the per-project config directory) so you can re-create them by hand.
 
 ## Related
 
-- [Commands & Snippets](/commands-snippets/) — reuse a slash command as the prompt
+- [Commands & Snippets](/commands-snippets/) — snippet references in prompts are expanded when a task is saved

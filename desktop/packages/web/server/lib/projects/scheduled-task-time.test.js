@@ -4,7 +4,7 @@ import {
   normalizeScheduledTaskTimes,
   parseScheduledTaskTimeParts,
   resolveScheduledTaskTimes,
-} from "./time.js"
+} from "./scheduled-task-time.js"
 
 describe("scheduled task time helpers", () => {
   it("normalizes HH:mm values", () => {

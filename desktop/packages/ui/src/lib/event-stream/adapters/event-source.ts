@@ -1,11 +1,11 @@
 /**
- * Native EventSource driver adapter. Mirrors the reconnect discipline the two
- * small consumers (openchamberEvents, useWebNotificationStream) relied on: any
+ * Native EventSource driver adapter. Mirrors the reconnect discipline the
+ * small consumer (useWebNotificationStream) relied on: any
  * `error` closes the source and fails the attempt so the transport's backoff
  * loop owns reconnection (instead of the browser's opaque internal retry).
  *
  * The connection counts as acknowledged on the FIRST message — for the
- * openchamber event stream that is the `openchamber:event-stream-ready`
+ * openchamber envelope streams that is the `openchamber:*-stream-ready`
  * envelope, which is exactly what reset the reconnect counter before.
  */
 

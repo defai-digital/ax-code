@@ -9,7 +9,6 @@ import { registerConfigEntityRoutes } from "./config-entity-routes.js"
 import { registerSettingsUtilityRoutes } from "./core-routes.js"
 import { registerProjectIconRoutes } from "./project-icon-routes.js"
 import { registerDiscoverExternalProjectRoutes } from "../projects/discover-external.js"
-import { registerScheduledTaskRoutes } from "../scheduled-tasks/routes.js"
 import { registerSkillRoutes } from "./skill-routes.js"
 import { registerPluginRoutes } from "./plugin-routes.js"
 import { getNpmInfo, clearCache as clearNpmCache } from "./npm-registry.js"
@@ -60,9 +59,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getAxCodePort,
       buildAugmentedPath,
       projectConfigRuntime,
-      scheduledTasksRuntime,
-      getOpenChamberEventClients,
-      writeSseEvent,
     } = routeDependencies
 
     const { getProviderSources, removeProviderConfig } = await import("./index.js")
@@ -127,15 +123,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       path,
       readSettingsFromDiskMigrated,
       sanitizeProjects,
-    })
-
-    registerScheduledTaskRoutes(app, {
-      readSettingsFromDiskMigrated,
-      sanitizeProjects,
-      projectConfigRuntime,
-      scheduledTasksRuntime,
-      getOpenChamberEventClients,
-      writeSseEvent,
     })
 
     const {

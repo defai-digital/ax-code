@@ -5,20 +5,21 @@ import { loadCurrentScheduledTaskList } from "./scheduledTaskListLoad"
 
 const task: ScheduledTask = {
   id: "task-1",
-  name: "Daily summary",
-  enabled: true,
+  directory: "/work/alpha",
+  title: "Daily summary",
+  status: "active",
   schedule: {
-    kind: "daily",
-    times: ["09:00"],
+    type: "daily",
+    time: "09:00",
+    timezone: "UTC",
   },
-  execution: {
-    prompt: "Summarize open work",
-    providerID: "openai",
-    modelID: "gpt-5",
-  },
-  state: {
-    createdAt: 1,
-    updatedAt: 2,
+  prompt: "Summarize open work",
+  model: { providerID: "openai", modelID: "gpt-5" },
+  catchUpPolicy: "run_once",
+  lastRunStatus: "idle",
+  time: {
+    created: 1,
+    updated: 2,
   },
 }
 

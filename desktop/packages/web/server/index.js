@@ -51,7 +51,7 @@ import { createBootstrapRuntime } from "./lib/ax-code/bootstrap-runtime.js"
 import { createSessionRuntime } from "./lib/ax-code/session-runtime.js"
 import { createRuntimeBusyReporter } from "./lib/ax-code/runtime-busy-reporter.js"
 import { createAxCodeWatcherRuntime } from "./lib/ax-code/watcher.js"
-import { createScheduledTasksRuntime } from "./lib/scheduled-tasks/runtime.js"
+import { createScheduledTaskConvergence } from "./lib/scheduled-task-convergence/convergence.js"
 import { createServerStartupRuntime } from "./lib/ax-code/server-startup-runtime.js"
 import { createStartupPipelineRuntime } from "./lib/ax-code/startup-pipeline-runtime.js"
 import { runCliEntryIfMain } from "./lib/ax-code/cli-entry-runtime.js"
@@ -63,6 +63,7 @@ import { createNotificationTemplateRuntime } from "./lib/notifications/template-
 import { createGracefulShutdownRuntime } from "./lib/ax-code/shutdown-runtime.js"
 import { createDevRuntimeUpstreamWriter } from "./lib/ax-code/dev-runtime-upstream.js"
 import { createProjectConfigRuntime } from "./lib/projects/project-config.js"
+import { expandSnippets } from "./lib/ax-code/snippets.js"
 import { createPreviewProxyRuntime } from "./lib/preview/proxy-runtime.js"
 import { createProxyMiddleware, responseInterceptor } from "http-proxy-middleware"
 import { createSseProxyMetrics } from "./lib/ax-code/proxy.js"
@@ -74,7 +75,6 @@ const DEFAULT_PORT = 3100
 const DESKTOP_NOTIFY_PREFIX = "[OpenChamberDesktopNotify] "
 const uiNotificationClients = new Set()
 const uiNotificationWsClients = new Set()
-const uiOpenChamberEventClients = new Set()
 const HEALTH_CHECK_INTERVAL = 15000
 const configuredShutdownTimeout = Number.parseInt(process.env.AX_CODE_DESKTOP_SHUTDOWN_TIMEOUT_MS || "", 10)
 const SHUTDOWN_TIMEOUT =
@@ -106,13 +106,7 @@ function headerIncludesEventStream(value) {
  * non-standard clients (e.g. curl, fetch) that omit Accept.
  * Path-based exclusion acts as a deterministic fallback.
  */
-const SSE_PATH_PREFIXES = [
-  "/api/event",
-  "/api/global/event",
-  "/global/event",
-  "/api/notifications/stream",
-  "/api/openchamber/events",
-]
+const SSE_PATH_PREFIXES = ["/api/event", "/api/global/event", "/global/event", "/api/notifications/stream"]
 
 function shouldSkipCompression(req, res) {
   if (headerIncludesEventStream(req.headers.accept)) {
@@ -1067,7 +1061,19 @@ const waitForAgentPresence = (...args) => axCodeLifecycleRuntime.waitForAgentPre
 const refreshAxCodeAfterConfigChange = (...args) => axCodeLifecycleRuntime.refreshAxCodeAfterConfigChange(...args)
 const startHealthMonitoring = () => axCodeLifecycleRuntime.startHealthMonitoring(HEALTH_CHECK_INTERVAL)
 const triggerHealthCheck = () => axCodeLifecycleRuntime.triggerHealthCheck()
-const scheduledTasksRuntime = createScheduledTasksRuntime({
+// S2.6 (SPEC-2026-08-29-desktop-process-model-collapse §2 D6): the desktop
+// scheduled-tasks engine is deleted; scheduling now lives in the ax-code
+// runtime (`/scheduled-task`). This convergence step runs once per boot after
+// the startup pipeline: it migrates any legacy per-project `scheduledTasks`
+// JSON into the runtime store (marker-gated, idempotent), then wakes every
+// registered project directory so each runtime instance starts its scheduler
+// loop (instances only bootstrap — and therefore schedule — on the first
+// directory-scoped request). Standalone web mode runs the same code path.
+const scheduledTaskConvergence = createScheduledTaskConvergence({
+  fsPromises,
+  path,
+  projectsDirPath: AX_CODE_DESKTOP_PROJECTS_CONFIG_DIR,
+  markerPath: path.join(AX_CODE_DESKTOP_USER_CONFIG_ROOT, "scheduled-tasks-migrated.json"),
   projectConfigRuntime,
   listProjects: async () => {
     const settings = await readSettingsFromDiskMigrated()
@@ -1076,24 +1082,7 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
   buildAxCodeUrl,
   getAxCodeAuthHeaders,
   waitForAxCodeReady,
-  emitTaskRunEvent: (event) => {
-    for (const client of uiOpenChamberEventClients) {
-      try {
-        writeSseEvent(client, {
-          type: "openchamber:scheduled-task-ran",
-          properties: {
-            projectId: event.projectID,
-            taskId: event.taskID,
-            ranAt: event.ranAt,
-            status: event.status,
-            ...(event.sessionID ? { sessionId: event.sessionID } : {}),
-          },
-        })
-      } catch {
-        uiOpenChamberEventClients.delete(client)
-      }
-    }
-  },
+  expandSnippets: (prompt, projectPath) => expandSnippets(prompt, projectPath),
   logger: console,
 })
 
@@ -1162,7 +1151,6 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
   setUiAuthController: (value) => {
     uiAuthController = value
   },
-  scheduledTasksRuntime,
   destroyAllClientConnections: () => {
     // Stop the shared global event hub first: nothing else ever calls
     // stop() on it, so without this its upstream reader keeps reconnecting
@@ -1184,16 +1172,6 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
       }
     }
     uiNotificationClients.clear()
-
-    for (const client of uiOpenChamberEventClients) {
-      try {
-        client.end?.()
-        client.socket?.destroy()
-      } catch {
-        /* ignore */
-      }
-    }
-    uiOpenChamberEventClients.clear()
 
     // Close all tracked WebSocket connections
     for (const ws of uiNotificationWsClients) {
@@ -1399,9 +1377,6 @@ async function main(options = {}) {
     getAxCodePort: () => axCodePort,
     buildAugmentedPath,
     projectConfigRuntime,
-    scheduledTasksRuntime,
-    getOpenChamberEventClients: () => uiOpenChamberEventClients,
-    writeSseEvent,
   })
 
   const previewProxyRuntime = createPreviewProxyRuntime({
@@ -1479,9 +1454,9 @@ async function main(options = {}) {
   )
 
   try {
-    await scheduledTasksRuntime.start()
+    await scheduledTaskConvergence.start()
   } catch (error) {
-    console.warn("[ScheduledTasks] Failed to start runtime:", error?.message || error)
+    console.warn("[ScheduledTasks] Failed to run scheduled task convergence:", error?.message || error)
   }
 
   return {
@@ -1489,9 +1464,6 @@ async function main(options = {}) {
     httpServer: server,
     getPort: () => startupPipelineResult.activePort,
     getAxCodePort: () => axCodePort,
-    getQuitRiskStatus: () => ({
-      scheduledTasks: scheduledTasksRuntime.getStatus(),
-    }),
     getStartupDiagnostics: () =>
       startupDiagnosticsRuntime
         ? startupDiagnosticsRuntime.snapshot({

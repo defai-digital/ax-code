@@ -8,7 +8,6 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     syncToHmrState,
     axCodeWatcherRuntime,
     sessionRuntime,
-    scheduledTasksRuntime,
     getHealthCheckInterval,
     clearHealthCheckInterval,
     getTerminalRuntime,
@@ -38,7 +37,6 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     // Phase 1: synchronous teardown (fast, immediate)
     axCodeWatcherRuntime.stop()
     sessionRuntime.dispose()
-    scheduledTasksRuntime?.stop?.()
 
     const healthCheckInterval = getHealthCheckInterval()
     if (healthCheckInterval) {

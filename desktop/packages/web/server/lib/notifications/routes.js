@@ -54,8 +54,8 @@ export const registerNotificationRoutes = (app, dependencies) => {
     } catch {}
 
     // Keep the connection alive through reverse proxies / load balancers, which
-    // reap idle SSE sockets. Mirrors the /api/openchamber/events heartbeat; the
-    // client ignores any event whose type is not "openchamber:notification".
+    // reap idle SSE sockets. The client ignores any event whose type is not
+    // "openchamber:notification".
     const heartbeat = setInterval(() => {
       try {
         writeSseEvent(res, {

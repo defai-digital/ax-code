@@ -1,6 +1,6 @@
 import { DateTime, IANAZone } from "luxon"
 import parser from "cron-parser"
-import { normalizeScheduledTaskTime, resolveScheduledTaskTimes } from "../scheduled-tasks/time.js"
+import { normalizeScheduledTaskTime, resolveScheduledTaskTimes } from "./scheduled-task-time.js"
 
 const PROJECT_CONFIG_VERSION = 1
 const MAX_TASK_NAME_LENGTH = 80
@@ -374,6 +374,32 @@ export const createProjectConfigRuntime = (deps) => {
     await fsPromises.rename(temporaryPath, filePath)
   }
 
+  // S2.6 (SPEC-2026-08-29-desktop-process-model-collapse §2 D6): the runtime
+  // migration rewrites the task list after each project pass and deletes the
+  // server-owned `scheduledTasks` key entirely once nothing remains, so the
+  // JSON no longer looks like an unmigrated store. Atomic tmp+rename like
+  // writeProjectConfigToDisk; every other key is preserved verbatim.
+  const writeScheduledTasksToDisk = async (projectID, tasks) => {
+    const filePath = resolveProjectConfigPath(projectID)
+    const parentDirectory = path.dirname(filePath)
+    const temporaryPath = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+    const existing = await readRawProjectConfigFromDisk(projectID)
+    const merged = {
+      ...existing,
+      version: PROJECT_CONFIG_VERSION,
+    }
+    if (tasks.length > 0) {
+      merged.scheduledTasks = tasks
+    } else {
+      delete merged.scheduledTasks
+    }
+
+    await fsPromises.mkdir(parentDirectory, { recursive: true })
+    await fsPromises.writeFile(temporaryPath, JSON.stringify(merged, null, 2), "utf8")
+    await fsPromises.rename(temporaryPath, filePath)
+  }
+
   const withProjectWriteLock = async (projectID, mutate) => {
     const key = sanitizeProjectID(projectID)
     const previous = writeLocks.get(key) || Promise.resolve()
@@ -505,11 +531,26 @@ export const createProjectConfigRuntime = (deps) => {
     })
   }
 
+  // S2.6: replace the whole task list with the tasks that still need migration
+  // (the input comes from a prior listScheduledTasks read, so it is already
+  // normalized). An empty list deletes the key; the key is never deleted while
+  // any task still awaits confirmation in the runtime.
+  const replaceScheduledTasks = async (projectID, tasks) => {
+    return withProjectWriteLock(projectID, async () => {
+      const nextTasks = Array.isArray(tasks) ? tasks : []
+      await writeScheduledTasksToDisk(projectID, nextTasks)
+      return {
+        tasks: nextTasks,
+      }
+    })
+  }
+
   return {
     listScheduledTasks,
     upsertScheduledTask,
     deleteScheduledTask,
     updateScheduledTaskState,
+    replaceScheduledTasks,
     resolveProjectConfigPath,
   }
 }

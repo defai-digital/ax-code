@@ -26,6 +26,7 @@ import { haveEquivalentSyncSnapshots } from "./snapshot-equality"
 import { useGlobalSyncStore, type GlobalSyncStore } from "./global-sync-store"
 import { ChildStoreManager, type DirectoryStore } from "./child-store"
 import { useI18nStore, formatMessage } from "@/lib/i18n/store"
+import { ingestScheduledTaskRuntimeEvent, isScheduledTaskRuntimeEventType } from "@/lib/scheduledTaskEvents"
 import {
   aggregateLiveSessions,
   aggregateLiveSessionStatuses,
@@ -1280,6 +1281,11 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
         return resolveDirectoryFromRoutingIndex(routingIndex, directory, payload, childStores)
       },
       onEvent: (directory, payload) => {
+        if (isScheduledTaskRuntimeEventType(payload.type)) {
+          // S2.6: runtime scheduled-task events fan out to the dialog/sidebar
+          // via the shared registry (no dedicated EventSource).
+          ingestScheduledTaskRuntimeEvent(payload)
+        }
         if (payload.type === "provider.updated") {
           // Dedicated private GPU models (PAI-EAS, etc.) arrive from background
           // /v1/models discovery after connect. Refresh the picker the same way

@@ -23,6 +23,7 @@ import { Icon } from "@/components/icon/Icon"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useUIStore } from "@/stores/useUIStore"
 import type { ScheduledTask } from "@/lib/scheduledTasksApi"
+import { stripFanOutSuffix, type ScheduledTaskDraftInput } from "@/lib/scheduledTaskTransform"
 import { useI18n } from "@/lib/i18n"
 import { normalizeScheduledTaskTimes } from "./scheduledTaskTime"
 
@@ -478,20 +479,20 @@ type ScheduledTaskDraft = {
     prompt: string
     providerID: string
     modelID: string
-    variant: string
     agent: string
   }
-  state?: ScheduledTask["state"]
 }
+
+const pad2 = (value: number): string => String(value).padStart(2, "0")
 
 const normalizeDraftTimes = (task: ScheduledTask | null): string[] => {
   if (!task) {
     return ["09:00"]
   }
-  const candidates = Array.isArray(task.schedule.times)
-    ? task.schedule.times
-    : task.schedule.time
-      ? [task.schedule.time]
+  const schedule = task.schedule
+  const candidates =
+    (schedule.type === "daily" || schedule.type === "weekly") && typeof schedule.time === "string"
+      ? [schedule.time]
       : []
 
   const unique = normalizeScheduledTaskTimes(candidates)
@@ -503,7 +504,6 @@ const toDraft = (
   defaults: {
     providerID: string
     modelID: string
-    variant: string
     agent: string
   },
 ): ScheduledTaskDraft => {
@@ -525,39 +525,37 @@ const toDraft = (
         prompt: "",
         providerID: defaults.providerID,
         modelID: defaults.modelID,
-        variant: defaults.variant,
         agent: defaults.agent,
       },
     }
   }
 
+  const schedule = task.schedule
+  const scheduleTimezone = "timezone" in schedule && schedule.timezone ? schedule.timezone : timezoneFallback
+  const onceRunAt = schedule.type === "once" ? new Date(schedule.runAt) : null
   return {
     id: task.id,
-    name: task.name,
-    enabled: task.enabled,
+    // Editing one fan-out part shows the base name again so re-saving does
+    // not stack " (i/N)" suffixes.
+    name: stripFanOutSuffix(task.title),
+    enabled: task.status === "active",
     catchUpPolicy: task.catchUpPolicy === "skip" ? "skip" : "run_once",
     schedule: {
-      kind: task.schedule.kind === "once" ? "once" : task.schedule.kind === "weekly" ? "weekly" : "daily",
+      kind: schedule.type === "once" ? "once" : schedule.type === "weekly" ? "weekly" : "daily",
       times: normalizeDraftTimes(task),
-      onceDate:
-        typeof task.schedule.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(task.schedule.date)
-          ? task.schedule.date
-          : getLocalDateISO(),
-      onceTime:
-        typeof task.schedule.time === "string" && /^([01]\d|2[0-3]):([0-5]\d)$/.test(task.schedule.time)
-          ? task.schedule.time
-          : "09:00",
-      weekdays: Array.isArray(task.schedule.weekdays) ? task.schedule.weekdays : [1],
-      timezone: task.schedule.timezone || timezoneFallback,
+      onceDate: onceRunAt
+        ? `${onceRunAt.getFullYear()}-${pad2(onceRunAt.getMonth() + 1)}-${pad2(onceRunAt.getDate())}`
+        : getLocalDateISO(),
+      onceTime: onceRunAt ? `${pad2(onceRunAt.getHours())}:${pad2(onceRunAt.getMinutes())}` : "09:00",
+      weekdays: schedule.type === "weekly" ? [schedule.day] : [1],
+      timezone: scheduleTimezone,
     },
     execution: {
-      prompt: task.execution.prompt,
-      providerID: task.execution.providerID,
-      modelID: task.execution.modelID,
-      variant: task.execution.variant || "",
-      agent: task.execution.agent || "",
+      prompt: task.prompt,
+      providerID: task.model?.providerID || defaults.providerID,
+      modelID: task.model?.modelID || defaults.modelID,
+      agent: task.agent || "",
     },
-    state: task.state,
   }
 }
 
@@ -601,16 +599,14 @@ export function ScheduledTaskEditorDialog(props: {
   open: boolean
   task: ScheduledTask | null
   onOpenChange: (open: boolean) => void
-  onSave: (draft: Partial<ScheduledTask>) => Promise<void>
+  onSave: (submit: { id?: string; enabled: boolean; input: ScheduledTaskDraftInput }) => Promise<void>
 }) {
   const { open, task, onOpenChange, onSave } = props
   const { t, locale } = useI18n()
   const loadProviders = useConfigStore((state) => state.loadProviders)
   const loadAgents = useConfigStore((state) => state.loadAgents)
-  const providers = useConfigStore((state) => state.providers)
   const currentProviderID = useConfigStore((state) => state.currentProviderId)
   const currentModelID = useConfigStore((state) => state.currentModelId)
-  const currentVariant = useConfigStore((state) => state.currentVariant || "")
   const currentAgentName = useConfigStore((state) => state.currentAgentName || "")
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference)
   const weekStartPreference = useUIStore((state) => state.weekStartPreference)
@@ -620,7 +616,6 @@ export function ScheduledTaskEditorDialog(props: {
     toDraft(task, {
       providerID: currentProviderID,
       modelID: currentModelID,
-      variant: currentVariant,
       agent: currentAgentName,
     }),
   )
@@ -633,7 +628,10 @@ export function ScheduledTaskEditorDialog(props: {
   const [showSnippetAutocomplete, setShowSnippetAutocomplete] = React.useState(false)
   const [snippetQuery, setSnippetQuery] = React.useState("")
   const [calendarMonth, setCalendarMonth] = React.useState<Date>(() => {
-    const initialDate = parseISODateToLocal(task?.schedule?.date || "") || new Date()
+    const initialDate =
+      (task?.schedule.type === "once"
+        ? parseISODateToLocal(formatLocalDateISO(new Date(task.schedule.runAt)))
+        : null) || new Date()
     return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1)
   })
   const datePickerRef = React.useRef<HTMLDivElement>(null)
@@ -685,18 +683,17 @@ export function ScheduledTaskEditorDialog(props: {
       toDraft(task, {
         providerID: currentProviderID,
         modelID: currentModelID,
-        variant: currentVariant,
         agent: currentAgentName,
       }),
     )
-    const sourceDate = parseISODateToLocal(task?.schedule?.date || "") || new Date()
+    const sourceDate = (task?.schedule.type === "once" ? new Date(task.schedule.runAt) : null) || new Date()
     setCalendarMonth(new Date(sourceDate.getFullYear(), sourceDate.getMonth(), 1))
     setIsDatePickerOpen(false)
     setShowCommandAutocomplete(false)
     setShowFileMention(false)
     setCommandQuery("")
     setMentionQuery("")
-  }, [open, task, currentProviderID, currentModelID, currentVariant, currentAgentName])
+  }, [open, task, currentProviderID, currentModelID, currentAgentName])
 
   React.useEffect(() => {
     if (!isDatePickerOpen) {
@@ -714,37 +711,6 @@ export function ScheduledTaskEditorDialog(props: {
       document.removeEventListener("mousedown", onPointerDown)
     }
   }, [isDatePickerOpen])
-
-  const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.id === draft.execution.providerID)
-    const model = provider?.models?.find((item) => item.id === draft.execution.modelID) as
-      | { variants?: Record<string, unknown> }
-      | undefined
-    return model?.variants ? Object.keys(model.variants) : []
-  }, [providers, draft.execution.providerID, draft.execution.modelID])
-  const hasVariantOptions = variantOptions.length > 0
-  const selectedVariantValue = React.useMemo(() => {
-    if (!hasVariantOptions) {
-      return "__default"
-    }
-    if (!draft.execution.variant) {
-      return "__default"
-    }
-    return variantOptions.includes(draft.execution.variant) ? draft.execution.variant : "__default"
-  }, [draft.execution.variant, hasVariantOptions, variantOptions])
-
-  React.useEffect(() => {
-    if (hasVariantOptions || !draft.execution.variant) {
-      return
-    }
-    setDraft((prev) => ({
-      ...prev,
-      execution: {
-        ...prev.execution,
-        variant: "",
-      },
-    }))
-  }, [hasVariantOptions, draft.execution.variant])
 
   const toggleWeekday = React.useCallback((weekday: number, nextChecked: boolean) => {
     setDraft((prev) => {
@@ -1053,37 +1019,44 @@ export function ScheduledTaskEditorDialog(props: {
     }
 
     const normalizedTimes = normalizeScheduledTaskTimes(draft.schedule.times)
-    const payload: Partial<ScheduledTask> = {
-      ...(draft.id ? { id: draft.id } : {}),
+    const input: ScheduledTaskDraftInput = {
       name: draft.name.trim(),
-      enabled: draft.enabled,
-      catchUpPolicy: draft.catchUpPolicy,
-      schedule: {
-        kind: draft.schedule.kind,
-        timezone: draft.schedule.timezone.trim(),
-        ...(draft.schedule.kind === "once"
-          ? {
-              date: draft.schedule.onceDate,
-              time: draft.schedule.onceTime,
-            }
-          : {
-              times: normalizedTimes,
-              ...(draft.schedule.kind === "weekly" ? { weekdays: draft.schedule.weekdays } : {}),
-            }),
-      },
-      execution: {
-        prompt: draft.execution.prompt,
+      prompt: draft.execution.prompt,
+      ...(draft.execution.agent.trim() ? { agent: draft.execution.agent.trim() } : {}),
+      model: {
         providerID: draft.execution.providerID,
         modelID: draft.execution.modelID,
-        ...(draft.execution.variant.trim() ? { variant: draft.execution.variant.trim() } : {}),
-        ...(draft.execution.agent.trim() ? { agent: draft.execution.agent.trim() } : {}),
       },
-      ...(draft.state ? { state: draft.state } : {}),
+      catchUpPolicy: draft.catchUpPolicy,
+      schedule:
+        draft.schedule.kind === "once"
+          ? {
+              kind: "once",
+              date: draft.schedule.onceDate,
+              time: draft.schedule.onceTime,
+              timezone: draft.schedule.timezone.trim(),
+            }
+          : draft.schedule.kind === "weekly"
+            ? {
+                kind: "weekly",
+                weekdays: draft.schedule.weekdays,
+                times: normalizedTimes,
+                timezone: draft.schedule.timezone.trim(),
+              }
+            : {
+                kind: "daily",
+                times: normalizedTimes,
+                timezone: draft.schedule.timezone.trim(),
+              },
     }
 
     setSaving(true)
     try {
-      await onSave(payload)
+      await onSave({
+        ...(draft.id ? { id: draft.id } : {}),
+        enabled: draft.enabled,
+        input,
+      })
       onOpenChange(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("sessions.scheduledTasks.editor.toast.saveFailed"))
@@ -1420,7 +1393,6 @@ export function ScheduledTaskEditorDialog(props: {
                   ...prev.execution,
                   providerID,
                   modelID,
-                  variant: "",
                 },
               }))
             }}
@@ -1428,52 +1400,21 @@ export function ScheduledTaskEditorDialog(props: {
         </div>
 
         <div className="flex min-w-0 flex-col gap-1">
-          <FieldLabel>{t("sessions.scheduledTasks.editor.thinkingLevel.label")}</FieldLabel>
-          <Select
-            value={selectedVariantValue}
-            disabled={!hasVariantOptions}
-            onValueChange={(value) => {
+          <FieldLabel>{t("sessions.scheduledTasks.editor.agent.label")}</FieldLabel>
+          <AgentSelector
+            agentName={draft.execution.agent}
+            filter={(agent) => isPrimaryMode(agent.mode)}
+            onChange={(agent) =>
               setDraft((prev) => ({
                 ...prev,
                 execution: {
                   ...prev.execution,
-                  variant: value === "__default" ? "" : value,
+                  agent,
                 },
               }))
-            }}
-          >
-            <SelectTrigger className="w-fit max-w-full">
-              <SelectValue>
-                {(value) => (value === "__default" ? t("sessions.scheduledTasks.editor.thinkingLevel.default") : value)}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__default">{t("sessions.scheduledTasks.editor.thinkingLevel.default")}</SelectItem>
-              {variantOptions.map((variant) => (
-                <SelectItem key={variant} value={variant}>
-                  {variant}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            }
+          />
         </div>
-      </div>
-
-      <div className="flex min-w-0 flex-col gap-1">
-        <FieldLabel>{t("sessions.scheduledTasks.editor.agent.label")}</FieldLabel>
-        <AgentSelector
-          agentName={draft.execution.agent}
-          filter={(agent) => isPrimaryMode(agent.mode)}
-          onChange={(agent) =>
-            setDraft((prev) => ({
-              ...prev,
-              execution: {
-                ...prev.execution,
-                agent,
-              },
-            }))
-          }
-        />
       </div>
 
       <div className="flex flex-col gap-1">

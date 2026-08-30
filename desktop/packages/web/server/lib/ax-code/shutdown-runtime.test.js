@@ -12,7 +12,6 @@ const createRuntime = (server) =>
     syncToHmrState: vi.fn(),
     axCodeWatcherRuntime: { stop: vi.fn() },
     sessionRuntime: { dispose: vi.fn() },
-    scheduledTasksRuntime: { stop: vi.fn() },
     getHealthCheckInterval: () => null,
     clearHealthCheckInterval: vi.fn(),
     getTerminalRuntime: () => null,

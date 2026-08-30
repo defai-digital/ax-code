@@ -13,32 +13,37 @@ import { useUIStore } from "@/stores/useUIStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { refreshGlobalSessions } from "@/stores/useGlobalSessionsStore"
-import { subscribeOpenchamberEvents } from "@/lib/openchamberEvents"
+import { subscribeScheduledTaskEvents } from "@/lib/scheduledTaskEvents"
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, getProjectIconImageUrl } from "@/lib/projectMeta"
 import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { cn, formatDirectoryName } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n"
 import type { ProjectEntry } from "@/lib/api/types"
 import {
+  createScheduledTasks,
   deleteScheduledTask,
+  expandPromptSnippets,
   fetchScheduledTasks,
   runScheduledTaskNow,
-  upsertScheduledTask,
+  setScheduledTaskEnabled,
+  updateScheduledTask,
   type ScheduledTask,
-  type ScheduledTaskStatus,
+  type ScheduledTaskRunDisplayStatus,
 } from "@/lib/scheduledTasksApi"
+import {
+  buildRuntimeScheduledTaskPayloads,
+  type RuntimeSchedule,
+  type ScheduledTaskDraftInput,
+} from "@/lib/scheduledTaskTransform"
 import { ScheduledTaskEditorDialog } from "./ScheduledTaskEditorDialog"
 import { loadCurrentScheduledTaskList } from "./scheduledTaskListLoad"
 import { relativeTimeParts } from "./scheduledTaskRelativeTime"
-import { normalizeScheduledTaskTimes } from "./scheduledTaskTime"
 
-const scheduleTimes = (task: ScheduledTask): string[] => {
-  const raw = Array.isArray(task.schedule.times) ? task.schedule.times : task.schedule.time ? [task.schedule.time] : []
-  return normalizeScheduledTaskTimes(raw)
-}
+const pad2 = (value: number): string => String(value).padStart(2, "0")
 
 const formatSchedule = (task: ScheduledTask, t: ReturnType<typeof useI18n>["t"]): string => {
-  const timesLabel = scheduleTimes(task).join(", ") || "--:--"
+  const schedule = task.schedule as RuntimeSchedule
+  const timezone = "timezone" in schedule ? schedule.timezone : undefined
   const formatWeekday = (value: number) => {
     if (value === 0) return t("sessions.scheduledTasks.dialog.schedule.weekdayShort.sun")
     if (value === 1) return t("sessions.scheduledTasks.dialog.schedule.weekdayShort.mon")
@@ -49,51 +54,39 @@ const formatSchedule = (task: ScheduledTask, t: ReturnType<typeof useI18n>["t"])
     if (value === 6) return t("sessions.scheduledTasks.dialog.schedule.weekdayShort.sat")
     return t("sessions.scheduledTasks.dialog.schedule.weekdayShort.unknown")
   }
-  if (task.schedule.kind === "daily") {
-    if (task.schedule.timezone) {
+  if (schedule.type === "daily") {
+    if (timezone) {
       return t("sessions.scheduledTasks.dialog.schedule.dailyWithTimezone", {
-        time: timesLabel,
-        timezone: task.schedule.timezone,
+        time: schedule.time,
+        timezone,
       })
     }
-    return t("sessions.scheduledTasks.dialog.schedule.daily", { time: timesLabel })
+    return t("sessions.scheduledTasks.dialog.schedule.daily", { time: schedule.time })
   }
-  if (task.schedule.kind === "weekly") {
-    const days = Array.isArray(task.schedule.weekdays)
-      ? task.schedule.weekdays.map((value) => formatWeekday(value)).join(", ")
-      : ""
-    if (task.schedule.timezone) {
+  if (schedule.type === "weekly") {
+    const days = formatWeekday(schedule.day)
+    if (timezone) {
       return t("sessions.scheduledTasks.dialog.schedule.weeklyWithTimezone", {
         days,
-        time: timesLabel,
-        timezone: task.schedule.timezone,
+        time: schedule.time,
+        timezone,
       })
     }
-    return t("sessions.scheduledTasks.dialog.schedule.weekly", { days, time: timesLabel })
+    return t("sessions.scheduledTasks.dialog.schedule.weekly", { days, time: schedule.time })
   }
-  if (task.schedule.kind === "once") {
-    const date =
-      typeof task.schedule.date === "string" && task.schedule.date.trim().length > 0
-        ? task.schedule.date
-        : t("sessions.scheduledTasks.dialog.schedule.unknownDate")
-    const time =
-      typeof task.schedule.time === "string" && task.schedule.time.trim().length > 0 ? task.schedule.time : "--:--"
-    if (task.schedule.timezone) {
-      return t("sessions.scheduledTasks.dialog.schedule.onceWithTimezone", {
-        date,
-        time,
-        timezone: task.schedule.timezone,
-      })
-    }
+  if (schedule.type === "once") {
+    const runAt = new Date(schedule.runAt)
+    const date = `${runAt.getFullYear()}-${pad2(runAt.getMonth() + 1)}-${pad2(runAt.getDate())}`
+    const time = `${pad2(runAt.getHours())}:${pad2(runAt.getMinutes())}`
     return t("sessions.scheduledTasks.dialog.schedule.once", { date, time })
   }
-  if (task.schedule.timezone) {
+  if (timezone) {
     return t("sessions.scheduledTasks.dialog.schedule.cronWithTimezone", {
-      cron: task.schedule.cron || "",
-      timezone: task.schedule.timezone,
+      cron: schedule.expression,
+      timezone,
     })
   }
-  return t("sessions.scheduledTasks.dialog.schedule.cron", { cron: task.schedule.cron || "" })
+  return t("sessions.scheduledTasks.dialog.schedule.cron", { cron: schedule.expression })
 }
 
 const formatClockTime = (value?: number): string => {
@@ -126,7 +119,7 @@ const formatRelativeTime = (value: number | undefined, t: ReturnType<typeof useI
 type ScheduledTaskStatusTone = "success" | "error" | "warning" | "muted"
 
 const STATUS_META: Record<
-  ScheduledTaskStatus,
+  ScheduledTaskRunDisplayStatus,
   {
     tone: ScheduledTaskStatusTone
     Icon: IconName
@@ -229,12 +222,20 @@ export function ScheduledTasksDialog() {
     [homeDirectory, currentTheme.metadata.variant, currentTheme.colors.surface.foreground],
   )
 
+  // Runtime scheduled tasks are scoped by project directory (the runtime's
+  // `?directory=` instance key), not by the desktop project id.
+  const directoryForProject = React.useCallback(
+    (projectID: string): string => projects.find((project) => project.id === projectID)?.path || "",
+    [projects],
+  )
+
   const reloadTasks = React.useCallback(
     async (projectID: string, options?: { silent?: boolean }) => {
       const requestId = taskListRequestRef.current + 1
       taskListRequestRef.current = requestId
 
-      if (!projectID) {
+      const directory = directoryForProject(projectID)
+      if (!projectID || !directory) {
         setTasks([])
         if (!options?.silent) {
           setLoading(false)
@@ -245,21 +246,23 @@ export function ScheduledTasksDialog() {
         setLoading(true)
       }
       const loaded = await loadCurrentScheduledTaskList({
-        load: () => fetchScheduledTasks(projectID),
+        load: () => fetchScheduledTasks(directory),
         isCurrent: () =>
           openRef.current && selectedProjectIDRef.current === projectID && taskListRequestRef.current === requestId,
       })
       if (loaded.status === "loaded") {
         const nextTasks = loaded.tasks
         nextTasks.sort((a, b) => {
-          if (a.enabled !== b.enabled) {
-            return a.enabled ? -1 : 1
+          const aActive = a.status === "active"
+          const bActive = b.status === "active"
+          if (aActive !== bActive) {
+            return aActive ? -1 : 1
           }
-          const byName = a.name.localeCompare(b.name)
+          const byName = a.title.localeCompare(b.title)
           if (byName !== 0) {
             return byName
           }
-          return (a.state?.nextRunAt || Number.MAX_SAFE_INTEGER) - (b.state?.nextRunAt || Number.MAX_SAFE_INTEGER)
+          return (a.nextRunAt || Number.MAX_SAFE_INTEGER) - (b.nextRunAt || Number.MAX_SAFE_INTEGER)
         })
         setTasks(nextTasks)
       } else if (loaded.status === "failed") {
@@ -274,7 +277,7 @@ export function ScheduledTasksDialog() {
         setLoading(false)
       }
     },
-    [t],
+    [directoryForProject, t],
   )
 
   React.useEffect(() => {
@@ -297,11 +300,11 @@ export function ScheduledTasksDialog() {
       return
     }
     let timeoutID: ReturnType<typeof setTimeout> | null = null
-    const unsubscribe = subscribeOpenchamberEvents((event) => {
-      if (event.type !== "scheduled-task-ran") {
-        return
-      }
-      if (event.projectId !== selectedProjectID) {
+    const unsubscribe = subscribeScheduledTaskEvents((event) => {
+      const directory = directoryForProject(selectedProjectID)
+      // Events without a directory (e.g. scheduled.task.deleted) always
+      // trigger a refresh; directory-scoped events must match the selection.
+      if (event.directory && directory && event.directory !== directory) {
         return
       }
       if (timeoutID) {
@@ -317,32 +320,59 @@ export function ScheduledTasksDialog() {
       }
       unsubscribe()
     }
-  }, [open, selectedProjectID, reloadTasks])
+  }, [open, selectedProjectID, reloadTasks, directoryForProject])
 
   const handleSaveTask = React.useCallback(
-    async (taskDraft: Partial<ScheduledTask>) => {
-      if (!selectedProjectID) {
+    async (submit: { id?: string; enabled: boolean; input: ScheduledTaskDraftInput }) => {
+      const directory = directoryForProject(selectedProjectID)
+      if (!selectedProjectID || !directory) {
         throw new Error(t("sessions.scheduledTasks.dialog.error.chooseProjectFirst"))
       }
-      await upsertScheduledTask(selectedProjectID, taskDraft)
+      // Client-side fan-out: a multi-time/multi-weekday draft becomes N
+      // runtime tasks (same naming as the S2.6 migration). When editing, the
+      // first slot updates the edited task and any extra slots become new
+      // sibling tasks. Snippet references are pre-expanded — the runtime
+      // executes the stored prompt verbatim.
+      const prompt = await expandPromptSnippets(directory, submit.input.prompt)
+      const payloads = buildRuntimeScheduledTaskPayloads({ ...submit.input, prompt })
+      if (!payloads || payloads.length === 0) {
+        throw new Error(t("sessions.scheduledTasks.dialog.toast.updateFailed"))
+      }
+      if (submit.id) {
+        const [first, ...rest] = payloads
+        await updateScheduledTask(directory, submit.id, {
+          title: first.title,
+          prompt: first.prompt,
+          schedule: first.schedule,
+          ...(first.agent ? { agent: first.agent } : {}),
+          ...(first.model ? { model: first.model } : {}),
+          catchUpPolicy: first.catchUpPolicy,
+          status: submit.enabled ? "active" : "paused",
+        })
+        if (rest.length > 0) {
+          await createScheduledTasks(directory, rest, { pause: !submit.enabled })
+        }
+      } else {
+        await createScheduledTasks(directory, payloads, { pause: !submit.enabled })
+      }
       await reloadTasks(selectedProjectID)
       toast.success(t("sessions.scheduledTasks.dialog.toast.saved"))
     },
-    [selectedProjectID, reloadTasks, t],
+    [selectedProjectID, directoryForProject, reloadTasks, t],
   )
 
   const handleToggleEnabled = React.useCallback(
     async (task: ScheduledTask, enabled: boolean) => {
-      if (!selectedProjectID) {
+      const directory = directoryForProject(selectedProjectID)
+      if (!selectedProjectID || !directory) {
         return
       }
       setMutatingTaskID(task.id)
-      setTasks((prev) => prev.map((item) => (item.id === task.id ? { ...item, enabled } : item)))
+      setTasks((prev) =>
+        prev.map((item) => (item.id === task.id ? { ...item, status: enabled ? "active" : "paused" } : item)),
+      )
       try {
-        await upsertScheduledTask(selectedProjectID, {
-          ...task,
-          enabled,
-        })
+        await setScheduledTaskEnabled(directory, task.id, enabled)
         await reloadTasks(selectedProjectID, { silent: true })
       } catch (error) {
         toast.error(error instanceof Error ? error.message : t("sessions.scheduledTasks.dialog.toast.updateFailed"))
@@ -351,16 +381,17 @@ export function ScheduledTasksDialog() {
         setMutatingTaskID(null)
       }
     },
-    [selectedProjectID, reloadTasks, t],
+    [selectedProjectID, directoryForProject, reloadTasks, t],
   )
 
   const handleDeleteTask = React.useCallback(
     async (task: ScheduledTask) => {
-      if (!selectedProjectID) {
+      const directory = directoryForProject(selectedProjectID)
+      if (!selectedProjectID || !directory) {
         return
       }
       const confirmed = await requestConfirm(
-        t("sessions.scheduledTasks.dialog.confirm.deleteTask", { taskName: task.name }),
+        t("sessions.scheduledTasks.dialog.confirm.deleteTask", { taskName: task.title }),
         { destructive: true },
       )
       if (!confirmed) {
@@ -369,7 +400,7 @@ export function ScheduledTasksDialog() {
 
       setMutatingTaskID(task.id)
       try {
-        await deleteScheduledTask(selectedProjectID, task.id)
+        await deleteScheduledTask(directory, task.id)
         await reloadTasks(selectedProjectID, { silent: true })
         toast.success(t("sessions.scheduledTasks.dialog.toast.deleted"))
       } catch (error) {
@@ -378,17 +409,18 @@ export function ScheduledTasksDialog() {
         setMutatingTaskID(null)
       }
     },
-    [selectedProjectID, reloadTasks, t, requestConfirm],
+    [selectedProjectID, directoryForProject, reloadTasks, t, requestConfirm],
   )
 
   const handleRunNow = React.useCallback(
     async (task: ScheduledTask) => {
-      if (!selectedProjectID) {
+      const directory = directoryForProject(selectedProjectID)
+      if (!selectedProjectID || !directory) {
         return
       }
       setMutatingTaskID(task.id)
       try {
-        await runScheduledTaskNow(selectedProjectID, task.id)
+        await runScheduledTaskNow(directory, task.id)
         await Promise.all([reloadTasks(selectedProjectID, { silent: true }), refreshGlobalSessions()])
         toast.success(t("sessions.scheduledTasks.dialog.toast.started"))
       } catch (error) {
@@ -397,7 +429,7 @@ export function ScheduledTasksDialog() {
         setMutatingTaskID(null)
       }
     },
-    [selectedProjectID, reloadTasks, t],
+    [selectedProjectID, directoryForProject, reloadTasks, t],
   )
 
   const projectSelector = (
@@ -464,7 +496,8 @@ export function ScheduledTasksDialog() {
           <div className="space-y-2.5">
             {tasks.map((task) => {
               const isBusy = mutatingTaskID === task.id
-              const status = (task.state?.lastStatus || "idle") as ScheduledTaskStatus
+              const isActive = task.status === "active"
+              const status = task.lastRunStatus
               const meta = STATUS_META[status]
               const statusLabel =
                 status === "success"
@@ -474,19 +507,16 @@ export function ScheduledTasksDialog() {
                     : status === "running"
                       ? t("sessions.scheduledTasks.dialog.status.running")
                       : t("sessions.scheduledTasks.dialog.status.idle")
-              const nextAt = task.state?.nextRunAt
-              const lastAt = task.state?.lastRunAt
+              const nextAt = task.nextRunAt
+              const lastAt = task.lastRunAt
 
               return (
                 <div
                   key={task.id}
-                  className={cn(
-                    "rounded-lg border border-border p-4 transition-opacity",
-                    !task.enabled && "opacity-60",
-                  )}
+                  className={cn("rounded-lg border border-border p-4 transition-opacity", !isActive && "opacity-60")}
                 >
                   <div className="min-w-0">
-                    <div className="typography-ui-header truncate font-semibold text-foreground">{task.name}</div>
+                    <div className="typography-ui-header truncate font-semibold text-foreground">{task.title}</div>
                     <div className="typography-micro truncate text-muted-foreground">{formatSchedule(task, t)}</div>
                   </div>
 
@@ -536,13 +566,13 @@ export function ScheduledTasksDialog() {
                     </span>
                   </div>
 
-                  {task.state?.lastError ? (
+                  {task.lastError ? (
                     <div
                       className="mt-3 flex items-start gap-2 rounded-md border p-2 typography-micro"
                       style={toneStyle("error")}
                     >
                       <Icon name="error-warning" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      <span className="min-w-0 break-words">{task.state.lastError}</span>
+                      <span className="min-w-0 break-words">{task.lastError}</span>
                     </div>
                   ) : null}
 
@@ -550,21 +580,21 @@ export function ScheduledTasksDialog() {
                     <label
                       className={cn(
                         "inline-flex cursor-pointer items-center gap-2 typography-micro font-medium",
-                        task.enabled ? "text-foreground" : "text-muted-foreground",
+                        isActive ? "text-foreground" : "text-muted-foreground",
                         isBusy && "cursor-not-allowed opacity-50",
                       )}
                     >
                       <Checkbox
-                        checked={task.enabled}
+                        checked={isActive}
                         onChange={(enabled) => void handleToggleEnabled(task, enabled)}
                         ariaLabel={
-                          task.enabled
-                            ? t("sessions.scheduledTasks.dialog.taskToggle.pauseAria", { taskName: task.name })
-                            : t("sessions.scheduledTasks.dialog.taskToggle.enableAria", { taskName: task.name })
+                          isActive
+                            ? t("sessions.scheduledTasks.dialog.taskToggle.pauseAria", { taskName: task.title })
+                            : t("sessions.scheduledTasks.dialog.taskToggle.enableAria", { taskName: task.title })
                         }
                         disabled={isBusy}
                       />
-                      {task.enabled
+                      {isActive
                         ? t("sessions.scheduledTasks.dialog.taskToggle.enabled")
                         : t("sessions.scheduledTasks.dialog.taskToggle.paused")}
                     </label>
@@ -581,7 +611,7 @@ export function ScheduledTasksDialog() {
                           setEditorOpen(true)
                         }}
                         disabled={isBusy}
-                        aria-label={t("sessions.scheduledTasks.dialog.actions.editAria", { taskName: task.name })}
+                        aria-label={t("sessions.scheduledTasks.dialog.actions.editAria", { taskName: task.title })}
                       >
                         <Icon name="edit-2" className="h-4 w-4" /> {t("sessions.scheduledTasks.dialog.actions.edit")}
                       </Button>
@@ -590,7 +620,7 @@ export function ScheduledTasksDialog() {
                         size="sm"
                         onClick={() => void handleDeleteTask(task)}
                         disabled={isBusy}
-                        aria-label={t("sessions.scheduledTasks.dialog.actions.deleteAria", { taskName: task.name })}
+                        aria-label={t("sessions.scheduledTasks.dialog.actions.deleteAria", { taskName: task.title })}
                       >
                         <Icon name="delete-bin" className="h-4 w-4" />
                       </Button>
