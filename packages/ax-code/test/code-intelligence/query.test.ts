@@ -638,6 +638,37 @@ describe("CodeGraphQuery.pruneOrphanFiles", () => {
     })
   })
 
+  test("scopePrefix requires a path-separator boundary, not just a shared string prefix", async () => {
+    // A raw string prefix (`LIKE 'scopePrefix%'`) is not a directory
+    // boundary: "/Users/u/proj1" is a string-prefix of both
+    // "/Users/u/proj1-old/…" and "/Users/u/proj10/…" even though neither
+    // is actually inside the "proj1" worktree. Those sibling directories
+    // must survive a prune scoped to "/Users/u/proj1", the same way the
+    // "proj1" vs "proj2" case above is protected.
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeGraphQuery.clearProject(projectID)
+
+        seed(projectID, "/Users/u/proj1/a.ts")
+        seed(projectID, "/Users/u/proj1-old/b.ts")
+        seed(projectID, "/Users/u/proj10/c.ts")
+
+        const result = CodeGraphQuery.pruneOrphanFiles(projectID, new Set(["/Users/u/proj1/a.ts"]), "/Users/u/proj1")
+        expect(result.files).toBe(0)
+
+        const remaining = CodeGraphQuery.listFiles(projectID)
+          .map((f) => f.path)
+          .sort()
+        expect(remaining).toEqual(["/Users/u/proj1-old/b.ts", "/Users/u/proj1/a.ts", "/Users/u/proj10/c.ts"])
+
+        CodeGraphQuery.clearProject(projectID)
+      },
+    })
+  })
+
   test("is a no-op when every known file is live", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

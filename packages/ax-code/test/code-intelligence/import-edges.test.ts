@@ -124,4 +124,21 @@ const lazy = await import("./lazy")
     expect(imports.some((item) => item.includes("string-literal"))).toBe(false)
     expect(imports.some((item) => item.includes("template-literal"))).toBe(false)
   })
+
+  test("resolves imports that already carry an explicit extension", () => {
+    // NodeNext/ESM-style TypeScript and plain CommonJS both commonly
+    // import with the real extension already present (e.g. "./bar.js"
+    // resolving to a source file that literally is bar.js, or "./bar.ts"
+    // in a .ts-first project). The resolved candidate list must include
+    // the exact resolved path — not just path+extra-extension guesses —
+    // or the import edge can never match an indexed file.
+    const text = `
+import { bar } from "./bar.ts"
+const utils = require("./utils.js")
+`
+    const imports = parseImportSpecifiers(text, "/repo/src/main.ts")
+
+    expect(imports).toContain("/repo/src/bar.ts")
+    expect(imports).toContain("/repo/src/utils.js")
+  })
 })

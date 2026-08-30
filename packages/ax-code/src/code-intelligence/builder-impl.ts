@@ -134,6 +134,14 @@ export function parseImportSpecifiers(text: string, absPath: string): string[] {
 
     if (modulePath.startsWith(".") || modulePath.startsWith("/")) {
       const resolved = path.resolve(dir, modulePath)
+      // The specifier may already carry its real extension (explicit
+      // `.js`/`.ts`/etc. imports are the norm for NodeNext/ESM-style
+      // TypeScript and plain CommonJS). Without this candidate, an
+      // already-extensioned import never matches an indexed file: the
+      // loop below only ever appends a *second* extension on top of the
+      // resolved path (e.g. "./bar.ts" -> ".../bar.ts.ts"), so the edge
+      // silently never resolves. Try the resolved path as-is first.
+      imports.push(resolved)
       for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
         imports.push(resolved + ext)
       }

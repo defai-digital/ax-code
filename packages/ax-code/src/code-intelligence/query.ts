@@ -1,3 +1,4 @@
+import path from "path"
 import { Database, eq, and, or, inArray, desc, lt, gte, ne, sql } from "../storage/db"
 import {
   CodeNodeTable,
@@ -371,12 +372,30 @@ export namespace CodeGraphQuery {
       // Escape LIKE wildcards in the walk root so a path containing %/_ is
       // treated literally. drizzle-orm's `like()` has no ESCAPE arg, so
       // express the clause with a raw SQL fragment.
+      //
+      // A raw string prefix is not a directory-boundary check: with just
+      // `scopePrefix + "%"`, a walk rooted at "/a/b/proj1" would also match
+      // "/a/b/proj1-old/…" and "/a/b/proj10/…" — sibling directories that
+      // happen to share the same leading characters — because LIKE has no
+      // concept of a path separator. Since the same project id can appear
+      // in multiple worktrees (the exact scenario this scope prefix exists
+      // to guard, see the function comment above), that false match would
+      // treat a sibling worktree's files as in-scope, find them absent from
+      // `livePaths`, and delete their graph rows. Require the match to be
+      // the prefix itself or the prefix followed by a path separator.
       const escaped = scopePrefix.replace(/([%_\\])/g, "\\$1")
+      const boundary = escaped + path.sep
       return db
         .select({ path: CodeFileTable.path })
         .from(CodeFileTable)
         .where(
-          and(eq(CodeFileTable.project_id, projectID), sql`${CodeFileTable.path} LIKE ${escaped + "%"} ESCAPE '\\'`),
+          and(
+            eq(CodeFileTable.project_id, projectID),
+            or(
+              eq(CodeFileTable.path, scopePrefix),
+              sql`${CodeFileTable.path} LIKE ${boundary + "%"} ESCAPE '\\'`,
+            ),
+          ),
         )
         .all()
     })
