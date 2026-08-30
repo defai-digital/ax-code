@@ -1463,12 +1463,26 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
       return true
     }
 
+    const savedPath = selectedFile.path
+    const savedDraftContent = draftContent
+    // The write below is async — if the user switches to a different file before it
+    // resolves (e.g. via the "discard changes" flow), this closure's `selectedFile`/
+    // `draftContent` are stale. Re-check the live selection before touching any state
+    // that's shared with the currently-displayed file, so a slow save for the old file
+    // can't clobber the newly-opened file's content.
+    const isStillSelected = () => {
+      if (!root) return false
+      const rootState = useFilesViewTabsStore.getState().byRoot[root]
+      const currentPath = rootState?.selectedPath ?? rootState?.openPaths[0] ?? null
+      return currentPath === savedPath
+    }
+
     setIsSaving(true)
 
     try {
       const result = await saveFilesViewDraft({
-        path: selectedFile.path,
-        draftContent,
+        path: savedPath,
+        draftContent: savedDraftContent,
         displayedContent,
         lineEnding: loadedFileLineEnding,
         writeFile: files.writeFile,
@@ -1483,15 +1497,17 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
       if (result.skipped) {
         return true
       }
-      setFileContent(draftContent)
-      // Refresh stat after write so polling doesn't see a stale metadata change.
-      void readFileStat(selectedFile.path)
-        .then((stat) => {
-          if (stat) {
-            lastLoadedFileStatRef.current = stat
-          }
-        })
-        .catch(() => {})
+      if (isStillSelected()) {
+        setFileContent(savedDraftContent)
+        // Refresh stat after write so polling doesn't see a stale metadata change.
+        void readFileStat(savedPath)
+          .then((stat) => {
+            if (stat && isStillSelected()) {
+              lastLoadedFileStatRef.current = stat
+            }
+          })
+          .catch(() => {})
+      }
       return true
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t("filesView.toast.saveFailed"))
@@ -1499,7 +1515,18 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = "full" }) => {
     } finally {
       setIsSaving(false)
     }
-  }, [displayedContent, draftContent, files, isDirty, loadedFileLineEnding, readFileStat, selectedFile, selectedFileReadOptions, t])
+  }, [
+    displayedContent,
+    draftContent,
+    files,
+    isDirty,
+    loadedFileLineEnding,
+    readFileStat,
+    root,
+    selectedFile,
+    selectedFileReadOptions,
+    t,
+  ])
 
   React.useEffect(() => {
     if (!isDirty) {
