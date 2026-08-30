@@ -182,6 +182,19 @@ export const GithubRunCommand = cmd({
       let octoGraph: typeof graphql
       let session: { id: SessionID; title: string; version: string }
       let exitCode = 0
+      // Tracks whether `appToken`/`octoRest`/`octoGraph` were actually
+      // assigned. A failure during OIDC token exchange (network error,
+      // misconfigured OIDC_BASE_URL, missing id-token permission, etc.)
+      // throws before those assignments run. Without this flag, the catch
+      // block below would dereference the still-unassigned `octoRest!` /
+      // `appToken!` and crash with an unhandled TypeError instead of
+      // reporting the real error via `core.setFailed`.
+      let credentialsReady = false
+      // Tracks whether `configureGit` actually ran, so `restoreGitConfig`
+      // in `finally` doesn't unset local git config that this run never set
+      // (e.g. when an error occurs between credential setup and
+      // `configureGit`, such as a failure fetching the user prompt).
+      let gitConfigured = false
       const triggerCommentId = isCommentEvent
         ? (payload as IssueCommentEvent | PullRequestReviewCommentEvent).comment.id
         : undefined
@@ -217,6 +230,7 @@ export const GithubRunCommand = cmd({
         octoGraph = graphql.defaults({
           headers: { authorization: `token ${appToken}` },
         })
+        credentialsReady = true
 
         const { userPrompt, promptFiles } = await getUserPrompt({
           eventName: context.eventName,
@@ -232,6 +246,7 @@ export const GithubRunCommand = cmd({
           savedUserName = config.savedUserName
           savedUserEmail = config.savedUserEmail
           savedGitConfig = config.savedGitConfig
+          gitConfigured = true
         }
 
         if (isUserEvent) {
@@ -356,15 +371,22 @@ export const GithubRunCommand = cmd({
         exitCode = 1
         console.error(toErrorMessage(e))
         const msg = formatGitHubAgentFailureMessage(e)
-        if (isUserEvent) {
+        // Only attempt to comment/react if credential setup actually
+        // succeeded — otherwise octoRest/appToken were never assigned and
+        // dereferencing them here would crash instead of reporting `msg`.
+        if (isUserEvent && credentialsReady) {
           await createComment(octoRest!, owner, repo, issueId!, `${msg}${footer()}`)
           await removeReaction(octoRest!, owner, repo, triggerCommentId, issueId, commentType)
         }
         core.setFailed(msg)
       } finally {
         if (!useGithubToken) {
-          await restoreGitConfig(gitRun, isMock, savedUserName, savedUserEmail, savedGitConfig)
-          await revokeAppToken(appToken!)
+          if (gitConfigured) {
+            await restoreGitConfig(gitRun, isMock, savedUserName, savedUserEmail, savedGitConfig)
+          }
+          if (credentialsReady) {
+            await revokeAppToken(appToken!)
+          }
         }
       }
       process.exit(exitCode)
