@@ -44,8 +44,11 @@ export namespace ProviderError {
     // classified separately as request-body overflow below. Keep the bare-400
     // fallback Mistral-specific: an empty-body 400 from any other provider is
     // usually a gateway or parameter rejection, and classifying it as context
-    // overflow would disable retries and trigger unwarranted compaction.
-    if (providerID !== undefined && providerID !== "mistral") return false
+    // overflow would disable retries and trigger unwarranted compaction. This
+    // must also apply when providerID is unknown (undefined) — callers that
+    // cannot supply one (e.g. parseStreamError, isRequestTooLarge's internal
+    // exclusion check) must not have a bare 400 misclassified as overflow.
+    if (providerID !== "mistral") return false
     return /^400\s*(status code)?\s*\(no body\)/i.test(message)
   }
 
