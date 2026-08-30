@@ -622,7 +622,7 @@ export const ProvidersLoginCommand = cmd({
             prompts.outro("Done")
             return
           }
-          if (typeof wellknown.auth.env !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(wellknown.auth.env)) {
+          if (typeof wellknown.auth?.env !== "string" || !/^[A-Z][A-Z0-9_]*$/.test(wellknown.auth.env)) {
             prompts.log.error("Well-known config has missing or invalid auth.env (expected uppercase env var name)")
             prompts.outro("Done")
             return

@@ -618,4 +618,34 @@ describe("providers command", () => {
       spawnSpy.mockRestore()
     }
   })
+
+  test("well-known login rejects a response with no auth field instead of throwing", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const passwordSpy = vi.spyOn(prompts, "password")
+
+    vi.spyOn(Ssrf, "assertPublicUrl").mockResolvedValue(undefined as never)
+    vi.spyOn(Ssrf, "pinnedFetch").mockResolvedValue({
+      ok: true,
+      async json() {
+        return {}
+      },
+    } as any)
+
+    try {
+      await ProvidersLoginCommand.handler({ url: "https://example.com" } as any)
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Well-known config has missing or invalid auth.env (expected uppercase env var name)",
+      )
+      expect(passwordSpy).not.toHaveBeenCalled()
+      expect(outroSpy).toHaveBeenCalledWith("Done")
+    } finally {
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      passwordSpy.mockRestore()
+    }
+  })
 })

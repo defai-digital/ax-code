@@ -16,6 +16,7 @@ import os from "os"
 import path from "path"
 import type { Dirent } from "fs"
 import { Global } from "../../../global"
+import { Installation } from "../../../installation"
 import { cmd } from "../cmd"
 import { asRecordOrUndefined } from "../../../util/record"
 import { parseJsonRecord } from "../../../util/json-record"
@@ -1140,7 +1141,7 @@ export const ExplainCommand = cmd({
 
     const report: DiagnosticReport = {
       timestamp: new Date().toISOString(),
-      version: "2.12.3",
+      version: Installation.VERSION,
       platform: `${process.platform} ${process.arch}`,
       sessionCount: sessionIDs.size,
       errorCount: standard.totalErrors,
