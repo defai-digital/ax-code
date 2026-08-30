@@ -393,7 +393,7 @@
         {
           "fingerprint": "616e9a85a1ac74bf4aa42b2a1c21026a7b60731d4a70f92544fded017a54af78",
           "file": "src/tool/bash-impl.ts",
-          "line": 966,
+          "line": 1045,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -401,7 +401,7 @@
         {
           "fingerprint": "7ac7861499fb5659192755521a995cb986131131d27df7ee50928f79b8ce6e9e",
           "file": "src/tool/bash-impl.ts",
-          "line": 967,
+          "line": 1046,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -409,7 +409,7 @@
         {
           "fingerprint": "b6ccd991efa86426087f6ba13ff4e83712d6ca771983e62f3a71feaca628587b",
           "file": "src/tool/bash-impl.ts",
-          "line": 1120,
+          "line": 1199,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -417,7 +417,7 @@
         {
           "fingerprint": "6fa902c9ef2e19fef4950c3cb389c828b2c25d063b008fac5c59728669fed0c9",
           "file": "src/tool/bash-impl.ts",
-          "line": 1143,
+          "line": 1222,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -425,7 +425,7 @@
         {
           "fingerprint": "c07b490b40e828a68cca6bdcd2c78f4c0541794987facbafdaaa5823e50176eb",
           "file": "src/tool/bash-impl.ts",
-          "line": 1157,
+          "line": 1236,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -433,7 +433,7 @@
         {
           "fingerprint": "d06989df56dc6957119f0a631d5c65722afbd4be54f36afbf614bd98c7ef6fc9",
           "file": "src/tool/bash-impl.ts",
-          "line": 1162,
+          "line": 1241,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -782,7 +782,7 @@
         {
           "fingerprint": "a5cca76fee89225319b14ba89e06204565a0e3a65d07ad7a566783519ecd883f",
           "file": "src/tool/grep.ts",
-          "line": 171,
+          "line": 177,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -1054,7 +1054,7 @@
         {
           "fingerprint": "87c7b21f04ac03f6e4b102a847e4dbe099691fc23802528c5c0fbf57cff65be5",
           "file": "src/cli/cmd/providers-impl.ts",
-          "line": 32,
+          "line": 33,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1062,7 +1062,7 @@
         {
           "fingerprint": "1adbc1adf1d0b356cb6104d40110bb15086d4afd656fa18c6b74a2111fb168b7",
           "file": "src/cli/cmd/run.ts",
-          "line": 597,
+          "line": 655,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -1070,7 +1070,7 @@
         {
           "fingerprint": "aeb732a3e004738dcf5dceb3c1b29b0e98191cd2c2425912729796cc339015d5",
           "file": "src/cli/cmd/run.ts",
-          "line": 633,
+          "line": 691,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1142,7 +1142,7 @@
         {
           "fingerprint": "97eeeb757f34ce4d55118a56b69bd51d17ad55095c5db4eae7cfaff503359414",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 332,
+          "line": 337,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1150,23 +1150,23 @@
         {
           "fingerprint": "48f54bc148eb5180e0123041431ebccf20771a986046fb8c387a324c7132d265",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 748,
+          "line": 753,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "65bacb05678f35c089f21525992017993e41f0ba68304140c28f106127c1d25d",
+          "fingerprint": "336e33d0cd1658980f92760fe283fc9edb7aa6969cd4e5d4760dfda05b3e5ab6",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 752,
+          "line": 757,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "979d237f7a12e8860ab3cde0df1010acbab07970e01d5ec8376a2a2ae86ab33a",
+          "fingerprint": "6ad19391e26c89923ee286f25e5a2c5eb130ce640c62cc9a1653fb3f020e2f94",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 756,
+          "line": 764,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1174,7 +1174,7 @@
         {
           "fingerprint": "94835321fd4764acd5d2c20ae85163b425d19914a8b36ddbabfa6a2871e22f98",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 1010,
+          "line": 1018,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1182,7 +1182,7 @@
         {
           "fingerprint": "2f4fc5cf64d2ce458bf6389bbafeb79f101cc1e5f045b945f5d745710aa36c83",
           "file": "src/cli/cmd/tui/component/prompt/index.tsx",
-          "line": 1584,
+          "line": 1592,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1838,7 +1838,7 @@
         {
           "fingerprint": "3fc3755942afed7d82ed9c83b15e7f265e935fd18dd464c7f194e11c9478a140",
           "file": "src/tool/bash-impl.ts",
-          "line": 737,
+          "line": 809,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1854,7 +1854,7 @@
         {
           "fingerprint": "a9f867e5661ce93894d1d55b04f74e9b2cb8d5119e435685b31a5903e583fab6",
           "file": "src/tool/grep.ts",
-          "line": 238,
+          "line": 244,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1910,7 +1910,7 @@
         {
           "fingerprint": "cd25b053641c24a7e79247da1f07f90a27dbceedf0e0378c9eb1d7b06847c326",
           "file": "src/util/log.ts",
-          "line": 459,
+          "line": 476,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -2379,7 +2379,7 @@
         {
           "fingerprint": "cb2d7dcc5ec3d020af2baadc44a15cf3bf772cef162164ae02c3a28cff4ca21c",
           "file": "src/agent/agent.ts",
-          "line": 88,
+          "line": 93,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2387,7 +2387,7 @@
         {
           "fingerprint": "b0e1471cb5a328f5aa95db056002138d29cf019a0112c82506908a00677c4cbd",
           "file": "src/agent/agent.ts",
-          "line": 161,
+          "line": 166,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2395,7 +2395,7 @@
         {
           "fingerprint": "bb9ea2d49e8ff2cbba7920dab203eca4aa2d7b78e4ca81ed8df7be61db1d862f",
           "file": "src/agent/agent.ts",
-          "line": 188,
+          "line": 193,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2723,7 +2723,7 @@
         {
           "fingerprint": "6bebd3da9de8946abce7d59dae34102e4948d45522bcc14cf6567eb2e88c7936",
           "file": "src/cli/cmd/mcp-impl.ts",
-          "line": 563,
+          "line": 558,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2731,7 +2731,7 @@
         {
           "fingerprint": "412ee4a45f8bb6b10605bcfeca703f0605f4b454dbb276e5b96d4b6200af6715",
           "file": "src/cli/cmd/mcp-impl.ts",
-          "line": 566,
+          "line": 561,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2859,7 +2859,7 @@
         {
           "fingerprint": "26f9faed8230a9c47613e591cde93bf832e41420c4af8c94d967cbaf3a2be26e",
           "file": "src/cli/cmd/run.ts",
-          "line": 242,
+          "line": 263,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
@@ -2867,7 +2867,7 @@
         {
           "fingerprint": "9342baba56a2e3ba03eaaaeb1e5be5559a06065d619e0f414c6f87b0d8518c17",
           "file": "src/cli/cmd/run.ts",
-          "line": 451,
+          "line": 508,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2875,15 +2875,15 @@
         {
           "fingerprint": "1eda4272de8a4ea536cdfc27a75e3af8aa68b2185e8d9257ddf321a7f2eaaa0a",
           "file": "src/cli/cmd/run.ts",
-          "line": 458,
+          "line": 515,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "5cdd7474a0b8db7c59b0e473b979e7daa3c22a04149964e21517d7c119219199",
+          "fingerprint": "6de2f8c078c30477597d3011651f6187e13c2d3aff538a466b0b77abe54808e1",
           "file": "src/cli/cmd/run.ts",
-          "line": 571,
+          "line": 629,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
@@ -2891,7 +2891,7 @@
         {
           "fingerprint": "8abe35e3599e300098c2ccfc56f040ce0dd638c7464afed812d34d750198a79a",
           "file": "src/cli/cmd/run.ts",
-          "line": 954,
+          "line": 1021,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
@@ -5259,15 +5259,15 @@
         {
           "fingerprint": "566d2d2d9ac2bb229c198b1efce40c2e20d5632ec396919419b422daa334e453",
           "file": "src/tool/bash-impl.ts",
-          "line": 698,
+          "line": 731,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "57de424b8016950733e8dab756f0f697b0051afe3441e7564eeb99ce31fbc3ca",
+          "fingerprint": "3050f2563644be95bb5f7a725021a2c7ac7640191a4ace72910329b23bcf4628",
           "file": "src/tool/bash-impl.ts",
-          "line": 730,
+          "line": 763,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5744,7 +5744,7 @@
         {
           "fingerprint": "b006250416be179404e7334fdb6340ab37158743639f16c84350ad1ec693de87",
           "file": "src/cli/cmd/mcp-impl.ts",
-          "line": 285,
+          "line": 284,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -5752,7 +5752,7 @@
         {
           "fingerprint": "a84c73ed702ef2703d9db7463e2ae6b71ccb935dc5ba01979c2038a46e0e5028",
           "file": "src/cli/cmd/mcp-impl.ts",
-          "line": 747,
+          "line": 741,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
