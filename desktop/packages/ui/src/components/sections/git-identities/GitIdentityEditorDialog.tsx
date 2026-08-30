@@ -57,6 +57,8 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
   const createProfile = useGitIdentitiesStore((s) => s.createProfile)
   const updateProfile = useGitIdentitiesStore((s) => s.updateProfile)
   const deleteProfile = useGitIdentitiesStore((s) => s.deleteProfile)
+  const defaultGitIdentityId = useGitIdentitiesStore((s) => s.defaultGitIdentityId)
+  const setDefaultGitIdentityId = useGitIdentitiesStore((s) => s.setDefaultGitIdentityId)
 
   const selectedProfile = React.useMemo(
     () => (profileId && profileId !== "new" && !importData ? getProfileById(profileId) : null),
@@ -183,6 +185,12 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
     try {
       const success = await deleteProfile(profileId)
       if (success) {
+        // Deleting a profile doesn't touch the separate defaultGitIdentityId setting —
+        // clear it here so we don't leave a dangling reference that silently breaks
+        // auto-applied identities on newly opened repos.
+        if (defaultGitIdentityId === profileId) {
+          void setDefaultGitIdentityId(null)
+        }
         toast.success(t("settings.gitIdentities.editor.toast.profileDeleted"))
         setIsDeleteDialogOpen(false)
         onOpenChange(false)

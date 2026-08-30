@@ -110,6 +110,12 @@ export const GitPage: React.FC = () => {
     setIsDeletePending(true)
     const success = await deleteProfile(deleteDialogProfile.id)
     if (success) {
+      // Deleting a profile doesn't touch the separate defaultGitIdentityId setting —
+      // clear it here so we don't leave a dangling reference that silently breaks
+      // auto-applied identities on newly opened repos.
+      if (defaultGitIdentityId === deleteDialogProfile.id) {
+        void setDefaultGitIdentityId(null)
+      }
       toast.success(t("settings.gitIdentities.page.toast.profileDeleted", { name: deleteDialogProfile.name }))
       setDeleteDialogProfile(null)
     } else {
