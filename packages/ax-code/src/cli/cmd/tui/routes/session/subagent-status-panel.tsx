@@ -3,7 +3,6 @@ import type { MouseEvent } from "@ax-code/tui"
 import { useRenderer } from "@ax-code/tui/solid"
 import { Spinner } from "@tui/component/spinner"
 import { useTheme } from "@tui/context/theme"
-import { Locale } from "@/util/locale"
 import { stringWidth } from "@/bun/node-compat"
 import { truncateToCellWidth } from "./last-input-view-model"
 import { subagentPanelHeaderSummary, subagentPanelTitle } from "./subagent-status-view"
@@ -48,17 +47,21 @@ export function SubagentStatusPanel(props: {
   const summary = createMemo(() => subagentPanelHeaderSummary(props.view))
   const summaryBudget = createMemo(() => {
     const staleText = stale() > 0 ? stringWidth(`${stale()} without updates`) + 1 : 0
-    // Border + padding + spinner cell + separators + the toggle glyph.
-    const chrome = 8 + stringWidth(title()) + staleText
+    // Left border (1) + padding (1+1) + spinner cell/gap (1+1) + toggle
+    // glyph/space (1+1) + the " · " separator (3) = 10.
+    const chrome = 10 + stringWidth(title()) + staleText
     return Math.max(0, props.width - chrome)
   })
 
   // Truncate a row's title to what the row can actually show instead of a
   // fixed 60 columns: on narrow panes the old fixed budget let the flexbox
   // hard-clip the title mid-word while wide panes wasted space.
-  function rowTitleBudget(item: SubagentStatusItem) {
-    const right = 12 + (showModel() && item.model ? 26 : 0)
-    const left = stringWidth(`${item.agent ?? "Agent"} `) + stringWidth(` — ${item.activity}`)
+  function rowTitleBudget(item: SubagentStatusItem, activity: string) {
+    // Elapsed text (up to ~6 cols) + 2 gaps + "[↗]" + "[×]" = 14; plus the
+    // model column (truncated to 22 cols) and its gap when shown.
+    const right = 14 + (showModel() && item.model ? 26 : 0)
+    // Spinner glyph + its gap (2) precede the agent name in the same row.
+    const left = 2 + stringWidth(`${item.agent ?? "Agent"} `) + stringWidth(` — ${activity}`)
     return Math.max(8, props.width - right - left)
   }
 
@@ -95,7 +98,7 @@ export function SubagentStatusPanel(props: {
           }}
         >
           <box flexDirection="row" flexShrink={1} overflow="hidden">
-            <Spinner color={stale() > 0 ? theme.warning : theme.accent}>
+            <Spinner color={stale() > 0 ? theme.warning : theme.accent} fallbackPrefix="">
               <span style={{ fg: theme.text, bold: true }}>
                 {props.collapsed ? "▸" : "▾"} {title()}
               </span>
@@ -119,6 +122,7 @@ export function SubagentStatusPanel(props: {
                 if (stopping() || item.stale) return theme.warning
                 return hovered() === item.id ? theme.text : theme.textMuted
               })
+              const activityText = createMemo(() => (stopping() ? "Stopping" : item.activity))
               return (
                 <box
                   height={1}
@@ -134,11 +138,11 @@ export function SubagentStatusPanel(props: {
                     <Spinner color={rowColor()}>
                       <span style={{ fg: theme.primary }}>{item.agent ?? "Agent"}</span>{" "}
                       <span style={{ fg: hovered() === item.id ? theme.text : theme.textMuted }}>
-                        {truncateToCellWidth(item.title, rowTitleBudget(item))}
+                        {truncateToCellWidth(item.title, rowTitleBudget(item, activityText()))}
                       </span>
                       <span style={{ fg: item.stale ? theme.warning : theme.textMuted }}>
                         {" — "}
-                        {stopping() ? "Stopping" : item.activity}
+                        {activityText()}
                       </span>
                     </Spinner>
                   </box>
@@ -146,7 +150,7 @@ export function SubagentStatusPanel(props: {
                   <box height={1} flexDirection="row" flexShrink={0} gap={1}>
                     <Show when={showModel() && item.model}>
                       <text fg={theme.textMuted} wrapMode="none">
-                        {Locale.truncate(item.model ?? "", 22)}
+                        {truncateToCellWidth(item.model ?? "", 22)}
                       </text>
                     </Show>
                     <Show when={item.elapsed}>

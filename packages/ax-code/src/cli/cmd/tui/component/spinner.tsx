@@ -13,14 +13,20 @@ export function AxTuiSpinner(props: { frames: string[]; interval: number; color:
   return <spinner frames={props.frames} interval={props.interval} color={props.color} />
 }
 
-export function Spinner(props: { children?: JSX.Element; color?: RGBA }) {
+export function Spinner(props: { children?: JSX.Element; color?: RGBA; fallbackPrefix?: string }) {
   const { theme } = useTheme()
   const kv = useKV()
   const color = () => props.color ?? theme.textMuted
+  const fallbackPrefix = () => props.fallbackPrefix ?? "... "
   return (
     <Show
       when={shouldUseTuiAnimations({ userEnabled: kv.get("animations_enabled", true) })}
-      fallback={<text fg={color()}>... {props.children}</text>}
+      fallback={
+        <text fg={color()}>
+          {fallbackPrefix()}
+          {props.children}
+        </text>
+      }
     >
       <box flexDirection="row" gap={1}>
         <AxTuiSpinner frames={frames} interval={80} color={color()} />

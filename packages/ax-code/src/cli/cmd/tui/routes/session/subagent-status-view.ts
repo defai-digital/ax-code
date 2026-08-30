@@ -1,3 +1,5 @@
+import { Locale } from "@/util/locale"
+
 export type SubagentTaskStatus =
   | "pending"
   | "running"
@@ -248,7 +250,7 @@ export function buildSubagentStatusView(input: {
 
 /** Panel header title: keeps the count visible while staying grammatical for one. */
 export function subagentPanelTitle(activeCount: number) {
-  return activeCount === 1 ? "Subagent" : `Subagents ${activeCount}`
+  return Locale.pluralize(activeCount, "Subagent", "Subagents {}")
 }
 
 // Lead-line summary for the panel header so even a collapsed panel tells the
