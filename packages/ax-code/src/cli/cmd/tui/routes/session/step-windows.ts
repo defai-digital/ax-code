@@ -59,9 +59,7 @@ export function parseStepTokenWindows(
     if (part.type === "tool") {
       const state = part.state && typeof part.state === "object" ? (part.state as { time?: unknown }) : undefined
       const time =
-        state?.time && typeof state.time === "object"
-          ? (state.time as { start?: unknown; end?: unknown })
-          : undefined
+        state?.time && typeof state.time === "object" ? (state.time as { start?: unknown; end?: unknown }) : undefined
       const start = typeof time?.start === "number" && Number.isFinite(time.start) ? time.start : undefined
       if (start === undefined) continue
       if (step.toolStart === undefined || start < step.toolStart) step.toolStart = start

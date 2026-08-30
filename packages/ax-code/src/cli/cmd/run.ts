@@ -35,6 +35,7 @@ import { extractRunFinalAssistantText, handleRunStructuredOutput, resolveRunOutp
 import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 import { sameSkuOnConnectedProvider } from "../../provider/model-selectability"
 import { readNonTtyStdin } from "../stdin"
+import { CLI_CONCISE_MAX_LINES, diffSummary, formatDiffSummary, tailLines } from "../../util/tool-output"
 
 type ToolProps<T extends Tool.Info> = {
   input: Tool.InferParameters<T>
@@ -86,11 +87,30 @@ function describeFilesystemSearchTool(input: { label: string; pattern: string; r
   })
 }
 
-function block(info: Inline, output?: string) {
+function omittedHint(capped: { total: number; truncated: boolean }) {
+  if (!capped.truncated) return
+  UI.println(
+    UI.Style.TEXT_DIM +
+      `… ${capped.total - CLI_CONCISE_MAX_LINES} more lines omitted (${capped.total} total); pass --full to show all` +
+      UI.Style.TEXT_NORMAL,
+  )
+}
+
+// Renders a completed tool block. Concise by default: long output is reduced
+// to its tail (failures cluster at the end) with an omission hint; --full
+// restores the previous full-output behavior for auditing.
+function block(info: Inline, output: string | undefined, full: boolean) {
   UI.empty()
   inline(info)
   if (!output?.trim()) return
-  UI.println(output)
+  if (full) {
+    UI.println(output)
+    UI.empty()
+    return
+  }
+  const capped = tailLines(output)
+  UI.println(capped.text)
+  omittedHint(capped)
   UI.empty()
 }
 
@@ -229,13 +249,14 @@ function read(info: ToolProps<typeof ReadTool>) {
   })
 }
 
-function write(info: ToolProps<typeof WriteTool>) {
+function write(info: ToolProps<typeof WriteTool>, full: boolean) {
   block(
     {
       icon: "←",
       title: `Write ${normalizePath(info.input.filePath)}`,
     },
     completedOutput(info.part.state.status, toolStateOutput(info.part)),
+    full,
   )
 }
 
@@ -246,16 +267,29 @@ function webfetch(info: ToolProps<typeof WebFetchTool>) {
   })
 }
 
-function edit(info: ToolProps<typeof EditTool>) {
+function edit(info: ToolProps<typeof EditTool>, full: boolean) {
   const title = normalizePath(info.input.filePath)
-  const diff = info.metadata.diff
-  block(
-    {
-      icon: "←",
-      title: `Edit ${title}`,
-    },
-    diff,
-  )
+  if (full) {
+    block(
+      {
+        icon: "←",
+        title: `Edit ${title}`,
+      },
+      info.metadata.diff,
+      true,
+    )
+    return
+  }
+  UI.empty()
+  inline({
+    icon: "←",
+    title: `Edit ${title}`,
+  })
+  const summary = diffSummary(info.metadata.diff)
+  if (summary) {
+    UI.println(UI.Style.TEXT_DIM + `${formatDiffSummary(summary)}; pass --full to show the diff` + UI.Style.TEXT_NORMAL)
+  }
+  UI.empty()
 }
 
 function codesearch(info: ToolProps<typeof CodeSearchTool>) {
@@ -296,7 +330,7 @@ function skill(info: ToolProps<typeof SkillTool>) {
   })
 }
 
-function bash(info: ToolProps<typeof BashTool>) {
+function bash(info: ToolProps<typeof BashTool>, full: boolean) {
   const output = completedOutput(info.part.state.status, toolStateOutput(info.part), true)
   block(
     {
@@ -304,17 +338,35 @@ function bash(info: ToolProps<typeof BashTool>) {
       title: `${info.input.command}`,
     },
     output,
+    full,
   )
 }
 
-function todo(info: ToolProps<typeof TodoWriteTool>) {
-  block(
-    {
-      icon: "#",
-      title: "Todos",
-    },
-    Todo.formatCheckboxLines(info.input.todos).join("\n"),
+function todo(info: ToolProps<typeof TodoWriteTool>, full: boolean) {
+  if (full) {
+    block(
+      {
+        icon: "#",
+        title: "Todos",
+      },
+      Todo.formatCheckboxLines(info.input.todos).join("\n"),
+      true,
+    )
+    return
+  }
+  UI.empty()
+  inline({
+    icon: "#",
+    title: "Todos",
+  })
+  const todos = info.input.todos
+  const done = todos.filter((item) => item.status === "completed").length
+  UI.println(
+    UI.Style.TEXT_DIM +
+      `${Todo.countActive(todos)} active · ${done} done · ${todos.length} total; pass --full to show the list` +
+      UI.Style.TEXT_NORMAL,
   )
+  UI.empty()
 }
 
 function normalizePath(input?: string) {
@@ -415,6 +467,11 @@ export const RunCommand = cmd({
       .option("thinking", {
         type: "boolean",
         describe: "show thinking blocks",
+        default: false,
+      })
+      .option("full", {
+        type: "boolean",
+        describe: "show full tool output (diffs, command output, todo list) instead of concise summaries",
         default: false,
       })
       .option("replay", {
@@ -562,18 +619,19 @@ export const RunCommand = cmd({
     async function execute(sdk: AxCodeClient) {
       function tool(part: ToolPart) {
         try {
-          if (part.tool === "bash") return bash(props<typeof BashTool>(part))
+          const full = Boolean(args.full)
+          if (part.tool === "bash") return bash(props<typeof BashTool>(part), full)
           if (part.tool === "glob") return glob(props<typeof GlobTool>(part))
           if (part.tool === "grep") return grep(props<typeof GrepTool>(part))
           if (part.tool === "list") return list(props<typeof ListTool>(part))
           if (part.tool === "read") return read(props<typeof ReadTool>(part))
-          if (part.tool === "write") return write(props<typeof WriteTool>(part))
+          if (part.tool === "write") return write(props<typeof WriteTool>(part), full)
           if (part.tool === "webfetch") return webfetch(props<typeof WebFetchTool>(part))
-          if (part.tool === "edit") return edit(props<typeof EditTool>(part))
+          if (part.tool === "edit") return edit(props<typeof EditTool>(part), full)
           if (part.tool === "codesearch") return codesearch(props<typeof CodeSearchTool>(part))
           if (part.tool === "websearch") return websearch(props<typeof WebSearchTool>(part))
           if (part.tool === "task") return task(props<typeof TaskTool>(part))
-          if (part.tool === "todowrite") return todo(props<typeof TodoWriteTool>(part))
+          if (part.tool === "todowrite") return todo(props<typeof TodoWriteTool>(part), full)
           if (part.tool === "skill") return skill(props<typeof SkillTool>(part))
           return fallback(part)
         } catch (error) {
@@ -647,7 +705,16 @@ export const RunCommand = cmd({
                 icon: "✗",
                 title: `${part.tool} failed`,
               })
-              UI.error(part.state.error)
+              // Errors always render, even in concise mode; only their line
+              // count is capped (tail) so a huge stack/build log cannot flood
+              // the transcript. --full restores the uncapped error text.
+              if (args.full) {
+                UI.error(part.state.error)
+                continue
+              }
+              const cappedError = tailLines(part.state.error)
+              UI.error(cappedError.text)
+              omittedHint(cappedError)
             }
 
             if (

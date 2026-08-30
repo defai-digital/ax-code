@@ -2,6 +2,12 @@ import path from "path"
 import { LANGUAGE_EXTENSIONS } from "@ax-code/ax-code-intel/language"
 import { Filesystem } from "@/util/filesystem"
 
+// Diff/line-capping helpers live in @/util/tool-output so the
+// non-interactive `ax-code run` renderer shares one implementation with the
+// TUI without importing TUI route modules.
+export { diffSummary, capLines, EXPANDED_OUTPUT_MAX_LINES } from "@/util/tool-output"
+export type { DiffSummary } from "@/util/tool-output"
+
 export const diagnostics = (input: Record<string, Record<string, any>[]> | undefined, file: string) => {
   const normalized = Filesystem.normalizePath(file)
   const list = input?.[normalized] ?? []
@@ -47,30 +53,6 @@ export const workdir = (base: string | undefined, home: string | undefined, inpu
   return Filesystem.contains(home, absolute) ? Filesystem.shortenHome(absolute, home) : absolute
 }
 
-// Parse a unified-diff string and return hunk/added/removed counts.
-// Returns undefined when the input is empty or contains no hunks so
-// callers can `<Show when={summary()}>` without rendering a noisy chip
-// on binary/empty patches. Lines starting with `+++` / `---` are file
-// headers, not content, and are excluded from the +/− tallies.
-export type DiffSummary = { hunks: number; added: number; removed: number }
-export const diffSummary = (diff?: string): DiffSummary | undefined => {
-  if (!diff) return undefined
-  let hunks = 0
-  let added = 0
-  let removed = 0
-  for (const line of diff.split("\n")) {
-    if (line.startsWith("@@")) hunks++
-    else if (line.startsWith("+++")) continue
-    else if (line.startsWith("---")) continue
-    else if (line.startsWith("+")) added++
-    else if (line.startsWith("-")) removed++
-  }
-  // A context-only or empty patch (hunk headers but no +/- content) carries
-  // no signal worth surfacing — suppress so we don't render "1 hunks · +0 −0".
-  if (added === 0 && removed === 0) return undefined
-  return { hunks, added, removed }
-}
-
 // Format a millisecond duration as "Xs" or "Xm Ys". Used by the
 // session graph/rollback/dre helpers — the existing util/format
 // formatDuration takes seconds, drops trailing "0s" / "0m", and adds
@@ -81,19 +63,4 @@ export const duration = (ms?: number): string => {
   if (sec < 60) return `${sec}s`
   const min = Math.floor(sec / 60)
   return `${min}m ${sec % 60}s`
-}
-
-// Hard cap for expanded tool-output rendering. Write input content is not
-// server-truncated, so a multi-MB write would otherwise split and render in
-// full and stall the transcript. `total` always reports the full line count
-// so callers can show a "… truncated, N lines total" affordance.
-export const EXPANDED_OUTPUT_MAX_LINES = 500
-
-export const capLines = (
-  lines: string[],
-  max = EXPANDED_OUTPUT_MAX_LINES,
-): { text: string; total: number; truncated: boolean } => {
-  const total = lines.length
-  if (total <= max) return { text: lines.join("\n"), total, truncated: false }
-  return { text: lines.slice(0, max).join("\n"), total, truncated: true }
 }

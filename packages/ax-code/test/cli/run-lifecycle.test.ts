@@ -433,3 +433,42 @@ test("autonomous pulse timer does not keep the process alive", async () => {
   expect(intervalBlock).toContain("unrefTimer(timer, input.unref)")
   expect(intervalBlock).toContain("clearInterval(timer)")
 })
+
+test("run command defaults to concise tool output with an opt-in --full flag", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+
+  expect(src).toContain('.option("full"')
+  expect(src).toContain(
+    'describe: "show full tool output (diffs, command output, todo list) instead of concise summaries"',
+  )
+
+  // The four block-rendering tools thread the flag through the dispatch.
+  expect(src).toContain("bash(props<typeof BashTool>(part), full)")
+  expect(src).toContain("write(props<typeof WriteTool>(part), full)")
+  expect(src).toContain("edit(props<typeof EditTool>(part), full)")
+  expect(src).toContain("todo(props<typeof TodoWriteTool>(part), full)")
+
+  // Concise mode reuses the shared shaping helpers instead of printing raw output.
+  expect(src).toContain('from "../../util/tool-output"')
+  expect(src).toContain("tailLines(output)")
+  expect(src).toContain("diffSummary(info.metadata.diff)")
+  expect(src).toContain("formatDiffSummary(summary)")
+  expect(src).toContain("pass --full")
+})
+
+test("run command caps error text but never hides it in concise mode", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+
+  expect(src).toContain("const cappedError = tailLines(part.state.error)")
+  expect(src).toContain("UI.error(cappedError.text)")
+  // The full flag still restores uncapped errors.
+  expect(src).toContain("UI.error(part.state.error)")
+})
+
+test("run command json format still short-circuits before tool rendering", async () => {
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  const emitShort = src.indexOf('if (emit("tool_use", { part })) continue')
+  const render = src.indexOf("tool(part)", emitShort)
+  expect(emitShort).toBeGreaterThan(-1)
+  expect(render).toBeGreaterThan(emitShort)
+})

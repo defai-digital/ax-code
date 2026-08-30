@@ -232,6 +232,8 @@ ax-code run "Fix all TypeScript errors in src/"
 AX_CODE_AUTONOMOUS=true ax-code run "Migrate API routes"
 ```
 
+`ax-code run` prints concise tool output by default: command output is reduced to its tail, edits show a diff summary, and todo writes show a one-line progress count. Errors are never hidden — they render with the same tail cap as other output. Pass `--full` to restore complete tool output (full diffs, untruncated command output, full todo lists) for auditing.
+
 ## Safety Guarantees
 
 Even with autonomous mode on:
