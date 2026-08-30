@@ -453,6 +453,24 @@ export namespace ACP {
             log.error("unexpected error when fetching message", { error: err })
             return undefined
           })
+        // Restore the model/mode actually last used on this session (see
+        // loadSession) before replaying. Without this, a forked session that
+        // was last driven in a restricted agent (e.g. "plan") silently
+        // reports and runs under the default agent instead — a permission
+        // regression, since prompt() picks the agent from
+        // sessionManager.getModel()/modeId.
+        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
+        if (lastUser?.role === "user") {
+          mode.models.currentModelId = providerModelKey(lastUser.model)
+          this.sessionManager.setModel(sessionId, {
+            providerID: ProviderID.make(lastUser.model.providerID),
+            modelID: ModelID.make(lastUser.model.modelID),
+          })
+          if (mode.modes?.availableModes?.some((m) => m.id === lastUser.agent)) {
+            mode.modes.currentModeId = lastUser.agent
+            this.sessionManager.setMode(sessionId, lastUser.agent)
+          }
+        }
         try {
           for (const msg of messages ?? []) {
             log.debug("replay message", msg)
@@ -488,6 +506,32 @@ export namespace ACP {
           this.pendingSessionUpdates,
           this.eventAbort,
         )
+        // sessionManager.load() always tracks a fresh state with no
+        // model/modeId, so a resumed session otherwise silently falls back to
+        // the default model/agent even if it was previously driven under a
+        // different (possibly permission-restricted) agent. Restore from the
+        // last user message, matching loadSession/unstable_forkSession —
+        // without replaying the transcript, since the client reattaching via
+        // resume already has it rendered.
+        const messages = await this.sdk.session
+          .messages({ sessionID: sessionId, directory }, { throwOnError: true })
+          .then((x) => x.data)
+          .catch((err) => {
+            log.error("unexpected error when fetching message", { error: err })
+            return undefined
+          })
+        const lastUser = messages?.findLast((m) => m.info.role === "user")?.info
+        if (lastUser?.role === "user") {
+          result.models.currentModelId = providerModelKey(lastUser.model)
+          this.sessionManager.setModel(sessionId, {
+            providerID: ProviderID.make(lastUser.model.providerID),
+            modelID: ModelID.make(lastUser.model.modelID),
+          })
+          if (result.modes?.availableModes?.some((m) => m.id === lastUser.agent)) {
+            result.modes.currentModeId = lastUser.agent
+            this.sessionManager.setMode(sessionId, lastUser.agent)
+          }
+        }
         await sendUsageUpdate(this.connection, this.sdk, sessionId, directory)
         return result
       } catch (e) {
