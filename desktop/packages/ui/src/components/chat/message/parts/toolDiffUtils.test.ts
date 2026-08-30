@@ -66,6 +66,30 @@ describe("toolDiffUtils", () => {
     expect(getRenderablePatchInfo(entries[0]?.patch ?? "")).not.toBeNull()
   })
 
+  test("does not split a multi-file patch on a body line that merely starts with ---", () => {
+    const entries = getDiffPatchEntries(
+      undefined,
+      [
+        "--- a/src/a.ts",
+        "+++ b/src/a.ts",
+        "@@ -1,2 +1,2 @@",
+        "--- old dashes",
+        "+new",
+        " context",
+        "--- a/src/b.ts",
+        "+++ b/src/b.ts",
+        "@@ -1 +1 @@",
+        "-left",
+        "+right",
+      ].join("\n"),
+      identity,
+    )
+
+    expect(entries.map((entry) => entry.renderMode)).toEqual(["diff", "diff"])
+    expect(entries.map((entry) => entry.title)).toEqual(["src/a.ts", "src/b.ts"])
+    expect(entries[0]?.patch).toContain("--- old dashes")
+  })
+
   test("keeps malformed unified patches as text fallbacks", () => {
     const entries = getDiffPatchEntries(
       undefined,

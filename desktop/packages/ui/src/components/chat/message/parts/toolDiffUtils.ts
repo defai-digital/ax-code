@@ -12,7 +12,8 @@ const APPLY_PATCH_ENVELOPE_PATTERN = /^\*\*\*\s+(?:Begin Patch|End Patch|Add Fil
 const HUNK_HEADER_PATTERN = /^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@/m
 const GIT_DIFF_FILE_BREAK_PATTERN = /(?=^diff --git\s+)/gm
 const GIT_DIFF_FILE_BREAK_TEST = /^diff --git\s+/m
-const UNIFIED_DIFF_FILE_BREAK_PATTERN = /(?=^---\s+\S)/gm
+const UNIFIED_DIFF_MINUS_HEADER_PATTERN = /^---\s+\S/
+const UNIFIED_DIFF_PLUS_HEADER_PATTERN = /^\+\+\+\s+\S/
 const UNIFIED_DIFF_FILE_BREAK_TEST = /^---\s+\S/m
 
 export { isRecord }
@@ -105,16 +106,46 @@ export const getRenderablePatchInfo = (patch: string): { patch: string; title?: 
   }
 }
 
+const getUnifiedDiffFileBreakLineIndexes = (lines: string[]): number[] => {
+  const breaks: number[] = []
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    const next = lines[index + 1]
+    // A real file header is a "--- a/x" / "+++ b/x" pair, not just any body
+    // line that happens to start with "---" (e.g. removed Markdown/YAML
+    // content), so require the following line to look like the "+++" half.
+    if (
+      line !== undefined &&
+      next !== undefined &&
+      UNIFIED_DIFF_MINUS_HEADER_PATTERN.test(line) &&
+      UNIFIED_DIFF_PLUS_HEADER_PATTERN.test(next)
+    ) {
+      breaks.push(index)
+    }
+  }
+  return breaks
+}
+
 const getPatchChunks = (patch: string): string[] => {
   const isGitDiff = GIT_DIFF_FILE_BREAK_TEST.test(patch)
-  const hasUnifiedDiff = UNIFIED_DIFF_FILE_BREAK_TEST.test(patch)
-  if (!isGitDiff && !hasUnifiedDiff) {
+  if (isGitDiff) {
+    return patch
+      .split(GIT_DIFF_FILE_BREAK_PATTERN)
+      .map((chunk) => chunk.trim())
+      .filter((chunk) => chunk.length > 0)
+  }
+
+  const lines = patch.split("\n")
+  const breakIndexes = getUnifiedDiffFileBreakLineIndexes(lines)
+  if (breakIndexes.length === 0) {
     return []
   }
 
-  return patch
-    .split(isGitDiff ? GIT_DIFF_FILE_BREAK_PATTERN : UNIFIED_DIFF_FILE_BREAK_PATTERN)
-    .map((chunk) => chunk.trim())
+  return breakIndexes
+    .map((start, i) => {
+      const end = i + 1 < breakIndexes.length ? breakIndexes[i + 1] : lines.length
+      return lines.slice(start, end).join("\n").trim()
+    })
     .filter((chunk) => chunk.length > 0)
 }
 
