@@ -581,6 +581,7 @@ export const useChatTimelineController = ({
         }
 
         const result = await new Promise<boolean>((resolve) => {
+          resolvePendingScrollRequest(false)
           pendingScrollRequestRef.current = {
             sessionId: sessionIdRef.current ?? sessionId ?? "",
             kind: "turn",
@@ -601,7 +602,7 @@ export const useChatTimelineController = ({
         setPendingRevealWork(false)
       }
     },
-    [attemptPendingScrollRequest, releaseAutoFollow, sessionId],
+    [attemptPendingScrollRequest, releaseAutoFollow, resolvePendingScrollRequest, sessionId],
   )
 
   const scrollToMessage = React.useCallback(
@@ -630,6 +631,7 @@ export const useChatTimelineController = ({
         }
 
         const result = await new Promise<boolean>((resolve) => {
+          resolvePendingScrollRequest(false)
           pendingScrollRequestRef.current = {
             sessionId: sessionIdRef.current ?? sessionId ?? "",
             kind: "message",
@@ -650,7 +652,7 @@ export const useChatTimelineController = ({
         setPendingRevealWork(false)
       }
     },
-    [attemptPendingScrollRequest, releaseAutoFollow, sessionId],
+    [attemptPendingScrollRequest, releaseAutoFollow, resolvePendingScrollRequest, sessionId],
   )
 
   const resumeToBottom = React.useCallback(async () => {
