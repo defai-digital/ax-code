@@ -18,6 +18,7 @@ import { syncDebug } from "./debug"
 import { API_PATHS } from "@/lib/http"
 import { createMetricsTracker, type MetricsTracker } from "./streaming-metrics"
 import { createEventTransport } from "@/lib/event-stream/client"
+import { markStreamConnected, markStreamDisconnected } from "@/lib/event-stream/connection-state"
 import { isAbortError, type SdkSseDriver, type TransportError, type WsDriver } from "@/lib/event-stream/types"
 import type { MessageStreamWsFrame } from "@/lib/event-stream/adapters/websocket"
 import { SYNC_RETRY_NOW_EVENT as TRANSPORT_SYNC_RETRY_NOW_EVENT } from "@/lib/event-stream/visibility"
@@ -517,16 +518,24 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
       return
     }
     disconnected = true
+    // Single writer of the canonical connection phase (S4.7): the pipeline
+    // owns the transport, so it is the only module allowed to mark the
+    // stream disconnected.
+    markStreamDisconnected(reason)
     onDisconnect?.(reason)
   }
 
   const markConnected = () => {
     disconnected = false
+    // Single writer of the canonical connection phase (S4.7): mark the
+    // stream connected before consumers react, so UI gating on the
+    // connection store never lags the pipeline's own recovery work.
+    markStreamConnected()
     // Fire onReconnect on every successful connect — including the very
-    // first one. Consumer state (isConnected) starts at false and needs
-    // to be flipped positively; without this the send button throws
-    // "Connection lost" until something else (HTTP health check) happens
-    // to race a setState({isConnected: true}) through.
+    // first one. Consumer state (the connection store) starts at
+    // "connecting" and needs to be flipped positively; without this the
+    // send button throws "Connection lost" until something else (HTTP
+    // health check) happens to race a connect through.
     onReconnect?.()
   }
 
@@ -740,6 +749,10 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
         notifyDisconnected(reasonFromTransportError(error))
       },
       onTransportSwitch: () => {
+        // A transport switch (WS → SSE fallback) is not a disconnection: the
+        // stream is about to re-establish on the fallback driver, so the
+        // canonical phase stays/flips to connected (S4.7).
+        markStreamConnected()
         onTransportSwitch?.()
       },
     },

@@ -18,6 +18,11 @@
  * - R3 transport consumer registry: src/lib/event-stream/client (the unified
  *   Slice 1 transport) may only be imported by the registered consumers
  *   below. Everyone else uses lib/event-stream/subscribe.ts.
+ * - R5 connection-state writer registry: the write API of
+ *   src/lib/event-stream/connection-state (markStreamConnected /
+ *   markStreamDisconnected) may only be imported by the sync event pipeline
+ *   (the transport owner) and the module's own test. Read-only imports
+ *   (useConnectionStore, selectIsConnected, types) are unrestricted.
  * - R4 no duplicate exported hook names: across src/stores/ and src/sync/
  *   two modules may not export the same `useX` identifier. Implemented with
  *   static analysis (not the runtime store registry in
@@ -42,6 +47,7 @@ const UI_SRC = "desktop/packages/ui/src"
 const STORES_DIR = `${UI_SRC}/stores`
 const SYNC_DIR = `${UI_SRC}/sync`
 const TRANSPORT_CLIENT_MODULE = `${UI_SRC}/lib/event-stream/client`
+const CONNECTION_STATE_MODULE = `${UI_SRC}/lib/event-stream/connection-state`
 
 const DOCS_POINTER =
   "See desktop/packages/ui/src/stores/DOCUMENTATION.md (Store boundary enforcement) " +
@@ -100,6 +106,20 @@ export const EVENT_TRANSPORT_CLIENT_CONSUMERS: readonly string[] = [
   `${UI_SRC}/sync/event-pipeline.ts`,
 ]
 
+/**
+ * R5 registered writers of the connection-state store. Only the sync event
+ * pipeline (the owner of the app's event transport) may import the
+ * markStreamConnected / markStreamDisconnected write API; the module's own
+ * unit test exercises it directly. Read imports are unrestricted.
+ */
+export const CONNECTION_STATE_WRITERS: readonly string[] = [
+  `${UI_SRC}/lib/event-stream/connection-state.test.ts`,
+  `${UI_SRC}/sync/event-pipeline.ts`,
+]
+
+/** Named exports of connection-state that mutate the store. */
+const CONNECTION_STATE_WRITE_API = new Set(["markStreamConnected", "markStreamDisconnected"])
+
 export const STORE_BOUNDARY_REASONS = {
   storeToStore:
     "Stores must not import other stores outside the frozen allowlist (R1). " +
@@ -110,6 +130,10 @@ export const STORE_BOUNDARY_REASONS = {
   transportConsumer:
     "lib/event-stream/client may only be imported by its registered consumers (R3). " +
     "Use the public lib/event-stream/subscribe.ts entry point instead.",
+  connectionStateWriter:
+    "The connection-state write API (markStreamConnected/markStreamDisconnected) may only be imported by " +
+    "its registered writers (R5) — the sync event pipeline owns the transport and is the sole writer. " +
+    "Everyone else reads via useConnectionStore / selectIsConnected.",
   duplicateHook:
     "Exported hook names (useX) must be unique across src/stores/ and src/sync/ (R4). " +
     "Rename one of the colliding hooks.",
@@ -120,7 +144,7 @@ export type StoreBoundaryViolation = {
   line: number
   column: number
   specifier: string
-  rule: "R1" | "R2" | "R3" | "R4"
+  rule: "R1" | "R2" | "R3" | "R4" | "R5"
   reason: string
   sourceLine?: string
 }
@@ -249,6 +273,71 @@ export function analyzeEventTransportClientImports(file: string, source: string)
   return violations
 }
 
+/**
+ * R5 — imports of the connection-state write API. Needs the import clause
+ * (not just the module specifier), so this walks the AST directly. Also
+ * returns the set of files that DO import the write API, so the caller can
+ * warn when a registered writer stops importing it (registry may only
+ * shrink).
+ */
+export function analyzeConnectionStateWriterImports(
+  file: string,
+  source: string,
+): { violations: StoreBoundaryViolation[]; importsWriteApi: boolean } {
+  const fileRel = rel(file)
+  const sourceLines = source.split(/\r?\n/)
+  const violations: StoreBoundaryViolation[] = []
+  let importsWriteApi = false
+
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue
+    if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue
+    const resolved = resolveUiModule(file, statement.moduleSpecifier.text)
+    if (resolved !== CONNECTION_STATE_MODULE) continue
+
+    const clause = statement.importClause
+    if (!clause) continue // side-effect import: no bindings, cannot write
+    const registered = CONNECTION_STATE_WRITERS.includes(fileRel)
+
+    // Namespace import can reach the write API through the namespace object.
+    if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+      if (!registered) {
+        const position = sourceFile.getLineAndCharacterOfPosition(clause.namedBindings.getStart(sourceFile))
+        violations.push(
+          violation(
+            file,
+            { specifier: statement.moduleSpecifier.text, line: position.line + 1, column: position.character + 1 },
+            "R5",
+            STORE_BOUNDARY_REASONS.connectionStateWriter,
+            sourceLines,
+          ),
+        )
+      }
+      continue
+    }
+
+    if (!clause.namedBindings || !ts.isNamedImports(clause.namedBindings)) continue
+    for (const element of clause.namedBindings.elements) {
+      const imported = (element.propertyName ?? element.name).text
+      if (!CONNECTION_STATE_WRITE_API.has(imported)) continue
+      importsWriteApi = true
+      if (registered) continue
+      const position = sourceFile.getLineAndCharacterOfPosition(element.getStart(sourceFile))
+      violations.push(
+        violation(
+          file,
+          { specifier: statement.moduleSpecifier.text, line: position.line + 1, column: position.character + 1 },
+          "R5",
+          STORE_BOUNDARY_REASONS.connectionStateWriter,
+          sourceLines,
+        ),
+      )
+    }
+  }
+  return { violations, importsWriteApi }
+}
+
 const HOOK_NAME_PATTERN = /^use[A-Z]/
 
 function isInStoreScope(modulePath: string | undefined): modulePath is string {
@@ -341,6 +430,7 @@ export async function collectDesktopStoreBoundaryViolations(): Promise<StoreBoun
   const warnings: string[] = []
   const storeEdges: StoreBoundaryEdge[] = []
   const transportImporters = new Set<string>()
+  const connectionStateWriters = new Set<string>()
   const hookNames = new Map<string, string[]>()
 
   for (const file of files.sort()) {
@@ -350,6 +440,10 @@ export async function collectDesktopStoreBoundaryViolations(): Promise<StoreBoun
     storeEdges.push(...analyzeStoreToStoreImports(file, source))
     violations.push(...analyzeSyncInternalImports(file, source))
     violations.push(...analyzeEventTransportClientImports(file, source))
+
+    const connectionState = analyzeConnectionStateWriterImports(file, source)
+    violations.push(...connectionState.violations)
+    if (connectionState.importsWriteApi) connectionStateWriters.add(fileRel)
 
     const importsTransport = extractImportSpecifiers(source, file).some(
       (item) => resolveUiModule(file, item.specifier) === TRANSPORT_CLIENT_MODULE,
@@ -387,6 +481,14 @@ export async function collectDesktopStoreBoundaryViolations(): Promise<StoreBoun
   for (const consumer of EVENT_TRANSPORT_CLIENT_CONSUMERS) {
     if (transportImporters.has(consumer)) continue
     warnings.push(`R3 registered consumer no longer imports lib/event-stream/client — shrink the registry: ${consumer}`)
+  }
+
+  // R5 — registered writers that no longer import the write API prompt a shrink.
+  for (const writer of CONNECTION_STATE_WRITERS) {
+    if (connectionStateWriters.has(writer)) continue
+    warnings.push(
+      `R5 registered writer no longer imports the connection-state write API — shrink the registry: ${writer}`,
+    )
   }
 
   // R4 — duplicate exported hook names across stores/ + sync/.

@@ -164,8 +164,8 @@ export function createEventTransport(config: EventTransportConfig, hooks: EventT
           streamErrorLogged = false
           setState("open")
           // Fire onConnected on every successful connect — including the very
-          // first one. Consumer state (isConnected) starts at false and needs
-          // to be flipped positively.
+          // first one. Consumer connection state starts at "connecting" and
+          // needs to be flipped positively.
           hooks.onConnected({ first: firstConnect, transport: kind })
           firstConnect = false
         },
@@ -203,7 +203,7 @@ export function createEventTransport(config: EventTransportConfig, hooks: EventT
             console.error("[event-transport] stream failed")
           }
           // Notify the consumer that the stream has disconnected, so it can
-          // update connection state (e.g. set isConnected = false).
+          // update connection state (e.g. mark the stream reconnecting).
           disconnectedCycle = true
           hooks.onDisconnected?.(attemptError)
 

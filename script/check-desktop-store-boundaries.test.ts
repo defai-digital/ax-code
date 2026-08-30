@@ -1,8 +1,10 @@
 import path from "node:path"
 import { describe, expect, test } from "vitest"
 import {
+  CONNECTION_STATE_WRITERS,
   EVENT_TRANSPORT_CLIENT_CONSUMERS,
   STORE_TO_STORE_IMPORT_ALLOWLIST,
+  analyzeConnectionStateWriterImports,
   analyzeEventTransportClientImports,
   analyzeStoreToStoreImports,
   analyzeSyncInternalImports,
@@ -141,6 +143,50 @@ describe("R3 transport consumer registry", () => {
         'import { createEventTransport } from "./client"',
       ),
     ).toEqual([])
+  })
+})
+
+describe("R5 connection-state writer registry", () => {
+  test("blocks unregistered importers of the write API", () => {
+    const { violations, importsWriteApi } = analyzeConnectionStateWriterImports(
+      componentFile("ui", "ReconnectBanner.tsx"),
+      'import { markStreamDisconnected } from "@/lib/event-stream/connection-state"',
+    )
+
+    expect(importsWriteApi).toBe(true)
+    expect(violations).toHaveLength(1)
+    expect(violations[0].rule).toBe("R5")
+  })
+
+  test("blocks namespace imports from unregistered modules", () => {
+    const { violations } = analyzeConnectionStateWriterImports(
+      componentFile("ui", "ReconnectBanner.tsx"),
+      'import * as connectionState from "@/lib/event-stream/connection-state"',
+    )
+
+    expect(violations).toHaveLength(1)
+    expect(violations[0].rule).toBe("R5")
+  })
+
+  test("allows read-only imports anywhere and the write API in registered writers", () => {
+    const readOnly = analyzeConnectionStateWriterImports(
+      componentFile("ui", "ReconnectBanner.tsx"),
+      'import { selectIsConnected, useConnectionStore } from "@/lib/event-stream/connection-state"',
+    )
+    expect(readOnly.violations).toEqual([])
+    expect(readOnly.importsWriteApi).toBe(false)
+
+    const writer = analyzeConnectionStateWriterImports(
+      syncFile("event-pipeline.ts"),
+      'import { markStreamConnected, markStreamDisconnected } from "@/lib/event-stream/connection-state"',
+    )
+    expect(writer.violations).toEqual([])
+    expect(writer.importsWriteApi).toBe(true)
+
+    expect(CONNECTION_STATE_WRITERS).toEqual([
+      "desktop/packages/ui/src/lib/event-stream/connection-state.test.ts",
+      "desktop/packages/ui/src/sync/event-pipeline.ts",
+    ])
   })
 })
 

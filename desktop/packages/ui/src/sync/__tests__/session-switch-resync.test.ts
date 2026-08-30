@@ -34,8 +34,11 @@ vi.doMock("@/stores/permissionStore", () => ({
 }))
 
 vi.doMock("@/stores/useConfigStore", () => ({
+  // Connection fields (isConnected/hasEverConnected) left this store in S4.7 —
+  // the mock only exists so transitively imported modules never load the real
+  // (browser-persisted) config store in a node test.
   useConfigStore: {
-    getState: () => ({ isConnected: true, hasEverConnected: true }),
+    getState: () => ({}),
     setState: () => undefined,
   },
 }))

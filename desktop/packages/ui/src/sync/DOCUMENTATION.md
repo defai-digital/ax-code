@@ -83,6 +83,50 @@ Bootstrap runs in two scopes:
    (`useConfigStore.initializeApp`, `useAgentsStore.loadAgents`, …). The
    global `projects` list is only used to seed the directory's project id.
 
+## Connection state (S4.7 — single transport-owned phase)
+
+The canonical connection phase lives in
+`src/lib/event-stream/connection-state.ts` (`useConnectionStore`:
+`phase` = `"connecting" | "connected" | "reconnecting"`,
+`hasEverConnected`, `lastDisconnectReason`). It is the ONLY connection-state
+field in the app — the overlapping `useConfigStore.isConnected /
+connectionPhase / hasEverConnected / lastDisconnectReason` fields and
+`useUIStore.eventStreamStatus` were removed (SPEC-2026-08-30, S4.7).
+
+Ownership rules:
+
+1. **Single writer: the event pipeline.** `event-pipeline.ts` owns the app's
+   `createEventTransport` instance and marks the store via
+   `markStreamConnected()` (server subscription acknowledgement — SSE
+   `server.connected` frame or WS ready frame — and transport switches) and
+   `markStreamDisconnected(reason)` (transport failure/interrupt). The sync
+   context (`sync-context-impl.tsx`) does NOT write connection state in its
+   `onReconnect`/`onTransportSwitch` callbacks anymore — those callbacks only
+   run recovery work (global bootstrap retry, session-list catch-up,
+   per-directory resync). The writer registry is enforced by
+   `script/check-desktop-store-boundaries.ts` (R5): only `event-pipeline.ts`
+   (and the module's own test) may import the `markStream*` write API.
+2. **Readers subscribe to the connection store directly** —
+   `selectIsConnected(state)` (`state.phase === "connected"`) is the derived
+   convenience for the old `isConnected` boolean. Current readers: `App.tsx`,
+   `ElectronMiniChatApp.tsx`, `SyncStatusIndicator`, `ReconnectBanner`,
+   `useAxCodeReadiness`, `session-actions.ts` (send grace window + "Connection
+   lost" error), `lib/axCodeStatus.ts` (debug dump).
+3. **Probes are not connection state.** `useConfigStore.probeConnection /
+checkConnection` are server-reachability probes (HTTP health endpoint) used
+   at boot and inside the send grace window. They return a boolean and never
+   write the connection phase: a healthy HTTP endpoint does not imply a live
+   stream, and a failed probe does not tear one down. Boot failure after a
+   successful reachability check is recorded separately as
+   `useConfigStore.initializationError` (read by `useAxCodeReadiness`).
+4. **Not persisted.** A persisted phase would lie on every app start; the
+   store always boots at `phase: "connecting"`.
+
+The module lives in `lib/event-stream/` (not `stores/`) so the boundary
+direction stays one-way: the transport layer never imports `stores/`, while
+`stores/` (e.g. `useConfigStore.activateDirectory`) and components read the
+connection store.
+
 ## Session list rules
 
 ### Directory-scoped session list

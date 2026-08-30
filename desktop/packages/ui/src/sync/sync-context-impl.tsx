@@ -1260,11 +1260,10 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
         handleEvent(directory, payload, childStores, routingIndex)
       },
       onReconnect: () => {
-        useConfigStore.setState({
-          isConnected: true,
-          hasEverConnected: true,
-          connectionPhase: "connected",
-        })
+        // Connection state is owned by the transport layer (S4.7): the
+        // pipeline already marked the stream connected via
+        // lib/event-stream/connection-state — no store writes here.
+        //
         // If the global bootstrap failed (e.g. backend down at mount), the
         // store still carries an init error — a successful reconnect is the
         // earliest chance to refill it.
@@ -1284,22 +1283,10 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
           triggerDirectoryResync(dir)
         }
       },
-      onDisconnect: (reason) => {
-        const { hasEverConnected } = useConfigStore.getState()
-        useConfigStore.setState({
-          isConnected: false,
-          connectionPhase: hasEverConnected ? "reconnecting" : "connecting",
-          lastDisconnectReason: reason,
-        })
-      },
       onTransportSwitch: () => {
         // Transport changes are gap-prone in real networks. Treat them like a
-        // reconnect and refresh active session snapshots from HTTP.
-        useConfigStore.setState({
-          isConnected: true,
-          hasEverConnected: true,
-          connectionPhase: "connected",
-        })
+        // reconnect and refresh active session snapshots from HTTP (the
+        // pipeline already marked the stream connected — S4.7).
         // Transport switches are gap-prone; catch the global session index
         // up alongside the per-directory resync (S4.4).
         void useGlobalSessionsStore.getState().loadSessions()

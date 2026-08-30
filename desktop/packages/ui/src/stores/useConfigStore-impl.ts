@@ -18,6 +18,7 @@ import type { ProviderModel, ProviderWithModelList } from "@/types/providerModel
 import { API_ENDPOINTS } from "@/lib/http"
 import { withTimeout } from "@/lib/asyncTimeout"
 import { isRecord } from "@/lib/record"
+import { selectIsConnected, useConnectionStore } from "@/lib/event-stream/connection-state"
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json"
 const MODELS_DEV_PROXY_URL = API_ENDPOINTS.openchamber.modelsMetadata
@@ -462,10 +463,13 @@ interface ConfigStore {
   selectedProviderId: string
   agentModelSelections: { [agentName: string]: { providerId: string; modelId: string } }
   defaultProviders: { [key: string]: string }
-  isConnected: boolean
-  hasEverConnected: boolean
-  connectionPhase: "connecting" | "connected" | "reconnecting"
-  lastDisconnectReason: string | null
+  /**
+   * Boot status: set when `initializeApp` fails after the server was reached
+   * (e.g. initApp/provider/agent load threw). NOT connection state — the
+   * canonical transport-owned connection phase lives in
+   * `lib/event-stream/connection-state` (S4.7). Read by useAxCodeReadiness.
+   */
+  initializationError: string | null
   isInitialized: boolean
   modelsMetadata: Map<string, ModelMetadata>
   // OpenChamber settings-based defaults (take precedence over agent preferences)
@@ -503,7 +507,13 @@ interface ConfigStore {
   getResolvedGitGenerationModel: () => { providerId: string; modelId: string } | null
   saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void
   getAgentModelSelection: (agentName: string) => { providerId: string; modelId: string } | null
+  /**
+   * Server-reachability probe (HTTP health endpoint). Distinct from transport
+   * connection state (lib/event-stream/connection-state, S4.7): returns a
+   * boolean and never writes the connection phase.
+   */
   probeConnection: (options?: { timeoutMs?: number }) => Promise<boolean>
+  /** Boot-time reachability probe with bounded retries; boolean only, no connection-state writes (S4.7). */
   checkConnection: () => Promise<boolean>
   initializeApp: () => Promise<void>
   getCurrentProvider: () => ProviderWithModelList | undefined
@@ -631,10 +641,7 @@ export const useConfigStore = create<ConfigStore>()(
         selectedProviderId: "",
         agentModelSelections: {},
         defaultProviders: {},
-        isConnected: false,
-        hasEverConnected: false,
-        connectionPhase: "connecting",
-        lastDisconnectReason: null,
+        initializationError: null,
         isInitialized: false,
         modelsMetadata: new Map<string, ModelMetadata>(),
         settingsDefaultModel: undefined,
@@ -722,7 +729,7 @@ export const useConfigStore = create<ConfigStore>()(
             }
           })
 
-          if (!get().isConnected) {
+          if (!selectIsConnected(useConnectionStore.getState())) {
             return
           }
 
@@ -1693,44 +1700,25 @@ export const useConfigStore = create<ConfigStore>()(
         },
 
         probeConnection: async (options?: { timeoutMs?: number }) => {
-          const isHealthy = await probeAxCodeHealth(options?.timeoutMs)
-          if (isHealthy) {
-            set({ isConnected: true, hasEverConnected: true, connectionPhase: "connected" })
-            return true
-          }
-
-          const state = get()
-          if (state.isConnected) {
-            return true
-          }
-
-          set({
-            isConnected: false,
-            connectionPhase: state.hasEverConnected ? "reconnecting" : "connecting",
-            lastDisconnectReason: "health_probe_unhealthy",
-          })
-          return false
+          // Server-reachability probe only (S4.7): answers "is the HTTP health
+          // endpoint reachable right now" so a failing send can retry within
+          // its grace window. It must NOT write connection state — the
+          // transport-owned phase lives in lib/event-stream/connection-state
+          // and a healthy probe does not imply a live stream.
+          return probeAxCodeHealth(options?.timeoutMs)
         },
 
         checkConnection: async () => {
+          // Boot-time server-reachability probe with bounded retries. Like
+          // probeConnection this returns a boolean only; it does not write
+          // transport connection state (S4.7).
           const maxAttempts = 5
           let attempt = 0
           let lastError: unknown = null
 
           while (attempt < maxAttempts) {
             try {
-              const isHealthy = await axCodeClient.checkHealth()
-              const hasEverConnected = get().hasEverConnected
-              set(
-                isHealthy
-                  ? { isConnected: true, hasEverConnected: true, connectionPhase: "connected" }
-                  : {
-                      isConnected: false,
-                      connectionPhase: hasEverConnected ? "reconnecting" : "connecting",
-                      lastDisconnectReason: "health_check_unhealthy",
-                    },
-              )
-              return isHealthy
+              return await axCodeClient.checkHealth()
             } catch (error) {
               lastError = error
               attempt += 1
@@ -1742,11 +1730,6 @@ export const useConfigStore = create<ConfigStore>()(
           if (lastError) {
             console.warn("[ConfigStore] Failed to reach ax-code after retrying:", lastError)
           }
-          set({
-            isConnected: false,
-            connectionPhase: get().hasEverConnected ? "reconnecting" : "connecting",
-            lastDisconnectReason: "health_check_failed",
-          })
           return false
         },
 
@@ -1760,16 +1743,14 @@ export const useConfigStore = create<ConfigStore>()(
               const debug = streamDebugEnabled()
               if (debug) console.log("Starting app initialization...")
 
-              const isConnected = await get().checkConnection()
-              if (debug) console.log("Connection check result:", isConnected)
+              const isReachable = await get().checkConnection()
+              if (debug) console.log("Connection check result:", isReachable)
 
-              if (!isConnected) {
-                if (debug) console.log("Server not connected")
-                // checkConnection already set lastDisconnectReason; do not overwrite.
-                set({
-                  isConnected: false,
-                  connectionPhase: get().hasEverConnected ? "reconnecting" : "connecting",
-                })
+              if (!isReachable) {
+                if (debug) console.log("Server not reachable")
+                // Leave initializationError untouched: an unreachable server
+                // is a probe outcome, not a boot failure — the transport
+                // layer surfaces the outage through the connection store.
                 return
               }
 
@@ -1782,15 +1763,13 @@ export const useConfigStore = create<ConfigStore>()(
               if (debug) console.log("Loading agents...")
               await get().loadAgents()
 
-              set({ isInitialized: true, isConnected: true, hasEverConnected: true, connectionPhase: "connected" })
+              set({ isInitialized: true, initializationError: null })
               if (debug) console.log("App initialized successfully")
             } catch (error) {
               console.error("Failed to initialize app:", error)
               set({
                 isInitialized: false,
-                isConnected: false,
-                connectionPhase: get().hasEverConnected ? "reconnecting" : "connecting",
-                lastDisconnectReason: "init_error",
+                initializationError: "init_error",
               })
             }
           })().finally(() => {

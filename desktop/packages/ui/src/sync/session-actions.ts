@@ -27,6 +27,7 @@ import { axCodeClient, ascendingId } from "@/lib/ax-code/client"
 // session lifecycle event instead.
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { selectIsConnected, useConnectionStore } from "@/lib/event-stream/connection-state"
 import { registerSessionDirectory } from "./sync-refs"
 import { isSyntheticPart } from "@/lib/messages/synthetic"
 import { materializeSessionSnapshots } from "./materialization"
@@ -146,7 +147,7 @@ function formatSdkError(error: unknown): string {
 }
 
 function connectionLostError(): Error {
-  const { hasEverConnected, lastDisconnectReason } = useConfigStore.getState()
+  const { hasEverConnected, lastDisconnectReason } = useConnectionStore.getState()
   const suffix = lastDisconnectReason ? ` (${lastDisconnectReason})` : hasEverConnected ? "" : " (never connected)"
   return new Error(`Connection lost${suffix}. Please wait for reconnection.`)
 }
@@ -369,7 +370,7 @@ const CONNECTION_GRACE_MS = 2000
 export async function waitForConnectionOrThrow(): Promise<void> {
   const deadline = Date.now() + CONNECTION_GRACE_MS
   while (Date.now() < deadline) {
-    if (useConfigStore.getState().isConnected) return
+    if (selectIsConnected(useConnectionStore.getState())) return
     const remainingMs = deadline - Date.now()
     if (remainingMs <= 0) break
     if (await useConfigStore.getState().probeConnection({ timeoutMs: Math.min(500, remainingMs) })) return

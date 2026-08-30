@@ -10,6 +10,7 @@ import { axCodeClient } from "@/lib/ax-code/client"
 import type { RuntimeAPIs } from "@/lib/api/types"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { selectIsConnected, useConnectionStore } from "@/lib/event-stream/connection-state"
 import { useAgentsStore } from "@/stores/useAgentsStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useGitStore } from "@/stores/useGitStore"
@@ -58,7 +59,7 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft)
   const initializeApp = useConfigStore((state) => state.initializeApp)
   const isInitialized = useConfigStore((state) => state.isInitialized)
-  const isConnected = useConfigStore((state) => state.isConnected)
+  const isConnected = useConnectionStore(selectIsConnected)
   const loadProviders = useConfigStore((state) => state.loadProviders)
   const loadAgents = useConfigStore((state) => state.loadAgents)
   const providersCount = useConfigStore((state) => state.providers.length)

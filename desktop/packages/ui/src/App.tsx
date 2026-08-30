@@ -13,6 +13,7 @@ import { PermissionNotifications } from "@/components/notifications/PermissionNo
 import { flushPendingRemovals, recoverPendingRemovals } from "@/sync/soft-removal"
 import { useWindowTitle } from "@/hooks/useWindowTitle"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { selectIsConnected, useConnectionStore } from "@/lib/event-stream/connection-state"
 import { useAgentsStore } from "@/stores/useAgentsStore"
 import { hasModifier } from "@/lib/utils"
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, restartDesktopApp } from "@/lib/desktop"
@@ -223,7 +224,7 @@ function App({ apis }: AppProps) {
   const { t } = useI18n()
   const initializeApp = useConfigStore((s) => s.initializeApp)
   const isInitialized = useConfigStore((s) => s.isInitialized)
-  const isConnected = useConfigStore((s) => s.isConnected)
+  const isConnected = useConnectionStore(selectIsConnected)
   const providersCount = useConfigStore((state) => state.providers.length)
   // Agents are single-home in useAgentsStore (S4.6); config store's loadAgents
   // delegates the list load to it and keeps the settings/default resolution.

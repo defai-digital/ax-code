@@ -1,6 +1,7 @@
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { getSyncSessions } from "@/sync/sync-refs"
 import { useUIStore } from "@/stores/useUIStore"
+import { useConnectionStore } from "@/lib/event-stream/connection-state"
 import { API_ENDPOINTS, HTTP_DEFAULTS, API_PATHS } from "./http"
 import { isPlainRecord } from "./record"
 
@@ -152,7 +153,7 @@ export const buildAxCodeStatusReport = async (): Promise<string> => {
   const appVersion = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "(unknown)"
   const platform = typeof navigator !== "undefined" ? navigator.userAgent : "(no navigator)"
   const directory = getCurrentDirectory()
-  const eventStreamStatus = useUIStore.getState().eventStreamStatus
+  const connection = useConnectionStore.getState()
   const origin = typeof window !== "undefined" ? window.location.origin : ""
   const apiBase = origin ? `${origin.replace(/\/+$/, "")}${API_PATHS.base}/` : ""
 
@@ -258,7 +259,11 @@ export const buildAxCodeStatusReport = async (): Promise<string> => {
   lines.push(`Time: ${now.toISOString()}`)
   lines.push(`AX Code version: ${appVersion}`)
   lines.push(`Runtime: ${origin || "(unknown)"} (api=${origin ? `${origin}${API_PATHS.base}` : "(unknown)"})`)
-  lines.push(`Event stream: ${eventStreamStatus}`)
+  lines.push(
+    `Event stream: ${connection.phase}` +
+      (connection.lastDisconnectReason ? ` (last disconnect: ${connection.lastDisconnectReason})` : "") +
+      (connection.hasEverConnected ? "" : " (never connected)"),
+  )
   lines.push(`Directory: ${directory || "(none)"}`)
   lines.push(`Platform: ${platform}`)
 

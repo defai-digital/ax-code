@@ -1,10 +1,11 @@
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useConnectionStore } from "@/lib/event-stream/connection-state"
 
 export function useAxCodeReadiness() {
   const isInitialized = useConfigStore((s) => s.isInitialized)
-  const connectionPhase = useConfigStore((s) => s.connectionPhase)
-  const lastDisconnectReason = useConfigStore((s) => s.lastDisconnectReason)
-  const isUnavailable = !isInitialized && lastDisconnectReason === "init_error"
+  const initializationError = useConfigStore((s) => s.initializationError)
+  const connectionPhase = useConnectionStore((s) => s.phase)
+  const isUnavailable = !isInitialized && initializationError === "init_error"
 
   return {
     isReady: isInitialized,

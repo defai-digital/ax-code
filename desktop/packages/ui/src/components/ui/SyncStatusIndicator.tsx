@@ -1,29 +1,22 @@
 import React from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useConfigStore } from "@/stores/useConfigStore"
+import { useConnectionStore, type ConnectionPhase } from "@/lib/event-stream/connection-state"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 type SyncStatus = "connected" | "reconnecting" | "connecting" | "disconnected"
 
-function resolveSyncStatus(
-  isConnected: boolean,
-  connectionPhase: "connecting" | "connected" | "reconnecting",
-  hasEverConnected: boolean,
-): SyncStatus {
-  if (isConnected && connectionPhase === "connected") {
+function resolveSyncStatus(connectionPhase: ConnectionPhase, hasEverConnected: boolean): SyncStatus {
+  if (connectionPhase === "connected") {
     return "connected"
   }
   if (connectionPhase === "reconnecting") {
     return "reconnecting"
   }
-  if (connectionPhase === "connecting" && !hasEverConnected) {
+  if (!hasEverConnected) {
     return "connecting"
   }
-  if (!isConnected && hasEverConnected) {
-    return "disconnected"
-  }
-  return "connecting"
+  return "disconnected"
 }
 
 const statusConfig: Record<
@@ -58,11 +51,10 @@ const statusConfig: Record<
 
 export const SyncStatusIndicator: React.FC = React.memo(function SyncStatusIndicator() {
   const { t } = useI18n()
-  const isConnected = useConfigStore((s) => s.isConnected)
-  const connectionPhase = useConfigStore((s) => s.connectionPhase)
-  const hasEverConnected = useConfigStore((s) => s.hasEverConnected)
+  const connectionPhase = useConnectionStore((s) => s.phase)
+  const hasEverConnected = useConnectionStore((s) => s.hasEverConnected)
 
-  const status = resolveSyncStatus(isConnected, connectionPhase, hasEverConnected)
+  const status = resolveSyncStatus(connectionPhase, hasEverConnected)
   const config = statusConfig[status]
 
   return (

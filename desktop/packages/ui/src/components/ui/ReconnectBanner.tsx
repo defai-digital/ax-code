@@ -1,7 +1,7 @@
 import React from "react"
 import { Icon } from "@/components/icon/Icon"
 import { requestSyncRetryNow } from "@/sync/event-pipeline"
-import { useConfigStore } from "@/stores/useConfigStore"
+import { useConnectionStore } from "@/lib/event-stream/connection-state"
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
@@ -13,8 +13,8 @@ const RECONNECT_BANNER_DELAY_MS = 6_000
 
 export const ReconnectBanner: React.FC = React.memo(function ReconnectBanner() {
   const { t } = useI18n()
-  const connectionPhase = useConfigStore((s) => s.connectionPhase)
-  const lastDisconnectReason = useConfigStore((s) => s.lastDisconnectReason)
+  const connectionPhase = useConnectionStore((s) => s.phase)
+  const lastDisconnectReason = useConnectionStore((s) => s.lastDisconnectReason)
   const isReconnecting = connectionPhase === "reconnecting"
 
   const [delayElapsed, setDelayElapsed] = React.useState(false)

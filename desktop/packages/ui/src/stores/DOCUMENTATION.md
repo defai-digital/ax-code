@@ -93,6 +93,24 @@ reaches the agents list through the `AgentsSource` bridge in
 `src/lib/agents.ts`, which `useAgentsStore` registers at module load
 (`getAgentsSource()` → `{ getAgents, loadAgents }`).
 
+## Connection state (S4.7 — NOT here)
+
+Connection state has a single transport-owned home:
+`src/lib/event-stream/connection-state.ts` (`useConnectionStore`, see
+`src/sync/DOCUMENTATION.md` "Connection state"). Do not re-add connection
+fields to stores in this directory:
+
+- `useConfigStore` no longer carries `isConnected` / `connectionPhase` /
+  `hasEverConnected` / `lastDisconnectReason`. Its `probeConnection` /
+  `checkConnection` are server-reachability probes (HTTP health), documented
+  as distinct from transport state; boot failure is recorded as
+  `initializationError`, not as a connection phase.
+- `useUIStore` no longer carries `eventStreamStatus` / `eventStreamHint` (or
+  `setEventStreamStatus`) — the field had no writers left and duplicated the
+  transport phase; its one reader (the `axCodeStatus` debug dump) now reads
+  the connection store. A persisted connection field is wrong by definition:
+  a stale phase would lie on every app start.
+
 ## Git / PR Stores
 
 The Git and PR stores are the most important stores to understand before editing this directory.
@@ -167,6 +185,11 @@ desktop CI workflows), not just by convention:
   `subscribe.ts`.
 - **R4 no duplicate exported hook names** — two modules under `src/stores/`
   and `src/sync/` may not export the same `useX` identifier.
+- **R5 connection-state writer registry** — the write API of
+  `src/lib/event-stream/connection-state` (`markStreamConnected` /
+  `markStreamDisconnected`) may only be imported by the sync event pipeline
+  (the transport owner) and the module's own test. Read-only imports
+  (`useConnectionStore`, `selectIsConnected`) are unrestricted.
 
 Related: `src/lib/store-registry.ts` provides `defineStore(name, meta)` for
 machine-readable store names/domains/tiers; new stores should register

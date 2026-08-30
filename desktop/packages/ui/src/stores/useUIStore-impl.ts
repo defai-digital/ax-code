@@ -72,7 +72,6 @@ type PendingFileNavigation = {
 }
 
 export type MainTabGuard = (nextTab: MainTab) => boolean
-export type EventStreamStatus = "idle" | "connecting" | "connected" | "reconnecting" | "paused" | "offline" | "error"
 
 const LEGACY_DEFAULT_NOTIFICATION_TEMPLATES = {
   completion: { title: "{agent_name} is ready", message: "{last_message}" },
@@ -576,8 +575,6 @@ interface UIStore {
   settingsHasOpenedOnce: boolean
   settingsProjectsSelectedId: string | null
   settingsRemoteInstancesSelectedId: string | null
-  eventStreamStatus: EventStreamStatus
-  eventStreamHint: string | null
   showReasoningTraces: boolean
   collapsibleThinkingBlocks: boolean
   groupReasoningBlocks: boolean
@@ -723,7 +720,6 @@ interface UIStore {
   setSettingsPage: (slug: string) => void
   setSettingsProjectsSelectedId: (projectId: string | null) => void
   setSettingsRemoteInstancesSelectedId: (instanceId: string | null) => void
-  setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void
   setShowReasoningTraces: (value: boolean) => void
   setCollapsibleThinkingBlocks: (value: boolean) => void
   setChatRenderMode: (value: ChatRenderMode) => void
@@ -860,8 +856,6 @@ export const useUIStore = create<UIStore>()(
         settingsHasOpenedOnce: false,
         settingsProjectsSelectedId: null,
         settingsRemoteInstancesSelectedId: null,
-        eventStreamStatus: "idle",
-        eventStreamHint: null,
         showReasoningTraces: true,
         collapsibleThinkingBlocks: true,
         groupReasoningBlocks: true,
@@ -1631,13 +1625,6 @@ export const useUIStore = create<UIStore>()(
 
         setSettingsRemoteInstancesSelectedId: (instanceId) => {
           set({ settingsRemoteInstancesSelectedId: instanceId })
-        },
-
-        setEventStreamStatus: (status, hint) => {
-          set({
-            eventStreamStatus: status,
-            eventStreamHint: hint ?? null,
-          })
         },
 
         setShowReasoningTraces: (value) => {

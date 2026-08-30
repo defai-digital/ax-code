@@ -2,6 +2,7 @@ import { describe, expect, test, beforeEach, vi } from "vitest"
 import type { PermissionRequest } from "@/types/permission"
 import type { Message, Part, Session } from "@ax-code/sdk/v2/client"
 import { resolveResyncedSessionStatus, hasCompletedAssistantReply } from "./reconnect-recovery"
+import { useConnectionStore } from "@/lib/event-stream/connection-state"
 
 // Mock SDK client that records permission.reply / question.reply calls
 const replyCalls: Array<{ method: string; params: Record<string, unknown> }> = []
@@ -28,21 +29,28 @@ type MockSessionCreateResult = {
 }
 
 let configState: {
-  isConnected: boolean
-  hasEverConnected: boolean
   probeConnection: (options?: { timeoutMs?: number }) => Promise<boolean>
 } = {
-  isConnected: true,
-  hasEverConnected: true,
   probeConnection: () => Promise.resolve(true),
+}
+
+// S4.7: isConnected/hasEverConnected/lastDisconnectReason moved to the
+// transport-owned connection store; session-actions reads it directly, so
+// tests drive the real store instead of mocking those fields.
+function resetConnectionState(overrides: { connected?: boolean; hasEverConnected?: boolean } = {}) {
+  const hasEverConnected = overrides.hasEverConnected ?? true
+  useConnectionStore.setState({
+    phase: (overrides.connected ?? true) ? "connected" : hasEverConnected ? "reconnecting" : "connecting",
+    hasEverConnected,
+    lastDisconnectReason: null,
+  })
 }
 
 function resetConfigState() {
   configState = {
-    isConnected: true,
-    hasEverConnected: true,
     probeConnection: () => Promise.resolve(true),
   }
+  resetConnectionState()
 }
 
 // Configurable result for the session.messages refetch the accepted-prompt
@@ -813,15 +821,12 @@ describe("optimisticSend responsiveness", () => {
     const childStores = createChildStores([["/test/project", store]])
     let sawOptimisticBeforeProbe = false
 
+    // Start disconnected so waitForConnectionOrThrow enters its grace loop
+    // and runs the probe (which then reports the server reachable).
+    resetConnectionState({ connected: false })
     configState = {
-      isConnected: false,
-      hasEverConnected: true,
       probeConnection: () => {
         sawOptimisticBeforeProbe = (store.getState().message["session-a"] ?? []).length === 1
-        configState = {
-          ...configState,
-          isConnected: true,
-        }
         return Promise.resolve(true)
       },
     }
