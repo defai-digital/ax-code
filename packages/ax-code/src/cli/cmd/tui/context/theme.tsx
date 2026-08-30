@@ -307,12 +307,22 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
       onCleanup(cancel)
     })
 
+    // renderer.getPalette() is an uncancellable async terminal query. Two
+    // THEME_MODE events arriving in quick succession (e.g. the terminal
+    // reports a mode at startup and then corrects it moments later) can have
+    // overlapping requests in flight; without a generation guard, whichever
+    // resolves last wins even if it was issued first, leaving store.mode
+    // (and the generated system palette) reflecting a stale, out-of-order
+    // mode instead of the most recently requested one.
+    let systemThemeRequestID = 0
     function resolveSystemTheme(mode: "dark" | "light" = store.mode) {
+      const requestID = ++systemThemeRequestID
       renderer
         .getPalette({
           size: 16,
         })
         .then((colors: TerminalColors) => {
+          if (requestID !== systemThemeRequestID) return
           const detectedMode = detectTerminalMode(colors)
           const nextMode = store.lock ? store.mode : (detectedMode ?? mode)
           if (!store.lock && detectedMode && store.mode !== detectedMode) {
