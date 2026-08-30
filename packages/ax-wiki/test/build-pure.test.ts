@@ -189,4 +189,32 @@ describe("per-page fingerprint (gate C5)", () => {
     const page = a.plan.pages[0]!.path
     expect(a.manifest.pages[page]!.fingerprint).not.toBe(b.manifest.pages[page]!.fingerprint)
   })
+
+  test("an update build regenerates a page whose fingerprint changed even with no source changes", async () => {
+    const readExistingPage = (candidate: Map<string, string>) => async (pagePath: string) => candidate.get(pagePath)
+    const first = await buildPure({
+      ...baseInput(),
+      generatorIdentity: { name: "ax-wiki", version: "1.0.0", promptVersion: "p1" },
+    })
+    const previous = first.manifest
+    const existing = first.candidate
+
+    const unchanged = await buildPure({
+      ...baseInput(),
+      action: "update",
+      previous,
+      readExistingPage: readExistingPage(existing),
+      generatorIdentity: { name: "ax-wiki", version: "1.0.0", promptVersion: "p1" },
+    })
+    expect(unchanged.generatedPages).toEqual([])
+
+    const upgraded = await buildPure({
+      ...baseInput(),
+      action: "update",
+      previous,
+      readExistingPage: readExistingPage(existing),
+      generatorIdentity: { name: "ax-wiki", version: "2.0.0", promptVersion: "p2" },
+    })
+    expect(new Set(upgraded.generatedPages)).toEqual(new Set(first.plan.pages.map((page) => page.path)))
+  })
 })

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import { mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
@@ -10,6 +10,7 @@ import {
   parseFrontmatter,
   renderWikiPage,
   upsertAxWikiBlock,
+  writeWikiCards,
 } from "../src"
 
 describe("AX Wiki artifacts", () => {
@@ -50,6 +51,21 @@ describe("AX Wiki artifacts", () => {
     const repairedEnd = upsertAxWikiBlock(`# Rules\n\n${AX_WIKI_END}\nKeep me.`)
     expect(repairedEnd).toContain("Keep me.")
     expect(repairedEnd.match(new RegExp(AX_WIKI_END, "g"))).toHaveLength(1)
+  })
+
+  test("writes wiki cards atomically, leaving no stray temp file", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ax-wiki-cards-"))
+    try {
+      const file = path.join(root, ".ax-code", "wiki-cards.md")
+      await writeWikiCards(file, "# AX Wiki cards\n")
+      expect(await readFile(file, "utf8")).toBe("# AX Wiki cards\n")
+      await writeWikiCards(file, "# AX Wiki cards\n\nUpdated.\n")
+      expect(await readFile(file, "utf8")).toBe("# AX Wiki cards\n\nUpdated.\n")
+      const leftovers = (await readdir(path.dirname(file))).filter((entry) => entry.includes(".tmp-"))
+      expect(leftovers).toEqual([])
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   test.runIf(process.platform !== "win32")("refuses to follow instruction-file symlinks", async () => {

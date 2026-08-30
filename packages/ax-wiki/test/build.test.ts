@@ -8,6 +8,7 @@ import {
   buildAxWiki,
   lintWiki,
   loadWikiManifest,
+  mergeProtectedSections,
   type WikiPageGenerator,
 } from "../src"
 
@@ -77,6 +78,24 @@ describe("AX Wiki build lifecycle", () => {
     expect(lint.issues.some((issue) => issue.code === "wiki.page_modified")).toBe(true)
     await writeFile(path.join(root, "packages/core/src/index.ts"), "export function coreValue() { return 4 }\n")
     await expect(buildAxWiki({ root, action: "update", generator: generate })).rejects.toThrow("manually modified")
+  })
+
+  test("preserves protected content containing $-patterns verbatim on merge", () => {
+    // Regression test: String#replace treats a plain-string *replacement* specially
+    // ($$, $&, $`, $', $1..) — mergeProtectedSections must not let those sequences in
+    // a preserved section's raw content be reinterpreted when it is spliced back in.
+    const id = "maintainer-notes"
+    const raw = `${AX_WIKI_PROTECTED_START} ${id} -->\nDisplay math: $$ E=mc^2 $$ and a match ref $& plus $\` and $'.\n${AX_WIKI_PROTECTED_END}`
+    const existing = `# Page\n\n${raw}\n\n## Sources\n`
+    // The freshly generated content happens to contain a section with the same id
+    // (e.g. an LLM generator echoing back what it was shown) that must be replaced
+    // by, not merged with, the preserved raw content.
+    const staleRaw = `${AX_WIKI_PROTECTED_START} ${id} -->\nstale\n${AX_WIKI_PROTECTED_END}`
+    const generated = `# Page\n\n${staleRaw}\n\n## Sources\n`
+
+    const merged = mergeProtectedSections(generated, existing)
+    expect(merged).toContain(raw)
+    expect(merged).not.toContain("stale")
   })
 
   test("validates the complete candidate before writing", async () => {
