@@ -270,6 +270,12 @@ export namespace Provider {
 
   const state = Instance.state(async () => {
     using _ = log.time("state")
+    // Capture the cache generation at init START, not completion. An init that
+    // begins before invalidateAll() bumps modelCacheGeneration must keep its
+    // original (now-stale) label so getLanguage() retries against the freshly
+    // re-initialized state instead of returning models built with credentials
+    // read before the auth/config change.
+    const generation = modelCacheGeneration
     // Ensure shell env is loaded before reading API keys from process.env
     const { ensureShellEnv } = await import("@/runtime/shell-env")
     await ensureShellEnv()
@@ -688,7 +694,7 @@ export namespace Provider {
     }
 
     return {
-      generation: modelCacheGeneration,
+      generation,
       models: languages,
       modelPending: new Map<string, Promise<Lang>>(),
       providers,
@@ -886,7 +892,12 @@ export namespace Provider {
                 rawProviderTimeout <= 2_147_483_647
               ? Math.floor(rawProviderTimeout)
               : 0
-        if (rawProviderTimeout != null && rawProviderTimeout !== false && providerTimeout === 0) {
+        if (
+          rawProviderTimeout != null &&
+          rawProviderTimeout !== false &&
+          rawProviderTimeout !== 0 &&
+          providerTimeout === 0
+        ) {
           log.warn("ignoring invalid provider timeout", { providerID: model.providerID, value: rawProviderTimeout })
           delete options["timeout"]
         } else if (providerTimeout > 0) {
