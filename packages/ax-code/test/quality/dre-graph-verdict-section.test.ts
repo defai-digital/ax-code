@@ -82,7 +82,7 @@ describe("quality.dre-graph-verdict-section", () => {
       }),
     })
 
-    expect(html).toContain(`validation failed (bun test &amp;lt;suite&amp;gt;, pnpm typecheck, ignored extra command)`)
+    expect(html).toContain(`validation failed (bun test &lt;suite&gt;, pnpm typecheck, ignored extra command)`)
     expect(html).not.toContain("not shown")
     expect(html).toContain(`Changed &lt;core&gt;&amp; API`)
     expect(html).toContain(`<span class="chip high">high</span>`)

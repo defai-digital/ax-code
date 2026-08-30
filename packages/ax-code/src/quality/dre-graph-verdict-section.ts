@@ -15,11 +15,14 @@ export function verdictSection(input: { dre: SessionDre.Snapshot; risk: SessionR
     needs_review: "Needs manual review",
     blocked: "Blocked \u2014 do not accept",
   }
+  // `stat()` HTML-escapes `value` itself, so build validationLabel from raw
+  // text here — pre-escaping the commands would double-escape (e.g. a `<`
+  // in a command would render as the literal text "&lt;" instead of "<").
   const validationLabel =
     sig.validationCommands.length > 0
       ? `${validation(sig)} (${sig.validationCommands
           .slice(0, 3)
-          .map((c) => esc(c.split(" ").slice(0, 3).join(" ")))
+          .map((c) => c.split(" ").slice(0, 3).join(" "))
           .join(", ")})`
       : validation(sig)
 
