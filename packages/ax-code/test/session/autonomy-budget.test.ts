@@ -104,6 +104,22 @@ describe("resolveAutonomyBudget", () => {
     expect(b.toolCallRate.count).toBe(20)
   })
 
+  test("session.* and experimental caps win over a named profile preset", () => {
+    // Precedence per the module docstring: profile presets -> constants ->
+    // session.* / experimental.autonomous_caps -> autonomy.budget.* (highest).
+    // A legacy session.* field must still override a coarser named profile.
+    const b = resolveAutonomyBudget({
+      autonomy: { profile: "quick" },
+      session: { max_steps: 500, max_continuations: 7, max_total_steps: 4000 },
+      experimental: { autonomous_caps: { steps: 900 } },
+    } as any)
+    expect(b.profile).toBe("quick")
+    expect(b.modelTurnsPerSegment).toBe(500)
+    expect(b.maxContinuations).toBe(7)
+    expect(b.modelTurnsTotal).toBe(4000)
+    expect(b.toolCallsPerSegment).toBe(900)
+  })
+
   test("explicit budget field overrides profile seed", () => {
     const b = resolveAutonomyBudget({
       autonomy: {

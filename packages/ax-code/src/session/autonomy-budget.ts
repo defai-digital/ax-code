@@ -153,7 +153,13 @@ export function resolveAutonomyBudget(
   const preset = profile === "quick" || profile === "long" || profile === "goal" ? PROFILE_PRESETS[profile] : undefined
 
   // --- model turns / continuations ---
-  let modelTurnsPerSegment = preset?.modelTurnsPerSegment ?? session?.max_steps ?? GLOBAL_STEP_LIMIT
+  // Precedence (lowest to highest): profile presets -> constants -> session.* /
+  // experimental.autonomous_caps -> autonomy.budget.* / autonomy.stall.* (see
+  // module docstring). session.* must win over a profile preset when both are
+  // set, so it is checked first in each `??` chain below; the highest-precedence
+  // autonomy.budget.* override is still applied afterward via the if/else-if
+  // blocks.
+  let modelTurnsPerSegment = session?.max_steps ?? preset?.modelTurnsPerSegment ?? GLOBAL_STEP_LIMIT
   if (budget?.model_turns?.per_segment !== undefined) {
     modelTurnsPerSegment = budget.model_turns.per_segment
     sources.push("autonomy.budget.model_turns.per_segment")
@@ -163,7 +169,7 @@ export function resolveAutonomyBudget(
     sources.push(`profile:${profile}.model_turns.per_segment`)
   }
 
-  let maxContinuations = preset?.maxContinuations ?? session?.max_continuations ?? 3
+  let maxContinuations = session?.max_continuations ?? preset?.maxContinuations ?? 3
   if (budget?.continuations !== undefined) {
     maxContinuations = budget.continuations
     sources.push("autonomy.budget.continuations")
@@ -174,7 +180,7 @@ export function resolveAutonomyBudget(
   }
 
   const derivedTotal = modelTurnsPerSegment * (maxContinuations + 1)
-  let modelTurnsTotal = preset?.modelTurnsTotal ?? session?.max_total_steps ?? derivedTotal
+  let modelTurnsTotal = session?.max_total_steps ?? preset?.modelTurnsTotal ?? derivedTotal
   let modelTurnsTotalSuperLong = session?.max_total_steps ?? modelTurnsPerSegment * SUPER_LONG_TOTAL_STEP_HEADROOM
   let modelTurnsTotalGoal = session?.max_total_steps ?? modelTurnsPerSegment * GOAL_TOTAL_STEP_HEADROOM
   if (budget?.model_turns?.total !== undefined) {
@@ -199,7 +205,7 @@ export function resolveAutonomyBudget(
   }
 
   // --- blast radius / tool calls ---
-  let toolCallsPerSegment = preset?.toolCallsPerSegment ?? caps?.steps ?? AUTONOMOUS_MAX_STEPS
+  let toolCallsPerSegment = caps?.steps ?? preset?.toolCallsPerSegment ?? AUTONOMOUS_MAX_STEPS
   if (budget?.tool_calls?.per_segment !== undefined) {
     toolCallsPerSegment = budget.tool_calls.per_segment
     sources.push("autonomy.budget.tool_calls.per_segment")
