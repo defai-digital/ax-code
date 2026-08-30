@@ -2,6 +2,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
+import { Env } from "@/util/env"
 
 /**
  * Resolve the Python interpreter ax-engine should use for Hugging Face Hub
@@ -40,15 +41,20 @@ export function resolveAxEnginePython(
 /**
  * Env map for spawning `ax-engine download` / `download-mtp` so the child
  * always sees a Python that has `huggingface_hub` when one is available.
+ *
+ * Sanitized like every other ax-engine subprocess spawn (server.ts): this
+ * child talks to an external network host (Hugging Face Hub), so it must not
+ * inherit provider API keys or other secrets sitting in the parent shell env.
  */
 export function axEngineDownloadEnv(
   env: NodeJS.ProcessEnv = process.env,
   home: string = os.homedir(),
 ): NodeJS.ProcessEnv {
   const python = resolveAxEnginePython(env, home)
-  if (!python) return { ...env }
+  const sanitized = Env.sanitize(env)
+  if (!python) return sanitized
   return {
-    ...env,
+    ...sanitized,
     AX_ENGINE_PYTHON: python,
   }
 }
