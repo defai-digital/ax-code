@@ -118,9 +118,16 @@ interface SkillsStore {
 const CONFIG_EVENT_SOURCE = "useSkillsStore"
 const SKILLS_LOAD_CACHE_TTL_MS = 5000
 const skillsLastLoadedAt = new Map<string, number>()
+const skillsCacheByKey = new Map<string, DiscoveredSkill[]>()
 const skillsLoadInFlight = new Map<string, Promise<boolean>>()
 const skillsLoadRequestIds = new Map<string, number>()
 let skillsLoadSequence = 0
+
+const invalidateSkillsCache = (directory: string | null) => {
+  const cacheKey = getDirectoryCacheKey(directory)
+  skillsLastLoadedAt.delete(cacheKey)
+  skillsCacheByKey.delete(cacheKey)
+}
 
 export const useSkillsStore = create<SkillsStore>()(
   devtools(
@@ -144,9 +151,10 @@ export const useSkillsStore = create<SkillsStore>()(
           const cacheKey = getDirectoryCacheKey(currentDirectory)
           const now = Date.now()
           const loadedAt = skillsLastLoadedAt.get(cacheKey) ?? 0
-          const hasCachedSkills = get().skills.length > 0
+          const cachedSkills = skillsCacheByKey.get(cacheKey)
 
-          if (hasCachedSkills && now - loadedAt < SKILLS_LOAD_CACHE_TTL_MS) {
+          if (cachedSkills && now - loadedAt < SKILLS_LOAD_CACHE_TTL_MS) {
+            set({ skills: cachedSkills })
             return true
           }
 
@@ -187,6 +195,7 @@ export const useSkillsStore = create<SkillsStore>()(
 
                 if (!isCurrentLoad()) return true
                 set({ skills: configSkills, isLoading: false })
+                skillsCacheByKey.set(cacheKey, configSkills)
                 skillsLastLoadedAt.set(cacheKey, Date.now())
                 return true
               } catch (error) {
@@ -261,6 +270,8 @@ export const useSkillsStore = create<SkillsStore>()(
               throw new Error(message)
             }
 
+            invalidateSkillsCache(currentDirectory)
+
             const needsReload = payload?.requiresReload ?? false
             if (needsReload) {
               requiresReload = true
@@ -311,6 +322,8 @@ export const useSkillsStore = create<SkillsStore>()(
               throw new Error(message)
             }
 
+            invalidateSkillsCache(currentDirectory)
+
             const needsReload = payload?.requiresReload ?? false
             if (needsReload) {
               requiresReload = true
@@ -351,6 +364,8 @@ export const useSkillsStore = create<SkillsStore>()(
               const message = payload?.error || "Failed to delete skill"
               throw new Error(message)
             }
+
+            invalidateSkillsCache(currentDirectory)
 
             const needsReload = payload?.requiresReload ?? false
             if (needsReload) {

@@ -35,7 +35,7 @@ vi.doMock("@/lib/configUpdate", () => ({
   getConfigUpdateSnapshot: vi.fn(() => ({ isUpdating: false, message: null })),
 }))
 
-const { useSkillsStore } = await import("./useSkillsStore")
+let useSkillsStore: (typeof import("./useSkillsStore"))["useSkillsStore"]
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), {
@@ -61,7 +61,9 @@ const resetStore = () => {
 }
 
 describe("useSkillsStore", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    ;({ useSkillsStore } = await import("./useSkillsStore"))
     currentDirectory = "/workspace/project"
     resetStore()
     fetchCalls.length = 0

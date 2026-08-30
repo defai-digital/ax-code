@@ -37,9 +37,16 @@ export const isCommandBuiltIn = (command: Command): boolean => {
 const CONFIG_EVENT_SOURCE = "useCommandsStore"
 const COMMANDS_LOAD_CACHE_TTL_MS = 5000
 const commandsLastLoadedAt = new Map<string, number>()
+const commandsCacheByKey = new Map<string, Command[]>()
 const commandsLoadInFlight = new Map<string, Promise<boolean>>()
 const commandsLoadRequestIds = new Map<string, number>()
 let commandsLoadSequence = 0
+
+const invalidateCommandsCache = (directory: string | null) => {
+  const cacheKey = getDirectoryCacheKey(directory)
+  commandsLastLoadedAt.delete(cacheKey)
+  commandsCacheByKey.delete(cacheKey)
+}
 
 const buildCommandsSignature = (commands: Command[]): string =>
   buildRecordSignature(commands, (command) => [
@@ -97,9 +104,10 @@ export const useCommandsStore = create<CommandsStore>()(
           const cacheKey = getDirectoryCacheKey(directory)
           const now = Date.now()
           const loadedAt = commandsLastLoadedAt.get(cacheKey) ?? 0
-          const hasCachedCommands = get().commands.length > 0
+          const cachedCommands = commandsCacheByKey.get(cacheKey)
 
-          if (hasCachedCommands && now - loadedAt < COMMANDS_LOAD_CACHE_TTL_MS) {
+          if (cachedCommands && now - loadedAt < COMMANDS_LOAD_CACHE_TTL_MS) {
+            set({ commands: cachedCommands })
             return true
           }
 
@@ -182,6 +190,7 @@ export const useCommandsStore = create<CommandsStore>()(
                 } else {
                   set({ isLoading: false })
                 }
+                commandsCacheByKey.set(cacheKey, commandsWithScope)
                 commandsLastLoadedAt.set(cacheKey, Date.now())
                 return true
               } catch (error) {
@@ -251,6 +260,8 @@ export const useCommandsStore = create<CommandsStore>()(
               const message = payload?.error || "Failed to create command"
               throw new Error(message)
             }
+
+            invalidateCommandsCache(directory)
 
             if (streamDebugEnabled()) {
               console.log("[CommandsStore] Command created successfully")
@@ -324,6 +335,8 @@ export const useCommandsStore = create<CommandsStore>()(
               throw new Error(message)
             }
 
+            invalidateCommandsCache(directory)
+
             if (streamDebugEnabled()) {
               console.log("[CommandsStore] Command updated successfully")
             }
@@ -375,6 +388,8 @@ export const useCommandsStore = create<CommandsStore>()(
               const message = payload?.error || "Failed to delete command"
               throw new Error(message)
             }
+
+            invalidateCommandsCache(directory)
 
             if (streamDebugEnabled()) {
               console.log("[CommandsStore] Command deleted successfully")

@@ -53,7 +53,7 @@ vi.doMock("@/lib/configUpdate", () => ({
   getConfigUpdateSnapshot: vi.fn(() => ({ isUpdating: false, message: null })),
 }))
 
-const { useCommandsStore } = await import("./useCommandsStore")
+let useCommandsStore: (typeof import("./useCommandsStore"))["useCommandsStore"]
 
 const jsonResponse = (body: unknown): Response =>
   new Response(JSON.stringify(body), {
@@ -77,7 +77,9 @@ const resetStore = () => {
 }
 
 describe("useCommandsStore", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules()
+    ;({ useCommandsStore } = await import("./useCommandsStore"))
     activeProjectPath = "/workspace/project"
     resetStore()
     commandLists.length = 0
