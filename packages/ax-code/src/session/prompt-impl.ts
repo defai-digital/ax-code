@@ -1488,6 +1488,30 @@ export namespace SessionPrompt {
           break
         }
 
+        // A forced tool-calling-backstop wrap-up turn that ends cleanly is a
+        // checkpoint, not natural completion (ADR-065 D1): the summary may
+        // list remaining work, so resume with tools available instead of
+        // letting the completion gate end the run. Placed after the
+        // unexecutable-tool-text recovery, which owns malformed forced turns
+        // and clears these flags, so each consumed forced turn triggers this
+        // exactly once. Clearing the flags here lets the NEXT clean finish
+        // complete normally.
+        if (modelFinished && lastTurnWasForceTextOnly && lastTurnForceTextReason === "tool_only_breaker") {
+          lastTurnWasForceTextOnly = false
+          lastTurnForceTextReason = undefined
+          log.info("tool-calling backstop wrap-up finished; resuming with tools", {
+            command: "session.prompt.loop",
+            status: "resume",
+            sessionID,
+          })
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: latestMessages,
+            text: AutonomousContinuationPrompt.toolCallingBackstopResume(),
+          })
+          continue
+        }
+
         if (shouldRecoverEmptySubagentResult) {
           const gateRetryTransition = await handlePromptLoopCompletionGateRetry({
             sessionID,

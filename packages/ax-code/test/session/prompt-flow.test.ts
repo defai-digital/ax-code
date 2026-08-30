@@ -1792,9 +1792,12 @@ describe("session.prompt flow", () => {
           parts: [{ type: "text", text: "work through a long tool-only task" }],
         })
 
-        // 3 tool-calling turns hit the cap, then exactly one forced
-        // text-only turn — no immediate re-fire after the summary (#390).
-        expect(streamSpy).toHaveBeenCalledTimes(4)
+        // 3 tool-calling turns hit the cap, then the forced text-only turn —
+        // no immediate re-fire after the summary (#390). ADR-065 D1: the
+        // forced wrap-up is a checkpoint, not natural completion, so the loop
+        // injects one resume continuation; the resume turn's own clean
+        // finish=stop then completes the run (5 calls total).
+        expect(streamSpy).toHaveBeenCalledTimes(5)
         expect(toolChoices[3]).toBe("none")
 
         const messages = await Session.messages({ sessionID: session.id })
@@ -1874,5 +1877,161 @@ describe("session.prompt flow", () => {
         await Session.remove(session.id)
       },
     })
+  })
+
+  test("tool-calling backstop wrap-up is not natural completion: the run resumes with tools (ADR-065 D1)", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { autonomy: { stall: { tool_only_turns: 3 } } },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      const toolChoices: unknown[] = []
+      let call = 0
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+        call += 1
+        toolChoices.push(input.toolChoice)
+        // 3 tool-calling turns hit the cap; the forced wrap-up turn ends
+        // cleanly with remaining work listed; the resumed turn keeps working
+        // (finish=tool-calls) before a final natural stop.
+        const finishReason = call <= 3 || call === 5 ? "tool-calls" : "stop"
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            if (call === 4) {
+              yield { type: "text-start", id: "text_1" }
+              yield { type: "text-delta", id: "text_1", text: "summary: remaining steps 4-9 are not done" }
+              yield { type: "text-end", id: "text_1" }
+            }
+            if (call >= 6) {
+              yield { type: "text-start", id: "text_1" }
+              yield { type: "text-delta", id: "text_1", text: "all steps complete" }
+              yield { type: "text-end", id: "text_1" }
+            }
+            yield {
+              type: "finish-step",
+              finishReason,
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Backstop Resume Flow Test" })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "work through a long tool-only task" }],
+          })
+
+          // The forced wrap-up turn must not end the run: the loop resumes
+          // (call 5), works with tools again, and stops on the later natural
+          // finish (call 6).
+          expect(streamSpy).toHaveBeenCalledTimes(6)
+          expect(toolChoices[3]).toBe("none")
+          expect(toolChoices[4]).not.toBe("none")
+
+          const messages = await Session.messages({ sessionID: session.id })
+          const checkpoints = messages.filter(
+            (entry) =>
+              entry.info.role === "user" &&
+              entry.parts.some((part) => part.type === "text" && part.text.includes("your last 3 turns each ended")),
+          )
+          expect(checkpoints).toHaveLength(1)
+          const resumes = messages.filter(
+            (entry) =>
+              entry.info.role === "user" &&
+              entry.parts.some((part) => part.type === "text" && part.text.includes("Agent-loop wrap-up follow-up")),
+          )
+          expect(resumes).toHaveLength(1)
+
+          expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
+  })
+
+  test("natural finish after the backstop resume turn completes normally (no infinite suppression)", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      config: { autonomy: { stall: { tool_only_turns: 3 } } },
+    })
+
+    const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
+    process.env["AX_CODE_AUTONOMOUS"] = "true"
+
+    try {
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      let call = 0
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+        call += 1
+        const finishReason = call <= 3 ? "tool-calls" : "stop"
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            if (call >= 4) {
+              yield { type: "text-start", id: "text_1" }
+              yield { type: "text-delta", id: "text_1", text: call === 4 ? "wrap-up summary" : "final answer" }
+              yield { type: "text-end", id: "text_1" }
+            }
+            yield {
+              type: "finish-step",
+              finishReason,
+              usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Backstop Resume Completion Test" })
+
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "work through a long tool-only task" }],
+          })
+
+          // 3 tool-calling turns, the forced wrap-up, then exactly one
+          // resume turn whose natural finish=stop completes the run — the
+          // suppression fires once per forced turn, not forever.
+          expect(streamSpy).toHaveBeenCalledTimes(5)
+
+          const messages = await Session.messages({ sessionID: session.id })
+          const resumes = messages.filter(
+            (entry) =>
+              entry.info.role === "user" &&
+              entry.parts.some((part) => part.type === "text" && part.text.includes("Agent-loop wrap-up follow-up")),
+          )
+          expect(resumes).toHaveLength(1)
+
+          expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previousAutonomous === undefined) delete process.env["AX_CODE_AUTONOMOUS"]
+      else process.env["AX_CODE_AUTONOMOUS"] = previousAutonomous
+    }
   })
 })

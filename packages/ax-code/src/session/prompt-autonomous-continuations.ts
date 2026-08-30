@@ -235,6 +235,20 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  /**
+   * Injected when a forced tool-calling-backstop wrap-up turn (reason
+   * tool_only_breaker) finishes cleanly. The forced summary is a checkpoint,
+   * not natural completion (ADR-065 D1): it may list remaining work, so the
+   * run resumes with tools available instead of ending at the gate.
+   */
+  export function toolCallingBackstopResume() {
+    return (
+      `Agent-loop wrap-up follow-up: your checkpoint summary is recorded. Tools are available again. ` +
+      `If the summary listed remaining work, resume those steps now with tools and finish them before stopping. ` +
+      `If the task is actually complete, give the final answer in text without calling more tools.`
+    )
+  }
+
   export function axEngineReadOnlyCheckpoint(input: {
     consecutiveTurns: number
     forceThreshold: number
