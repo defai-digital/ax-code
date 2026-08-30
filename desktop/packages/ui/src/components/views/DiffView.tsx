@@ -686,7 +686,11 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(
       setStagedDiffData(null)
       setDiffLoadError(null)
       lastDiffRequestRef.current = null
-    }, [staged, stagedRevision])
+      // `directory` must stay a dependency: this entry's React key doesn't include the
+      // directory, and `stagedRevision` defaults to 0 for a directory with no recorded
+      // index mutations yet, so switching directories can leave a previous directory's
+      // staged diff cached here and shown/reverted against the newly active one.
+    }, [directory, staged, stagedRevision])
 
     React.useEffect(() => {
       if (!isExpanded || !hasBeenVisible) return
@@ -1199,7 +1203,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
     setSelectedStagedDiffData(null)
     setDiffLoadError(null)
     lastDiffRequestRef.current = null
-  }, [activeDiffStaged, indexRevision])
+    // effectiveDirectory must stay a dependency: without it, switching directories while
+    // viewing a staged diff (indexRevision defaults to 0 for a directory with no recorded
+    // mutations yet, so it can be unchanged across the switch) leaves the previous
+    // directory's staged diff cached in state and displayed/reverted against the new one.
+  }, [activeDiffStaged, effectiveDirectory, indexRevision])
 
   // Auto-select first file (skip if we have a pending file to consume)
   React.useEffect(() => {
