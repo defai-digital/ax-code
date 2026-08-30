@@ -195,6 +195,14 @@ export async function bootstrapDirectory(input: {
       const grouped = groupBySession((x.data ?? []).filter((q): q is QuestionRequest => !!q?.id && !!q.sessionID))
       const merged = { ...getState().question }
       for (const [sessionID, questions] of Object.entries(grouped)) {
+        // A live event may have already updated this session's list while this
+        // snapshot was in flight (e.g. a new question asked, or one answered).
+        // Only trust the snapshot for sessions that didn't change concurrently —
+        // otherwise this HTTP response, computed before the concurrent change,
+        // would silently overwrite the fresher event-driven state.
+        const beforeSignature = beforeSignatures.get(sessionID) ?? ""
+        const currentSignature = requestSignature(getState().question[sessionID])
+        if (currentSignature !== beforeSignature) continue
         merged[sessionID] = questions.filter((q) => !!q?.id).sort((a, b) => cmp(a.id, b.id))
       }
       for (const sessionID of beforeSignatures.keys()) {
@@ -226,6 +234,11 @@ export async function bootstrapDirectory(input: {
       )
       const merged = { ...getState().permission }
       for (const [sessionID, perms] of Object.entries(grouped)) {
+        // See matching comment in the question.list resync above: don't let a
+        // snapshot computed before a concurrent live change overwrite it.
+        const beforeSignature = beforeSignatures.get(sessionID) ?? ""
+        const currentSignature = requestSignature(getState().permission[sessionID])
+        if (currentSignature !== beforeSignature) continue
         merged[sessionID] = perms.filter((p) => !!p?.id).sort((a, b) => cmp(a.id, b.id))
       }
       for (const sessionID of beforeSignatures.keys()) {

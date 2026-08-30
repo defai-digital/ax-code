@@ -142,6 +142,58 @@ describe("resyncBlockingRequestsForDirectory", () => {
     expect(store.getState().question["ses_a"]?.[0]?.id).toBe("que_sse_arrived")
   })
 
+  test("preserves an in-flight SSE-delivered question even when the session still has other pending questions in the snapshot", async () => {
+    // Unlike the "signature changed during the fetch" case above (where the
+    // snapshot came back empty for the session), this covers the case where
+    // the snapshot DOES have an entry for the session — but that entry was
+    // computed before a concurrent live update, and must not clobber it.
+    const store = createDirectoryStore({
+      question: { ses_a: [{ ...buildQuestion(), id: "que_initial" }] },
+    })
+    pendingQuestionsResponse = [{ ...buildQuestion(), id: "que_initial" }]
+
+    const promise = resyncBlockingRequestsForDirectory("/repo", store)
+    store.setState({
+      question: {
+        ses_a: [
+          { ...buildQuestion(), id: "que_initial" },
+          { ...buildQuestion(), id: "que_sse_arrived" },
+        ],
+      },
+    })
+    await promise
+
+    const ids = store
+      .getState()
+      .question["ses_a"]?.map((q) => q.id)
+      .sort()
+    expect(ids).toEqual(["que_initial", "que_sse_arrived"])
+  })
+
+  test("preserves an in-flight SSE-delivered permission even when the session still has other pending permissions in the snapshot", async () => {
+    const store = createDirectoryStore({
+      permission: { ses_a: [{ ...buildPermission(), id: "perm_initial" }] },
+    })
+    pendingPermissionsResponse = [{ ...buildPermission(), id: "perm_initial" }]
+
+    const promise = resyncBlockingRequestsForDirectory("/repo", store)
+    store.setState({
+      permission: {
+        ses_a: [
+          { ...buildPermission(), id: "perm_initial" },
+          { ...buildPermission(), id: "perm_sse_arrived" },
+        ],
+      },
+    })
+    await promise
+
+    const ids = store
+      .getState()
+      .permission["ses_a"]?.map((p) => p.id)
+      .sort()
+    expect(ids).toEqual(["perm_initial", "perm_sse_arrived"])
+  })
+
   test("clears stale entries when API returns no pending requests and signature unchanged", async () => {
     const store = createDirectoryStore({
       question: { ses_a: [{ ...buildQuestion(), id: "que_stale" }] },

@@ -551,6 +551,15 @@ export async function resyncBlockingRequestsForDirectory(
     store.setState((state: DirectoryStore) => {
       const merged = { ...state.question }
       for (const [sessionId, questions] of Object.entries(grouped)) {
+        // A live SSE event may have already updated this session's questions
+        // while this snapshot request was in flight (e.g. a new question
+        // asked, or one answered). Only trust the snapshot for sessions that
+        // didn't change concurrently — otherwise this response, computed
+        // before the concurrent change, would silently overwrite the fresher
+        // event-driven state.
+        const beforeSignature = beforeSignatures.get(sessionId) ?? ""
+        const currentSignature = requestSignature(state.question[sessionId])
+        if (currentSignature !== beforeSignature) continue
         merged[sessionId] = questions
       }
       for (const sessionId of candidates) {
@@ -630,6 +639,11 @@ export async function resyncBlockingRequestsForDirectory(
     store.setState((state: DirectoryStore) => {
       const merged = { ...state.permission }
       for (const [sessionId, permissions] of Object.entries(grouped)) {
+        // See matching comment in the question resync above: don't let a
+        // snapshot computed before a concurrent live change overwrite it.
+        const beforeSignature = beforeSignatures.get(sessionId) ?? ""
+        const currentSignature = requestSignature(state.permission[sessionId])
+        if (currentSignature !== beforeSignature) continue
         merged[sessionId] = permissions
       }
       for (const sessionId of candidates) {
