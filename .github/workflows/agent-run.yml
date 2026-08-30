@@ -71,9 +71,17 @@ jobs:
           AX_CODE_AUTONOMOUS: "true"
           AX_CODE_ISOLATION_MODE: ${{ github.event.inputs.sandbox || 'workspace-write' }}
           AX_CODE_ISOLATION_BACKEND: auto
+          # Passed through an env var (not inlined via ${{ }} into the script
+          # body) so its value is treated as opaque shell data, not re-parsed
+          # as shell syntax — inlining a workflow_dispatch input directly
+          # into `run:` lets a value like `$(curl ...$OPENROUTER_API_KEY)`
+          # execute as a command substitution in this write-permissioned,
+          # secret-bearing job (the standard GitHub Actions script-injection
+          # pattern).
+          AGENT_RUN_PROMPT_INPUT: ${{ github.event.inputs.prompt }}
         run: |
           set -euo pipefail
-          PROMPT="${{ github.event.inputs.prompt }}"
+          PROMPT="${AGENT_RUN_PROMPT_INPUT:-}"
           if [ -z "$PROMPT" ]; then
             PROMPT="Review this PR for obvious bugs; do not push."
           fi
