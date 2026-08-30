@@ -1076,7 +1076,7 @@ export async function validateWorktreeDirectory(
   resolvedWorktreeRoot: string | null
   resolvedCwd: string | null
 }> {
-  const response = await fetch(`${API_BASE}/validate-directory`, {
+  const response = await fetch(buildUrl(`${API_BASE}/validate-directory`, undefined), {
     method: HTTP_DEFAULTS.method.post,
     headers: HTTP_DEFAULTS.headers.contentTypeJson,
     body: JSON.stringify({ directory, worktreeRoot }),
@@ -1097,7 +1097,7 @@ export async function canonicalizeWorktreeState(directory: string): Promise<{
   degraded: boolean
   attentionReason?: "merge" | "rebase" | "cherry-pick" | "revert" | "bisect" | null
 }> {
-  const response = await fetch(`${API_BASE}/canonicalize-worktree-state`, {
+  const response = await fetch(buildUrl(`${API_BASE}/canonicalize-worktree-state`, undefined), {
     method: HTTP_DEFAULTS.method.post,
     headers: HTTP_DEFAULTS.headers.contentTypeJson,
     body: JSON.stringify({ directory }),
