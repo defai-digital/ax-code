@@ -151,7 +151,7 @@ const runStage = (env) =>
 // placeholder behind after each policy test.
 const resetStagedTree = () => {
   fs.rmSync(stagedTreeDir, { recursive: true, force: true })
-  fs.mkdirSync(stagedTreeDir, { recursive: true })
+  fs.mkdirSync(path.join(stagedTreeDir, "node_modules"), { recursive: true })
   fs.writeFileSync(path.join(stagedTreeDir, "README.txt"), placeholderReadme("dev"))
 }
 

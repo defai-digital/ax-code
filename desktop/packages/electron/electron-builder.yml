@@ -42,6 +42,16 @@ extraResources:
   # the asar, so no asarUnpack entry is needed for the runtime tree.
   - from: resources/ax-code
     to: ax-code
+  # electron-builder unconditionally filters a node_modules directory at the
+  # root of every FileSet. Copy it through a separate FileSet whose root is the
+  # directory itself; otherwise release installers contain the CLI launcher
+  # but none of its runtime dependencies.
+  - from: resources/ax-code/node_modules
+    to: ax-code/node_modules
+
+# Fail packaging if a staged CLI tree lost any direct runtime dependency while
+# electron-builder copied extraResources. Placeholder OSS/dev builds still pass.
+afterPack: scripts/verify-packaged-ax-code.cjs
 
 # Unpack native .node files — they cannot be required() from inside an asar.
 asarUnpack:

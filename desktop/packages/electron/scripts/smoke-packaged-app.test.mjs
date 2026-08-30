@@ -3,7 +3,9 @@ import {
   buildSmokeAppArgs,
   buildSmokeBundleIdentifier,
   bundledAxCodeLauncherPath,
+  desktopMainLogPath,
   findMissingStartupEvents,
+  outputConfirmsBundledRuntime,
   parseArgs,
   resolveBundledPhaseAction,
 } from "./smoke-packaged-app.mjs"
@@ -37,6 +39,26 @@ describe("smoke-packaged-app args", () => {
     expect(bundledAxCodeLauncherPath("/tmp/AX Code.app")).toBe(
       "/tmp/AX Code.app/Contents/Resources/ax-code/bin/ax-code",
     )
+  })
+
+  test("locates the Electron main-process log used by startup diagnostics", () => {
+    expect(desktopMainLogPath({ platform: "darwin", home: "/Users/smoke" })).toBe(
+      "/Users/smoke/Library/Logs/AX Code/main.log",
+    )
+    expect(desktopMainLogPath({ platform: "linux", home: "/home/smoke" })).toBe(
+      "/home/smoke/.ax-code-desktop/logs/main.log",
+    )
+  })
+
+  test("recognizes the main supervisor's authoritative bundled source", () => {
+    expect(
+      outputConfirmsBundledRuntime(
+        "[electron] supervising ax-code runtime: /Applications/AX Code.app/Contents/Resources/ax-code/bin/ax-code (source: bundled)",
+      ),
+    ).toBe(true)
+    expect(
+      outputConfirmsBundledRuntime("[electron] supervising ax-code runtime: /usr/bin/ax-code (source: path)"),
+    ).toBe(false)
   })
 
   test("bundled phase runs when the launcher is executable", () => {

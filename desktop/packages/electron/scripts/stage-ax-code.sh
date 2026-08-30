@@ -45,7 +45,9 @@ stage_placeholder() {
     exit 1
   fi
   rm -rf "$dest"
-  mkdir -p "$dest"
+  # Keep an empty node_modules source directory for electron-builder's
+  # dedicated dependency FileSet. Release trees replace it with real modules.
+  mkdir -p "$dest/node_modules"
   node "$node_helpers" placeholder > "$dest/README.txt"
   echo "[stage-ax-code] $reason — staged README.txt placeholder"
   exit 0

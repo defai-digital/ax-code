@@ -65,6 +65,16 @@ export const findMissingStartupEvents = (requiredEvents, events) => {
 export const bundledAxCodeLauncherPath = (appPath) =>
   path.join(appPath, "Contents", "Resources", "ax-code", "bin", "ax-code")
 
+export const desktopMainLogPath = ({ platform = process.platform, home = os.homedir() } = {}) =>
+  platform === "darwin"
+    ? path.join(home, "Library", "Logs", "AX Code", "main.log")
+    : path.join(home, ".ax-code-desktop", "logs", "main.log")
+
+export const outputConfirmsBundledRuntime = (output) =>
+  typeof output === "string" &&
+  output.includes("[electron] supervising ax-code runtime:") &&
+  output.includes("(source: bundled)")
+
 // What the bundled phase should do when the sidecar launcher is missing or
 // not executable. Release CI (AX_CODE_STAGE_REQUIRED=true) must FAIL — a
 // graceful skip there would mask a broken runtime-less installer; dev and
@@ -263,10 +273,7 @@ const waitFor = async (fn, timeoutMs, label) => {
 const copyLogIfPresent = async (artifactsDir) => {
   if (!artifactsDir) return
   await fs.mkdir(artifactsDir, { recursive: true })
-  const logPath =
-    process.platform === "darwin"
-      ? path.join(os.homedir(), "Library", "Logs", "AX Code Desktop", "main.log")
-      : path.join(os.homedir(), ".ax-code-desktop", "logs", "main.log")
+  const logPath = desktopMainLogPath()
   if (await pathExists(logPath)) {
     await fs.copyFile(logPath, path.join(artifactsDir, "main.log"))
   }
@@ -358,18 +365,36 @@ const runBundledAxCodePhase = async ({ args, smokeAppPath, executable, tmpDir })
 
   const stdout = []
   const stderr = []
+  let childError = null
+  let childExit = null
   const child = spawn(executable, buildSmokeAppArgs({ userDataDir }), {
     env,
     stdio: ["ignore", "pipe", "pipe"],
   })
   child.stdout.on("data", (chunk) => stdout.push(chunk.toString()))
   child.stderr.on("data", (chunk) => stderr.push(chunk.toString()))
+  child.on("error", (error) => {
+    childError = error
+  })
+  child.on("exit", (code, signal) => {
+    childExit = { code, signal }
+  })
 
   try {
     await waitFor(
       async () => {
+        if (childError) throw childError
+        if (childExit) {
+          throw new Error(
+            `packaged app exited before readiness (code=${childExit.code ?? "null"}, signal=${childExit.signal ?? "null"})`,
+          )
+        }
         const { response, body } = await fetchJson(`http://127.0.0.1:${serverPort}/health`)
-        return response.ok && (body?.axCodeRunning === true || body?.isAxCodeReady === true)
+        if (!response.ok) throw new Error(`/health returned ${response.status}`)
+        if (body?.axCodeRunning === true || body?.isAxCodeReady === true) return body
+        throw new Error(
+          `/health reports runtime not ready (source=${JSON.stringify(body?.axCodeBinarySource ?? null)}, version=${JSON.stringify(body?.axCodeVersion ?? null)})`,
+        )
       },
       args.timeoutMs,
       "/health readiness (bundled runtime)",
@@ -379,14 +404,24 @@ const runBundledAxCodePhase = async ({ args, smokeAppPath, executable, tmpDir })
     if (!response.ok) {
       throw new Error(`/health failed with status ${response.status} (bundled runtime)`)
     }
-    if (body?.axCodeBinarySource !== "bundled") {
-      throw new Error(`expected axCodeBinarySource "bundled", got ${JSON.stringify(body?.axCodeBinarySource ?? null)}`)
+    // Under main-process supervision the web lifecycle correctly treats the
+    // runtime as external, so its /health source is null. The Electron main
+    // process owns binary resolution and reports the authoritative source.
+    if (!outputConfirmsBundledRuntime(`${stdout.join("")}\n${stderr.join("")}`)) {
+      throw new Error("Electron main process did not resolve the staged runtime from the bundled source")
     }
     const version = String(body?.axCodeVersion || "").replace(/^v/, "")
     if (expectedVersion && version !== expectedVersion) {
       throw new Error(`bundled runtime version ${version || "(unknown)"} does not match the pinned ${expectedVersion}`)
     }
     console.log(`Bundled ax-code runtime smoke passed (v${version || "unknown"})`)
+  } catch (error) {
+    if (args.artifacts) {
+      await fs.mkdir(args.artifacts, { recursive: true })
+      await fs.writeFile(path.join(args.artifacts, "bundled-stdout.log"), stdout.join(""))
+      await fs.writeFile(path.join(args.artifacts, "bundled-stderr.log"), stderr.join(""))
+    }
+    throw error
   } finally {
     await terminateChild(child)
   }
@@ -521,6 +556,7 @@ const main = async () => {
     // Stop the stub-driven instance before relaunching the same app copy for
     // the bundled-runtime phase (finally still terminates idempotently).
     await terminateChild(child)
+    await cleanupStubProcesses(stubAxCode)
     await runBundledAxCodePhase({ args, smokeAppPath, executable, tmpDir })
 
     console.log("Packaged app smoke passed")
