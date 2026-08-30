@@ -59,7 +59,6 @@ export const STORE_TO_STORE_IMPORT_ALLOWLIST: readonly string[] = [
   "useAgentsStore -> useSkillsCatalogStore",
   "useAgentsStore -> useSkillsStore",
   "useConfigStore -> useConfigStore-impl",
-  "useConfigStore-impl -> useAgentsStore",
   "useConfigStore-impl -> useDirectoryStore",
   "useDirectoryStore -> useFileSearchStore",
   "useGlobalSessionsStore -> globalSessions",

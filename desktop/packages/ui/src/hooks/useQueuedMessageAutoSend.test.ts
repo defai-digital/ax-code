@@ -14,6 +14,12 @@ const _mockSUIState: { currentSessionId: string | null; worktreeMetadata: Map<st
 
 vi.doMock("@/stores/useConfigStore", () => ({
   useConfigStore: {
+    getState: () => ({}),
+  },
+}))
+
+vi.doMock("@/stores/useAgentsStore", () => ({
+  useAgentsStore: {
     getState: () => ({
       getVisibleAgents: getVisibleAgentsMock,
     }),

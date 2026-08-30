@@ -1,6 +1,7 @@
 import React from "react"
 import { Textarea } from "@/components/ui/textarea"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { useUIStore } from "@/stores/useUIStore"
 import { useMessageQueueStore, type QueuedMessage } from "@/stores/messageQueueStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
@@ -920,7 +921,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
   const currentVariant = useConfigStore((state) => state.currentVariant)
   const currentAgentName = useConfigStore((state) => state.currentAgentName)
   const setAgent = useConfigStore((state) => state.setAgent)
-  const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents)
+  const getVisibleAgents = useAgentsStore((state) => state.getVisibleAgents)
   const agents = getVisibleAgents()
   const isMobile = useUIStore((state) => state.isMobile)
   const setImagePreviewOpen = useUIStore((state) => state.setImagePreviewOpen)

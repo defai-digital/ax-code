@@ -1,15 +1,10 @@
 import type {
-  Agent,
-  Command,
-  Config,
   LspStatus,
-  McpStatus,
   Message,
   Part,
   Path,
   PermissionRequest,
   Project,
-  ProviderListResponse,
   QuestionRequest,
   Session,
   SessionStatus,
@@ -40,13 +35,9 @@ export type ProjectMeta = {
 /** Per-directory store state */
 export type State = {
   status: "loading" | "partial" | "complete"
-  agent: Agent[]
-  command: Command[]
   project: string
   projectMeta: ProjectMeta | undefined
   icon: string | undefined
-  provider: ProviderListResponse
-  config: Config
   path: Path
   session: Session[]
   sessionTotal: number
@@ -55,7 +46,6 @@ export type State = {
   todo: Record<string, Todo[]>
   permission: Record<string, PermissionRequest[]>
   question: Record<string, QuestionRequest[]>
-  mcp: Record<string, McpStatus>
   lsp: LspStatus[]
   vcs: VcsInfo | undefined
   limit: number
@@ -114,12 +104,8 @@ export const INITIAL_STATE: State = {
   project: "",
   projectMeta: undefined,
   icon: undefined,
-  provider: { all: [], connected: [], default: {} },
-  config: {},
   path: { state: "", config: "", worktree: "", directory: "", home: "" },
   status: "loading",
-  agent: [],
-  command: [],
   session: [],
   sessionTotal: 0,
   session_status: {},
@@ -127,7 +113,6 @@ export const INITIAL_STATE: State = {
   todo: {},
   permission: {},
   question: {},
-  mcp: {},
   lsp: [],
   vcs: undefined,
   limit: 5,

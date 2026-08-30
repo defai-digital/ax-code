@@ -29,6 +29,7 @@ import { getEditModeColors } from "@/lib/permissions/editModeColors"
 import { isProviderModelSelectable } from "@/lib/providerModelAvailability"
 import { cn, fuzzyMatch } from "@/lib/utils"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSelectionStore } from "@/sync/selection-store"
 import { useDirectorySync, useSessionMessages } from "@/sync/sync-context"
@@ -303,8 +304,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
   const setAgent = useConfigStore((state) => state.setAgent)
   const getCurrentProvider = useConfigStore((state) => state.getCurrentProvider)
   const getModelMetadata = useConfigStore((state) => state.getModelMetadata)
-  const getCurrentAgent = useConfigStore((state) => state.getCurrentAgent)
-  const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents)
+  const getAgentByName = useAgentsStore((state) => state.getAgentByName)
+  const getVisibleAgents = useAgentsStore((state) => state.getVisibleAgents)
 
   // Use visible agents (excludes hidden internal agents)
   const agents = getVisibleAgents()
@@ -457,8 +458,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({ className }) => {
     if (uiAgentName) {
       return agents.find((agent) => agent.name === uiAgentName)
     }
-    return getCurrentAgent?.()
-  }, [agents, getCurrentAgent, uiAgentName])
+    return currentAgentName ? getAgentByName(currentAgentName) : undefined
+  }, [agents, currentAgentName, getAgentByName, uiAgentName])
 
   const buttonHeight = "h-7"
   const controlIconSize = "size-4"

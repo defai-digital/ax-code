@@ -57,18 +57,31 @@ NOT carry config-domain copies: `providers`/`providerAuth`/`config`/
 live in `src/stores/` (`useConfigStore`, `useTodosPersistStore`, …). Do not
 re-add config-domain fields here.
 
+Per-directory child stores (`State` in `types.ts`) hold only the live
+session/message hot path plus directory metadata: `status`, `project`,
+`projectMeta`, `icon`, `path`, `session`, `sessionTotal`, `session_status`,
+`session_diff`, `todo`, `permission`, `question`, `lsp`, `vcs`, `limit`,
+`message`, `part`. The config-domain slices `agent`/`command`/`provider`/
+`mcp`/`config` were removed (SPEC-2026-08-30 S4.6): those domains are
+single-home in `src/stores/` — providers + selection in `useConfigStore`,
+agents in `useAgentsStore`, commands in `useCommandsStore`, MCP in
+`useMcpStore`/`useMcpConfigStore`. `lsp` stays: it carries live per-directory
+LSP status with an `lsp.updated` event contract (see the event → field
+mapping below). Do not re-add config-domain slices to `State`.
+
 Bootstrap runs in two scopes:
 
 1. **Global** (`bootstrapGlobal`): fetches `path.get` + `project.list` only,
    then flips `ready` (with `error` when every request failed). Config and
    providers are no longer fetched globally.
 2. **Per directory** (`bootstrapDirectory`): phase 1 (blocking) fetches
-   `provider.list`, `config.get`, `path.get`, `session.status` per directory
-   — these per-directory fetches are the only seed source for the
-   per-directory `provider`/`config` slices, which S4.6 deletes entirely;
-   phase 2 (deferred) fetches agents/commands/mcp/lsp/vcs/permission/question;
-   phase 3 (lazy) loads the session list. The global `projects` list is only
-   used to seed the directory's project id.
+   `path.get` + `session.status` (plus `project.current` when the project id
+   cannot be seeded from the global list); phase 2 (deferred) fetches
+   lsp/vcs/permission/question; phase 3 (lazy) loads the session list. Since
+   S4.6 the bootstrap does NOT fetch providers/config/agents/commands/mcp —
+   the app-level stores above load those themselves
+   (`useConfigStore.initializeApp`, `useAgentsStore.loadAgents`, …). The
+   global `projects` list is only used to seed the directory's project id.
 
 ## Session list rules
 

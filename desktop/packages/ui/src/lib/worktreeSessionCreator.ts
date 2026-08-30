@@ -9,6 +9,7 @@ import { useI18nStore, formatMessage, type I18nKey, type I18nParams } from "@/li
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { useSelectionStore } from "@/sync/selection-store"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { checkIsGitRepository, previewGitWorktree } from "@/lib/gitApi"
@@ -62,7 +63,7 @@ let isCreatingWorktreeSession = false
 
 const applyDefaultAgentAndModelSelection = (sessionId: string, configState = useConfigStore.getState()) => {
   try {
-    const visibleAgents = configState.getVisibleAgents()
+    const visibleAgents = useAgentsStore.getState().getVisibleAgents()
     let agentName: string | undefined
 
     if (configState.settingsDefaultAgent) {

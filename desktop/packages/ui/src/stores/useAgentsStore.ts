@@ -19,6 +19,7 @@ import { useSkillsCatalogStore } from "@/stores/useSkillsCatalogStore"
 import { useSkillsStore } from "@/stores/useSkillsStore"
 import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { parseConfigPathGroup } from "@/lib/configPathGroup"
+import { filterVisibleAgents, registerAgentsSource, type AgentScope, type AgentWithExtras } from "@/lib/agents"
 import { getAxCodeCurrentDirectory } from "@/lib/ax-code/currentDirectory"
 import { getActiveConfigDirectory } from "@/stores/utils/configDirectory"
 import { getDirectoryCacheKey } from "@/stores/utils/cacheKey"
@@ -44,7 +45,8 @@ const buildAgentsSignature = (agents: Agent[]): string =>
     ]
   })
 
-export type AgentScope = "user" | "project"
+export type { AgentScope, AgentWithExtras }
+export { isAgentBuiltIn, isAgentHidden, filterVisibleAgents } from "@/lib/agents"
 
 export interface AgentConfig {
   name: string
@@ -60,31 +62,9 @@ export interface AgentConfig {
   scope?: AgentScope
 }
 
-// Extended Agent type for API properties not in SDK types
-export type AgentWithExtras = Agent & {
-  native?: boolean
-  hidden?: boolean
-  options?: { hidden?: boolean }
-  scope?: AgentScope
-  /** Subfolder name parsed from file path, e.g. "business", "development" */
-  group?: string
-}
-
-// Helper to check if agent is built-in (handles both SDK 'builtIn' and API 'native')
-export const isAgentBuiltIn = (agent: Agent): boolean => {
-  const extended = agent as AgentWithExtras & { builtIn?: boolean }
-  return extended.native === true || extended.builtIn === true
-}
-
-// Helper to check if agent is hidden (internal agents like title, compaction, summary)
-// Checks both top-level hidden and options.hidden (AX Code API inconsistency workaround)
-export const isAgentHidden = (agent: Agent): boolean => {
-  const extended = agent as AgentWithExtras
-  return extended.hidden === true || extended.options?.hidden === true
-}
-
-// Helper to filter only visible (non-hidden) agents
-export const filterVisibleAgents = (agents: Agent[]): Agent[] => agents.filter((agent) => !isAgentHidden(agent))
+// Extended Agent type for API properties not in SDK types — defined in
+// @/lib/agents (moved in SPEC-2026-08-30 S4.6 so the pure helpers can be
+// shared without a store→store import edge) and re-exported above.
 
 const CONFIG_EVENT_SOURCE = "useAgentsStore"
 
@@ -109,7 +89,7 @@ interface AgentsStore {
 
   setSelectedAgent: (name: string | null) => void
   setAgentDraft: (draft: AgentDraft | null) => void
-  loadAgents: () => Promise<boolean>
+  loadAgents: (options?: { directory?: string | null }) => Promise<boolean>
   createAgent: (config: AgentConfig) => Promise<boolean>
   updateAgent: (name: string, config: Partial<AgentConfig>) => Promise<boolean>
   deleteAgent: (name: string) => Promise<boolean>
@@ -135,8 +115,15 @@ export const useAgentsStore = create<AgentsStore>()(
           set({ agentDraft: draft })
         },
 
-        loadAgents: async () => {
-          const configDirectory = getActiveConfigDirectory("AgentsStore")
+        loadAgents: async (options) => {
+          // Explicit directory (e.g. the config store's active directory,
+          // passed through the lib/agents source bridge) wins over the
+          // ambient active config directory. An explicit null means "no
+          // directory override" — do not fall back in that case.
+          const configDirectory =
+            options && "directory" in options
+              ? options.directory?.trim() || null
+              : getActiveConfigDirectory("AgentsStore")
           const cacheKey = getDirectoryCacheKey(configDirectory)
           const now = Date.now()
           const loadedAt = agentsLastLoadedAt.get(cacheKey) ?? 0
@@ -473,6 +460,14 @@ if (typeof window !== "undefined") {
   window.__zustand_agents_store__ = useAgentsStore
 }
 
+// Register this store as the single agents home (SPEC-2026-08-30 S4.6) so
+// useConfigStore can read/load the list through the lib/agents bridge without
+// a store→store import edge (R1 ratchet).
+registerAgentsSource({
+  getAgents: () => useAgentsStore.getState().agents,
+  loadAgents: (options) => useAgentsStore.getState().loadAgents(options),
+})
+
 type ConfigRefreshMode = "active" | "projects"
 
 const normalizeRefreshScopes = (scopes?: ConfigChangeScope[]): ConfigChangeScope[] => {
@@ -535,9 +530,14 @@ async function performConfigRefresh(
       if (refreshProviders) {
         sdkRefreshTasks.push(configStore.loadProviders({ directory }).then(() => undefined))
       }
-      if (refreshSdkAgents) {
-        sdkRefreshTasks.push(configStore.loadAgents({ directory }).then(() => undefined))
-      }
+    }
+    if (refreshSdkAgents) {
+      // S4.6: the agents list is single-home (this store), loaded for the
+      // active directory only — per-directory agent copies no longer exist.
+      // This call delegates to this store's loadAgents via the lib/agents
+      // source bridge (deduped with the load below), then re-resolves the
+      // config store's settings/default selection for the active directory.
+      sdkRefreshTasks.push(configStore.loadAgents().then(() => undefined))
     }
 
     const uiRefreshTasks: Promise<void>[] = []

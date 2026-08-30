@@ -46,18 +46,22 @@ describe("R1 store-to-store import ratchet", () => {
 
   test("accepts the frozen baseline edges via relative and alias specifiers", () => {
     const relative = analyzeStoreToStoreImports(
-      storeFile("useConfigStore-impl.ts"),
-      'import { filterVisibleAgents } from "./useAgentsStore"',
+      storeFile("useAgentsStore.ts"),
+      'import { useConfigStore } from "./useConfigStore"',
     )
     const alias = analyzeStoreToStoreImports(
       storeFile("useAgentsStore.ts"),
       'import { useConfigStore } from "@/stores/useConfigStore"',
     )
 
-    expect(relative.map((edge) => edge.edge)).toEqual(["useConfigStore-impl -> useAgentsStore"])
+    expect(relative.map((edge) => edge.edge)).toEqual(["useAgentsStore -> useConfigStore"])
     expect(alias.map((edge) => edge.edge)).toEqual(["useAgentsStore -> useConfigStore"])
-    expect(STORE_TO_STORE_IMPORT_ALLOWLIST).toContain("useConfigStore-impl -> useAgentsStore")
     expect(STORE_TO_STORE_IMPORT_ALLOWLIST).toContain("useAgentsStore -> useConfigStore")
+    // S4.6: useConfigStore-impl no longer imports useAgentsStore — the
+    // filterVisibleAgents helper moved to src/lib/agents.ts and the agents
+    // list is read through the lib/agents source bridge. The ratchet only
+    // shrinks, so the old edge stays out of the allowlist.
+    expect(STORE_TO_STORE_IMPORT_ALLOWLIST).not.toContain("useConfigStore-impl -> useAgentsStore")
   })
 
   test("ignores test files, nested support directories, and non-store imports", () => {

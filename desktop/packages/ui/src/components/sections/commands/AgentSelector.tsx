@@ -2,7 +2,6 @@ import React from "react"
 import type { Agent } from "@ax-code/sdk/v2"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useAgentsStore, filterVisibleAgents } from "@/stores/useAgentsStore"
-import { useConfigStore } from "@/stores/useConfigStore"
 import { useUIStore } from "@/stores/useUIStore"
 import { useDeviceInfo } from "@/lib/device"
 import { cn } from "@/lib/utils"
@@ -21,14 +20,12 @@ interface CommandAgentSelectorProps {
 export const AgentSelector: React.FC<CommandAgentSelectorProps> = ({ agentName, onChange, className, filter }) => {
   const { t } = useI18n()
   const { isReady, isUnavailable } = useAxCodeReadiness()
-  const configAgents = useConfigStore((state) => state.agents)
+  // Agents are single-home in useAgentsStore (S4.6).
   const agentsStoreAgents = useAgentsStore((state) => state.agents)
   const loadAgentsStore = useAgentsStore((state) => state.loadAgents)
-  const loadConfigAgents = useConfigStore((state) => state.loadAgents)
   const rawAgents = React.useMemo(() => {
-    if (Array.isArray(configAgents) && configAgents.length > 0) return configAgents
     return Array.isArray(agentsStoreAgents) ? agentsStoreAgents : []
-  }, [configAgents, agentsStoreAgents])
+  }, [agentsStoreAgents])
   const agents = React.useMemo(() => {
     const visible = filterVisibleAgents(rawAgents)
     return filter ? visible.filter(filter) : visible
@@ -41,9 +38,8 @@ export const AgentSelector: React.FC<CommandAgentSelectorProps> = ({ agentName, 
 
   React.useEffect(() => {
     if (rawAgents.length > 0) return
-    void loadConfigAgents()
     void loadAgentsStore()
-  }, [rawAgents.length, loadConfigAgents, loadAgentsStore])
+  }, [rawAgents.length, loadAgentsStore])
 
   const closeMobilePanel = () => setIsMobilePanelOpen(false)
 

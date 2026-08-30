@@ -2,6 +2,7 @@ import React from "react"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { useI18n } from "@/lib/i18n"
 
 export interface MultirunAgentSelectorProps {
@@ -21,7 +22,7 @@ export interface MultirunAgentSelectorProps {
 
 /**
  * Agent selector dropdown for selecting an agent for multi-run sessions.
- * Uses getVisibleAgents from useConfigStore to show available agents.
+ * Uses getVisibleAgents from useAgentsStore (single agents home, S4.6).
  */
 export const AgentSelector: React.FC<MultirunAgentSelectorProps> = ({
   value,
@@ -32,7 +33,7 @@ export const AgentSelector: React.FC<MultirunAgentSelectorProps> = ({
   portalToBody,
 }) => {
   const { t } = useI18n()
-  const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents)
+  const getVisibleAgents = useAgentsStore((state) => state.getVisibleAgents)
   const loadAgents = useConfigStore((state) => state.loadAgents)
   const defaultAgentName = useConfigStore((state) => state.currentAgentName)
   const agents = getVisibleAgents()

@@ -13,6 +13,7 @@ import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useSelectionStore } from "@/sync/selection-store"
 import * as sessionActions from "@/sync/session-actions"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { useUIStore } from "@/stores/useUIStore"
 import { useGitHubAuthStore } from "@/stores/useGitHubAuthStore"
 import { axCodeClient } from "@/lib/ax-code/client"
@@ -255,7 +256,7 @@ export function GitHubIssuePickerDialog({
 
   const resolveDefaultAgentName = React.useCallback((): string | undefined => {
     const configState = useConfigStore.getState()
-    const visibleAgents = configState.getVisibleAgents()
+    const visibleAgents = useAgentsStore.getState().getVisibleAgents()
 
     if (configState.settingsDefaultAgent) {
       const settingsAgent = visibleAgents.find((a) => a.name === configState.settingsDefaultAgent)

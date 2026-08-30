@@ -127,7 +127,7 @@ export function routeMessage(params: {
     files?: RouteFileInput[]
   }>
 }): Promise<void> {
-  const run = (): Promise<void> => {
+  const run = async (): Promise<void> => {
     if (params.inputMode === "shell") {
       const sdk = axCodeClient.getSdkClient()
       const dir = axCodeClient.getDirectory() || undefined
@@ -159,14 +159,18 @@ export function routeMessage(params: {
       const cmdName = forcedCommand?.name ?? head.slice(1)
       const cmdArgs = forcedCommand?.arguments ?? tail.join(" ")
 
-      const dirState = getDirectoryState(params.directory ?? undefined)
-      const syncCommands = dirState?.command ?? []
-      const storeCommands = useCommandsStore.getState().commands
-      const knownCommand = Boolean(
-        syncCommands.find((c) => c.name === cmdName) || storeCommands.find((c) => c.name === cmdName),
-      )
+      // Commands are single-home in useCommandsStore (SPEC-2026-08-30 S4.6) —
+      // the per-directory sync `command` slice is gone. The store is not
+      // boot-loaded, so load lazily on the first slash-command send (its
+      // in-flight dedup + TTL cache make repeat sends cheap).
+      let storeCommands = useCommandsStore.getState().commands
+      if (storeCommands.length === 0) {
+        await useCommandsStore.getState().loadCommands()
+        storeCommands = useCommandsStore.getState().commands
+      }
+      const knownCommand = Boolean(storeCommands.find((c) => c.name === cmdName))
       // Empty lists usually mean "not synced yet"; do not treat that as "command missing".
-      const commandsLoaded = syncCommands.length > 0 || storeCommands.length > 0
+      const commandsLoaded = storeCommands.length > 0
 
       // Known command, or forced work-mode while command catalog not loaded yet.
       if (cmdName && (knownCommand || (forcedCommand != null && !commandsLoaded))) {

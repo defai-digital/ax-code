@@ -121,9 +121,10 @@ export async function bootstrapDirectory(input: {
   const loading = state.status !== "complete"
 
   // Seed the project id from the global project list while we fetch
-  // directory-specific data. `provider`/`config` are intentionally NOT seeded
-  // from a global copy (SPEC-2026-08-30 S4.3): the per-directory phase-1
-  // fetches below are their only seed source until S4.6 removes the slices.
+  // directory-specific data. Config domains (providers/config/agents/
+  // commands/mcp) are intentionally NOT fetched here (SPEC-2026-08-30 S4.6):
+  // their single homes are the app-level stores in src/stores/
+  // (`useConfigStore`, `useAgentsStore`, `useCommandsStore`, `useMcpStore`).
   const seededProject = projectID(directory, g.projects)
   if (seededProject) set({ project: seededProject })
   if (loading) set({ status: "partial" })
@@ -136,8 +137,6 @@ export async function bootstrapDirectory(input: {
     seededProject
       ? Promise.resolve()
       : retry(() => sdk.project.current().then((x) => set({ project: unwrap(x, "project.current").id }))),
-    retry(() => sdk.provider.list().then((x) => set({ provider: unwrap(x, "provider.list") }))),
-    retry(() => sdk.config.get().then((x) => set({ config: unwrap(x, "config.get") }))),
     retry(() =>
       sdk.path.get().then((x) => {
         const data = unwrap(x, "path.get")
@@ -155,7 +154,7 @@ export async function bootstrapDirectory(input: {
 
   // path.get and session.status have no global-state fallback.
   // If either fails, the UI cannot safely advance to "complete".
-  const [, , , pathResult, sessionStatusResult] = phase1Results
+  const [, pathResult, sessionStatusResult] = phase1Results
   const criticalPhase1Failed = pathResult.status === "rejected" || sessionStatusResult.status === "rejected"
 
   if (phase1Errors.length === phase1Results.length || criticalPhase1Failed) {
@@ -171,9 +170,6 @@ export async function bootstrapDirectory(input: {
   // These enrich the UI but aren't required for basic functionality.
   // ---------------------------------------------------------------------------
   void Promise.allSettled([
-    retry(() => sdk.app.agents().then((x) => set({ agent: unwrap(x, "app.agents") }))),
-    retry(() => sdk.command.list().then((x) => set({ command: unwrap(x, "command.list") }))),
-    retry(() => sdk.mcp.status().then((x) => set({ mcp: unwrap(x, "mcp.status") }))),
     retry(() => sdk.lsp.status().then((x) => set({ lsp: unwrap(x, "lsp.status") }))),
     retry(() =>
       sdk.vcs.get().then((x) => {

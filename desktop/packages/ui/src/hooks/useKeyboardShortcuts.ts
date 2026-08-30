@@ -7,6 +7,7 @@ import { useThemeSystem } from "@/contexts/useThemeSystem"
 import { useAssistantStatus } from "@/hooks/useAssistantStatus"
 import { createWorktreeSession } from "@/lib/worktreeSessionCreator"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { canUseLocalElectronDesktopIPC, invokeDesktop } from "@/lib/desktop"
 import { showAxCodeStatus } from "@/lib/axCodeStatus"
 import { eventMatchesShortcut, getEffectiveShortcutCombo, normalizeCombo } from "@/lib/shortcuts"
@@ -249,7 +250,7 @@ export const useKeyboardShortcuts = () => {
 
         const configState = useConfigStore.getState()
         const nextAgentName = getCycledPrimaryAgentName(
-          configState.getVisibleAgents(),
+          useAgentsStore.getState().getVisibleAgents(),
           configState.currentAgentName,
           cycleAgentDirection,
         )

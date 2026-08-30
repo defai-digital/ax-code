@@ -73,6 +73,26 @@ Dev mode logs a single-line diff whenever an event would change the store
 entry — that log is now the regression alarm (a diff means an event disagreed
 with store state, which should be rare).
 
+## Config-domain ownership (S4.6 — single homes)
+
+Each config domain has exactly one home store (SPEC-2026-08-30, decision D2).
+The duplicated copies in the sync layer (`State.agent/command/provider/mcp/
+config`, `GlobalState.providers/providerAuth/config`) and the
+`useConfigStore.agents` copy + duplicate loader are deleted:
+
+| Domain                            | Single home                         | Notes                                                                                                                  |
+| --------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| providers + model/agent selection | `useConfigStore`                    | Keeps `directoryScoped` snapshots and the provider startup re-poll hedge                                               |
+| agents                            | `useAgentsStore`                    | Real CRUD + loads; pure helpers (`filterVisibleAgents`, `isAgentHidden`, `isAgentBuiltIn`) live in `src/lib/agents.ts` |
+| commands                          | `useCommandsStore`                  | Slash-command send path lazy-loads it on first use                                                                     |
+| MCP status/config                 | `useMcpStore` / `useMcpConfigStore` | —                                                                                                                      |
+| settings defaults                 | `useConfigStore`                    | `loadAgents` keeps the settings fetch + default selection resolution, sourcing the agents list from `useAgentsStore`   |
+
+`useConfigStore-impl` may not import `useAgentsStore` (R1 ratchet), so it
+reaches the agents list through the `AgentsSource` bridge in
+`src/lib/agents.ts`, which `useAgentsStore` registers at module load
+(`getAgentsSource()` → `{ getAgents, loadAgents }`).
+
 ## Git / PR Stores
 
 The Git and PR stores are the most important stores to understand before editing this directory.

@@ -3,6 +3,7 @@ import { useMessageQueueStore, type QueuedMessage } from "@/stores/messageQueueS
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSelectionStore } from "@/sync/selection-store"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { parseAgentMentions } from "@/lib/messages/agentMentions"
 import { getSyncSessionStatus } from "@/sync/sync-refs"
 import { useDirectorySync } from "@/sync/sync-context"
@@ -35,7 +36,7 @@ export const buildQueuedAutoSendPayload = (queue: QueuedMessage[]) => {
     return null
   }
 
-  const agents = useConfigStore.getState().getVisibleAgents()
+  const agents = useAgentsStore.getState().getVisibleAgents()
   const { sanitizedText, mention } = parseAgentMentions(queued.content, agents)
 
   return {

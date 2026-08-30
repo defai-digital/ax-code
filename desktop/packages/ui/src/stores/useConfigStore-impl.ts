@@ -1,11 +1,10 @@
 import { create } from "zustand"
 import { devtools, persist, createJSONStorage } from "zustand/middleware"
-import type { Agent } from "@ax-code/sdk/v2"
 import { axCodeClient } from "@/lib/ax-code/client"
 import { scopeMatches, subscribeToConfigChanges } from "@/lib/configSync"
 import type { ModelMetadata } from "@/types"
 import { getSafeStorage } from "./utils/safeStorage"
-import { filterVisibleAgents } from "./useAgentsStore"
+import { getAgentsSource } from "@/lib/agents"
 import { useSessionUIStore } from "@/sync/session-ui-store"
 import { useSelectionStore } from "@/sync/selection-store"
 import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry"
@@ -440,7 +439,6 @@ const resolveInitialDirectoryKey = (): string => {
 
 interface DirectoryScopedConfig {
   providers: ProviderWithModelList[]
-  agents: Agent[]
   currentProviderId: string
   currentModelId: string
   currentVariant?: string | undefined
@@ -457,7 +455,6 @@ interface ConfigStore {
   providers: ProviderWithModelList[]
   providersLoading: boolean
   providersError: string | null
-  agents: Agent[]
   currentProviderId: string
   currentModelId: string
   currentVariant: string | undefined
@@ -511,10 +508,7 @@ interface ConfigStore {
   initializeApp: () => Promise<void>
   getCurrentProvider: () => ProviderWithModelList | undefined
   getCurrentModel: () => ProviderModel | undefined
-  getCurrentAgent: () => Agent | undefined
   getModelMetadata: (providerId: string, modelId: string) => ModelMetadata | undefined
-  // Returns only visible agents (excludes hidden internal agents like title, compaction, summary)
-  getVisibleAgents: () => Agent[]
 }
 
 // In-flight dedup: prevent concurrent duplicate loadProviders/loadAgents calls for the same directory
@@ -630,7 +624,6 @@ export const useConfigStore = create<ConfigStore>()(
         providers: [],
         providersLoading: false,
         providersError: null,
-        agents: [],
         currentProviderId: "",
         currentModelId: "",
         currentVariant: undefined,
@@ -703,7 +696,6 @@ export const useConfigStore = create<ConfigStore>()(
               return {
                 activeDirectoryKey: directoryKey,
                 providers: snapshot.providers,
-                agents: snapshot.agents,
                 currentProviderId: snapshot.currentProviderId,
                 currentModelId: snapshot.currentModelId,
                 currentVariant: snapshot.currentVariant,
@@ -719,7 +711,6 @@ export const useConfigStore = create<ConfigStore>()(
             return {
               activeDirectoryKey: directoryKey,
               providers: [],
-              agents: [],
               currentProviderId: "",
               currentModelId: "",
               currentAgentName: undefined,
@@ -787,7 +778,6 @@ export const useConfigStore = create<ConfigStore>()(
                 set((state) => {
                   const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
                     providers: [],
-                    agents: [],
                     currentProviderId: "",
                     currentModelId: "",
                     currentAgentName: undefined,
@@ -896,7 +886,6 @@ export const useConfigStore = create<ConfigStore>()(
             set((state) => {
               const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
                 providers: [],
-                agents: [],
                 currentProviderId: "",
                 currentModelId: "",
                 currentAgentName: undefined,
@@ -996,7 +985,6 @@ export const useConfigStore = create<ConfigStore>()(
             const directoryKey = state.activeDirectoryKey
             const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
               providers: state.providers,
-              agents: state.agents,
               currentProviderId: state.currentProviderId,
               currentModelId: state.currentModelId,
               currentVariant: state.currentVariant,
@@ -1052,7 +1040,6 @@ export const useConfigStore = create<ConfigStore>()(
             const directoryKey = state.activeDirectoryKey
             const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
               providers: state.providers,
-              agents: state.agents,
               currentProviderId: state.currentProviderId,
               currentModelId: state.currentModelId,
               currentVariant: state.currentVariant,
@@ -1088,7 +1075,6 @@ export const useConfigStore = create<ConfigStore>()(
             const directoryKey = state.activeDirectoryKey
             const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
               providers: state.providers,
-              agents: state.agents,
               currentProviderId: state.currentProviderId,
               currentModelId: state.currentModelId,
               currentVariant: state.currentVariant,
@@ -1148,7 +1134,6 @@ export const useConfigStore = create<ConfigStore>()(
             const directoryKey = state.activeDirectoryKey
             const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
               providers: state.providers,
-              agents: state.agents,
               currentProviderId: state.currentProviderId,
               currentModelId: state.currentModelId,
               currentAgentName: state.currentAgentName,
@@ -1182,7 +1167,6 @@ export const useConfigStore = create<ConfigStore>()(
 
             const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
               providers: state.providers,
-              agents: state.agents,
               currentProviderId: state.currentProviderId,
               currentModelId: state.currentModelId,
               currentAgentName: state.currentAgentName,
@@ -1219,20 +1203,30 @@ export const useConfigStore = create<ConfigStore>()(
           if (existing) return existing
 
           const promise = (async (): Promise<boolean> => {
-            const existingSnapshot = get().directoryScoped[directoryKey]
-            const previousAgents =
-              existingSnapshot?.agents ?? (get().activeDirectoryKey === directoryKey ? get().agents : [])
             let lastError: unknown = null
 
             for (let attempt = 0; attempt < 3; attempt++) {
               try {
-                // Fetch agents and OpenChamber settings in parallel
-                const [agents, openChamberDefaults] = await Promise.all([
-                  axCodeClient.withDirectory(fromDirectoryKey(directoryKey), () => axCodeClient.listAgents()),
+                // The agents list itself lives in useAgentsStore (single home,
+                // SPEC-2026-08-30 S4.6); the lib/agents source bridge loads it
+                // without a store→store import edge (R1 ratchet). This method
+                // keeps owning the OpenChamber settings fetch + default
+                // agent/model selection resolution.
+                const source = getAgentsSource()
+                if (!source) {
+                  throw new Error("agents source not registered")
+                }
+
+                // Load agents and fetch OpenChamber settings in parallel
+                const [loaded, openChamberDefaults] = await Promise.all([
+                  source.loadAgents({ directory: fromDirectoryKey(directoryKey) }),
                   fetchOpenChamberDefaults(),
                 ])
+                if (!loaded) {
+                  throw new Error("agents list load failed")
+                }
 
-                const safeAgents = Array.isArray(agents) ? agents : []
+                const safeAgents = source.getAgents()
 
                 const providers =
                   get().activeDirectoryKey === directoryKey
@@ -1260,7 +1254,6 @@ export const useConfigStore = create<ConfigStore>()(
                 set((state) => {
                   const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
                     providers,
-                    agents: previousAgents,
                     currentProviderId: "",
                     currentModelId: "",
                     currentAgentName: undefined,
@@ -1272,10 +1265,9 @@ export const useConfigStore = create<ConfigStore>()(
                   const nextSnapshot: DirectoryScopedConfig = {
                     ...baseSnapshot,
                     providers,
-                    agents: safeAgents,
                   }
 
-                  const nextState: Partial<ConfigStore> = {
+                  return {
                     settingsDefaultModel: openChamberDefaults.defaultModel,
                     settingsDefaultVariant: openChamberDefaults.defaultVariant,
                     settingsDefaultAgent: openChamberDefaults.defaultAgent,
@@ -1290,12 +1282,6 @@ export const useConfigStore = create<ConfigStore>()(
                       [directoryKey]: nextSnapshot,
                     },
                   }
-
-                  if (state.activeDirectoryKey === directoryKey) {
-                    nextState.agents = safeAgents
-                  }
-
-                  return nextState
                 })
 
                 const shouldPersistResolvedZenModel = !!resolvedZenModel && resolvedZenModel !== defaultZenModel
@@ -1314,7 +1300,6 @@ export const useConfigStore = create<ConfigStore>()(
                   set((state) => {
                     const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
                       providers,
-                      agents: [],
                       currentProviderId: "",
                       currentModelId: "",
                       currentVariant: undefined,
@@ -1327,7 +1312,6 @@ export const useConfigStore = create<ConfigStore>()(
                     const nextSnapshot: DirectoryScopedConfig = {
                       ...baseSnapshot,
                       providers,
-                      agents: [],
                       currentAgentName: undefined,
                     }
 
@@ -1364,7 +1348,7 @@ export const useConfigStore = create<ConfigStore>()(
                 const buildAgent = primaryAgents.find((agent) => agent.name === "build")
                 const fallbackAgent = buildAgent || primaryAgents[0] || safeAgents[0]
 
-                let resolvedAgent: Agent = fallbackAgent
+                let resolvedAgent = fallbackAgent
 
                 // Track invalid settings to clear
                 const invalidSettings: { defaultModel?: string; defaultVariant?: string; defaultAgent?: string } = {}
@@ -1449,7 +1433,6 @@ export const useConfigStore = create<ConfigStore>()(
                 set((state) => {
                   const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
                     providers,
-                    agents: safeAgents,
                     currentProviderId: "",
                     currentModelId: "",
                     currentAgentName: undefined,
@@ -1461,7 +1444,6 @@ export const useConfigStore = create<ConfigStore>()(
                   const nextSnapshot: DirectoryScopedConfig = {
                     ...baseSnapshot,
                     providers,
-                    agents: safeAgents,
                     currentAgentName: resolvedAgent.name,
                     currentProviderId: resolvedProviderId ?? baseSnapshot.currentProviderId,
                     currentModelId: resolvedModelId ?? baseSnapshot.currentModelId,
@@ -1512,44 +1494,6 @@ export const useConfigStore = create<ConfigStore>()(
             }
 
             console.error("Failed to load agents:", lastError)
-
-            set((state) => {
-              const providers =
-                state.activeDirectoryKey === directoryKey
-                  ? state.providers
-                  : (state.directoryScoped[directoryKey]?.providers ?? [])
-
-              const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
-                providers,
-                agents: [],
-                currentProviderId: "",
-                currentModelId: "",
-                currentAgentName: undefined,
-                selectedProviderId: "",
-                agentModelSelections: {},
-                defaultProviders: {},
-              }
-
-              const nextSnapshot: DirectoryScopedConfig = {
-                ...baseSnapshot,
-                providers,
-                agents: previousAgents,
-              }
-
-              const nextState: Partial<ConfigStore> = {
-                directoryScoped: {
-                  ...state.directoryScoped,
-                  [directoryKey]: nextSnapshot,
-                },
-              }
-
-              if (state.activeDirectoryKey === directoryKey) {
-                nextState.agents = previousAgents
-              }
-
-              return nextState
-            })
-
             return false
           })().finally(() => _inFlightAgents.delete(directoryKey))
 
@@ -1563,14 +1507,12 @@ export const useConfigStore = create<ConfigStore>()(
         },
 
         setAgent: (agentName: string | undefined) => {
-          const { agents, providers, settingsDefaultModel, settingsDefaultVariant, currentProviderId, currentModelId } =
-            get()
+          const { providers, settingsDefaultModel, settingsDefaultVariant, currentProviderId, currentModelId } = get()
 
           set((state) => {
             const directoryKey = state.activeDirectoryKey
             const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
               providers: state.providers,
-              agents: state.agents,
               currentProviderId: state.currentProviderId,
               currentModelId: state.currentModelId,
               currentAgentName: state.currentAgentName,
@@ -1610,7 +1552,6 @@ export const useConfigStore = create<ConfigStore>()(
                 const directoryKey = state.activeDirectoryKey
                 const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
                   providers: state.providers,
-                  agents: state.agents,
                   currentProviderId: state.currentProviderId,
                   currentModelId: state.currentModelId,
                   currentVariant: state.currentVariant,
@@ -1642,7 +1583,11 @@ export const useConfigStore = create<ConfigStore>()(
             }
 
             // Prefer the selected agent's configured model when switching agents.
-            const agent = agents.find((candidate) => candidate.name === agentName)
+            // The agents list lives in useAgentsStore (single home, S4.6) —
+            // read it through the lib/agents source bridge.
+            const agent = getAgentsSource()
+              ?.getAgents()
+              .find((candidate) => candidate.name === agentName)
             const agentModelSelection = agent?.model
             if (agentModelSelection?.providerID && agentModelSelection?.modelID) {
               const { providerID, modelID } = agentModelSelection
@@ -1870,11 +1815,6 @@ export const useConfigStore = create<ConfigStore>()(
           return provider.models.find((model) => model.id === currentModelId)
         },
 
-        getCurrentAgent: () => {
-          const { agents, currentAgentName } = get()
-          if (!currentAgentName) return undefined
-          return agents.find((a) => a.name === currentAgentName)
-        },
         getModelMetadata: (providerId: string, modelId: string) => {
           const key = buildModelMetadataKey(providerId, modelId)
           if (!key) {
@@ -1898,14 +1838,21 @@ export const useConfigStore = create<ConfigStore>()(
 
           return deriveModelMetadata(providerId, model)
         },
-        getVisibleAgents: () => {
-          const { agents } = get()
-          return filterVisibleAgents(agents)
-        },
       }),
       {
         name: "config-store",
         storage: createJSONStorage(() => getSafeStorage()),
+        // v1: the per-directory `agents` copies were removed (S4.6 — agents
+        // are single-home in useAgentsStore); strip them from rehydrated
+        // snapshots so stale lists do not linger in persisted state.
+        version: 1,
+        migrate: (persisted) => {
+          const state = persisted as { directoryScoped?: Record<string, Record<string, unknown>> } | undefined
+          for (const snapshot of Object.values(state?.directoryScoped ?? {})) {
+            delete snapshot.agents
+          }
+          return state
+        },
         partialize: (state) => ({
           activeDirectoryKey: state.activeDirectoryKey,
           directoryScoped: state.directoryScoped,

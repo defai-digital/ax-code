@@ -10,6 +10,7 @@ import { axCodeClient } from "@/lib/ax-code/client"
 import type { RuntimeAPIs } from "@/lib/api/types"
 import { useDirectoryStore } from "@/stores/useDirectoryStore"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useGitStore } from "@/stores/useGitStore"
 import { useSessionUIStore } from "@/sync/session-ui-store"
@@ -61,7 +62,7 @@ const MiniChatBootstrap: React.FC<{ config: MiniChatConfig }> = ({ config }) => 
   const loadProviders = useConfigStore((state) => state.loadProviders)
   const loadAgents = useConfigStore((state) => state.loadAgents)
   const providersCount = useConfigStore((state) => state.providers.length)
-  const agentsCount = useConfigStore((state) => state.agents.length)
+  const agentsCount = useAgentsStore((state) => state.agents.length)
 
   React.useEffect(() => {
     void initializeApp()

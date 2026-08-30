@@ -73,33 +73,35 @@ export const parsePermissionRuleset = (ruleset: unknown): PermissionRule[] => {
   return parsed
 }
 
-type ConfigStoreAgent = {
+type AgentsStoreAgent = {
   name: string
   permission?: PermissionRule[]
 }
 
-type ConfigStoreState = {
-  agents?: ConfigStoreAgent[]
+type AgentsStoreState = {
+  agents?: AgentsStoreAgent[]
 }
 
-type ConfigStoreRef = { getState?: () => ConfigStoreState }
+type AgentsStoreRef = { getState?: () => AgentsStoreState }
 
-const resolveConfigStore = (): ConfigStoreRef | undefined => {
+const resolveAgentsStore = (): AgentsStoreRef | undefined => {
   if (typeof window === "undefined") {
     return undefined
   }
-  return (window as { __zustand_config_store__?: ConfigStoreRef }).__zustand_config_store__
+  // Agents are single-home in useAgentsStore (SPEC-2026-08-30 S4.6); the
+  // config store no longer carries an agents copy.
+  return (window as { __zustand_agents_store__?: AgentsStoreRef }).__zustand_agents_store__
 }
 
-const getAgentDefinition = (agentName?: string): ConfigStoreAgent | undefined => {
+const getAgentDefinition = (agentName?: string): AgentsStoreAgent | undefined => {
   if (!agentName) {
     return undefined
   }
 
   try {
-    const configStore = resolveConfigStore()
-    if (configStore?.getState) {
-      const state = configStore.getState()
+    const agentsStore = resolveAgentsStore()
+    if (agentsStore?.getState) {
+      const state = agentsStore.getState()
       return state.agents?.find?.((agent) => agent.name === agentName)
     }
   } catch {

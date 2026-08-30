@@ -13,6 +13,7 @@ import { PermissionNotifications } from "@/components/notifications/PermissionNo
 import { flushPendingRemovals, recoverPendingRemovals } from "@/sync/soft-removal"
 import { useWindowTitle } from "@/hooks/useWindowTitle"
 import { useConfigStore } from "@/stores/useConfigStore"
+import { useAgentsStore } from "@/stores/useAgentsStore"
 import { hasModifier } from "@/lib/utils"
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, restartDesktopApp } from "@/lib/desktop"
 import {
@@ -224,7 +225,9 @@ function App({ apis }: AppProps) {
   const isInitialized = useConfigStore((s) => s.isInitialized)
   const isConnected = useConfigStore((s) => s.isConnected)
   const providersCount = useConfigStore((state) => state.providers.length)
-  const agentsCount = useConfigStore((state) => state.agents.length)
+  // Agents are single-home in useAgentsStore (S4.6); config store's loadAgents
+  // delegates the list load to it and keeps the settings/default resolution.
+  const agentsCount = useAgentsStore((state) => state.agents.length)
   const loadProviders = useConfigStore((state) => state.loadProviders)
   const loadAgents = useConfigStore((state) => state.loadAgents)
   const error = useSessionUIStore((s) => s.error)
@@ -478,10 +481,11 @@ function App({ apis }: AppProps) {
     const MAX_RETRIES = 15
     const attempt = async () => {
       const state = useConfigStore.getState()
-      if (state.providers.length > 0 && state.agents.length > 0) return
+      if (state.providers.length > 0 && useAgentsStore.getState().agents.length > 0) return
       try {
         if (state.providers.length === 0) await loadProviders()
-        if (useConfigStore.getState().agents.length === 0) await loadAgents()
+        // loadAgents delegates the list load to useAgentsStore (single home).
+        if (useAgentsStore.getState().agents.length === 0) await loadAgents()
       } catch {
         /* retry next interval */
       }

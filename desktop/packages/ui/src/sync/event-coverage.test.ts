@@ -11,7 +11,7 @@
  *     previous state object in place; the deep-frozen baseline would throw).
  * (b) A synthetic burst of `message.part.delta` events through the real
  *     pipeline → reducer → child-store path must leave every untouched slice
- *     (`config`, `permission`, unrelated messages/parts, …)
+ *     (`session`, `permission`, unrelated messages/parts, …)
  *     reference-identical, across the whole burst.
  */
 
@@ -151,7 +151,6 @@ function frozenBaseline(): State {
   const baseline: State = {
     ...INITIAL_STATE,
     status: "complete",
-    config: { theme: "dark" } as State["config"],
     session: [session("ses_1")],
     sessionTotal: 1,
     message: { ses_1: [assistantMessage("msg_1", "ses_1")] },
@@ -258,7 +257,6 @@ describe("message.part.delta burst referential stability", () => {
     const seeded: State = {
       ...INITIAL_STATE,
       status: "complete",
-      config: { theme: "dark" } as State["config"],
       session: [session("ses_1"), session("ses_other")],
       sessionTotal: 2,
       message: {
@@ -278,7 +276,6 @@ describe("message.part.delta burst referential stability", () => {
 
     // Capture the references that must survive the burst untouched.
     const stableSlices = [
-      "config",
       "session",
       "message",
       "permission",
