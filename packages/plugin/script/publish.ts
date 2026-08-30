@@ -29,7 +29,7 @@ await fs.writeFile("package.json", JSON.stringify(pkg, null, 2))
 try {
   // Drop stale tarballs from earlier runs so the publish step is unambiguous.
   for (const stale of readdirSync(dir).filter((file) => file.endsWith(".tgz"))) {
-    await fs.unlink(path.join(dir, file))
+    await fs.unlink(path.join(dir, stale))
   }
   sh("npm", ["pack", "--workspaces=false"])
   // Resolve the packed tarball explicitly (spawnSync has no shell glob expansion).
