@@ -160,7 +160,7 @@ export const computeQueuedAutoSendStatusUpdate = (
       nextStatusMap.set(sessionId, status.type as SessionStatusType)
     }
   }
-  for (const [sessionId, queue] of queueEntries) {
+  for (const [sessionId] of queueEntries) {
     if (heldSessionIds.has(sessionId)) continue
     const currentStatusType = (statusRecord[sessionId]?.type ?? "idle") as SessionStatusType
     nextStatusMap.set(sessionId, currentStatusType)
