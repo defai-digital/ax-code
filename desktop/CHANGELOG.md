@@ -4,6 +4,53 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.10.0] - 2026-08-30
+
+### Added
+
+- Add regression test for ACP fork/resume mode restoration.
+
+### Fixed
+
+- Fix three path-traversal/arbitrary-write vulnerabilities in the desktop web API.
+- Fix login rate-limit bypass from a lock that released before its own critical section.
+- Fix arbitrary recursive directory deletion in the worktree-removal API.
+- Fix ClawdHub skill install failing on Linux when tmp and target differ in filesystem.
+- Fix scheduled-task pause failures dropping a created task's retry tracking.
+- Fix wrong file paths in @-mention autocomplete after a workspace switch.
+- Fix crash on malformed well-known response and hardcoded version in CLI.
+- Fix stale deferred-bootstrap responses reverting store after a workspace switch.
+- Fix stale sessionID in TUI session route context after switching sessions.
+- Fix seven correctness bugs in the desktop chat components.
+- Fix stale-directory race in AxCodeService.sendMessage/sendCommand.
+- Fix stale-response races across a project/directory switch in settings sections.
+- Fix stale-response races and a stuck spinner in the git views.
+- Fix uncaught exception on malformed PTY replay frame in SDK WebSocket bridge.
+- Fix ACP fork/resume silently dropping the session's actual agent mode.
+- Fix misleading "AGENTS.md already exists" log printed on a fresh init.
+- Fix stack-overflow crash in aspect-ratio GCD on non-finite/invalid dimensions.
+- Fix cross-session error leakage and a session-entry leak in the SDK.
+- Fix duplicate reply/reject racing on the same question requestID.
+- Fix Bun.\$ shim re-running commands on repeated Promise consumption.
+- Fix MCP prompts bypassing command-override precedence.
+- Fix headless JSONL event sink crashing the whole process on a write error.
+- Fix extmark desync on non-ASCII paste placeholder text.
+- Fix out-of-order terminal-palette resolution setting a stale theme mode.
+- Fix out-of-order provider-refresh responses clobbering fresher data.
+- Fix cross-workspace runtime state leak from out-of-order sync responses.
+- Fix undo/rollback/export targeting the wrong session after a mid-flight switch.
+- Fix bug-report URL always appending a truncation marker.
+- Fix stale margin persisting on tool rows after the state that caused it changes.
+- Fix ax-code run falsely rejecting equivalent --output-file/--output-last-message paths.
+- Fix GitHub Action crashing with TypeError instead of reporting real errors.
+- Fix QA failure detection misclassifying mixed-signal test output as passing.
+- Fix throwing plugin hook crashing the caller instead of being isolated.
+- Fix workflow phase/run stuck in "running" forever on mixed terminal states.
+- Fix prior-reporting-chain-context gate falsely blocking valid reentry approvals.
+- Fix double HTML-escaping of validation commands in DRE verdict panel.
+- Fix signed-archive linkage gate always passing when signedArchiveID is null.
+- Fix log retention potentially deleting newest logs instead of oldest.
+
 ## [7.9.16] - 2026-08-30
 
 ### Added
