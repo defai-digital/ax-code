@@ -48,7 +48,7 @@ export const buildAssistantRetryPayload = (input: {
   failedAssistantMessage: Message
 }): AssistantRetryPayload | null => {
   const failedIndex = input.messages.findIndex((message) => message.id === input.failedAssistantMessage.id)
-  const searchSpace = failedIndex > 0 ? input.messages.slice(0, failedIndex) : failedIndex === 0 ? [] : input.messages
+  const searchSpace = failedIndex > 0 ? input.messages.slice(0, failedIndex) : []
 
   const userMessage = [...searchSpace].reverse().find((message) => message.role === "user")
   if (!userMessage) {

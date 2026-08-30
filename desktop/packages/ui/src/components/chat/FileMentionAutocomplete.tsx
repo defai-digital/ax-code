@@ -49,7 +49,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       ),
     )
     const projectRoot = React.useMemo(() => {
-      const candidate = activeProjectPath || currentDirectory
+      const candidate = currentDirectory || activeProjectPath
       const normalized = candidate ? normalizeFilesViewPath(candidate) : ""
       return normalized || null
     }, [activeProjectPath, currentDirectory])
@@ -160,6 +160,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       }
 
       let cancelled = false
+      let settled = false
       pendingSearchRef.current++
       setLoading(true)
 
@@ -182,6 +183,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           }
         })
         .finally(() => {
+          settled = true
           if (!cancelled) {
             pendingSearchRef.current--
             if (pendingSearchRef.current <= 0) {
@@ -193,9 +195,11 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 
       return () => {
         cancelled = true
-        pendingSearchRef.current = Math.max(0, pendingSearchRef.current - 1)
-        if (pendingSearchRef.current <= 0) {
-          setLoading(false)
+        if (!settled) {
+          pendingSearchRef.current = Math.max(0, pendingSearchRef.current - 1)
+          if (pendingSearchRef.current <= 0) {
+            setLoading(false)
+          }
         }
       }
     }, [currentDirectory, debouncedQuery, recentFiles, searchFiles, showHidden, showGitignored])
@@ -215,6 +219,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       }
 
       let cancelled = false
+      let settled = false
       pendingSearchRef.current++
       setLoading(true)
 
@@ -234,6 +239,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           }
         })
         .finally(() => {
+          settled = true
           if (!cancelled) {
             pendingSearchRef.current--
             if (pendingSearchRef.current <= 0) {
@@ -245,9 +251,11 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 
       return () => {
         cancelled = true
-        pendingSearchRef.current = Math.max(0, pendingSearchRef.current - 1)
-        if (pendingSearchRef.current <= 0) {
-          setLoading(false)
+        if (!settled) {
+          pendingSearchRef.current = Math.max(0, pendingSearchRef.current - 1)
+          if (pendingSearchRef.current <= 0) {
+            setLoading(false)
+          }
         }
       }
     }, [currentDirectory, debouncedQuery, searchFiles, showHidden, showGitignored])

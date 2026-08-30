@@ -379,6 +379,7 @@ export const useChatTimelineController = ({
       return false
     }
 
+    const targetSessionId = sessionIdRef.current
     beginHistoryInteraction()
     const container = scrollRef.current
     if (container) {
@@ -397,6 +398,9 @@ export const useChatTimelineController = ({
 
     try {
       await waitForNextRenderCommit()
+      if (sessionIdRef.current !== targetSessionId) {
+        return false
+      }
       return true
     } finally {
       setPendingRevealWork(false)
@@ -450,6 +454,9 @@ export const useChatTimelineController = ({
           }
 
           await waitForNextRenderCommitOrTimeout()
+          if (sessionIdRef.current !== targetSessionId) {
+            return false
+          }
 
           const afterMessages = messagesRef.current
           const afterMessageCount = afterMessages.length

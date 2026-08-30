@@ -171,12 +171,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
       })),
     )
 
-  React.useEffect(() => {
-    if (currentSessionId) {
-      MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId)
-    }
-  }, [currentSessionId])
-
   const [copiedCode, setCopiedCode] = React.useState<string | null>(null)
   const [copiedMessage, setCopiedMessage] = React.useState(false)
   const copiedCodeResetTimerRef = React.useRef<number | null>(null)

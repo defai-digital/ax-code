@@ -1864,12 +1864,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         if (primaryText.trim() && !primaryText.trimStart().startsWith("/")) {
           recordRecentPrompt(primaryText)
         }
-        // Clear linked issue after successful message send
+        // Clear linked issue after successful message send. Only clear if it's
+        // still the same link that was sent — the user may have linked a new
+        // issue/PR while this send was in flight, and that should survive.
         if (linkedIssue) {
-          setLinkedIssue(null)
+          setLinkedIssue((current) => (current === linkedIssue ? null : current))
         }
         if (linkedPr) {
-          setLinkedPr(null)
+          setLinkedPr((current) => (current === linkedPr ? null : current))
         }
       })
       .catch((error: unknown) => {
@@ -1910,21 +1912,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
           normalized.includes("entity too large")
         ) {
           toast.error(t("chat.chatInput.toast.attachmentsTooLarge"))
-          if (allAttachments.length > 0) {
+          if (allAttachments.length > 0 && useSessionUIStore.getState().currentSessionId === currentSessionId) {
             useInputStore.getState().setAttachedFiles(allAttachments)
           }
           return
         }
 
         if (isSoftNetworkError) {
-          if (allAttachments.length > 0) {
+          if (allAttachments.length > 0 && useSessionUIStore.getState().currentSessionId === currentSessionId) {
             useInputStore.getState().setAttachedFiles(allAttachments)
             toast.error(t("chat.chatInput.toast.sendAttachmentsFailed"))
           }
           return
         }
 
-        if (allAttachments.length > 0) {
+        if (allAttachments.length > 0 && useSessionUIStore.getState().currentSessionId === currentSessionId) {
           useInputStore.getState().setAttachedFiles(allAttachments)
         }
         toast.error(rawMessage || t("chat.chatInput.toast.messageSendFailed"))
