@@ -78,7 +78,11 @@ function buildEdits(
     // reference to it.
     edits.push({
       op: "create_symbol",
-      target: targets[0]?.qualifiedName ?? "new_extracted_symbol",
+      // `target` must be a CodeNodeID or a file path (RefactorEdit contract)
+      // — the extracted symbol doesn't exist yet, so it has no id. Use the
+      // first target's file as the creation site; the qualified names are
+      // already captured in `detail` for humans.
+      target: targets[0]?.file ?? "unknown",
       detail: `Extract shared logic from ${targets.length} target${targets.length === 1 ? "" : "s"}`,
     })
     for (const t of targets) {
@@ -276,7 +280,13 @@ export async function planRefactorImpl(
   // own atomic group keyed by target; a multi-edit rename/collapse can be
   // composed from these.
   const editGroups: RefactorEditGroup[] = edits.map((edit, index) => {
-    const targetFile = resolved.find((t) => t.id === edit.target)?.file
+    // `edit.target` is either a CodeNodeID (most ops) or a file path
+    // (create_symbol, move_file — see the RefactorEdit contract). Resolve
+    // via the symbol lookup first; fall back to treating it as a file path
+    // directly so those ops still get file attribution.
+    const targetFile =
+      resolved.find((t) => t.id === edit.target)?.file ??
+      (affectedFileSet.has(edit.target) ? edit.target : undefined)
     return {
       id: `g${index}`,
       kind: "atomic" as const,
