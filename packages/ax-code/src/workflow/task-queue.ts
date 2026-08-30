@@ -162,6 +162,13 @@ function aggregatePhaseStatus(
   }
   if (children.every((child) => child.status === "completed")) return "completed"
   if (children.every((child) => child.status === "cancelled")) return "cancelled"
+  // Every child is terminal but the mix isn't uniformly completed or
+  // cancelled (e.g. some completed, some cancelled, none failed) — the "all"
+  // merge condition can never be satisfied and no more progress will happen.
+  // Without this, the phase (and therefore the run) would stay "running"
+  // forever. The first-success and majority branches above already guard
+  // against this same case.
+  if (children.every((child) => isTerminalChildStatus(child.status))) return "failed"
   if (children.some((child) => child.status === "paused")) return "paused"
   return "running"
 }
@@ -229,12 +236,24 @@ function isTerminalChildStatus(status: WorkflowRun.ChildStatus) {
   return status === "completed" || status === "failed" || status === "cancelled"
 }
 
+function isTerminalPhaseStatus(status: WorkflowRun.PhaseStatus) {
+  return status === "completed" || status === "failed" || status === "cancelled"
+}
+
 function aggregateRunStatus(phases: WorkflowRunDetailPhase[]): WorkflowRun.Status {
   if (phases.length === 0) return "queued"
   if (phases.some((phase) => phase.status === "failed")) return "failed"
   if (phases.some((phase) => phase.status === "blocked")) return "blocked"
   if (phases.every((phase) => phase.status === "completed")) return "completed"
   if (phases.every((phase) => phase.status === "cancelled")) return "cancelled"
+  // Every phase is terminal but the mix isn't uniformly completed or
+  // cancelled (e.g. an earlier phase completed while a later phase's
+  // children were individually cancelled through the generic task-queue
+  // cancel endpoint, without going through WorkflowScheduler.cancel()). The
+  // run can never make further progress, so without this fallback it would
+  // stay "running" forever — the scheduler only advances past a "completed"
+  // phase and has no path to resolve a cancelled one.
+  if (phases.every((phase) => isTerminalPhaseStatus(phase.status))) return "failed"
   if (phases.some((phase) => phase.status === "paused")) return "paused"
   return "running"
 }
