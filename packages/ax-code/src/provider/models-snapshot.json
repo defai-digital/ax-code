@@ -176193,7 +176193,7 @@
         "open_weights": true,
         "limit": {
           "context": 163840,
-          "output": 65536
+          "output": 147456
         }
       },
       "deepseek/deepseek-chat-v3.1": {
@@ -182687,7 +182687,7 @@
         "open_weights": true,
         "limit": {
           "context": 262144,
-          "output": 235929
+          "output": 16384
         }
       },
       "qwen/qwen3.8-27b": {
@@ -184323,8 +184323,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1048576,
-          "output": 16384
+          "context": 128000,
+          "output": 115200
         }
       },
       "meta-llama/llama-4-scout": {

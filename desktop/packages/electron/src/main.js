@@ -35,6 +35,7 @@ const { buildComputerUseServerEnv } = require("./computer-use-server-env")
 const { applyBundledAxCodeEnv, buildBundledAxCodeEnv } = require("./bundled-ax-code-env")
 const { getRuntimeAuthPassword } = require("./runtime-auth-password")
 const { createRendererCrashPolicy } = require("./renderer-crash-policy")
+const { createSettingsWriteHandler } = require("./settings-write-handler")
 const { loadUrlWithTimeout } = require("./load-url-timeout")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { sendUpdateProgressToWindows } = require("./update-progress")
@@ -287,6 +288,8 @@ function spawnServerProcess(wire) {
   serverPort = 0
 
   child.on("message", (msg) => {
+    // settings-write requests are consumed by the sole-writer handler (S2.3).
+    if (settingsWriteHandler.handleMessage(msg)) return
     if (msg?.type === "startup-event" && msg.event?.name) {
       recordStartupEvent(msg.event.name, msg.event.details ?? {}, {
         source: msg.event.source || "web-server",
@@ -990,6 +993,19 @@ const mutateSettingsRoot = (mutator) => {
   })
   return next
 }
+
+// S2.3 (SPEC-2026-08-29-desktop-process-model-collapse §2 D5): main is the sole
+// writer of settings.json. The web-server utilityProcess delegates every
+// settings mutation here as a "settings-write" message instead of writing the
+// file itself. The handler is created after mutateSettingsRoot because it
+// applies each request through that serialized chain.
+const settingsWriteHandler = createSettingsWriteHandler({
+  mutateSettingsRoot,
+  postMessage: (message) => {
+    if (!serverChild) throw new Error("server process is not running")
+    serverChild.postMessage(message)
+  },
+})
 
 // AX Code Desktop is intentionally local-only. Remote host and SSH settings may
 // remain in an older settings file, but no runtime path reads or activates them.

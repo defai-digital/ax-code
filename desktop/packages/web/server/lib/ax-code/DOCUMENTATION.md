@@ -33,7 +33,8 @@ This module provides ax-code server integration utilities for the web server run
 - `packages/web/server/lib/ax-code/openchamber-routes.js`: models metadata route registration.
 - `packages/web/server/lib/ax-code/project-icon-routes.js`: project icon upload/read/discovery route registration and icon storage orchestration.
 - `packages/web/server/lib/ax-code/skill-routes.js`: route registration for skill config CRUD, supporting files, and skills catalog scan/install flows.
-- `packages/web/server/lib/ax-code/settings-runtime.js`: Settings persistence runtime (disk IO, migrations, normalization, project validation, and persisted update serialization).
+- `packages/web/server/lib/ax-code/settings-runtime.js`: Settings persistence runtime (disk reads, migrations, normalization, project validation, and persisted update serialization; writes route through settings-writer.js).
+- `packages/web/server/lib/ax-code/settings-writer.js`: single entry point for settings.json writes — delegates to Electron main over the utilityProcess channel in desktop mode (main is the sole writer, S2.3), local atomic writer in standalone web mode.
 - `packages/web/server/lib/ax-code/settings-helpers.js`: Settings payload sanitization/format helpers runtime for response shaping and persisted merge prep.
 - `packages/web/server/lib/ax-code/settings-normalization-runtime.js`: path/settings normalization and sanitization helpers runtime used by settings/routes/config wiring.
 - `packages/web/server/lib/ax-code/theme-runtime.js`: custom theme JSON validation and theme directory loading runtime for settings utility routes.
@@ -180,8 +181,16 @@ This module provides ax-code server integration utilities for the web server run
 - Returned API:
   - `readSettingsFromDisk()`
   - `readSettingsFromDiskMigrated()`
-  - `writeSettingsToDisk(settings)`
+  - `writeSettingsToDisk(settings)` — routes through the configured settings writer (delegates to Electron main in desktop mode)
+  - `writeSettingsToDiskLocal(settings)` — local atomic writer, standalone web mode only
   - `persistSettings(changes)`
+
+## Public exports (settings-writer.js)
+
+- `createSettingsWriter(dependencies)`: creates the settings.json writer backend.
+  - delegate mode (Electron `process.parentPort` present): sends `{ type: "settings-write", id, settings }` to main and resolves on the id-correlated `{ type: "settings-write-result", id, ok, error? }` reply; bounded timeout; pending writes reject when the channel closes.
+  - local mode (no parentPort): passes through to the local atomic writer.
+- Returned API: `{ mode, write(settings) }`; also exports `SETTINGS_WRITE_TIMEOUT_MS`.
 
 ## Public exports (settings-helpers.js)
 

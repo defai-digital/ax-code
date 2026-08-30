@@ -213,6 +213,43 @@ describe("settings runtime", () => {
     }
   })
 
+  it("routes settings writes through the configured writer instead of disk", async () => {
+    const tempRoot = await fsPromises.mkdtemp(path.join(os.tmpdir(), "oc-settings-runtime-"))
+    const settingsFilePath = path.join(tempRoot, "settings.json")
+    const delegated = []
+    const settingsWriter = {
+      write: async (settings) => {
+        delegated.push(settings)
+      },
+    }
+    const runtime = createSettingsRuntime({
+      fsPromises,
+      path,
+      crypto,
+      SETTINGS_FILE_PATH: settingsFilePath,
+      sanitizeProjects: (projects) => (Array.isArray(projects) ? projects : []),
+      sanitizeSettingsUpdate: (settings) => settings,
+      mergePersistedSettings: (_current, changes) => changes,
+      normalizeSettingsPaths: (settings) => ({ settings, changed: false }),
+      normalizeStringArray: (values) =>
+        Array.isArray(values) ? values.filter((value) => typeof value === "string") : [],
+      formatSettingsResponse: (settings) => settings,
+      resolveDirectoryCandidate: (value) => value,
+      settingsWriter,
+    })
+
+    try {
+      await runtime.persistSettings({ themeId: "ax-dark" })
+
+      expect(delegated).toEqual([{ themeId: "ax-dark" }])
+      // The web layer must not write settings.json itself when a writer is
+      // configured (desktop mode: Electron main is the sole writer).
+      await expect(fsPromises.access(settingsFilePath)).rejects.toMatchObject({ code: "ENOENT" })
+    } finally {
+      await fsPromises.rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it("keeps projects with temporarily-missing paths when persisting settings", async () => {
     const { runtime, tempRoot, cleanup } = await createRuntime()
     try {

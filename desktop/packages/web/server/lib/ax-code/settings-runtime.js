@@ -64,6 +64,12 @@ export const createSettingsRuntime = (deps) => {
     normalizeStringArray,
     formatSettingsResponse,
     resolveDirectoryCandidate,
+    // Single entry point for settings.json writes (settings-writer.js). In
+    // desktop (utilityProcess) mode it delegates to Electron main, the sole
+    // writer of the file; in standalone web mode it falls back to the local
+    // atomic writer below. Optional so tests can exercise the local path
+    // directly.
+    settingsWriter = null,
   } = deps
 
   let persistSettingsLock = Promise.resolve()
@@ -530,12 +536,15 @@ export const createSettingsRuntime = (deps) => {
     await fsPromises.rm(tmp, { force: true })
   }
 
-  const writeSettingsToDisk = async (settings) => {
+  const writeSettingsToDiskLocal = async (settings) => {
     try {
       await fsPromises.mkdir(path.dirname(SETTINGS_FILE_PATH), { recursive: true })
       // Atomic write: Electron main and the web server can read this file
       // concurrently. A partial read during a non-atomic writeFile would make
       // a later read-modify-write wipe the settings file.
+      // Only used in standalone web mode — in desktop (utilityProcess) mode
+      // Electron main is the sole writer of settings.json and every write
+      // delegates to it via the settingsWriter (S2.3).
       const tmp = `${SETTINGS_FILE_PATH}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
       await fsPromises.writeFile(tmp, JSON.stringify(settings, null, 2), "utf8")
       await replaceFile(tmp, SETTINGS_FILE_PATH)
@@ -544,6 +553,11 @@ export const createSettingsRuntime = (deps) => {
       throw error
     }
   }
+
+  // Every settings.json write path (persistSettings and the migration
+  // write-back) routes through the writer abstraction so the web layer never
+  // writes the file directly in desktop mode.
+  const writeSettingsToDisk = settingsWriter ? (settings) => settingsWriter.write(settings) : writeSettingsToDiskLocal
 
   const validateProjectEntries = async (projects) => {
     console.log(`[validateProjectEntries] Starting validation for ${projects.length} projects`)
@@ -848,6 +862,7 @@ export const createSettingsRuntime = (deps) => {
     readSettingsFromDisk,
     readSettingsFromDiskMigrated,
     writeSettingsToDisk,
+    writeSettingsToDiskLocal,
     persistSettings,
   }
 }

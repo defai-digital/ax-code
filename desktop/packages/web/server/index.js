@@ -45,6 +45,7 @@ import { registerOpenChamberRoutes } from "./lib/ax-code/openchamber-routes.js"
 import { createServerUtilsRuntime } from "./lib/ax-code/server-utils-runtime.js"
 import { createStaticRoutesRuntime } from "./lib/ax-code/static-routes-runtime.js"
 import { createSettingsRuntime } from "./lib/ax-code/settings-runtime.js"
+import { createSettingsWriter } from "./lib/ax-code/settings-writer.js"
 import { createAxCodeResolutionRuntime } from "./lib/ax-code/ax-code-resolution-runtime.js"
 import { createBootstrapRuntime } from "./lib/ax-code/bootstrap-runtime.js"
 import { createSessionRuntime } from "./lib/ax-code/session-runtime.js"
@@ -253,6 +254,16 @@ const validateDirectoryPath = (...args) => projectDirectoryRuntime.validateDirec
 const resolveProjectDirectory = (...args) => projectDirectoryRuntime.resolveProjectDirectory(...args)
 const resolveOptionalProjectDirectory = (...args) => projectDirectoryRuntime.resolveOptionalProjectDirectory(...args)
 
+// S2.3 (SPEC-2026-08-29-desktop-process-model-collapse §2 D5): Electron main is
+// the sole writer of settings.json. process.parentPort exists only inside the
+// Electron utilityProcess, so in desktop mode every settings write delegates to
+// main over that channel; standalone web mode (plain node, or child_process.fork
+// IPC whose parent is not Electron main) keeps the local atomic writer.
+const settingsWriter = createSettingsWriter({
+  parentPort: process.parentPort ?? null,
+  localWrite: (settings) => settingsRuntime.writeSettingsToDiskLocal(settings),
+})
+
 const settingsRuntime = createSettingsRuntime({
   fsPromises,
   path,
@@ -265,6 +276,7 @@ const settingsRuntime = createSettingsRuntime({
   normalizeStringArray,
   formatSettingsResponse,
   resolveDirectoryCandidate,
+  settingsWriter,
 })
 
 const readSettingsFromDiskMigrated = (...args) => settingsRuntime.readSettingsFromDiskMigrated(...args)
