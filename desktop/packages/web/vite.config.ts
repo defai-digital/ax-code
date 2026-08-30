@@ -6,6 +6,7 @@ import { createRequire } from "node:module"
 import { readFileSync } from "node:fs"
 import { themeStoragePlugin } from "../../vite-theme-plugin"
 import { createDesktopApiWsProxyPlugin } from "./vite-api-ws-proxy"
+import { createDesktopApiRuntimeProxyPlugin } from "./vite-api-runtime-proxy"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const requireFromUi = createRequire(path.resolve(__dirname, "../ui/package.json"))
@@ -140,6 +141,11 @@ export default defineConfig({
     },
     themeStoragePlugin(),
     ghosttyWasmAssetPlugin(),
+    // S2.4b: /api, /global, /graph, /dre-graph are classified per request with
+    // the packaged app:// routing table and forwarded either directly to the
+    // ax-code runtime (when the dev upstream file is available) or to the web
+    // server (fallback — the pre-S2.4 behavior). See vite-api-runtime-proxy.ts.
+    createDesktopApiRuntimeProxyPlugin(),
     createDesktopApiWsProxyPlugin(),
   ],
   resolve: {
@@ -167,26 +173,15 @@ export default defineConfig({
   server: {
     port: devServerPort,
     proxy: {
+      // /api, /global, /graph, /dre-graph are NOT static entries: the
+      // desktop-api-runtime-proxy plugin dispatches them per request using the
+      // packaged routing table (S2.4b). /auth and /health are web-only in that
+      // table, so they keep plain proxy entries.
       "/auth": {
         target: `http://127.0.0.1:${process.env.AX_CODE_DESKTOP_PORT || 3001}`,
         changeOrigin: true,
       },
       "/health": {
-        target: `http://127.0.0.1:${process.env.AX_CODE_DESKTOP_PORT || 3001}`,
-        changeOrigin: true,
-      },
-      "/api": {
-        target: `http://127.0.0.1:${process.env.AX_CODE_DESKTOP_PORT || 3001}`,
-        changeOrigin: true,
-      },
-      // The Project/DRE Dashboard iframe loads the backend-served /dre-graph app
-      // (and its /graph assets). Without these the vite SPA fallback returns
-      // index.html, so the dashboard iframe recursively loads the app shell.
-      "/dre-graph": {
-        target: `http://127.0.0.1:${process.env.AX_CODE_DESKTOP_PORT || 3001}`,
-        changeOrigin: true,
-      },
-      "/graph": {
         target: `http://127.0.0.1:${process.env.AX_CODE_DESKTOP_PORT || 3001}`,
         changeOrigin: true,
       },

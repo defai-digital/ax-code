@@ -60,6 +60,7 @@ import { createNotificationEmitterRuntime } from "./lib/notifications/emitter-ru
 import { createNotificationTriggerRuntime } from "./lib/notifications/runtime.js"
 import { createNotificationTemplateRuntime } from "./lib/notifications/template-runtime.js"
 import { createGracefulShutdownRuntime } from "./lib/ax-code/shutdown-runtime.js"
+import { createDevRuntimeUpstreamWriter } from "./lib/ax-code/dev-runtime-upstream.js"
 import { createProjectConfigRuntime } from "./lib/projects/project-config.js"
 import { createPreviewProxyRuntime } from "./lib/preview/proxy-runtime.js"
 import { createProxyMiddleware, responseInterceptor } from "http-proxy-middleware"
@@ -973,6 +974,25 @@ const reportRuntimeOriginToMain = (origin) => {
   } catch {}
 }
 
+// S2.4b (SPEC-2026-08-29-desktop-process-model-collapse §2 D3): in dev, the
+// Vite dev server is a separate process tree, so the utilityProcess channel
+// above cannot reach it. The dev orchestrator
+// (desktop/packages/electron/scripts/dev.mjs) sets
+// AX_CODE_DESKTOP_DEV_UPSTREAM_FILE for the whole stack; the writer then
+// mirrors every runtime-origin transition — plus the current Basic credential
+// — to a 0600 JSON file the Vite proxy plugin (vite-api-runtime-proxy.ts)
+// re-reads. Packaged/production runs never set the variable, so the writer
+// stays inert there. The file contents are never logged.
+const devRuntimeUpstreamWriter = createDevRuntimeUpstreamWriter({
+  filePath: process.env.AX_CODE_DESKTOP_DEV_UPSTREAM_FILE,
+  getAxCodeAuthHeaders,
+})
+
+const handleRuntimeOriginChange = (origin) => {
+  reportRuntimeOriginToMain(origin)
+  devRuntimeUpstreamWriter.publish(origin)
+}
+
 const axCodeLifecycleRuntime = createAxCodeLifecycleRuntime({
   state: axCodeLifecycleState,
   env: {
@@ -1005,7 +1025,7 @@ const axCodeLifecycleRuntime = createAxCodeLifecycleRuntime({
   getActiveSessionCount,
   recordStartupEvent,
   healthCheckIntervalMs: HEALTH_CHECK_INTERVAL,
-  onRuntimeOriginChange: reportRuntimeOriginToMain,
+  onRuntimeOriginChange: handleRuntimeOriginChange,
 })
 
 const restartAxCode = (...args) => axCodeLifecycleRuntime.restartAxCode(...args)

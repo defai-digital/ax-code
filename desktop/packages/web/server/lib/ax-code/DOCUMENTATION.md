@@ -110,7 +110,7 @@ This module provides ax-code server integration utilities for the web server run
 ## Public exports (lifecycle.js)
 
 - `createAxCodeLifecycleRuntime(dependencies)`: creates lifecycle runtime for managed/external ax-code process orchestration.
-  - Optional `onRuntimeOriginChange(origin)` dependency (S2.4a): invoked, deduped, whenever the managed runtime's loopback origin is assigned (ready/restart/external), cleared (down), and once after bootstrap. `origin` is `"http://127.0.0.1:<port>"`-shaped (or the external base URL) and `null` when the runtime is unavailable; it never carries credentials. In desktop mode the web server forwards these as `{ type: "runtime-origin", origin }` messages to Electron main over the utilityProcess channel (same channel as "ready"/"settings-write") so main's app:// protocol handler can reverse-proxy runtime-shaped prefixes straight to the runtime.
+  - Optional `onRuntimeOriginChange(origin)` dependency (S2.4a): invoked, deduped, whenever the managed runtime's loopback origin is assigned (ready/restart/external), cleared (down), and once after bootstrap. `origin` is `"http://127.0.0.1:<port>"`-shaped (or the external base URL) and `null` when the runtime is unavailable; it never carries credentials. In desktop mode the web server forwards these as `{ type: "runtime-origin", origin }` messages to Electron main over the utilityProcess channel (same channel as "ready"/"settings-write") so main's app:// protocol handler can reverse-proxy runtime-shaped prefixes straight to the runtime. In dev (S2.4b), the same transitions additionally drive `dev-runtime-upstream.js`: the origin plus the current Basic credential are mirrored to the `AX_CODE_DESKTOP_DEV_UPSTREAM_FILE` JSON file the Vite dev proxy re-reads.
 - Returned API:
   - `startAxCode()`
   - `restartAxCode()`
@@ -121,6 +121,14 @@ This module provides ax-code server integration utilities for the web server run
   - `startHealthMonitoring(healthCheckIntervalMs)`
   - `waitForPortRelease(port, timeoutMs, hostname?)`
   - `killProcessOnPort(port)`
+
+## Public exports (dev-runtime-upstream.js)
+
+- `createDevRuntimeUpstreamWriter({ filePath, getAxCodeAuthHeaders, processRef? })`: dev-only (S2.4b) publisher of the runtime's current loopback origin + Basic credential for the Vite dev proxy. Active only when `AX_CODE_DESKTOP_DEV_UPSTREAM_FILE` is set (the Electron dev orchestrator sets it for the whole stack; packaged/production runs never do). Wired into the same `onRuntimeOriginChange` transitions as the S2.4a utilityProcess message.
+  - `publish(origin)`: writes `{ version: 1, origin, authorization?, updatedAt }` via atomic tmp+rename with mode 0600; `publish(null)` removes the file so the Vite proxy falls back to the web server. Contents are never logged.
+  - `remove()`: idempotent delete; also registered on process exit (best effort — SIGKILL leaves a stale file, which the Vite side tolerates by falling back to the web server on proxy errors).
+  - `active`: whether a target path was configured.
+- `DEV_RUNTIME_UPSTREAM_FILE_ENV`: the environment variable name (`AX_CODE_DESKTOP_DEV_UPSTREAM_FILE`).
 
 ## Public exports (env-runtime.js)
 

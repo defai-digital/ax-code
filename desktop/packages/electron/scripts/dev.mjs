@@ -106,6 +106,13 @@ await run("node", [path.join(electronDir, "scripts", "bundle-main.mjs")], { cwd:
 const serverPort = Number.parseInt(process.env.AX_CODE_DESKTOP_ELECTRON_SERVER_PORT || "", 10) || (await findFreePort())
 const children = new Set()
 
+// Drop any leftover from a previous dev stack that reused this server port, so
+// the Vite proxy never starts from a stale runtime origin.
+const devUpstreamFilePath = path.join(os.tmpdir(), `ax-code-desktop-dev-runtime-upstream-${serverPort}.json`)
+try {
+  fs.rmSync(devUpstreamFilePath, { force: true })
+} catch {}
+
 const shutdown = () => {
   stopAll(children)
 }
@@ -138,6 +145,12 @@ const sharedEnv = {
   ...process.env,
   AX_CODE_DESKTOP_PORT: String(serverPort),
   AX_CODE_DESKTOP_RENDERER_PORT: String(rendererPort),
+  // S2.4b: the web server publishes the ax-code runtime's current loopback
+  // origin + Basic credential to this file on every origin transition, and the
+  // Vite dev proxy (vite-api-runtime-proxy.ts) re-reads it to mirror the
+  // packaged app:// routing. Dev-only — packaged runs never set it. Keyed on
+  // the web server port so concurrent dev stacks never share a file.
+  AX_CODE_DESKTOP_DEV_UPSTREAM_FILE: devUpstreamFilePath,
   ...(devAxCodeBinary ? { AX_CODE_BINARY: devAxCodeBinary } : {}),
   ...(devAxEnginePython ? { AX_ENGINE_PYTHON: devAxEnginePython } : {}),
 }
