@@ -60,6 +60,11 @@ export const useStreamingTextThrottle = ({
     clearTimer(state)
     state.pendingText = latestTextRef.current
     state.lastEmitAt = 0
+    // Keep the ref in sync synchronously (not just via the [throttledText] effect,
+    // which won't run until next commit) so the throttle effect below — which can
+    // fire in this same commit when identityKey and text change together — doesn't
+    // read the previous message's stale, longer throttledText and reinstate it.
+    throttledTextRef.current = latestTextRef.current
     setThrottledText(latestTextRef.current)
   }, [identityKey])
 
