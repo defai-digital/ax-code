@@ -293,14 +293,22 @@ export function qaCommandFailed(input: {
   if (!isQATestCommand(input.command)) return false
 
   const text = `${input.output}\n${input.error ?? ""}`.toLowerCase()
-  if (/\b0\s+fail(?:ed|ures?)?\b/.test(text) || /\b0\s+errors?\b/.test(text)) return false
 
-  return (
+  // Check unambiguous failure signals first: a genuine nonzero failure count or an
+  // explicit FAIL marker must win even if the same output also contains an unrelated
+  // "0 failed"/"0 errors" phrase elsewhere (e.g. a zero-count category alongside a
+  // failing one, or an unrelated build-step summary).
+  if (
     /\b[1-9]\d*\s+fail(?:ed|ures?)?\b/.test(text) ||
     /\btest suites:\s*[1-9]\d*\s+failed\b/i.test(input.output) ||
-    /\bFAIL\b/.test(input.output) ||
-    /\bfailed\b/.test(text)
-  )
+    /\bFAIL\b/.test(input.output)
+  ) {
+    return true
+  }
+
+  if (/\b0\s+fail(?:ed|ures?)?\b/.test(text) || /\b0\s+errors?\b/.test(text)) return false
+
+  return /\bfailed\b/.test(text)
 }
 
 export function qaRecommendationCommands(runs: QARunExtract[]) {
