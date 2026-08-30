@@ -18,7 +18,27 @@ const RATE_LIMIT_NO_IP_MAX_ATTEMPTS = Number(process.env.AX_CODE_DESKTOP_RATE_LI
 const loginRateLimiter = new Map()
 let rateLimitCleanupTimer = null
 
+// Per-key mutex implemented as a chain of promises. Each call to
+// withRateLimitLock(key, fn) only runs fn once every previously queued fn for
+// the same key has fully settled, and the stored "tail" is normalized to
+// never reject so a failing attempt can't wedge later callers. attemptLogin
+// (below, inside createUiAuth) holds this lock across the whole evaluate ->
+// verify -> record sequence for a login attempt; without holding the lock
+// across that whole read-modify-write of the shared loginRateLimiter Map,
+// concurrent requests for the same key (e.g. a brute-force script firing
+// attempts in parallel) can interleave and lose increments, letting more
+// attempts through than maxAttempts before lockout engages.
 const rateLimitLocks = new Map()
+
+const withRateLimitLock = (key, fn) => {
+  const previousTail = rateLimitLocks.get(key) || Promise.resolve()
+  const result = previousTail.then(fn)
+  rateLimitLocks.set(
+    key,
+    result.catch(() => {}),
+  )
+  return result
+}
 
 const getClientIp = (req) => {
   const ip = req.ip || req.connection?.remoteAddress
@@ -50,17 +70,12 @@ const getRateLimitConfig = (key) => {
   }
 }
 
-const acquireRateLimitLock = async (key) => {
-  const prev = rateLimitLocks.get(key) || Promise.resolve()
-  const curr = prev.then(() => rateLimitLocks.delete(key))
-  rateLimitLocks.set(key, curr)
-  await curr
-}
-
-const checkRateLimit = async (req) => {
-  const key = getRateLimitKey(req)
-  await acquireRateLimitLock(key)
-
+// Pure (lock-free) rate-limit primitives. These must only ever be called from
+// inside withRateLimitLock(key, ...) — see attemptLogin below, which holds a
+// single lock acquisition across the whole evaluate -> verify -> record
+// sequence so a brute-force attempt can't race the counter update for the
+// same key.
+const evaluateRateLimit = (key) => {
   const now = Date.now()
   const { maxAttempts } = getRateLimitConfig(key)
 
@@ -132,10 +147,7 @@ const checkRateLimit = async (req) => {
   }
 }
 
-const recordFailedAttempt = async (req) => {
-  const key = getRateLimitKey(req)
-  await acquireRateLimitLock(key)
-
+const markFailedAttempt = (key) => {
   const now = Date.now()
   const record = loginRateLimiter.get(key)
 
@@ -155,10 +167,7 @@ const recordFailedAttempt = async (req) => {
   }
 }
 
-const clearRateLimit = async (req) => {
-  const key = getRateLimitKey(req)
-  await acquireRateLimitLock(key)
-
+const resetRateLimitRecord = (key) => {
   try {
     loginRateLimiter.delete(key)
   } catch (err) {
@@ -436,6 +445,31 @@ export const createUiAuth = ({ password, cookieName = SESSION_COOKIE_NAME, sessi
     }
   }
 
+  // Runs the whole login-attempt sequence — evaluate the current rate-limit
+  // state, verify the password, then record the outcome — as a single
+  // critical section per rate-limit key. Holding the lock across all three
+  // steps (rather than locking each Map access independently) is what
+  // actually prevents a burst of concurrent requests from the same key
+  // racing past the attempt cap: with per-step locking, two concurrent
+  // callers could both pass the "allowed" check before either recorded its
+  // attempt, undercounting failures and letting more than maxAttempts
+  // through before lockout engages.
+  const attemptLogin = (req, candidate) => {
+    const key = getRateLimitKey(req)
+    return withRateLimitLock(key, () => {
+      const rateLimitResult = evaluateRateLimit(key)
+      if (!rateLimitResult.allowed) {
+        return { rateLimitResult, outcome: "blocked" }
+      }
+      if (!verifyPassword(candidate)) {
+        markFailedAttempt(key)
+        return { rateLimitResult, outcome: "invalid" }
+      }
+      resetRateLimitRecord(key)
+      return { rateLimitResult, outcome: "success" }
+    })
+  }
+
   const isSessionValid = async (token) => {
     if (!token) {
       return false
@@ -494,13 +528,14 @@ export const createUiAuth = ({ password, cookieName = SESSION_COOKIE_NAME, sessi
   }
 
   const handleSessionCreate = async (req, res) => {
-    const rateLimitResult = await checkRateLimit(req)
+    const candidate = typeof req.body?.password === "string" ? req.body.password : ""
+    const { rateLimitResult, outcome } = await attemptLogin(req, candidate)
 
     res.setHeader("X-RateLimit-Limit", rateLimitResult.limit)
     res.setHeader("X-RateLimit-Remaining", rateLimitResult.remaining)
     res.setHeader("X-RateLimit-Reset", rateLimitResult.reset)
 
-    if (!rateLimitResult.allowed) {
+    if (outcome === "blocked") {
       res.setHeader("Retry-After", rateLimitResult.retryAfter)
       res.status(429).json({
         error: "Too many login attempts, please try again later",
@@ -509,15 +544,11 @@ export const createUiAuth = ({ password, cookieName = SESSION_COOKIE_NAME, sessi
       return
     }
 
-    const candidate = typeof req.body?.password === "string" ? req.body.password : ""
-    if (!verifyPassword(candidate)) {
-      await recordFailedAttempt(req)
+    if (outcome === "invalid") {
       clearSessionCookie(req, res)
       res.status(401).json({ error: "Invalid credentials" })
       return
     }
-
-    await clearRateLimit(req)
 
     await issueSession(req, res, {
       trustDevice: isTrustedDeviceRequest(req.body?.trustDevice),
