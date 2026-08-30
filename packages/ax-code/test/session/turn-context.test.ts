@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest"
+import { ScopedFlag } from "../../src/flag/scoped"
 import { Instance } from "../../src/project/instance"
 import { ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
 import type { MessageV2 } from "../../src/session/message-v2"
+import BUILD_SWITCH from "../../src/session/prompt/build-switch.txt"
 import { insertReminders } from "../../src/session/prompt-reminders"
 import { systemPrompt } from "../../src/session/prompt-system"
 import { buildTurnContext } from "../../src/session/prompt-turn-context"
@@ -28,6 +30,13 @@ function userMessage(id: string, sessionID: string) {
   return {
     info: { id, sessionID, role: "user" as const },
     parts: [{ type: "text" as const, text: "hi" }],
+  } as any as MessageV2.WithParts
+}
+
+function assistantMessage(id: string, sessionID: string, agent: string) {
+  return {
+    info: { id, sessionID, role: "assistant" as const, agent },
+    parts: [{ type: "text" as const, text: "done" }],
   } as any as MessageV2.WithParts
 }
 
@@ -196,6 +205,50 @@ describe("insertReminders turn context", () => {
       },
     })
   })
+
+  test("BUILD_SWITCH reminder fires only on the turn immediately after leaving plan mode", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const planAssistant = assistantMessage("a1", session.id, "plan")
+        const buildAssistant = assistantMessage("a2", session.id, "build")
+
+        // The turn right after the plan -> build switch must get the reminder.
+        const firstBuildUser = userMessage("m2", session.id)
+        const firstResult = await insertReminders({
+          messages: [userMessage("m1", session.id), planAssistant, firstBuildUser],
+          agent: { name: "build" } as any,
+          session,
+        })
+        const firstReminded = firstResult.find((m) => m.info.id === firstBuildUser.info.id)!
+        expect(
+          firstReminded.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH),
+        ).toBe(true)
+
+        // A later build turn — further from the switch, with another build
+        // turn already in between — must NOT repeat the reminder on every
+        // subsequent build turn for the rest of the session.
+        const laterBuildUser = userMessage("m4", session.id)
+        const laterResult = await insertReminders({
+          messages: [
+            userMessage("m1", session.id),
+            planAssistant,
+            firstBuildUser,
+            buildAssistant,
+            laterBuildUser,
+          ],
+          agent: { name: "build" } as any,
+          session,
+        })
+        const laterReminded = laterResult.find((m) => m.info.id === laterBuildUser.info.id)!
+        expect(
+          laterReminded.parts.some((p) => p.type === "text" && p.synthetic && p.text === BUILD_SWITCH),
+        ).toBe(false)
+      },
+    })
+  })
 })
 
 describe("system prompt cache stability", () => {
@@ -239,5 +292,40 @@ describe("system prompt cache stability", () => {
         expect(joined).not.toContain("<intelligence_nudge>")
       },
     })
+  })
+
+  test("environment cache invalidates when the autonomous flag changes mid-session without a model change", async () => {
+    // SystemPrompt.environment() reads the live ScopedFlag.autonomous() value
+    // (the real <autonomous_workflow> block). The cache key must include it —
+    // otherwise a mid-turn autonomous-mode toggle keeps serving the stale
+    // environment section until the model happens to change too.
+    const cache = {}
+    let calls = 0
+    const environment = async () => {
+      calls++
+      return [ScopedFlag.autonomous() ? "autonomous-env" : "manual-env"]
+    }
+    const callArgs = {
+      agent: { name: "build" } as any,
+      model: { providerID: ProviderID.make("openai"), api: { id: "gpt-5.2" } } as any,
+      format: { type: "text" } as { type: string },
+      cache,
+      skills: async () => undefined,
+      environment,
+      instructions: async () => ["rules"],
+      memory: async () => undefined,
+    }
+
+    process.env.AX_CODE_AUTONOMOUS = "1"
+    const first = await systemPrompt(callArgs)
+    expect(first).toContain("autonomous-env")
+    expect(calls).toBe(1)
+
+    // Same model, same cache object — only the runtime flag flips.
+    process.env.AX_CODE_AUTONOMOUS = "0"
+    const second = await systemPrompt(callArgs)
+    expect(second).toContain("manual-env")
+    expect(second).not.toContain("autonomous-env")
+    expect(calls).toBe(2)
   })
 })

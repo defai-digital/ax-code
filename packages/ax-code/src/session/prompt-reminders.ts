@@ -130,7 +130,13 @@ export async function insertReminders(input: InsertRemindersInput) {
     ) {
       appendSyntheticReminder(PROMPT_PLAN)
     }
-    const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
+    // Only the immediately preceding assistant turn counts as "just switched
+    // out of plan" — matching the transition-only semantics of the
+    // AX_CODE_EXPERIMENTAL_PLAN_MODE branch below. Checking the whole history
+    // (any past plan-agent turn) would re-inject this reminder on every build
+    // turn for the rest of the session once plan mode was ever used once.
+    const lastAssistantAgent = input.messages.findLast((msg) => msg.info.role === "assistant")?.info.agent
+    const wasPlan = lastAssistantAgent === "plan"
     if (
       wasPlan &&
       input.agent.name === "build" &&

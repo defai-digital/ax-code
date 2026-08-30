@@ -1,4 +1,5 @@
 import type { Agent } from "../agent/agent"
+import { ScopedFlag } from "../flag/scoped"
 import { providerModelKey } from "../provider/model-key"
 import type { ProviderID } from "../provider/schema"
 import { InstructionPrompt } from "./instruction"
@@ -73,10 +74,17 @@ export async function systemPrompt(input: {
   const memory = await memoryFn(input.agent, input.messages)
   const assuranceWorkflow = SystemPrompt.assuranceWorkflow(input.agent, input.model)
 
+  // SystemPrompt.environment() also reads the live, runtime-mutable
+  // autonomous flag (ScopedFlag.autonomous()), which can be toggled mid-session
+  // via the autonomous route with no model change. The cache key must include
+  // it too, or a mid-turn toggle keeps serving a stale <autonomous_workflow>
+  // block (present when it should be gone, or vice versa) until the model
+  // happens to change.
   const modelKey = providerModelKey({ providerID: input.model.providerID, modelID: input.model.api.id })
-  if (!input.cache.environment || input.cache.environmentModelKey !== modelKey) {
+  const environmentCacheKey = `${modelKey}:${ScopedFlag.autonomous() ? "autonomous" : "manual"}`
+  if (!input.cache.environment || input.cache.environmentModelKey !== environmentCacheKey) {
     input.cache.environment = await (input.environment ?? SystemPrompt.environment)(input.model as any)
-    input.cache.environmentModelKey = modelKey
+    input.cache.environmentModelKey = environmentCacheKey
   }
   if (!input.cache.instructions) input.cache.instructions = await (input.instructions ?? InstructionPrompt.system)()
 
