@@ -881,15 +881,17 @@ export namespace MCP {
           cwd,
           error: NamedError.message(error),
         })
-        // Kill the subprocess that StdioClientTransport spawned.
-        // Without this, a failed connect (timeout, transport error)
-        // leaves the MCP server process running orphaned — holding
-        // its PID, pipes, and any ports it opened — until the parent
-        // ax-code process exits.
+        // Kill the subprocess that StdioClientTransport spawned, including
+        // any children it forked (e.g. `npx` launching a further node
+        // process). `transport.close()` alone only signals the immediate
+        // child by pid; go through closeIfPossible so the process tree is
+        // killed first, matching every other MCP close path in this file.
+        // Without this, a failed connect (timeout, transport error) can
+        // leave the MCP server process (or its descendants) running
+        // orphaned — holding pipes and any ports it opened — until the
+        // parent ax-code process exits.
         cleanupStderr()
-        await transport.close().catch((closeErr) => {
-          log.debug("failed to close mcp transport after connect failure", { key, err: closeErr })
-        })
+        await closeIfPossible(transport, key, "local mcp connect failed")
         status = {
           status: "failed" as const,
           error: NamedError.message(error),
