@@ -59,6 +59,7 @@ type ShellResult = { exitCode: number; stdout: Buffer; stderr: Buffer }
 class ShellPromise implements PromiseLike<ShellResult> {
   private _quiet = false
   private _nothrow = false
+  private _promise: Promise<ShellResult> | undefined
   constructor(
     private readonly cmd: string,
     private opts: ShellOpts,
@@ -79,8 +80,14 @@ class ShellPromise implements PromiseLike<ShellResult> {
     this.opts = { ...this.opts, env }
     return this
   }
+  // Memoized like a real Promise: `$` callers routinely await a ShellPromise
+  // and then separately call `.text()`/`.json()`, or chain `.catch()` after
+  // an earlier `await`. Re-spawning per accessor would run the underlying
+  // command more than once for commands with side effects (e.g. plugin
+  // shells running `git commit`, file writes).
   private run(): Promise<ShellResult> {
-    return new Promise((resolve, reject) => {
+    if (this._promise) return this._promise
+    this._promise = new Promise((resolve, reject) => {
       const child = cpSpawn(this.cmd, {
         shell: true,
         cwd: this.opts.cwd,
@@ -112,6 +119,7 @@ class ShellPromise implements PromiseLike<ShellResult> {
         resolve(result)
       })
     })
+    return this._promise
   }
   async text() {
     return (await this.run()).stdout.toString()
