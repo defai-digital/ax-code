@@ -361,11 +361,24 @@ export const GlobalRoutes = lazy(() =>
             q.push({ data: encodeSsePayload(payload), id })
           }
 
+          // This endpoint is mounted ahead of the per-request directory-
+          // scoping middleware in server.ts (so /global/health and
+          // /global/capabilities stay reachable without bootstrapping a
+          // project instance), which means there is no ambient
+          // Instance.directory here — reading it throws Context.NotFound
+          // and previously took the whole connection down before a single
+          // byte was written. These control frames are not tied to any one
+          // project anyway (unlike real events, which each carry their own
+          // originating directory from GlobalBus), so tag them with the
+          // same "global" sentinel already used by the dispose/upgrade
+          // events below instead of the per-request instance directory.
+          const GLOBAL_STREAM_DIRECTORY = "global"
+
           // Send heartbeat every 10s to prevent stalled proxy streams.
           heartbeat = setInterval(() => {
             try {
               pushControl({
-                directory: Instance.directory,
+                directory: GLOBAL_STREAM_DIRECTORY,
                 payload: {
                   type: "server.heartbeat",
                   properties: {},
@@ -389,7 +402,7 @@ export const GlobalRoutes = lazy(() =>
           } else if (subscription.replay?.type === "gap") {
             pushControl(
               {
-                directory: Instance.directory,
+                directory: GLOBAL_STREAM_DIRECTORY,
                 payload: {
                   type: Event.ResyncRequired.type,
                   properties: {
@@ -408,7 +421,7 @@ export const GlobalRoutes = lazy(() =>
           if (!done) {
             pushControl(
               {
-                directory: Instance.directory,
+                directory: GLOBAL_STREAM_DIRECTORY,
                 payload: {
                   type: Event.Connected.type,
                   properties: {},

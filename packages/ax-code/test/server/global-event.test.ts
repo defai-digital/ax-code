@@ -46,6 +46,24 @@ async function readSseFrames(response: Response, count: number): Promise<ParsedS
 }
 
 describe("GET /global/event", () => {
+  test("delivers the connected frame with no ambient Instance context", async () => {
+    // This route is mounted in server.ts ahead of the per-request
+    // directory-scoping middleware (so /global/health and
+    // /global/capabilities stay reachable without bootstrapping a project
+    // instance), so a real deployment (app.fetch(request) called directly
+    // by @hono/node-server / Bun.serve / the IPC bridge, per
+    // runtime-adapter.ts and ipc-transport.ts) reaches this handler with no
+    // AsyncLocalStorage instance context at all. Deliberately do NOT wrap
+    // this call in Instance.provide() — that reflects the real dispatch
+    // path, not the accidental context inheritance every other test in
+    // this file gets from wrapping app.request() inside Instance.provide().
+    const response = await Server.Default().request("/global/event")
+    expect(response.status).toBe(200)
+    const [connected] = await readSseFrames(response, 1)
+    expect(connected?.data.payload?.type).toBe("server.connected")
+    expect(connected?.data.directory).toBe("global")
+  })
+
   test("control frames carry the GlobalEvent shape (directory + payload)", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -77,9 +95,16 @@ describe("GET /global/event", () => {
           // The first frame is the server.connected control frame. It must
           // validate against the declared GlobalEvent schema, which requires
           // `directory` — exactly like every real data frame on this stream.
+          // Unlike real events (which each carry their publisher's own
+          // Instance.directory), this route is mounted ahead of the
+          // directory-scoping middleware in server.ts, so there is no
+          // ambient project directory for a control frame to report here —
+          // it uses the same "global" sentinel as the dispose/upgrade
+          // events below instead of Instance.directory (which would throw
+          // Context.NotFound outside a wrapping Instance.provide()).
           expect(frame).toBeDefined()
           expect(frame!.payload?.type).toBe("server.connected")
-          expect(frame!.directory).toBe(tmp.path)
+          expect(frame!.directory).toBe("global")
         } finally {
           await reader.cancel().catch(() => {})
         }
