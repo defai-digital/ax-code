@@ -1,6 +1,7 @@
 "use strict"
 
 const path = require("path")
+const { routeApiRequest } = require("./api-prefix-router")
 const { isLoopbackDesktopHostname } = require("./desktop-hosts")
 const {
   isTrustedRendererNavigationUrl: isTrustedLoopbackRendererNavigationUrl,
@@ -238,7 +239,66 @@ const proxyPackagedRendererApiRequest = async (request, { getApiOrigin, fetchImp
   }
 }
 
-const createPackagedRendererProtocolHandler = ({ webDistPath, readFile, getApiOrigin, fetchImpl }) => {
+// Runtime-target 503 shape matches the readiness semantics the renderer
+// already handles from the web proxy (503 + JSON { restarting: true }), so
+// polling loaders keep retrying while the runtime restarts.
+const buildRuntimeUnavailableResponse = () =>
+  new Response(JSON.stringify({ error: "ax-code is restarting", restarting: true }), {
+    status: 503,
+    headers: { "Content-Type": "application/json" },
+  })
+
+// Forward a runtime-classified request straight to the ax-code runtime.
+// getRuntimeUpstream() returns { origin, authorization } from main, or null
+// when the runtime origin is unknown (runtime down/restarting).
+const proxyPackagedRuntimeRequest = async (request, { route, getRuntimeUpstream, fetchImpl }) => {
+  const upstream = typeof getRuntimeUpstream === "function" ? getRuntimeUpstream() : null
+  const origin = typeof upstream?.origin === "string" ? upstream.origin.replace(/\/+$/, "") : ""
+  if (!origin || !isSafeLoopbackApiOrigin(origin)) {
+    return buildRuntimeUnavailableResponse()
+  }
+  const source = new URL(request.url)
+  const target = `${origin}${route.upstreamPath}${source.search}`
+  const headers = copyProxiedRequestHeaders(request)
+  // The renderer never holds the runtime credential (SPEC §2 D2): drop any
+  // incoming Authorization and inject main's per-boot Basic header instead.
+  // The value is never logged or included in diagnostics.
+  headers.delete("authorization")
+  if (typeof upstream.authorization === "string" && upstream.authorization) {
+    headers.set("authorization", upstream.authorization)
+  }
+  // Server-to-server proxy traffic carries no browser Origin; the runtime
+  // enforces loopback origins and rejects mismatches, so strip it here the
+  // same way the web proxy does.
+  headers.delete("origin")
+  // Identity encoding keeps SSE byte streams pass-through (matches the web
+  // proxy's proxyReq behavior) and avoids compressed-body mismatches.
+  headers.set("accept-encoding", "identity")
+  const init = {
+    method: request.method || "GET",
+    headers,
+  }
+  if (init.method !== "GET" && init.method !== "HEAD" && request.body != null) {
+    init.body = request.body
+    init.duplex = "half"
+  }
+  try {
+    // The fetch Response is returned directly, so the body streams unbuffered
+    // and long-lived SSE stays open. No timeout is applied on purpose — an
+    // idle-timeout would kill healthy SSE connections.
+    return await fetchImpl(target, init)
+  } catch {
+    return buildRuntimeUnavailableResponse()
+  }
+}
+
+const createPackagedRendererProtocolHandler = ({
+  webDistPath,
+  readFile,
+  getApiOrigin,
+  getRuntimeUpstream,
+  fetchImpl,
+}) => {
   const proxyFetch = typeof fetchImpl === "function" ? fetchImpl : globalThis.fetch
   return async (request) => {
     if (!isPackagedRendererUrl(request?.url)) {
@@ -251,6 +311,17 @@ const createPackagedRendererProtocolHandler = ({ webDistPath, readFile, getApiOr
       return new Response("Bad Request", { status: 400 })
     }
     if (isLoopbackApiPath(pathname)) {
+      // S2.4a (SPEC-2026-08-29-desktop-process-model-collapse §2 D3):
+      // longest-prefix routing. Runtime-shaped prefixes go straight to the
+      // ax-code runtime with main-injected auth; everything else keeps the
+      // original web-server hop. When no runtime upstream is configured the
+      // handler keeps the pre-S2.4 behavior (all paths via the web server).
+      if (typeof getRuntimeUpstream === "function") {
+        const route = routeApiRequest(pathname, request.method)
+        if (route.target === "runtime") {
+          return proxyPackagedRuntimeRequest(request, { route, getRuntimeUpstream, fetchImpl: proxyFetch })
+        }
+      }
       return proxyPackagedRendererApiRequest(request, { getApiOrigin, fetchImpl: proxyFetch })
     }
     const resolved = resolvePackagedRendererAssetPath(webDistPath, pathname)

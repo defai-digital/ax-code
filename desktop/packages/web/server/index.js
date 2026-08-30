@@ -958,6 +958,21 @@ Object.defineProperties(axCodeLifecycleState, {
   },
 })
 
+// S2.4a (SPEC-2026-08-29-desktop-process-model-collapse §2 D3): report the
+// managed runtime's current loopback origin to Electron main over the
+// utilityProcess channel (same channel as "ready"/"settings-write"). Main's
+// app:// protocol handler reverse-proxies runtime-shaped prefixes straight to
+// this origin; null means the runtime is unavailable. process.parentPort only
+// exists inside the Electron utilityProcess; standalone web mode skips this.
+// The origin never carries credentials.
+const reportRuntimeOriginToMain = (origin) => {
+  const parentPort = process.parentPort ?? null
+  if (!parentPort || typeof parentPort.postMessage !== "function") return
+  try {
+    parentPort.postMessage({ type: "runtime-origin", origin })
+  } catch {}
+}
+
 const axCodeLifecycleRuntime = createAxCodeLifecycleRuntime({
   state: axCodeLifecycleState,
   env: {
@@ -990,6 +1005,7 @@ const axCodeLifecycleRuntime = createAxCodeLifecycleRuntime({
   getActiveSessionCount,
   recordStartupEvent,
   healthCheckIntervalMs: HEALTH_CHECK_INTERVAL,
+  onRuntimeOriginChange: reportRuntimeOriginToMain,
 })
 
 const restartAxCode = (...args) => axCodeLifecycleRuntime.restartAxCode(...args)

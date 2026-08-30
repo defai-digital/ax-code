@@ -501,4 +501,86 @@ describe("ax-code lifecycle", () => {
     runtime.shutdown()
     expect(state.healthCheckInterval).toBe(null)
   })
+
+  it("reports the runtime origin when a managed start assigns the port (S2.4a)", async () => {
+    delete process.env.AX_CODE_BINARY
+    startHeadlessBackendMock.mockResolvedValueOnce({
+      url: "http://127.0.0.1:45678",
+      headers: { Authorization: "Basic test" },
+      close: vi.fn(async () => undefined),
+    })
+
+    const onRuntimeOriginChange = vi.fn()
+    const runtime = createRuntime({ onRuntimeOriginChange })
+    const server = await runtime.startAxCode()
+
+    expect(onRuntimeOriginChange).toHaveBeenCalledWith("http://127.0.0.1:45678")
+
+    await server.close()
+  })
+
+  it("reports a null origin when a managed start fails (S2.4a)", async () => {
+    delete process.env.AX_CODE_BINARY
+    startHeadlessBackendMock.mockRejectedValue(new Error("spawn failed"))
+
+    const onRuntimeOriginChange = vi.fn()
+    const state = createLifecycleState()
+    state.axCodePort = 45678
+    const runtime = createRuntime({ state, onRuntimeOriginChange })
+
+    await expect(runtime.startAxCode()).rejects.toThrow("spawn failed")
+
+    expect(state.axCodePort).toBe(null)
+    expect(onRuntimeOriginChange).toHaveBeenCalledWith(null)
+  })
+
+  it("dedupes repeat reports and forces one initial report after bootstrap (S2.4a)", async () => {
+    delete process.env.AX_CODE_BINARY
+    startHeadlessBackendMock.mockResolvedValue({
+      url: "http://127.0.0.1:45678",
+      headers: { Authorization: "Basic test" },
+      close: vi.fn(async () => undefined),
+      closed: new Promise(() => {}),
+    })
+    // waitForAxCodeReady polls /config and /agent after the port is assigned;
+    // answer those probes so the success-path bootstrap completes.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, body: { cancel: vi.fn(async () => undefined) }, json: async () => ({}) })),
+    )
+
+    try {
+      const onRuntimeOriginChange = vi.fn()
+      const state = createLifecycleState()
+      const runtime = createRuntime({ state, onRuntimeOriginChange })
+
+      await runtime.bootstrapAxCodeAtStartup()
+
+      // Exactly one report for the assigned origin, plus the forced initial
+      // report after bootstrap — deduped, so the same origin is not re-sent.
+      const originCalls = onRuntimeOriginChange.mock.calls.filter(([origin]) => origin === "http://127.0.0.1:45678")
+      expect(originCalls.length).toBe(1)
+      expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual(["http://127.0.0.1:45678"])
+
+      runtime.shutdown()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it("reports a null origin after a failed bootstrap (S2.4a)", async () => {
+    delete process.env.AX_CODE_BINARY
+    startHeadlessBackendMock.mockRejectedValue(new Error("spawn failed"))
+
+    const onRuntimeOriginChange = vi.fn()
+    const state = createLifecycleState()
+    const runtime = createRuntime({ state, onRuntimeOriginChange })
+
+    await runtime.bootstrapAxCodeAtStartup()
+
+    expect(onRuntimeOriginChange).toHaveBeenCalledWith(null)
+    expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual([null])
+
+    runtime.shutdown()
+  })
 })

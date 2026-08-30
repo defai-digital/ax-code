@@ -52,6 +52,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     getActiveSessionCount = () => 0,
     recordStartupEvent = null,
     healthCheckIntervalMs = 15000,
+    onRuntimeOriginChange = null,
   } = deps
 
   const markStartup = (name, details = {}, options = {}) => {
@@ -59,11 +60,34 @@ export const createAxCodeLifecycleRuntime = (deps) => {
     return recordStartupEvent(name, details, options)
   }
 
+  // S2.4a (SPEC-2026-08-29-desktop-process-model-collapse §2 D3): Electron
+  // main's app:// protocol handler reverse-proxies runtime-shaped prefixes
+  // straight to the runtime, so main must always know the runtime's current
+  // loopback origin. Report every transition where the proxy target changes —
+  // port assigned (ready/restart/external), port cleared (down) — deduped,
+  // plus one forced initial report after bootstrap. null means "runtime
+  // unavailable". The origin never carries credentials.
+  let lastReportedRuntimeOrigin
+  const reportRuntimeOrigin = () => {
+    if (typeof onRuntimeOriginChange !== "function") return
+    const origin = state.axCodePort
+      ? String(state.axCodeBaseUrl || `http://127.0.0.1:${state.axCodePort}`).replace(/\/+$/, "")
+      : null
+    // lastReportedRuntimeOrigin starts undefined so the first report — even a
+    // null "unavailable" — always fires once.
+    if (origin === lastReportedRuntimeOrigin) return
+    lastReportedRuntimeOrigin = origin
+    try {
+      onRuntimeOriginChange(origin)
+    } catch {}
+  }
+
   const portReadyCallbacks = []
   let startupAbortController = null
 
   const setAxCodePortInternal = (port) => {
     setAxCodePort(port)
+    reportRuntimeOrigin()
     if (port > 0 && portReadyCallbacks.length > 0) {
       const cbs = portReadyCallbacks.splice(0)
       for (const cb of cbs) cb(port)
@@ -729,6 +753,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
       const message = error instanceof Error ? error.message : String(error)
       state.lastAxCodeError = message
       state.axCodePort = null
+      reportRuntimeOrigin()
       syncToHmrState()
       console.error(`Failed to start AX Code: ${message}`)
       throw error
@@ -767,6 +792,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
             `[AX Code] Managed server startup failed on attempt ${attempt}/${START_AX_CODE_MAX_ATTEMPTS}; retrying: ${message}`,
           )
           state.axCodePort = null
+          reportRuntimeOrigin()
           state.isAxCodeReady = false
           state.axCodeNotReadySince = Date.now()
           syncToHmrState()
@@ -883,6 +909,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
         setAxCodePortInternal(env.ENV_CONFIGURED_AX_CODE_PORT)
       } else {
         state.axCodePort = null
+        reportRuntimeOrigin()
         syncToHmrState()
       }
 
@@ -918,6 +945,7 @@ export const createAxCodeLifecycleRuntime = (deps) => {
       state.lastAxCodeError = error.message
       if (!env.ENV_CONFIGURED_AX_CODE_PORT) {
         state.axCodePort = null
+        reportRuntimeOrigin()
         syncToHmrState()
       }
       state.axCodeApiPrefixDetected = true
@@ -1225,6 +1253,12 @@ export const createAxCodeLifecycleRuntime = (deps) => {
       // Keep the UI recoverable: retry with backoff instead of wedging on a
       // permanent "restarting" 503.
       scheduleBootstrapRetry()
+    } finally {
+      // S2.4a: main's protocol handler needs the runtime origin even when
+      // nothing changed during this bootstrap (HMR reuse, or a failed boot
+      // that must report "unavailable"). The dedupe sentinel guarantees this
+      // initial report fires exactly once.
+      reportRuntimeOrigin()
     }
   }
 

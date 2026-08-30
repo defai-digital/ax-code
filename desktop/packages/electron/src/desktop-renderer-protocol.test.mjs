@@ -124,3 +124,148 @@ describe("packaged renderer protocol policy", () => {
     expect(response.status).toBe(503)
   })
 })
+
+describe("packaged renderer protocol runtime routing (S2.4a)", () => {
+  const createRoutedHandler = ({ runtimeUpstream, fetchImpl, ...rest } = {}) =>
+    createPackagedRendererProtocolHandler({
+      webDistPath: "/app/web-dist",
+      getApiOrigin: () => "http://127.0.0.1:50959",
+      getRuntimeUpstream: () => runtimeUpstream,
+      readFile: async () => {
+        throw new Error("missing")
+      },
+      fetchImpl,
+      ...rest,
+    })
+
+  test("runtime-target paths go to the runtime origin with ^/api stripped and auth injected", async () => {
+    const seen = []
+    const handle = createRoutedHandler({
+      runtimeUpstream: { origin: "http://127.0.0.1:46001", authorization: "Basic injected-by-main" },
+      fetchImpl: async (url, init) => {
+        seen.push({
+          url,
+          method: init.method,
+          authorization: init.headers.get("authorization"),
+          origin: init.headers.get("origin"),
+          acceptEncoding: init.headers.get("accept-encoding"),
+        })
+        return new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } })
+      },
+    })
+    const response = await handle({
+      url: "app://ax-code/api/session?directory=%2Ftmp",
+      method: "GET",
+      headers: new Headers({
+        authorization: "Basic renderer-must-not-win",
+        origin: "app://ax-code",
+        cookie: "oc_ui_session=abc",
+      }),
+    })
+    expect(response.status).toBe(200)
+    expect(seen).toEqual([
+      {
+        url: "http://127.0.0.1:46001/session?directory=%2Ftmp",
+        method: "GET",
+        authorization: "Basic injected-by-main",
+        origin: null,
+        acceptEncoding: "identity",
+      },
+    ])
+  })
+
+  test("web-target paths keep the existing web-server hop unchanged", async () => {
+    const seen = []
+    const handle = createRoutedHandler({
+      runtimeUpstream: { origin: "http://127.0.0.1:46001", authorization: "Basic injected-by-main" },
+      fetchImpl: async (url, init) => {
+        seen.push({ url, authorization: init.headers.get("authorization") })
+        return new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } })
+      },
+    })
+    // Desktop override under a runtime-shaped prefix.
+    const override = await handle({
+      url: "app://ax-code/api/session/abc/prompt_async",
+      method: "POST",
+      headers: new Headers(),
+    })
+    expect(override.status).toBe(200)
+    // Plain desktop prefix.
+    const desktop = await handle({ url: "app://ax-code/api/git/status", method: "GET", headers: new Headers() })
+    expect(desktop.status).toBe(200)
+    expect(seen).toEqual([
+      { url: "http://127.0.0.1:50959/api/session/abc/prompt_async", authorization: null },
+      { url: "http://127.0.0.1:50959/api/git/status", authorization: null },
+    ])
+  })
+
+  test("runtime origin unknown returns 503 with restarting JSON", async () => {
+    const handle = createRoutedHandler({
+      runtimeUpstream: null,
+      fetchImpl: async () => {
+        throw new Error("should not fetch")
+      },
+    })
+    const response = await handle({ url: "app://ax-code/api/session", method: "GET", headers: new Headers() })
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: "ax-code is restarting", restarting: true })
+  })
+
+  test("runtime fetch failure returns 503 with restarting JSON (not 502)", async () => {
+    const handle = createRoutedHandler({
+      runtimeUpstream: { origin: "http://127.0.0.1:46001", authorization: "Basic injected-by-main" },
+      fetchImpl: async () => {
+        throw new Error("connection refused")
+      },
+    })
+    const response = await handle({ url: "app://ax-code/api/session", method: "GET", headers: new Headers() })
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: "ax-code is restarting", restarting: true })
+  })
+
+  test("runtime responses stream through unbuffered (SSE pass-through)", async () => {
+    const upstreamBody = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("data: one\n\n"))
+      },
+    })
+    const handle = createRoutedHandler({
+      runtimeUpstream: { origin: "http://127.0.0.1:46001", authorization: "Basic injected-by-main" },
+      fetchImpl: async () =>
+        new Response(upstreamBody, {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+    })
+    const response = await handle({ url: "app://ax-code/api/event", method: "GET", headers: new Headers() })
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toBe("text/event-stream")
+    // The exact upstream stream object is returned — no buffering or re-chunking.
+    expect(response.body).toBe(upstreamBody)
+  })
+
+  test("bare runtime prefixes (no /api) route to the runtime verbatim", async () => {
+    const seen = []
+    const handle = createRoutedHandler({
+      runtimeUpstream: { origin: "http://127.0.0.1:46001", authorization: "Basic injected-by-main" },
+      fetchImpl: async (url) => {
+        seen.push(url)
+        return new Response("{}", { status: 200 })
+      },
+    })
+    const response = await handle({ url: "app://ax-code/global/event", method: "GET", headers: new Headers() })
+    expect(response.status).toBe(200)
+    expect(seen).toEqual(["http://127.0.0.1:46001/global/event"])
+  })
+
+  test("non-loopback runtime origins are rejected as unavailable", async () => {
+    const handle = createRoutedHandler({
+      runtimeUpstream: { origin: "http://example.com", authorization: "Basic injected-by-main" },
+      fetchImpl: async () => {
+        throw new Error("should not fetch")
+      },
+    })
+    const response = await handle({ url: "app://ax-code/api/session", method: "GET", headers: new Headers() })
+    expect(response.status).toBe(503)
+  })
+})

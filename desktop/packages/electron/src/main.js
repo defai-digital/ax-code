@@ -112,6 +112,11 @@ function getDevRendererUrl() {
 let mainWindow = null
 let serverPort = 0
 let serverChild = null
+// Latest ax-code runtime origin reported by the web server over the
+// utilityProcess channel ({ type: "runtime-origin" }; S2.4a, SPEC §2 D3).
+// null/empty means the runtime is unavailable; the packaged app:// protocol
+// handler 503s runtime-target requests until a fresh report arrives.
+let runtimeOrigin = null
 let isQuitting = false
 let rendererStabilityTimer = null
 let rendererReadyForOpenProject = false
@@ -286,10 +291,21 @@ function spawnServerProcess(wire) {
   // A (re)spawn always takes over the port; clear it so windows and IPC never
   // target the dead server while the replacement boots.
   serverPort = 0
+  // The runtime origin reported by the previous server is stale across a
+  // restart; the fresh server re-reports it after its runtime bootstrap
+  // (S2.1 FSM recovery path — the report always re-arrives).
+  runtimeOrigin = null
 
   child.on("message", (msg) => {
     // settings-write requests are consumed by the sole-writer handler (S2.3).
     if (settingsWriteHandler.handleMessage(msg)) return
+    if (msg?.type === "runtime-origin") {
+      // S2.4a: the web server reports the managed runtime's current loopback
+      // origin (or null when down/restarting). Never log the associated
+      // credential; the origin itself carries none.
+      runtimeOrigin = typeof msg.origin === "string" && msg.origin ? msg.origin : null
+      return
+    }
     if (msg?.type === "startup-event" && msg.event?.name) {
       recordStartupEvent(msg.event.name, msg.event.details ?? {}, {
         source: msg.event.source || "web-server",
@@ -2782,6 +2798,15 @@ app.whenReady().then(async () => {
       createPackagedRendererProtocolHandler({
         webDistPath: getWebDistPath(),
         getApiOrigin: () => buildRendererApiOrigin(serverPort),
+        // S2.4a (SPEC §2 D2/D3): runtime-shaped prefixes are proxied straight
+        // to the ax-code runtime with the per-boot Basic credential injected
+        // here in main. The renderer never holds the credential; never log
+        // or persist this header value. null = runtime unavailable (503).
+        getRuntimeUpstream: () => {
+          if (!runtimeOrigin) return null
+          const credentials = Buffer.from(`ax-code:${getRuntimeAuthPassword()}`).toString("base64")
+          return { origin: runtimeOrigin, authorization: `Basic ${credentials}` }
+        },
         fetchImpl: (url, init) => electronNet.fetch(url, init),
         readFile: (filePath) => fsp.readFile(filePath),
       }),

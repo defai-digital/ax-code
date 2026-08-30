@@ -110,6 +110,7 @@ This module provides ax-code server integration utilities for the web server run
 ## Public exports (lifecycle.js)
 
 - `createAxCodeLifecycleRuntime(dependencies)`: creates lifecycle runtime for managed/external ax-code process orchestration.
+  - Optional `onRuntimeOriginChange(origin)` dependency (S2.4a): invoked, deduped, whenever the managed runtime's loopback origin is assigned (ready/restart/external), cleared (down), and once after bootstrap. `origin` is `"http://127.0.0.1:<port>"`-shaped (or the external base URL) and `null` when the runtime is unavailable; it never carries credentials. In desktop mode the web server forwards these as `{ type: "runtime-origin", origin }` messages to Electron main over the utilityProcess channel (same channel as "ready"/"settings-write") so main's app:// protocol handler can reverse-proxy runtime-shaped prefixes straight to the runtime.
 - Returned API:
   - `startAxCode()`
   - `restartAxCode()`
