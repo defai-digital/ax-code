@@ -46,6 +46,14 @@ export function sanitizePromptInput(input: string) {
   return input.replace(/<\d+;\d+;\d+[Mm]/g, "")
 }
 
+// A prompt has a draft when it carries any text OR any non-text part (pasted
+// image, agent/file reference, etc.). The ctrl+c clear-vs-exit decision and the
+// footer hint must agree with the escape/rewind intents, which already treat a
+// parts-only draft as a draft.
+export function hasPromptDraft(input: string, parts: readonly unknown[]): boolean {
+  return input !== "" || parts.length > 0
+}
+
 export function promptEscapeClearIntent(input: {
   keyName?: string
   hasDraft: boolean

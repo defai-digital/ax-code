@@ -77,6 +77,7 @@ import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import {
+  hasPromptDraft,
   promptEscapeClearIntent,
   promptEscapeRewindIntent,
   escapeRewindDisarmKey,
@@ -649,7 +650,7 @@ export function Prompt(props: PromptProps) {
   // ctrl+c is overloaded: it clears a non-empty draft and exits when the
   // input is empty — the footer hint mirrors whichever action currently applies.
   const footerClearHint = createMemo(() => {
-    const hasDraft = store.prompt.input !== ""
+    const hasDraft = hasPromptDraft(store.prompt.input, store.prompt.parts)
     return {
       keys: (hasDraft ? keybind.print("input_clear") : keybind.print("app_exit")) || "ctrl+c",
       label: hasDraft ? "clear" : "exit",
@@ -2033,12 +2034,12 @@ export function Prompt(props: PromptProps) {
                   }
                   // If no supported clipboard fallback applies, let the default paste behavior continue.
                 }
-                if (keybind.match("input_clear", e) && store.prompt.input !== "") {
+                if (keybind.match("input_clear", e) && hasPromptDraft(store.prompt.input, store.prompt.parts)) {
                   clearPromptDraft()
                   return
                 }
                 if (keybind.match("app_exit", e)) {
-                  if (store.prompt.input === "") {
+                  if (!hasPromptDraft(store.prompt.input, store.prompt.parts)) {
                     // preventDefault must happen synchronously — after the
                     // await the event has already been dispatched to the
                     // textarea's own handlers.
@@ -2077,7 +2078,7 @@ export function Prompt(props: PromptProps) {
                 }
                 const escapeIntent = promptEscapeClearIntent({
                   keyName: e.name,
-                  hasDraft: store.prompt.input !== "" || store.prompt.parts.length > 0,
+                  hasDraft: hasPromptDraft(store.prompt.input, store.prompt.parts),
                   previousEscapeAt: lastDraftEscapeAt,
                   now: Date.now(),
                 })
@@ -2097,7 +2098,7 @@ export function Prompt(props: PromptProps) {
                 // elsewhere keeps working.
                 const rewindIntent = promptEscapeRewindIntent({
                   keyName: e.name,
-                  hasDraft: store.prompt.input !== "" || store.prompt.parts.length > 0,
+                  hasDraft: hasPromptDraft(store.prompt.input, store.prompt.parts),
                   onSessionRoute: route.data.type === "session" && !!props.sessionID,
                   sessionIdle: status().type === "idle",
                   previousIdleEscapeAt: lastIdleEscapeAt,

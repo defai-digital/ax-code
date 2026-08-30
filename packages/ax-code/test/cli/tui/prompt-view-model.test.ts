@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   createPromptPasteSubmitGate,
   DOUBLE_ESCAPE_CLEAR_MS,
+  hasPromptDraft,
   isUnmodifiedPromptSubmitKey,
   promptEscapeClearIntent,
   promptSubmissionView,
@@ -25,6 +26,15 @@ function pastedTextPart(text: string, placeholder: string, start: number, end: n
 }
 
 describe("prompt view model", () => {
+  test("hasPromptDraft treats a parts-only prompt as a draft (regression: ctrl+c exited instead of clearing)", () => {
+    expect(hasPromptDraft("", [])).toBe(false)
+    expect(hasPromptDraft("hello", [])).toBe(true)
+    // An image-only (or @agent-reference-only) draft has empty text but non-empty
+    // parts — ctrl+c must clear it, not exit the app.
+    expect(hasPromptDraft("", [{ type: "file" }])).toBe(true)
+    expect(hasPromptDraft("hello", [{ type: "file" }])).toBe(true)
+  })
+
   test("arms clear on the first escape when the prompt has draft text", () => {
     expect(
       promptEscapeClearIntent({
