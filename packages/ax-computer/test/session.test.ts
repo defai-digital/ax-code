@@ -410,6 +410,28 @@ describe("ComputerSession", () => {
     expect(next.acts).toEqual([{ type: "click", target: { kind: "element", id: "x" } }])
   })
 
+  test("a rejected act on a stale target must not supersede an in-flight observe", async () => {
+    const primary = new FakeProvider("primary", ["a"])
+    const session = new ComputerSession(primary)
+    const pendingResult = deferred<ComputerObservation>()
+    primary.observe = async (scope) => {
+      primary.observedScopes.push(scope)
+      return pendingResult.promise
+    }
+    const pending = session.observe({ desktop: true })
+
+    // This id was never issued by an observation, so resolveAction throws
+    // before the provider is ever called: the UI never changes.
+    await expect(session.act({ type: "click", target: { kind: "element", id: "e999:bogus" } })).rejects.toMatchObject({
+      code: "stale_target",
+    })
+
+    pendingResult.resolve(observation("primary", ["a"]))
+    const committed = await pending
+    expect(committed.elements[0]!.id).toBe("e1:a")
+    expect(primary.acts).toHaveLength(0)
+  })
+
   test("observePassive does not advance the epoch or invalidate prior ids", async () => {
     const primary = new FakeProvider("primary", ["a"])
     const session = new ComputerSession(primary)

@@ -77,13 +77,17 @@ export class ComputerSession {
   }
 
   async act(action: ComputerAction): Promise<ActionResult> {
+    // Resolve the target before bumping the revision: a stale/invalid target
+    // throws here and never reaches the provider, so the UI never changes and
+    // an observation already in flight must not be superseded by it.
+    const resolved = this.resolveAction(action)
     // Acts mutate the UI, so an observation still in flight right now is a
     // snapshot of a UI that is about to change. Bump the revision so it
     // rejects with superseded_observation instead of committing as the
     // current epoch. Sequential observe -> act -> observe flows are
     // unaffected; only observes already in flight are superseded.
     this.revision += 1
-    return this.provider.act(this.resolveAction(action))
+    return this.provider.act(resolved)
   }
 
   /**
