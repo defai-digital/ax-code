@@ -53,6 +53,12 @@ let persistFoldersTimer: ReturnType<typeof setTimeout> | undefined
 let persistCollapsedTimer: ReturnType<typeof setTimeout> | undefined
 let pendingFoldersMap: SessionFoldersMap | null = null
 let pendingCollapsedIds: Set<string> | null = null
+// Set by every store mutation (via persistState). Guards the disk hydration
+// GET below from clobbering a folder the user creates/edits in the brief
+// window between store init (localStorage snapshot) and that fetch
+// resolving — without this, a fast local edit is silently reverted to the
+// stale disk snapshot.
+let hasLocalFoldersMutation = false
 
 const cloneSessionFoldersMap = (foldersMap: SessionFoldersMap): SessionFoldersMap =>
   Object.fromEntries(
@@ -208,6 +214,7 @@ if (typeof window !== "undefined") {
 }
 
 const persistState = (foldersMap: SessionFoldersMap, collapsedFolderIds: Set<string>): void => {
+  hasLocalFoldersMutation = true
   persistFolders(foldersMap)
   persistCollapsed(collapsedFolderIds)
   schedulePersistToDisk(foldersMap, collapsedFolderIds)
@@ -517,6 +524,13 @@ const hydrateSessionFoldersFromDisk = async (): Promise<void> => {
 
     const hasDiskData = Object.keys(diskFolders).length > 0 || diskCollapsed.size > 0
     if (!hasDiskData) {
+      return
+    }
+
+    // A folder created/edited locally while this fetch was in flight must
+    // win over the (now stale) disk snapshot — otherwise it would vanish
+    // from the UI the instant hydration lands.
+    if (hasLocalFoldersMutation) {
       return
     }
 
