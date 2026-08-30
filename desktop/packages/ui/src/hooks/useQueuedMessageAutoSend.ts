@@ -114,6 +114,72 @@ export const shouldDispatchQueuedAutoSend = (
   return (previousStatusType === "busy" || previousStatusType === "retry") && currentStatusType === "idle"
 }
 
+type QueuedAutoSendStatusUpdate = {
+  /** Baseline to store for the next tick — held sessions keep their prior (armed) status. */
+  nextStatusMap: Map<string, SessionStatusType>
+  /** Sessions whose busy/retry -> idle edge fired this tick and are clear to dispatch now. */
+  sessionIdsToDispatch: string[]
+}
+
+/**
+ * Advances the per-session status baseline used to detect a busy/retry -> idle
+ * edge, without stranding sessions whose auto-send is currently deferred
+ * (in-flight dispatch, recent abort, or an unseen error hold).
+ *
+ * A session held this tick must keep its pre-transition baseline (e.g. "busy")
+ * rather than being advanced to "idle" — otherwise, once the hold lifts with
+ * no further status transition to re-trigger the effect, the edge is gone and
+ * the queued message never auto-sends.
+ */
+export const computeQueuedAutoSendStatusUpdate = (
+  queuedMessages: Record<string, QueuedMessage[]>,
+  statusRecord: Record<string, { type: string } | undefined>,
+  previousStatusMap: Map<string, SessionStatusType>,
+  isAutoSendDeferred: (sessionId: string) => boolean,
+): QueuedAutoSendStatusUpdate => {
+  const queueEntries = Object.entries(queuedMessages)
+
+  const heldSessionIds = new Set<string>()
+  const sessionIdsToDispatch: string[] = []
+  for (const [sessionId, queue] of queueEntries) {
+    if (queue.length === 0) continue
+    const currentStatusType = (statusRecord[sessionId]?.type ?? "idle") as SessionStatusType
+    const previousStatusType = previousStatusMap.get(sessionId)
+    if (!shouldDispatchQueuedAutoSend(previousStatusType, currentStatusType)) continue
+
+    if (isAutoSendDeferred(sessionId)) {
+      heldSessionIds.add(sessionId)
+    } else {
+      sessionIdsToDispatch.push(sessionId)
+    }
+  }
+
+  const nextStatusMap = new Map(previousStatusMap)
+  for (const [sessionId, status] of Object.entries(statusRecord)) {
+    if (status && !heldSessionIds.has(sessionId)) {
+      nextStatusMap.set(sessionId, status.type as SessionStatusType)
+    }
+  }
+  for (const [sessionId, queue] of queueEntries) {
+    if (heldSessionIds.has(sessionId)) continue
+    const currentStatusType = (statusRecord[sessionId]?.type ?? "idle") as SessionStatusType
+    nextStatusMap.set(sessionId, currentStatusType)
+  }
+
+  // Prune sessions that are no longer tracked (deleted/archived/gone) so the
+  // status map does not grow unbounded over a long-running app session. A
+  // session that later reappears starts with no previous status, which
+  // correctly prevents a spurious idle-transition auto-send.
+  const activeSessionIds = new Set([...Object.keys(statusRecord), ...Object.keys(queuedMessages)])
+  for (const sessionId of nextStatusMap.keys()) {
+    if (!activeSessionIds.has(sessionId)) {
+      nextStatusMap.delete(sessionId)
+    }
+  }
+
+  return { nextStatusMap, sessionIdsToDispatch }
+}
+
 export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?: boolean }) {
   const enabled = typeof enabledOrOptions === "boolean" ? enabledOrOptions : (enabledOrOptions?.enabled ?? true)
   const queuedMessages = useMessageQueueStore((state) => state.queuedMessages)
@@ -182,41 +248,17 @@ export function useQueuedMessageAutoSend(enabledOrOptions?: boolean | { enabled?
     }
 
     const statusRecord = sessionStatusRecord ?? {}
-    const nextStatusMap = new Map(previousStatusRef.current)
-    for (const [sessionId, status] of Object.entries(statusRecord)) {
-      if (status) {
-        nextStatusMap.set(sessionId, status.type as SessionStatusType)
-      }
-    }
+    const { nextStatusMap, sessionIdsToDispatch } = computeQueuedAutoSendStatusUpdate(
+      queuedMessages,
+      statusRecord,
+      previousStatusRef.current,
+      isAutoSendDeferred,
+    )
 
-    const queueEntries = Object.entries(queuedMessages)
-    queueEntries.forEach(([sessionId, queue]) => {
-      const currentStatusType = (statusRecord[sessionId]?.type ?? "idle") as SessionStatusType
-      const previousStatusType = previousStatusRef.current.get(sessionId)
-      const shouldDispatch = queue.length > 0 && shouldDispatchQueuedAutoSend(previousStatusType, currentStatusType)
-
-      if (shouldDispatch && !isAutoSendDeferred(sessionId)) {
+    for (const sessionId of sessionIdsToDispatch) {
+      const queue = queuedMessages[sessionId]
+      if (queue) {
         void dispatchSessionQueue(sessionId, queue)
-      }
-
-      // Advance the baseline only when there is no deferred drain to preserve:
-      // an in-flight/abort/error-hold keeps the busy -> idle edge armed so it
-      // re-fires once the hold lifts instead of stranding the head.
-      if (shouldDispatch && isAutoSendDeferred(sessionId)) {
-        return
-      }
-
-      nextStatusMap.set(sessionId, currentStatusType)
-    })
-
-    // Prune sessions that are no longer tracked (deleted/archived/gone) so the
-    // status map does not grow unbounded over a long-running app session. A
-    // session that later reappears starts with no previous status, which
-    // correctly prevents a spurious idle-transition auto-send.
-    const activeSessionIds = new Set([...Object.keys(statusRecord), ...Object.keys(queuedMessages)])
-    for (const sessionId of nextStatusMap.keys()) {
-      if (!activeSessionIds.has(sessionId)) {
-        nextStatusMap.delete(sessionId)
       }
     }
 

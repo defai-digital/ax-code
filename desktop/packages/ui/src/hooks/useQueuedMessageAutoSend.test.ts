@@ -64,8 +64,13 @@ vi.doMock("@/sync/session-ui-store", () => ({
   },
 }))
 
-const { buildQueuedAutoSendPayload, isQueuedAutoSendHeld, sendQueuedAutoSendPayload, shouldDispatchQueuedAutoSend } =
-  await import("./useQueuedMessageAutoSend")
+const {
+  buildQueuedAutoSendPayload,
+  computeQueuedAutoSendStatusUpdate,
+  isQueuedAutoSendHeld,
+  sendQueuedAutoSendPayload,
+  shouldDispatchQueuedAutoSend,
+} = await import("./useQueuedMessageAutoSend")
 const { useSyncNotificationStore } = await import("@/sync/notification-store")
 
 describe("shouldDispatchQueuedAutoSend", () => {
@@ -77,6 +82,76 @@ describe("shouldDispatchQueuedAutoSend", () => {
   test("does not dispatch when idle is only first seen or status is missing", () => {
     expect(shouldDispatchQueuedAutoSend(undefined, "idle")).toBe(false)
     expect(shouldDispatchQueuedAutoSend("idle", "idle")).toBe(false)
+  })
+})
+
+describe("computeQueuedAutoSendStatusUpdate", () => {
+  test("dispatches a busy -> idle session and advances its baseline to idle", () => {
+    const previous = new Map([["session-a", "busy" as const]])
+    const queued = { "session-a": [{ id: "q1", content: "hi", createdAt: 1 }] }
+    const statusRecord = { "session-a": { type: "idle" } }
+
+    const { nextStatusMap, sessionIdsToDispatch } = computeQueuedAutoSendStatusUpdate(
+      queued,
+      statusRecord,
+      previous,
+      () => false,
+    )
+
+    expect(sessionIdsToDispatch).toEqual(["session-a"])
+    expect(nextStatusMap.get("session-a")).toBe("idle")
+  })
+
+  test("keeps the busy baseline armed for a session whose auto-send is deferred", () => {
+    const previous = new Map([["session-a", "busy" as const]])
+    const queued = { "session-a": [{ id: "q1", content: "hi", createdAt: 1 }] }
+    const statusRecord = { "session-a": { type: "idle" } }
+
+    // Deferred (e.g. an unseen error hold): must not dispatch, and must not
+    // advance the baseline to "idle" — otherwise the busy -> idle edge is
+    // consumed with nothing left to re-trigger the auto-send once the hold lifts.
+    const { nextStatusMap, sessionIdsToDispatch } = computeQueuedAutoSendStatusUpdate(
+      queued,
+      statusRecord,
+      previous,
+      () => true,
+    )
+
+    expect(sessionIdsToDispatch).toEqual([])
+    expect(nextStatusMap.get("session-a")).toBe("busy")
+
+    // Once the hold lifts, the edge is still armed and fires on the next tick
+    // even though the status record itself did not change again.
+    const { nextStatusMap: secondMap, sessionIdsToDispatch: secondDispatch } = computeQueuedAutoSendStatusUpdate(
+      queued,
+      statusRecord,
+      nextStatusMap,
+      () => false,
+    )
+    expect(secondDispatch).toEqual(["session-a"])
+    expect(secondMap.get("session-a")).toBe("idle")
+  })
+
+  test("advances the baseline normally for sessions with no queued messages", () => {
+    const previous = new Map([["session-b", "busy" as const]])
+    const statusRecord = { "session-b": { type: "idle" } }
+
+    const { nextStatusMap, sessionIdsToDispatch } = computeQueuedAutoSendStatusUpdate({}, statusRecord, previous, () => true)
+
+    expect(sessionIdsToDispatch).toEqual([])
+    expect(nextStatusMap.get("session-b")).toBe("idle")
+  })
+
+  test("prunes sessions no longer present in either the status record or the queue", () => {
+    const previous = new Map([
+      ["session-a", "idle" as const],
+      ["session-stale", "busy" as const],
+    ])
+
+    const { nextStatusMap } = computeQueuedAutoSendStatusUpdate({}, { "session-a": { type: "idle" } }, previous, () => false)
+
+    expect(nextStatusMap.has("session-stale")).toBe(false)
+    expect(nextStatusMap.get("session-a")).toBe("idle")
   })
 })
 
