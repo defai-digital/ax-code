@@ -46,7 +46,7 @@ export async function loadWikiManifest(root: string, wikiDir = AX_WIKI_DIR_DEFAU
   return manifest
 }
 
-async function atomicWrite(file: string, content: string): Promise<void> {
+export async function atomicWrite(file: string, content: string): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true })
   const temporary = `${file}.tmp-${randomUUID()}`
   try {
