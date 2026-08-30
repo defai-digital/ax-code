@@ -48,7 +48,20 @@ export namespace Shard {
   // A separate context from the registry's "database" context (db.ts). Sharing
   // one would let a shard `use` leak its tx into a registry write (or vice
   // versa) when a shard callback nests a registry operation. See db.ts:222.
-  const shardCtx = Context.create<{ tx: TxOrDb; effects: Effect[] }>("shard")
+  //
+  // A single AsyncLocalStorage instance is shared by every project's shard
+  // (there is one `handle()` call per project, not one context per project),
+  // so the stored record must carry its own `projectID` and `inTransaction`
+  // flag — mirroring Database's `ctx` (db.ts:251-264) — for two reasons:
+  //  1. Without `projectID`, a `handle(B)` call nested inside a `handle(A)`
+  //     `use`/`transaction` callback would silently reuse project A's
+  //     connection for project B's queries (cross-project data corruption).
+  //  2. Without `inTransaction`, `transaction()` nested inside `use()` would
+  //     reuse `use()`'s plain (non-transactional) client and silently skip
+  //     BEGIN IMMEDIATE, turning a supposedly atomic multi-statement write
+  //     into an unguarded one — the exact failure mode db.ts:254-263
+  //     documents for the registry DB.
+  const shardCtx = Context.create<{ projectID: string; tx: TxOrDb; effects: Effect[]; inTransaction: boolean }>("shard")
 
   function encodeProjectID(projectID: ProjectID): string {
     return Buffer.from(projectID, "utf8").toString("base64url")
@@ -425,49 +438,56 @@ export namespace Shard {
    * and never on the registry DB.
    */
   export function handle(projectID: ProjectID) {
+    const key = projectID as string
     return {
       use<T>(callback: (tx: TxOrDb) => T): T {
-        try {
-          return requireSync(callback(shardCtx.use().tx))
-        } catch (err) {
-          if (err instanceof Context.NotFound) {
-            const effects: Effect[] = []
-            const result = shardCtx.provide({ effects, tx: open(projectID) }, () => callback(open(projectID)))
-            runEffects(effects)
-            return result
-          }
-          throw err
+        const current = shardCtx.peek()
+        // Reuse the ambient tx only when it belongs to THIS project — a
+        // context left by a different project's `handle(...)` call must not
+        // be mistaken for this one (see the shardCtx comment above).
+        if (current && current.projectID === key) {
+          return requireSync(callback(current.tx))
         }
+        const effects: Effect[] = []
+        const result = shardCtx.provide({ effects, tx: open(projectID), inTransaction: false, projectID: key }, () =>
+          callback(open(projectID)),
+        )
+        runEffects(effects)
+        return result
       },
       transaction<T>(callback: (tx: TxOrDb) => T): SyncTransactionResult<T> {
-        try {
-          return requireSync(callback(shardCtx.use().tx)) as SyncTransactionResult<T>
-        } catch (err) {
-          if (err instanceof Context.NotFound) {
-            const effects: Effect[] = []
-            // BEGIN IMMEDIATE, matching Database.transaction (db.ts) so shard
-            // write transactions acquire the RESERVED lock up front.
-            const result = open(projectID).transaction<T>(
-              (tx) => {
-                return requireSync(
-                  shardCtx.provide({ tx, effects }, () => callback(tx)) as SyncTransactionResult<T>,
-                ) as SyncTransactionResult<T>
-              },
-              { behavior: "immediate" },
-            ) as SyncTransactionResult<T>
-            runEffects(effects)
-            return result
-          }
-          throw err
+        const current = shardCtx.peek()
+        // Only fold into the ambient context when it is THIS project's own
+        // real transaction. A same-project `use()` context is not
+        // transactional (no BEGIN of its own), and a different project's
+        // context must never be reused at all — both cases fall through to
+        // starting a fresh, correctly-scoped BEGIN IMMEDIATE below.
+        if (current && current.projectID === key && current.inTransaction) {
+          return requireSync(callback(current.tx)) as SyncTransactionResult<T>
         }
+        const effects: Effect[] = []
+        // BEGIN IMMEDIATE, matching Database.transaction (db.ts) so shard
+        // write transactions acquire the RESERVED lock up front.
+        const result = open(projectID).transaction<T>(
+          (tx) => {
+            return requireSync(
+              shardCtx.provide({ tx, effects, inTransaction: true, projectID: key }, () =>
+                callback(tx),
+              ) as SyncTransactionResult<T>,
+            ) as SyncTransactionResult<T>
+          },
+          { behavior: "immediate" },
+        ) as SyncTransactionResult<T>
+        runEffects(effects)
+        return result
       },
       effect<F extends () => unknown>(fn: F & SyncEffect<F>) {
-        try {
-          shardCtx.use().effects.push(fn as Effect)
-        } catch (err) {
-          if (!(err instanceof Context.NotFound)) throw err
-          ;(fn as Effect)()
+        const current = shardCtx.peek()
+        if (current && current.projectID === key) {
+          current.effects.push(fn as Effect)
+          return
         }
+        ;(fn as Effect)()
       },
     }
   }
