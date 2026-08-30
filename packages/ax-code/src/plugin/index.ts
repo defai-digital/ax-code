@@ -168,7 +168,17 @@ export namespace Plugin {
     for (const hook of current.hooks) {
       const fn = hook[name] as any
       if (!fn) continue
-      await fn(input, output)
+      try {
+        await fn(input, output)
+      } catch (err) {
+        // A throwing plugin hook must not brick the caller's flow (tool
+        // execution, system prompt build, LLM param build, compaction, shell
+        // env resolution, ...). Every other hook path in this module already
+        // isolates failures this way (the "event" subscription below uses
+        // Promise.allSettled, and the config-hook loop above splices out the
+        // offending hook) — `trigger` was the one path still propagating.
+        log.error("plugin trigger hook failed", { name, error: toErrorMessage(err) })
+      }
     }
     return output
   }
