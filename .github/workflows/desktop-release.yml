@@ -144,6 +144,85 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # The CLI and Desktop tags are often pushed together. The CLI workflow has
+  # to validate, build, sign, and publish its runtime archives before the
+  # Desktop packaging jobs can stage them from the public release URLs.
+  wait-for-cli-release:
+    needs: create-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Wait for published CLI runtime assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLI_TAG: v${{ needs.create-release.outputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          expected_assets=(
+            ax-code-darwin-arm64.zip
+            ax-code-darwin-arm64.zip.minisig
+            ax-code-windows-x64.zip
+            ax-code-windows-x64.zip.minisig
+            ax-code-windows-arm64.zip
+            ax-code-windows-arm64.zip.minisig
+            ax-code-linux-x64.tar.gz
+            ax-code-linux-x64.tar.gz.minisig
+            ax-code-linux-arm64.tar.gz
+            ax-code-linux-arm64.tar.gz.minisig
+          )
+
+          for attempt in {1..170}; do
+            missing_assets=()
+            if release_json="$(gh api "repos/$REPOSITORY/releases/tags/$CLI_TAG" 2>/dev/null)"; then
+              if jq -e '.draft == false' <<<"$release_json" >/dev/null; then
+                for asset in "${expected_assets[@]}"; do
+                  if ! jq -e --arg asset "$asset" \
+                    'any(.assets[]?; .name == $asset and .state == "uploaded" and .size > 0)' \
+                    <<<"$release_json" >/dev/null; then
+                    missing_assets+=("$asset")
+                  fi
+                done
+                if [ "${#missing_assets[@]}" -eq 0 ]; then
+                  echo "CLI release $CLI_TAG is published with all required runtime assets"
+                  exit 0
+                fi
+              fi
+            fi
+
+            if ! run_json="$(gh run list \
+              --repo "$REPOSITORY" \
+              --workflow release.yml \
+              --branch "$CLI_TAG" \
+              --limit 1 \
+              --json status,conclusion,url 2>/dev/null)"; then
+              run_json='[]'
+            fi
+            run_status="$(jq -r '.[0].status // empty' <<<"$run_json")"
+            run_conclusion="$(jq -r '.[0].conclusion // empty' <<<"$run_json")"
+            run_url="$(jq -r '.[0].url // empty' <<<"$run_json")"
+            if [ "$run_status" = "completed" ]; then
+              if [ "$run_conclusion" != "success" ]; then
+                echo "::error::CLI release workflow for $CLI_TAG completed with $run_conclusion: $run_url"
+              else
+                echo "::error::CLI release workflow completed without publishing every required runtime asset: $run_url"
+              fi
+              exit 1
+            fi
+
+            if [ "$attempt" -eq 170 ]; then
+              echo "::error::Timed out waiting for published CLI runtime assets for $CLI_TAG"
+              exit 1
+            fi
+            if [ "$attempt" -eq 1 ] || [ $((attempt % 10)) -eq 0 ]; then
+              echo "Waiting for CLI release $CLI_TAG to publish the bundled runtime assets (attempt $attempt/170)"
+            fi
+            sleep 30
+          done
+
   package-web:
     needs: create-release
     runs-on: ubuntu-latest
@@ -188,7 +267,7 @@ jobs:
           node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
   build-macos:
-    needs: create-release
+    needs: [create-release, wait-for-cli-release]
     runs-on: macos-latest
     env:
       HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
@@ -366,7 +445,7 @@ jobs:
   # Windows x64 (Intel/AMD). The arm64 sibling is build-windows-arm64 below;
   # each arch builds on its own runner so native modules compile for the target.
   build-windows:
-    needs: create-release
+    needs: [create-release, wait-for-cli-release]
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v7
@@ -407,9 +486,18 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip" -OutFile $zip
           $dir = Join-Path $env:RUNNER_TEMP "minisign-bin"
           Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force
-          $exe = Get-ChildItem -Recurse -Filter minisign.exe $dir | Select-Object -First 1
-          if (-not $exe) { throw "minisign.exe not found in $dir" }
-          $exe.Directory.FullName | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+          $minisignArchitecture = switch ($env:RUNNER_ARCH) {
+            "X64" { "x86_64" }
+            "ARM64" { "aarch64" }
+            default { throw "Unsupported Windows runner architecture: $env:RUNNER_ARCH" }
+          }
+          $exe = Join-Path $dir "minisign-win64"
+          $exe = Join-Path $exe $minisignArchitecture
+          $exe = Join-Path $exe "minisign.exe"
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw "minisign.exe for $minisignArchitecture not found in $dir"
+          }
+          Split-Path -Parent $exe | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build Windows Electron app
         shell: bash
@@ -459,7 +547,7 @@ jobs:
           if-no-files-found: error
 
   build-windows-arm64:
-    needs: create-release
+    needs: [create-release, wait-for-cli-release]
     runs-on: windows-11-arm
     steps:
       - uses: actions/checkout@v7
@@ -500,9 +588,18 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip" -OutFile $zip
           $dir = Join-Path $env:RUNNER_TEMP "minisign-bin"
           Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force
-          $exe = Get-ChildItem -Recurse -Filter minisign.exe $dir | Select-Object -First 1
-          if (-not $exe) { throw "minisign.exe not found in $dir" }
-          $exe.Directory.FullName | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
+          $minisignArchitecture = switch ($env:RUNNER_ARCH) {
+            "X64" { "x86_64" }
+            "ARM64" { "aarch64" }
+            default { throw "Unsupported Windows runner architecture: $env:RUNNER_ARCH" }
+          }
+          $exe = Join-Path $dir "minisign-win64"
+          $exe = Join-Path $exe $minisignArchitecture
+          $exe = Join-Path $exe "minisign.exe"
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw "minisign.exe for $minisignArchitecture not found in $dir"
+          }
+          Split-Path -Parent $exe | Out-File $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Build Windows Electron app
         shell: bash
@@ -581,7 +678,7 @@ jobs:
 
   # Ubuntu Desktop 24.04 LTS glibc baseline (amd64). Sibling arm64 job below.
   build-linux:
-    needs: create-release
+    needs: [create-release, wait-for-cli-release]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -639,7 +736,7 @@ jobs:
           node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
   build-linux-arm64:
-    needs: create-release
+    needs: [create-release, wait-for-cli-release]
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v7
