@@ -16246,37 +16246,6 @@
           "output": 128000
         }
       },
-      "claude-opus-4-thinking:32000": {
-        "id": "claude-opus-4-thinking:32000",
-        "name": "Claude 4 Opus Thinking (32K)",
-        "description": "Flagship Claude model for deep reasoning, coding, and long-horizon agents",
-        "family": "claude-opus",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-03-31",
-        "release_date": "2025-05-22",
-        "last_updated": "2025-05-22",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "input": 200000,
-          "output": 32000
-        }
-      },
       "doubao-1.5-vision-pro-32k": {
         "id": "doubao-1.5-vision-pro-32k",
         "name": "Doubao 1.5 Vision Pro 32k",
@@ -18515,37 +18484,6 @@
           "context": 262144,
           "input": 262144,
           "output": 32768
-        }
-      },
-      "claude-opus-4-1-thinking:32000": {
-        "id": "claude-opus-4-1-thinking:32000",
-        "name": "Claude 4.1 Opus Thinking (32K)",
-        "description": "Flagship Claude model for deep reasoning, coding, and long-horizon agents",
-        "family": "claude-opus",
-        "attachment": true,
-        "reasoning": true,
-        "reasoning_options": [],
-        "tool_call": true,
-        "structured_output": true,
-        "temperature": true,
-        "knowledge": "2025-03-31",
-        "release_date": "2025-08-05",
-        "last_updated": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": false,
-        "limit": {
-          "context": 200000,
-          "input": 200000,
-          "output": 32000
         }
       },
       "claude-sonnet-4-thinking:64000": {
@@ -180559,7 +180497,7 @@
         "open_weights": false,
         "limit": {
           "context": 1047576,
-          "output": 942818
+          "output": 32768
         }
       },
       "openai/o1": {

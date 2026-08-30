@@ -2339,7 +2339,14 @@ function connectPtyOverWebSocket(
     })
   })
   setSocketHandler(socket, "message", (event) => {
-    const parsed = parsePtyServerEvent(event.data)
+    let parsed: AxCodeGrpcPtyServerEvent | undefined
+    try {
+      parsed = parsePtyServerEvent(event.data)
+    } catch (error) {
+      queue.fail(error instanceof Error ? error : new Error(`Invalid AX Code PTY server frame: ${String(error)}`))
+      close(1011, "invalid server frame")
+      return
+    }
     if (parsed) queue.push(parsed)
   })
   setSocketHandler(socket, "error", () => {

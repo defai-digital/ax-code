@@ -1319,6 +1319,53 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("HTTP bridge fails the PTY stream instead of throwing when a replay frame has malformed JSON", async () => {
+    class FakeSocket {
+      readyState = 1
+      binaryType?: string
+      sent: Array<string | Uint8Array | ArrayBuffer> = []
+      closed?: { code?: number; reason?: string }
+      onopen?: (event: unknown) => void
+      onmessage?: (event: { data: unknown }) => void
+      onerror?: (event: unknown) => void
+      onclose?: (event: { code?: number; reason?: string }) => void
+
+      constructor(readonly url: string) {}
+
+      send(data: string | Uint8Array | ArrayBuffer) {
+        this.sent.push(data)
+      }
+
+      close(code?: number, reason?: string) {
+        this.closed = { code, reason }
+      }
+    }
+
+    let socket: FakeSocket | undefined
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      webSocketFactory(url) {
+        socket = new FakeSocket(url)
+        queueMicrotask(() => socket?.onopen?.({}))
+        return socket
+      },
+      fetch: (async () => Response.json({ id: "pty_1" })) as typeof fetch,
+    })
+    const frames = async function* () {}
+    const eventsPromise = (async () => {
+      const events = []
+      for await (const event of client.pty.connect("pty_1", frames())) events.push(event)
+      return events
+    })()
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const malformed = new Uint8Array([0, ...new TextEncoder().encode("{not json")])
+    socket?.onmessage?.({ data: malformed })
+
+    await expect(eventsPromise).rejects.toThrow(/JSON|Invalid AX Code PTY server frame/)
+    expect(socket?.closed).toEqual({ code: 1011, reason: "invalid server frame" })
+  })
+
   test("HTTP bridge can load a GUI bootstrap snapshot from selected routes", async () => {
     const paths: string[] = []
     const client = createAxCodeGrpcClientFromHttp({
