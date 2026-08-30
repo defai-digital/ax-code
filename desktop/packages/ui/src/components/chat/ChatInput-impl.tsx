@@ -1660,6 +1660,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [{ text: instructionsText, synthetic: true }],
             variantToSend,
             inputMode,
+            { sessionId: currentSessionId ?? undefined },
           )
           scrollToBottom?.()
         } catch (error) {
@@ -1681,6 +1682,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [{ text: instructionsText, synthetic: true }],
             variantToSend,
             inputMode,
+            { sessionId: currentSessionId ?? undefined },
           )
           scrollToBottom?.()
         } catch (error) {
@@ -1705,6 +1707,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [{ text: instructionsText, synthetic: true }],
             variantToSend,
             inputMode,
+            { sessionId: currentSessionId ?? undefined },
           )
           scrollToBottom?.()
         } catch (error) {
@@ -1726,6 +1729,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [{ text: instructionsText, synthetic: true }],
             variantToSend,
             inputMode,
+            { sessionId: currentSessionId ?? undefined },
           )
           scrollToBottom?.()
         } catch (error) {
@@ -1747,6 +1751,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [{ text: instructionsText, synthetic: true }],
             variantToSend,
             inputMode,
+            { sessionId: currentSessionId ?? undefined },
           )
           scrollToBottom?.()
         } catch (error) {
@@ -1768,6 +1773,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [{ text: instructionsText, synthetic: true }],
             variantToSend,
             inputMode,
+            { sessionId: currentSessionId ?? undefined },
           )
           scrollToBottom?.()
         } catch (error) {
@@ -1789,6 +1795,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [{ text: instructionsText, synthetic: true }],
             variantToSend,
             inputMode,
+            { sessionId: currentSessionId ?? undefined },
           )
           scrollToBottom?.()
         } catch (error) {
@@ -1840,6 +1847,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
       additionalParts.length > 0 ? additionalParts : undefined,
       variantToSend,
       inputMode,
+      { sessionId: currentSessionId ?? undefined },
     )
 
     if (typeof window === "undefined") {
@@ -1874,8 +1882,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         // Restore the composed text so a failed send doesn't destroy user input.
         // Skip when the composer already has content — queued-only submits keep
         // the text, and the user may have typed something new while in flight.
+        // Always persist the restored text to the sending session's own stored
+        // draft, but only write it into the live composer (`setMessage`) if the
+        // user is still viewing that same session — otherwise the failed send
+        // from session A would overwrite whatever session B currently has typed.
         if (originalPrimaryText && messageRef.current.trim().length === 0) {
-          setMessage(originalPrimaryText)
+          if (useSessionUIStore.getState().currentSessionId === currentSessionId) {
+            setMessage(originalPrimaryText)
+          }
           saveStoredDraft(currentSessionId, originalPrimaryText)
         }
 
