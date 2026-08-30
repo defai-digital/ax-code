@@ -40,6 +40,8 @@ pnpm run desktop:dev
 
 Launches the Electron desktop app in dev mode.
 
+Runtime supervision (S2.5, SPEC-2026-08-29-desktop-process-model-collapse): the Electron main process spawns and supervises the ax-code runtime by default — in dev and packaged builds alike — booting it in parallel with the web server. The web server treats the runtime as external (main always passes `AX_CODE_HOST`/`AX_CODE_PORT` to its fork env) and never spawns its own; runtime-target requests 503 with `{restarting:true}` until the runtime is healthy. Set `AX_CODE_DESKTOP_SUPERVISE_RUNTIME=0` to restore the pre-S2.5 behavior (the web server spawns and supervises the runtime itself); the variable passes through `scripts/dev.mjs` to the Electron process.
+
 Dev API routing mirrors packaged mode (S2.4, SPEC-2026-08-29-desktop-process-model-collapse): the Vite dev server classifies `/api`, `/global`, `/graph`, and `/dre-graph` requests with the same longest-prefix table as the packaged `app://` handler (`packages/electron/src/api-prefix-router.js`). Runtime-shaped paths are forwarded directly to the ax-code runtime — with the `^/api` rewrite, the renderer Origin stripped, and the per-boot Basic credential injected — while desktop-owned paths go to the web server. The web server publishes the runtime's current loopback origin and credential to a dev-only 0600 file (`AX_CODE_DESKTOP_DEV_UPSTREAM_FILE`, set by `packages/electron/scripts/dev.mjs`) on every runtime origin transition; the Vite proxy (`packages/web/vite-api-runtime-proxy.ts`) re-reads it, so no runtime port needs to be pinned in dev. When the file is missing or the runtime is unreachable, every request falls back to the web server, exactly as before S2.4.
 
 ### Shared UI (`packages/ui`)

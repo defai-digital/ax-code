@@ -1,12 +1,12 @@
 "use strict"
 
-// ── Main-supervised ax-code runtime (S2.5a) ─────────────────────────────────
+// ── Main-supervised ax-code runtime (S2.5) ──────────────────────────────────
 // SPEC-2026-08-29-desktop-process-model-collapse §5 S2.5: wires the unified
 // supervision FSM (supervision-fsm.js) to the ax-code runtime process so the
-// Electron main process can spawn/supervise it directly, gated behind
-// AX_CODE_DESKTOP_SUPERVISE_RUNTIME (see main.js). When the flag is off this
-// module is never loaded into a supervision role and the web server's own
-// lifecycle keeps its current behavior.
+// Electron main process can spawn/supervise it directly. S2.5b flipped the
+// default: main supervision is ON unless AX_CODE_DESKTOP_SUPERVISE_RUNTIME is
+// "0"/"false" (see main.js); only with that escape hatch does the web
+// server's own lifecycle keep its pre-S2.5 managed-spawn behavior.
 //
 // Design notes:
 // - Binary resolution mirrors the web lifecycle's env-runtime.js order —
@@ -23,6 +23,11 @@
 //   its env, and its external-mode re-probes target the configured port, so
 //   the origin must be stable across FSM restarts. The reserve-then-release
 //   TOCTOU window is acceptable on loopback (same pattern as scripts/dev.mjs).
+// - prepare() (binary resolution + port reservation) is split from start()
+//   (FSM boot) so S2.5b parallel boot can learn the fixed port BEFORE the
+//   runtime is up: main passes AX_CODE_HOST/AX_CODE_PORT to the web fork env
+//   immediately, which keeps the web lifecycle in external mode and is what
+//   guarantees the web never managed-spawns a second runtime.
 // - The per-boot Basic-auth password (S2.2) is passed to the runtime child env
 //   and used for health probes. It is NEVER logged or included in diagnostics.
 // - Loopback-only: the runtime is always bound to 127.0.0.1.
@@ -194,6 +199,7 @@ function createAxCodeRuntimeSupervision(options = {}) {
   const livenessConfig = { ...RUNTIME_LIVENESS, ...(options.liveness || {}) }
 
   let fsm = null
+  let preparePromise = null
   let startPromise = null
   let port = 0
   let fixedOrigin = null
@@ -428,9 +434,14 @@ function createAxCodeRuntimeSupervision(options = {}) {
     }
   }
 
-  async function start() {
-    if (startPromise) return startPromise
-    startPromise = (async () => {
+  // Binary resolution + fixed-port reservation, WITHOUT spawning anything.
+  // S2.5b parallel boot awaits this before forking the web server so the web
+  // env always carries AX_CODE_HOST/AX_CODE_PORT (the double-spawn invariant),
+  // then lets start() run the FSM concurrently with the web boot. Idempotent;
+  // a failed prepare may be retried.
+  async function prepare() {
+    if (preparePromise) return preparePromise
+    preparePromise = (async () => {
       const settings = settingsReader() || {}
       const resolved = resolveRuntimeBinary({ env, settings, isExecutable, platform })
       if (!resolved) {
@@ -449,7 +460,21 @@ function createAxCodeRuntimeSupervision(options = {}) {
       const envPort = Number.parseInt(trim(env.AX_CODE_PORT), 10)
       port = Number.isInteger(envPort) && envPort > 0 ? envPort : await reservePort(RUNTIME_HOSTNAME)
       fixedOrigin = `http://${RUNTIME_HOSTNAME}:${port}`
+      return { port, origin: fixedOrigin }
+    })()
+    try {
+      return await preparePromise
+    } finally {
+      if (resolution === null) {
+        preparePromise = null
+      }
+    }
+  }
 
+  async function start() {
+    if (startPromise) return startPromise
+    startPromise = (async () => {
+      await prepare()
       fsm = fsmFactory({
         label: "ax-code-runtime",
         policy,
@@ -493,6 +518,7 @@ function createAxCodeRuntimeSupervision(options = {}) {
   }
 
   return {
+    prepare,
     start,
     stop,
     get origin() {

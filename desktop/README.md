@@ -280,12 +280,15 @@ Package layout:
 | `packages/web`      | Local web runtime used by development and desktop packaging |
 | `packages/electron` | Desktop shell (Electron)                                    |
 
-In `pnpm run desktop:dev`, the Vite dev server routes renderer API calls with
-the same longest-prefix table as the packaged `app://` handler (S2.4):
-runtime-shaped paths go directly to the ax-code runtime, desktop-owned paths
-to the web server, with an automatic web-server fallback whenever the runtime
-origin is unknown. See [CONTRIBUTING.md](./CONTRIBUTING.md#desktop-electron)
-for the full dev proxying model.
+In `pnpm run desktop:dev`, the Electron main process spawns and supervises
+the ax-code runtime by default (S2.5; `AX_CODE_DESKTOP_SUPERVISE_RUNTIME=0`
+restores web-supervised mode), and the Vite dev server routes renderer API
+calls with the same longest-prefix table as the packaged `app://` handler
+(S2.4): runtime-shaped paths go directly to the ax-code runtime,
+desktop-owned paths to the web server, with an automatic web-server fallback
+whenever the runtime origin is unknown. See
+[CONTRIBUTING.md](./CONTRIBUTING.md#desktop-electron) for the full dev
+proxying model.
 
 ## Legacy Compatibility Notes
 

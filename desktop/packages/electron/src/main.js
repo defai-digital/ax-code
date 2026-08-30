@@ -113,15 +113,18 @@ function getDevRendererUrl() {
 let mainWindow = null
 let serverPort = 0
 let serverChild = null
-// Latest ax-code runtime origin reported by the web server over the
-// utilityProcess channel ({ type: "runtime-origin" }; S2.4a, SPEC §2 D3).
-// null/empty means the runtime is unavailable; the packaged app:// protocol
-// handler 503s runtime-target requests until a fresh report arrives.
+// Latest ax-code runtime origin. Two sources depending on supervision mode:
+// main's own runtime supervision (S2.5 default, via onOriginChange) or the
+// web server over the utilityProcess channel ({ type: "runtime-origin" };
+// S2.4a, SPEC §2 D3) when the web supervises (escape hatch). null/empty
+// means the runtime is unavailable; the packaged app:// protocol handler
+// 503s runtime-target requests until a fresh report arrives.
 let runtimeOrigin = null
-// Bootstrap retry-exhausted flag reported alongside the origin. When the
-// origin is null and this is true, the runtime is permanently down (not
-// restarting) and the protocol handler answers {restarting:false} so the
-// renderer switches from the "restarting" loader to the failure UI.
+// Retry-exhausted flag reported alongside the origin (from the supervisor's
+// onOriginChange context or the web's bootstrap report). When the origin is
+// null and this is true, the runtime is permanently down (not restarting)
+// and the protocol handler answers {restarting:false} so the renderer
+// switches from the "restarting" loader to the failure UI.
 let runtimeRetryExhausted = false
 let isQuitting = false
 let rendererStabilityTimer = null
@@ -201,18 +204,20 @@ app.on("open-file", (event, filePath) => {
 })
 
 // ── Server ──────────────────────────────────────────────────────────────────
-// S2.5a (SPEC-2026-08-29-desktop-process-model-collapse §5 S2.5): when
-// AX_CODE_DESKTOP_SUPERVISE_RUNTIME=1, main spawns and supervises the ax-code
-// runtime itself (axcode-runtime-supervisor.js + the supervision FSM) instead
-// of letting the web server's lifecycle manage it. Default OFF: every code
-// path below guards on `runtimeSupervision` being non-null, so flag-off
-// behavior is byte-identical to before.
+// S2.5 (SPEC-2026-08-29-desktop-process-model-collapse §5 S2.5): main spawns
+// and supervises the ax-code runtime itself (axcode-runtime-supervisor.js +
+// the supervision FSM) instead of letting the web server's lifecycle manage
+// it. S2.5b flipped the default: main supervision is ON unless
+// AX_CODE_DESKTOP_SUPERVISE_RUNTIME is "0"/"false" — that escape hatch
+// restores the pre-S2.5 behavior (the web server supervises the runtime).
+// Every code path below guards on `runtimeSupervision` being non-null, so
+// escape-hatch behavior is byte-identical to before S2.5.
 const isMainSupervisedRuntimeEnabled = () => {
   const raw =
     typeof process.env.AX_CODE_DESKTOP_SUPERVISE_RUNTIME === "string"
-      ? process.env.AX_CODE_DESKTOP_SUPERVISE_RUNTIME.trim()
+      ? process.env.AX_CODE_DESKTOP_SUPERVISE_RUNTIME.trim().toLowerCase()
       : ""
-  return raw === "1" || raw.toLowerCase() === "true"
+  return raw !== "0" && raw !== "false"
 }
 // Bundled ax-code runtime staged by Slice 3 (packaged builds only); computed
 // once and shared between the web-server fork env and the main-supervised
@@ -222,7 +227,8 @@ const bundledAxCodeEnv = buildBundledAxCodeEnv({
   isPackaged: app.isPackaged,
   resourcesPath: process.resourcesPath,
 })
-// Active only when the S2.5a flag is on and the supervision has been created.
+// Created unless the S2.5 escape hatch is set; the supervision owns the
+// runtime origin/exhausted state in that mode.
 let runtimeSupervision = null
 
 // The web server runs in a dedicated utilityProcess (dist/server-process.js)
@@ -273,8 +279,9 @@ async function showServerRecoveryFailure(error) {
     .catch((dialogError) => console.error("[electron] failed to show server recovery dialog:", dialogError))
 }
 
-// S2.5a: surfaced when the main-supervised ax-code runtime exhausts its
-// restart budget. The diagnostics payload comes from the supervision module
+// S2.5: surfaced when the main-supervised ax-code runtime exhausts its
+// restart budget (or, under S2.5b parallel boot, when the initial boot never
+// became healthy). The diagnostics payload comes from the supervision module
 // and never contains the runtime credential.
 async function showRuntimeRecoveryFailure(diagnostics = {}) {
   const lines = [
@@ -328,12 +335,17 @@ function spawnServerProcess(wire) {
           resourcesPath: process.resourcesPath,
           execPath: process.execPath,
         }),
-        // S2.5a: when main supervises the runtime, the web lifecycle must
+        // S2.5: when main supervises the runtime, the web lifecycle must
         // treat it as EXTERNAL and skip its managed spawn. AX_CODE_PORT pins
         // the fixed loopback port (stable across runtime restarts);
         // AX_CODE_HOST gives the exact origin for the web's external probe
-        // (it must be a full URL per env-config.js validation). The runtime
-        // password is already shared via AX_CODE_SERVER_PASSWORD above.
+        // (it must be a full URL per env-config.js validation). Both are
+        // ALWAYS passed in supervise mode — the port is reserved by
+        // prepare() before this process forks, even though the runtime may
+        // not be healthy yet (S2.5b parallel boot): a configured AX_CODE_HOST
+        // is what guarantees the web never managed-spawns a second runtime.
+        // The runtime password is already shared via AX_CODE_SERVER_PASSWORD
+        // above.
         ...(runtimeSupervision
           ? {
               AX_CODE_PORT: String(runtimeSupervision.port),
@@ -354,7 +366,7 @@ function spawnServerProcess(wire) {
   serverPort = 0
   // The runtime origin reported by the previous server is stale across a
   // restart; the fresh server re-reports it after its runtime bootstrap
-  // (S2.1 FSM recovery path — the report always re-arrives). S2.5a: when main
+  // (S2.1 FSM recovery path — the report always re-arrives). S2.5: when main
   // supervises the runtime, its origin is independent of the web server and
   // stays valid across web-server restarts — keep it.
   if (!runtimeSupervision) {
@@ -366,7 +378,7 @@ function spawnServerProcess(wire) {
     // settings-write requests are consumed by the sole-writer handler (S2.3).
     if (settingsWriteHandler.handleMessage(msg)) return
     if (msg?.type === "runtime-origin") {
-      // S2.5a: when main supervises the runtime it owns the origin directly;
+      // S2.5: when main supervises the runtime it owns the origin directly;
       // web reports describe the web's external view and are ignored here.
       if (runtimeSupervision) return
       // S2.4a: the web server reports the managed runtime's current loopback
@@ -813,7 +825,7 @@ handleCommand("desktop_download_and_install_update", async () => {
 })
 
 // Only the local web server is active; remote background services are disabled.
-// Shutdown order (S2.5a): the web server first (it may still be proxying to
+// Shutdown order (S2.5): the web server first (it may still be proxying to
 // the runtime), then the main-supervised runtime.
 const stopBackgroundServices = async () => {
   await Promise.allSettled([stopServer()])
@@ -2936,11 +2948,21 @@ app.whenReady().then(async () => {
       // settings file must not prevent the local app from starting.
       console.warn("[electron] failed to purge disabled remote settings", error)
     })
-    // S2.5a: with AX_CODE_DESKTOP_SUPERVISE_RUNTIME=1, main spawns and
-    // supervises the ax-code runtime BEFORE the web server, so the web
-    // lifecycle's external probe finds it healthy and adopts it (external
-    // mode) instead of spawning its own. The runtime origin is owned here
-    // directly; web {type:"runtime-origin"} reports are ignored in this mode.
+    // S2.5b: main spawns and supervises the ax-code runtime by default, IN
+    // PARALLEL with the web server. prepare() resolves the binary and
+    // reserves the fixed loopback port up front, so the web fork env (see
+    // spawnServerProcess) ALWAYS carries AX_CODE_HOST/AX_CODE_PORT in this
+    // mode — that is what keeps the web lifecycle in external mode and
+    // guarantees it never managed-spawns a second runtime, even though the
+    // runtime is typically not healthy yet when the web boots. The FSM boot
+    // then runs concurrently with launchServer(): the renderer loads
+    // immediately and runtime-target requests are gated by the app://
+    // protocol handler from the supervisor's onOriginChange updates (503
+    // {restarting:true} while booting/restarting, {restarting:false} once
+    // exhausted). A runtime boot failure therefore surfaces through the FSM
+    // exhaustion dialog (showRuntimeRecoveryFailure), not the
+    // startup-failure path — only a prepare() failure (no usable binary, a
+    // configuration error) still fails startup here.
     if (isMainSupervisedRuntimeEnabled()) {
       recordStartupEvent("runtime.supervision.start", {}, { once: false })
       runtimeSupervision = createAxCodeRuntimeSupervision({
@@ -2950,13 +2972,33 @@ app.whenReady().then(async () => {
         onOriginChange: (origin, context = {}) => {
           runtimeOrigin = typeof origin === "string" && origin ? origin : null
           runtimeRetryExhausted = context.exhausted === true
+          if (origin) {
+            recordStartupEvent("runtime.supervision.ready", { port: runtimeSupervision?.port }, { once: false })
+          }
           if (context.exhausted === true) {
             showRuntimeRecoveryFailure(context.diagnostics || {})
           }
         },
       })
-      const { port: runtimePort } = await runtimeSupervision.start()
-      recordStartupEvent("runtime.supervision.ready", { port: runtimePort }, { once: false })
+      const { port: runtimePort } = await runtimeSupervision.prepare()
+      recordStartupEvent("runtime.supervision.prepared", { port: runtimePort }, { once: false })
+      runtimeSupervision.start().catch((error) => {
+        // A quitting app stops the FSM before readiness, which rejects
+        // start() — that is normal shutdown, not a boot failure.
+        if (isQuitting) return
+        // The FSM deliberately leaves initial-start retries to the caller
+        // (the crash budget only covers restarts of a once-healthy runtime).
+        // With parallel boot there is no startup gate to fail, so surface
+        // the same terminal state as FSM exhaustion: the origin stays null,
+        // the protocol handler flips to {restarting:false}, and the manual
+        // escape is the desktop_restart IPC (full app restart).
+        console.error("[electron] ax-code runtime failed to start:", error)
+        runtimeOrigin = null
+        runtimeRetryExhausted = true
+        showRuntimeRecoveryFailure({
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
     }
     await launchServer()
     await createWindow()
@@ -2982,7 +3024,7 @@ app.whenReady().then(async () => {
     )
     // app.exit() does not fire 'before-quit', so stop the server process
     // (and any ax-code child it spawned, or the main-supervised runtime under
-    // S2.5a) here to avoid orphaning it when the server booted but window
+    // S2.5) here to avoid orphaning it when the server booted but window
     // creation failed.
     await stopBackgroundServices()
     app.exit(1)

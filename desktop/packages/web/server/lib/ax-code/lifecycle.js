@@ -852,7 +852,10 @@ export const createAxCodeLifecycleRuntime = (deps) => {
 
       if (state.isExternalAxCode) {
         console.log("Re-probing external ax-code server...")
-        const probePort = state.axCodePort || env.ENV_CONFIGURED_AX_CODE_PORT || 4096
+        // The host URL's own port is the fallback when no explicit
+        // AX_CODE_PORT was configured alongside AX_CODE_HOST.
+        const probePort =
+          state.axCodePort || env.ENV_CONFIGURED_AX_CODE_PORT || env.ENV_CONFIGURED_AX_CODE_HOST?.port || 4096
         const probeOrigin = state.axCodeBaseUrl ?? env.ENV_CONFIGURED_AX_CODE_HOST?.origin
         const healthy = await managedAxCodeRuntime.probeExternalServer(probePort, probeOrigin)
         if (healthy) {
@@ -1243,6 +1246,26 @@ export const createAxCodeLifecycleRuntime = (deps) => {
           { source: "web-server", milestone: "ax-code.health.ready" },
         )
         syncToHmrState()
+      } else if (env.ENV_CONFIGURED_AX_CODE_HOST) {
+        // S2.5b (SPEC-2026-08-29-desktop-process-model-collapse §5 S2.5): an
+        // explicit external origin is configured — in desktop mode Electron
+        // main always passes AX_CODE_HOST for the runtime it supervises, even
+        // before the runtime is healthy (parallel boot: the port is reserved
+        // up front). NEVER managed-spawn here: spawning would double-spawn
+        // the runtime against main's supervisor. Mark the external target
+        // and let the bounded bootstrap retry loop re-probe until the
+        // runtime comes up; restartAxCode's external path then adopts it
+        // (port, readiness, proxy) exactly like a first-boot detection.
+        // The port intentionally stays unset so the reported runtime origin
+        // remains null ("restarting") until a probe actually succeeds.
+        state.isExternalAxCode = true
+        state.isAxCodeReady = false
+        state.axCodeNotReadySince = Date.now()
+        state.lastAxCodeError = `External AX Code server at ${env.ENV_CONFIGURED_AX_CODE_HOST.origin} is not ready yet`
+        console.log(`${state.lastAxCodeError}; scheduling external re-probes (managed spawn disabled)`)
+        scheduleBootstrapRetry()
+        syncToHmrState()
+        return
       } else {
         if (env.ENV_EFFECTIVE_PORT) {
           console.log(`Using AX Code port from environment: ${env.ENV_EFFECTIVE_PORT}`)

@@ -451,4 +451,33 @@ describe("ax-code runtime supervision", () => {
     expect(ctx.fakeSpawn.children[0].killSignals).toEqual(["SIGTERM", "SIGKILL"])
     expect(ctx.supervision.state).toBe("stopped")
   })
+
+  test("prepare() resolves the binary and reserves the fixed port WITHOUT spawning (S2.5b parallel boot)", async () => {
+    const ctx = createSupervision({ settings: { axCodeBinary: "/custom/ax-code" } })
+
+    const prepared = await ctx.supervision.prepare()
+    expect(prepared).toEqual({ port: RESERVED_PORT, origin: FIXED_ORIGIN })
+    expect(ctx.supervision.port).toBe(RESERVED_PORT)
+    // No spawn, no FSM: prepare is the pre-boot half only.
+    expect(ctx.fakeSpawn.calls).toHaveLength(0)
+    expect(ctx.supervision.state).toBe("idle")
+
+    // prepare() is idempotent and start() reuses the prepared port/origin.
+    await expect(ctx.supervision.prepare()).resolves.toEqual(prepared)
+    const result = await startHealthy(ctx)
+    expect(result).toEqual(prepared)
+    expect(ctx.fakeSpawn.calls[0].args).toEqual(["serve", "--hostname", "127.0.0.1", "--port", String(RESERVED_PORT)])
+  })
+
+  test("a missing binary rejects prepare() before any spawn, and prepare() may be retried", async () => {
+    const settings = {}
+    const ctx = createSupervision({ settings, isExecutable: (candidate) => candidate === "/custom/ax-code" })
+
+    await expect(ctx.supervision.prepare()).rejects.toThrow(/could not find the ax-code CLI/)
+    expect(ctx.fakeSpawn.calls).toHaveLength(0)
+    expect(ctx.supervision.port).toBe(0)
+
+    settings.axCodeBinary = "/custom/ax-code"
+    await expect(ctx.supervision.prepare()).resolves.toEqual({ port: RESERVED_PORT, origin: FIXED_ORIGIN })
+  })
 })

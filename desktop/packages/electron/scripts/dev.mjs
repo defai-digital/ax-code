@@ -145,6 +145,11 @@ const sharedEnv = {
   ...process.env,
   AX_CODE_DESKTOP_PORT: String(serverPort),
   AX_CODE_DESKTOP_RENDERER_PORT: String(rendererPort),
+  // Runtime supervision (S2.5): the Electron main process spawns/supervises
+  // the ax-code runtime by default, in parallel with the web server. The
+  // AX_CODE_DESKTOP_SUPERVISE_RUNTIME=0 escape hatch (web-supervised mode)
+  // passes through via ...process.env — nothing to wire here.
+  //
   // S2.4b: the web server publishes the ax-code runtime's current loopback
   // origin + Basic credential to this file on every origin transition, and the
   // Vite dev proxy (vite-api-runtime-proxy.ts) re-reads it to mirror the

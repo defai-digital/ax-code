@@ -612,4 +612,71 @@ describe("ax-code lifecycle", () => {
 
     runtime.shutdown()
   }, 30000)
+
+  it("never managed-spawns when an external origin is configured but not yet healthy (S2.5b)", async () => {
+    delete process.env.AX_CODE_BINARY
+    // The external runtime (supervised by Electron main in desktop mode) is
+    // still booting: every probe fails with connection refused.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("connect ECONNREFUSED")
+      }),
+    )
+
+    try {
+      const onRuntimeOriginChange = vi.fn()
+      const state = createLifecycleState()
+      const runtime = createRuntime({
+        state,
+        onRuntimeOriginChange,
+        env: {
+          ENV_CONFIGURED_AX_CODE_PORT: 45678,
+          ENV_CONFIGURED_AX_CODE_HOST: { origin: "http://127.0.0.1:45678", port: 45678 },
+          ENV_EFFECTIVE_PORT: 45678,
+          ENV_CONFIGURED_AX_CODE_HOSTNAME: "127.0.0.1",
+          ENV_SKIP_AX_CODE_START: false,
+        },
+      })
+
+      await runtime.bootstrapAxCodeAtStartup()
+
+      // The double-spawn invariant: with AX_CODE_HOST configured, a failed
+      // external probe must NOT fall back to a managed spawn — main's
+      // supervisor would be fighting a second runtime for the same port.
+      expect(startHeadlessBackendMock).not.toHaveBeenCalled()
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(state.isExternalAxCode).toBe(true)
+      expect(state.isAxCodeReady).toBe(false)
+      // The port stays unset so the reported origin is null ("restarting")
+      // until a probe actually succeeds.
+      expect(state.axCodePort).toBe(null)
+      expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual([null, { exhausted: false }])
+      // Recovery is a scheduled re-probe, not a crash and not a wedge.
+      expect(state.axCodeNextRetryAt).toBeGreaterThan(0)
+      expect(state.axCodeRetryExhausted).toBe(false)
+
+      // Once the external runtime answers healthy, the scheduled retry
+      // adopts it — still without any managed spawn.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({
+          ok: true,
+          body: { cancel: vi.fn(async () => undefined) },
+          json: async () => ({ healthy: true, version: "7.9.13" }),
+        })),
+      )
+      await vi.waitFor(() => {
+        expect(state.isAxCodeReady).toBe(true)
+      })
+      expect(state.axCodePort).toBe(45678)
+      expect(startHeadlessBackendMock).not.toHaveBeenCalled()
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(onRuntimeOriginChange.mock.calls.at(-1)).toEqual(["http://127.0.0.1:45678", { exhausted: false }])
+
+      runtime.shutdown()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
