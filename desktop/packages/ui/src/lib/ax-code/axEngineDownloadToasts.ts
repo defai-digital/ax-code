@@ -132,12 +132,19 @@ export function createDownloadToastTracker(deps: DownloadToastDeps) {
     if (polling) return
     polling = true
     try {
-      const first = announced.values().next().value
-      if (!first) {
+      if (announced.size === 0) {
         stopTimer()
         return
       }
-      reconcile(await deps.fetchJobs(first.directory))
+      // Announced jobs can span multiple directories (downloads started from
+      // different projects/worktrees while the tracker is shared at module
+      // scope) — fetch each distinct directory's job list, not just the
+      // first announced entry's, or jobs in other directories are never
+      // reconciled and eventually get misreported as "interrupted".
+      const directories = new Set<string | null>()
+      for (const info of announced.values()) directories.add(info.directory)
+      const jobLists = await Promise.all(Array.from(directories, (directory) => deps.fetchJobs(directory)))
+      reconcile(jobLists.flat())
     } catch {
       // Transient (e.g. the CLI is restarting) — keep polling; the toast stays
       // "Downloading…" until a terminal state can actually be observed.
