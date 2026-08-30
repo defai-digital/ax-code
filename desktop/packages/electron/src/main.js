@@ -41,6 +41,7 @@ const { createSettingsWriteHandler } = require("./settings-write-handler")
 const { loadUrlWithTimeout } = require("./load-url-timeout")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
 const { sendUpdateProgressToWindows } = require("./update-progress")
+const { resolveDesktopUpdateFeed } = require("./desktop-update-feed")
 const { normalizeInstalledAppsCache } = require("./installed-apps-cache")
 const {
   reloadLocalRendererWindowsAfterServerRestart,
@@ -776,6 +777,26 @@ autoUpdater.on("error", (err) => {
   console.warn("[updater] error:", err instanceof Error ? err.message : err)
 })
 
+// electron-updater's GitHub provider always follows the repo-wide "latest"
+// release. This repository ships CLI releases (v*) and Desktop releases
+// (desktop-v*) side by side, and the latest release is usually a CLI one
+// whose assets carry no update manifests — every check then fails with
+// ERR_UPDATER_CHANNEL_FILE_NOT_FOUND and the app can never self-update.
+// Point the updater at the newest published desktop-v* release instead.
+let desktopUpdateFeed = null
+async function ensureDesktopUpdateFeed({ force = false } = {}) {
+  if (desktopUpdateFeed && !force) return desktopUpdateFeed
+  const feed = await resolveDesktopUpdateFeed()
+  // setFeedURL replaces the updater's provider client; only swap it when the
+  // target release actually changed so an in-flight download keeps its
+  // resolved provider.
+  if (!desktopUpdateFeed || desktopUpdateFeed.url !== feed.url) {
+    autoUpdater.setFeedURL({ provider: "generic", url: feed.url })
+  }
+  desktopUpdateFeed = feed
+  return feed
+}
+
 // ── Origin guard & registration helper ───────────────────────────────────────
 // The preload shim is only trusted on the active loopback server (or loopback
 // development renderer). Wildcard and network addresses are not local senders.
@@ -817,9 +838,16 @@ handleCommand("desktop_check_for_updates", async (args) => {
     return { available: false, currentVersion: app.getVersion(), disabled: true }
   }
   try {
+    // Refresh the feed on every check so a release published after the
+    // previous check is seen; download reuses this resolved provider.
+    await ensureDesktopUpdateFeed({ force: true })
     const result = await autoUpdater.checkForUpdates()
     if (!result?.updateInfo) return { available: false, currentVersion: app.getVersion() }
-    const available = result.updateInfo.version !== app.getVersion()
+    // Trust electron-updater's own semver comparison. A plain !== would
+    // report a downgrade as "available" whenever the newest published
+    // desktop release is older than the running app (e.g. while a newer
+    // desktop release is still in draft).
+    const available = result.isUpdateAvailable === true
     return {
       available,
       version: result.updateInfo.version,
@@ -840,6 +868,9 @@ handleCommand("desktop_check_for_updates", async (args) => {
 
 handleCommand("desktop_download_and_install_update", async () => {
   sendUpdateProgress("Started", {})
+  // Belt-and-braces: the download button is only reachable after a check,
+  // which already resolved the feed — reuse it instead of re-resolving.
+  await ensureDesktopUpdateFeed()
   await autoUpdater.downloadUpdate()
 })
 
@@ -3027,7 +3058,9 @@ app.whenReady().then(async () => {
     // warms the cache here. Release smoke runs before updater metadata is
     // uploaded to the draft release, so it opts out with this environment flag.
     if (shouldCheckForUpdatesOnStartup()) {
-      autoUpdater.checkForUpdates().catch(() => {})
+      ensureDesktopUpdateFeed()
+        .then(() => autoUpdater.checkForUpdates())
+        .catch(() => {})
     }
 
     // Notify renderer on OS wake-from-sleep so the SSE event pipeline can
