@@ -657,6 +657,13 @@ export class CSSVariableGenerator {
         .toString(16)
         .padStart(2, "0")}`
     }
+    // Check "rgba" before "rgb": "rgba(...)".startsWith("rgb") is also true, so
+    // testing rgb first would replace the inner "rgb" substring of an already-
+    // rgba color (producing invalid "rgbaa(...)") and append a second alpha
+    // component instead of overriding the existing one.
+    if (color.startsWith("rgba")) {
+      return color.replace(/,\s*[\d.]+\)$/, `, ${alpha})`)
+    }
     if (color.startsWith("rgb")) {
       return color.replace("rgb", "rgba").replace(")", `, ${alpha})`)
     }
@@ -701,9 +708,28 @@ export class CSSVariableGenerator {
     return color
   }
 
+  // Expand a hex color to a plain 6-digit RRGGBB string (dropping any alpha
+  // channel) so darken()/lighten() can safely bit-shift it as a 24-bit value.
+  // Without this, a 3/4-digit shorthand (e.g. "#fff") or an 8-digit
+  // hex-with-alpha (e.g. "#3573f080") parses as a value with fewer than 24
+  // significant bits and produces a badly wrong shade.
+  private normalizeHexRgb(color: string): string {
+    let hex = color.slice(1)
+    if (hex.length === 3 || hex.length === 4) {
+      hex = hex
+        .slice(0, 3)
+        .split("")
+        .map((c) => c + c)
+        .join("")
+    } else if (hex.length === 8) {
+      hex = hex.slice(0, 6)
+    }
+    return hex
+  }
+
   private darken(color: string, percent: number): string {
     if (color.startsWith("#")) {
-      const num = parseInt(color.slice(1), 16)
+      const num = parseInt(this.normalizeHexRgb(color), 16)
       const amt = Math.round(2.55 * percent)
       const R = (num >> 16) - amt
       const G = ((num >> 8) & 0x00ff) - amt
@@ -725,7 +751,7 @@ export class CSSVariableGenerator {
 
   private lighten(color: string, percent: number): string {
     if (color.startsWith("#")) {
-      const num = parseInt(color.slice(1), 16)
+      const num = parseInt(this.normalizeHexRgb(color), 16)
       const amt = Math.round(2.55 * percent)
       const R = (num >> 16) + amt
       const G = ((num >> 8) & 0x00ff) + amt
