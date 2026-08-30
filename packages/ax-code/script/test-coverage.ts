@@ -524,13 +524,20 @@ export async function createCoverageSummary(input: {
   if (input.baselineFile) {
     const baselineText = await readText(input.baselineFile).catch(() => "")
     if (baselineText) {
-      const baseline = JSON.parse(baselineText) as CoverageSummary
-      if (baseline.kind === "ax-code-coverage-summary" && baseline.group === input.group) {
-        summary.trend = compareCoverage(summary, baseline, input.baselineFile)
-      } else {
-        summary.notes.push(
-          `baseline summary at ${relativeArtifact(input.baselineFile)} did not match group ${input.group}`,
-        )
+      let baseline: CoverageSummary | undefined
+      try {
+        baseline = JSON.parse(baselineText) as CoverageSummary
+      } catch {
+        summary.notes.push(`baseline summary at ${relativeArtifact(input.baselineFile)} could not be parsed as JSON`)
+      }
+      if (baseline) {
+        if (baseline.kind === "ax-code-coverage-summary" && baseline.group === input.group) {
+          summary.trend = compareCoverage(summary, baseline, input.baselineFile)
+        } else {
+          summary.notes.push(
+            `baseline summary at ${relativeArtifact(input.baselineFile)} did not match group ${input.group}`,
+          )
+        }
       }
     }
   }

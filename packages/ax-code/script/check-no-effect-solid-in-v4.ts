@@ -123,7 +123,10 @@ export namespace EffectGuard {
 
   function isAllowed(file: string) {
     if (AllowedFiles.includes(file as (typeof AllowedFiles)[number])) return true
-    for (const dir of AllowedDirs) if (file.startsWith(dir)) return true
+    // Real directory-boundary check: a bare startsWith would also match a
+    // sibling directory that merely shares the prefix (e.g. "src/foo-bar.ts"
+    // against allowed dir "src/foo").
+    for (const dir of AllowedDirs) if (file === dir || file.startsWith(`${dir}/`)) return true
     return false
   }
 
