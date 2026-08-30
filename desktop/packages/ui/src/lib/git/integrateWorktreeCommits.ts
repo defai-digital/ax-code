@@ -99,6 +99,17 @@ async function computeCleanWorktreesToSync(args: {
 
 async function syncCleanTargetWorktrees(paths: string[]): Promise<void> {
   for (const path of paths) {
+    // Re-check cleanliness right before resetting: `paths` was computed once,
+    // up front, but integration can pause on a conflict for an arbitrary
+    // amount of user time before this runs (via continueIntegrate). A
+    // worktree that was clean at that snapshot may have picked up
+    // uncommitted work since, and `git reset --hard` would silently discard
+    // it. Skip any worktree that is no longer clean instead of blindly
+    // resetting it.
+    const status = await execCommand("git status --porcelain", path).catch(() => undefined)
+    if (!status || stdoutText(status)) {
+      continue
+    }
     await execCommand("git reset --hard", path).catch(() => undefined)
   }
 }
