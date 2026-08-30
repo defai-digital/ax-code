@@ -264,6 +264,197 @@ describe("session.message-v2.toModelMessage", () => {
     expect(wire).not.toContain("provider request-size limit")
   })
 
+  test("stripMedia on a completed tool part names the dropped attachment count", async () => {
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [{ ...basePart(userID, "u1"), type: "text", text: "run tool" }] as MessageV2.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "ls" },
+              output: "ok",
+              title: "Bash",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-1"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "one.png",
+                  url: "data:image/png;base64,b25l",
+                },
+                {
+                  ...basePart(assistantID, "file-2"),
+                  type: "file",
+                  mime: "application/pdf",
+                  filename: "two.pdf",
+                  url: "data:application/pdf;base64,dHdv",
+                },
+              ],
+            },
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    const converted = await MessageV2.toModelMessages(input, model, { stripMedia: true })
+    const toolMessage = converted.find((msg) => msg.role === "tool")
+    expect(toolMessage).toBeDefined()
+    const wire = JSON.stringify(toolMessage)
+    expect(wire).toContain("ok\\n[2 tool attachments removed to reduce context size]")
+    expect(wire).not.toContain("data:image/png;base64,b25l")
+    expect(wire).not.toContain("data:application/pdf;base64,dHdv")
+    // media must not leak back in as an injected user message either
+    expect(JSON.stringify(converted)).not.toContain("b25l")
+  })
+
+  test("stripMedia on a completed tool part with one attachment uses the singular placeholder", async () => {
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [{ ...basePart(userID, "u1"), type: "text", text: "run tool" }] as MessageV2.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "ls" },
+              output: "ok",
+              title: "Bash",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-1"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "one.png",
+                  url: "data:image/png;base64,b25l",
+                },
+              ],
+            },
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    const converted = await MessageV2.toModelMessages(input, model, { stripMedia: true })
+    const toolMessage = converted.find((msg) => msg.role === "tool")
+    expect(JSON.stringify(toolMessage)).toContain("ok\\n[1 tool attachment removed to reduce context size]")
+  })
+
+  test("stripMedia on a completed tool part without attachments adds no placeholder", async () => {
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [{ ...basePart(userID, "u1"), type: "text", text: "run tool" }] as MessageV2.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "ls" },
+              output: "ok",
+              title: "Bash",
+              metadata: {},
+              time: { start: 0, end: 1 },
+            },
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    const converted = await MessageV2.toModelMessages(input, model, { stripMedia: true })
+    const wire = JSON.stringify(converted)
+    expect(wire).not.toContain("removed to reduce context size")
+    expect(wire).not.toContain("media omitted from this request")
+  })
+
+  test("media projection still appends the omission note for tool attachments", async () => {
+    const userID = "m-user"
+    const assistantID = "m-assistant"
+
+    const input: MessageV2.WithParts[] = [
+      {
+        info: userInfo(userID),
+        parts: [{ ...basePart(userID, "u1"), type: "text", text: "run tool" }] as MessageV2.Part[],
+      },
+      {
+        info: assistantInfo(assistantID, userID),
+        parts: [
+          {
+            ...basePart(assistantID, "a1"),
+            type: "tool",
+            callID: "call-1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              input: { cmd: "ls" },
+              output: "ok",
+              title: "Bash",
+              metadata: {},
+              time: { start: 0, end: 1 },
+              attachments: [
+                {
+                  ...basePart(assistantID, "file-1"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "one.png",
+                  url: "data:image/png;base64,b25l",
+                },
+                {
+                  ...basePart(assistantID, "file-2"),
+                  type: "file",
+                  mime: "image/png",
+                  filename: "two.png",
+                  url: "data:image/png;base64,dHdv",
+                },
+              ],
+            },
+          },
+        ] as MessageV2.Part[],
+      },
+    ]
+
+    const converted = await MessageV2.toModelMessages(input, model, { mediaProjection: "stripped" })
+    const wire = JSON.stringify(converted)
+    expect(wire).toContain("media omitted from this request")
+    expect(wire).toContain("(2 tool attachments)")
+    expect(wire).not.toContain("b25l")
+    expect(wire).not.toContain("dHdv")
+  })
+
   test("filters out messages with only ignored parts", async () => {
     const messageID = "m-user"
 

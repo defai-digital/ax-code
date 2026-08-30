@@ -3579,3 +3579,59 @@ describe("ProviderTransform.auxMaxOutputTokens", () => {
     expect(ProviderTransform.auxMaxOutputTokens(model(undefined))).toBe(OUTPUT_TOKEN_MAX)
   })
 })
+
+describe("ProviderTransform.message - unsupported modality gate", () => {
+  const mkModel = (image: boolean) =>
+    ({
+      id: "test/test-model",
+      providerID: ProviderID.make("test"),
+      api: { id: "test-model", url: "https://api.test.com", npm: "@ai-sdk/openai-compatible" },
+      name: "Test Model",
+      capabilities: {
+        temperature: true,
+        reasoning: false,
+        attachment: true,
+        toolcall: true,
+        input: { text: true, audio: false, image, video: false, pdf: false },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      limit: { context: 200_000, output: 8192 },
+      status: "active",
+      options: {},
+      headers: {},
+    }) as any
+
+  const imageFilePart = {
+    type: "file",
+    data: "data:image/png;base64,aW1hZ2U=",
+    mediaType: "image/png",
+    filename: "shot.png",
+  } as any
+
+  test("replaces an image file part with an error text part when the model lacks image input", () => {
+    const result = ProviderTransform.message(
+      [{ role: "user", content: [{ type: "text", text: "look at this" }, imageFilePart] } as any],
+      mkModel(false),
+      {},
+    )
+    expect(result).toHaveLength(1)
+    const content = (result[0] as any).content
+    expect(content[0]).toEqual({ type: "text", text: "look at this" })
+    expect(content[1].type).toBe("text")
+    expect(content[1].text).toContain("ERROR: Cannot read")
+    expect(content[1].text).toContain('"shot.png"')
+    expect(content[1].text).toContain("does not support image input")
+  })
+
+  test("passes an image file part through unchanged when the model supports image input", () => {
+    const result = ProviderTransform.message(
+      [{ role: "user", content: [{ type: "text", text: "look at this" }, imageFilePart] } as any],
+      mkModel(true),
+      {},
+    )
+    expect(result).toHaveLength(1)
+    const content = (result[0] as any).content
+    expect(content[1]).toEqual(imageFilePart)
+  })
+})

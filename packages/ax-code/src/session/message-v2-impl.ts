@@ -916,10 +916,16 @@ export namespace MessageV2 {
               })
               const attachments = options?.stripMedia ? [] : projectedAttachments
               const baseOutputText = part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output
+              // stripMedia drops every attachment (media and non-media), so a
+              // single stripped notice covers them all; the projection notice
+              // only applies when attachments survive the strip.
+              const strippedAttachments = options?.stripMedia ? sourceAttachments.length : 0
               const outputText =
-                omittedMedia > 0 && options?.mediaProjection
-                  ? `${baseOutputText}\n${MediaProjection.OMITTED_TEXT} (${omittedMedia} tool attachment${omittedMedia === 1 ? "" : "s"})`
-                  : baseOutputText
+                strippedAttachments > 0
+                  ? `${baseOutputText}\n${MediaProjection.STRIPPED_ATTACHMENTS_TEXT(strippedAttachments)}`
+                  : omittedMedia > 0 && options?.mediaProjection
+                    ? `${baseOutputText}\n${MediaProjection.OMITTED_TEXT} (${omittedMedia} tool attachment${omittedMedia === 1 ? "" : "s"})`
+                    : baseOutputText
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message

@@ -12,6 +12,10 @@ export namespace MediaProjection {
   export const OMITTED_TEXT =
     "[media omitted from this request to stay within the provider request-size limit; newer media is retained first]"
 
+  export function STRIPPED_ATTACHMENTS_TEXT(count: number): string {
+    return `[${count} tool attachment${count === 1 ? "" : "s"} removed to reduce context size]`
+  }
+
   export interface Selector {
     readonly mode: Mode
     readonly total: number
