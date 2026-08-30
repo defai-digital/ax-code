@@ -43994,6 +43994,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "externalFiles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [

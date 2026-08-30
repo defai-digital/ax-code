@@ -118,6 +118,12 @@ export namespace MessageV2 {
     type: z.literal("patch"),
     hash: z.string(),
     files: z.string().array(),
+    // Repo-wide `files` minus the paths this message's completed mutating
+    // tool calls claimed — i.e. files that changed without any file-writing
+    // tool claiming them (concurrent external edits, bash writes). Optional
+    // and additive; omitted when empty. Consumers that need the full ledger
+    // (revert/rollback) must keep reading `files`.
+    externalFiles: z.string().array().optional(),
   }).meta({
     ref: "PatchPart",
   })

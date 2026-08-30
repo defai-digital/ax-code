@@ -728,6 +728,159 @@ describe("session.prompt flow", () => {
     })
   })
 
+  describe("patch part externalFiles", () => {
+    async function runPatchFlow(input: {
+      directory: string
+      toolName: string
+      toolInput: Record<string, unknown>
+      toolMetadata?: Record<string, unknown>
+      patchFiles: string[]
+    }) {
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      trackSpy = vi.spyOn(Snapshot, "track").mockResolvedValueOnce("snap-before").mockResolvedValue("snap-after")
+      patchSpy = vi.spyOn(Snapshot, "patch").mockImplementation(async (hash) => ({
+        hash,
+        files: hash === "snap-before" ? input.patchFiles : [],
+      }))
+      let call = 0
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+        call++
+        if (call === 1) {
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "tool-input-start", id: "call_1", toolName: input.toolName }
+              yield { type: "tool-call", toolCallId: "call_1", toolName: input.toolName, input: input.toolInput }
+              yield {
+                type: "tool-result",
+                toolCallId: "call_1",
+                input: input.toolInput,
+                output: {
+                  output: "tool output",
+                  title: input.toolName,
+                  metadata: input.toolMetadata ?? {},
+                  attachments: [],
+                },
+              }
+              yield {
+                type: "finish-step",
+                finishReason: "tool-calls",
+                usage: { inputTokens: 20, outputTokens: 8, totalTokens: 28 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any
+        }
+
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text: "done" }
+            yield { type: "text-end", id: "text_1" }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 12, outputTokens: 4, totalTokens: 16 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      })
+
+      return Instance.provide({
+        directory: input.directory,
+        fn: async () => {
+          const session = await Session.create({ title: "Patch externalFiles Test" })
+          try {
+            await SessionPrompt.prompt({
+              sessionID: session.id,
+              agent: "build",
+              parts: [{ type: "text", text: "edit files" }],
+            })
+            const stored = await Session.messages({ sessionID: session.id })
+            const patchPart = stored
+              .flatMap((message) => message.parts)
+              .find((part) => part.type === "patch" && part.hash === "snap-before")
+            if (!patchPart || patchPart.type !== "patch") throw new Error("expected a patch part for snap-before")
+            return patchPart
+          } finally {
+            await Session.remove(session.id)
+          }
+        },
+      })
+    }
+
+    test("excludes files claimed by a completed write tool", async () => {
+      await using tmp = await tmpdir({ git: true })
+      const writePath = path.join(tmp.path, "sub", "a.txt")
+      const externalPath = path.join(tmp.path, "internal", "external.go")
+
+      const patchPart = await runPatchFlow({
+        directory: tmp.path,
+        toolName: "write",
+        toolInput: { filePath: writePath, content: "claimed" },
+        patchFiles: [writePath, externalPath],
+      })
+
+      expect(patchPart.files).toEqual([writePath, externalPath])
+      expect(patchPart.externalFiles).toEqual([externalPath])
+    })
+
+    test("claims files listed in apply_patch result metadata", async () => {
+      await using tmp = await tmpdir({ git: true })
+      const patchedPath = path.join(tmp.path, "b.ts")
+      const externalPath = path.join(tmp.path, "c.ts")
+
+      const patchPart = await runPatchFlow({
+        directory: tmp.path,
+        toolName: "apply_patch",
+        toolInput: { patchText: "*** Begin Patch\n*** Update File: b.ts\n*** End Patch" },
+        toolMetadata: {
+          files: [{ filePath: patchedPath, relativePath: "b.ts", type: "update" }],
+        },
+        patchFiles: [patchedPath, externalPath],
+      })
+
+      expect(patchPart.files).toEqual([patchedPath, externalPath])
+      expect(patchPart.externalFiles).toEqual([externalPath])
+    })
+
+    test("marks every file external when no mutating tool ran", async () => {
+      await using tmp = await tmpdir({ git: true })
+      const readPath = path.join(tmp.path, "sub", "a.txt")
+      const externalPath = path.join(tmp.path, "internal", "external.go")
+
+      const patchPart = await runPatchFlow({
+        directory: tmp.path,
+        toolName: "read",
+        toolInput: { filePath: readPath },
+        patchFiles: [readPath, externalPath],
+      })
+
+      expect(patchPart.files).toEqual([readPath, externalPath])
+      expect(patchPart.externalFiles).toEqual([readPath, externalPath])
+    })
+
+    test("claims a relative file_path alias and omits empty externalFiles", async () => {
+      await using tmp = await tmpdir({ git: true })
+      const writePath = path.join(tmp.path, "sub", "a.txt")
+
+      const patchPart = await runPatchFlow({
+        directory: tmp.path,
+        toolName: "write",
+        toolInput: { file_path: "sub/a.txt", content: "claimed" },
+        patchFiles: [writePath],
+      })
+
+      expect(patchPart.files).toEqual([writePath])
+      expect(patchPart.externalFiles).toBeUndefined()
+    })
+  })
+
   test("persists partial assistant text on cancel and allows later recovery", async () => {
     await using tmp = await tmpdir({ git: true })
 

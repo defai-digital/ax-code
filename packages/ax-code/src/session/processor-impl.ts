@@ -1,4 +1,5 @@
 import { MessageV2 } from "./message-v2"
+import path from "path"
 import { Log } from "@/util/log"
 import { Session } from "."
 import { Agent } from "@/agent/agent"
@@ -38,6 +39,9 @@ import { LongAgentContextPacker } from "@/context/long-agent-packer"
 import { createDeltaBatcher } from "./delta-batcher"
 import { createPartWriteBatcher } from "./part-write-batcher"
 import { MediaProjection } from "./media-projection"
+import { Instance } from "@/project/instance"
+import { Filesystem } from "@/util/filesystem"
+import { FILE_PATH_ALIAS_KEYS } from "@/tool/file-path"
 
 export namespace SessionProcessor {
   const log = Log.create({ service: "session.processor" })
@@ -174,6 +178,80 @@ export namespace SessionProcessor {
     const stepTouchedFilePaths = new Set<string>()
     let stepToolObservations: AgentOptimizationTrace.ToolObservation[] = []
     const fileTouchingTools = new Set(["read", "edit", "write", "multiedit", "apply_patch"])
+    // Mutating subset of fileTouchingTools (read-only tools like `read` never
+    // claim writes). Used to attribute patch-part files to this message's own
+    // file-writing tool calls (ADR-065 D2).
+    const fileMutatingTools = new Set(["edit", "write", "multiedit", "apply_patch", "notebook_edit"])
+    // Absolute, forward-slash-normalized paths (same form Snapshot.patch emits
+    // for `files`) written by COMPLETED mutating tool parts of this assistant
+    // message. Populated at tool-result time; subtracted from patch-part
+    // `files` to compute `externalFiles`. Bash writes are deliberately NOT
+    // claimed — the shell can write anything — so bash writes and concurrent
+    // external edits both land in `externalFiles`.
+    const claimedFiles = new Set<string>()
+    const normalizeClaimedPath = (raw: string): string | undefined => {
+      if (raw.length === 0 || raw.includes("\x00")) return undefined
+      // Tools resolve relative input paths against the session working
+      // directory (resolveToolFilePath in tool/file-path.ts); mirror that so
+      // claims match the absolute form Snapshot.patch emits for `files`.
+      const resolved = (path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(Instance.directory, raw)).replaceAll(
+        "\\",
+        "/",
+      )
+      // Only paths inside the worktree can ever appear in `files`.
+      if (!Filesystem.contains(Instance.worktree, resolved)) return undefined
+      return resolved
+    }
+    const claimInputPath = (toolInput: Record<string, unknown>): string | undefined => {
+      // `state.input` is the RAW un-aliased model input, so tolerate the
+      // file-path aliases providers emit. Canonical `filePath` wins, then the
+      // shared alias list, then notebook_edit's `notebook_path`.
+      for (const key of ["filePath", ...FILE_PATH_ALIAS_KEYS, "notebook_path"]) {
+        const value = toolInput[key]
+        if (typeof value === "string" && value.length > 0) return value
+      }
+      return undefined
+    }
+    const claimCompletedToolFiles = (tool: string, toolInput: Record<string, unknown>, metadata: unknown) => {
+      if (!fileMutatingTools.has(tool)) return
+      const claimed: string[] = []
+      if (tool === "apply_patch") {
+        // apply_patch input is only `patchText` — no file path. Its RESULT
+        // metadata carries the touched files (see tool/apply_patch.ts):
+        // metadata.files[] entries with absolute `filePath` / `movePath`.
+        const files = asRecord(metadata)["files"]
+        if (Array.isArray(files)) {
+          for (const entry of files) {
+            const record = asRecord(entry)
+            for (const key of ["filePath", "movePath"]) {
+              const value = record[key]
+              if (typeof value === "string") claimed.push(value)
+            }
+          }
+        }
+      } else {
+        const inputPath = claimInputPath(toolInput)
+        if (inputPath) claimed.push(inputPath)
+        if (tool === "multiedit") {
+          // multiedit can fan out across files: edits[].filePath overrides the
+          // top-level filePath per edit (see tool/multiedit.ts).
+          const edits = toolInput["edits"]
+          if (Array.isArray(edits)) {
+            for (const edit of edits) {
+              const value = asRecord(edit)["filePath"]
+              if (typeof value === "string" && value.length > 0) claimed.push(value)
+            }
+          }
+        }
+      }
+      for (const raw of claimed) {
+        const normalized = normalizeClaimedPath(raw)
+        if (normalized) claimedFiles.add(normalized)
+      }
+    }
+    // Patch-part files this message did NOT claim via a completed mutating
+    // tool call. Omitted from the part when empty to keep parts lean.
+    const computeExternalFiles = (files: string[]): string[] => files.filter((file) => !claimedFiles.has(file))
     // Per-session sliding-window rate limiter. Defaults 30 calls / 10s;
     // overridable via autonomy.budget.tool_calls.rate (resolved at turn start).
     let rateLimitWindowMs = 10_000
@@ -759,6 +837,10 @@ export namespace SessionProcessor {
                         attachments: value.output.attachments,
                       },
                     })
+                    // Attribute patch-part files to this message's own writes:
+                    // claim the paths this completed mutating tool wrote so
+                    // later patch parts can separate them from external edits.
+                    claimCompletedToolFiles(match.tool, storedInput, value.output.metadata)
                     const resultMetadata = asRecord(value.output.metadata)
                     const resultTaskID = resultMetadata?.["taskID"]
                     if (
@@ -1085,11 +1167,13 @@ export namespace SessionProcessor {
                     })
                     Session.updateMessage.force(input.assistantMessage)
                     if (patchData) {
+                      const externalFiles = computeExternalFiles(patchData.files)
                       Session.updatePart.force({
                         ...partBase(),
                         type: "patch",
                         hash: patchData.hash,
                         files: patchData.files,
+                        ...(externalFiles.length > 0 ? { externalFiles } : {}),
                       })
                     }
                   })
@@ -1463,6 +1547,7 @@ export namespace SessionProcessor {
           Database.transaction(() => {
             for (const p of finalizedParts) Session.updatePart.force(p)
             if (finalPatch) {
+              const externalFiles = computeExternalFiles(finalPatch.files)
               Session.updatePart.force({
                 id: PartID.ascending(),
                 messageID: input.assistantMessage.id,
@@ -1470,6 +1555,7 @@ export namespace SessionProcessor {
                 type: "patch",
                 hash: finalPatch.hash,
                 files: finalPatch.files,
+                ...(externalFiles.length > 0 ? { externalFiles } : {}),
               })
             }
             // Use local toolcalls record instead of DB query to find incomplete tools

@@ -2740,6 +2740,7 @@ export type PatchPart = {
   type: "patch"
   hash: string
   files: Array<string>
+  externalFiles?: Array<string>
 }
 
 export type Path = {
