@@ -86,15 +86,25 @@ export function findWrappedCommand(parts: string[]): { name: string; args: strin
   return undefined
 }
 
-function classifyGit(args: string[]): string | undefined {
-  // Skip git global flags (and the values of the common value-taking ones)
-  // to find the subcommand.
+// git global flags that take a value (skipped along with their value when
+// locating the subcommand), e.g. `-C <dir>`, `-c <key=value>`.
+const GIT_GLOBAL_VALUE_FLAGS: ReadonlySet<string> = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace"])
+
+/**
+ * Skip git's own global flags (and the values of the common value-taking
+ * ones) to find the subcommand and its remaining args. Shared by
+ * `classifyGit` here and bash-impl.ts's `git config` write-target detection
+ * so both agree on what the subcommand is for invocations like
+ * `git -C dir config ...` or `git -c x=y config ...` — checking
+ * `args[0] === "config"` directly would miss those and let a dangerous
+ * `git config` write slip past the protected-path check.
+ */
+export function gitSubcommand(args: string[]): { subcommand: string; rest: string[] } | undefined {
   let index = 0
-  const valueFlags = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace"])
   while (index < args.length) {
     const arg = args[index]
     if (arg === undefined) return undefined
-    if (valueFlags.has(arg)) {
+    if (GIT_GLOBAL_VALUE_FLAGS.has(arg)) {
       index += 2
       continue
     }
@@ -105,8 +115,14 @@ function classifyGit(args: string[]): string | undefined {
     break
   }
   const subcommand = args[index]?.toLowerCase()
-  const rest = args.slice(index + 1)
   if (!subcommand) return undefined
+  return { subcommand, rest: args.slice(index + 1) }
+}
+
+function classifyGit(args: string[]): string | undefined {
+  const resolved = gitSubcommand(args)
+  if (!resolved) return undefined
+  const { subcommand, rest } = resolved
 
   if (subcommand === "push") {
     if (hasShortFlag(rest, "f") || hasLongFlag(rest, "--force") || hasLongFlag(rest, "--force-with-lease")) {

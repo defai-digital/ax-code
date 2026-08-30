@@ -33,7 +33,7 @@ import { Isolation } from "@/isolation"
 import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
-import { classifyDestructiveCommand, findWrappedCommand } from "./bash-destructive"
+import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
 import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
@@ -536,14 +536,19 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           return
         }
 
-        if (name === "git" && args[0] === "config") {
+        const gitConfigCall = name === "git" ? gitSubcommand(args) : undefined
+        if (gitConfigCall?.subcommand === "config") {
           // git config writes to .git/config (or --file <path>) internally,
           // not via a shell redirect, so the implicit destination is surfaced
           // here. Only dangerous keys (hook injection, arbitrary command
           // wrappers, protocol handlers) are treated as write targets — benign
           // keys (user.email, user.name) stay untouched to avoid false
           // positives, and reads (--get/--list/...) are skipped entirely.
-          const rest = args.slice(1)
+          // Use gitSubcommand (not args[0] === "config") so a leading git
+          // global flag (`git -C dir config ...`, `git -c x=y config ...`)
+          // doesn't let a dangerous write slip past this check — see
+          // bash-destructive.ts.
+          const rest = gitConfigCall.rest
           const isRead = rest.some((arg) => GIT_CONFIG_READ_FLAGS.has(arg))
           const key = gitConfigKey(rest)
           if (!isRead && key && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix))) {

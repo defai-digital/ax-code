@@ -381,6 +381,41 @@ describe("tool.bash truncation", () => {
     })
   })
 
+  test("git config write to a dangerous key is blocked in autonomous mode even behind a global git flag", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      const sessionID = SessionID.make("ses_bash_git_config_global_flag")
+      BlastRadius.reset(sessionID)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+
+            // A leading global git flag (`-c key=value`) must not let a
+            // `git config core.hooksPath ...` write slip past the
+            // non-overridable .git/config protected-path check — the
+            // subcommand must be located by skipping git's own global
+            // flags, not by reading args[0] directly.
+            await expect(
+              bash.execute(
+                {
+                  command: "git -c protocol.ext.allow=always config core.hooksPath ./evil-hooks",
+                  description: "git config with a leading global flag",
+                },
+                { ...ctx, sessionID },
+              ),
+            ).rejects.toMatchObject({
+              message: expect.stringContaining("non-overridable protected path"),
+            })
+          },
+        })
+      } finally {
+        BlastRadius.reset(sessionID)
+      }
+    })
+  })
+
   test("inner shell write redirect counts against autonomous blast radius", async () => {
     await using tmp = await tmpdir({ git: true })
     await withAutonomous(async () => {
