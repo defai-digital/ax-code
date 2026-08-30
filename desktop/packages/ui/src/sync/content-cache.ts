@@ -47,6 +47,14 @@ function remove(path: string) {
  */
 export function evictContentLru(keep: Set<string> | undefined, evict: (path: string) => void) {
   const safeSet = keep ?? new Set<string>()
+  // Counts consecutive touches of protected entries with no real eviction in
+  // between. `keep` may contain paths that aren't even cached, so comparing
+  // against `safeSet.size` (as opposed to how many protected entries are
+  // actually still in `lru`) can under-count and stop evicting too early,
+  // leaving the cache over budget indefinitely. Counting full rotations
+  // around the current `lru` instead is accurate regardless of how `keep`
+  // relates to what's cached.
+  let protectedStreak = 0
 
   while (lru.size > MAX_FILE_CONTENT_ENTRIES || total > MAX_FILE_CONTENT_BYTES) {
     const path = lru.keys().next().value
@@ -54,10 +62,13 @@ export function evictContentLru(keep: Set<string> | undefined, evict: (path: str
 
     if (safeSet.has(path)) {
       touch(path)
-      if (lru.size <= safeSet.size) return
+      protectedStreak += 1
+      // Every entry currently in the cache is protected — nothing left to evict.
+      if (protectedStreak >= lru.size) return
       continue
     }
 
+    protectedStreak = 0
     remove(path)
     evict(path)
   }
