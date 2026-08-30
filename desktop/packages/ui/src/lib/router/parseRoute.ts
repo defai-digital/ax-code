@@ -95,18 +95,17 @@ function parseSettingsPath(params: URLSearchParams): string | null {
  * Returns null if missing or empty.
  */
 function parseDiffFile(params: URLSearchParams): string | null {
+  // URLSearchParams.get() already percent-decodes the value once; serializeRoute
+  // writes the raw path via params.set() (encoded once on serialization), so no
+  // further decoding is needed here. An extra decodeURIComponent() would corrupt
+  // any file path that itself contains a "%" character (e.g. "weird%2Fname.ts"
+  // round-trips to "weird/name.ts").
   const value = params.get(ROUTE_PARAMS.FILE)
   if (!value || value.trim().length === 0) {
     return null
   }
 
-  // URL decode the file path
-  try {
-    return decodeURIComponent(value.trim())
-  } catch {
-    // If decoding fails, return the raw value
-    return value.trim()
-  }
+  return value.trim()
 }
 
 /**
