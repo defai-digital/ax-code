@@ -37,6 +37,24 @@ type DeleteFolderConfirm = {
   sessionCount: number
 } | null
 
+// Folders are meant to hold only top-level (root) session ids — see the
+// depth === 0 gate on the "Move to Folder" menu in SessionNodeItem. But a
+// folder can still end up with a non-root session id (e.g. the bulk
+// multi-select action range-selects a row's descendants and moves the whole
+// batch into a folder, or via already-persisted data from before that gate
+// existed). A non-root session's node is never removed from its real
+// parent's `children` array, so without this recursive prune such a session
+// would render twice: once nested under its true parent here, and again as
+// a top-level row inside the folder listing. Strip any folder member out of
+// the ungrouped tree at every depth, not just the root, to keep rendering
+// single-sourced regardless of how the folder ended up with that id.
+const pruneFolderSessionIds = (nodes: SessionNode[], folderSessionIds: Set<string>): SessionNode[] =>
+  nodes
+    .filter((node) => !folderSessionIds.has(node.session.id))
+    .map((node) =>
+      node.children.length > 0 ? { ...node, children: pruneFolderSessionIds(node.children, folderSessionIds) } : node,
+    )
+
 type Props = {
   group: SessionGroup
   groupKey: string
@@ -269,7 +287,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
     [allFoldersForGroup],
   )
   const ungroupedSessions = React.useMemo(
-    () => sourceGroupNodes.filter((node) => !sessionIdsInFolders.has(node.session.id)),
+    () => pruneFolderSessionIds(sourceGroupNodes, sessionIdsInFolders),
     [sourceGroupNodes, sessionIdsInFolders],
   )
   const rootFolders = React.useMemo(

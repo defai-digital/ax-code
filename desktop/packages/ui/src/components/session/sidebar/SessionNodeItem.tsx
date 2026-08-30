@@ -126,12 +126,18 @@ type Props = {
   renderContext?: "project" | "recent"
 }
 
+// Recursive so a structural change at ANY depth (not just the immediate
+// children) invalidates SessionNodeItem's memo below. A shallow signature
+// (only immediate children + their direct child count) misses a
+// great-grandchild — e.g. a subagent's subagent spawning its own subagent —
+// being added/removed, so a deeply nested new session would silently fail to
+// render until an unrelated prop change forced this node to re-render.
 const getNodeChildSignature = (node: SessionNode): string => {
   if (node.children.length === 0) {
     return ""
   }
 
-  return node.children.map((child) => `${child.session.id}:${child.children.length}`).join("|")
+  return node.children.map((child) => `${child.session.id}:${getNodeChildSignature(child)}`).join("|")
 }
 
 const treeContainsSessionId = (node: SessionNode, sessionId: string | null): boolean => {
@@ -904,56 +910,67 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                   <Icon name="drag-move-2" className="mr-1 h-4 w-4" />
                   {t("sessions.sidebar.session.menu.moveSession")}
                 </DropdownMenuItem>
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="[&>svg]:mr-1">
-                    <Icon name="folder" className="h-4 w-4" />
-                    {t("sessions.sidebar.folders.moveToFolder")}
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="min-w-[180px]">
-                    {scopeFolders.length === 0 ? (
-                      <DropdownMenuItem disabled className="text-muted-foreground">
-                        {t("sessions.sidebar.folders.none")}
-                      </DropdownMenuItem>
-                    ) : (
-                      scopeFolders.map((folder) => (
-                        <DropdownMenuItem
-                          key={folder.id}
-                          onClick={() => {
-                            if (currentFolderId === folder.id) removeSessionFromFolder(sessionDirectory, session.id)
-                            else addSessionToFolder(sessionDirectory, folder.id, session.id)
-                          }}
-                        >
-                          <span className="flex-1 truncate">{folder.name}</span>
-                          {currentFolderId === folder.id ? (
-                            <Icon name="check" className="ml-2 h-3.5 w-3.5 text-primary flex-shrink-0" />
-                          ) : null}
+                {depth === 0 ? (
+                  // Folders only ever collect top-level session ids (see
+                  // SessionGroupSection's ungroupedSessions/sessionIdsInFolders,
+                  // which only strip folder members out of the group's ROOT
+                  // node list). A nested subtask/subagent row is never removed
+                  // from its parent's `children` array, so if it were added to
+                  // a folder here it would render twice: once nested under its
+                  // real parent, and again as a top-level row inside the
+                  // folder. Restrict folder assignment to root sessions to
+                  // keep that invariant intact.
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="[&>svg]:mr-1">
+                      <Icon name="folder" className="h-4 w-4" />
+                      {t("sessions.sidebar.folders.moveToFolder")}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="min-w-[180px]">
+                      {scopeFolders.length === 0 ? (
+                        <DropdownMenuItem disabled className="text-muted-foreground">
+                          {t("sessions.sidebar.folders.none")}
                         </DropdownMenuItem>
-                      ))
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() => {
-                        const newFolder = createFolderAndStartRename(sessionDirectory)
-                        if (!newFolder) return
-                        addSessionToFolder(sessionDirectory, newFolder.id, session.id)
-                      }}
-                    >
-                      <Icon name="add" className="mr-1 h-4 w-4" />
-                      {t("sessions.sidebar.folders.newFolderEllipsis")}
-                    </DropdownMenuItem>
-                    {currentFolderId ? (
+                      ) : (
+                        scopeFolders.map((folder) => (
+                          <DropdownMenuItem
+                            key={folder.id}
+                            onClick={() => {
+                              if (currentFolderId === folder.id) removeSessionFromFolder(sessionDirectory, session.id)
+                              else addSessionToFolder(sessionDirectory, folder.id, session.id)
+                            }}
+                          >
+                            <span className="flex-1 truncate">{folder.name}</span>
+                            {currentFolderId === folder.id ? (
+                              <Icon name="check" className="ml-2 h-3.5 w-3.5 text-primary flex-shrink-0" />
+                            ) : null}
+                          </DropdownMenuItem>
+                        ))
+                      )}
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         onClick={() => {
-                          removeSessionFromFolder(sessionDirectory, session.id)
+                          const newFolder = createFolderAndStartRename(sessionDirectory)
+                          if (!newFolder) return
+                          addSessionToFolder(sessionDirectory, newFolder.id, session.id)
                         }}
-                        className="text-destructive focus:text-destructive"
                       >
-                        <Icon name="close" className="mr-1 h-4 w-4" />
-                        {t("sessions.sidebar.folders.removeFromFolder")}
+                        <Icon name="add" className="mr-1 h-4 w-4" />
+                        {t("sessions.sidebar.folders.newFolderEllipsis")}
                       </DropdownMenuItem>
-                    ) : null}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
+                      {currentFolderId ? (
+                        <DropdownMenuItem
+                          onClick={() => {
+                            removeSessionFromFolder(sessionDirectory, session.id)
+                          }}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Icon name="close" className="mr-1 h-4 w-4" />
+                          {t("sessions.sidebar.folders.removeFromFolder")}
+                        </DropdownMenuItem>
+                      ) : null}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                ) : null}
               </>
             )
           })()
