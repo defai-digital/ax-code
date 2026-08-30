@@ -26,8 +26,18 @@ const dir = path.resolve(__dirname, "..")
 const require = createRequire(import.meta.url)
 process.chdir(dir)
 
+function buildChannelForVersion(version: string) {
+  const prerelease = version.split("-", 2)[1]
+  if (!prerelease) return "latest"
+  return prerelease.split(".", 1)[0] || "beta"
+}
+
 const buildVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, "")
-const buildChannel = process.env.AX_CODE_CHANNEL ?? "latest"
+// Derive the channel from the version's prerelease tag when AX_CODE_CHANNEL
+// isn't set, matching build-node.ts — otherwise a local/prerelease build
+// silently embeds AX_CODE_CHANNEL="latest" and the shipped binary checks the
+// wrong auto-update channel (Installation.CHANNEL, src/installation/index.ts).
+const buildChannel = process.env.AX_CODE_CHANNEL ?? buildChannelForVersion(buildVersion)
 const appleCodesignIdentity = process.env.AX_CODE_APPLE_CODESIGN_IDENTITY?.trim()
 const solidStoreClientEntry = require.resolve("solid-js/store/dist/store.js")
 const solidWebClientEntry = require.resolve("solid-js/web/dist/web.js")
