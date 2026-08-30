@@ -81,14 +81,30 @@ export function createStoreBackedBootstrapTasks<TStore extends SyncBootstrapAsse
   setStore: SetStoreFunction<TStore>
   requests: SyncBootstrapAssemblyRequests
   onProvidersReady?: (failed: boolean) => void
+  // Deferred tasks (lsp/mcp/resource/formatter/vcs) keep running in the
+  // background after the run() that created them has already returned
+  // (sync-bootstrap-flow.ts schedules them via scheduleBackground and does
+  // not await them). If the user switches session/workspace in the meantime,
+  // sdk.setWorkspace() swaps in a new client and a later bootstrap run
+  // applies fresh data — a slow response from the old run must not then land
+  // and silently revert it. Defaults to always-current for callers (tests)
+  // that don't care about this race.
+  isRequestCurrent?: () => boolean
 }) {
   const setStore = input.setStore as unknown as SetStoreFunction<SyncBootstrapAssemblyStoreState>
+  const isRequestCurrent = input.isRequestCurrent ?? (() => true)
+  function guarded<T>(apply: (value: T) => void): (value: T) => void {
+    return (value) => {
+      if (!isRequestCurrent()) return
+      apply(value)
+    }
+  }
 
   const sessionTasks = createSessionBootstrapPhaseTasks({
     continueFromArgs: input.continueFromArgs,
     sessionListPromise: input.requests.sessionListPromise,
     getExistingSessions: () => input.store.session,
-    applySessions: (sessions) => {
+    applySessions: guarded((sessions) => {
       setStore("session", reconcile(sessions))
       // Drop projection for sessions no longer in the list so long-running
       // TUI processes do not retain unbounded message/part maps (STAB-03).
@@ -97,7 +113,7 @@ export function createStoreBackedBootstrapTasks<TStore extends SyncBootstrapAsse
           pruneOrphanSessionRecords(draft as any)
         }),
       )
-    },
+    }),
   })
 
   return {
@@ -105,52 +121,52 @@ export function createStoreBackedBootstrapTasks<TStore extends SyncBootstrapAsse
     coreTasks: createCoreBootstrapPhaseTasks({
       providerTask: createProviderBootstrapTask({
         providersPromise: input.requests.providersPromise,
-        applyState(next) {
+        applyState: guarded((next) => {
           setStore(
             produce((draft) => {
               applyProviderBootstrapState(draft, next)
             }),
           )
-        },
+        }),
         onReady: input.onProvidersReady,
       }),
       providerListPromise: input.requests.providerListPromise,
       providerNextFallback: input.store.provider_next,
-      applyProviderNext: (value) => setStore("provider_next", reconcile(value)),
+      applyProviderNext: guarded((value) => setStore("provider_next", reconcile(value))),
       agentsPromise: input.requests.agentsPromise,
-      applyAgents: (value) => setStore("agent", reconcile(value)),
+      applyAgents: guarded((value) => setStore("agent", reconcile(value))),
       configPromise: input.requests.configPromise,
       configFallback: input.store.config,
-      applyConfig: (value) => setStore("config", reconcile(value)),
+      applyConfig: guarded((value) => setStore("config", reconcile(value))),
       commandPromise: input.requests.commandPromise,
-      applyCommands: (value) => setStore("command", reconcile(value)),
+      applyCommands: guarded((value) => setStore("command", reconcile(value))),
       sessionTasks: sessionTasks.core,
       permissionPromise: input.requests.permissionPromise,
-      applyPermission: (value) => setStore("permission", reconcile(value)),
+      applyPermission: guarded((value) => setStore("permission", reconcile(value))),
       questionPromise: input.requests.questionPromise,
-      applyQuestion: (value) => setStore("question", reconcile(value)),
+      applyQuestion: guarded((value) => setStore("question", reconcile(value))),
       sessionStatusPromise: input.requests.sessionStatusPromise,
-      applySessionStatus: (value) => setStore("session_status", reconcile(value)),
+      applySessionStatus: guarded((value) => setStore("session_status", reconcile(value))),
       providerAuthPromise: input.requests.providerAuthPromise,
-      applyProviderAuth: (value) => setStore("provider_auth", reconcile(value)),
+      applyProviderAuth: guarded((value) => setStore("provider_auth", reconcile(value))),
       pathPromise: input.requests.pathPromise,
       pathFallback: input.store.path,
-      applyPath: (value) => setStore("path", reconcile(value)),
+      applyPath: guarded((value) => setStore("path", reconcile(value))),
       isolationTask: input.requests.isolationTask,
       autonomousTask: input.requests.autonomousTask,
     }),
     deferredTasks: createDeferredBootstrapPhaseTasks({
       lspPromise: input.requests.lspPromise,
-      applyLsp: (value) => setStore("lsp", reconcile(value)),
+      applyLsp: guarded((value) => setStore("lsp", reconcile(value))),
       mcpPromise: input.requests.mcpPromise,
-      applyMcp: (value) => setStore("mcp", reconcile(value)),
+      applyMcp: guarded((value) => setStore("mcp", reconcile(value))),
       resourcePromise: input.requests.resourcePromise,
-      applyResources: (value) => setStore("mcp_resource", reconcile(value)),
+      applyResources: guarded((value) => setStore("mcp_resource", reconcile(value))),
       formatterPromise: input.requests.formatterPromise,
-      applyFormatter: (value) => setStore("formatter", reconcile(value)),
+      applyFormatter: guarded((value) => setStore("formatter", reconcile(value))),
       vcsPromise: input.requests.vcsPromise,
       vcsFallback: input.store.vcs,
-      applyVcs: (value) => setStore("vcs", reconcile(value)),
+      applyVcs: guarded((value) => setStore("vcs", reconcile(value))),
       workspacesTask: input.requests.workspacesTask,
       debugEngineTask: input.requests.debugEngineTask,
       workflowDashboardTask: input.requests.workflowDashboardTask,

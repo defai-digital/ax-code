@@ -143,13 +143,14 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       syncWorkflowDashboard,
       syncSmartLlm,
       syncSuperLong,
-      createTasks(requests, onProvidersReady) {
+      createTasks(requests, onProvidersReady, isRequestCurrent) {
         return createStoreBackedBootstrapTasks({
           continueFromArgs: !!args.continue,
           store,
           setStore,
           requests,
           onProvidersReady,
+          isRequestCurrent,
         })
       },
       createSpan: createTuiStartupSpan,

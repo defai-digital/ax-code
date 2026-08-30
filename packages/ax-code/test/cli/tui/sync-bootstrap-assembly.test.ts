@@ -176,4 +176,33 @@ describe("tui sync bootstrap assembly", () => {
     expect(store.formatter).toHaveLength(1)
     expect(store.vcs).toEqual({ branch: "main" })
   })
+
+  test("drops results from a run that is no longer current (workspace switched mid-flight)", async () => {
+    const [store, setStore] = createState()
+    setStore("vcs", { branch: "stale-workspace-branch" })
+
+    let current = true
+    const tasks = createStoreBackedBootstrapTasks({
+      continueFromArgs: false,
+      store,
+      setStore,
+      requests: createRequests({
+        sessionListPromise: async () => [{ id: "ses_1" } as never],
+        vcsPromise: async () => ({ data: { branch: "old-workspace-branch" } }),
+        agentsPromise: async () => ({ data: [{ id: "agent_1" } as never] }),
+      }),
+      // Simulate sdk.setWorkspace() swapping the client after this run's
+      // requests were built but before its (slow) responses land.
+      isRequestCurrent: () => current,
+    })
+
+    current = false
+    await Promise.all([...tasks.blockingTasks, ...tasks.coreTasks, ...tasks.deferredTasks].map((task) => task()))
+
+    // A stale run must not clobber the store with data from the old
+    // workspace once a newer run has taken over.
+    expect(store.vcs).toEqual({ branch: "stale-workspace-branch" })
+    expect(store.agent).toHaveLength(0)
+    expect(store.session).toHaveLength(0)
+  })
 })

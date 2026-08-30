@@ -114,6 +114,13 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
   createTasks: (
     requests: SyncBootstrapAssemblyRequests,
     onProvidersReady: (failed: boolean) => void,
+    // True while no later run() has swapped in a new client (e.g. via
+    // sdk.setWorkspace() on a session/workspace switch). Deferred tasks keep
+    // running in the background after run() itself has already returned (see
+    // scheduleBackground below), so without this a slow LSP/MCP/VCS/formatter
+    // response built against the old workspace's client could land after a
+    // newer run already applied fresh data and silently revert it.
+    isRequestCurrent: () => boolean,
   ) => SyncBootstrapFlowTaskGroups
   createSpan: (name: string) => Exclude<BootstrapSpan, undefined>
   recordStartup: (name: string, data?: Record<string, unknown>) => void
@@ -177,9 +184,14 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
             input.resetSessionSync()
             input.setSessionLoaded(false)
 
+            // Snapshot the client this run's requests are built against so
+            // deferred/background tasks can detect a later run swapping in a
+            // new one (workspace switch) instead of trusting a live read.
+            const requestClient = resolveClient()
+            const isRequestCurrent = () => resolveClient() === requestClient
             const requests = createSyncBootstrapRequests({
               wrap: input.wrap,
-              client: resolveClient(),
+              client: requestClient,
               sessionListStart: now() - BOOTSTRAP_SESSION_LIST_WINDOW_MS,
               onSessionListSettled() {
                 input.setSessionLoaded(true)
@@ -194,9 +206,13 @@ export function createSyncBootstrapFlow<TClient extends SyncBootstrapRequestClie
               syncWorkflowDashboard: input.syncWorkflowDashboard,
             })
 
-            const { blockingTasks, coreTasks, deferredTasks } = input.createTasks(requests, (failed) => {
-              input.recordStartup("tui.startup.providersReady", { failed })
-            })
+            const { blockingTasks, coreTasks, deferredTasks } = input.createTasks(
+              requests,
+              (failed) => {
+                input.recordStartup("tui.startup.providersReady", { failed })
+              },
+              isRequestCurrent,
+            )
 
             const sequence = createPhaseSequence({
               blockingTasks,
