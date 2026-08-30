@@ -30,7 +30,7 @@ const { assertDesktopReadFileAllowed } = require("./desktop-read-file-policy")
 const { sanitizeDesktopWindowTitle } = require("./desktop-window-title")
 const { shouldIncludeNativeSearchEntry, toNativeSearchRelativePath } = require("./desktop-file-search")
 const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support-urls")
-const { createServerRestartPolicy, shouldRecoverAfterServerExit } = require("./server-restart-policy")
+const { createSupervisionFsm } = require("./supervision-fsm")
 const { buildComputerUseServerEnv } = require("./computer-use-server-env")
 const { applyBundledAxCodeEnv, buildBundledAxCodeEnv } = require("./bundled-ax-code-env")
 const { createRendererCrashPolicy } = require("./renderer-crash-policy")
@@ -111,9 +111,6 @@ let mainWindow = null
 let serverPort = 0
 let serverChild = null
 let isQuitting = false
-let isRelaunchingServer = false
-let serverCrashRecoveryPending = false
-let serverStabilityTimer = null
 let rendererStabilityTimer = null
 let rendererReadyForOpenProject = false
 let externalOpenPathDrainRunning = false
@@ -195,13 +192,22 @@ app.on("open-file", (event, filePath) => {
 // rather than in-process, so its CPU/IO never blocks the main event loop that
 // drives the window, IPC, and auto-update. The renderer reaches it over HTTP
 // loopback exactly as before — only where the server runs changes.
+//
+// Supervision (boot timeout, crash-restart budget/backoff, stability window,
+// graceful-stop escalation) is owned by the unified supervision FSM
+// (supervision-fsm.js; SPEC-2026-08-29-desktop-process-model-collapse §4).
+// This file only provides the driver that forks/stops the utilityProcess and
+// the app-specific reactions: window reloads, the failure dialog, and logging.
 const SERVER_START_TIMEOUT_MS = 30_000
 const SERVER_STOP_TIMEOUT_MS = 5_000
 const SERVER_KILL_TIMEOUT_MS = 3_000
 const MAX_SERVER_CRASH_RESTARTS = 5
 const SERVER_CRASH_RETRY_BASE_MS = 500
+const SERVER_CRASH_RETRY_CAP_MS = 5_000
 const SERVER_STABILITY_RESET_MS = 60_000
-const serverRestartPolicy = createServerRestartPolicy({ maxRestarts: MAX_SERVER_CRASH_RESTARTS })
+// Port the server held when the current crash was detected; renderer windows
+// are retargeted from it onto the replacement's port after a restart.
+let portBeforeServerCrash = 0
 
 const MAX_RENDERER_CRASH_RELOADS = 3
 const RENDERER_STABILITY_RESET_MS = 60_000
@@ -217,19 +223,6 @@ function scheduleRendererStabilityReset() {
   rendererStabilityTimer.unref?.()
 }
 
-function waitForServerRestartBackoff(attempt) {
-  return new Promise((resolve) => setTimeout(resolve, Math.min(SERVER_CRASH_RETRY_BASE_MS * 2 ** (attempt - 1), 5_000)))
-}
-
-function scheduleServerStabilityReset() {
-  if (serverStabilityTimer) clearTimeout(serverStabilityTimer)
-  serverStabilityTimer = setTimeout(() => {
-    serverStabilityTimer = null
-    serverRestartPolicy.markStable()
-  }, SERVER_STABILITY_RESET_MS)
-  serverStabilityTimer.unref?.()
-}
-
 async function showServerRecoveryFailure(error) {
   const detail = error instanceof Error ? error.message : String(error)
   await dialog
@@ -243,184 +236,84 @@ async function showServerRecoveryFailure(error) {
     .catch((dialogError) => console.error("[electron] failed to show server recovery dialog:", dialogError))
 }
 
-function launchServer() {
-  return new Promise((resolve, reject) => {
-    const serverEntry = path.join(__dirname, "server-process.js")
-    recordStartupEvent("server.utilityProcess.launch", {}, { once: false })
-    serverChild = utilityProcess.fork(serverEntry, [], {
-      serviceName: "ax-code-server",
-      env: applyBundledAxCodeEnv(
-        {
-          ...process.env,
-          // The server reads these at module-init time; previously set on the
-          // main process before require, now passed into the forked process.
-          AX_CODE_DESKTOP_DIST_DIR: getWebDistPath(),
-          AX_CODE_DESKTOP_RUNTIME: "desktop",
-          AX_CODE_DESKTOP_SHUTDOWN_TIMEOUT_MS: "4000",
-          AX_CODE_DESKTOP_STARTUP_SNAPSHOT: JSON.stringify(startupDiagnostics.snapshot()),
-          // Bundled computer-use server (packaged macOS builds with a staged
-          // artifact only); no-op in dev/OSS builds.
-          ...buildComputerUseServerEnv({
-            platform: process.platform,
-            isPackaged: app.isPackaged,
-            resourcesPath: process.resourcesPath,
-            execPath: process.execPath,
-          }),
-        },
-        // Bundled ax-code runtime (packaged builds with a staged CLI tree
-        // only). Also strips any inherited AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY
-        // when this build has no staged runtime, so a user export cannot leak
-        // through ...process.env and masquerade as a bundled runtime.
-        buildBundledAxCodeEnv({
+// Spawn the web-server utilityProcess and route its lifecycle events into the
+// supervision FSM through `wire`. Returns the child as the driver handle.
+function spawnServerProcess(wire) {
+  const serverEntry = path.join(__dirname, "server-process.js")
+  recordStartupEvent("server.utilityProcess.launch", {}, { once: false })
+  const child = utilityProcess.fork(serverEntry, [], {
+    serviceName: "ax-code-server",
+    env: applyBundledAxCodeEnv(
+      {
+        ...process.env,
+        // The server reads these at module-init time; previously set on the
+        // main process before require, now passed into the forked process.
+        AX_CODE_DESKTOP_DIST_DIR: getWebDistPath(),
+        AX_CODE_DESKTOP_RUNTIME: "desktop",
+        AX_CODE_DESKTOP_SHUTDOWN_TIMEOUT_MS: "4000",
+        AX_CODE_DESKTOP_STARTUP_SNAPSHOT: JSON.stringify(startupDiagnostics.snapshot()),
+        // Bundled computer-use server (packaged macOS builds with a staged
+        // artifact only); no-op in dev/OSS builds.
+        ...buildComputerUseServerEnv({
           platform: process.platform,
           isPackaged: app.isPackaged,
           resourcesPath: process.resourcesPath,
+          execPath: process.execPath,
         }),
-      ),
-    })
-
-    let settled = false
-    // True only once the child reported "ready". Distinct from `settled`,
-    // which also covers failed starts (timeout / error message) — those
-    // exits belong to the launch attempt's caller, not crash recovery.
-    let becameReady = false
-    const timer = setTimeout(() => {
-      if (settled) return
-      settled = true
-      try {
-        serverChild?.kill()
-      } catch {
-        /* ignore */
-      }
-      reject(new Error("server process start timed out"))
-    }, SERVER_START_TIMEOUT_MS)
-
-    serverChild.on("message", (msg) => {
-      if (msg?.type === "startup-event" && msg.event?.name) {
-        recordStartupEvent(msg.event.name, msg.event.details ?? {}, {
-          source: msg.event.source || "web-server",
-          atEpochMs: Number.isFinite(msg.event.atEpochMs) ? msg.event.atEpochMs : undefined,
-          forward: false,
-          milestone: msg.event.name,
-        })
-        return
-      }
-      if (settled) return
-      if (msg?.type === "ready") {
-        settled = true
-        becameReady = true
-        clearTimeout(timer)
-        serverPort = msg.port
-        recordStartupEvent("server.utilityProcess.ready", { port: serverPort }, { once: false })
-        resolve()
-      } else if (msg?.type === "error") {
-        settled = true
-        clearTimeout(timer)
-        reject(new Error(msg.message || "server process failed to start"))
-      }
-    })
-
-    const child = serverChild
-    child.on("exit", (code) => {
-      const wasCurrent = serverChild === child
-      // Only null the module variable if it still points to THIS process.
-      // After crash recovery the old process's exit event may fire AFTER
-      // the new process is assigned, which would incorrectly null the
-      // reference to the new server.
-      if (wasCurrent) serverChild = null
-      if (!settled) {
-        settled = true
-        clearTimeout(timer)
-        reject(new Error(`server process exited before ready (code ${code})`))
-      } else if (shouldRecoverAfterServerExit({ becameReady, wasCurrent, quitting: isQuitting })) {
-        if (serverStabilityTimer) {
-          clearTimeout(serverStabilityTimer)
-          serverStabilityTimer = null
-        }
-        console.error("[electron] server process exited unexpectedly with code", code)
-        restartServerAfterCrash().catch((err) => {
-          console.error("[electron] failed to recover server process:", err)
-        })
-      }
-    })
+      },
+      // Bundled ax-code runtime (packaged builds with a staged CLI tree
+      // only). Also strips any inherited AX_CODE_DESKTOP_BUNDLED_AX_CODE_BINARY
+      // when this build has no staged runtime, so a user export cannot leak
+      // through ...process.env and masquerade as a bundled runtime.
+      buildBundledAxCodeEnv({
+        platform: process.platform,
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+      }),
+    ),
   })
-}
+  serverChild = child
+  // A (re)spawn always takes over the port; clear it so windows and IPC never
+  // target the dead server while the replacement boots.
+  serverPort = 0
 
-async function restartServerAfterCrash() {
-  if (isQuitting) return
-  if (isRelaunchingServer) {
-    // A replacement can become ready and then die while the first recovery
-    // is still reloading renderer windows. Remember that exit so it is not
-    // lost behind the in-progress guard.
-    serverCrashRecoveryPending = true
-    return
-  }
-  isRelaunchingServer = true
-  serverCrashRecoveryPending = false
-  const oldServerPort = serverPort
-  try {
-    let lastError = new Error("server process exited unexpectedly")
-    while (!isQuitting) {
-      if (!serverRestartPolicy.beginRestart()) {
-        serverCrashRecoveryPending = false
-        console.error(
-          "[electron] server process crashed too many times (%d), giving up on restart",
-          serverRestartPolicy.crashRestarts,
-        )
-        await showServerRecoveryFailure(lastError)
-        return
-      }
-      const attempt = serverRestartPolicy.crashRestarts
-      try {
-        serverPort = 0
-        await launchServer()
-        serverRestartPolicy.completeRestart()
-        scheduleServerStabilityReset()
-        const willReloadMainWindow = Boolean(
-          mainWindow &&
-            !mainWindow.isDestroyed() &&
-            resolveServerRestartReloadUrl(mainWindow.webContents.getURL(), {
-              oldPort: oldServerPort,
-              newPort: serverPort,
-            }),
-        )
-        if (willReloadMainWindow) rendererReadyForOpenProject = false
-        const result = await reloadLocalRendererWindowsAfterServerRestart(BrowserWindow.getAllWindows(), {
-          oldPort: oldServerPort,
-          newPort: serverPort,
-        })
-        if (result.failed > 0) {
-          console.warn("[electron] failed to reload %d renderer window(s) after server restart", result.failed)
-        }
-        return
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error))
-        serverRestartPolicy.completeRestart()
-        console.error("[electron] server restart attempt %d failed:", attempt, lastError)
-        await waitForServerRestartBackoff(attempt)
-      }
-    }
-  } finally {
-    serverRestartPolicy.completeRestart()
-    isRelaunchingServer = false
-    if (serverCrashRecoveryPending && !isQuitting) {
-      serverCrashRecoveryPending = false
-      queueMicrotask(() => {
-        restartServerAfterCrash().catch((error) => {
-          console.error("[electron] failed to continue server crash recovery:", error)
-        })
+  child.on("message", (msg) => {
+    if (msg?.type === "startup-event" && msg.event?.name) {
+      recordStartupEvent(msg.event.name, msg.event.details ?? {}, {
+        source: msg.event.source || "web-server",
+        atEpochMs: Number.isFinite(msg.event.atEpochMs) ? msg.event.atEpochMs : undefined,
+        forward: false,
+        milestone: msg.event.name,
       })
+      return
     }
-  }
+    if (msg?.type === "ready") {
+      serverPort = msg.port
+      recordStartupEvent("server.utilityProcess.ready", { port: serverPort }, { once: false })
+      wire.ready({ port: msg.port })
+    } else if (msg?.type === "error") {
+      wire.failed(new Error(msg.message || "server process failed to start"))
+    }
+  })
+
+  child.on("exit", (code, signal) => {
+    // Only null the module variable if it still points to THIS process.
+    // After crash recovery the old process's exit event may fire AFTER
+    // the new process is assigned, which would incorrectly null the
+    // reference to the new server.
+    if (serverChild === child) serverChild = null
+    // Electron's utilityProcess emits only the code today (signal stays
+    // undefined); the FSM renders null codes as "unknown exit code".
+    wire.exited(code, signal)
+  })
+  return child
 }
 
 // Ask the server to shut down gracefully (which also stops the ax-code child it
-// spawned), then ensure the process is gone. Resolves once the child exits or a
-// timeout forces a kill.
-function stopServer() {
-  const child = serverChild
-  if (!child) return Promise.resolve()
-  serverChild = null
+// spawned), then ensure the process is gone. A wedged server may ignore the
+// graceful stop and even SIGTERM, so escalate to SIGKILL rather than hang the
+// quit path forever. Resolves once the child exits or a kill is sent.
+function gracefulStopServerProcess(child, { termTimeoutMs, killTimeoutMs }) {
   return new Promise((resolve) => {
     let done = false
     let killTimer = null
@@ -431,8 +324,6 @@ function stopServer() {
       if (killTimer) clearTimeout(killTimer)
       resolve()
     }
-    // A wedged server may ignore the graceful stop and even SIGTERM, so
-    // escalate to SIGKILL rather than hang the quit path forever.
     const termTimer = setTimeout(() => {
       try {
         child.kill("SIGTERM")
@@ -446,8 +337,8 @@ function stopServer() {
           /* ignore */
         }
         finish()
-      }, SERVER_KILL_TIMEOUT_MS)
-    }, SERVER_STOP_TIMEOUT_MS)
+      }, killTimeoutMs)
+    }, termTimeoutMs)
     child.once("exit", finish)
     try {
       child.postMessage({ type: "stop" })
@@ -460,6 +351,82 @@ function stopServer() {
       finish()
     }
   })
+}
+
+function handleServerSupervisionEvent(event) {
+  if (event.type === "state-change" && event.to === "degraded") {
+    portBeforeServerCrash = serverPort
+    if (Number.isInteger(event.exitCode)) {
+      console.error("[electron] server process exited unexpectedly with code", event.exitCode)
+    }
+  } else if (event.type === "restart-backoff") {
+    console.error("[electron] server restart attempt %d failed:", event.attempt, event.error)
+  } else if (event.type === "state-change" && event.to === "exhausted") {
+    console.error("[electron] server process crashed too many times (%d), giving up on restart", event.crashRestarts)
+  }
+}
+
+// After a successful crash-restart, point every local renderer window at the
+// replacement server's port (packaged windows reload the same app:// URL).
+async function reloadRenderersAfterServerRecovery(info) {
+  const newPort = Number.isInteger(info?.port) ? info.port : serverPort
+  const oldPort = portBeforeServerCrash
+  const willReloadMainWindow = Boolean(
+    mainWindow &&
+      !mainWindow.isDestroyed() &&
+      resolveServerRestartReloadUrl(mainWindow.webContents.getURL(), {
+        oldPort,
+        newPort,
+      }),
+  )
+  if (willReloadMainWindow) rendererReadyForOpenProject = false
+  const result = await reloadLocalRendererWindowsAfterServerRestart(BrowserWindow.getAllWindows(), {
+    oldPort,
+    newPort,
+  })
+  if (result.failed > 0) {
+    console.warn("[electron] failed to reload %d renderer window(s) after server restart", result.failed)
+  }
+}
+
+const serverSupervision = createSupervisionFsm({
+  label: "server",
+  policy: {
+    maxCrashRestarts: MAX_SERVER_CRASH_RESTARTS,
+    stabilityWindowMs: SERVER_STABILITY_RESET_MS,
+    backoffBaseMs: SERVER_CRASH_RETRY_BASE_MS,
+    backoffCapMs: SERVER_CRASH_RETRY_CAP_MS,
+    bootTimeoutMs: SERVER_START_TIMEOUT_MS,
+    stopTermTimeoutMs: SERVER_STOP_TIMEOUT_MS,
+    stopKillTimeoutMs: SERVER_KILL_TIMEOUT_MS,
+  },
+  driver: {
+    spawn: (wire) => spawnServerProcess(wire),
+    terminate: (child) => {
+      try {
+        child.kill()
+      } catch {
+        /* the process may already be gone */
+      }
+    },
+    gracefulStop: (child, timeouts) => gracefulStopServerProcess(child, timeouts),
+  },
+  onEvent: handleServerSupervisionEvent,
+  onRecovered: (info) => reloadRenderersAfterServerRecovery(info),
+  onExhausted: (error) => {
+    showServerRecoveryFailure(error)
+  },
+})
+
+function launchServer() {
+  return serverSupervision.start()
+}
+
+function stopServer() {
+  // Null the handle synchronously (the before-quit guard relies on this),
+  // then let the FSM run the graceful stop sequence and suppress recovery.
+  serverChild = null
+  return serverSupervision.stop()
 }
 
 // ── Window ──────────────────────────────────────────────────────────────────
