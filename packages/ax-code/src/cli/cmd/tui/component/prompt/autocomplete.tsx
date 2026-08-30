@@ -346,6 +346,14 @@ export function Autocomplete(props: {
 
       const { lineRange, baseQuery } = extractLineRange(query ?? "")
 
+      // Snapshot the search directory before the request goes out: sync.data
+      // is a live, app-wide signal that a workspace/session switch mid-flight
+      // would mutate. The results below came from *this* directory (baked
+      // into the request), so path/url construction must anchor on the same
+      // value — reading the signal fresh after the await could resolve
+      // against a directory the user has already navigated away from.
+      const baseDir = (sync.data.path.directory || process.cwd()).replace(/\/+$/, "")
+
       // Get files from SDK
       const result = await sdk.client.find.files(
         {
@@ -376,7 +384,6 @@ export function Autocomplete(props: {
         const width = props.anchor().width - 4 - glyphReserve
         options.push(
           ...sortedFiles.map((item): AutocompleteOption => {
-            const baseDir = (sync.data.path.directory || process.cwd()).replace(/\/+$/, "")
             const fullPath = `${baseDir}/${item}`
             const urlObj = pathToFileURL(fullPath)
             let filename = item
