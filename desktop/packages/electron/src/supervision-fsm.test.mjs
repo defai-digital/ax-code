@@ -2,7 +2,7 @@ import { createRequire } from "node:module"
 import { describe, expect, test } from "vitest"
 
 const require = createRequire(import.meta.url)
-const { createSupervisionFsm, computeBackoffMs } = require("./supervision-fsm.js")
+const { createSupervisionFsm, computeBackoffMs, computeReadinessDelayMs } = require("./supervision-fsm.js")
 
 // Deterministic clock: timers are queued and fired by advance(), so the FSM's
 // backoff/stability/boot timing is tested without real waits.
@@ -628,5 +628,403 @@ describe("supervision FSM driver contract", () => {
     const { fsm } = createFsm({ clock, driver: failing })
     await expect(fsm.start()).rejects.toThrow("fork failed")
     expect(fsm.state).toBe("idle")
+  })
+})
+
+// Async spawn driver: spawn returns a promise the test settles by hand.
+function createAsyncDriver() {
+  const spawns = []
+  const driver = {
+    spawn(wire, context) {
+      const child = { wire, context, terminated: 0, gracefulStops: [] }
+      spawns.push(child)
+      return new Promise((resolve, reject) => {
+        child.settleSpawn = (handle = child) => resolve(handle)
+        child.failSpawn = (error) => reject(error)
+      })
+    },
+    terminate(handle) {
+      handle.terminated += 1
+    },
+    gracefulStop(handle, timeouts) {
+      handle.gracefulStops.push(timeouts)
+      return Promise.resolve()
+    },
+  }
+  return { driver, spawns }
+}
+
+describe("supervision FSM async spawn", () => {
+  test("a resolved spawn promise enters booting and can become healthy", async () => {
+    const clock = createFakeClock()
+    const fake = createAsyncDriver()
+    const { fsm, events } = createFsm({ clock, driver: fake })
+
+    const started = fsm.start()
+    expect(fsm.state).toBe("spawning")
+    expect(fake.spawns).toHaveLength(1)
+
+    fake.spawns[0].settleSpawn()
+    await flushMicrotasks()
+    expect(fsm.state).toBe("booting")
+
+    fake.spawns[0].wire.ready({ port: 4096 })
+    await expect(started).resolves.toEqual({ port: 4096 })
+    expect(fsm.state).toBe("healthy")
+    expect(stateChanges(events)).toEqual([
+      "idle->resolving",
+      "resolving->spawning",
+      "spawning->booting",
+      "booting->healthy",
+    ])
+  })
+
+  test("a rejected spawn promise fails the initial start without touching the crash budget", async () => {
+    const clock = createFakeClock()
+    const fake = createAsyncDriver()
+    const { fsm } = createFsm({ clock, driver: fake })
+
+    const started = fsm.start()
+    const assertion = expect(started).rejects.toThrow("binary not found")
+    fake.spawns[0].failSpawn(new Error("binary not found"))
+    await assertion
+    expect(fsm.state).toBe("idle")
+    expect(fsm.crashRestarts).toBe(0)
+
+    clock.advance(120_000)
+    expect(fake.spawns).toHaveLength(1)
+  })
+
+  test("a rejected spawn promise on a restart attempt counts against the budget", async () => {
+    const clock = createFakeClock()
+    const fake = createAsyncDriver()
+    const { fsm, events } = createFsm({ clock, driver: fake })
+
+    // wire.ready before the spawn promise settles: the readiness guard keeps
+    // the attempt, and the late handle is attached without being terminated.
+    const started = fsm.start()
+    fake.spawns[0].wire.ready({ port: 4096 })
+    fake.spawns[0].settleSpawn()
+    await expect(started).resolves.toEqual({ port: 4096 })
+    expect(fsm.state).toBe("healthy")
+    expect(fake.spawns[0].terminated).toBe(0)
+
+    fake.spawns[0].wire.exited(1)
+    clock.advance(0)
+    expect(fake.spawns).toHaveLength(2)
+
+    fake.spawns[1].failSpawn(new Error("spawn blew up"))
+    await flushMicrotasks()
+    expect(fsm.state).toBe("restarting")
+    const backoffs = backoffEvents(events)
+    expect(backoffs).toHaveLength(1)
+    expect(backoffs[0]).toMatchObject({ attempt: 1, backoffMs: 500, error: "spawn blew up" })
+
+    clock.advance(500)
+    expect(fake.spawns).toHaveLength(3)
+    expect(fsm.crashRestarts).toBe(2)
+  })
+
+  test("stop during an in-flight spawn terminates the handle when the promise settles late", async () => {
+    const clock = createFakeClock()
+    const fake = createAsyncDriver()
+    const { fsm } = createFsm({ clock, driver: fake })
+
+    const started = fsm.start()
+    const assertion = expect(started).rejects.toThrow("server process stopped before ready")
+    const stopped = fsm.stop()
+    await stopped
+    expect(fsm.state).toBe("stopped")
+
+    // The spawn promise settles after the stop: the late handle is killed so
+    // no unsupervised process is left running.
+    fake.spawns[0].settleSpawn()
+    await flushMicrotasks()
+    expect(fake.spawns[0].terminated).toBe(1)
+    await assertion
+
+    clock.advance(600_000)
+    expect(fake.spawns).toHaveLength(1)
+    expect(fsm.state).toBe("stopped")
+  })
+
+  test("the boot window covers the in-flight spawn; a late-settling handle is terminated", async () => {
+    const clock = createFakeClock()
+    const fake = createAsyncDriver()
+    const { fsm } = createFsm({ clock, driver: fake })
+
+    const started = fsm.start()
+    const assertion = expect(started).rejects.toThrow("server process start timed out")
+    clock.advance(30_000)
+    await assertion
+    expect(fsm.state).toBe("idle")
+    expect(fsm.crashRestarts).toBe(0)
+
+    fake.spawns[0].settleSpawn()
+    await flushMicrotasks()
+    expect(fake.spawns[0].terminated).toBe(1)
+
+    clock.advance(600_000)
+    expect(fake.spawns).toHaveLength(1)
+    expect(fsm.state).toBe("idle")
+  })
+})
+
+describe("supervision FSM boot readiness probing", () => {
+  const READINESS = { maxAttempts: 10, baseDelayMs: 5_000, capDelayMs: 60_000 }
+
+  test("computeReadinessDelayMs produces the capped exponential schedule", () => {
+    const sequence = [1, 2, 3, 4, 5, 6, 7].map((attempt) => computeReadinessDelayMs(attempt, READINESS))
+    expect(sequence).toEqual([5_000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000])
+  })
+
+  test("succeeds on the 3rd probe following the exact 5s/10s delay schedule", async () => {
+    const clock = createFakeClock()
+    const fake = createFakeDriver()
+    const probeCalls = []
+    const results = [false, false, true]
+    const { fsm, events } = createFsm({
+      clock,
+      driver: fake,
+      readiness: {
+        ...READINESS,
+        probe: () => {
+          probeCalls.push(clock.now())
+          return Promise.resolve(results.shift() ?? true)
+        },
+      },
+    })
+
+    const started = fsm.start()
+    expect(fsm.state).toBe("booting")
+    await flushMicrotasks() // probe 1 runs immediately after entering booting
+    expect(probeCalls).toEqual([1_000_000])
+
+    clock.advance(4_999)
+    await flushMicrotasks()
+    expect(probeCalls).toHaveLength(1)
+
+    clock.advance(1) // t=1_005_000: probe 2 after exactly baseDelayMs
+    await flushMicrotasks()
+    expect(probeCalls).toEqual([1_000_000, 1_005_000])
+
+    clock.advance(10_000) // t=1_015_000: probe 3 after exactly 2*baseDelayMs
+    await flushMicrotasks()
+    expect(probeCalls).toEqual([1_000_000, 1_005_000, 1_015_000])
+
+    // Readiness success carries wire.ready semantics with the handle as info.
+    await expect(started).resolves.toBe(fake.spawns[0])
+    expect(fsm.state).toBe("healthy")
+    expect(events.filter((event) => event.type === "readiness-probe-failed")).toHaveLength(2)
+    expect(fake.spawns[0].terminated).toBe(0)
+
+    // No further probes once healthy.
+    clock.advance(600_000)
+    expect(probeCalls).toHaveLength(3)
+  })
+
+  test("a rejecting probe counts as a failed attempt and surfaces the error", async () => {
+    const clock = createFakeClock()
+    const fake = createFakeDriver()
+    const { fsm, events } = createFsm({
+      clock,
+      driver: fake,
+      readiness: {
+        ...READINESS,
+        maxAttempts: 2,
+        probe: () => Promise.reject(new Error("connection refused")),
+      },
+    })
+
+    const started = fsm.start()
+    const assertion = expect(started).rejects.toThrow("server process failed 2 readiness probes")
+    await flushMicrotasks()
+    clock.advance(5_000)
+    await flushMicrotasks()
+    await assertion
+
+    const failures = events.filter((event) => event.type === "readiness-probe-failed")
+    expect(failures).toHaveLength(2)
+    expect(failures[0].error).toBe("connection refused")
+    expect(fake.spawns[0].terminated).toBe(1)
+    expect(fsm.state).toBe("idle")
+    expect(fsm.crashRestarts).toBe(0)
+  })
+
+  test("exhaustion on a restart attempt terminates the process and counts against the crash budget", async () => {
+    const clock = createFakeClock()
+    const fake = createFakeDriver()
+    let probeResults = [true]
+    const { fsm, events } = createFsm({
+      clock,
+      driver: fake,
+      readiness: { ...READINESS, maxAttempts: 3, probe: () => Promise.resolve(probeResults.shift() ?? false) },
+    })
+
+    const started = fsm.start()
+    await flushMicrotasks() // first probe succeeds immediately
+    await expect(started).resolves.toBe(fake.spawns[0])
+    expect(fsm.state).toBe("healthy")
+
+    fake.spawns[0].wire.exited(1)
+    clock.advance(0)
+    expect(fake.spawns).toHaveLength(2)
+
+    // Restart attempt: all 3 probes fail (at +0, +5s, +15s) → exhaustion.
+    probeResults = [false, false, false]
+    await flushMicrotasks()
+    clock.advance(5_000)
+    await flushMicrotasks()
+    expect(fsm.state).toBe("booting")
+    clock.advance(10_000)
+    await flushMicrotasks()
+
+    expect(events.filter((event) => event.type === "readiness-probe-failed")).toHaveLength(3)
+    expect(fake.spawns[1].terminated).toBe(1)
+    const backoffs = backoffEvents(events)
+    expect(backoffs).toHaveLength(1)
+    expect(backoffs[0]).toMatchObject({ attempt: 1, backoffMs: 500, error: "server process failed 3 readiness probes" })
+
+    // The killed child's late exit must not consume budget a second time.
+    fake.spawns[1].wire.exited(1)
+    expect(backoffEvents(events)).toHaveLength(1)
+
+    clock.advance(500)
+    expect(fake.spawns).toHaveLength(3)
+    expect(fsm.crashRestarts).toBe(2)
+  })
+
+  test("wire.ready inside a synchronous spawn skips readiness probing entirely", async () => {
+    const clock = createFakeClock()
+    let probeCalls = 0
+    const readyDriver = {
+      spawn(wire) {
+        const child = { wire, terminated: 0, gracefulStops: [] }
+        wire.ready({ port: 4096 })
+        return child
+      },
+      terminate() {},
+      gracefulStop: () => Promise.resolve(),
+    }
+    const { fsm } = createFsm({
+      clock,
+      driver: { driver: readyDriver, spawns: [] },
+      readiness: {
+        ...READINESS,
+        probe: () => {
+          probeCalls += 1
+          return Promise.resolve(false)
+        },
+      },
+    })
+
+    await expect(fsm.start()).resolves.toEqual({ port: 4096 })
+    expect(fsm.state).toBe("healthy")
+    await flushMicrotasks()
+    clock.advance(600_000)
+    expect(probeCalls).toBe(0)
+  })
+
+  test("wire.ready during a readiness delay cancels the probe loop", async () => {
+    const clock = createFakeClock()
+    const fake = createFakeDriver()
+    const probeCalls = []
+    const { fsm } = createFsm({
+      clock,
+      driver: fake,
+      readiness: {
+        ...READINESS,
+        probe: () => {
+          probeCalls.push(clock.now())
+          return Promise.resolve(false)
+        },
+      },
+    })
+
+    const started = fsm.start()
+    await flushMicrotasks() // probe 1 fails; probe 2 scheduled at +5s
+    expect(probeCalls).toHaveLength(1)
+
+    clock.advance(2_000)
+    fake.spawns[0].wire.ready({ port: 4096 })
+    await expect(started).resolves.toEqual({ port: 4096 })
+    expect(fsm.state).toBe("healthy")
+
+    clock.advance(600_000)
+    await flushMicrotasks()
+    expect(probeCalls).toHaveLength(1)
+  })
+
+  test("stop during a readiness delay cancels cleanly", async () => {
+    const clock = createFakeClock()
+    const fake = createFakeDriver()
+    let probeCalls = 0
+    const { fsm, exhausted } = createFsm({
+      clock,
+      driver: fake,
+      readiness: {
+        ...READINESS,
+        probe: () => {
+          probeCalls += 1
+          return Promise.resolve(false)
+        },
+      },
+    })
+
+    const started = fsm.start()
+    const assertion = expect(started).rejects.toThrow("server process stopped before ready")
+    await flushMicrotasks() // probe 1 fails; probe 2 pending
+    expect(probeCalls).toBe(1)
+
+    const stopped = fsm.stop()
+    await stopped
+    expect(fsm.state).toBe("stopped")
+    expect(fake.spawns[0].gracefulStops).toHaveLength(1)
+    await assertion
+
+    clock.advance(600_000)
+    await flushMicrotasks()
+    expect(probeCalls).toBe(1)
+    expect(fake.spawns).toHaveLength(1)
+    expect(exhausted).toHaveLength(0)
+  })
+
+  test("stop while a readiness probe is in flight drops the late result", async () => {
+    const clock = createFakeClock()
+    const fake = createFakeDriver()
+    let resolveProbe = null
+    const { fsm } = createFsm({
+      clock,
+      driver: fake,
+      readiness: { ...READINESS, probe: () => new Promise((resolve) => (resolveProbe = resolve)) },
+    })
+
+    const started = fsm.start()
+    const assertion = expect(started).rejects.toThrow("server process stopped before ready")
+    await flushMicrotasks() // probe 1 in flight
+    expect(resolveProbe).not.toBeNull()
+
+    const stopped = fsm.stop()
+    await stopped
+    expect(fsm.state).toBe("stopped")
+
+    // The probe settles after the stop: no failure event, no restart.
+    resolveProbe(false)
+    await flushMicrotasks()
+    clock.advance(600_000)
+    expect(fake.spawns).toHaveLength(1)
+    expect(fsm.state).toBe("stopped")
+    await assertion
+  })
+
+  test("malformed readiness values throw at construction", () => {
+    const { driver } = createFakeDriver()
+    const base = { maxAttempts: 10, baseDelayMs: 5_000, capDelayMs: 60_000, probe: () => true }
+    expect(() => createSupervisionFsm({ driver, readiness: { ...base, probe: undefined } })).toThrow(/probe/)
+    expect(() => createSupervisionFsm({ driver, readiness: { ...base, maxAttempts: 0 } })).toThrow(/maxAttempts/)
+    expect(() => createSupervisionFsm({ driver, readiness: { ...base, baseDelayMs: -1 } })).toThrow(/baseDelayMs/)
+    expect(() => createSupervisionFsm({ driver, readiness: { ...base, capDelayMs: 1.5 } })).toThrow(/capDelayMs/)
+    expect(() => createSupervisionFsm({ driver, readiness: base })).not.toThrow()
+    expect(() => createSupervisionFsm({ driver })).not.toThrow()
   })
 })

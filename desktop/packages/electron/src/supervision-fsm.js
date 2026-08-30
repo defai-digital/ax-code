@@ -2,11 +2,11 @@
 
 // Unified, dependency-injected supervision FSM for child processes owned by
 // the Electron main process (SPEC-2026-08-29-desktop-process-model-collapse
-// §4). One instance supervises one process: the web-server utilityProcess
-// today, the ax-code runtime process in a later sub-step. The FSM owns all
-// supervision state (phase, restart budget, backoff/stability/boot/stop
-// timers); the injected driver owns the actual process handle and OS calls,
-// so unit tests run deterministically with a fake clock and a fake driver.
+// §4). One instance supervises one process: the web-server utilityProcess and
+// (S2.5a) the ax-code runtime process. The FSM owns all supervision state
+// (phase, restart budget, backoff/stability/boot/stop timers); the injected
+// driver owns the actual process handle and OS calls, so unit tests run
+// deterministically with a fake clock and a fake driver.
 //
 // States: idle → resolving → spawning → booting → healthy → degraded →
 // restarting → exhausted → stopping → stopped. `resolving` is a pass-through
@@ -16,7 +16,14 @@
 // and immediately yields to `restarting`.
 //
 // Driver contract:
-//   spawn(wire, context) -> handle   (synchronous; context = { restart, attempt })
+//   spawn(wire, context) -> handle | Promise<handle>   (context = { restart, attempt })
+//     Synchronous drivers return the handle directly; asynchronous drivers
+//     (e.g. spawn + stdout parsing) return a promise. The FSM stays in
+//     `spawning` until the promise settles, then enters `booting`. A rejected
+//     spawn promise is a boot failure on the same path as wire.failed. If the
+//     promise settles after the attempt was abandoned (stop, boot timeout,
+//     newer attempt), the FSM terminates the late handle so no process is
+//     orphaned — unless it already reported wire.ready.
 //     The driver MUST route process events back through `wire`:
 //       wire.ready(info)          — the process reported readiness (boot success)
 //       wire.failed(error)        — the process reported a boot error (still alive)
@@ -26,6 +33,17 @@
 //   terminate(handle)               — force-kill (boot timeout, wedged probe)
 //   gracefulStop(handle, { termTimeoutMs, killTimeoutMs }) -> Promise
 //     Graceful stop with SIGTERM/SIGKILL escalation; resolves when gone.
+//
+// Optional boot readiness probing (S2.5a; former policy B of SPEC §4): when
+// `readiness: { maxAttempts, baseDelayMs, capDelayMs, probe(handle) }` is
+// configured, the driver may omit wire.ready entirely — after spawn the FSM
+// runs up to maxAttempts probes while `booting`, with an exponential delay of
+// min(baseDelayMs * 2^(n-1), capDelayMs) between attempts n and n+1. The first
+// success transitions to `healthy` with the handle as the ready info;
+// exhaustion is a boot failure that counts against the crash budget. A
+// wire.ready arriving first cancels probing (drivers may use either style).
+// bootTimeoutMs still bounds the whole boot window, so drivers enabling
+// readiness must size it to fit the probe schedule.
 //
 // All delays go through the injected clock ({ setTimeout, clearTimeout, now }),
 // and every state change is emitted as a structured event to `onEvent` so
@@ -84,6 +102,25 @@ function normalizeProbe(probe) {
   return probe
 }
 
+// Same eager-validation rationale as normalizeProbe, for the boot readiness
+// schedule: an invalid delay would turn boot into a hot probe loop.
+function normalizeReadiness(readiness) {
+  if (readiness == null) return null
+  if (typeof readiness.probe !== "function") {
+    throw new TypeError("supervision FSM readiness requires a probe(handle) function")
+  }
+  for (const key of ["maxAttempts", "baseDelayMs", "capDelayMs"]) {
+    if (!Number.isInteger(readiness[key]) || readiness[key] <= 0) {
+      throw new TypeError(`supervision FSM readiness requires ${key} to be a positive integer`)
+    }
+  }
+  return readiness
+}
+
+function computeReadinessDelayMs(attemptNumber, readiness) {
+  return Math.min(readiness.baseDelayMs * 2 ** (attemptNumber - 1), readiness.capDelayMs)
+}
+
 function createSupervisionFsm(options = {}) {
   const label = typeof options.label === "string" && options.label ? options.label : "process"
   const policy = normalizePolicy(options.policy)
@@ -106,6 +143,7 @@ function createSupervisionFsm(options = {}) {
   const onRecovered = typeof options.onRecovered === "function" ? options.onRecovered : null
   const onExhausted = typeof options.onExhausted === "function" ? options.onExhausted : null
   const probe = normalizeProbe(options.probe)
+  const readiness = normalizeReadiness(options.readiness)
 
   const restartPolicy = createServerRestartPolicy({ maxRestarts: policy.maxCrashRestarts })
 
@@ -120,6 +158,7 @@ function createSupervisionFsm(options = {}) {
   let stabilityTimer = null
   let probeTimer = null
   let probeFailures = 0
+  let readinessTimer = null
   let startSettlement = null
   let stopPromise = null
   let lastError = null
@@ -181,6 +220,13 @@ function createSupervisionFsm(options = {}) {
       probeTimer = null
     }
     probeFailures = 0
+  }
+
+  function clearReadinessTimer() {
+    if (readinessTimer) {
+      clearTimer(readinessTimer)
+      readinessTimer = null
+    }
   }
 
   function isStopping() {
@@ -285,6 +331,46 @@ function createSupervisionFsm(options = {}) {
     unref(probeTimer)
   }
 
+  // Boot readiness probing (optional config): runs only while the attempt is
+  // unsettled in `booting`, so a wire.ready/wire.failed/exit/stop arriving
+  // first cancels the loop via the attempt/settled guards.
+  function runReadinessProbe(current, attemptNumber) {
+    if (attempt !== current || current.settled) return
+    Promise.resolve()
+      .then(() => readiness.probe(current.handle))
+      .then(
+        (result) => ({ ok: Boolean(result), error: undefined }),
+        (error) => ({ ok: false, error: toError(error, `${label} readiness probe failed`).message }),
+      )
+      .then(({ ok, error }) => {
+        if (attempt !== current || current.settled) return
+        if (ok) {
+          // wire.ready semantics with the handle as the ready info, so the
+          // start() settlement / healthy event carry what the driver spawned.
+          handleReady(current, current.handle)
+          return
+        }
+        emit({ type: "readiness-probe-failed", attempt: attemptNumber, maxAttempts: readiness.maxAttempts, error })
+        if (attemptNumber >= readiness.maxAttempts) {
+          // Exhaustion is a boot failure: it counts against the crash budget
+          // like any other failed boot (SPEC §4), and the not-ready process
+          // is terminated like a boot-timeout kill.
+          handleBootFailure(current, new Error(`${label} process failed ${attemptNumber} readiness probes`), {
+            terminate: true,
+          })
+          return
+        }
+        readinessTimer = setTimer(
+          () => {
+            readinessTimer = null
+            runReadinessProbe(current, attemptNumber + 1)
+          },
+          computeReadinessDelayMs(attemptNumber, readiness),
+        )
+        unref(readinessTimer)
+      })
+  }
+
   // After a failed restart attempt (or immediately after a crash, with
   // delayMs 0), wait, then consume budget and spawn the next attempt. The
   // budget check runs when the timer fires — including after the final
@@ -298,8 +384,8 @@ function createSupervisionFsm(options = {}) {
       if (!restartPolicy.beginRestart()) {
         // The exhausted event / onExhausted context carries the last observed
         // exit ({ exitCode, exitSignal }, either may be undefined) alongside
-        // the error. S2.5 will extend this context with binary path / version
-        // diagnostics from the driver side.
+        // the error. Driver-level diagnostics (binary path, version) are
+        // attached by the supervisor module that owns the driver.
         const context = {
           crashRestarts: restartPolicy.crashRestarts,
           exitCode: lastExit ? lastExit.code : undefined,
@@ -340,6 +426,7 @@ function createSupervisionFsm(options = {}) {
     if (attempt !== current || current.settled) return
     current.settled = true
     clearBootTimer()
+    clearReadinessTimer()
     restartPolicy.completeRestart()
     if (terminate) safeTerminate(current.handle)
     lastError = error
@@ -352,6 +439,7 @@ function createSupervisionFsm(options = {}) {
     current.settled = true
     current.becameReady = true
     clearBootTimer()
+    clearReadinessTimer()
     restartPolicy.completeRestart()
     const wasRestart = current.restart
     transition("healthy", { info })
@@ -367,6 +455,7 @@ function createSupervisionFsm(options = {}) {
     if (!current.settled) {
       current.settled = true
       clearBootTimer()
+      clearReadinessTimer()
       restartPolicy.completeRestart()
       attempt = null
       // A signal-killed process exits with code null; name the signal when
@@ -403,33 +492,67 @@ function createSupervisionFsm(options = {}) {
     attempt = null
   }
 
+  // Shared post-spawn path for sync and async drivers: attach the handle and
+  // open the boot window. `late` marks a handle that arrived via a settled
+  // spawn promise, possibly after the attempt was already abandoned.
+  function settleSpawn(current, context, handle, { late }) {
+    if (attempt !== current) {
+      // Only reachable for a late async handle: the attempt was dropped
+      // (stop, or replaced by a newer attempt) while the spawn was in flight.
+      // Nobody supervises this process — kill it so it is never orphaned.
+      safeTerminate(handle)
+      return
+    }
+    current.handle = handle
+    if (current.settled) {
+      // The attempt settled while an async spawn was in flight (boot timeout,
+      // wire.failed, exit). A late handle from that spawn is likewise
+      // unsupervised, so terminate it — unless it already reported ready
+      // (the driver called wire.ready before resolving its spawn promise,
+      // the async analogue of a sync driver settling inside spawn()).
+      if (late && !current.becameReady) safeTerminate(handle)
+      return
+    }
+    transition("booting", current.restart ? { attempt: context.attempt } : {})
+    if (readiness) runReadinessProbe(current, 1)
+  }
+
   function spawnAttempt({ restart }) {
     const id = ++attemptSeq
     const context = { restart, attempt: restart ? restartPolicy.crashRestarts : 0 }
     transition("spawning", restart ? { attempt: context.attempt } : {})
     const current = { id, handle: null, settled: false, becameReady: false, restart }
     attempt = current
+    // The boot window covers spawn AND booting: it is armed before the driver
+    // runs so an async spawn that never settles still hits the boot timeout.
+    bootTimer = setTimer(() => {
+      bootTimer = null
+      handleBootFailure(current, new Error(`${label} process start timed out`), { terminate: true })
+    }, policy.bootTimeoutMs)
     const wire = {
       ready: (info) => handleReady(current, info),
       failed: (error) =>
         handleBootFailure(current, toError(error, `${label} process failed to start`), { terminate: false }),
       exited: (code, signal) => handleExit(current, code, signal),
     }
-    let handle
+    let spawned
     try {
-      handle = driver.spawn(wire, context)
+      spawned = driver.spawn(wire, context)
     } catch (error) {
       handleBootFailure(current, toError(error, `${label} process failed to start`), { terminate: false })
       return
     }
-    current.handle = handle
-    // A synchronous fake/real driver may have already settled this attempt.
-    if (current.settled) return
-    transition("booting", restart ? { attempt: context.attempt } : {})
-    bootTimer = setTimer(() => {
-      bootTimer = null
-      handleBootFailure(current, new Error(`${label} process start timed out`), { terminate: true })
-    }, policy.bootTimeoutMs)
+    if (spawned && typeof spawned.then === "function") {
+      // Async spawn driver: the FSM stays in `spawning` until the promise
+      // settles; a rejection is a boot failure on the wire.failed path (the
+      // driver owns killing any half-started process before rejecting).
+      spawned.then(
+        (handle) => settleSpawn(current, context, handle, { late: true }),
+        (error) => handleBootFailure(current, toError(error, `${label} process failed to start`), { terminate: false }),
+      )
+      return
+    }
+    settleSpawn(current, context, spawned, { late: false })
   }
 
   function start() {
@@ -458,6 +581,7 @@ function createSupervisionFsm(options = {}) {
     clearBackoffTimer()
     clearStabilityTimer()
     stopProbe()
+    clearReadinessTimer()
     // A stop may interrupt an in-flight restart attempt; clear the policy's
     // relaunching flag so it can never linger into the next start().
     restartPolicy.completeRestart()
@@ -496,5 +620,6 @@ function createSupervisionFsm(options = {}) {
 module.exports = {
   createSupervisionFsm,
   computeBackoffMs,
+  computeReadinessDelayMs,
   DEFAULT_POLICY,
 }
