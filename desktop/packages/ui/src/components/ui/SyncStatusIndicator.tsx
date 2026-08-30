@@ -4,19 +4,20 @@ import { useConnectionStore, type ConnectionPhase } from "@/lib/event-stream/con
 import { useI18n } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
-type SyncStatus = "connected" | "reconnecting" | "connecting" | "disconnected"
+type SyncStatus = "connected" | "reconnecting" | "connecting"
 
-function resolveSyncStatus(connectionPhase: ConnectionPhase, hasEverConnected: boolean): SyncStatus {
+function resolveSyncStatus(connectionPhase: ConnectionPhase): SyncStatus {
   if (connectionPhase === "connected") {
     return "connected"
   }
-  if (connectionPhase === "reconnecting") {
-    return "reconnecting"
-  }
-  if (!hasEverConnected) {
-    return "connecting"
-  }
-  return "disconnected"
+  // Under the connection-state store semantics (S4.7) "connecting" only ever
+  // occurs before the first successful connect — markStreamDisconnected keeps
+  // "connecting" solely while hasEverConnected is false. A dropped stream
+  // after a successful connect is therefore always "reconnecting", which is
+  // the accurate long-term state because the pipeline retries forever. The
+  // old "disconnected" branch (connecting + hasEverConnected) could never
+  // co-occur and was removed (S4 review).
+  return connectionPhase === "reconnecting" ? "reconnecting" : "connecting"
 }
 
 const statusConfig: Record<
@@ -24,7 +25,7 @@ const statusConfig: Record<
   {
     dotClass: string
     pulse: boolean
-    labelKey: "syncStatus.connected" | "syncStatus.reconnecting" | "syncStatus.connecting" | "syncStatus.disconnected"
+    labelKey: "syncStatus.connected" | "syncStatus.reconnecting" | "syncStatus.connecting"
   }
 > = {
   connected: {
@@ -42,19 +43,13 @@ const statusConfig: Record<
     pulse: true,
     labelKey: "syncStatus.connecting",
   },
-  disconnected: {
-    dotClass: "bg-status-error",
-    pulse: false,
-    labelKey: "syncStatus.disconnected",
-  },
 }
 
 export const SyncStatusIndicator: React.FC = React.memo(function SyncStatusIndicator() {
   const { t } = useI18n()
   const connectionPhase = useConnectionStore((s) => s.phase)
-  const hasEverConnected = useConnectionStore((s) => s.hasEverConnected)
 
-  const status = resolveSyncStatus(connectionPhase, hasEverConnected)
+  const status = resolveSyncStatus(connectionPhase)
   const config = statusConfig[status]
 
   return (

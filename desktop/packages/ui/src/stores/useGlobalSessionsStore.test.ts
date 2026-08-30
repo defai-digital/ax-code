@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import type { Session } from "@ax-code/sdk/v2"
 
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from "./useGlobalSessionsStore"
@@ -31,9 +31,14 @@ describe("useGlobalSessionsStore", () => {
       archivedSessions: [],
       sessionsByDirectory: new Map(),
       pendingRemoval: new Map(),
+      deleteTombstones: new Map(),
       hasLoaded: false,
       status: "idle",
     })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   test("updates an existing session when the share URL changes", () => {
@@ -41,6 +46,26 @@ describe("useGlobalSessionsStore", () => {
     useGlobalSessionsStore.getState().upsertSession(buildSession("https://share.example/b"))
 
     expect(useGlobalSessionsStore.getState().activeSessions[0]?.share?.url).toBe("https://share.example/b")
+  })
+
+  test("a no-op upsert keeps every list reference stable in both directions", () => {
+    const active = makeSession("ses_a", { directory: "/repo" })
+    const archived = makeSession("ses_b", { directory: "/repo", time: { created: 1, updated: 2, archived: 3 } })
+    useGlobalSessionsStore.getState().upsertSession(active)
+    useGlobalSessionsStore.getState().upsertSession(archived)
+    const before = useGlobalSessionsStore.getState()
+
+    // Identical active upsert: the archived bucket must not get a new array.
+    useGlobalSessionsStore.getState().upsertSession(makeSession("ses_a", { directory: "/repo" }))
+    // Identical archived upsert: the active bucket must not get a new array.
+    useGlobalSessionsStore
+      .getState()
+      .upsertSession(makeSession("ses_b", { directory: "/repo", time: { created: 1, updated: 2, archived: 3 } }))
+
+    const after = useGlobalSessionsStore.getState()
+    expect(after.activeSessions).toBe(before.activeSessions)
+    expect(after.archivedSessions).toBe(before.archivedSessions)
+    expect(after.sessionsByDirectory).toBe(before.sessionsByDirectory)
   })
 
   test("does not let an older active snapshot overwrite a newer live session update", () => {
@@ -352,6 +377,41 @@ describe("useGlobalSessionsStore", () => {
 
       const state = useGlobalSessionsStore.getState()
       expect(state.activeSessions[0]?.title).toBe("Event title")
+    })
+
+    test("a stale reconnect snapshot does not resurrect a session deleted by event", () => {
+      const deleted = makeSession("ses_a", { directory: "/repo" })
+      useGlobalSessionsStore.getState().upsertSession(deleted)
+
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(sessionEvent("session.deleted", makeSession("ses_a", { directory: "/repo" })))
+      expect(useGlobalSessionsStore.getState().activeSessions).toHaveLength(0)
+
+      // A snapshot built before the delete reached the server still contains
+      // the session; the delete tombstone must filter it back out.
+      useGlobalSessionsStore.getState().applySnapshot([deleted], [deleted])
+
+      const state = useGlobalSessionsStore.getState()
+      expect(state.activeSessions).toHaveLength(0)
+      expect(state.archivedSessions).toHaveLength(0)
+      expect(state.deleteTombstones.has("ses_a")).toBe(true)
+    })
+
+    test("an expired delete tombstone allows the session to reappear from a snapshot", () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_000_000)
+      useGlobalSessionsStore.getState().upsertSession(makeSession("ses_a", { directory: "/repo" }))
+      useGlobalSessionsStore
+        .getState()
+        .applySessionEvent(sessionEvent("session.deleted", makeSession("ses_a", { directory: "/repo" })))
+
+      // Past the 15-minute tombstone TTL the snapshot is authoritative again:
+      // if the server still lists the session, it comes back.
+      vi.setSystemTime(1_000_000 + 16 * 60 * 1000)
+      useGlobalSessionsStore.getState().applySnapshot([makeSession("ses_a", { directory: "/repo" })], [])
+
+      expect(useGlobalSessionsStore.getState().activeSessions.map((s) => s.id)).toEqual(["ses_a"])
     })
 
     test("malformed payloads and unrelated event types are a no-op", () => {

@@ -359,24 +359,43 @@ describe("message.part.delta burst referential stability", () => {
 // Drift guard — the fixture above must match the DOCUMENTATION.md table.
 // ---------------------------------------------------------------------------
 
-function parseDocumentedEventTypes(): string[] {
+/**
+ * Parse the "Event → field mapping" table in DOCUMENTATION.md into
+ * `event type -> sorted fields-to-clone list`. Slash-grouped rows
+ * (`session.idle/error`) expand to one entry per event type. Parenthesized
+ * notes in the fields column — the lifecycle extras ("plus … when
+ * archiving/deleting", pinned separately via LIFECYCLE_EXTRA_SLICES) and the
+ * vcs "mutates `draft.vcs` directly" remark — are prose, not slice names, so
+ * they are stripped before reading the backticked field list.
+ */
+function parseDocumentedEventTable(): Record<string, string[]> {
   const section = documentation.split("## Event → field mapping")[1]?.split("\n## ")[0] ?? ""
 
-  const types: string[] = []
+  const table: Record<string, string[]> = {}
   for (const line of section.split("\n")) {
-    const match = line.match(/^\|\s*`([^`]+)`\s*\|/)
+    const match = line.match(/^\|\s*`([^`]+)`\s*\|([^|]*)\|\s*$/)
     if (!match) continue
-    const cell = match[1]
+    const [, cell, fieldsCell] = match
+    const fields = [...fieldsCell.replace(/\([^)]*\)/g, "").matchAll(/`([^`.]+)`/g)].map((m) => m[1]).sort()
+
     const [first, ...rest] = cell.split("/")
-    types.push(first)
     const prefix = first.replace(/[^.]+$/, "")
+    table[first] = fields
     for (const segment of rest) {
-      types.push(prefix + segment)
+      table[prefix + segment] = fields
     }
   }
-  return types.sort()
+  return table
 }
 
+const DOCUMENTED_EVENT_TABLE = parseDocumentedEventTable()
+
 test("the fixture covers exactly the event types documented in DOCUMENTATION.md", () => {
-  expect(Object.keys(DOCUMENTED_EVENT_SLICES).sort()).toEqual(parseDocumentedEventTypes())
+  expect(Object.keys(DOCUMENTED_EVENT_SLICES).sort()).toEqual(Object.keys(DOCUMENTED_EVENT_TABLE).sort())
+})
+
+test("the fixture slice sets match the documented fields-to-clone column per event", () => {
+  for (const [type, slices] of Object.entries(DOCUMENTED_EVENT_SLICES)) {
+    expect([...slices].sort(), `${type} fields-to-clone`).toEqual(DOCUMENTED_EVENT_TABLE[type] ?? [])
+  }
 })

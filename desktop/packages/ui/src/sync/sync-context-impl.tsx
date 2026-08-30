@@ -59,6 +59,7 @@ import { axCodeClient } from "@/lib/ax-code/client"
 import { usePermissionStore } from "@/stores/permissionStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useCommandsStore } from "@/stores/useCommandsStore"
 import { useTodosPersistStore } from "@/stores/useTodosPersistStore"
 import { toast } from "@/components/ui"
 import { appendNotification } from "./notification-store"
@@ -789,6 +790,18 @@ async function autoAcceptViaResolvedLineage(
   }
 }
 
+/**
+ * Commands freshness on reconnect/resync (S4 review): commands are
+ * single-home in useCommandsStore (S4.6) and are NOT event-fed — the store
+ * loads lazily on draft start — so commands added by another client during
+ * a stream gap would otherwise stay invisible until the next draft. Fire a
+ * reload wherever the session-list catch-up runs; the store's TTL cache
+ * (5s) and in-flight dedup keep repeated calls cheap.
+ */
+const reloadCommandsAfterGap = () => {
+  void useCommandsStore.getState().loadCommands()
+}
+
 function handleEvent(
   rawDirectory: string,
   payload: Event,
@@ -824,6 +837,7 @@ function handleEvent(
       // newer event-fed entries (S4.4).
       if (requiresResync) {
         void useGlobalSessionsStore.getState().loadSessions()
+        reloadCommandsAfterGap()
       }
     } else if (result.type === "project") {
       const current = useGlobalSyncStore.getState()
@@ -878,6 +892,7 @@ function handleEvent(
       // Same replay-gap catch-up as the global branch above (S4.4).
       if (payload.type === "server.resync_required") {
         void useGlobalSessionsStore.getState().loadSessions()
+        reloadCommandsAfterGap()
       }
     } else if (result?.type === "project") {
       const current = useGlobalSyncStore.getState()
@@ -1279,6 +1294,7 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
         // any newer event-fed entries. Wired alongside the per-directory
         // resync below.
         void useGlobalSessionsStore.getState().loadSessions()
+        reloadCommandsAfterGap()
         for (const dir of childStores.children.keys()) {
           triggerDirectoryResync(dir)
         }
@@ -1290,6 +1306,7 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
         // Transport switches are gap-prone; catch the global session index
         // up alongside the per-directory resync (S4.4).
         void useGlobalSessionsStore.getState().loadSessions()
+        reloadCommandsAfterGap()
         for (const dir of childStores.children.keys()) {
           triggerDirectoryResync(dir)
         }

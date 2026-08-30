@@ -168,6 +168,34 @@ describe("R5 connection-state writer registry", () => {
     expect(violations[0].rule).toBe("R5")
   })
 
+  test("blocks dynamic import() and require() of the module by unregistered modules", () => {
+    // A dynamic import/require hands over the whole module object, so it is
+    // the same write-API bypass class as a namespace import.
+    const dynamic = analyzeConnectionStateWriterImports(
+      componentFile("ui", "ReconnectBanner.tsx"),
+      'const state = await import("@/lib/event-stream/connection-state")',
+    )
+    expect(dynamic.violations).toHaveLength(1)
+    expect(dynamic.violations[0].rule).toBe("R5")
+
+    const required = analyzeConnectionStateWriterImports(
+      componentFile("ui", "ReconnectBanner.tsx"),
+      'const state = require("@/lib/event-stream/connection-state")',
+    )
+    expect(required.violations).toHaveLength(1)
+    expect(required.violations[0].rule).toBe("R5")
+  })
+
+  test("allows dynamic import() in registered writers", () => {
+    const writer = analyzeConnectionStateWriterImports(
+      syncFile("event-pipeline.ts"),
+      'const state = await import("@/lib/event-stream/connection-state")',
+    )
+
+    expect(writer.violations).toEqual([])
+    expect(writer.importsWriteApi).toBe(true)
+  })
+
   test("allows read-only imports anywhere and the write API in registered writers", () => {
     const readOnly = analyzeConnectionStateWriterImports(
       componentFile("ui", "ReconnectBanner.tsx"),

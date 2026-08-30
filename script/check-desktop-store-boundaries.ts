@@ -30,6 +30,20 @@
  *   far; barrels (`export * from` / `export { x } from` an in-scope module)
  *   are transparent — the name belongs to the defining module.
  *
+ * Known limitations (accepted; tighten only with a dedicated change):
+ *
+ * - R1 covers only TOP-LEVEL src/stores/ modules. A two-hop path through a
+ *   nested support directory (store A → stores/utils/helper → store B) is
+ *   untracked.
+ * - R2 uses an enumerated internal list (SYNC_INTERNAL_MODULES): a new
+ *   src/sync/ module defaults to public until it is added there.
+ * - R4 cannot attribute names re-exported via `export *` from an
+ *   OUT-of-scope module (the barrel's names are not statically knowable
+ *   without cross-file resolution), so those are silently ignored.
+ * - R5 analyzes static import clauses plus dynamic import()/require()
+ *   literals; a specifier assembled at runtime (template with variables,
+ *   computed string) is not statically knowable and is not checked.
+ *
  * Docs: desktop/packages/ui/src/stores/DOCUMENTATION.md (Store boundary
  * enforcement) and desktop/packages/ui/src/sync/DOCUMENTATION.md.
  */
@@ -275,10 +289,12 @@ export function analyzeEventTransportClientImports(file: string, source: string)
 
 /**
  * R5 — imports of the connection-state write API. Needs the import clause
- * (not just the module specifier), so this walks the AST directly. Also
- * returns the set of files that DO import the write API, so the caller can
- * warn when a registered writer stops importing it (registry may only
- * shrink).
+ * (not just the module specifier), so this walks the AST directly. Dynamic
+ * `import(...)` and `require(...)` of the module are treated like namespace
+ * imports: they hand over the whole module object, so an unregistered module
+ * may not use them at all (same bypass class as `import * as`). Also returns
+ * whether the file DOES import the write API, so the caller can warn when a
+ * registered writer stops importing it (registry may only shrink).
  */
 export function analyzeConnectionStateWriterImports(
   file: string,
@@ -290,15 +306,15 @@ export function analyzeConnectionStateWriterImports(
   let importsWriteApi = false
 
   const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue
-    if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue
+  const registered = CONNECTION_STATE_WRITERS.includes(fileRel)
+
+  const checkStaticImport = (statement: ts.ImportDeclaration) => {
+    if (!ts.isStringLiteralLike(statement.moduleSpecifier)) return
     const resolved = resolveUiModule(file, statement.moduleSpecifier.text)
-    if (resolved !== CONNECTION_STATE_MODULE) continue
+    if (resolved !== CONNECTION_STATE_MODULE) return
 
     const clause = statement.importClause
-    if (!clause) continue // side-effect import: no bindings, cannot write
-    const registered = CONNECTION_STATE_WRITERS.includes(fileRel)
+    if (!clause) return // side-effect import: no bindings, cannot write
 
     // Namespace import can reach the write API through the namespace object.
     if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
@@ -314,10 +330,10 @@ export function analyzeConnectionStateWriterImports(
           ),
         )
       }
-      continue
+      return
     }
 
-    if (!clause.namedBindings || !ts.isNamedImports(clause.namedBindings)) continue
+    if (!clause.namedBindings || !ts.isNamedImports(clause.namedBindings)) return
     for (const element of clause.namedBindings.elements) {
       const imported = (element.propertyName ?? element.name).text
       if (!CONNECTION_STATE_WRITE_API.has(imported)) continue
@@ -335,6 +351,37 @@ export function analyzeConnectionStateWriterImports(
       )
     }
   }
+
+  // Dynamic import / require yield the whole module object — the same
+  // write-API reach as a namespace import, so the same registry rule applies.
+  const checkDynamicImport = (node: ts.CallExpression) => {
+    const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword
+    const isRequire = ts.isIdentifier(node.expression) && node.expression.text === "require"
+    if (!isDynamicImport && !isRequire) return
+    const argument = node.arguments[0]
+    if (!argument || !ts.isStringLiteralLike(argument)) return
+    if (resolveUiModule(file, argument.text) !== CONNECTION_STATE_MODULE) return
+    importsWriteApi = true
+    if (registered) return
+    const position = sourceFile.getLineAndCharacterOfPosition(argument.getStart(sourceFile))
+    violations.push(
+      violation(
+        file,
+        { specifier: argument.text, line: position.line + 1, column: position.character + 1 },
+        "R5",
+        STORE_BOUNDARY_REASONS.connectionStateWriter,
+        sourceLines,
+      ),
+    )
+  }
+
+  const visit = (node: ts.Node) => {
+    if (ts.isImportDeclaration(node)) checkStaticImport(node)
+    else if (ts.isCallExpression(node)) checkDynamicImport(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+
   return { violations, importsWriteApi }
 }
 

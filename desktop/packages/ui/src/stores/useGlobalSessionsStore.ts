@@ -23,6 +23,17 @@ type GlobalSessionsState = {
   archivedSessions: Session[]
   sessionsByDirectory: Map<string, Session[]>
   pendingRemoval: Map<string, PendingRemovalEntry>
+  /**
+   * Bounded tombstone set for deletes (S4 review): `applySessionEvent`'s
+   * delete plan records `id -> deletedAt` so a STALE reconnect snapshot
+   * cannot resurrect a just-deleted session — `preserveNewerSessions` only
+   * covers updates, because a deleted session has no current entry left to
+   * compare freshness against. `applySnapshot` filters incoming sessions
+   * with a live tombstone; entries expire after DELETE_TOMBSTONE_TTL_MS and
+   * the map is pruned lazily (and capped at DELETE_TOMBSTONE_CAP) whenever a
+   * new tombstone is recorded.
+   */
+  deleteTombstones: Map<string, number>
   hasLoaded: boolean
   status: GlobalSessionsStatus
   loadSessions: (fallbackActive?: Session[]) => Promise<LoadResult>
@@ -32,10 +43,11 @@ type GlobalSessionsState = {
    * event to the global index (SPEC-2026-08-30 S4.4). This is the reconcile
    * authority: the payload is shape-validated before any state is touched,
    * sessions inside their pendingRemoval undo window are never resurrected,
-   * and out-of-order events older than the current entry are ignored so
-   * newer optimistic/local data is preserved. Archive transitions arrive as
-   * `session.updated` with `time.archived` set. Unrelated event types and
-   * malformed payloads are a no-op.
+   * deletes record a bounded tombstone so stale snapshots cannot resurrect
+   * the session either, and out-of-order events older than the current entry
+   * are ignored so newer optimistic/local data is preserved. Archive
+   * transitions arrive as `session.updated` with `time.archived` set.
+   * Unrelated event types and malformed payloads are a no-op.
    */
   applySessionEvent: (payload: unknown) => void
   /**
@@ -351,6 +363,60 @@ const withoutPendingRemoval = (sessions: Session[], pendingRemoval: Map<string, 
   return filtered.length === sessions.length ? sessions : filtered
 }
 
+const DELETE_TOMBSTONE_TTL_MS = 15 * 60 * 1000
+const DELETE_TOMBSTONE_CAP = 200
+
+const isLiveTombstone = (deletedAt: number, now: number): boolean => now - deletedAt < DELETE_TOMBSTONE_TTL_MS
+
+/**
+ * Record a delete tombstone, lazily pruning expired entries and capping the
+ * map oldest-first (Map preserves insertion order). Always returns a new map
+ * so the state update is a real change.
+ */
+const recordDeleteTombstone = (tombstones: Map<string, number>, id: string, now: number): Map<string, number> => {
+  const next = new Map<string, number>()
+  for (const [entryId, deletedAt] of tombstones) {
+    if (isLiveTombstone(deletedAt, now)) next.set(entryId, deletedAt)
+  }
+  next.delete(id) // refresh insertion order when the same id is re-deleted
+  next.set(id, now)
+  while (next.size > DELETE_TOMBSTONE_CAP) {
+    const oldest = next.keys().next().value
+    if (oldest === undefined) break
+    next.delete(oldest)
+  }
+  return next
+}
+
+/**
+ * Drop sessions with a LIVE delete tombstone from an incoming snapshot.
+ * Keeps the original list reference when nothing matches, so referential
+ * stability is preserved for the common no-tombstone case.
+ */
+const withoutDeleteTombstones = (sessions: Session[], tombstones: Map<string, number>): Session[] => {
+  if (tombstones.size === 0) {
+    return sessions
+  }
+  const now = Date.now()
+  const filtered = sessions.filter((session) => {
+    const deletedAt = tombstones.get(session.id)
+    return deletedAt === undefined || !isLiveTombstone(deletedAt, now)
+  })
+  return filtered.length === sessions.length ? sessions : filtered
+}
+
+/**
+ * Remove a session id from a list, keeping the original reference when the
+ * id is not present — a no-op update must not produce a new array (same
+ * length-check discipline as removeSessions).
+ */
+const removeSessionFromList = (sessions: Session[], id: string): Session[] => {
+  if (!sessions.some((candidate) => candidate.id === id)) {
+    return sessions
+  }
+  return sessions.filter((candidate) => candidate.id !== id)
+}
+
 const applySnapshot = (
   state: GlobalSessionsState,
   activeSessions: Session[],
@@ -358,14 +424,16 @@ const applySnapshot = (
   status: GlobalSessionsStatus,
 ): Partial<GlobalSessionsState> | GlobalSessionsState => {
   // Snapshots from the server may still contain sessions the user just
-  // soft-removed; keep them hidden until the removal commits or is undone.
-  const incomingActive = withoutPendingRemoval(
-    preserveNewerSessions(activeSessions, state.activeSessions),
-    state.pendingRemoval,
+  // soft-removed (pendingRemoval undo window) or hard-deleted (delete
+  // tombstone — preserveNewerSessions cannot cover deletes because the
+  // session has no current entry left); keep both out of the incoming lists.
+  const incomingActive = withoutDeleteTombstones(
+    withoutPendingRemoval(preserveNewerSessions(activeSessions, state.activeSessions), state.pendingRemoval),
+    state.deleteTombstones,
   )
-  const incomingArchived = withoutPendingRemoval(
-    preserveNewerSessions(archivedSessions, state.archivedSessions),
-    state.pendingRemoval,
+  const incomingArchived = withoutDeleteTombstones(
+    withoutPendingRemoval(preserveNewerSessions(archivedSessions, state.archivedSessions), state.pendingRemoval),
+    state.deleteTombstones,
   )
   const nextActiveSessions = sameSessionList(state.activeSessions, incomingActive)
     ? state.activeSessions
@@ -402,6 +470,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   archivedSessions: [],
   sessionsByDirectory: new Map(),
   pendingRemoval: new Map(),
+  deleteTombstones: new Map(),
   hasLoaded: false,
   status: "idle",
 
@@ -413,6 +482,11 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     const plan = planSessionLifecycleEvent(get(), payload)
     switch (plan.kind) {
       case "delete":
+        // Record the tombstone BEFORE the removal so a stale reconnect
+        // snapshot landing after the delete cannot resurrect the session.
+        set((state) => ({
+          deleteTombstones: recordDeleteTombstone(state.deleteTombstones, plan.session.id, Date.now()),
+        }))
         get().removeSessions([plan.session.id])
         return
       case "upsert":
@@ -485,12 +559,16 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
       const isArchived = Boolean(session.time?.archived)
       const previous = state.activeSessions.find((candidate) => candidate.id === session.id)
       const previousDirectory = previous ? resolveGlobalSessionDirectory(previous) : undefined
+      // The opposite-bucket removal goes through removeSessionFromList so a
+      // session that is not present there keeps the list reference — an
+      // unconditional filter would allocate a new array on every no-op
+      // update and re-render every subscriber for nothing.
       const nextActiveSessions = isArchived
-        ? state.activeSessions.filter((candidate) => candidate.id !== session.id)
+        ? removeSessionFromList(state.activeSessions, session.id)
         : upsertSessionIntoList(state.activeSessions, session)
       const nextArchivedSessions = isArchived
         ? upsertSessionIntoList(state.archivedSessions, session)
-        : state.archivedSessions.filter((candidate) => candidate.id !== session.id)
+        : removeSessionFromList(state.archivedSessions, session.id)
 
       if (nextActiveSessions === state.activeSessions && nextArchivedSessions === state.archivedSessions) {
         return state

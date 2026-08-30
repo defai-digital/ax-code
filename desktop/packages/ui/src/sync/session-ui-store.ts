@@ -164,16 +164,25 @@ export function routeMessage(params: {
       // boot-loaded, so load lazily on the first slash-command send (its
       // in-flight dedup + TTL cache make repeat sends cheap).
       let storeCommands = useCommandsStore.getState().commands
+      let catalogLoadFailed = false
       if (storeCommands.length === 0) {
-        await useCommandsStore.getState().loadCommands()
+        const loaded = await useCommandsStore.getState().loadCommands()
         storeCommands = useCommandsStore.getState().commands
+        // A FAILED load (store still empty after awaiting) must not degrade
+        // a real slash command into plain text: route it through the command
+        // path anyway and let the server validate — it rejects unknown
+        // commands cleanly, while a silently mis-sent prompt is never
+        // recoverable as a command. When the load succeeded, the normal
+        // known/unknown logic below applies unchanged.
+        catalogLoadFailed = !loaded && storeCommands.length === 0
       }
       const knownCommand = Boolean(storeCommands.find((c) => c.name === cmdName))
       // Empty lists usually mean "not synced yet"; do not treat that as "command missing".
       const commandsLoaded = storeCommands.length > 0
 
-      // Known command, or forced work-mode while command catalog not loaded yet.
-      if (cmdName && (knownCommand || (forcedCommand != null && !commandsLoaded))) {
+      // Known command, forced work-mode while command catalog not loaded
+      // yet, or any slash command while the catalog load failed.
+      if (cmdName && (knownCommand || catalogLoadFailed || (forcedCommand != null && !commandsLoaded))) {
         return optimisticSend({
           sessionId: params.sessionId,
           content,
