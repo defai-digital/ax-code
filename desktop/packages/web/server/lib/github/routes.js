@@ -57,6 +57,22 @@ function setPrStatusCache(key, data, fetchedAt) {
   prStatusCache.set(key, { data, fetchedAt })
 }
 
+// prStatusCache (and the repo/fork-resolution caches in pr-status.js and
+// repo/fork-detection.js) are keyed by directory/branch/repo, not by GitHub
+// account. Since this app supports switching between multiple linked GitHub
+// accounts with different token permissions, a switch must clear them so a
+// newly-activated account can't be served data fetched under the previous
+// account's authorization.
+async function clearGitHubAccountScopedCaches() {
+  prStatusCache.clear()
+  const [{ clearPrStatusResolutionCaches }, { clearForkDetectionCache }] = await Promise.all([
+    import("./pr-status.js"),
+    import("./repo/fork-detection.js"),
+  ])
+  clearPrStatusResolutionCaches()
+  clearForkDetectionCache()
+}
+
 export function registerGitHubRoutes(app) {
   let githubLibraries = null
   const getGitHubLibraries = async () => {
@@ -211,6 +227,7 @@ export function registerGitHubRoutes(app) {
         tokenType: typeof payload.token_type === "string" ? payload.token_type : "bearer",
         user,
       })
+      await clearGitHubAccountScopedCaches()
 
       return res.json({
         connected: true,
@@ -233,6 +250,7 @@ export function registerGitHubRoutes(app) {
       if (!activated) {
         return res.status(404).json({ error: "GitHub account not found" })
       }
+      await clearGitHubAccountScopedCaches()
 
       const auth = getGitHubAuth()
       const accounts = getGitHubAuthAccounts()
@@ -274,6 +292,7 @@ export function registerGitHubRoutes(app) {
     try {
       const { clearGitHubAuth } = await getGitHubLibraries()
       const removed = clearGitHubAuth()
+      await clearGitHubAccountScopedCaches()
       return res.json({ success: true, removed })
     } catch (error) {
       console.error("Failed to disconnect GitHub:", error)
@@ -937,6 +956,7 @@ export function registerGitHubRoutes(app) {
       if (upstream) {
         try {
           const { getRemotes } = await import("../git/index.js")
+          const { resolveGitHubRepoFromDirectory } = await import("./index.js")
           const remotes = await getRemotes(directory)
           for (const r of remotes) {
             if (r?.name) {

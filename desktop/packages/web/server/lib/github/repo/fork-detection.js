@@ -4,6 +4,13 @@ const REPO_METADATA_TTL_MS = 5 * 60_000
 const REPO_METADATA_CACHE_MAX_ENTRIES = 200
 const repoMetadataCache = new Map()
 
+// Keyed by repo, not by GitHub account, so it must be cleared on account
+// switch (see routes.js auth/activate, auth/complete, DELETE auth) to avoid
+// serving fork/parent metadata fetched under a different account's token.
+export function clearForkDetectionCache() {
+  repoMetadataCache.clear()
+}
+
 const setRepoMetadataCache = (repoKey, data) => {
   if (repoMetadataCache.size >= REPO_METADATA_CACHE_MAX_ENTRIES && !repoMetadataCache.has(repoKey)) {
     const oldest = repoMetadataCache.entries().next().value

@@ -5,6 +5,15 @@ const REPO_DEFAULT_BRANCH_TTL_MS = 5 * 60_000
 const defaultBranchCache = new Map()
 const repoMetadataCache = new Map()
 
+// Caches above are keyed by repo, not by GitHub account, so a switch of the
+// active account (see routes.js auth/activate, auth/complete, DELETE auth)
+// must clear them to avoid serving data fetched under a different account's
+// token/permissions.
+export function clearPrStatusResolutionCaches() {
+  defaultBranchCache.clear()
+  repoMetadataCache.clear()
+}
+
 const normalizeText = (value) => (typeof value === "string" ? value.trim() : "")
 const normalizeLower = (value) => normalizeText(value).toLowerCase()
 const normalizeRepoKey = (owner, repo) => {
@@ -320,9 +329,13 @@ const parseRepoFromApiUrl = (value) => {
 const _searchApiDisabledRepos = new Map()
 const SEARCH_API_RETRY_MS = 5 * 60 * 1000 // retry after 5 minutes
 
-const searchFallbackPr = async ({ octokit, branch, repoNames }) => {
+const searchFallbackPr = async ({ octokit, branch, repos }) => {
   // Build a repo key to check/store 403 status per-repo
-  const repoKey = [...repoNames].sort().join(",").toLowerCase()
+  const repoKey = repos
+    .map((repo) => normalizeRepoKey(repo?.owner, repo?.repo))
+    .filter(Boolean)
+    .sort()
+    .join(",")
 
   // Skip if this repo set returned 403 recently
   const disabledAt = _searchApiDisabledRepos.get(repoKey)
@@ -330,7 +343,7 @@ const searchFallbackPr = async ({ octokit, branch, repoNames }) => {
     return null
   }
 
-  const normalizedRepoNames = new Set(repoNames.map((name) => normalizeLower(name)).filter(Boolean))
+  const allowedRepoKeys = new Set(repos.map((repo) => normalizeRepoKey(repo?.owner, repo?.repo)).filter(Boolean))
 
   for (const state of ["open", "closed"]) {
     let response
@@ -358,7 +371,7 @@ const searchFallbackPr = async ({ octokit, branch, repoNames }) => {
       if (!repo) {
         continue
       }
-      if (normalizedRepoNames.size > 0 && !normalizedRepoNames.has(normalizeLower(repo.repo))) {
+      if (allowedRepoKeys.size > 0 && !allowedRepoKeys.has(normalizeRepoKey(repo.owner, repo.repo))) {
         continue
       }
       try {
@@ -511,7 +524,7 @@ export async function resolveGitHubPrStatus({ octokit, directory, branch, remote
     const fallbackSearch = await searchFallbackPr({
       octokit,
       branch: candidateBranch,
-      repoNames: resolvedTargets.map((target) => target.repo.repo),
+      repos: resolvedTargets.map((target) => target.repo),
     })
     if (fallbackSearch) {
       return {

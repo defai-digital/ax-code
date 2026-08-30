@@ -3265,6 +3265,18 @@ export async function removeWorktree(directory, input = {}) {
   })()
 
   if (!matchedEntry?.worktree) {
+    // Not (or no longer) a registered `git worktree` entry. Only allow the
+    // filesystem cleanup fallback below when the target is actually inside
+    // this project's own worktree root — otherwise a caller could pass an
+    // arbitrary path (e.g. via the HTTP API) and have it recursively deleted.
+    const worktreeRootCanonical = await canonicalPath(context.worktreeRoot)
+    const isInsideWorktreeRoot =
+      targetCanonical === worktreeRootCanonical ||
+      targetCanonical.startsWith(worktreeRootCanonical + path.sep)
+    if (!isInsideWorktreeRoot) {
+      throw new Error("Refusing to remove a directory outside the worktree root")
+    }
+
     const targetExists = await checkPathExists(targetDirectory)
     if (targetExists) {
       await fsp.rm(targetDirectory, { recursive: true, force: true })
