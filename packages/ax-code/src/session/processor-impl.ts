@@ -29,7 +29,7 @@ import type { SessionID, MessageID } from "./schema"
 import { TaskQueue } from "./task-queue"
 import { NamedError } from "@ax-code/util/error"
 import { Recorder } from "@/replay/recorder"
-import { Database } from "@/storage/db"
+import { SessionShard } from "./shard"
 import { asRecord } from "@/util/record"
 import { toErrorMessage } from "../util/error-message"
 import { usageSource } from "@/provider/usage"
@@ -1154,8 +1154,15 @@ export namespace SessionProcessor {
                       log.warn("snapshot patch failed", { error: err })
                     }
                   }
-                  // Batch step-finish + message update + patch in one transaction
-                  Database.transaction(() => {
+                  // Batch step-finish + message update + patch in one transaction.
+                  // Must open the transaction on the store that actually owns
+                  // these rows: when session sharding is on, updatePart/updateMessage
+                  // route to the project's shard DB (a separate connection/context
+                  // from the registry `Database`), so a `Database.transaction` here
+                  // would wrap the wrong connection and each `.force()` call below
+                  // would silently auto-commit on its own — losing the atomicity
+                  // this batch exists for.
+                  SessionShard.storeFor(input.sessionID, { write: true }).transaction(() => {
                     Session.updatePart.force({
                       id: PartID.ascending(),
                       reason: usedTools ? "tool-calls" : finishReason,
@@ -1542,9 +1549,11 @@ export namespace SessionProcessor {
           // Drain coalesced mid-stream writes so finalization sees the latest
           // progress and does not race a pending timer (PERF-05).
           await partWriteBatcher.flush()
-          // Batch final cleanup writes in one transaction
+          // Batch final cleanup writes in one transaction. See the sharding note
+          // above the step-finish batch: this must run on the same store the
+          // writes below resolve to, not unconditionally on the registry `Database`.
           input.assistantMessage.time.completed = Date.now()
-          Database.transaction(() => {
+          SessionShard.storeFor(input.sessionID, { write: true }).transaction(() => {
             for (const p of finalizedParts) Session.updatePart.force(p)
             if (finalPatch) {
               const externalFiles = computeExternalFiles(finalPatch.files)
