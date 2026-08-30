@@ -309,6 +309,12 @@ export class CliLanguageModel implements LanguageModelV3 {
       stdout: "pipe",
       stderr: "pipe",
       env: cliEnv(this.config.providerEnvKeys, this.config.providerID),
+      // Group leader so setupProcessAbort's Shell.killTree can signal the
+      // whole tree on abort/timeout. Without this, process.kill(-pid, ...)
+      // fails (not a group leader) and killTree falls back to killing only
+      // this process, leaking any subprocess the CLI itself started (a bash
+      // tool call, a dev server) as an orphan.
+      detached: process.platform !== "win32",
     })
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli generate")
     // Remove materialized attachment temp files once the process exits
@@ -433,6 +439,9 @@ export class CliLanguageModel implements LanguageModelV3 {
       stdout: "pipe",
       stderr: "pipe",
       env: cliEnv(this.config.providerEnvKeys, this.config.providerID),
+      // See doGenerate: group leader so Shell.killTree can kill the whole
+      // process tree on abort/timeout instead of leaking orphaned children.
+      detached: process.platform !== "win32",
     })
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
     // Remove materialized attachment temp files once the process exits
