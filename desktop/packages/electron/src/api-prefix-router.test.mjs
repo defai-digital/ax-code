@@ -1,9 +1,52 @@
+import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
+import { dirname, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 
-// Renderer endpoint constants, imported straight from the UI package so this
-// coverage test cannot drift from the paths the renderer actually fetches.
-import { API_ENDPOINTS, API_PATHS } from "../../ui/src/lib/http.ts"
+// Renderer endpoint constants, parsed from the UI package's http.ts as TEXT
+// (never imported) so this coverage test cannot drift from the paths the
+// renderer actually fetches, without crossing the desktop package-source
+// boundary enforced by check:desktop-boundaries.
+const HTTP_TS_PATH = resolve(dirname(fileURLToPath(import.meta.url)), "../../ui/src/lib/http.ts")
+
+const parseHttpEndpointLeaves = (source) => {
+  const apiPaths = {}
+  const pathsBlock = source.match(/export const API_PATHS = \{([\s\S]*?)\n\}/)
+  for (const match of pathsBlock[1].matchAll(/(\w+):\s*"([^"]+)"/g)) {
+    apiPaths[match[1]] = match[2]
+  }
+  const resolveValue = (raw) => {
+    if (raw.startsWith("API_PATHS.")) return apiPaths[raw.slice("API_PATHS.".length)]
+    return raw.slice(1, -1).replace(/\$\{API_PATHS\.(\w+)\}/g, (_, name) => apiPaths[name])
+  }
+  const leaves = {}
+  for (const [key, value] of Object.entries(apiPaths)) {
+    leaves[`API_PATHS.${key}`] = value
+  }
+  // Only the API_ENDPOINTS object holds routed paths; other exported
+  // constants in http.ts (methods, headers, cache, query) are not paths.
+  const endpointsStart = source.indexOf("export const API_ENDPOINTS")
+  const stack = []
+  for (const rawLine of source.slice(endpointsStart).split("\n")) {
+    const line = rawLine.trim()
+    const open = line.match(/^(\w+): \{$/)
+    if (open) {
+      stack.push(open[1])
+      continue
+    }
+    if (line.startsWith("}")) {
+      if (stack.length === 0) break // closing line of API_ENDPOINTS itself
+      stack.pop()
+      continue
+    }
+    const leaf = line.match(/^(\w+):\s*(`[^`]+`|"[^"]+"|API_PATHS\.\w+),?$/)
+    if (leaf && stack.length > 0) {
+      leaves[`API_ENDPOINTS.${stack.join(".")}.${leaf[1]}`] = resolveValue(leaf[2])
+    }
+  }
+  return leaves
+}
 
 const require = createRequire(import.meta.url)
 const { API_ROUTE_TABLE, matchApiRouteEntry, routeApiRequest } = require("./api-prefix-router.js")
@@ -221,23 +264,8 @@ const ENDPOINT_METHODS = {
   "API_ENDPOINTS.session.directory": "POST",
 }
 
-const flattenEndpoints = (value, prefix, out = {}) => {
-  for (const [key, entry] of Object.entries(value)) {
-    const name = prefix ? `${prefix}.${key}` : key
-    if (typeof entry === "string") {
-      out[name] = entry
-    } else if (entry && typeof entry === "object") {
-      flattenEndpoints(entry, name, out)
-    }
-  }
-  return out
-}
-
 describe("renderer route-table coverage (ui/src/lib/http.ts)", () => {
-  const leaves = {
-    ...flattenEndpoints(API_PATHS, "API_PATHS"),
-    ...flattenEndpoints(API_ENDPOINTS, "API_ENDPOINTS"),
-  }
+  const leaves = parseHttpEndpointLeaves(readFileSync(HTTP_TS_PATH, "utf8"))
 
   test("every renderer endpoint constant has an explicit classification", () => {
     const failures = []
