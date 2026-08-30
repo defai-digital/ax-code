@@ -4,6 +4,8 @@ import {
   mergeSubagentRollupTasks,
   queueItemsForSessionTree,
   queueStatusToTaskStatus,
+  subagentPanelHeaderSummary,
+  subagentPanelTitle,
   taskQueueItemsToRollupTasks,
 } from "../../../src/cli/cmd/tui/routes/session/subagent-status-view"
 
@@ -300,5 +302,69 @@ describe("buildSubagentStatusView", () => {
     expect(queueStatusToTaskStatus("blocked_permission")).toBe("running")
     expect(queueStatusToTaskStatus("failed")).toBe("error")
     expect(queueStatusToTaskStatus("cancelled")).toBe("cancelled")
+  })
+})
+
+describe("subagentPanelTitle", () => {
+  test("uses the singular form for exactly one active subagent", () => {
+    expect(subagentPanelTitle(1)).toBe("Subagent")
+    expect(subagentPanelTitle(2)).toBe("Subagents 2")
+    expect(subagentPanelTitle(0)).toBe("Subagents 0")
+  })
+})
+
+describe("subagentPanelHeaderSummary", () => {
+  test("returns the lead active item's label so a collapsed panel still informs", () => {
+    const now = 120_000
+    const view = buildSubagentStatusView({
+      now,
+      parentSessionID: "parent",
+      childSessions: [{ id: "child", parentID: "parent", title: "Review code" }],
+      tasks: [
+        {
+          id: "part",
+          sessionID: "child",
+          title: "Review code",
+          agent: "reviewer",
+          status: "running",
+          startedAt: 30_000,
+          lastActivityAt: 110_000,
+        },
+      ],
+      statuses: {
+        child: { type: "busy", startedAt: 30_000, lastActivityAt: 110_000, waitState: "tool", activeTool: "bash" },
+      },
+    })
+
+    expect(subagentPanelHeaderSummary(view)).toBe("reviewer: Running command · 1m30s")
+  })
+
+  test("includes the stale marker when the lead subagent stops reporting", () => {
+    const now = 240_000
+    const view = buildSubagentStatusView({
+      now,
+      parentSessionID: "parent",
+      staleAfterMs: 90_000,
+      childSessions: [{ id: "child", parentID: "parent", title: "Explore code" }],
+      tasks: [
+        {
+          id: "part",
+          sessionID: "child",
+          agent: "explorer",
+          status: "running",
+          startedAt: 10_000,
+          lastActivityAt: 20_000,
+        },
+      ],
+      statuses: {
+        child: { type: "busy", startedAt: 10_000, lastActivityAt: 20_000, waitState: "llm" },
+      },
+    })
+
+    expect(subagentPanelHeaderSummary(view)).toBe("explorer: Thinking · 3m50s · no update 3m40s")
+  })
+
+  test("returns undefined when nothing is active", () => {
+    expect(subagentPanelHeaderSummary({ running: 0, done: 1, failed: 0, total: 1, items: [] })).toBeUndefined()
   })
 })

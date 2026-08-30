@@ -4,6 +4,9 @@ import { useRenderer } from "@ax-code/tui/solid"
 import { Spinner } from "@tui/component/spinner"
 import { useTheme } from "@tui/context/theme"
 import { Locale } from "@/util/locale"
+import { stringWidth } from "@/bun/node-compat"
+import { truncateToCellWidth } from "./last-input-view-model"
+import { subagentPanelHeaderSummary, subagentPanelTitle } from "./subagent-status-view"
 import type { SubagentStatusItem, SubagentStatusView } from "./subagent-status-view"
 
 const MAX_PANEL_ROWS = 8
@@ -37,6 +40,27 @@ export function SubagentStatusPanel(props: {
   const visible = createMemo(() => active().slice(0, visibleLimit()))
   const hidden = createMemo(() => active().length - visible().length)
   const showModel = createMemo(() => props.width >= 84)
+  const title = createMemo(() => subagentPanelTitle(active().length))
+  // Collapsed panels used to read as a static "▸ Subagents 2" — nothing
+  // moved and nothing said what was running, so users missed the area
+  // entirely. While collapsed, the header carries the lead item's summary
+  // ("agent: activity · elapsed") whenever there is room for it.
+  const summary = createMemo(() => subagentPanelHeaderSummary(props.view))
+  const summaryBudget = createMemo(() => {
+    const staleText = stale() > 0 ? stringWidth(`${stale()} without updates`) + 1 : 0
+    // Border + padding + spinner cell + separators + the toggle glyph.
+    const chrome = 8 + stringWidth(title()) + staleText
+    return Math.max(0, props.width - chrome)
+  })
+
+  // Truncate a row's title to what the row can actually show instead of a
+  // fixed 60 columns: on narrow panes the old fixed budget let the flexbox
+  // hard-clip the title mid-word while wide panes wasted space.
+  function rowTitleBudget(item: SubagentStatusItem) {
+    const right = 12 + (showModel() && item.model ? 26 : 0)
+    const left = stringWidth(`${item.agent ?? "Agent"} `) + stringWidth(` — ${item.activity}`)
+    return Math.max(8, props.width - right - left)
+  }
 
   function open(item: SubagentStatusItem) {
     if (!item.sessionID) return
@@ -52,7 +76,15 @@ export function SubagentStatusPanel(props: {
 
   return (
     <Show when={active().length > 0}>
-      <box flexShrink={0} backgroundColor={theme.backgroundPanel} paddingLeft={1} paddingRight={1} gap={0}>
+      <box
+        flexShrink={0}
+        backgroundColor={theme.backgroundPanel}
+        paddingLeft={1}
+        paddingRight={1}
+        gap={0}
+        border={["left"]}
+        borderColor={stale() > 0 ? theme.warning : theme.accent}
+      >
         <box
           height={1}
           flexDirection="row"
@@ -62,9 +94,16 @@ export function SubagentStatusPanel(props: {
             props.onToggle()
           }}
         >
-          <text fg={theme.textMuted} wrapMode="none">
-            {props.collapsed ? "▸" : "▾"} <b>Subagents</b> {active().length}
-          </text>
+          <box flexDirection="row" flexShrink={1} overflow="hidden">
+            <Spinner color={stale() > 0 ? theme.warning : theme.accent}>
+              <span style={{ fg: theme.text, bold: true }}>
+                {props.collapsed ? "▸" : "▾"} {title()}
+              </span>
+              <Show when={props.collapsed && summary() && summaryBudget() > 8}>
+                <span style={{ fg: theme.textMuted }}> · {truncateToCellWidth(summary() ?? "", summaryBudget())}</span>
+              </Show>
+            </Spinner>
+          </box>
           <Show when={stale() > 0}>
             <text flexShrink={0} fg={theme.warning} wrapMode="none">
               {stale()} without updates
@@ -95,7 +134,7 @@ export function SubagentStatusPanel(props: {
                     <Spinner color={rowColor()}>
                       <span style={{ fg: theme.primary }}>{item.agent ?? "Agent"}</span>{" "}
                       <span style={{ fg: hovered() === item.id ? theme.text : theme.textMuted }}>
-                        {Locale.truncate(item.title, 60)}
+                        {truncateToCellWidth(item.title, rowTitleBudget(item))}
                       </span>
                       <span style={{ fg: item.stale ? theme.warning : theme.textMuted }}>
                         {" — "}

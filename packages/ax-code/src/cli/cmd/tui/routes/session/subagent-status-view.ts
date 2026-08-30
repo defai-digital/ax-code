@@ -246,6 +246,19 @@ export function buildSubagentStatusView(input: {
   return { running, done, failed, total: items.length, items }
 }
 
+/** Panel header title: keeps the count visible while staying grammatical for one. */
+export function subagentPanelTitle(activeCount: number) {
+  return activeCount === 1 ? "Subagent" : `Subagents ${activeCount}`
+}
+
+// Lead-line summary for the panel header so even a collapsed panel tells the
+// user what is running. Items are sorted active-first, and the item label is
+// already "agent: activity · elapsed( · no update Ns)".
+export function subagentPanelHeaderSummary(view: SubagentStatusView): string | undefined {
+  const lead = view.items.find((item) => item.active)
+  return lead?.label
+}
+
 const QUEUE_KINDS = new Set(["subagent", "automation"])
 
 export type SubagentQueueItem = {
