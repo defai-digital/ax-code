@@ -48,17 +48,28 @@ export const StashesDialog: React.FC<StashesDialogProps> = ({
   const [fileCounts, setFileCounts] = React.useState<Record<string, number>>({})
   const { requestConfirm, confirmDialog } = useConfirmDialog()
 
+  // Tracks the latest directory so a stash list fetched for a directory the user has
+  // since switched away from (dialog stays mounted across directory changes) doesn't
+  // clobber the currently-displayed directory's stashes when it resolves late.
+  const directoryRef = React.useRef(directory)
+  React.useEffect(() => {
+    directoryRef.current = directory
+  }, [directory])
+
   const load = React.useCallback(async () => {
-    if (!directory) return
+    const targetDirectory = directory
+    if (!targetDirectory) return
     setIsLoading(true)
     try {
-      const result = await listGitStashes(directory)
+      const result = await listGitStashes(targetDirectory)
+      if (directoryRef.current !== targetDirectory) return
       setStashes(result.stashes)
       setFileCounts({})
     } catch (error) {
+      if (directoryRef.current !== targetDirectory) return
       toast.error(error instanceof Error ? error.message : t("gitView.stashes.toast.loadFailed"))
     } finally {
-      setIsLoading(false)
+      if (directoryRef.current === targetDirectory) setIsLoading(false)
     }
   }, [directory, t])
 

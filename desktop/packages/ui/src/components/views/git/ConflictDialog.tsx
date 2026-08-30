@@ -45,21 +45,29 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
   React.useEffect(() => {
     if (!open || !directory) return
 
+    let cancelled = false
     setIsLoading(true)
     setLoadError(null)
     setConflictDetails(null)
 
     getConflictDetails(directory)
       .then((details) => {
+        if (cancelled) return
         setConflictDetails(details)
       })
       .catch((err) => {
+        if (cancelled) return
         const message = err instanceof Error ? err.message : t("gitView.conflict.loadFailed")
         setLoadError(message)
       })
       .finally(() => {
+        if (cancelled) return
         setIsLoading(false)
       })
+
+    return () => {
+      cancelled = true
+    }
   }, [open, directory, t])
 
   const buildConflictContext = React.useCallback(async (): Promise<{

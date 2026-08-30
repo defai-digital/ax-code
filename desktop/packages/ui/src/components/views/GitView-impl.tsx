@@ -940,12 +940,15 @@ export const GitView: React.FC = () => {
 
     let cancelled = false
 
+    let didBeginApply = false
+
     const run = async () => {
       try {
         const hasLocal = await git.hasLocalIdentity?.(currentDirectory)
         if (cancelled) return
         if (hasLocal === true) return
 
+        didBeginApply = true
         beginIdentityApply()
         await git.setGitIdentity(currentDirectory, defaultId)
         autoAppliedDefaultRef.current.set(currentDirectory, defaultId)
@@ -953,7 +956,10 @@ export const GitView: React.FC = () => {
       } catch (error) {
         console.warn("Failed to auto-apply default git identity:", error)
       } finally {
-        if (!cancelled) {
+        // Always balance the begin() call above, even when cancelled mid-flight —
+        // otherwise the shared apply counter stays incremented and isSettingIdentity
+        // (which drives GitHeader's spinner/disabled state) gets stuck true forever.
+        if (didBeginApply) {
           endIdentityApply()
         }
       }
