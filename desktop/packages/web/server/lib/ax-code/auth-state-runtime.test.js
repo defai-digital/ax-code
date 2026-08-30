@@ -57,4 +57,36 @@ describe("ax-code auth state runtime", () => {
     expect(getAuthSource()).toBe("generated")
     expect(runtime.isAxCodeConnectionSecure()).toBe(true)
   })
+
+  it("adopts an injected env password over existing state and never rotates it", async () => {
+    const { runtime, process, getAuthPassword, getAuthSource } = createRuntime({
+      userProvidedPassword: "main-injected-secret",
+    })
+
+    // First boot adoption.
+    await expect(runtime.ensureLocalAxCodeServerPassword()).resolves.toBe("main-injected-secret")
+    expect(getAuthSource()).toBe("user-env")
+
+    // A managed restart (rotateManaged) must keep the injected password —
+    // the desktop rotates nothing once Electron main owns the credential.
+    await expect(runtime.ensureLocalAxCodeServerPassword({ rotateManaged: true })).resolves.toBe(
+      "main-injected-secret",
+    )
+    expect(getAuthPassword()).toBe("main-injected-secret")
+    expect(getAuthSource()).toBe("user-env")
+    expect(process.env.AX_CODE_SERVER_PASSWORD).toBe("main-injected-secret")
+  })
+
+  it("reuses an existing managed password instead of regenerating (HMR reuse)", async () => {
+    const { runtime, getAuthPassword, getAuthSource } = createRuntime()
+
+    const first = await runtime.ensureLocalAxCodeServerPassword()
+    // Simulate an HMR reload: same state, no env password, no rotation —
+    // the running runtime child must not have its password swapped out.
+    const second = await runtime.ensureLocalAxCodeServerPassword()
+
+    expect(second).toBe(first)
+    expect(getAuthPassword()).toBe(first)
+    expect(getAuthSource()).toBe("generated")
+  })
 })

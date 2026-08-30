@@ -1,4 +1,11 @@
 export const createAxCodeAuthStateRuntime = (dependencies) => {
+  // Password ownership (SPEC-2026-08-29-desktop-process-model-collapse §2 D2 /
+  // §5 S2.2): under the Electron desktop shell, the main process generates the
+  // per-boot runtime Basic-auth password and injects it here via
+  // AX_CODE_SERVER_PASSWORD (surfaced as getUserProvidedPassword(), source
+  // "user-env"), so this runtime adopts it and never generates or rotates.
+  // Only in standalone (non-Electron) mode with no env password does this
+  // module fall back to generating — and rotating — a managed password itself.
   const {
     crypto,
     process,
@@ -56,6 +63,8 @@ export const createAxCodeAuthStateRuntime = (dependencies) => {
   }
 
   const ensureLocalAxCodeServerPassword = async ({ rotateManaged = false } = {}) => {
+    // Env-injected password (Electron main per boot, or a user export) always
+    // wins — including over rotateManaged and over any HMR-restored password.
     const userProvidedPassword = getUserProvidedPassword()
     if (isValidAxCodePassword(userProvidedPassword)) {
       return setAxCodeAuthState(userProvidedPassword, "user-env")

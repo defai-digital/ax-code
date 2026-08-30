@@ -1,13 +1,14 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import { createHmrStateRuntime } from "./hmr-state-runtime.js"
 
-const createRuntime = (env = {}) =>
+const createRuntime = (env = {}, { logger } = {}) =>
   createHmrStateRuntime({
     globalThisLike: {},
     os: { homedir: () => "/home/user" },
     processLike: { env },
     stateKey: "__ax_code_test_hmr_state__",
+    ...(logger ? { logger } : {}),
   })
 
 describe("hmr state runtime", () => {
@@ -46,5 +47,65 @@ describe("hmr state runtime", () => {
       axCodeAuthPassword: "user-secret",
       axCodeAuthSource: "user-env",
     })
+  })
+
+  it("prefers the env password over a conflicting HMR-state password and warns without logging it", () => {
+    const logger = { warn: vi.fn() }
+    const runtime = createRuntime({}, { logger })
+
+    expect(
+      runtime.resolveAxCodeAuthFromState({
+        hmrState: {
+          axCodeAuthPassword: "stale-hmr-secret",
+          axCodeAuthSource: "generated",
+        },
+        userProvidedAxCodePassword: "env-secret",
+      }),
+    ).toEqual({
+      axCodeAuthPassword: "env-secret",
+      axCodeAuthSource: "user-env",
+    })
+    expect(logger.warn).toHaveBeenCalledTimes(1)
+    const warning = logger.warn.mock.calls[0][0]
+    expect(warning).not.toContain("stale-hmr-secret")
+    expect(warning).not.toContain("env-secret")
+  })
+
+  it("does not warn when HMR state and env hold the same password", () => {
+    const logger = { warn: vi.fn() }
+    const runtime = createRuntime({}, { logger })
+
+    expect(
+      runtime.resolveAxCodeAuthFromState({
+        hmrState: {
+          axCodeAuthPassword: "env-secret",
+          axCodeAuthSource: "user-env",
+        },
+        userProvidedAxCodePassword: "env-secret",
+      }),
+    ).toEqual({
+      axCodeAuthPassword: "env-secret",
+      axCodeAuthSource: "user-env",
+    })
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  it("keeps the HMR-state password when no env password is present (standalone mode)", () => {
+    const logger = { warn: vi.fn() }
+    const runtime = createRuntime({}, { logger })
+
+    expect(
+      runtime.resolveAxCodeAuthFromState({
+        hmrState: {
+          axCodeAuthPassword: "generated-secret",
+          axCodeAuthSource: "generated",
+        },
+        userProvidedAxCodePassword: null,
+      }),
+    ).toEqual({
+      axCodeAuthPassword: "generated-secret",
+      axCodeAuthSource: "generated",
+    })
+    expect(logger.warn).not.toHaveBeenCalled()
   })
 })

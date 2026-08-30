@@ -341,6 +341,7 @@ const hmrStateRuntime = createHmrStateRuntime({
   os,
   processLike: process,
   stateKey: "__openchamberHmrState",
+  logger: console,
 })
 const hmrState = hmrStateRuntime.getOrCreateHmrState()
 hmrStateRuntime.ensureUserProvidedAxCodePassword(hmrState)

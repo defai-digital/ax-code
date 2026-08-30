@@ -1,5 +1,5 @@
 export const createHmrStateRuntime = (dependencies) => {
-  const { globalThisLike, os, processLike, stateKey } = dependencies
+  const { globalThisLike, os, processLike, stateKey, logger = console } = dependencies
   const asTrimmedString = (value) => (typeof value === "string" ? value.trim() : "")
   const asNonEmptyString = (value) => asTrimmedString(value) || null
 
@@ -28,10 +28,24 @@ export const createHmrStateRuntime = (dependencies) => {
 
   const getUserProvidedAxCodePassword = (hmrState) => asNonEmptyString(hmrState.userProvidedAxCodePassword)
 
-  const resolveAxCodeAuthFromState = ({ hmrState, userProvidedAxCodePassword }) => ({
-    axCodeAuthPassword: asNonEmptyString(hmrState.axCodeAuthPassword) || userProvidedAxCodePassword,
-    axCodeAuthSource: asNonEmptyString(hmrState.axCodeAuthSource) || (userProvidedAxCodePassword ? "user-env" : null),
-  })
+  // The env password (user-exported, or injected by the Electron main process
+  // once per app boot — SPEC-2026-08-29 S2.2) is authoritative. HMR state
+  // should hold the same value captured by an earlier module load within the
+  // same boot; if they disagree, prefer the env value and warn — never log
+  // either password.
+  const resolveAxCodeAuthFromState = ({ hmrState, userProvidedAxCodePassword }) => {
+    const statePassword = asNonEmptyString(hmrState.axCodeAuthPassword)
+    const stateSource = asNonEmptyString(hmrState.axCodeAuthSource)
+    if (userProvidedAxCodePassword) {
+      if (statePassword && statePassword !== userProvidedAxCodePassword) {
+        logger.warn(
+          "[ax-code] AX_CODE_SERVER_PASSWORD differs from the password held by HMR state; using the env value",
+        )
+      }
+      return { axCodeAuthPassword: userProvidedAxCodePassword, axCodeAuthSource: "user-env" }
+    }
+    return { axCodeAuthPassword: statePassword, axCodeAuthSource: stateSource }
+  }
 
   const syncStateFromRuntime = (hmrState, runtime) => {
     hmrState.axCodeProcess = runtime.axCodeProcess

@@ -33,6 +33,7 @@ const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support
 const { createSupervisionFsm } = require("./supervision-fsm")
 const { buildComputerUseServerEnv } = require("./computer-use-server-env")
 const { applyBundledAxCodeEnv, buildBundledAxCodeEnv } = require("./bundled-ax-code-env")
+const { getRuntimeAuthPassword } = require("./runtime-auth-password")
 const { createRendererCrashPolicy } = require("./renderer-crash-policy")
 const { loadUrlWithTimeout } = require("./load-url-timeout")
 const { shouldCheckForUpdatesOnStartup } = require("./startup-update-policy")
@@ -250,6 +251,14 @@ function spawnServerProcess(wire) {
         // main process before require, now passed into the forked process.
         AX_CODE_DESKTOP_DIST_DIR: getWebDistPath(),
         AX_CODE_DESKTOP_RUNTIME: "desktop",
+        // Per-boot ax-code runtime Basic-auth password, owned by main since
+        // S2.2 (SPEC-2026-08-29-desktop-process-model-collapse §2 D2). The web
+        // server adopts it instead of self-generating and forwards it to the
+        // runtime child env; the proxy's Basic credential is unchanged.
+        // Never log or persist this value. S2.4 will reuse
+        // getRuntimeAuthPassword() in the app:// protocol handler. The
+        // username stays the runtime default ("ax-code").
+        AX_CODE_SERVER_PASSWORD: getRuntimeAuthPassword(),
         AX_CODE_DESKTOP_SHUTDOWN_TIMEOUT_MS: "4000",
         AX_CODE_DESKTOP_STARTUP_SNAPSHOT: JSON.stringify(startupDiagnostics.snapshot()),
         // Bundled computer-use server (packaged macOS builds with a staged
