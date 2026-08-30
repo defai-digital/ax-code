@@ -9,7 +9,6 @@ import type {
   Path,
   PermissionRequest,
   Project,
-  ProviderAuthResponse,
   ProviderListResponse,
   QuestionRequest,
   Session,
@@ -70,11 +69,7 @@ export type GlobalState = {
   error?: InitError
   path: Path
   projects: Project[]
-  providers: ProviderListResponse
-  providerAuth: ProviderAuthResponse
-  config: Config
   reload: undefined | "pending" | "complete"
-  sessionTodo: Record<string, Todo[]>
 }
 
 export type InitError = {
@@ -144,9 +139,5 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
   ready: false,
   path: { state: "", config: "", worktree: "", directory: "", home: "" },
   projects: [],
-  providers: { all: [], connected: [], default: {} },
-  providerAuth: {},
-  config: {},
   reload: undefined,
-  sessionTodo: {},
 }

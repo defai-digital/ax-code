@@ -48,6 +48,28 @@ So:
 | `input-store.ts`                             | Draft input state, attached files, synthetic parts                                                  | App UI state                              |
 | `selection-store.ts`                         | Model/agent/variant selections, including one-time legacy `context-store` selection migration       | App UI state                              |
 
+## Global sync store & bootstrap
+
+`global-sync-store.ts` (`useGlobalSyncStore`) holds only app-level boot
+state — `ready`, `error`, `path`, `projects`, `reload`. It deliberately does
+NOT carry config-domain copies: `providers`/`providerAuth`/`config`/
+`sessionTodo` were removed (SPEC-2026-08-30 S4.3) because their real readers
+live in `src/stores/` (`useConfigStore`, `useTodosPersistStore`, …). Do not
+re-add config-domain fields here.
+
+Bootstrap runs in two scopes:
+
+1. **Global** (`bootstrapGlobal`): fetches `path.get` + `project.list` only,
+   then flips `ready` (with `error` when every request failed). Config and
+   providers are no longer fetched globally.
+2. **Per directory** (`bootstrapDirectory`): phase 1 (blocking) fetches
+   `provider.list`, `config.get`, `path.get`, `session.status` per directory
+   — these per-directory fetches are the only seed source for the
+   per-directory `provider`/`config` slices, which S4.6 deletes entirely;
+   phase 2 (deferred) fetches agents/commands/mcp/lsp/vcs/permission/question;
+   phase 3 (lazy) loads the session list. The global `projects` list is only
+   used to seed the directory's project id.
+
 ## Session list rules
 
 ### Directory-scoped session list

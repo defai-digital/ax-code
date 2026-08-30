@@ -1119,9 +1119,7 @@ export function SyncProvider(props: { sdk: AxCodeClient; directory: string; chil
               }
             },
             global: {
-              config: globalState.config,
               projects: globalState.projects,
-              providers: globalState.providers,
             },
             loadSessions: (dir) =>
               retry(async () => {

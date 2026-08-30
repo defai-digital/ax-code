@@ -62,7 +62,6 @@ function projectID(directory: string, projects: Project[]) {
 export async function bootstrapGlobal(sdk: AxCodeClient, set: (patch: Partial<GlobalState>) => void) {
   const results = await Promise.allSettled([
     retry(() => sdk.path.get().then((x) => set({ path: unwrap(x, "path.get") }))),
-    retry(() => sdk.global.config.get().then((x) => set({ config: unwrap(x, "global.config.get") }))),
     retry(() =>
       sdk.project.list().then((x) => {
         const data = unwrap(x, "project.list")
@@ -73,7 +72,6 @@ export async function bootstrapGlobal(sdk: AxCodeClient, set: (patch: Partial<Gl
         set({ projects })
       }),
     ),
-    retry(() => sdk.provider.list().then((x) => set({ providers: unwrap(x, "provider.list") }))),
   ])
 
   const errors = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map((r) => r.reason)
@@ -114,9 +112,7 @@ export async function bootstrapDirectory(input: {
   getState: () => State
   set: (patch: Partial<State>) => void
   global: {
-    config: Record<string, unknown>
     projects: Project[]
-    providers: { all: unknown[]; connected: unknown[]; default: Record<string, unknown> }
   }
   loadSessions: (directory: string) => Promise<void> | void
 }) {
@@ -124,15 +120,12 @@ export async function bootstrapDirectory(input: {
   const state = getState()
   const loading = state.status !== "complete"
 
-  // Seed from global state while we fetch directory-specific data
+  // Seed the project id from the global project list while we fetch
+  // directory-specific data. `provider`/`config` are intentionally NOT seeded
+  // from a global copy (SPEC-2026-08-30 S4.3): the per-directory phase-1
+  // fetches below are their only seed source until S4.6 removes the slices.
   const seededProject = projectID(directory, g.projects)
   if (seededProject) set({ project: seededProject })
-  if (state.provider.all.length === 0 && g.providers.all.length > 0) {
-    set({ provider: g.providers as State["provider"] })
-  }
-  if (Object.keys(state.config ?? {}).length === 0 && Object.keys(g.config ?? {}).length > 0) {
-    set({ config: g.config as State["config"] })
-  }
   if (loading) set({ status: "partial" })
 
   // ---------------------------------------------------------------------------
