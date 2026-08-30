@@ -13,7 +13,6 @@ import { checkIsGitRepository } from "@/lib/gitApi"
 import { useDirectoryStore } from "./useDirectoryStore"
 import { useProjectsStore } from "./useProjectsStore"
 import { useSnippetsStore } from "./useSnippetsStore"
-import { useGlobalSessionsStore } from "./useGlobalSessionsStore"
 import { getMultiRunSessionTitle } from "@/lib/multirun/title"
 import { getSyncChildStores, registerSessionDirectory } from "@/sync/sync-refs"
 
@@ -44,7 +43,11 @@ const registerCreatedSession = (session: Session, directory: string): Session =>
       : ({ ...session, directory: normalizedDirectory } as Session)
 
   registerSessionDirectory(session.id, normalizedDirectory)
-  useGlobalSessionsStore.getState().upsertSession(sessionWithDirectory)
+  // No useGlobalSessionsStore write (S4.5): the session.created bus event is
+  // the writer of record for the global index — it reaches the store for every
+  // directory via sync/global-session-events.ts. Only the per-directory child
+  // store is seeded here (best-effort) so an already-open directory shows the
+  // session without waiting for its own event reducer pass.
 
   try {
     const store = getSyncChildStores().ensureChild(normalizedDirectory, { bootstrap: false })
@@ -66,8 +69,8 @@ const registerCreatedSession = (session: Session, directory: string): Session =>
       }
     })
   } catch {
-    // SyncProvider can be unavailable in tests or detached surfaces; the global
-    // session upsert above is enough for the sidebar to show the session.
+    // SyncProvider can be unavailable in tests or detached surfaces; the
+    // session.created event still feeds the global index for the sidebar.
   }
 
   return sessionWithDirectory

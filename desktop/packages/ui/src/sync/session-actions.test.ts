@@ -436,7 +436,7 @@ describe("createSession passes directory", () => {
 })
 
 describe("unarchiveSession", () => {
-  test("clears the archive timestamp through the session's scoped client and restores the global list", async () => {
+  test("clears the archive timestamp through the session's scoped client and lets the event restore the global list", async () => {
     const { setActionRefs, unarchiveSession } = await import("./session-actions")
     setActionRefs(mockSdk as unknown as AxCodeClient, createChildStores([]), () => "/current/project")
 
@@ -450,11 +450,9 @@ describe("unarchiveSession", () => {
         time: { archived: null },
       },
     })
-    expect(upsertSessionMock).toHaveBeenCalledWith({
-      id: "session-a",
-      directory: "/test/project",
-      time: { created: 1, updated: 6 },
-    })
+    // S4.5: no manual global-store write — the session.updated(archived: null)
+    // event is the writer of record that restores the session to active.
+    expect(upsertSessionMock).not.toHaveBeenCalled()
   })
 })
 
@@ -725,9 +723,9 @@ describe("rollback and fork actions use the session directory", () => {
     expect(targetStore.getState().message["session-b"]?.map((message) => message.id)).toEqual(["msg-b"])
     expect(targetStore.getState().part["msg-b"]?.map((part) => part.id)).toEqual(["prt-b"])
     expect(targetStore.getState().session_status["session-b"]).toEqual({ type: "idle" })
-    expect(upsertSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "session-b", directory: "/target/project" }),
-    )
+    // S4.5: no manual global-store write — the session.updated event
+    // re-buckets the session under its new directory as the writer of record.
+    expect(upsertSessionMock).not.toHaveBeenCalled()
     expect(registeredSessionDirectories).toContainEqual({ sessionID: "session-b", directory: "/target/project" })
     expect(setCurrentSessionMock).toHaveBeenCalledWith("session-b", "/target/project")
   })

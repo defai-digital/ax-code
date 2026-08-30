@@ -50,7 +50,7 @@ Examples:
 
 These stores coordinate persistent project/session metadata across multiple views.
 
-### `useGlobalSessionsStore.ts` ownership (S4.4 transition)
+### `useGlobalSessionsStore.ts` ownership (S4.5 — event-fed single writer)
 
 The global session index (active + archived, plus `sessionsByDirectory`) is
 **event-fed**: `session.created` / `session.updated` / `session.deleted` bus
@@ -61,12 +61,17 @@ up through `loadSessions()` (full HTTP active+archived snapshot).
 stable, never resurrects sessions inside their `pendingRemoval` undo window,
 and ignores out-of-order events older than the current entry.
 
-During the dual-source transition the manual writes in
-`src/sync/session-actions.ts` / `src/sync/soft-removal.ts` /
-`useMultiRunStore` / `useSessionAutoCleanup` remain as **optimistic** writes
-(the event is the reconcile authority); they are removed in S4.5. Dev mode
-logs a single-line diff whenever an event would change the store entry —
-that log is the regression signal for the removal.
+Since S4.5 the event stream is the **sole writer of record**: the
+mutation-maintained contract ("every action must remember to update this
+store") is retired. The only remaining manual writes are documented
+optimistic-transition primitives: the create-time add in `createSession`, the
+instant removals in the hard delete/archive confirm flows (which bypass
+`pendingRemoval`), and the soft-removal failure rollback. `upsertSession` /
+`removeSessions` / `archiveSessions` stay public as the primitives behind
+those mechanisms and the event reducer — they are not a general mutation API.
+Dev mode logs a single-line diff whenever an event would change the store
+entry — that log is now the regression alarm (a diff means an event disagreed
+with store state, which should be rare).
 
 ## Git / PR Stores
 

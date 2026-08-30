@@ -104,8 +104,9 @@ async function commitRemovals(ids: string[]): Promise<void> {
     .filter((entry): entry is PendingRemovalEntry => Boolean(entry))
   if (entries.length === 0) return
 
-  // Release the pending flags before the API calls so session-actions' own
-  // store updates (archive bucket move, rollback on failure) apply cleanly.
+  // Release the pending flags before the API calls so the resulting
+  // session.updated/deleted events (suppressed inside the undo window) apply
+  // cleanly once they arrive.
   store.commitPendingRemoval(entries.map((entry) => entry.session.id))
   clearTimers(ids)
 
@@ -116,15 +117,9 @@ async function commitRemovals(ids: string[]): Promise<void> {
         entry.kind === "delete"
           ? await sessionActions.deleteSession(entry.session.id)
           : await sessionActions.archiveSession(entry.session.id)
-      if (ok && entry.kind === "archive") {
-        // The session left the active list at mark time, so the store-level
-        // archiveSessions() move found nothing — add it to the archived
-        // bucket directly.
-        useGlobalSessionsStore.getState().upsertSession({
-          ...entry.session,
-          time: { ...entry.session.time, archived: Date.now() },
-        })
-      }
+      // No manual archived-bucket write on archive success (S4.5): the
+      // pending flag was released above, so the session.updated(time.archived)
+      // event adds the session to the archived bucket as the writer of record.
       if (!ok) failed.push(entry)
     }),
   )
@@ -134,6 +129,10 @@ async function commitRemovals(ids: string[]): Promise<void> {
 
   if (failed.length > 0) {
     for (const entry of failed) {
+      // Rollback restore (load-bearing): a FAILED removal emits no event, so
+      // nothing else re-adds the session — without this optimistic re-upsert
+      // of the pre-removal snapshot the session would stay hidden until the
+      // next full loadSessions().
       useGlobalSessionsStore.getState().upsertSession(entry.session)
     }
     for (const kind of ["archive", "delete"] as const) {

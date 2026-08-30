@@ -68,7 +68,6 @@ export const STORE_TO_STORE_IMPORT_ALLOWLIST: readonly string[] = [
   "useMcpConfigStore -> useAgentsStore",
   "useMcpStore -> useDirectoryStore",
   "useMultiRunStore -> useDirectoryStore",
-  "useMultiRunStore -> useGlobalSessionsStore",
   "useMultiRunStore -> useProjectsStore",
   "useMultiRunStore -> useSnippetsStore",
   "usePluginsStore -> useAgentsStore",

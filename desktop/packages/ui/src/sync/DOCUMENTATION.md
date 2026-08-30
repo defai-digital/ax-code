@@ -103,7 +103,8 @@ Current consumers:
 
 ### Mutation responsibility
 
-`useGlobalSessionsStore` is event-fed (SPEC-2026-08-30, S4.4). It is kept correct by:
+`useGlobalSessionsStore` is event-fed (SPEC-2026-08-30, S4.4/S4.5). The session
+lifecycle event stream is the **sole writer of record**; it is kept correct by:
 
 1. `session.created` / `session.updated` / `session.deleted` bus events, applied
    via `sync/global-session-events.ts` (`applySessionLifecycleEventToGlobalStore`)
@@ -118,13 +119,25 @@ Current consumers:
    reconnect (`server.connected` / WS ready and transport switch) and on
    `server.resync_required`; `applySnapshot`'s `preserveNewerSessions` keeps
    newer event-fed entries when a stale snapshot lands.
-3. Direct mutation from session actions after successful SDK calls
-   (`session-actions.ts` / `soft-removal.ts`) — during the S4.4 dual-source
-   transition these are OPTIMISTIC writes only: the event is the reconcile
-   authority. They are removed in S4.5; do not add new ones. In dev mode the
-   fan-out logs a single-line diff whenever an event would change the store
-   entry, which is exactly the signal that an optimistic write missed
-   something.
+3. A small set of explicitly-optimistic transition primitives (S4.5) — these
+   are the ONLY remaining manual writes, each annotated at its call site:
+   - `createSession()` → `upsertSession(session)`: creation gap — the new
+     session is navigated to immediately and must appear in the sidebar before
+     the `session.created` event round-trips.
+   - `deleteSession()` / `deleteSessionInDirectory()` → `removeSessions([id])`
+     and `archiveSession()` → `archiveSessions([id], at)`: hard delete/archive
+     confirm flows have no `pendingRemoval` undo window, so the post-success
+     write is the only guaranteed instant sidebar update (a dropped event
+     would otherwise leave a ghost entry).
+   - `soft-removal.ts` failure rollback → `upsertSession(entry.session)`: a
+     FAILED removal emits no event, so nothing else re-adds the session.
+   - The `pendingRemoval` window itself (`markPendingRemoval` /
+     `undoPendingRemoval` / `commitPendingRemoval`): instant hide + undo for
+     soft delete/archive; events about pending sessions are suppressed until
+     commit/undo.
+     In dev mode the fan-out logs a single-line diff whenever an event would
+     change the store entry — after S4.5 that log is the regression alarm: a
+     diff line means an event disagreed with store state, which should be rare.
 
 This keeps cold/global lists responsive without requiring a refetch after every change.
 
@@ -136,17 +149,24 @@ Session actions live in `session-actions.ts` and are the canonical place for SDK
 
 Rules:
 
-1. If an action mutates session list membership or visible session metadata, update `useGlobalSessionsStore` there. These writes are OPTIMISTIC during the S4.4 dual-source transition (see "Mutation responsibility") and are removed in S4.5 — prefer relying on the session lifecycle event when adding new actions.
+1. Do NOT write to `useGlobalSessionsStore` after an SDK mutation. The
+   `session.created/updated/deleted` event is the writer of record for the
+   global index (see "Mutation responsibility"); new actions must rely on it.
+   The only exceptions are the documented optimistic primitives: the
+   create-time add in `createSession`, the instant removals in the hard
+   delete/archive flows, and the soft-removal failure rollback.
 2. If an action targets a session by ID, resolve the **session's own directory**. Do not assume the current directory is correct.
 3. `session-ui-store.ts` should delegate to `session-actions.ts` for these mutations instead of duplicating SDK calls.
 
-Examples of global-store updates performed in `session-actions.ts`:
+Event-covered actions with NO manual global-store write (the session event
+reconciles the global index):
 
-- `createSession()` -> `upsertSession(session)`
-- `updateSessionTitle()` -> `upsertSession(result.data)`
-- `shareSession()` / `unshareSession()` -> `upsertSession(result.data)`
-- `archiveSession()` -> `archiveSessions([id], archivedAt)`
-- `deleteSession()` -> `removeSessions([id])`
+- `unarchiveSession()` -> `session.updated` (archived: null) event
+- `updateSessionTitle()` -> `session.updated` event
+- `moveSession()` -> `session.updated` (new directory) event
+- `applyRollbackPoint()` -> `session.updated` event
+- `useSessionAutoCleanup` bulk archive/delete -> per-session events
+- `useMultiRunStore` session creation -> `session.created` event
 
 ## The golden rule
 

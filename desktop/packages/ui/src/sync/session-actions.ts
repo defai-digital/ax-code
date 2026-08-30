@@ -17,13 +17,14 @@ import { useSessionUIStore } from "./session-ui-store"
 import { useInputStore } from "./input-store"
 import type { ChildStoreManager } from "./child-store"
 import { axCodeClient, ascendingId } from "@/lib/ax-code/client"
-// NOTE (SPEC-2026-08-30, S4.4 dual-source transition): the
-// `useGlobalSessionsStore` writes below (upsertSession / removeSessions /
-// archiveSessions after successful SDK calls) are now OPTIMISTIC writes.
-// `session.created/updated/deleted` bus events applied via
-// `sync/global-session-events.ts` are the reconcile authority; these writes
-// only keep the global index responsive until the event lands. They are
-// removed in S4.5 — do not add new ones.
+// NOTE (SPEC-2026-08-30, S4.5): the session lifecycle event stream
+// (`session.created/updated/deleted` applied via sync/global-session-events.ts)
+// is the sole writer of record for `useGlobalSessionsStore`. The few remaining
+// `useGlobalSessionsStore` writes below are explicitly-optimistic transition
+// primitives, each annotated at the call site with why it is load-bearing
+// (creation gap before the created event; hard delete/archive flows that
+// bypass the pendingRemoval undo window). Do not add new ones — rely on the
+// session lifecycle event instead.
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { registerSessionDirectory } from "./sync-refs"
@@ -569,6 +570,12 @@ export async function createSession(
       registerSessionDirectory(session.id, sessionDirectory)
     }
     useSessionUIStore.getState().setCurrentSession(session.id, sessionDirectory)
+    // Optimistic add (load-bearing): the new session is navigated to
+    // immediately, so it must appear in the sidebar before the
+    // `session.created` event round-trips — the HTTP response can arrive
+    // first, and an event dropped during a reconnect would otherwise leave
+    // the just-created session invisible until the next full load. The event
+    // remains the reconcile authority (signature/preserveNewer dedupe).
     useGlobalSessionsStore.getState().upsertSession(session)
     return session
   } catch (error) {
@@ -653,6 +660,11 @@ export async function deleteSession(sessionId: string, options?: { notify?: bool
       sessionID: sessionId,
       directory: sessionDirectory,
     })
+    // Optimistic removal (load-bearing): hard-delete callers (confirm dialog,
+    // bulk delete) have no pendingRemoval undo window, so this post-success
+    // write is the only guaranteed instant sidebar update — a dropped
+    // session.deleted event would otherwise leave a ghost session that errors
+    // when opened. The event itself lands as a no-op reconcile.
     useGlobalSessionsStore.getState().removeSessions([sessionId])
     return true
   } catch (error) {
@@ -686,6 +698,9 @@ export async function deleteSessionInDirectory(sessionId: string, directory: str
   if (ui.currentSessionId === sessionId) ui.setCurrentSession(null)
   try {
     await scopedClientForDirectory(directory).session.delete({ sessionID: sessionId, directory })
+    // Optimistic removal (load-bearing) — same contract as deleteSession:
+    // cross-directory hard deletes have no pendingRemoval window, so this is
+    // the instant sidebar update; the session.deleted event reconciles.
     useGlobalSessionsStore.getState().removeSessions([sessionId])
     return true
   } catch (error) {
@@ -709,6 +724,10 @@ export async function archiveSession(sessionId: string, options?: { notify?: boo
       directory: sessionDirectory,
       time: { archived: archivedAt },
     })
+    // Optimistic bucket move (load-bearing): hard-archive callers (confirm
+    // dialog, bulk archive) have no pendingRemoval undo window, so this
+    // post-success write is the instant sidebar update; the
+    // session.updated(time.archived) event reconciles as a no-op.
     useGlobalSessionsStore.getState().archiveSessions([sessionId], archivedAt)
     return true
   } catch (error) {
@@ -728,14 +747,13 @@ export async function archiveSession(sessionId: string, options?: { notify?: boo
 export async function unarchiveSession(sessionId: string, options?: { notify?: boolean }): Promise<boolean> {
   const sessionDirectory = getSessionDirectory(sessionId)
   try {
-    const result = await scopedClientForDirectory(sessionDirectory).session.update({
+    // No manual global-store write: the session.updated(time.archived=null)
+    // event restores the session to the active list (S4.5 single writer).
+    await scopedClientForDirectory(sessionDirectory).session.update({
       sessionID: sessionId,
       directory: sessionDirectory,
       time: { archived: null },
     })
-    if (result.data) {
-      useGlobalSessionsStore.getState().upsertSession(result.data)
-    }
     return true
   } catch (error) {
     console.error("[session-actions] unarchiveSession failed", error)
@@ -746,14 +764,13 @@ export async function unarchiveSession(sessionId: string, options?: { notify?: b
 
 export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
   const sessionDirectory = getSessionDirectory(sessionId)
-  const result = await scopedClientForDirectory(sessionDirectory).session.update({
+  // No manual global-store write: the session.updated event applies the new
+  // title to the global index (S4.5 single writer).
+  await scopedClientForDirectory(sessionDirectory).session.update({
     sessionID: sessionId,
     directory: sessionDirectory,
     title,
   })
-  if (result.data) {
-    useGlobalSessionsStore.getState().upsertSession(result.data)
-  }
 }
 
 export async function validateSessionMoveTarget(
@@ -787,7 +804,8 @@ export async function moveSession(sessionId: string, targetDirectory: string): P
   if (!session) throw new Error("Failed to move session")
 
   moveSessionLocalState(sessionId, directory, session)
-  useGlobalSessionsStore.getState().upsertSession(session)
+  // No manual global-store write: the session.updated event re-buckets the
+  // session under its new directory (S4.5 single writer).
 
   const nextDirectory = (session as { directory?: string | null }).directory
   if (nextDirectory) {
@@ -1277,7 +1295,8 @@ export async function applyRollbackPoint(sessionId: string, input: SessionRollba
       sessions[idx] = result.data
       store.setState({ session: sessions })
     }
-    useGlobalSessionsStore.getState().upsertSession(result.data)
+    // No manual global-store write: the session.updated event refreshes the
+    // global index entry (S4.5 single writer).
   }
 
   await replaceSessionMessagesFromServer(sessionId, directory)

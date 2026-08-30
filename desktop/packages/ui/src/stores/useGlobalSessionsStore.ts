@@ -38,8 +38,30 @@ type GlobalSessionsState = {
    * malformed payloads are a no-op.
    */
   applySessionEvent: (payload: unknown) => void
+  /**
+   * Optimistic-transition primitive (SPEC-2026-08-30 S4.5). The session
+   * lifecycle event stream is the sole writer of record for this store;
+   * `upsertSession` exists only for (a) the event reducer itself
+   * (`applySessionEvent`), (b) the create-time optimistic add in
+   * `createSession`, and (c) rollback restores after failed soft-removals.
+   * It is NOT a general mutation API — never call it to "maintain" the store
+   * after an SDK mutation; rely on the session event instead.
+   */
   upsertSession: (session: Session) => void
+  /**
+   * Optimistic-transition primitive (S4.5): used by `applySessionEvent` for
+   * `session.deleted`, and by the hard-delete confirm flows in
+   * `session-actions.ts` that bypass the `pendingRemoval` undo window.
+   * Also funnels per-session client-state cleanup (message queue,
+   * auto-accept toggles) for every delete path. Not a general mutation API.
+   */
   removeSessions: (ids: Iterable<string>) => void
+  /**
+   * Optimistic-transition primitive (S4.5): used by the hard-archive confirm
+   * flows in `session-actions.ts` that bypass the `pendingRemoval` undo
+   * window. Event-fed archive transitions arrive as `session.updated` and go
+   * through `upsertSession`, not here. Not a general mutation API.
+   */
   archiveSessions: (ids: Iterable<string>, archivedAt?: number) => void
   markPendingRemoval: (entries: PendingRemovalEntry[]) => void
   undoPendingRemoval: (ids: Iterable<string>) => void

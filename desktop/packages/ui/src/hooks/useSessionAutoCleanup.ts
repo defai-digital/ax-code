@@ -168,11 +168,11 @@ export const useSessionAutoCleanup = (enabledOrOptions?: boolean | CleanupOption
           }
         }
 
-        if (sessionRetentionAction === "archive") {
-          useGlobalSessionsStore.getState().archiveSessions(completedIds)
-        } else {
-          useGlobalSessionsStore.getState().removeSessions(completedIds)
-        }
+        // No manual global-store writes (S4.5): each successful SDK call above
+        // emits session.updated(time.archived) / session.deleted, and the
+        // event stream is the sole writer of record for the global index.
+        // (The delete event also funnels through removeSessions, so the
+        // per-session client-state cleanup there still runs.)
         return { completedIds, failedIds, action: sessionRetentionAction }
       } finally {
         runningRef.current = false

@@ -248,7 +248,10 @@ describe("useMultiRunStore", () => {
     })
 
     expect(result?.sessionIds).toEqual(["ses_multirun"])
-    expect(upsertedSessions.map((session) => session.id)).toEqual(["ses_multirun"])
+    // S4.5: no manual global-index write — the session.created bus event is
+    // the writer of record. Only routing + the per-directory child store are
+    // seeded here.
+    expect(upsertedSessions).toEqual([])
     expect(registeredDirectories).toEqual([{ sessionID: "ses_multirun", directory: "/repo" }])
     expect(ensureChildCalls).toEqual([{ directory: "/repo", bootstrap: false }])
     expect(childState.session.map((session) => session.id)).toEqual(["ses_multirun"])
