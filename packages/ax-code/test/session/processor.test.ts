@@ -1372,4 +1372,167 @@ describe("session.processor", () => {
       },
     })
   })
+
+  test("collapses cumulative reasoning snapshots to the final snapshot", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        // MiniMax-M3-style cumulative snapshots: each snapshot is a NEW
+        // reasoning id whose text extends the previous one (ADR-064 D4).
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            for (const [id, text] of [
+              ["reasoning_1", "thinking step one"],
+              ["reasoning_2", "thinking step one and two"],
+              ["reasoning_3", "thinking step one and two and three"],
+            ]) {
+              yield { type: "reasoning-start", id }
+              yield { type: "reasoning-delta", id, text }
+              yield { type: "reasoning-end", id }
+            }
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text: "done" }
+            yield { type: "text-end", id: "text_1" }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any)
+
+        const result = await processor.process(streamInput)
+
+        expect(result).toBe("continue")
+        const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+        const reasoningParts = saved.parts.filter((part) => part.type === "reasoning")
+        expect(reasoningParts).toHaveLength(1)
+        expect(reasoningParts[0]?.text).toBe("thinking step one and two and three")
+      },
+    })
+  })
+
+  test("preserves non-prefix reasoning blocks", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            for (const [id, text] of [
+              ["reasoning_1", "thinking about X"],
+              ["reasoning_2", "now considering Y"],
+            ]) {
+              yield { type: "reasoning-start", id }
+              yield { type: "reasoning-delta", id, text }
+              yield { type: "reasoning-end", id }
+            }
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text: "done" }
+            yield { type: "text-end", id: "text_1" }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any)
+
+        const result = await processor.process(streamInput)
+
+        expect(result).toBe("continue")
+        const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+        const reasoningParts = saved.parts.filter((part) => part.type === "reasoning")
+        expect(reasoningParts.map((part) => part.text)).toEqual(["thinking about X", "now considering Y"])
+      },
+    })
+  })
+
+  test("annotates raw DSML tool-call markup emitted as plain text", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const markup =
+          '<｜｜DSML｜｜tool_calls><｜｜DSML｜｜invoke name="bash">' +
+          '<｜｜DSML｜｜parameter name="command">ls</｜｜DSML｜｜parameter>' +
+          "</｜｜DSML｜｜invoke></｜｜DSML｜｜tool_calls>"
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text: markup }
+            yield { type: "text-end", id: "text_1" }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any)
+
+        const result = await processor.process(streamInput)
+
+        expect(result).toBe("continue")
+        const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+        const textParts = saved.parts.filter((part) => part.type === "text")
+        expect(textParts).toHaveLength(1)
+        expect(textParts[0]?.text).toContain(markup)
+        expect(textParts[0]?.text).toContain("raw tool-call markup (DSML) as plain text")
+        expect(textParts[0]?.text).toContain("It was not executed")
+        // The markup must never be parsed or executed — no tool parts.
+        expect(saved.parts.filter((part) => part.type === "tool")).toHaveLength(0)
+      },
+    })
+  })
+
+  test("does not annotate text merely mentioning the DSML format", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const text = "The <｜｜DSML｜｜tool_calls> tag wraps tool invocations in the DSML format."
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "text-start", id: "text_1" }
+            yield { type: "text-delta", id: "text_1", text }
+            yield { type: "text-end", id: "text_1" }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any)
+
+        const result = await processor.process(streamInput)
+
+        expect(result).toBe("continue")
+        const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+        const textParts = saved.parts.filter((part) => part.type === "text")
+        expect(textParts).toHaveLength(1)
+        expect(textParts[0]?.text).toBe(text)
+      },
+    })
+  })
 })

@@ -161,6 +161,13 @@ export namespace SessionProcessor {
       for (const key of Object.keys(doomLoopWarnings)) delete doomLoopWarnings[key]
     }
     let stepToolCallCount = 0
+    // Reasoning prefix coalescing (ADR-064 D4): some gateways (e.g.
+    // MiniMax-M3) send cumulative reasoning snapshots — each snapshot arrives
+    // as a NEW reasoning-start id whose text is the previous snapshot plus a
+    // suffix. Without coalescing every intermediate snapshot is persisted as
+    // its own part. Track the last ended reasoning part for this assistant
+    // message; reset implicitly because a processor is created per message.
+    let lastEndedReasoning: { id: PartID; text: string } | undefined
     let stepErrorSurfaces: string[] = []
     let stepTouchedFiles: Array<{ path: string; summary: string }> = []
     // O(1) membership for path dedup (PERF-09); was O(n) linear scan.
@@ -425,6 +432,40 @@ export namespace SessionProcessor {
                     stepParts.push({ type: "reasoning", text: part.text })
                     await partWriteBatcher.forceImmediate(part)
                     delete reasoningMap[value.id]
+                    // Reasoning prefix coalescing (ADR-064 D4): when the
+                    // previous ended reasoning part is a strict prefix of this
+                    // one, the gateway sent cumulative snapshots — drop the
+                    // superseded snapshot so chains (A, AB, ABC) collapse to
+                    // just ABC. Genuine multi-block reasoning (non-prefix)
+                    // is left untouched.
+                    const prev = lastEndedReasoning
+                    if (
+                      prev &&
+                      prev.text.length > 0 &&
+                      part.text.length > prev.text.length &&
+                      part.text.startsWith(prev.text)
+                    ) {
+                      try {
+                        await Session.removePart({
+                          sessionID: input.sessionID,
+                          messageID: input.assistantMessage.id,
+                          partID: prev.id,
+                        })
+                      } catch (error) {
+                        log.warn("failed to remove superseded reasoning part", { error, partID: prev.id })
+                      }
+                      // Drop the superseded snapshot from the step summary.
+                      // Scan from the end and remove a single match so
+                      // identical earlier blocks are not over-removed.
+                      for (let i = stepParts.length - 1; i >= 0; i--) {
+                        const entry = stepParts[i]
+                        if (entry.type === "reasoning" && entry.text === prev.text) {
+                          stepParts.splice(i, 1)
+                          break
+                        }
+                      }
+                    }
+                    lastEndedReasoning = { id: part.id, text: part.text }
                   }
                   break
 
@@ -1203,6 +1244,27 @@ export namespace SessionProcessor {
                       { text: currentText.text },
                     )
                     currentText.text = textOutput.text
+                    // DSML markup annotation (ADR-064 D3): DeepSeek-class
+                    // models sometimes emit raw tool-call markup as plain text
+                    // when a gateway fails to translate tool calls. The markup
+                    // is never parsed or executed — annotate the stored text so
+                    // users understand what happened. Requiring an
+                    // `invoke name=` guards against text merely discussing the
+                    // format.
+                    if (
+                      currentText.text.includes("<｜｜DSML｜｜tool_calls") &&
+                      currentText.text.includes("invoke name=")
+                    ) {
+                      currentText.text +=
+                        "\n\n[AX Code: the provider emitted raw tool-call markup (DSML) as plain text. " +
+                        "It was not executed. This usually means the gateway failed to translate tool calls — " +
+                        "consider switching model or reporting the provider.]"
+                      log.warn("provider emitted raw DSML tool-call markup as plain text", {
+                        sessionID: input.sessionID,
+                        providerID: input.model.providerID,
+                        modelID: input.model.id,
+                      })
+                    }
                     currentText.time = {
                       start: currentText.time?.start ?? Date.now(),
                       end: Date.now(),
