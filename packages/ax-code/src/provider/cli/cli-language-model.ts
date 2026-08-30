@@ -318,9 +318,15 @@ export class CliLanguageModel implements LanguageModelV3 {
       () => attachments.cleanup(),
     )
 
-    if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
+    if (!proc.stdout || !proc.stderr) {
+      await abort.kill()
+      throw new Error("CLI process output not available")
+    }
     if (this.useStdin()) {
-      if (!proc.stdin) throw new Error("CLI process stdin not available")
+      if (!proc.stdin) {
+        await abort.kill()
+        throw new Error("CLI process stdin not available")
+      }
       // Await drain for large prompts. ChildProcess.stdin.write returns
       // false when the buffer is full; without waiting, .end() can ship
       // before the tail of a >64KB prompt has been flushed and macOS
@@ -328,7 +334,16 @@ export class CliLanguageModel implements LanguageModelV3 {
       // nothing" with no error. Strict `=== false` check so non-Writable
       // test mocks (write() returning undefined) don't enter the drain
       // path and fail on the absence of .once.
-      await writeCliPrompt(proc.stdin, text)
+      //
+      // A write failure (e.g. EPIPE) does not mean the child has exited —
+      // without an explicit kill here the process was left running with no
+      // one attached to its stdout/stderr or awaiting its exit, orphaning it.
+      try {
+        await writeCliPrompt(proc.stdin, text)
+      } catch (error) {
+        await abort.kill()
+        throw error
+      }
     }
     let timeoutTimer: ReturnType<typeof setTimeout> | undefined
     proc.exited.catch((err) => {
@@ -427,9 +442,15 @@ export class CliLanguageModel implements LanguageModelV3 {
       () => attachments.cleanup(),
     )
 
-    if (!proc.stdout || !proc.stderr) throw new Error("CLI process output not available")
+    if (!proc.stdout || !proc.stderr) {
+      await abort.kill()
+      throw new Error("CLI process output not available")
+    }
     if (this.useStdin()) {
-      if (!proc.stdin) throw new Error("CLI process stdin not available")
+      if (!proc.stdin) {
+        await abort.kill()
+        throw new Error("CLI process stdin not available")
+      }
       // Await drain for large prompts. ChildProcess.stdin.write returns
       // false when the buffer is full; without waiting, .end() can ship
       // before the tail of a >64KB prompt has been flushed and macOS
@@ -437,7 +458,16 @@ export class CliLanguageModel implements LanguageModelV3 {
       // nothing" with no error. Strict `=== false` check so non-Writable
       // test mocks (write() returning undefined) don't enter the drain
       // path and fail on the absence of .once.
-      await writeCliPrompt(proc.stdin, text)
+      //
+      // A write failure (e.g. EPIPE) does not mean the child has exited —
+      // without an explicit kill here the process was left running with no
+      // one attached to its stdout/stderr or awaiting its exit, orphaning it.
+      try {
+        await writeCliPrompt(proc.stdin, text)
+      } catch (error) {
+        await abort.kill()
+        throw error
+      }
     }
     const parser = this.config.parser
     const textId = "cli-0"
