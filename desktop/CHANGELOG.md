@@ -4,6 +4,41 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.9.14] - 2026-08-30
+
+### Added
+
+- Add visible placeholder for tool attachments dropped by stripMedia.
+- Add unified desktop supervision FSM for process recovery.
+
+### Changed
+
+- Default ax-code run to concise tool output behind an opt-in --full flag.
+- Harden desktop state convergence against review findings.
+- Converge desktop connection state on a transport-owned store.
+- Converge desktop config domains onto their stores/ homes.
+- Retire the global sessions mutation-maintained contract.
+- Feed the global sessions store from the unified event stream.
+- Delete near-dead global sync state copies.
+- Enforce desktop store boundaries structurally.
+- Converge desktop scheduled tasks onto the runtime scheduler.
+- Harden main-process runtime supervision against review findings.
+- Mark patch-part files no file-writing tool claimed as external.
+- Resume after tool-calling backstop wrap-ups instead of completing.
+- Make main-process runtime supervision the desktop default.
+- Let Electron main supervise the ax-code runtime behind a flag.
+- Harden desktop API routing auth boundary and restart semantics.
+- Resolve bash preflight paths against a preceding top-level cd.
+- Coalesce cumulative reasoning snapshots, annotate DSML markup in text.
+- Mirror the API prefix routing in the Vite dev server.
+- Route packaged renderer API calls by longest-prefix to the runtime.
+- Make Electron main the sole desktop settings.json writer.
+- Move desktop runtime auth password ownership to Electron main.
+
+### Fixed
+
+- Fix desktop boundary violation in router coverage test.
+
 ## [7.9.13] - 2026-08-29
 
 ### Added
