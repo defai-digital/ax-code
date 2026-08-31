@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.10.1] - 2026-08-30
+
+### Fixed
+
+- Fix TUI stringWidth emoji ranges to match the native OpenTUI renderer.
+- Fix unvalidated release tag reaching the published Homebrew formula.
+- Fix the same GitHub Actions script-injection pattern in install-matrix-smoke.yml.
+- Fix GitHub Actions script injection via inlined workflow_dispatch input.
+- Fix crash on corrupted coverage baseline and a dormant prefix bug in CI scripts.
+- Fix build-node-tui.ts hardcoding the "latest" update channel.
+
 ## [7.10.0] - 2026-08-30
 
 ### Added
