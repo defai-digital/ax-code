@@ -176727,8 +176727,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 1024000,
-          "output": 384000
+          "context": 1048576,
+          "output": 393216
         }
       },
       "deepseek/deepseek-v3.2": {
@@ -184894,8 +184894,8 @@
         },
         "open_weights": false,
         "limit": {
-          "context": 1048576,
-          "output": 16384
+          "context": 128000,
+          "output": 115200
         }
       },
       "meta-llama/llama-4-scout": {

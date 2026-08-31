@@ -3,6 +3,7 @@ import { writeFile, mkdir } from "node:fs/promises"
 import path from "path"
 import { Env } from "../../src/util/env"
 import { tmpdir } from "../fixture/fixture"
+import { stringWidth } from "../../src/bun/node-compat"
 
 // The Bun→Node compat shim is installed globally by test/support/vitest.setup.ts.
 
@@ -106,5 +107,43 @@ describe("node-compat Bun.$ shell", () => {
     const glob = new Bun.Glob("*")
     expect(Array.from(glob.scanSync({ cwd: dir.path })).sort()).toEqual(["file.txt"])
     expect(Array.from(glob.scanSync({ cwd: dir.path, onlyFiles: false })).sort()).toEqual(["file.txt", "subdir"])
+  })
+})
+
+describe("node-compat stringWidth", () => {
+  // These must match packages/ax-code-tui's vendored native renderer
+  // (upstream sst/opentui, packages/core/src/zig/utf8.zig `eawToWidth`) or
+  // this shim's cursor/wrap/truncate math drifts from what actually renders.
+  test("CJK ideographs and kana are two columns wide", () => {
+    expect(stringWidth("中文字")).toBe(6)
+    expect(stringWidth("ひらがな")).toBe(8)
+    expect(stringWidth("한글")).toBe(4)
+  })
+
+  test("Ambiguous-width Latin-adjacent characters stay one column wide", () => {
+    expect(stringWidth("αβγ")).toBe(3)
+    expect(stringWidth("абв")).toBe(3)
+    expect(stringWidth("±×÷§°")).toBe(5)
+  })
+
+  // Regression: a blanket 0x1f300-0x1faff range both missed status glyphs
+  // below that block and over-counted narrow gaps inside it.
+  test("emoji/status glyphs below U+1F300 are two columns wide, matching the native table", () => {
+    expect(stringWidth("⌚")).toBe(2) // ⌚ watch
+    expect(stringWidth("⏰")).toBe(2) // ⏰ alarm clock
+    expect(stringWidth("☔")).toBe(2) // ☔ umbrella with rain drops
+    expect(stringWidth("✅")).toBe(2) // ✅ check mark button
+    expect(stringWidth("❌")).toBe(2) // ❌ cross mark
+    expect(stringWidth("⚠")).toBe(1) // ⚠ warning sign is narrow in the native table
+  })
+
+  test("narrow gaps inside the 0x1f300-0x1faff block stay one column wide", () => {
+    expect(stringWidth("\u{1F321}")).toBe(1) // thermometer: outside every native wide sub-range
+    expect(stringWidth("\u{1F394}")).toBe(1) // rosette: outside every native wide sub-range
+  })
+
+  test("supplementary-plane CJK and common emoji stay two columns wide", () => {
+    expect(stringWidth("\u{20000}")).toBe(2) // CJK Ext B ideograph
+    expect(stringWidth("😀")).toBe(2)
   })
 })

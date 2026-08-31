@@ -247,6 +247,121 @@ async function connect(input: { hostname?: string; port: number }) {
   })
 }
 
+// Emoji/dingbat code points the TUI's native renderer (vendored from upstream
+// sst/opentui; see packages/ax-code-tui/vendor/manifest.json and the
+// `eawToWidth` table in that project's packages/core/src/zig/utf8.zig) always
+// draws two columns wide, even though their Unicode East Asian Width property
+// is Ambiguous/Neutral rather than Wide/Fullwidth. This table is transcribed
+// from that native function so this shim's notion of "wide" stays in lockstep
+// with what actually lands on screen; a blanket 0x1f300-0x1faff range both
+// missed wide symbols below 0x1f300 (e.g. U+231A watch, U+2705 check mark,
+// U+26A1-adjacent status glyphs) and over-counted narrow gaps inside that
+// range, so cursor/wrap/truncate math drifted from the real render for any
+// line containing them. Sorted, non-overlapping — keep it that way for the
+// binary search in isNativeWideEmoji.
+const NATIVE_WIDE_EMOJI_RANGES: ReadonlyArray<readonly [number, number]> = [
+  [0x203c, 0x203c],
+  [0x2049, 0x2049],
+  [0x231a, 0x231b],
+  [0x2329, 0x232a],
+  [0x23e9, 0x23ec],
+  [0x23f0, 0x23f0],
+  [0x23f3, 0x23f3],
+  [0x25fd, 0x25fe],
+  [0x2614, 0x2615],
+  [0x2622, 0x2623],
+  [0x2630, 0x2637],
+  [0x2648, 0x2653],
+  [0x267f, 0x267f],
+  [0x2693, 0x2693],
+  [0x269b, 0x269b],
+  [0x26aa, 0x26ab],
+  [0x26bd, 0x26be],
+  [0x26c4, 0x26c5],
+  [0x26ce, 0x26ce],
+  [0x26d1, 0x26d1],
+  [0x26d4, 0x26d4],
+  [0x26ea, 0x26ea],
+  [0x26f2, 0x26f3],
+  [0x26f5, 0x26f5],
+  [0x26fa, 0x26fa],
+  [0x26fd, 0x26fd],
+  [0x2705, 0x2705],
+  [0x270a, 0x270b],
+  [0x2728, 0x2728],
+  [0x274c, 0x274c],
+  [0x274e, 0x274e],
+  [0x2753, 0x2755],
+  [0x2757, 0x2757],
+  [0x2760, 0x2767],
+  [0x2795, 0x2797],
+  [0x27b0, 0x27b0],
+  [0x27bf, 0x27bf],
+  [0x2b1b, 0x2b1c],
+  [0x2b50, 0x2b50],
+  [0x2b55, 0x2b55],
+  [0x1f000, 0x1f02b],
+  [0x1f030, 0x1f093],
+  [0x1f0a0, 0x1f0ae],
+  [0x1f0b1, 0x1f0bf],
+  [0x1f0c1, 0x1f0cf],
+  [0x1f0d1, 0x1f0f5],
+  [0x1f300, 0x1f320],
+  [0x1f32d, 0x1f335],
+  [0x1f337, 0x1f37c],
+  [0x1f37e, 0x1f393],
+  [0x1f3a0, 0x1f3ca],
+  [0x1f3cf, 0x1f3d3],
+  [0x1f3e0, 0x1f3f0],
+  [0x1f3f4, 0x1f3f4],
+  [0x1f3f8, 0x1f3ff],
+  [0x1f400, 0x1f43e],
+  [0x1f440, 0x1f440],
+  [0x1f442, 0x1f4fc],
+  [0x1f4ff, 0x1f6c5],
+  [0x1f6cc, 0x1f6cc],
+  [0x1f6d0, 0x1f6d2],
+  [0x1f6d5, 0x1f6d7],
+  [0x1f6dc, 0x1f6df],
+  [0x1f6eb, 0x1f6ec],
+  [0x1f6f4, 0x1f6fc],
+  [0x1f700, 0x1f773],
+  [0x1f780, 0x1f7d8],
+  [0x1f7e0, 0x1f7eb],
+  [0x1f800, 0x1f80b],
+  [0x1f810, 0x1f847],
+  [0x1f850, 0x1f859],
+  [0x1f860, 0x1f887],
+  [0x1f890, 0x1f8ad],
+  [0x1f8b0, 0x1f8b1],
+  [0x1f90c, 0x1f93a],
+  [0x1f93c, 0x1f945],
+  [0x1f947, 0x1fa53],
+  [0x1fa60, 0x1fa6d],
+  [0x1fa70, 0x1fa74],
+  [0x1fa78, 0x1fa7c],
+  [0x1fa80, 0x1fa86],
+  [0x1fa90, 0x1faac],
+  [0x1fab0, 0x1faba],
+  [0x1fac0, 0x1fac5],
+  [0x1fad0, 0x1fad9],
+  [0x1fae0, 0x1fae7],
+  [0x1faf0, 0x1faf8],
+]
+
+function isNativeWideEmoji(cp: number): boolean {
+  let lo = 0
+  let hi = NATIVE_WIDE_EMOJI_RANGES.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const [start, end] = NATIVE_WIDE_EMOJI_RANGES[mid]
+    if (cp < start) hi = mid - 1
+    else if (cp > end) lo = mid + 1
+    else return true
+  }
+  return false
+}
+
 // Terminal column width, approximating Bun.stringWidth: ANSI escapes count as
 // 0, zero-width/combining marks as 0, wide CJK/emoji as 2, everything else 1.
 // The previous shim counted code points, which misaligns TUI layout for wide
@@ -277,8 +392,8 @@ function charWidth(cp: number): number {
     (cp >= 0xfe30 && cp <= 0xfe4f) ||
     (cp >= 0xff00 && cp <= 0xff60) ||
     (cp >= 0xffe0 && cp <= 0xffe6) ||
-    (cp >= 0x1f300 && cp <= 0x1faff) ||
-    (cp >= 0x20000 && cp <= 0x3fffd)
+    (cp >= 0x20000 && cp <= 0x3fffd) ||
+    isNativeWideEmoji(cp)
   )
     return 2
   return 1
