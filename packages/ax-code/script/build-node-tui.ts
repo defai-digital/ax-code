@@ -24,6 +24,13 @@ import pkg from "../package.json"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const dir = path.resolve(__dirname, "..")
 const require = createRequire(import.meta.url)
+const { writeRuntimeManifest } = require(path.join(__dirname, "..", "..", "..", "script", "runtime-manifest.cjs")) as {
+  writeRuntimeManifest: (runtimeRoot: string) => {
+    files: Array<
+      { path: string; type: "file"; size: number; sha256: string } | { path: string; type: "symlink"; target: string }
+    >
+  }
+}
 process.chdir(dir)
 
 function buildChannelForVersion(version: string) {
@@ -555,6 +562,12 @@ if (process.platform === "darwin") {
     `${appleCodesignIdentity ? "Developer ID signed" : "Ad-hoc signed"} ${nativeLibs.length} native libraries`,
   )
 }
+
+// The release archive is protected by Minisign after this build completes. Keep
+// a deterministic manifest inside it so Desktop packaging can prove that the
+// non-native runtime, including lib/index-node-tui.js, survived staging unchanged.
+const runtimeManifest = writeRuntimeManifest(outRoot)
+console.log(`Wrote runtime manifest (${runtimeManifest.files.length} non-native entries)`)
 
 if (release) {
   // Archive the WHOLE tree (bin + lib + node_modules + node/), not just bin/ —

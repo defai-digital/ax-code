@@ -9,6 +9,24 @@ directories:
   buildResources: build
   output: dist
 
+# Protect Electron-owned JavaScript with a minimal-unpack ASAR and explicit
+# production fuses. Keep runAsNode enabled because the packaged desktop CLI
+# uses the Electron binary as a Node-compatible launcher. The separate ax-code
+# child runtime remains in extraResources because it is executed by Node 26.
+asar:
+  # electron-builder's default smart unpack extracts an entire dependency when
+  # it finds one native binary. Explicit patterns below keep node-pty's JS in
+  # app.asar while leaving only native code and its helper executable outside.
+  smartUnpack: false
+electronFuses:
+  runAsNode: true
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
 # Include ${os} so mac arm64 zip and win arm64 zip don't collide on the same
 # release (both would be AX-Code-1.3.0-arm64.zip without the os token).
 artifactName: AX-Code-${version}-${os}-${arch}.${ext}
@@ -23,13 +41,16 @@ files:
   - dist/server-process.js
   - dist/server.js
   - dist/desktop-cli.mjs
-
-# Web assets sit outside the asar so the Express server can serve them as
-# plain files at runtime (asar cannot exec native code and express.static
-# does not support asar paths).
-extraResources:
+  # Trusted copy of the staged sidecar manifest. Electron main verifies the
+  # external runtime against this ASAR-protected copy before spawning it.
+  - dist/ax-code-runtime-manifest.json
+  # Renderer JavaScript and static assets are read through Electron's patched
+  # fs APIs by the app:// protocol handler and the utility process.
   - from: resources/web-dist
     to: web-dist
+
+# Only resources that require a real filesystem path stay outside app.asar.
+extraResources:
   # macOS menu-bar tray icons (template PNGs + status glyphs)
   - from: resources/icons
     to: icons
@@ -53,10 +74,11 @@ extraResources:
 # electron-builder copied extraResources. Placeholder OSS/dev builds still pass.
 afterPack: scripts/verify-packaged-ax-code.cjs
 
-# Unpack native .node files — they cannot be required() from inside an asar.
+# Keep native code and node-pty's extensionless Unix helper on real filesystem
+# paths. JavaScript wrappers remain in app.asar on every platform.
 asarUnpack:
-  - "node_modules/better-sqlite3/**"
-  - "node_modules/node-pty/**"
+  - "node_modules/**/*.{node,dll,exe,dylib,so}"
+  - "node_modules/**/spawn-helper"
 
 # ── macOS ──────────────────────────────────────────────────────────────────
 mac:
@@ -116,6 +138,11 @@ win:
     # electron-builder cannot infer the publisher from a remote signing key.
     # Set it explicitly so electron-updater verifies the expected publisher.
     publisherName: DEFAI Private Limited
+  # Sign native addons as well as the default .exe files. The bundled JS is
+  # protected by runtime-manifest.json; PE files must have Authenticode.
+  signExts:
+    - .dll
+    - .node
 
 nsis:
   oneClick: false

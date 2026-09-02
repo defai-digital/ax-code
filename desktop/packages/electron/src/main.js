@@ -33,6 +33,7 @@ const { GITHUB_BUG_REPORT_URL, GITHUB_FEATURE_REQUEST_URL } = require("./support
 const { createSupervisionFsm } = require("./supervision-fsm")
 const { buildComputerUseServerEnv } = require("./computer-use-server-env")
 const { applyBundledAxCodeEnv, buildBundledAxCodeEnv } = require("./bundled-ax-code-env")
+const { verifyBundledAxCodeIntegrity } = require("./bundled-ax-code-integrity")
 const { getRuntimeAuthPassword } = require("./runtime-auth-password")
 const { createAxCodeRuntimeSupervision } = require("./axcode-runtime-supervisor")
 const { createRuntimeRestartRequestHandler } = require("./runtime-restart-request")
@@ -97,11 +98,12 @@ if (process.platform === "darwin" && !app.isPackaged && app.dock) {
 }
 
 // ── Resource paths ──────────────────────────────────────────────────────────
-// In production (packaged), extraResources land at process.resourcesPath/web-dist.
-// In development, point at the Vite build output directly.
+// In production, renderer assets live inside the integrity-protected app.asar.
+// Electron patches fs in main and utility processes to read ASAR paths. In
+// development, point at the Vite build output directly.
 function getWebDistPath() {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "web-dist")
+    return path.join(app.getAppPath(), "web-dist")
   }
   return path.join(__dirname, "..", "..", "..", "packages", "web", "dist")
 }
@@ -2993,6 +2995,16 @@ app.whenReady().then(async () => {
   browserSession.setPermissionCheckHandler((_webContents, permission) => WEBVIEW_ALLOWED_PERMISSIONS.has(permission))
 
   try {
+    const bundledIntegrity = verifyBundledAxCodeIntegrity({
+      platform: process.platform,
+      isPackaged: app.isPackaged,
+      appPath: app.getAppPath(),
+      resourcesPath: process.resourcesPath,
+    })
+    if (bundledIntegrity.status === "verified") {
+      console.log(`[electron] verified bundled ax-code runtime integrity (${bundledIntegrity.entries} entries)`)
+      recordStartupEvent("runtime.integrity.verified", { entries: bundledIntegrity.entries })
+    }
     await purgeDisabledRemoteAccessSettings().catch((error) => {
       // Runtime paths already ignore these values, so a read-only legacy
       // settings file must not prevent the local app from starting.

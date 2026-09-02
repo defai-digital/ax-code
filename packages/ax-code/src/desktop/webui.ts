@@ -82,11 +82,15 @@ function macDesktopInvocation(input: {
 
   const executable = path.join(appPath, "Contents", "MacOS", "AX Code")
   const resources = path.join(appPath, "Contents", "Resources")
-  const cli = path.join(resources, "app.asar", "dist", "desktop-cli.mjs")
-  const server = path.join(resources, "app.asar", "dist", "server.js")
-  const webDist = path.join(resources, "web-dist")
+  const archive = path.join(resources, "app.asar")
+  const cli = path.join(archive, "dist", "desktop-cli.mjs")
+  const server = path.join(archive, "dist", "server.js")
+  const webDist = path.join(archive, "web-dist")
 
-  if ([executable, cli, server, webDist].every(input.existsSync)) {
+  // Stock Node cannot stat virtual paths inside an ASAR archive. Verify the
+  // signed Electron executable and archive here; release packaging separately
+  // verifies each required archive entry before publishing.
+  if ([executable, archive].every(input.existsSync)) {
     return {
       command: executable,
       args: [cli],

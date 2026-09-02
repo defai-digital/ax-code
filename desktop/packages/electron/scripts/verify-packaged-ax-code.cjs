@@ -3,6 +3,7 @@
 const fs = require("node:fs")
 const path = require("node:path")
 const { findUnsafeRuntimeSymlinks } = require("./runtime-symlinks.cjs")
+const { verifyRuntimeManifest } = require("../../../../script/runtime-manifest.cjs")
 
 const isStageRequired = (env = process.env) => {
   const value = typeof env.AX_CODE_STAGE_REQUIRED === "string" ? env.AX_CODE_STAGE_REQUIRED.trim().toLowerCase() : ""
@@ -29,8 +30,9 @@ const verifyPackagedAxCode = (
   const platform = context.electronPlatformName
   const launcher = path.join(runtimeRoot, "bin", platform === "win32" ? "ax-code.cmd" : "ax-code")
   const manifestPath = path.join(runtimeRoot, "package.json")
+  const runtimeIntegrityManifestPath = path.join(runtimeRoot, "runtime-manifest.json")
 
-  if (!exists(launcher) || !exists(manifestPath)) {
+  if (!exists(launcher) || !exists(manifestPath) || !exists(runtimeIntegrityManifestPath)) {
     if (isStageRequired(env)) {
       throw new Error(`Packaged app is missing the required ax-code runtime at ${runtimeRoot}`)
     }
@@ -51,6 +53,8 @@ const verifyPackagedAxCode = (
     )
   }
 
+  verifyRuntimeManifest(runtimeRoot, { readFile })
+
   const missing = dependencies.filter((dependency) => !exists(dependencyManifestPath(runtimeRoot, dependency)))
   if (missing.length > 0) {
     throw new Error(
@@ -58,7 +62,9 @@ const verifyPackagedAxCode = (
     )
   }
 
-  console.log(`[verify-packaged-ax-code] verified ${dependencies.length} direct runtime dependencies`)
+  console.log(
+    `[verify-packaged-ax-code] verified ${dependencies.length} direct runtime dependencies and runtime manifest`,
+  )
   return { status: "verified", runtimeRoot, dependencies }
 }
 
@@ -72,4 +78,5 @@ module.exports.__test = {
   isStageRequired,
   resolvePackagedAxCodeRoot,
   verifyPackagedAxCode,
+  verifyRuntimeManifest,
 }

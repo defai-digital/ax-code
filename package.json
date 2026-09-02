@@ -36,6 +36,7 @@
     "desktop:test": "pnpm --dir packages/sdk/js run build && pnpm --filter \"./desktop/packages/*\" --if-present run test",
     "desktop:lint": "pnpm --filter \"./desktop/packages/*\" --if-present run lint",
     "desktop:smoke:packaged": "node desktop/packages/electron/scripts/smoke-packaged-app.mjs",
+    "desktop:smoke:packaged-asar-cli": "node desktop/packages/electron/scripts/smoke-packaged-asar-cli.mjs",
     "release:cli": "pnpm run publish:github",
     "release:desktop": "./desktop/scripts/publish-github-release.sh",
     "release:all": "pnpm run release:cli && pnpm run release:desktop",

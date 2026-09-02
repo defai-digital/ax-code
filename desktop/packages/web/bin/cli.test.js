@@ -9,6 +9,7 @@ import {
   parseArgs,
   resolveAvailablePort,
   resolveTunnelProviderAndMode,
+  toModuleUrl,
   windowsCommandQuote,
   CliError,
   EXIT_CODE,
@@ -100,6 +101,19 @@ describe("startup quoting", () => {
     expect(windowsCommandQuote(String.raw`C:\Program Files\AX "Code"\run.ps1`)).toBe(
       String.raw`"C:\\Program Files\\AX \"Code\"\\run.ps1"`,
     )
+  })
+
+  it("converts the packaged server path to an importable file URL", () => {
+    const serverPath = path.join(
+      "/Applications",
+      "AX Code.app",
+      "Contents",
+      "Resources",
+      "app.asar",
+      "dist",
+      "server.js",
+    )
+    expect(toModuleUrl(serverPath)).toBe(pathToFileURL(serverPath).href)
   })
 })
 

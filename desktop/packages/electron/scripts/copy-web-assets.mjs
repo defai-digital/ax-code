@@ -2,7 +2,7 @@
 /**
  * Copies the Vite-built web UI (packages/web/dist) into
  * packages/electron/resources/web-dist so electron-builder can
- * include it as an extraResource in the final package.
+ * include it in app.asar.
  */
 import fs from "fs/promises"
 import path from "path"

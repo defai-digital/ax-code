@@ -5,13 +5,14 @@ import { __internal, resolveDesktopInvocation } from "../../src/desktop/webui"
 const appPath = "/Applications/AX Code.app"
 const executable = path.join(appPath, "Contents", "MacOS", "AX Code")
 const resources = path.join(appPath, "Contents", "Resources")
-const cli = path.join(resources, "app.asar", "dist", "desktop-cli.mjs")
-const server = path.join(resources, "app.asar", "dist", "server.js")
-const webDist = path.join(resources, "web-dist")
+const archive = path.join(resources, "app.asar")
+const cli = path.join(archive, "dist", "desktop-cli.mjs")
+const server = path.join(archive, "dist", "server.js")
+const webDist = path.join(archive, "web-dist")
 
 describe("desktop web UI invocation", () => {
   test("discovers the packaged macOS app runtime when no shim is on PATH (#355)", () => {
-    const existing = new Set([appPath, executable, cli, server, webDist])
+    const existing = new Set([appPath, executable, archive])
     const invocation = resolveDesktopInvocation("/tmp/project", {
       platform: "darwin",
       env: {},

@@ -12,6 +12,9 @@ catalogs:
     '@actions/github':
       specifier: 6.0.1
       version: 6.0.1
+    '@electron/asar':
+      specifier: 3.4.1
+      version: 3.4.1
     '@hono/zod-validator':
       specifier: 0.4.2
       version: 0.4.2
@@ -81,6 +84,9 @@ catalogs:
     remeda:
       specifier: 2.26.0
       version: 2.26.0
+    resedit:
+      specifier: 1.7.2
+      version: 1.7.2
     semver:
       specifier: 7.6.3
       version: 7.6.3
@@ -240,6 +246,9 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
     devDependencies:
+      '@electron/asar':
+        specifier: 'catalog:'
+        version: 3.4.1
       '@electron/rebuild':
         specifier: ^3.7.1
         version: 3.7.2
@@ -252,6 +261,9 @@ importers:
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
+      resedit:
+        specifier: 'catalog:'
+        version: 1.7.2
 
   desktop/packages/ui:
     dependencies:

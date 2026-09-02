@@ -5,7 +5,7 @@ import net from "net"
 import os from "os"
 import path from "path"
 import { spawn, spawnSync } from "child_process"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { isModuleCliExecution } from "./cli-entry.js"
 import { assertLocalOnlyHostname, isLoopbackHostname } from "../server/lib/security/local-only.js"
 import {
@@ -915,6 +915,10 @@ function resolveServerEntrypoint() {
   return path.join(__dirname, "..", "server", "index.js")
 }
 
+function toModuleUrl(filePath) {
+  return pathToFileURL(filePath).href
+}
+
 function buildStartupArgs(options = {}) {
   const args = [resolveCliEntrypoint(), "serve", "--foreground", "--port", String(options.port || DEFAULT_PORT)]
   if (typeof options.host === "string" && options.host.length > 0) {
@@ -1799,7 +1803,7 @@ const commands = {
 
       const effectiveHost = typeof options.host === "string" && options.host.length > 0 ? options.host : undefined
 
-      const { startWebUiServer } = await import(pathToFileURL(serverPath).href)
+      const { startWebUiServer } = await import(toModuleUrl(serverPath))
       const controller = await startWebUiServer({
         port: targetPort,
         host: effectiveHost,
@@ -2973,6 +2977,7 @@ export {
   buildTunnelServeOptions,
   resolveTunnelProviderAndMode,
   windowsCommandQuote,
+  toModuleUrl,
   CliError,
   EXIT_CODE,
 }

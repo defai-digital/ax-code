@@ -26,6 +26,7 @@ const args = process.argv.slice(2)
 // pass it through, matching how rebuild-native.mjs pins the Electron ABI.
 const require = createRequire(import.meta.url)
 const { version: electronVersion } = require("electron/package.json")
+const { EMBEDDED_MANIFEST_NAME, prepareRuntimeIntegrityBinding } = require("./prepare-runtime-integrity.cjs")
 const builderEnv = resolveAppleSigningEnv(args)
 
 // Stage the closed-source AX Computer computer-use server into
@@ -52,6 +53,20 @@ const stageAxCode = spawnSync("bash", [path.join(__dirname, "stage-ax-code.sh"),
 if (stageAxCode.error) throw stageAxCode.error
 if (stageAxCode.status !== 0) process.exit(stageAxCode.status ?? 1)
 
+// Bind the staged sidecar's authenticated non-native manifest into app.asar.
+// Electron main verifies the external runtime against this trusted copy before
+// spawning it. Local placeholder builds receive a non-runnable marker file.
+const runtimeBinding = prepareRuntimeIntegrityBinding({
+  runtimeRoot: path.join(electronDir, "resources", "ax-code"),
+  outputPath: path.join(electronDir, "dist", EMBEDDED_MANIFEST_NAME),
+  env: builderEnv,
+})
+console.log(
+  runtimeBinding.status === "bound"
+    ? `[electron] bound ax-code runtime manifest (${runtimeBinding.entries} entries) into app.asar`
+    : "[electron] staged runtime placeholder; wrote ASAR integrity marker",
+)
+
 // Resolve electron-builder via npx (it's hoisted to the workspace root, not
 // packages/electron/node_modules/.bin), matching how the macOS job invokes it.
 // shell:true so `npx` resolves on the Windows runner.
@@ -69,4 +84,15 @@ const result = spawnSync("npx", ["electron-builder", `-c.electronVersion=${elect
 })
 
 if (result.error) throw result.error
-process.exit(result.status ?? 0)
+if (result.status !== 0) process.exit(result.status ?? 1)
+
+// Validate the finished unpacked application, after electron-builder has
+// written fuses (and after platform signing when enabled). This runs for macOS,
+// Windows, and Linux and fails packaging if Electron-owned JavaScript escaped
+// app.asar or the expected production fuse policy was not applied.
+const verify = spawnSync(process.execPath, [path.join(__dirname, "verify-packaged-electron.cjs"), ...args], {
+  stdio: "inherit",
+  cwd: electronDir,
+})
+if (verify.error) throw verify.error
+process.exit(verify.status ?? 1)

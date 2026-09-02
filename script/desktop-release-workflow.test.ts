@@ -53,4 +53,29 @@ describe("Desktop release workflow", () => {
       expect(block).not.toContain("Get-ChildItem -Recurse -Filter minisign.exe")
     }
   })
+
+  test("audits every Windows PE file after packaging", () => {
+    for (const [job, unpacked] of [
+      ["build-windows", "win-unpacked"],
+      ["build-windows-arm64", "win-arm64-unpacked"],
+    ]) {
+      const block = jobBlock(job)
+      expect(block).toContain("audit-windows-signatures.ps1")
+      expect(block).toContain(`-Root desktop/packages/electron/dist/${unpacked}`)
+      expect(block).toContain("-ExpectedThumbprint FC40F1109912C025E751E804AA9BD1538A2D12EF")
+    }
+  })
+
+  test("smokes the packaged ASAR CLI and static assets on every platform", () => {
+    for (const [job, flags] of [
+      ["build-macos", "--mac --arm64"],
+      ["build-windows", "--win --x64"],
+      ["build-windows-arm64", "--win --arm64"],
+      ["build-linux", "--linux --x64"],
+      ["build-linux-arm64", "--linux --arm64"],
+    ]) {
+      const block = jobBlock(job)
+      expect(block).toContain(`smoke-packaged-asar-cli.mjs ${flags}`)
+    }
+  })
 })

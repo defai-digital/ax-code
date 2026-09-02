@@ -415,6 +415,10 @@ jobs:
           AX_CODE_STAGE_REQUIRED: "true"
         run: node desktop/packages/electron/scripts/smoke-packaged-app.mjs --artifacts "$RUNNER_TEMP/desktop-smoke"
 
+      - name: Packaged ASAR CLI smoke
+        if: ${{ env.HAS_APPLE_CERT == 'true' }}
+        run: node desktop/packages/electron/scripts/smoke-packaged-asar-cli.mjs --mac --arm64
+
       - name: Upload macOS smoke logs
         if: always()
         uses: actions/upload-artifact@v7
@@ -516,6 +520,10 @@ jobs:
           set -euo pipefail
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --win --x64 --publish=never
+          pwsh -NoLogo -NoProfile -NonInteractive -File desktop/packages/electron/scripts/audit-windows-signatures.ps1 \
+            -Root desktop/packages/electron/dist/win-unpacked \
+            -ExpectedThumbprint FC40F1109912C025E751E804AA9BD1538A2D12EF
+          node desktop/packages/electron/scripts/smoke-packaged-asar-cli.mjs --win --x64
 
       - name: Upload Windows x64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -618,6 +626,10 @@ jobs:
           set -euo pipefail
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --win --arm64 --publish=never
+          pwsh -NoLogo -NoProfile -NonInteractive -File desktop/packages/electron/scripts/audit-windows-signatures.ps1 \
+            -Root desktop/packages/electron/dist/win-arm64-unpacked \
+            -ExpectedThumbprint FC40F1109912C025E751E804AA9BD1538A2D12EF
+          node desktop/packages/electron/scripts/smoke-packaged-asar-cli.mjs --win --arm64
 
       - name: Upload Windows arm64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -716,6 +728,7 @@ jobs:
           set -euo pipefail
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --linux --x64 --publish=never
+          node desktop/packages/electron/scripts/smoke-packaged-asar-cli.mjs --linux --x64
 
       - name: Upload Linux x64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}
@@ -774,6 +787,7 @@ jobs:
           set -euo pipefail
           pnpm --filter @ax-code/electron run build
           node desktop/packages/electron/scripts/package.mjs --linux --arm64 --publish=never
+          node desktop/packages/electron/scripts/smoke-packaged-asar-cli.mjs --linux --arm64
 
       - name: Upload Linux arm64 installers
         if: ${{ github.event.inputs.dry_run != 'true' }}

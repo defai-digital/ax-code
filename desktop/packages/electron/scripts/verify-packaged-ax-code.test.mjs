@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url"
 const require = createRequire(import.meta.url)
 const { dependencyManifestPath, resolvePackagedAxCodeRoot, verifyPackagedAxCode } =
   require("./verify-packaged-ax-code.cjs").__test
+const { writeRuntimeManifest } = require("../../../../script/runtime-manifest.cjs")
 
 const tempDirs = []
 const testSymlinks = process.platform === "win32" ? test.skip : test
@@ -27,7 +28,10 @@ const writeRuntime = (context, dependencies) => {
   const launcher = path.join(runtimeRoot, "bin", context.electronPlatformName === "win32" ? "ax-code.cmd" : "ax-code")
   fs.mkdirSync(path.dirname(launcher), { recursive: true })
   fs.writeFileSync(launcher, "launcher")
+  fs.mkdirSync(path.join(runtimeRoot, "lib"), { recursive: true })
+  fs.writeFileSync(path.join(runtimeRoot, "lib", "index-node-tui.js"), "runtime")
   fs.writeFileSync(path.join(runtimeRoot, "package.json"), JSON.stringify({ dependencies }))
+  writeRuntimeManifest(runtimeRoot)
   return runtimeRoot
 }
 
@@ -60,6 +64,7 @@ describe("packaged ax-code runtime verification", () => {
     const runtimeRoot = writeRuntime(context, { "solid-js": "1.9.9", "@ax-code/util": "1.0.0" })
     fs.mkdirSync(path.dirname(dependencyManifestPath(runtimeRoot, "solid-js")), { recursive: true })
     fs.writeFileSync(dependencyManifestPath(runtimeRoot, "solid-js"), "{}")
+    writeRuntimeManifest(runtimeRoot)
 
     expect(() => verifyPackagedAxCode(context)).toThrow("@ax-code/util")
   })
@@ -70,6 +75,7 @@ describe("packaged ax-code runtime verification", () => {
     const dependency = dependencyManifestPath(runtimeRoot, "solid-js")
     fs.mkdirSync(path.dirname(dependency), { recursive: true })
     fs.writeFileSync(dependency, "{}")
+    writeRuntimeManifest(runtimeRoot)
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), "ax-packaged-runtime-outside-"))
     tempDirs.push(outside)
     const link = path.join(runtimeRoot, "node_modules", "workspace-only")
@@ -86,6 +92,7 @@ describe("packaged ax-code runtime verification", () => {
       fs.mkdirSync(path.dirname(manifest), { recursive: true })
       fs.writeFileSync(manifest, "{}")
     }
+    writeRuntimeManifest(runtimeRoot)
 
     expect(verifyPackagedAxCode(context).status).toBe("verified")
   })
@@ -97,5 +104,21 @@ describe("packaged ax-code runtime verification", () => {
     expect(config).toContain("from: resources/ax-code/node_modules")
     expect(config).toContain("to: ax-code/node_modules")
     expect(config).toContain("afterPack: scripts/verify-packaged-ax-code.cjs")
+    expect(config).toContain("electronFuses:")
+    expect(config).toContain("smartUnpack: false")
+    expect(config).toContain("enableCookieEncryption: true")
+    expect(config).toContain("enableNodeOptionsEnvironmentVariable: false")
+    expect(config).toContain("enableNodeCliInspectArguments: false")
+    expect(config).toContain("enableEmbeddedAsarIntegrityValidation: true")
+    expect(config).toContain("onlyLoadAppFromAsar: true")
+    expect(config).toContain("grantFileProtocolExtraPrivileges: false")
+    expect(config).toContain("runAsNode: true")
+    expect(config).toContain("from: resources/web-dist")
+    expect(config).toContain("to: web-dist")
+    expect(config).toContain('"node_modules/**/*.{node,dll,exe,dylib,so}"')
+    expect(config).toContain('"node_modules/**/spawn-helper"')
+    expect(config).not.toContain('"node_modules/node-pty/**"')
+    expect(config).toContain("- .dll")
+    expect(config).toContain("- .node")
   })
 })
