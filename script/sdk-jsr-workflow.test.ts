@@ -10,7 +10,9 @@ describe("SDK JSR release workflow", () => {
     expect(workflow).toContain("format('refs/tags/{0}', inputs.tag)")
     expect(workflow).toContain('EXPECTED_TAG="sdk-v${SDK_VERSION}"')
     expect(workflow).toContain("id-token: write")
-    expect(workflow).toContain("run publish:jsr -- --provenance")
+    expect(workflow).toMatch(/run: pnpm --dir packages\/sdk\/js run publish:jsr\n/)
+    expect(workflow).not.toContain("run publish:jsr --")
+    expect(workflow).not.toContain("--no-provenance")
   })
 
   test("gates publication on regeneration, tests, and a JSR dry-run", () => {

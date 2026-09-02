@@ -64,4 +64,4 @@ jobs:
         run: pnpm --dir packages/sdk/js run check:jsr
 
       - name: Publish JSR package with provenance
-        run: pnpm --dir packages/sdk/js run publish:jsr -- --provenance
+        run: pnpm --dir packages/sdk/js run publish:jsr
