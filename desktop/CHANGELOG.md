@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [7.10.2] - 2026-09-02
+
+### Changed
+
+- Accept two false-positive lifecycle findings.
+
+### Fixed
+
+- Fix packaged Desktop config and network regressions.
+
 ## [7.10.1] - 2026-08-30
 
 ### Fixed
