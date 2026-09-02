@@ -34,7 +34,7 @@ pages are the ones linked here.
 | Keep scheduled work running across process or host exits | [Long-Running Operations](guides/long-running-operations.md)            |
 | Choose local, cloud, hybrid, council, or arena execution | [Execution Modes](guides/modes.md)                                      |
 | Connect external tools and data                          | [MCP Integrations](integrations/mcp.md)                                 |
-| Embed AX Code in an application                          | [`@ax-code/sdk`](../packages/sdk/js/README.md)                          |
+| Embed AX Code in an application                          | [`@defai-digital/ax-code-sdk`](../packages/sdk/js/README.md)            |
 | Generate a client for another language                   | [HTTP and OpenAPI Compatibility](sdk/http-openapi.md)                   |
 | Build a desktop or native host                           | [Native SDK Transport](sdk/native-transport.md)                         |
 
@@ -80,7 +80,7 @@ pages are the ones linked here.
 
 ## SDK and service boundaries
 
-- [`@ax-code/sdk`](../packages/sdk/js/README.md) — first-party TypeScript and JavaScript embedding.
+- [`@defai-digital/ax-code-sdk`](../packages/sdk/js/README.md) — first-party TypeScript and JavaScript embedding.
 - [Native SDK Transport](sdk/native-transport.md) — gRPC-shaped desktop/native boundary and fallback behavior.
 - [HTTP and OpenAPI Compatibility](sdk/http-openapi.md) — server mode and generated clients for other languages.
 - [OpenAPI snapshot](../packages/sdk/openapi.json) — authoritative HTTP route and schema contract.

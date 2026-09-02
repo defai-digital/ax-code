@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: desktop-native transport contract
-Last reviewed: 2026-05-30
+Last reviewed: 2026-09-02
 Owner: ax-code sdk
 
 AX Code now exposes an optional gRPC-shaped transport contract for desktop and native GUI apps. The contract is intentionally narrower than the full HTTP/OpenAPI route tree: it focuses on the headless runtime capabilities a GUI needs to feel native, while keeping HTTP/OpenAPI available internally for compatibility, diagnostics, and generated clients.
@@ -11,13 +11,13 @@ AX Code now exposes an optional gRPC-shaped transport contract for desktop and n
 
 Use gRPC/native transport as the preferred boundary for first-party desktop apps. Keep HTTP/SSE enabled as the fallback and debug surface.
 
-| Need                                           | Recommended path                         | Reason                                                                                 |
-| ---------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| First-party desktop GUI                        | `@ax-code/sdk/grpc`                      | Stable command/event contract, streaming-ready, native-friendly metadata and deadlines |
-| TypeScript automation in the same process      | `@ax-code/sdk` with `createAgent()`      | Lowest overhead and custom tool support                                                |
-| Browser, WebView fallback, or easy diagnostics | HTTP/SSE with `@ax-code/sdk/headless`    | Works with fetch, curl, browser devtools, and current server auth controls             |
-| External non-JS integrations                   | gRPC proto or OpenAPI-generated client   | Broad tooling support without first-party HTTP SDK maintenance                         |
-| Rust host embedding                            | gRPC/native service or subprocess bridge | Avoids exposing the full HTTP route tree to the app shell                              |
+| Need                                           | Recommended path                                    | Reason                                                                                 |
+| ---------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| First-party desktop GUI                        | `@defai-digital/ax-code-sdk/grpc`                   | Stable command/event contract, streaming-ready, native-friendly metadata and deadlines |
+| TypeScript automation in the same process      | `@defai-digital/ax-code-sdk` with `createAgent()`   | Lowest overhead and custom tool support                                                |
+| Browser, WebView fallback, or easy diagnostics | HTTP/SSE with `@defai-digital/ax-code-sdk/headless` | Works with fetch, curl, browser devtools, and current server auth controls             |
+| External non-JS integrations                   | gRPC proto or OpenAPI-generated client              | Broad tooling support without first-party HTTP SDK maintenance                         |
+| Rust host embedding                            | gRPC/native service or subprocess bridge            | Avoids exposing the full HTTP route tree to the app shell                              |
 
 ## Why Not Remove HTTP
 
@@ -27,11 +27,12 @@ The transport is not the dominant latency source for normal agent turns. LLM cal
 
 ## Contract Shape
 
-The language-neutral contract lives at [`packages/sdk/proto/ax_code/v1/headless.proto`](../../packages/sdk/proto/ax_code/v1/headless.proto).
-Published packages also include it at `@ax-code/sdk/proto/ax_code/v1/headless.proto` for native hosts that generate
-clients from the installed SDK package.
+The language-neutral contract lives at
+[`packages/sdk/proto/ax_code/v1/headless.proto`](../../packages/sdk/proto/ax_code/v1/headless.proto). The JSR package
+also contains that proto as an asset. TypeScript hosts locate it with `resolveAxCodeGrpcProtoUrl()`; non-JavaScript
+generators should use the canonical repository contract.
 
-The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
+The TypeScript facade lives at `@defai-digital/ax-code-sdk/grpc` and covers:
 
 - health and lifecycle readiness
 - app log ingestion and instance dispose/restart controls for native host lifecycle management
@@ -56,7 +57,7 @@ The TypeScript facade lives at `@ax-code/sdk/grpc` and covers:
 
 The proto uses structured JSON payloads for command bodies and workflow/task payloads. That keeps the transport stable while AX Code runtime schemas continue to evolve quickly.
 
-`@ax-code/sdk/grpc` also exports `AX_CODE_GRPC_METHOD_DESCRIPTORS`, `listAxCodeGrpcMethods()`,
+`@defai-digital/ax-code-sdk/grpc` also exports `AX_CODE_GRPC_METHOD_DESCRIPTORS`, `listAxCodeGrpcMethods()`,
 `getAxCodeGrpcMethodDescriptor()`, `assertAxCodeGrpcMethodSupported()`, `listMissingAxCodeGrpcNativeHandlers()`, and
 `assertAxCodeGrpcNativeHandlers()`. Native hosts should use these descriptors and coverage checks as the canonical method
 catalog when building handler maps, gRPC service binders, preload allowlists, or startup gates. Each descriptor includes
@@ -74,7 +75,7 @@ import {
   createAxCodeGrpcClientFromNativeBridge,
   resolveAxCodeGrpcProtoUrl,
   startAxCodeGrpcHeadlessBackend,
-} from "@ax-code/sdk/grpc"
+} from "@defai-digital/ax-code-sdk/grpc"
 
 const backend = await startAxCodeGrpcHeadlessBackend({ directory: "/workspace/app" })
 try {
@@ -141,7 +142,7 @@ import {
   assertAxCodeGrpcNativeHandlers,
   createAxCodeGrpcNativeBridgeFromHandlers,
   listAxCodeGrpcMethods,
-} from "@ax-code/sdk/grpc"
+} from "@defai-digital/ax-code-sdk/grpc"
 
 const handlers = {
   unary: {
@@ -189,11 +190,11 @@ internally. It does not return the HTTP URL or authorization header, so renderer
 facade and later moved to a real native gRPC transport without a public API rewrite.
 
 Node-based desktop hosts can expose a real HTTP/2 gRPC endpoint from the same native bridge with
-`@ax-code/sdk/grpc/node`. This is for privileged host processes, not renderer code:
+`@defai-digital/ax-code-sdk/grpc/node`. This is for privileged host processes, not renderer code:
 
 ```ts
-import { createAxCodeGrpcNativeBridgeFromHandlers, AX_CODE_GRPC_METHOD } from "@ax-code/sdk/grpc"
-import { startAxCodeGrpcNodeHttp2Server } from "@ax-code/sdk/grpc/node"
+import { createAxCodeGrpcNativeBridgeFromHandlers, AX_CODE_GRPC_METHOD } from "@defai-digital/ax-code-sdk/grpc"
+import { startAxCodeGrpcNodeHttp2Server } from "@defai-digital/ax-code-sdk/grpc/node"
 
 const bridge = createAxCodeGrpcNativeBridgeFromHandlers({
   unary: {

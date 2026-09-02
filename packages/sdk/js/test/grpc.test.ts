@@ -36,10 +36,13 @@ describe("gRPC SDK facade", () => {
     expect(AX_CODE_GRPC_METHOD.SubscribeEvents).toBe("/axcode.v1.AxCodeHeadless/SubscribeEvents")
     expect(AX_CODE_GRPC_PROTO_PATH).toBe("ax_code/v1/headless.proto")
     expect(AX_CODE_GRPC_PROTO_PACKAGE_PATH).toBe("proto/ax_code/v1/headless.proto")
-    expect(packageJson.exports["./proto/ax_code/v1/headless.proto"]).toBe("./dist/proto/ax_code/v1/headless.proto")
+    expect(packageJson.exports["./proto/ax_code/v1/headless.proto"]).toBeUndefined()
     expect(existsSync(resolveAxCodeGrpcProtoUrl().pathname)).toBe(true)
-    expect(resolveAxCodeGrpcProtoUrl("file:///app/node_modules/@ax-code/sdk/dist/grpc.js").pathname).toBe(
-      "/app/node_modules/@ax-code/sdk/dist/proto/ax_code/v1/headless.proto",
+    expect(resolveAxCodeGrpcProtoUrl("file:///app/node_modules/@defai-digital/ax-code-sdk/dist/grpc.js").pathname).toBe(
+      "/app/node_modules/@defai-digital/ax-code-sdk/dist/proto/ax_code/v1/headless.proto",
+    )
+    expect(resolveAxCodeGrpcProtoUrl("https://jsr.io/@defai-digital/ax-code-sdk/2.2.0/dist/grpc.js").href).toBe(
+      "https://jsr.io/@defai-digital/ax-code-sdk/2.2.0/dist/proto/ax_code/v1/headless.proto",
     )
   })
 

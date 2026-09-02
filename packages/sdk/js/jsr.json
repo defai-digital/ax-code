@@ -1,0 +1,24 @@
+{
+  "$schema": "https://jsr.io/schema/config-file.v1.json",
+  "name": "@defai-digital/ax-code-sdk",
+  "version": "2.2.0",
+  "exports": {
+    ".": "./dist/index.js",
+    "./testing": "./dist/testing/index.js",
+    "./programmatic": "./dist/programmatic/index.js",
+    "./grpc": "./dist/grpc.js",
+    "./grpc/node": "./dist/grpc-node.js",
+    "./headless": "./dist/headless.js",
+    "./headless-ipc": "./dist/headless-ipc.js",
+    "./headless/client": "./dist/headless/client.js",
+    "./headless/event": "./dist/headless/event.js",
+    "./headless/projection": "./dist/headless/projection.js",
+    "./v2": "./dist/v2/index.js",
+    "./v2/client": "./dist/v2/client.js",
+    "./v2/gen/client": "./dist/v2/gen/client/index.js",
+    "./v2/server": "./dist/v2/server.js"
+  },
+  "publish": {
+    "include": ["dist", "README.md", "ARCHITECTURE.md", "LICENSE", "package.json", "jsr.json"]
+  }
+}

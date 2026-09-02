@@ -141,14 +141,14 @@ Release archives are verified with minisign. Platform support, update paths, sig
 
 The same runtime, session store, and evidence model back every surface.
 
-| Surface              | Entry point                                                                                            |
-| -------------------- | ------------------------------------------------------------------------------------------------------ |
-| Desktop app          | AX Code Desktop for macOS, Windows, and Ubuntu 24.04+, from [`desktop/`](desktop/)                     |
-| Terminal UI          | `ax-code` — provider, model, agent, session, MCP, and skill flows                                      |
-| One-shot / headless  | `ax-code run "review the auth flow"` for scripts, CI, and bots                                         |
-| Local service        | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                         |
-| TypeScript embedding | `@ax-code/sdk` provides `createAgent()`, streaming events, sessions, and custom tools                  |
-| VS Code              | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) |
+| Surface             | Entry point                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------------ |
+| Desktop app         | AX Code Desktop for macOS, Windows, and Ubuntu 24.04+, from [`desktop/`](desktop/)                     |
+| Terminal UI         | `ax-code` — provider, model, agent, session, MCP, and skill flows                                      |
+| One-shot / headless | `ax-code run "review the auth flow"` for scripts, CI, and bots                                         |
+| Local service       | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                         |
+| TypeScript SDK      | `@defai-digital/ax-code-sdk` provides typed headless, gRPC, event, session, and testing APIs           |
+| VS Code             | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) |
 
 ## Control model
 

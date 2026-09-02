@@ -136,7 +136,7 @@ export interface AgentOptions {
   /** Direct API key authentication (skips local config) */
   auth?: AuthConfig
   /** User-defined tools to register alongside built-in tools.
-   *  Create each with the `tool()` helper from `@ax-code/sdk`. */
+   *  Create each with the `tool()` helper from `@defai-digital/ax-code-sdk`. */
   tools?: SdkTool[]
 }
 

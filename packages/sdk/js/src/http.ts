@@ -1,17 +1,10 @@
 /**
  * HTTP-server-based ax-code client.
  *
- * This was the default export in @ax-code/sdk@1.4.0. In 2.0.0 it
- * moved to `@ax-code/sdk/http` — the new default is the in-process
- * `createAgent` from `@ax-code/sdk`.
- *
- * @example
- * ```ts
- * import { createAxCode } from "@ax-code/sdk/http"
- *
- * const { client, server } = await createAxCode()
- * const sessions = await client.session.list()
- * ```
+ * This was the default export in the private workspace package
+ * `@ax-code/sdk@1.4.0`. It moved to the internal `@ax-code/sdk/http` path in
+ * 2.0.0. The public JSR package does not export this legacy surface; app
+ * integrations use its headless or gRPC entry point.
  */
 
 export * from "./client.js"

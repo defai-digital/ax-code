@@ -1,17 +1,17 @@
 /**
- * @ax-code/sdk — AI coding agent SDK
+ * @defai-digital/ax-code-sdk — AI coding agent SDK
  *
- * The default export is the in-process agent. No HTTP server is
- * spawned — the agent runs directly in your Node.js process with
- * 10-40x faster startup than the server-based path.
+ * The default entry point is an in-process adapter for source hosts that
+ * deliberately provide the private AX Code runtime package. Public apps
+ * should use the headless or gRPC entry point with a signed runtime binary.
  *
  * For GUI or app shell integrations, use:
- *   import { startHeadlessBackend } from "@ax-code/sdk/headless"
- *   import { createAxCodeGrpcClient } from "@ax-code/sdk/grpc"
+ *   import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"
+ *   import { createAxCodeGrpcClient } from "@defai-digital/ax-code-sdk/grpc"
  *
- * @example
+ * @example Source-workspace host
  * ```ts
- * import { createAgent } from "@ax-code/sdk"
+ * import { createAgent } from "@defai-digital/ax-code-sdk"
  *
  * const agent = await createAgent({ directory: "." })
  * for await (const event of agent.stream("What does src/index.ts do?")) {

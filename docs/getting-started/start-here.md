@@ -72,7 +72,7 @@ The rest of the documentation maps onto those layers.
 
 ### I want to embed or automate it
 
-- Use [`@ax-code/sdk`](../../packages/sdk/js/README.md) for in-process TypeScript integration.
+- Use [`@defai-digital/ax-code-sdk`](../../packages/sdk/js/README.md) headless or gRPC entry points for TypeScript app integration.
 - Use [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md) for a service boundary, generated clients, and the authoritative OpenAPI contract.
 - Use `ax-code mcp add` when the agent needs external tools or services.
 
@@ -119,7 +119,7 @@ Grok runs exclusively through `Grok Build CLI`. Select `grok-build-cli` in `/con
 | Sandbox and permissions  | [Sandbox Mode](../guides/sandbox.md)                                                                                                                              |
 | Unattended execution     | [Autonomous Mode](../guides/autonomous.md)                                                                                                                        |
 | Routing and model tier   | [Auto-Route](../guides/auto-route.md)                                                                                                                             |
-| SDK embedding            | [`@ax-code/sdk`](../../packages/sdk/js/README.md)                                                                                                                 |
+| SDK embedding            | [`@defai-digital/ax-code-sdk`](../../packages/sdk/js/README.md)                                                                                                   |
 | HTTP/OpenAPI clients     | [HTTP and OpenAPI Compatibility](../sdk/http-openapi.md)                                                                                                          |
 | VS Code integration      | [VS Code integration](../../packages/integration-vscode/README.md) · [Marketplace](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) |
 | Architecture             | [Semantic Layer](../architecture/semantic-layer.md)                                                                                                               |

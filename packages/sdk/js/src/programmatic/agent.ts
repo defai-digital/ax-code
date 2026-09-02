@@ -20,7 +20,7 @@ export async function createAgent(options: AgentOptions): Promise<Agent> {
   } catch (error) {
     if (isMissingRuntimeError(error)) {
       throw new Error(
-        "The @ax-code/sdk programmatic agent requires the ax-code runtime package to be installed and resolvable. Install a compatible ax-code runtime alongside @ax-code/sdk, or use @ax-code/sdk/headless or @ax-code/sdk/grpc for app integrations.",
+        "The @defai-digital/ax-code-sdk programmatic agent requires the ax-code runtime package to be installed and resolvable. Install a compatible ax-code runtime alongside @defai-digital/ax-code-sdk, or use @defai-digital/ax-code-sdk/headless or @defai-digital/ax-code-sdk/grpc for app integrations.",
         { cause: error },
       )
     }

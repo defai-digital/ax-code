@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { createAgent } from "@ax-code/sdk/programmatic"
+ * import { createAgent } from "@defai-digital/ax-code-sdk/programmatic"
  *
  * const agent = await createAgent({ directory: process.cwd() })
  *

@@ -1,5 +1,5 @@
 /**
- * Testing utilities for @ax-code/sdk.
+ * Testing utilities for @defai-digital/ax-code-sdk.
  *
  * Use `createMockAgent` in unit tests to verify your agent integration
  * without calling a real LLM provider. The mock agent satisfies the
@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { createMockAgent } from "@ax-code/sdk/testing"
+ * import { createMockAgent } from "@defai-digital/ax-code-sdk/testing"
  *
  * test("my bot scans for CVEs", async () => {
  *   const agent = createMockAgent({

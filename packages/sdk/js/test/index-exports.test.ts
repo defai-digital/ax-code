@@ -17,7 +17,6 @@ describe("@ax-code/sdk top-level exports", () => {
       "./programmatic",
       "./grpc",
       "./grpc/node",
-      "./proto/ax_code/v1/headless.proto",
       "./headless",
       "./headless-ipc",
       "./headless/client",

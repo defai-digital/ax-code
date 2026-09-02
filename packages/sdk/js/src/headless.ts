@@ -1,5 +1,5 @@
 /**
- * @ax-code/sdk/headless — App-oriented headless SDK for AX Code.
+ * @defai-digital/ax-code-sdk/headless — App-oriented headless SDK for AX Code.
  *
  * Use this entry point to start or attach to a local AX Code backend,
  * subscribe to typed events, project state, and manage backend lifecycle.
@@ -11,7 +11,7 @@
  *   createHeadlessClient,
  *   createHeadlessProjectionState,
  *   applyHeadlessProjectionEvent,
- * } from "@ax-code/sdk/headless"
+ * } from "@defai-digital/ax-code-sdk/headless"
  *
  * const backend = await startHeadlessBackend({ directory: "/path/to/workspace" })
  * try {

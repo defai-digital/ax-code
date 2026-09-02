@@ -9,7 +9,7 @@ import type { SdkTool } from "./types.js"
  *
  * @example
  * ```ts
- * import { createAgent, tool } from "@ax-code/sdk"
+ * import { createAgent, tool } from "@defai-digital/ax-code-sdk"
  * import { z } from "zod"
  *
  * const deploy = tool({

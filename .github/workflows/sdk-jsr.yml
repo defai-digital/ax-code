@@ -1,0 +1,67 @@
+name: Publish SDK to JSR
+
+on:
+  push:
+    tags:
+      - "sdk-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing SDK release tag, for example sdk-v2.2.0
+        required: true
+        type: string
+
+concurrency:
+  group: sdk-jsr-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AX_CODE_SDK_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+
+      - name: Setup AX Code JavaScript toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate SDK release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_VERSION="$(node -p "require('./packages/sdk/js/jsr.json').version")"
+          EXPECTED_TAG="sdk-v${SDK_VERSION}"
+          if [ "$AX_CODE_SDK_RELEASE_TAG" != "$EXPECTED_TAG" ]; then
+            echo "::error::SDK release tag must be $EXPECTED_TAG, received $AX_CODE_SDK_RELEASE_TAG"
+            exit 1
+          fi
+
+      - name: Regenerate SDK
+        run: pnpm --dir packages/sdk/js run build
+
+      - name: Reject generated SDK drift
+        run: git diff --exit-code -- packages/sdk/openapi.json packages/sdk/js/src/gen packages/sdk/js/src/v2/gen
+
+      - name: Typecheck SDK
+        run: pnpm --dir packages/sdk/js run typecheck
+
+      - name: Test SDK
+        run: pnpm --dir packages/sdk/js run test
+
+      - name: Verify JSR package
+        run: pnpm --dir packages/sdk/js run check:jsr
+
+      - name: Publish JSR package with provenance
+        run: pnpm --dir packages/sdk/js run publish:jsr -- --provenance
