@@ -22,6 +22,8 @@ describe("@ax-code/sdk top-level exports", () => {
       "./headless/client",
       "./headless/event",
       "./headless/projection",
+      "./mode",
+      "./provider-connect",
       "./v2",
       "./v2/client",
       "./v2/gen/client",

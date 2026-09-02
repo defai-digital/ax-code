@@ -23,6 +23,8 @@ provide the private runtime package may also use the in-process adapter and cust
 | In-process AX Code source embedding | `@defai-digital/ax-code-sdk` with `createAgent()` | Lowest overhead and custom tools when the private runtime source package is resolvable  |
 | App shell or GUI backend            | `@defai-digital/ax-code-sdk/headless`             | Starts or attaches to a local backend with typed events and projected app state         |
 | Native desktop boundary             | `@defai-digital/ax-code-sdk/grpc`                 | Stable command/event contract, streaming, metadata, deadlines, and native host adapters |
+| Shared app interaction contracts    | `@defai-digital/ax-code-sdk/mode`                 | Work-mode routing shared by TUI and app clients                                         |
+| Provider connection picker          | `@defai-digital/ax-code-sdk/provider-connect`     | Stable provider-category taxonomy without runtime-source imports                        |
 | Editor-native workflow              | VS Code integration                               | Uses the installed CLI/runtime while staying inside the editor                          |
 
 The JavaScript package no longer exposes first-party HTTP client/server subpaths. HTTP/OpenAPI remains an internal

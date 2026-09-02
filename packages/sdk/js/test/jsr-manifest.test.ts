@@ -38,6 +38,8 @@ describe("JSR package contract", () => {
       Object.values(jsrJson.exports).every((target) => target.startsWith("./dist/") && target.endsWith(".js")),
     ).toBe(true)
     expect(Object.keys(jsrJson.exports)).not.toContain("./proto/ax_code/v1/headless.proto")
+    expect(jsrJson.exports["./mode"]).toBe("./dist/mode.js")
+    expect(jsrJson.exports["./provider-connect"]).toBe("./dist/provider-connect.js")
     expect(JSON.stringify(jsrJson.exports)).not.toContain("computer")
   })
 

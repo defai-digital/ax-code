@@ -1,12 +1,7 @@
-export const CLI_PROVIDER_IDS = ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli"] as const
+import { CLI_PROVIDER_IDS, isKnownCliProviderID, type CliProviderID } from "@ax-code/sdk/provider-connect"
 
-export type CliProviderID = (typeof CLI_PROVIDER_IDS)[number]
-
-const CLI_PROVIDER_ID_SET = new Set<string>(CLI_PROVIDER_IDS)
-
-export function isKnownCliProviderID(providerID: string): providerID is CliProviderID {
-  return CLI_PROVIDER_ID_SET.has(providerID)
-}
+export { CLI_PROVIDER_IDS, isKnownCliProviderID }
+export type { CliProviderID }
 
 /** The provider-ID model is a sentinel that delegates model choice to the CLI itself. */
 export function isGenericCliFallbackModel(model: { id: string; providerID?: string }): boolean {

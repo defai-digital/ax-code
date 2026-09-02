@@ -13,6 +13,8 @@
     "./headless/client": "./dist/headless/client.js",
     "./headless/event": "./dist/headless/event.js",
     "./headless/projection": "./dist/headless/projection.js",
+    "./mode": "./dist/mode.js",
+    "./provider-connect": "./dist/provider-connect.js",
     "./v2": "./dist/v2/index.js",
     "./v2/client": "./dist/v2/client.js",
     "./v2/gen/client": "./dist/v2/gen/client/index.js",

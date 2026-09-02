@@ -1,11 +1,11 @@
 /**
  * Work mode: Agent (default) | Council | Arena — multi-model send routing.
  *
- * Re-exports from core `ax-code/mode/work-mode` with desktop-friendly flat names.
+ * Re-exports from the public SDK contract with desktop-friendly flat names.
  * Desktop-specific helpers (resolveWorkModeSend, workModeFallbackPrompt) live here.
  */
 
-import { WorkMode } from "ax-code/mode/work-mode"
+import { WorkMode } from "@ax-code/sdk/mode"
 
 // ── Re-exports from core ────────────────────────────────────────────────
 export type WorkModeId = WorkMode.Id

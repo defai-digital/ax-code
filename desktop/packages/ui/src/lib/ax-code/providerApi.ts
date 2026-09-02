@@ -2,7 +2,7 @@ import { API_ENDPOINTS, replacePathParams } from "@/lib/http"
 import { isRecord } from "@/lib/record"
 import { axCodeClient } from "./client"
 import type { ProviderSources } from "@/components/sections/providers/types"
-import { providerConnectCategory } from "ax-code/mode/provider-category"
+import { providerConnectCategory } from "@ax-code/sdk/provider-connect"
 
 export {
   CUSTOM_API_PROVIDER_OPTION_ID,
@@ -14,7 +14,7 @@ export {
   providersInConnectCategory,
   PROVIDER_CONNECT_CATEGORIES,
   type ProviderConnectCategory,
-} from "ax-code/mode/provider-category"
+} from "@ax-code/sdk/provider-connect"
 
 const PROVIDER_REQUEST_RETRY_DELAYS_MS = [250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3000, 3000]
 const PROVIDER_RESTART_POLL_MS = 2000
