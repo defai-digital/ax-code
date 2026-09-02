@@ -33,6 +33,13 @@ describe("response security headers", () => {
     expect(res.getHeader("X-Content-Type-Options")).toBe("nosniff")
   })
 
+  it("allows models.dev provider logos in img-src", () => {
+    const res = createMockResponse()
+    applySecurityHeaders({ path: "/" }, res)
+
+    expect(res.getHeader("Content-Security-Policy")).toContain("img-src 'self' data: blob: https://models.dev")
+  })
+
   it("adds credentialed CORS headers for the packaged app:// renderer", () => {
     const res = createMockResponse()
     expect(

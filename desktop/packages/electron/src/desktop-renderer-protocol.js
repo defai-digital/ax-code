@@ -98,7 +98,9 @@ const buildPackagedRendererCsp = () => {
     `default-src 'self' ${PACKAGED_RENDERER_ORIGIN}`,
     "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' ${PACKAGED_RENDERER_ORIGIN} data: blob:`,
+    // Provider logos fall back to https://models.dev/logos/<id>.svg when no
+    // SVG is bundled (see packages/ui/src/hooks/useProviderLogo.ts).
+    `img-src 'self' ${PACKAGED_RENDERER_ORIGIN} data: blob: https://models.dev`,
     `font-src 'self' ${PACKAGED_RENDERER_ORIGIN} data:`,
     `connect-src ${connectSrc}`,
     "media-src 'self' blob:",

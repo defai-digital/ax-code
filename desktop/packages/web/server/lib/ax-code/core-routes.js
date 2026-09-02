@@ -3,6 +3,7 @@ import { rateLimit } from "express-rate-limit"
 
 import { getRequestRpId } from "../security/request-origin.js"
 import { isLoopbackHostname, normalizeLoopbackHttpOrigin } from "../security/local-only.js"
+import { PACKAGED_RENDERER_ORIGIN } from "../security/response-headers.js"
 
 const API_SECURITY_SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
 
@@ -26,12 +27,23 @@ export const createApiRequestSecurityMiddleware = () => (req, res, next) => {
     return next()
   }
 
+  const originHeader = asTrimmedHeader(req.headers?.origin)
+  // The packaged Electron renderer is served from app://ax-code, a custom
+  // scheme only this app registers, so a web page cannot forge that Origin —
+  // and a non-browser client could simply omit Origin anyway. Chromium labels
+  // its loopback API calls "cross-site" purely because the scheme differs from
+  // the http(s) target, so judge this origin on its own instead of applying
+  // the Sec-Fetch-Site / loopback-origin rules to it. The loopback Host check
+  // above still runs first, keeping the DNS-rebinding guard intact.
+  if (originHeader === PACKAGED_RENDERER_ORIGIN) {
+    return next()
+  }
+
   const secFetchSite = asTrimmedHeader(req.headers?.["sec-fetch-site"]).toLowerCase()
   if (secFetchSite === "cross-site") {
     return res.status(403).json({ error: "Forbidden" })
   }
 
-  const originHeader = asTrimmedHeader(req.headers?.origin)
   if (originHeader && !normalizeLoopbackHttpOrigin(originHeader)) {
     return res.status(403).json({ error: "Forbidden" })
   }

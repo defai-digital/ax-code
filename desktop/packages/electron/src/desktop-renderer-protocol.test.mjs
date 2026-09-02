@@ -36,6 +36,11 @@ describe("packaged renderer protocol policy", () => {
     expect(connectSrc.every((source) => isLoopbackConnectSrc(source))).toBe(true)
   })
 
+  test("CSP img-src allows models.dev provider logos", () => {
+    const imgSrc = parseCspDirective(buildPackagedRendererCsp(), "img-src")
+    expect(imgSrc).toContain("https://models.dev")
+  })
+
   test("asset path resolver blocks escape from web-dist", () => {
     const root = path.resolve("/app/web-dist")
     expect(resolvePackagedRendererAssetPath(root, "/../secret.txt").ok).toBe(false)

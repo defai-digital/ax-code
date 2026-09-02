@@ -1,6 +1,6 @@
 const PREVIEW_PROXY_PREFIX = "/api/preview/proxy"
 const DASHBOARD_PROXY_PREFIXES = ["/dre-graph", "/graph"]
-const PACKAGED_RENDERER_ORIGIN = "app://ax-code"
+export const PACKAGED_RENDERER_ORIGIN = "app://ax-code"
 
 const getRequestPathname = (req) => {
   const pathname = req?.path || req?.originalUrl || req?.url || ""
@@ -37,6 +37,8 @@ export const applySecurityHeaders = (req, res) => {
   res.setHeader("X-XSS-Protection", "0")
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss: http: https:;",
+    // img-src allows https://models.dev for provider logo fallbacks
+    // (packages/ui/src/hooks/useProviderLogo.ts).
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://models.dev; font-src 'self' data:; connect-src 'self' ws: wss: http: https:;",
   )
 }

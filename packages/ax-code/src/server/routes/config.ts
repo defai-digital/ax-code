@@ -37,41 +37,46 @@ function redactProviderOptions(options: Record<string, unknown>) {
 }
 
 export function stripRedactedConfig(config: Config.Info): Config.Info {
-  return {
-    ...config,
-    provider: config.provider
-      ? Object.fromEntries(
-          Object.entries(config.provider).map(([id, p]) => [
-            id,
-            {
-              ...p,
-              options: stripRedactedProviderOptions(p.options),
-            },
-          ]),
-        )
-      : config.provider,
-    mcp: config.mcp
-      ? Object.fromEntries(
-          Object.entries(config.mcp).map(([name, m]) => {
-            if (!("type" in m)) return [name, m]
-            if (m.type === "remote") {
-              return [
-                name,
-                {
-                  ...m,
-                  headers: stripRedactedRecord(m.headers),
-                  oauth:
-                    m.oauth && typeof m.oauth === "object" && m.oauth.clientSecret === REDACTED
-                      ? Object.fromEntries(Object.entries(m.oauth).filter(([key]) => key !== "clientSecret"))
-                      : m.oauth,
-                },
-              ]
-            }
-            return [name, { ...m, environment: stripRedactedRecord(m.environment) }]
-          }),
-        )
-      : config.mcp,
+  const result: Config.Info = { ...config }
+  // Only rewrite provider/mcp when the caller actually sent them. Setting
+  // these keys to an explicit `undefined` is NOT a no-op: patchJsonc treats a
+  // `undefined` patch value as "delete this key" (jsonc-parser modify
+  // semantics), so a partial update like `{ disabled_providers: [...] }`
+  // would wipe every configured provider — managed custom API providers
+  // included — and every MCP server from the config file.
+  if (config.provider) {
+    result.provider = Object.fromEntries(
+      Object.entries(config.provider).map(([id, p]) => [
+        id,
+        {
+          ...p,
+          options: stripRedactedProviderOptions(p.options),
+        },
+      ]),
+    )
   }
+  if (config.mcp) {
+    result.mcp = Object.fromEntries(
+      Object.entries(config.mcp).map(([name, m]) => {
+        if (!("type" in m)) return [name, m]
+        if (m.type === "remote") {
+          return [
+            name,
+            {
+              ...m,
+              headers: stripRedactedRecord(m.headers),
+              oauth:
+                m.oauth && typeof m.oauth === "object" && m.oauth.clientSecret === REDACTED
+                  ? Object.fromEntries(Object.entries(m.oauth).filter(([key]) => key !== "clientSecret"))
+                  : m.oauth,
+            },
+          ]
+        }
+        return [name, { ...m, environment: stripRedactedRecord(m.environment) }]
+      }),
+    )
+  }
+  return result
 }
 
 export function redactConfig(config: Config.Info): Config.Info {

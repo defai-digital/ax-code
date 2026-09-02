@@ -286,6 +286,22 @@ describe("createApiRequestSecurityMiddleware", () => {
     await request(createApp()).post("/api/ok").set("Origin", "http://localhost:5173").expect(200)
   })
 
+  it("allows POST requests from the packaged Electron renderer origin", async () => {
+    await request(createApp()).post("/api/ok").set("Origin", "app://ax-code").expect(200)
+  })
+
+  it("allows the packaged renderer origin even when Chromium labels it cross-site", async () => {
+    await request(createApp())
+      .post("/api/ok")
+      .set("Origin", "app://ax-code")
+      .set("Sec-Fetch-Site", "cross-site")
+      .expect(200)
+  })
+
+  it("still rejects other custom-scheme origins", async () => {
+    await request(createApp()).post("/api/ok").set("Origin", "app://evil").expect(403)
+  })
+
   it("rejects POST requests with a cross-site Origin", async () => {
     const response = await request(createApp()).post("/api/ok").set("Origin", "https://evil.example.com").expect(403)
 

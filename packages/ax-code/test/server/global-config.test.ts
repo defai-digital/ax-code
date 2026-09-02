@@ -201,6 +201,62 @@ describe("/global/config redaction", () => {
     }
   })
 
+  test("partial enablement patch keeps provider and mcp sections", async () => {
+    const previousConfigPath = Global.Path.config
+    await using tmp = await tmpdir()
+
+    try {
+      ;(Global.Path as { config: string }).config = tmp.path
+      Config.global.reset()
+
+      await fs.mkdir(tmp.path, { recursive: true })
+      const configPath = path.join(tmp.path, "ax-code.json")
+      await Filesystem.write(
+        configPath,
+        JSON.stringify({
+          provider: {
+            "ax-trust-defai-digital": {
+              management: "custom-api",
+              name: "ax-trust.defai.digital",
+              npm: "@ai-sdk/openai-compatible",
+              options: { baseURL: "https://ax-trust.defai.digital/v1" },
+            },
+          },
+          mcp: {
+            remote: {
+              type: "remote",
+              url: "https://mcp.example",
+              headers: {
+                Authorization: "Bearer mcp-secret",
+              },
+            },
+          },
+        }),
+      )
+
+      // The TUI/Desktop provider disable flow patches only disabled_providers.
+      const response = await Server.Default().request("/global/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ disabled_providers: ["deepseek"] }),
+      })
+      expect(response.status).toBe(200)
+
+      const stored = JSON.parse(await Filesystem.readText(configPath)) as {
+        disabled_providers?: string[]
+        provider?: Record<string, { management?: string; options?: { baseURL?: string } }>
+        mcp?: Record<string, { headers?: Record<string, string> }>
+      }
+      expect(stored.disabled_providers).toEqual(["deepseek"])
+      expect(stored.provider?.["ax-trust-defai-digital"]?.management).toBe("custom-api")
+      expect(stored.provider?.["ax-trust-defai-digital"]?.options?.baseURL).toBe("https://ax-trust.defai.digital/v1")
+      expect(stored.mcp?.remote?.headers?.Authorization).toBe("Bearer mcp-secret")
+    } finally {
+      ;(Global.Path as { config: string }).config = previousConfigPath
+      Config.global.reset()
+    }
+  })
+
   test("project config patch ignores redacted sentinels", async () => {
     // This test verifies preservation of existing project-level credentials,
     // which are available only after the checkout has been explicitly trusted.
