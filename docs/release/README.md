@@ -38,6 +38,11 @@ release workflows, installer verification, and key-rotation guidance in the same
 
 See [Installation and Runtime Channels](../getting-started/install-runtime.md) for supported distribution channels.
 
+## Rollback
+
+If a published stable release must be withdrawn, follow the
+[release rollback runbook](rollback.md).
+
 ## Release notes
 
 CLI/TUI releases are documented here and in the repository [changelog](../../CHANGELOG.md). Desktop application

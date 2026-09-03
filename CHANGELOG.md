@@ -6,6 +6,28 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.10.3] - 2026-09-03
+
+### Removed
+
+- Remove the in-repository Desktop application source; Desktop GUI development continues in AX Coder (ADR-067/ADR-068).
+
+### Added
+
+- Add JSR distribution for the TypeScript SDK, including provenance publishing.
+- Expose Desktop-facing work-mode and provider-connect contracts through the SDK.
+
+### Changed
+
+- Consolidate Desktop work-mode and provider-category definitions into the SDK contracts.
+- Harden Desktop package integrity with ASAR runtime verification.
+- Regenerate the provider catalog data.
+
+### Fixed
+
+- Fix the JSR publish provenance invocation.
+- Fix stale Desktop handoff and release entrypoints after the Desktop source cutover.
+
 ## [7.10.2] - 2026-09-02
 
 ### Changed

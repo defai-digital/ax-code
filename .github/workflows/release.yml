@@ -33,7 +33,41 @@ env:
   AX_CODE_RELEASE_CHANNEL: ${{ contains(inputs.tag || github.ref_name, '-') && 'beta' || 'latest' }}
 
 jobs:
+  guard:
+    # Validates the release tag before any expensive or irreversible step runs.
+    # Runs for tag pushes and every workflow_dispatch mode, including
+    # postpublish_only resumes, which skip validate and build entirely.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release tag format
+        env:
+          TAG: ${{ env.AX_CODE_RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Release tag '$TAG' is not valid semver (expected vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-prerelease)."
+            exit 1
+          fi
+          echo "Release tag $TAG validated"
+
+      - name: Validate release channel mapping
+        env:
+          TAG: ${{ env.AX_CODE_RELEASE_TAG }}
+          CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" == *-* && "$CHANNEL" != "beta" ]]; then
+            echo "::error::Prerelease tag '$TAG' must resolve to the beta channel, got '$CHANNEL'."
+            exit 1
+          fi
+          if [[ "$TAG" != *-* && "$CHANNEL" != "latest" ]]; then
+            echo "::error::Stable tag '$TAG' must resolve to the latest channel, got '$CHANNEL'."
+            exit 1
+          fi
+          echo "Release channel $CHANNEL validated for $TAG"
+
   validate:
+    needs: guard
     if: ${{ !inputs.postpublish_only }}
     runs-on: ubuntu-latest
     steps:
@@ -49,8 +83,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build SDK
-        run: pnpm exec tsc
-        working-directory: packages/sdk/js
+        run: pnpm --dir packages/sdk/js run build
+
+      - name: Verify generated SDK artifacts are current
+        shell: bash
+        run: |
+          drift="$(git status --porcelain=v1 --untracked-files=all -- \
+            packages/sdk/openapi.json \
+            packages/sdk/js/src/gen \
+            packages/sdk/js/src/v2/gen)"
+          if [ -n "$drift" ]; then
+            echo "Generated SDK artifacts are stale. Run: pnpm --dir packages/sdk/js run build"
+            printf '%s\n' "$drift"
+            exit 1
+          fi
 
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build
@@ -60,6 +106,15 @@ jobs:
 
       - name: Test extracted core packages
         run: pnpm run test:extracted-packages
+
+      - name: Test SDK
+        run: pnpm --dir packages/sdk/js test
+
+      - name: Test repository scripts
+        run: pnpm run test:scripts
+
+      - name: Check repository structure
+        run: pnpm run check:structure
 
       - name: Test
         run: pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 1
@@ -86,7 +141,7 @@ jobs:
           retention-days: 14
 
   build:
-    needs: validate
+    needs: [guard, validate]
     permissions:
       contents: write
     strategy:
@@ -305,7 +360,7 @@ jobs:
           retention-days: 1
 
   publish:
-    needs: build
+    needs: [guard, build]
     # Runs on macOS so minisign can retrieve the signing passphrase from the
     # Apple Keychain instead of a plaintext environment variable. The
     # passphrase is injected into the ephemeral runner's login Keychain at
@@ -482,9 +537,10 @@ jobs:
     # Requires HOMEBREW_TAP_TOKEN or TAP_TOKEN to hold a PAT with write access
     # to the shared defai-digital/homebrew-tap repository and the legacy
     # product tap retained for upgrade compatibility.
-    needs: publish
+    needs: [guard, publish]
     if: >-
       always() &&
+      needs.guard.result == 'success' &&
       !contains(inputs.tag || github.ref_name, '-') &&
       (needs.publish.result == 'success' || inputs.postpublish_only)
     runs-on: ubuntu-latest
@@ -507,9 +563,10 @@ jobs:
   # Generate winget CLI manifests from published Windows ZIP assets and attach
   # them to the GitHub release for maintainers submitting to winget-pkgs.
   winget-manifests:
-    needs: publish
+    needs: [guard, publish]
     if: >-
       always() &&
+      needs.guard.result == 'success' &&
       !contains(inputs.tag || github.ref_name, '-') &&
       (needs.publish.result == 'success' || inputs.postpublish_only)
     runs-on: ubuntu-latest
@@ -558,9 +615,10 @@ jobs:
   # bootstrap (no preinstalled minisign on PATH). Continue when the Homebrew tap
   # update job fails so the Windows channel still gets exercised.
   install-matrix-smoke:
-    needs: [publish, homebrew]
+    needs: [guard, publish, homebrew]
     if: >-
       always() &&
+      needs.guard.result == 'success' &&
       !contains(inputs.tag || github.ref_name, '-') &&
       (needs.publish.result == 'success' || inputs.postpublish_only)
     uses: ./.github/workflows/install-matrix-smoke.yml
