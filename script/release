@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-BUMP_TYPE=${1:-patch}
+cd "$(dirname "$0")/.."
 
-gh workflow run publish.yml -f bump="$BUMP_TYPE"
+exec pnpm run release:cli "$@"

@@ -15,8 +15,8 @@ export type DesktopHandoffInput = {
 // Platforms where AX Code Desktop is available
 const SUPPORTED_PLATFORMS: NodeJS.Platform[] = ["darwin", "win32", "linux"]
 
-// Documentation URL for desktop installation
-const DESKTOP_DOCS_URL = "https://github.com/defai-digital/ax-code#desktop"
+// Release page containing the published desktop installers
+const DESKTOP_DOWNLOAD_URL = "https://github.com/defai-digital/ax-code/releases"
 
 /**
  * Resolve the desktop handoff result.
@@ -49,12 +49,12 @@ export function resolveDesktopHandoff(input: DesktopHandoffInput): DesktopHandof
   // Guide to installation
   return {
     type: "not-installed",
-    message: `AX Code Desktop is recommended for dashboards, workflow supervision, and project overview. Visit ${DESKTOP_DOCS_URL} to install.`,
+    message: `AX Code Desktop is recommended for dashboards, workflow supervision, and project overview. Visit ${DESKTOP_DOWNLOAD_URL} to install.`,
   }
 }
 
 // Exported for testing
 export const __internal = {
-  DESKTOP_DOCS_URL,
+  DESKTOP_DOWNLOAD_URL,
   SUPPORTED_PLATFORMS,
 }

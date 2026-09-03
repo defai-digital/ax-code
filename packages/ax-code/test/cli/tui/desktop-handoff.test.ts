@@ -22,7 +22,7 @@ describe("resolveDesktopHandoff", () => {
     if (result.type === "not-installed") {
       expect(result.message).toContain("Desktop")
       expect(result.message).toContain("dashboard")
-      expect(result.message).toContain(__internal.DESKTOP_DOCS_URL)
+      expect(result.message).toContain(__internal.DESKTOP_DOWNLOAD_URL)
     }
   })
 
@@ -45,7 +45,7 @@ describe("resolveDesktopHandoff", () => {
     if (result.type === "not-installed") {
       expect(result.message).toContain("Desktop")
       expect(result.message).toContain("dashboard")
-      expect(result.message).toContain(__internal.DESKTOP_DOCS_URL)
+      expect(result.message).toContain(__internal.DESKTOP_DOWNLOAD_URL)
     }
   })
 
@@ -87,12 +87,14 @@ describe("resolveDesktopHandoff", () => {
     expect(__internal.SUPPORTED_PLATFORMS).toContain("linux")
   })
 
-  test("docs URL is a valid URL", () => {
-    expect(__internal.DESKTOP_DOCS_URL).toMatch(/^https?:\/\//)
+  test("download URL is a valid URL", () => {
+    expect(__internal.DESKTOP_DOWNLOAD_URL).toMatch(/^https?:\/\//)
   })
 
-  test("docs URL points to the active repository (#354)", () => {
-    expect(__internal.DESKTOP_DOCS_URL).toBe("https://github.com/defai-digital/ax-code#desktop")
-    expect(__internal.DESKTOP_DOCS_URL).not.toContain("automatos-ai")
+  test("download URL points to the active repository release page", () => {
+    const url = new URL(__internal.DESKTOP_DOWNLOAD_URL)
+    expect(url.origin).toBe("https://github.com")
+    expect(url.pathname).toBe("/defai-digital/ax-code/releases")
+    expect(url.hash).toBe("")
   })
 })
