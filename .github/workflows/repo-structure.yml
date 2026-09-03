@@ -12,7 +12,6 @@ on:
       - "crates/**"
       - "script/**"
       - "docs/**"
-      - "desktop/**"
       - "packages/**"
       - "tools/**"
   push:
@@ -29,7 +28,6 @@ on:
       - "crates/**"
       - "script/**"
       - "docs/**"
-      - "desktop/**"
       - "packages/**"
       - "tools/**"
   schedule:

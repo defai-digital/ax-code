@@ -9,7 +9,7 @@ Released August 20, 2026 · [Full changelog](https://github.com/defai-digital/ax
 
 These notes cover the CLI and terminal TUI surfaces for the v7.2.0 → v7.7.6 line.
 Desktop-app changes are tracked separately in
-[`desktop/CHANGELOG.md`](../../desktop/CHANGELOG.md).
+[`CHANGELOG.md`](../../CHANGELOG.md).
 
 The v7.7 line hardened the CLI and TUI for long-running, unattended work: streaming
 correctness, crash resilience, provider reliability, and a large CLI ergonomics pass —

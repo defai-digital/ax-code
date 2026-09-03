@@ -210,7 +210,7 @@ handled after source changes have stabilized.
 
 The current workflow analyzes:
 
-- JavaScript and TypeScript product, SDK, integration, script, and desktop code.
+- JavaScript and TypeScript runtime, TUI, SDK, integration, and script code.
 - GitHub Actions workflows and local composite actions.
 - Rust crates under `crates/` with a manual Cargo build so native-addon and TUI
   code is extracted consistently.
@@ -234,7 +234,7 @@ When adding custom CodeQL queries, prefer repository-specific security
 boundaries over broad lint-style checks. High-value targets include sandbox
 escape paths, command execution with unsanitized arguments, path traversal
 around workspace containment, secret/env propagation to child processes,
-missing server route validation, and unsafe Electron IPC bridges.
+and missing server route validation.
 
 For full enterprise governance (RBAC, policy-as-code, SIEM export, cryptographic audit), integrate with **AX Trust** (roadmap item).
 

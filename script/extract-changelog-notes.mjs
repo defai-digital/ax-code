@@ -5,7 +5,7 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 
 const VERSION_PATTERN = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/
-const DEFAULT_CHANGELOG = "desktop/CHANGELOG.md"
+const DEFAULT_CHANGELOG = "CHANGELOG.md"
 export const CLI_CHANGELOG_FLOOR = "6.7.4"
 const REPO_RELEASES = "https://github.com/defai-digital/ax-code/releases/tag"
 const REPO_COMPARE = "https://github.com/defai-digital/ax-code/compare"

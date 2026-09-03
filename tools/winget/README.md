@@ -1,83 +1,13 @@
-# Winget package manifests (scaffolding)
+# AX Code CLI winget manifests
 
-This directory holds **manifest generators and templates** for publishing AX Code
-to the [Windows Package Manager Community Repository](https://github.com/microsoft/winget-pkgs).
+This directory owns manifest generation for the `DEFAI.AXCode` portable CLI package. Desktop GUI manifests belong to
+the separate AX Coder source repository.
 
-Winget is the recommended long-term Windows discovery channel. Until packages are
-merged upstream, users install via:
-
-```powershell
-# CLI (no preinstalled minisign required — installer bootstraps a pinned binary)
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
-
-# Desktop: download the Authenticode-signed NSIS installer from GitHub Releases
-```
-
-## Packages planned
-
-| Package identifier     | Installer type                         | Arches     |
-| ---------------------- | -------------------------------------- | ---------- |
-| `DEFAI.AXCode`         | Portable ZIP / nested install.ps1 flow | x64, arm64 |
-| `DEFAI.AXCode.Desktop` | NSIS exe (`AX-Code-*-win-*.exe`)       | x64, arm64 |
-
-Publisher: **DEFAI Private Limited** (matches Authenticode `publisherName`).
-
-## Generate manifests for a release
-
-From the monorepo root, after a GitHub release exists:
+Generate review-only manifests without downloading release assets:
 
 ```bash
-# Both packages (default) — needs both CLI v* and Desktop desktop-v* assets on the same tag/version number
-pnpm run winget:generate -- --version 7.1.0 --out .tmp/winget
-
-# CLI only (matches CLI release workflow assets)
-pnpm run winget:generate -- --version 7.1.0 --package cli --out .tmp/winget
-
-# Desktop only (uses desktop-v* tag by default)
-pnpm run winget:generate -- --version 1.3.0 --package desktop --out .tmp/winget
+pnpm run winget:generate -- --version 7.10.2 --package cli --skip-download
 ```
 
-This downloads SHA-256 hashes for the Windows release assets and writes versioned
-manifest folders ready for a PR against `microsoft/winget-pkgs`.
-
-Stable release workflows also attach pre-built zips:
-
-- CLI tag `v*`: `winget-cli-manifests-v<ver>.zip`
-- Desktop tag `desktop-v*`: `winget-desktop-manifests-desktop-v<ver>.zip`
-
-### Validate locally (Windows)
-
-```powershell
-winget validate --manifest .tmp\winget\manifests\d\DEFAI\AXCode\Desktop\<version>
-winget install --manifest .tmp\winget\manifests\d\DEFAI\AXCode\Desktop\<version>
-```
-
-### Submit upstream
-
-1. Fork [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs).
-2. Copy generated manifests under `manifests/d/DEFAI/...`.
-3. Open a PR following the winget-pkgs contribution guide.
-4. After merge, users can run:
-
-```powershell
-winget install DEFAI.AXCode
-winget install DEFAI.AXCode.Desktop
-```
-
-## Release checklist (after each Desktop/CLI Windows release)
-
-1. Tag/publish the GitHub release so `AX-Code-*-win-*.exe` and `ax-code-windows-*.zip` exist.
-2. Generate manifests:  
-   `pnpm exec tsx tools/winget/generate-manifests.ts --version <ver> --out .tmp/winget`
-3. On Windows: `winget validate --manifest .tmp/winget/manifests/d/DEFAI/AXCode/<ver>`  
-   and the Desktop sibling under `.../AXCode/Desktop/<ver>`.
-4. Open a PR to `microsoft/winget-pkgs` with both package folders.
-5. In release notes, mention SmartScreen publisher **DEFAI Private Limited** and NSIS silent `/S`.
-
-## Notes
-
-- Desktop auto-update continues to use electron-updater + GitHub Releases; winget
-  upgrades are an additional discovery/update path for IT-managed machines.
-- CLI manifests currently describe the GitHub ZIP assets. Prefer a future
-  Authenticode-signed CLI bootstrapper for the cleanest winget UX.
-- Keep package identifiers stable once published; only bump the version folder.
+Omit `--skip-download` after the matching signed `v*` release assets exist. The stable CLI release workflow generates
+and attaches the same manifests after publication.

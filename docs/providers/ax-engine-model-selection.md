@@ -23,10 +23,9 @@ matrix. In this checkout it exposes curated AutomatosX AXQ 6-bit MLX packs.
 | `GET /provider/ax-engine/models`                                                                                     | Serves that catalog from the **running ax-code process** (includes `catalog.source` + `catalog.modelIDs`) |
 | Desktop Models UI                                                                                                    | Displays whatever the live API returns — it does not embed a second model list                            |
 
-If Desktop shows an old list, the managed session is almost always spawning an older installed CLI
-(Homebrew/PATH) rather than this checkout. `pnpm run desktop:dev` prefers a monorepo source launcher over
-PATH installs so local catalog edits appear without `setup:cli`. Override with `AX_CODE_BINARY` or
-`settings.axCodeBinary` when you intentionally want another runtime.
+If an external GUI shows an old list, its managed session is almost always spawning an older installed CLI
+(Homebrew/PATH) rather than this checkout. In AX Coder development, override `AX_CODE_BINARY` or
+`settings.axCodeBinary` when you intentionally want this source runtime.
 
 ## Selection Criteria
 

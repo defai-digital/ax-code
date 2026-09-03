@@ -1,42 +1,17 @@
 #!/usr/bin/env tsx
-/**
- * Generate Windows Package Manager (winget) manifests for a published AX Code release.
- *
- * Usage:
- *   pnpm exec tsx tools/winget/generate-manifests.ts --version 7.1.0 --package cli
- *   pnpm exec tsx tools/winget/generate-manifests.ts --version 1.3.0 --package desktop --tag desktop-v1.3.0
- *   pnpm exec tsx tools/winget/generate-manifests.ts --version v7.1.0 --out .tmp/winget
- *
- * Fetches GitHub release assets, computes SHA-256, and writes manifest folders for:
- *   - DEFAI.AXCode.Desktop (NSIS installers, x64 + arm64)
- *   - DEFAI.AXCode (CLI zip portable, x64 + arm64)
- */
+/** Generate Windows Package Manager manifests for the AX Code CLI release. */
 import { createHash } from "node:crypto"
 import { mkdirSync, writeFileSync } from "node:fs"
 import path from "node:path"
 
-const REPO = "defai-digital/ax-code"
-const PUBLISHER = "DEFAI"
-const COPYRIGHT = "Copyright (c) DEFAI Private Limited"
-const LICENSE = "Apache-2.0"
-const LICENSE_URL = "https://github.com/defai-digital/ax-code/blob/main/LICENSE"
-const PACKAGE_URL = "https://github.com/defai-digital/ax-code"
-const PUBLISHER_URL = "https://github.com/defai-digital"
-const SUPPORT_URL = "https://github.com/defai-digital/ax-code/issues"
-const TAGS = ["ai", "developer-tools", "cli", "code-assistant"]
-
-export type PackageKind = "cli" | "desktop" | "all"
+const repository = "defai-digital/ax-code"
+const publisher = "DEFAI"
+const copyright = "Copyright (c) DEFAI Private Limited"
 
 export type Args = {
   version: string
   out: string
   skipDownload: boolean
-  package: PackageKind
-  /**
-   * Explicit GitHub release tag override for asset URLs (e.g. v7.1.0 or
-   * desktop-v1.3.0). Empty unless --tag was passed; in "all" mode each
-   * package derives its own tag (CLI: v*, desktop: desktop-v*) in main().
-   */
   tag: string
 }
 
@@ -44,303 +19,128 @@ export function parseArgs(argv: string[]): Args {
   let version = ""
   let out = path.join(".tmp", "winget")
   let skipDownload = false
-  let pkg: PackageKind = "all"
   let tag = ""
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i]
-    if (arg === "--version" || arg === "-v") {
-      version = argv[++i] ?? ""
-    } else if (arg === "--out" || arg === "-o") {
-      out = argv[++i] ?? out
-    } else if (arg === "--skip-download") {
-      skipDownload = true
-    } else if (arg === "--package" || arg === "-p") {
-      const value = (argv[++i] ?? "").toLowerCase()
-      if (value !== "cli" && value !== "desktop" && value !== "all") {
-        throw new Error(`--package must be cli, desktop, or all (got '${value}')`)
-      }
-      pkg = value
-    } else if (arg === "--tag") {
-      tag = argv[++i] ?? ""
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index]
+    if (arg === "--version" || arg === "-v") version = argv[++index] ?? ""
+    else if (arg === "--out" || arg === "-o") out = argv[++index] ?? out
+    else if (arg === "--tag") tag = argv[++index] ?? ""
+    else if (arg === "--skip-download") skipDownload = true
+    else if (arg === "--package" || arg === "-p") {
+      const selected = argv[++index] ?? ""
+      if (selected !== "cli") throw new Error("AX Code can generate only the CLI winget package")
     } else if (arg === "--help" || arg === "-h") {
-      console.log(
-        `Usage: generate-manifests.ts --version <semver> [--package cli|desktop|all] [--tag <release-tag>] [--out <dir>]`,
+      throw new Error(
+        "Usage: generate-manifests.ts --version <semver> [--package cli] [--tag <tag>] [--out <dir>] [--skip-download]",
       )
-      process.exit(0)
+    } else {
+      throw new Error(`unknown argument: ${arg}`)
     }
   }
-  if (!version) {
-    throw new Error("--version is required (e.g. 7.1.0)")
-  }
-  const normalizedVersion = version.replace(/^v/, "").replace(/^desktop-v/, "")
-  if (!tag) {
-    // Desktop releases use desktop-v*; CLI releases use v*. In "all" mode
-    // leave the tag empty here so main() derives one per package — a single
-    // derived tag would point desktop installer URLs at the CLI release tag.
-    if (pkg === "desktop") tag = `desktop-v${normalizedVersion}`
-    else if (pkg === "cli") tag = `v${normalizedVersion}`
-  }
-  return { version: normalizedVersion, out, skipDownload, package: pkg, tag }
-}
 
-export function shouldWriteCli(pkg: PackageKind): boolean {
-  return pkg === "cli" || pkg === "all"
-}
-
-export function shouldWriteDesktop(pkg: PackageKind): boolean {
-  return pkg === "desktop" || pkg === "all"
+  const normalizedVersion = version.replace(/^v/, "")
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(normalizedVersion)) {
+    throw new Error("--version must be a semantic version")
+  }
+  return { version: normalizedVersion, out, skipDownload, tag: tag || `v${normalizedVersion}` }
 }
 
 async function sha256Url(url: string): Promise<string> {
-  const res = await fetch(url, {
+  const response = await fetch(url, {
     headers: { "User-Agent": "ax-code-winget-manifest-generator" },
     redirect: "follow",
   })
-  if (!res.ok) {
-    throw new Error(`Failed to download ${url}: HTTP ${res.status}`)
+  if (!response.ok) throw new Error(`Failed to download ${url}: HTTP ${response.status}`)
+  return createHash("sha256")
+    .update(Buffer.from(await response.arrayBuffer()))
+    .digest("hex")
+    .toUpperCase()
+}
+
+function writeYaml(file: string, lines: string[]) {
+  mkdirSync(path.dirname(file), { recursive: true })
+  writeFileSync(file, `${lines.join("\n")}\n`, "utf8")
+}
+
+export async function generateManifests(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv)
+  const base = `https://github.com/${repository}/releases/download/${args.tag}`
+  const assets = [
+    { arch: "x64", file: "ax-code-windows-x64.zip" },
+    { arch: "arm64", file: "ax-code-windows-arm64.zip" },
+  ]
+  const hashes = new Map<string, string>()
+  for (const asset of assets) {
+    hashes.set(asset.file, args.skipDownload ? "REPLACE_WITH_SHA256" : await sha256Url(`${base}/${asset.file}`))
   }
-  const buf = Buffer.from(await res.arrayBuffer())
-  return createHash("sha256").update(buf).digest("hex").toUpperCase()
-}
 
-function yamlEscape(value: string): string {
-  if (/[:#{}[\],&*!|>'"%@`]/.test(value) || value.includes("\n")) {
-    return JSON.stringify(value)
-  }
-  return value
-}
+  const packageId = "DEFAI.AXCode"
+  const output = path.resolve(args.out, "manifests", "d", "DEFAI", "AXCode", args.version)
+  const repositoryUrl = `https://github.com/${repository}`
 
-function writeYaml(filePath: string, content: string) {
-  mkdirSync(path.dirname(filePath), { recursive: true })
-  writeFileSync(filePath, content.endsWith("\n") ? content : content + "\n", "utf8")
-}
+  writeYaml(path.join(output, `${packageId}.yaml`), [
+    `PackageIdentifier: ${packageId}`,
+    `PackageVersion: ${args.version}`,
+    "DefaultLocale: en-US",
+    "ManifestType: version",
+    "ManifestVersion: 1.6.0",
+  ])
 
-function packageLocale(opts: {
-  packageId: string
-  packageVersion: string
-  packageName: string
-  shortDescription: string
-  description: string
-  moniker: string
-}): string {
-  return [
-    `PackageIdentifier: ${opts.packageId}`,
-    `PackageVersion: ${opts.packageVersion}`,
+  writeYaml(path.join(output, `${packageId}.locale.en-US.yaml`), [
+    `PackageIdentifier: ${packageId}`,
+    `PackageVersion: ${args.version}`,
     "PackageLocale: en-US",
-    `Publisher: ${PUBLISHER}`,
-    `PublisherUrl: ${PUBLISHER_URL}`,
-    `PublisherSupportUrl: ${SUPPORT_URL}`,
-    `Author: ${PUBLISHER}`,
-    `PackageName: ${opts.packageName}`,
-    `PackageUrl: ${PACKAGE_URL}`,
-    `License: ${LICENSE}`,
-    `LicenseUrl: ${LICENSE_URL}`,
-    `Copyright: ${COPYRIGHT}`,
-    `ShortDescription: ${yamlEscape(opts.shortDescription)}`,
-    `Description: ${yamlEscape(opts.description)}`,
-    `Moniker: ${opts.moniker}`,
-    `Tags:`,
-    ...TAGS.map((t) => `  - ${t}`),
+    `Publisher: ${publisher}`,
+    "PublisherUrl: https://github.com/defai-digital",
+    `PublisherSupportUrl: ${repositoryUrl}/issues`,
+    `Author: ${publisher}`,
+    "PackageName: AX Code",
+    `PackageUrl: ${repositoryUrl}`,
+    "License: Apache-2.0",
+    `LicenseUrl: ${repositoryUrl}/blob/main/LICENSE`,
+    `Copyright: ${copyright}`,
+    "ShortDescription: Local-first agent runtime CLI for software work",
+    "Description: AX Code is a local-first coding-agent runtime for terminal sessions, headless automation, and application hosts.",
+    "Moniker: ax-code",
+    "Tags:",
+    "  - ai",
+    "  - developer-tools",
+    "  - cli",
+    "  - code-assistant",
     "ManifestType: defaultLocale",
     "ManifestVersion: 1.6.0",
-  ].join("\n")
-}
+  ])
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2))
-  const version = args.version
-  // Desktop assets publish under desktop-v* and CLI assets under v*. Derive
-  // a per-package base so "all" mode does not point desktop installers at
-  // the CLI release tag (which 404s on download and writes wrong
-  // InstallerUrl values under --skip-download).
-  const cliBase = `https://github.com/${REPO}/releases/download/${args.tag || `v${version}`}`
-  const desktopBase = `https://github.com/${REPO}/releases/download/${args.tag || `desktop-v${version}`}`
-  const releaseBaseFor = (pkg: PackageKind) => (pkg === "desktop" ? desktopBase : cliBase)
-  const writeCli = shouldWriteCli(args.package)
-  const writeDesktop = shouldWriteDesktop(args.package)
+  const installers = assets.flatMap((asset) => [
+    `  - Architecture: ${asset.arch}`,
+    "    InstallerType: zip",
+    "    NestedInstallerType: portable",
+    "    NestedInstallerFiles:",
+    "      - RelativeFilePath: bin\\ax-code.cmd",
+    "        PortableCommandAlias: ax-code",
+    `    InstallerUrl: ${base}/${asset.file}`,
+    `    InstallerSha256: ${hashes.get(asset.file)}`,
+    "    ArchiveBinariesDependOnPath: true",
+  ])
 
-  const desktopAssets = [
-    { arch: "x64", file: `AX-Code-${version}-win-x64.exe`, installerType: "nullsoft" as const },
-    { arch: "arm64", file: `AX-Code-${version}-win-arm64.exe`, installerType: "nullsoft" as const },
-  ]
-  const cliAssets = [
-    { arch: "x64", file: `ax-code-windows-x64.zip`, installerType: "zip" as const },
-    { arch: "arm64", file: `ax-code-windows-arm64.zip`, installerType: "zip" as const },
-  ]
+  writeYaml(path.join(output, `${packageId}.installer.yaml`), [
+    `PackageIdentifier: ${packageId}`,
+    `PackageVersion: ${args.version}`,
+    "Platform:",
+    "  - Windows.Desktop",
+    "MinimumOSVersion: 10.0.17763.0",
+    "InstallerType: zip",
+    "Commands:",
+    "  - ax-code",
+    "ReleaseDate: " + new Date().toISOString().slice(0, 10),
+    "Installers:",
+    ...installers,
+    "ManifestType: installer",
+    "ManifestVersion: 1.6.0",
+  ])
 
-  const assetsToHash: Array<{ pkg: PackageKind; file: string }> = [
-    ...(writeDesktop ? desktopAssets.map((asset) => ({ pkg: "desktop" as const, file: asset.file })) : []),
-    ...(writeCli ? cliAssets.map((asset) => ({ pkg: "cli" as const, file: asset.file })) : []),
-  ]
-
-  const tagSummary = args.tag || `cli tag v${version}, desktop tag desktop-v${version}`
-  console.log(`Generating winget manifests for ${tagSummary} (package=${args.package})`)
-  console.log(`Output: ${args.out}`)
-
-  const hashes = new Map<string, string>()
-  if (!args.skipDownload) {
-    for (const asset of assetsToHash) {
-      const url = `${releaseBaseFor(asset.pkg)}/${asset.file}`
-      process.stdout.write(`  hashing ${asset.file} ... `)
-      const hash = await sha256Url(url)
-      hashes.set(asset.file, hash)
-      console.log(hash.slice(0, 12) + "…")
-    }
-  } else {
-    for (const asset of assetsToHash) {
-      hashes.set(asset.file, "REPLACE_WITH_SHA256")
-    }
-  }
-
-  const written: string[] = []
-
-  // ── Desktop ────────────────────────────────────────────────────────────
-  if (writeDesktop) {
-    const desktopId = "DEFAI.AXCode.Desktop"
-    const desktopDir = path.join(args.out, "manifests", "d", "DEFAI", "AXCode", "Desktop", version)
-
-    writeYaml(
-      path.join(desktopDir, `${desktopId}.yaml`),
-      [
-        `PackageIdentifier: ${desktopId}`,
-        `PackageVersion: ${version}`,
-        "DefaultLocale: en-US",
-        "ManifestType: version",
-        "ManifestVersion: 1.6.0",
-      ].join("\n"),
-    )
-
-    writeYaml(
-      path.join(desktopDir, `${desktopId}.locale.en-US.yaml`),
-      packageLocale({
-        packageId: desktopId,
-        packageVersion: version,
-        packageName: "AX Code Desktop",
-        shortDescription: "Desktop workspace for the AX Code agent runtime",
-        description:
-          "AX Code Desktop is the graphical workspace for AX Code: chat sessions, file review, diffs, Git, terminals, and multi-agent workflows. Requires the AX Code CLI for coding sessions.",
-        moniker: "ax-code-desktop",
-      }),
-    )
-
-    const desktopInstallers = desktopAssets
-      .map((asset) => {
-        const url = `${desktopBase}/${asset.file}`
-        const hash = hashes.get(asset.file)!
-        return [
-          `  - Architecture: ${asset.arch}`,
-          `    InstallerType: ${asset.installerType}`,
-          `    Scope: user`,
-          `    InstallerUrl: ${url}`,
-          `    InstallerSha256: ${hash}`,
-          `    UpgradeBehavior: install`,
-          `    AppsAndFeaturesEntries:`,
-          `      - DisplayName: AX Code`,
-          `        Publisher: DEFAI Private Limited`,
-        ].join("\n")
-      })
-      .join("\n")
-
-    writeYaml(
-      path.join(desktopDir, `${desktopId}.installer.yaml`),
-      [
-        `PackageIdentifier: ${desktopId}`,
-        `PackageVersion: ${version}`,
-        "Platform:",
-        "  - Windows.Desktop",
-        "MinimumOSVersion: 10.0.17763.0",
-        "InstallerType: nullsoft",
-        "Scope: user",
-        "InstallModes:",
-        "  - interactive",
-        "  - silent",
-        "  - silentWithProgress",
-        "UpgradeBehavior: install",
-        "ReleaseDate: " + new Date().toISOString().slice(0, 10),
-        "Installers:",
-        desktopInstallers,
-        "ManifestType: installer",
-        "ManifestVersion: 1.6.0",
-      ].join("\n"),
-    )
-    written.push(desktopDir)
-  }
-
-  // ── CLI ────────────────────────────────────────────────────────────────
-  if (writeCli) {
-    const cliId = "DEFAI.AXCode"
-    const cliDir = path.join(args.out, "manifests", "d", "DEFAI", "AXCode", version)
-
-    writeYaml(
-      path.join(cliDir, `${cliId}.yaml`),
-      [
-        `PackageIdentifier: ${cliId}`,
-        `PackageVersion: ${version}`,
-        "DefaultLocale: en-US",
-        "ManifestType: version",
-        "ManifestVersion: 1.6.0",
-      ].join("\n"),
-    )
-
-    writeYaml(
-      path.join(cliDir, `${cliId}.locale.en-US.yaml`),
-      packageLocale({
-        packageId: cliId,
-        packageVersion: version,
-        packageName: "AX Code",
-        shortDescription: "Local-first agent runtime CLI for software work",
-        description:
-          "AX Code is a local-first agent runtime for coding agents, headless automation, and the AX Code Desktop workspace. This package installs the node-bundled CLI for Windows.",
-        moniker: "ax-code",
-      }),
-    )
-
-    const cliInstallers = cliAssets
-      .map((asset) => {
-        const url = `${cliBase}/${asset.file}`
-        const hash = hashes.get(asset.file)!
-        return [
-          `  - Architecture: ${asset.arch}`,
-          `    InstallerType: zip`,
-          `    NestedInstallerType: portable`,
-          `    NestedInstallerFiles:`,
-          `      - RelativeFilePath: bin\\ax-code.cmd`,
-          `        PortableCommandAlias: ax-code`,
-          `    InstallerUrl: ${url}`,
-          `    InstallerSha256: ${hash}`,
-          `    ArchiveBinariesDependOnPath: true`,
-        ].join("\n")
-      })
-      .join("\n")
-
-    writeYaml(
-      path.join(cliDir, `${cliId}.installer.yaml`),
-      [
-        `PackageIdentifier: ${cliId}`,
-        `PackageVersion: ${version}`,
-        "Platform:",
-        "  - Windows.Desktop",
-        "MinimumOSVersion: 10.0.17763.0",
-        "InstallerType: zip",
-        "Commands:",
-        "  - ax-code",
-        "ReleaseDate: " + new Date().toISOString().slice(0, 10),
-        "Installers:",
-        cliInstallers,
-        "ManifestType: installer",
-        "ManifestVersion: 1.6.0",
-      ].join("\n"),
-    )
-    written.push(cliDir)
-  }
-
-  console.log("")
-  console.log("Wrote:")
-  for (const dir of written) {
-    console.log(`  ${dir}`)
-  }
-  console.log("")
-  console.log("Next: winget validate --manifest <dir>  then open a PR to microsoft/winget-pkgs")
+  return { output, tag: args.tag }
 }
 
 const isMain =
@@ -348,8 +148,10 @@ const isMain =
   (process.argv[1].endsWith("generate-manifests.ts") || process.argv[1].endsWith("generate-manifests.js"))
 
 if (isMain) {
-  main().catch((err) => {
-    console.error(err instanceof Error ? err.message : err)
-    process.exit(1)
-  })
+  generateManifests()
+    .then((result) => console.log(`Wrote AX Code CLI winget manifests to ${result.output}`))
+    .catch((error) => {
+      console.error(error instanceof Error ? error.message : error)
+      process.exitCode = 1
+    })
 }

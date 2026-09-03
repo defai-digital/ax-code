@@ -127,7 +127,8 @@ Then:
 ax-code                  # open the terminal UI
 ```
 
-Connect a provider from the Desktop onboarding flow, with `/connect` in the terminal UI, or with `ax-code providers login`. No project setup or config file is required.
+Connect a provider with `/connect` in the terminal UI or with `ax-code providers login`. No project setup or config
+file is required.
 
 Release archives are verified with minisign. Platform support, update paths, signature verification, contributor source builds, and troubleshooting live in [Installation and Runtime Channels](docs/getting-started/install-runtime.md).
 
@@ -143,7 +144,6 @@ The same runtime, session store, and evidence model back every surface.
 
 | Surface             | Entry point                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------ |
-| Desktop app         | AX Code Desktop for macOS, Windows, and Ubuntu 24.04+, from [`desktop/`](desktop/)                     |
 | Terminal UI         | `ax-code` — provider, model, agent, session, MCP, and skill flows                                      |
 | One-shot / headless | `ax-code run "review the auth flow"` for scripts, CI, and bots                                         |
 | Local service       | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                         |
@@ -228,12 +228,11 @@ Report bugs, feature requests, and questions through [GitHub Issues](https://git
 
 ## Provenance
 
-AX Code began on the MIT-licensed [OpenCode](https://github.com/anomalyco/opencode) codebase, and that attribution is preserved here and in [NOTICE](NOTICE). DEFAI's independent work since then is what this README describes: the execution-evidence layer (event log, snapshots, replay reconstruction, run comparison, risk scoring, audit export), the deterministic debug and refactor engine with shadow-worktree verification, the code-intelligence graph and impact analysis, council and arena execution modes, the AX Wiki compiler, OS-level sandboxing, and AX Code Desktop.
+AX Code began on the MIT-licensed [OpenCode](https://github.com/anomalyco/opencode) codebase, and that attribution is preserved here and in [NOTICE](NOTICE). DEFAI's independent work since then is what this README describes: the execution-evidence layer (event log, snapshots, replay reconstruction, run comparison, risk scoring, audit export), the deterministic debug and refactor engine with shadow-worktree verification, the code-intelligence graph and impact analysis, council and arena execution modes, the AX Wiki compiler, OS-level sandboxing, and the public application-host contracts.
 
 The repository also includes code with upstream history from these MIT-licensed projects:
 
 - [OpenCode](https://github.com/anomalyco/opencode): the CLI, runtime, session, provider, and tool foundations. See [NOTICE](NOTICE).
-- [OpenChamber](https://github.com/btriapitsyn/openchamber): AX Code Desktop includes derived code. See [desktop/NOTICE](desktop/NOTICE).
 - [OpenTUI](https://github.com/anomalyco/opentui): the renderer snapshot underlying AX Code TUI. AX Code owns the `@ax-code/tui` package, integration, patches, and release process.
 - [ax-cli](https://github.com/defai-digital/ax-cli): selected AX/CLI capabilities ported from DEFAI's earlier project. See [NOTICE](NOTICE).
 
@@ -243,4 +242,4 @@ These notices preserve license provenance and upstream credit. They do not mean 
 
 AX Code is licensed under the [Apache License, Version 2.0](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital).
 
-Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT). The AX Code TUI package at `packages/ax-code-tui` retains the MIT license and attribution of its upstream renderer lineage. See [NOTICE](NOTICE), [LICENSE-MIT](LICENSE-MIT), [desktop/NOTICE](desktop/NOTICE), and the provenance section above.
+Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT). The AX Code TUI package at `packages/ax-code-tui` retains the MIT license and attribution of its upstream renderer lineage. See [NOTICE](NOTICE), [LICENSE-MIT](LICENSE-MIT), and the provenance section above.

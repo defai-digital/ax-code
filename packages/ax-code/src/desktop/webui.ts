@@ -54,18 +54,6 @@ type DesktopServeResult = {
   url?: string
 }
 
-function findDesktopCliFromCheckout(startDir: string) {
-  let current = path.resolve(startDir)
-  while (true) {
-    const candidate = path.join(current, "desktop", "packages", "web", "bin", "cli.js")
-    if (fs.existsSync(candidate)) return candidate
-
-    const parent = path.dirname(current)
-    if (parent === current) return undefined
-    current = parent
-  }
-}
-
 function macDesktopInvocation(input: {
   env: NodeJS.ProcessEnv
   homeDir: string
@@ -114,7 +102,7 @@ function macDesktopInvocation(input: {
   }
 }
 
-export function resolveDesktopInvocation(cwd: string, deps: DesktopInvocationDeps = {}): DesktopInvocation {
+export function resolveDesktopInvocation(_cwd: string, deps: DesktopInvocationDeps = {}): DesktopInvocation {
   const env = deps.env ?? process.env
   const platform = deps.platform ?? process.platform
   const homeDir = deps.homeDir ?? os.homedir()
@@ -124,11 +112,6 @@ export function resolveDesktopInvocation(cwd: string, deps: DesktopInvocationDep
   const configured = env.AX_CODE_DESKTOP_BINARY?.trim()
   if (configured) {
     return { command: configured, args: [], displayName: configured }
-  }
-
-  const checkoutCli = findDesktopCliFromCheckout(cwd)
-  if (checkoutCli) {
-    return { command: process.execPath, args: [checkoutCli], displayName: "local ax-code-desktop" }
   }
 
   const pathCli = findOnPath("ax-code-desktop", env)

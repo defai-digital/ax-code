@@ -52,11 +52,11 @@ describe("script.workspace-metadata", () => {
     expect(turbo.tasks?.["@ax-code/tui#build"]?.outputs).toContain("spinner/dist/**")
   })
 
-  test("Desktop UI build waits for generated SDK types", async () => {
+  test("Turbo has no in-repository Desktop build tasks", async () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const turbo = JSON.parse(await readFile(path.join(repoRoot, "turbo.json"), "utf8"))
 
-    expect(turbo.tasks?.["@openchamber/ui#build"]?.dependsOn).toEqual(expect.arrayContaining(["@ax-code/sdk#build"]))
+    expect(Object.keys(turbo.tasks ?? {}).filter((name) => /desktop|electron|openchamber/i.test(name))).toEqual([])
   })
 
   test("AX Code TUI JSX runtime resolves through the workspace package", async () => {

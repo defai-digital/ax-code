@@ -249,7 +249,7 @@
         {
           "fingerprint": "08f504bed4812683de42c6bf96b42656c5480c7f7161a7876dca952f4378f19c",
           "file": "src/desktop/webui.ts",
-          "line": 167,
+          "line": 154,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -257,7 +257,7 @@
         {
           "fingerprint": "91bde4c2b7b20279b9a43b2a300a191324200a4548d7eff4e2caa27e6aa90831",
           "file": "src/desktop/webui.ts",
-          "line": 170,
+          "line": 157,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -265,7 +265,7 @@
         {
           "fingerprint": "05eeadc494b238d86e782cb54c833fc020338ce892405031488d278d691eee4f",
           "file": "src/desktop/webui.ts",
-          "line": 173,
+          "line": 160,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -273,7 +273,7 @@
         {
           "fingerprint": "74d277a5d2e865ab89cb02d1bbf40d0afb0c9cc4402784acf084fe05d946fe25",
           "file": "src/desktop/webui.ts",
-          "line": 174,
+          "line": 161,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -281,7 +281,7 @@
         {
           "fingerprint": "05eeadc494b238d86e782cb54c833fc020338ce892405031488d278d691eee4f",
           "file": "src/desktop/webui.ts",
-          "line": 255,
+          "line": 242,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -289,7 +289,7 @@
         {
           "fingerprint": "bff0392ffeac8bb9d2598393d4529fdb422a0b00555ea68e479be87a7af034d2",
           "file": "src/desktop/webui.ts",
-          "line": 256,
+          "line": 243,
           "severity": "medium",
           "kind": "stale_listener",
           "summary": "stale_listener"
@@ -1366,7 +1366,7 @@
         {
           "fingerprint": "605e7f1179737ad9326d1180b258f678ccea91548826d01c23d1bbd7c2f0d904",
           "file": "src/desktop/webui.ts",
-          "line": 167,
+          "line": 154,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1374,7 +1374,7 @@
         {
           "fingerprint": "c184edcbd727b102ce9776481059151e738d639d52c577c7aa17a0041c5d92ab",
           "file": "src/desktop/webui.ts",
-          "line": 170,
+          "line": 157,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1382,7 +1382,7 @@
         {
           "fingerprint": "42438ee34679d67311c508c63330c85aefda04c0a1699ccc971d18223993281a",
           "file": "src/desktop/webui.ts",
-          "line": 173,
+          "line": 160,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1390,7 +1390,7 @@
         {
           "fingerprint": "59d7ceef34152f5825a4dda441ba8191c80968ac7d2bc1a79ddcc11d6c6c0692",
           "file": "src/desktop/webui.ts",
-          "line": 174,
+          "line": 161,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1398,7 +1398,7 @@
         {
           "fingerprint": "7d67c69180513e0a1ae42f301e18255a887317ae041d0d05f5187837986a357f",
           "file": "src/desktop/webui.ts",
-          "line": 255,
+          "line": 242,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1406,7 +1406,7 @@
         {
           "fingerprint": "ee173c4f2c42bbf9cba2f40117d120889f0160663a4c0f9fc3e4d2c6fb559e8c",
           "file": "src/desktop/webui.ts",
-          "line": 256,
+          "line": 243,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1974,7 +1974,7 @@
       ]
     },
     "security_scan": {
-      "count": 468,
+      "count": 467,
       "findings": [
         {
           "fingerprint": "ac110f04260c483cf0241ca9c330315691931c3d5bbe4a4717f977b833cd5dae",
@@ -3585,65 +3585,57 @@
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "5dc381aee0bb3f2c8e00ed60e5218c64a030428e1cef9ad2f8a4470396eb63e1",
-          "file": "src/desktop/webui.ts",
-          "line": 58,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "4f271dd55a1df4e43e188f4f7fe1d36b269ef67917c2b2743c78f826c00132a6",
-          "file": "src/desktop/webui.ts",
-          "line": 60,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
           "fingerprint": "aedaec790c2c97e8ee9f64135fa80e0b368eee3293c9c8b709ff4723384b37f9",
           "file": "src/desktop/webui.ts",
-          "line": 78,
+          "line": 66,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "0ff2c541db31d951d684c588bb2c110f80c23894946b231a2aabafbb48acd78b",
+          "fingerprint": "c26d72239c1c24e4280890090be1d3c3e5f73f40460b03a5369e1a84a9ef3ae5",
           "file": "src/desktop/webui.ts",
-          "line": 83,
+          "line": 71,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "f05d28a5afb626b42b95024faaf32607eae8d8645d4788a532628e51701d6de5",
+          "fingerprint": "f17613925a21500b9ff28fb368071d886ecffd775d35380cf8fd583536468b98",
           "file": "src/desktop/webui.ts",
-          "line": 84,
+          "line": 72,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "8d810ea54438bb888572dcab8db621d168b6b1fda306b1279831759afc850761",
+          "fingerprint": "0c31500e4aaaee1348f28b3f834204653acc63a1f07fa753aea345cd974899db",
           "file": "src/desktop/webui.ts",
-          "line": 85,
+          "line": 73,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "1df1aa783ab1155b9592e1d410543bbe1576a2c9dbd96420e2d4874e12cf2ed6",
+          "fingerprint": "c7aa386c61f071843fe7ad67ce332b8ec9bb6b7739b62d94d6d589b4da69d1e1",
           "file": "src/desktop/webui.ts",
-          "line": 86,
+          "line": 74,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
         },
         {
-          "fingerprint": "49853e3dc4d609b42a3ac6d234f23704903466b522e993a0cb82abb440de8def",
+          "fingerprint": "59c28c66f6b094c12d3f8ab67a6d608f95ffd535affda261d3d873e603f34ffd",
           "file": "src/desktop/webui.ts",
-          "line": 87,
+          "line": 75,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "d20f021b59dc4e3ac9d4748caeff5bb881fcd1862d9304dc717a2f93c5a5c7f8",
+          "file": "src/desktop/webui.ts",
+          "line": 76,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5659,7 +5651,7 @@
         {
           "fingerprint": "3cfd98584de53082effe085cf77be3be34f40eee26babe29096715bb82c82c8b",
           "file": "src/desktop/webui.ts",
-          "line": 159,
+          "line": 146,
           "severity": "medium",
           "kind": "env_leak",
           "summary": "env_leak"
@@ -5667,7 +5659,7 @@
         {
           "fingerprint": "23bb4939a9fb7c675c2fa997874572a0afbc0ae334c16b01299aa454ed21a321",
           "file": "src/desktop/webui.ts",
-          "line": 251,
+          "line": 238,
           "severity": "medium",
           "kind": "env_leak",
           "summary": "env_leak"

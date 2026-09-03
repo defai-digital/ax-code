@@ -7,8 +7,7 @@
   "packageManager": "pnpm@10.33.4",
   "workspaces": [
     "packages/*",
-    "packages/sdk/js",
-    "desktop/packages/*"
+    "packages/sdk/js"
   ],
   "engines": {
     "node": ">=24"
@@ -23,24 +22,7 @@
     "check:openapi": "pnpm --dir packages/sdk/js run validate:openapi",
     "check:sdk-jsr": "pnpm --dir packages/sdk/js run build && pnpm --dir packages/sdk/js run check:jsr",
     "check:self-scan": "pnpm --dir packages/ax-code run check:self-scan",
-    "check:desktop-boundaries": "tsx script/check-desktop-boundaries.ts",
-    "check:desktop-boundaries:strict": "tsx script/check-desktop-boundaries.ts --fail-on-violation",
-    "check:desktop-store-boundaries": "tsx script/check-desktop-store-boundaries.ts",
-    "check:desktop-electron-runtime": "node desktop/scripts/check-electron-runtime.mjs",
-    "check:desktop-endpoint-contracts": "node desktop/scripts/check-endpoint-contracts.mjs",
-    "check:desktop-ipc-contracts": "node desktop/scripts/check-desktop-ipc-contracts.mjs",
-    "check:desktop-package-tests": "node desktop/scripts/check-package-test-scripts.mjs",
-    "check:desktop-version-lockstep": "tsx script/check-desktop-version-lockstep.ts",
-    "desktop:dev": "turbo run dev --filter=@ax-code/electron",
-    "desktop:build": "turbo run build --filter=@ax-code/electron",
-    "desktop:typecheck": "pnpm --dir packages/sdk/js run build && pnpm --filter \"./desktop/packages/*\" --if-present run type-check",
-    "desktop:test": "pnpm --dir packages/sdk/js run build && pnpm --filter \"./desktop/packages/*\" --if-present run test",
-    "desktop:lint": "pnpm --filter \"./desktop/packages/*\" --if-present run lint",
-    "desktop:smoke:packaged": "node desktop/packages/electron/scripts/smoke-packaged-app.mjs",
-    "desktop:smoke:packaged-asar-cli": "node desktop/packages/electron/scripts/smoke-packaged-asar-cli.mjs",
     "release:cli": "pnpm run publish:github",
-    "release:desktop": "./desktop/scripts/publish-github-release.sh",
-    "release:all": "pnpm run release:cli && pnpm run release:desktop",
     "typecheck": "pnpm -r --if-present run typecheck",
     "build:native": "tsx script/build-native.ts",
     "build:native:debug": "tsx script/build-native.ts --debug",
@@ -58,28 +40,19 @@
     "sign:release": "tsx script/sign-release-assets.ts",
     "winget:generate": "tsx tools/winget/generate-manifests.ts",
     "prepare": "husky",
-    "postinstall": "node desktop/scripts/fix-node-pty-permissions.mjs",
+    "postinstall": "node script/fix-node-pty-permissions.mjs",
     "test:extracted-packages": "pnpm --dir packages/ax-code-intel typecheck && pnpm --dir packages/ax-code-intel test && pnpm --dir packages/ax-code-reason typecheck && pnpm --dir packages/ax-code-reason test",
     "test:scripts": "vitest run",
     "test": "echo 'do not run tests from root (use test:scripts for root script suites)' && exit 1"
   },
   "devDependencies": {
     "@actions/artifact": "5.0.1",
-    "@eslint/js": "^9.33.0",
-    "@types/mime-types": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "eslint": "^9.33.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.20",
-    "fast-glob": "catalog:",
-    "globals": "^16.3.0",
     "husky": "9.1.7",
     "prettier": "3.6.2",
-    "semver": "catalog:",
     "tsx": "^4.22.4",
     "turbo": "2.9.14",
-    "typescript-eslint": "^8.39.1",
     "vitest": "4.1.9"
   },
   "dependencies": {
@@ -107,13 +80,11 @@
     "protobufjs",
     "tree-sitter",
     "tree-sitter-bash",
-    "electron",
     "node-pty-prebuilt-multiarch",
     "web-tree-sitter"
   ],
   "pnpm": {
     "onlyBuiltDependencies": [
-      "electron",
       "node-pty-prebuilt-multiarch"
     ],
     "overrides": {

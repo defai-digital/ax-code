@@ -9,7 +9,7 @@ import { readFile } from "node:fs/promises"
 import { buildReleaseNotes, parseReleaseTag, releaseTitle } from "./extract-changelog-notes.mjs"
 
 const DEFAULT_REPO = "defai-digital/ax-code"
-const DEFAULT_CHANGELOG = "desktop/CHANGELOG.md"
+const DEFAULT_CHANGELOG = "CHANGELOG.md"
 
 function parseCli(argv) {
   const values = { apply: false, repo: DEFAULT_REPO, changelog: DEFAULT_CHANGELOG, limit: undefined }

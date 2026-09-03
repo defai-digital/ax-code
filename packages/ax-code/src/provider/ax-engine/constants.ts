@@ -106,11 +106,11 @@ export type AxEngineBinaryRelease = {
 export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undefined
 
 // Single source of truth for the built-in AX Engine model catalog exposed by
-// `/provider/ax-engine/models`, Desktop Models, and provider pickers. Desktop and
-// other clients must not hardcode model ids — they read this catalog from the
-// ax-code process that is currently serving. Editing this file only affects a
-// Desktop session when that session spawns this monorepo's ax-code (desktop:dev
-// prefers the monorepo source launcher over Homebrew/PATH installs).
+// `/provider/ax-engine/models`, external GUI model views, and provider pickers.
+// Clients must not hardcode model ids — they read this catalog from the ax-code
+// process that is currently serving. Editing this file affects an AX Coder
+// session only when it is configured to spawn this source runtime rather than a
+// signed or PATH-installed runtime.
 export const AX_ENGINE_MODEL_IDS = [
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,

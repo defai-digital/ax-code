@@ -40,8 +40,8 @@ See [Installation and Runtime Channels](../getting-started/install-runtime.md) f
 
 ## Release notes
 
-CLI/TUI releases are documented here; Desktop-app changes are tracked in
-[`desktop/CHANGELOG.md`](../../desktop/CHANGELOG.md).
+CLI/TUI releases are documented here and in the repository [changelog](../../CHANGELOG.md). Desktop application
+changes are owned by the separate AX Coder project.
 
 - [AX Code v7.7.6](notes-v7.7.6.md)
 - [AX Code v7.2.0](notes-v7.2.0.md)

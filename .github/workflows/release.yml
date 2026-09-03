@@ -414,7 +414,6 @@ jobs:
             node script/extract-changelog-notes.mjs \
               --version "$VERSION" \
               --channel cli \
-              --sibling "desktop-v${VERSION}" \
               --out "$NOTES_FILE"
             node script/github-release-assets.mjs create \
               --repo "$REPOSITORY" \

@@ -22,11 +22,6 @@ originally released under the MIT License. As DEFAI owns that code, the
 ax-cli-derived portions are now offered as part of this combined work under the
 Apache License, Version 2.0.
 
-The AX Code Desktop subtree (desktop/) includes software derived from
-OpenChamber (https://github.com/btriapitsyn/openchamber), Copyright (c) 2025
-Bohdan Triapitsyn, originally licensed under the MIT License. See desktop/NOTICE
-and desktop/LICENSE-MIT for the detailed Desktop provenance and attribution.
-
 The AX Code TUI package (`packages/ax-code-tui`) contains portions derived from
 OpenTUI (https://github.com/anomalyco/opentui), Copyright (c) opentui, available
 under the MIT License. Upstream license text and provenance are retained in the
@@ -101,6 +96,6 @@ Attribution disclaimer
 ========================================================================
 
 These notices preserve upstream attribution and license history. They do not
-mean that upstream OpenCode, OpenChamber, OpenTUI, or ax-cli contributors
+mean that upstream OpenCode, OpenTUI, or ax-cli contributors
 maintain AX Code unless they are separately listed in this repository's current
 contribution history.

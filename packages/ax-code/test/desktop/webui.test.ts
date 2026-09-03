@@ -46,6 +46,21 @@ describe("desktop web UI invocation", () => {
     expect(invocation.args).toEqual([])
   })
 
+  test("does not load a Desktop runtime from the AX Code checkout", () => {
+    const invocation = resolveDesktopInvocation("/tmp/ax-code/project", {
+      platform: "linux",
+      env: {},
+      existsSync: () => true,
+      findOnPath: () => null,
+    })
+
+    expect(invocation).toEqual({
+      command: "ax-code-desktop",
+      args: [],
+      displayName: "ax-code-desktop",
+    })
+  })
+
   test("distinguishes an installed legacy app from a missing Desktop install", () => {
     const invocation = resolveDesktopInvocation("/tmp/project", {
       platform: "darwin",
