@@ -14,17 +14,32 @@ test("decodeGitQuotedPathLiteral accepts only decoded string literals", () => {
   expect(decodeGitQuotedPathLiteral({ path: "src/index.ts" })).toBeUndefined()
 })
 
-test("parseGitQuotedPathLiteral decodes only JSON string literals", () => {
+test("parseGitQuotedPathLiteral decodes quoted string literals", () => {
   expect(parseGitQuotedPathLiteral('"dir/file\\tname.ts"')).toBe("dir/file\tname.ts")
   expect(parseGitQuotedPathLiteral('"unterminated')).toBeUndefined()
   expect(parseGitQuotedPathLiteral('{"path":"src/index.ts"}')).toBeUndefined()
 })
 
-test("decodeGitQuotedPath decodes only valid JSON string paths", () => {
+test("decodeGitQuotedPath preserves malformed quoted paths", () => {
   expect(decodeGitQuotedPath("src/index.ts")).toBe("src/index.ts")
   expect(decodeGitQuotedPath('"dir/file\\tname.ts"')).toBe("dir/file\tname.ts")
   expect(decodeGitQuotedPath('"unterminated')).toBe('"unterminated')
   expect(decodeGitQuotedPath('{"path":"src/index.ts"}')).toBe('{"path":"src/index.ts"}')
+})
+
+test("decodes Git C escapes and octal UTF-8 bytes", () => {
+  expect(decodeGitQuotedPath('"bell\\aand\\vtab.txt"')).toBe(
+    `bell${String.fromCharCode(7)}and${String.fromCharCode(11)}tab.txt`,
+  )
+  expect(decodeGitQuotedPath('"caf\\303\\251.txt"')).toBe(`caf${String.fromCodePoint(0xe9)}.txt`)
+  expect(decodeGitQuotedPath('"\\344\\270\\255.txt"')).toBe(`${String.fromCodePoint(0x4e2d)}.txt`)
+  expect(decodeGitQuotedPath('"literal\\\\141.txt"')).toBe("literal\\141.txt")
+  expect(parseGitQuotedPathLiteral('"invalid\\400.txt"')).toBeUndefined()
+  expect(parseGitQuotedPathLiteral('"invalid\\377.txt"')).toBeUndefined()
+})
+
+test("preserves an encoded UTF-8 byte order mark as a filename character", () => {
+  expect(decodeGitQuotedPath('"\\357\\273\\277file.txt"')).toBe(`${String.fromCodePoint(0xfeff)}file.txt`)
 })
 
 test("parsePathLine decodes single git-quoted paths", () => {

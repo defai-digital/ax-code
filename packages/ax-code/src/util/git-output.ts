@@ -17,7 +17,27 @@ export function decodeGitQuotedPathLiteral(value: unknown): string | undefined {
 }
 
 export function parseGitQuotedPathLiteral(file: string): string | undefined {
-  const parsed = parseJsonResult(file)
+  // Git quotes paths with C escapes, including bell/vertical-tab and octal
+  // UTF-8 bytes that JSON does not recognize. Preserve escaped backslashes
+  // while translating only those extra forms into valid JSON string escapes.
+  const literal = file.replace(/\\(?:[0-7]{1,3}(?:\\[0-7]{1,3})*|.)/g, (escape) => {
+    if (escape === "\\a") return "\\u0007"
+    if (escape === "\\v") return "\\u000b"
+    if (!/^\\[0-7]/.test(escape)) return escape
+    const bytes = escape
+      .slice(1)
+      .split("\\")
+      .map((byte) => Number.parseInt(byte, 8))
+    if (bytes.some((byte) => byte > 255)) return escape
+    try {
+      const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(Uint8Array.from(bytes))
+      return JSON.stringify(text).slice(1, -1)
+    } catch {
+      // Leave malformed bytes escaped so the safe parser rejects the literal.
+      return escape
+    }
+  })
+  const parsed = parseJsonResult(literal)
   if (!parsed.ok) {
     return undefined
   }

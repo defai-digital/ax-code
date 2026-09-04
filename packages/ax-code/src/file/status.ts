@@ -10,11 +10,8 @@ export interface FileStatusEntry {
 }
 
 export function parseModifiedNumstat(output: string): FileStatusEntry[] {
-  const text = output.trim()
-  if (!text) return []
-
   const result: FileStatusEntry[] = []
-  for (const line of text.split("\n")) {
+  for (const line of output.split("\n")) {
     const parsed = parseNumstatLine(line)
     if (!parsed) continue
     result.push({
@@ -28,10 +25,7 @@ export function parseModifiedNumstat(output: string): FileStatusEntry[] {
 }
 
 export function parseDeletedPaths(output: string): string[] {
-  const text = output.trim()
-  if (!text) return []
-
-  return text
+  return output
     .split("\n")
     .map((line) => parsePathLine(line))
     .filter((file): file is string => Boolean(file))
@@ -51,7 +45,7 @@ export function deletedFileStatus(file: string, numstatOutput: string): FileStat
   return {
     path: file,
     added: 0,
-    removed: parseNumstatLine(numstatOutput.trim())?.deletions ?? 0,
+    removed: parseNumstatLine(numstatOutput.split("\n")[0] ?? "")?.deletions ?? 0,
     status: "deleted",
   }
 }

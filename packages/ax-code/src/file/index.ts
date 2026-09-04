@@ -11,7 +11,7 @@ import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
-import { parseNumstatLine } from "../util/git-output"
+import { parseNumstatLine, parsePathLine } from "../util/git-output"
 import { Protected } from "./protected"
 import { Ripgrep } from "./ripgrep"
 import { deletedFileStatus, parseModifiedNumstat, untrackedFileStatus } from "./status"
@@ -530,10 +530,24 @@ export namespace File {
   export async function status() {
     if (Instance.project.vcs !== "git") return []
 
+    // Keep literal paths relative to the same directory as File.read().
+    // Deleted paths are collected separately and must not also appear modified.
     const diffOutput = (
-      await git(["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "HEAD"], {
-        cwd: Instance.directory,
-      })
+      await git(
+        [
+          "-c",
+          "core.fsmonitor=false",
+          "-c",
+          "core.quotepath=false",
+          "diff",
+          "--relative",
+          "--no-renames",
+          "--numstat",
+          "--diff-filter=d",
+          "HEAD",
+        ],
+        { cwd: Instance.directory },
+      )
     ).text()
 
     const changed: File.Info[] = parseModifiedNumstat(diffOutput)
@@ -547,12 +561,11 @@ export namespace File {
       )
     ).text()
 
-    if (untrackedOutput.trim()) {
+    if (untrackedOutput) {
       const untrackedFiles = untrackedOutput
-        .trim()
         .split("\n")
-        .map((file) => file.trim())
-        .filter(Boolean)
+        .map(parsePathLine)
+        .filter((file): file is string => file !== undefined)
       // Bounded worker-pool read to avoid fd-exhaustion (EMFILE) and heap
       // pressure on monorepos / data-science repos with thousands of
       // untracked files. The previous Promise.all opened one fd per file
@@ -592,15 +605,26 @@ export namespace File {
 
     const deletedNumstat = (
       await git(
-        ["-c", "core.fsmonitor=false", "-c", "core.quotepath=false", "diff", "--numstat", "--diff-filter=D", "HEAD"],
+        [
+          "-c",
+          "core.fsmonitor=false",
+          "-c",
+          "core.quotepath=false",
+          "diff",
+          "--relative",
+          "--no-renames",
+          "--numstat",
+          "--diff-filter=D",
+          "HEAD",
+        ],
         {
           cwd: Instance.directory,
         },
       )
     ).text()
 
-    if (deletedNumstat.trim()) {
-      for (const line of deletedNumstat.trim().split("\n")) {
+    if (deletedNumstat) {
+      for (const line of deletedNumstat.split("\n")) {
         const parsed = parseNumstatLine(line)
         if (parsed) changed.push(deletedFileStatus(parsed.file, line))
       }

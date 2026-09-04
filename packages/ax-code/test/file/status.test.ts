@@ -22,6 +22,13 @@ test("parseDeletedPaths decodes git path lines", () => {
   expect(parseDeletedPaths('src/old.ts\n"deleted\\tfile.ts"\n')).toEqual(["src/old.ts", "deleted\tfile.ts"])
 })
 
+test("preserves leading and trailing filename spaces", () => {
+  expect(parseDeletedPaths(" leading.txt\ntrailing.txt \n")).toEqual([" leading.txt", "trailing.txt "])
+  expect(parseModifiedNumstat("1\t2\ttrailing.txt \n")).toEqual([
+    { path: "trailing.txt ", added: 1, removed: 2, status: "modified" },
+  ])
+})
+
 test("untrackedFileStatus counts lines like git numstat", () => {
   expect(untrackedFileStatus("new.ts", "a\nb\n")).toEqual({
     path: "new.ts",

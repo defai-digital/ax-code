@@ -592,9 +592,8 @@ describe("file/index Filesystem patterns", () => {
         directory: tmp.path,
         fn: async () => {
           const result = await File.status()
-          // Deleted files appear in both numstat (as "modified") and diff-filter=D (as "deleted")
           const entries = result.filter((f) => f.path === "gone.txt")
-          expect(entries.some((e) => e.status === "deleted")).toBe(true)
+          expect(entries).toEqual([{ path: "gone.txt", added: 0, removed: 1, status: "deleted" }])
         },
       })
     })

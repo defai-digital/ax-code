@@ -763,7 +763,7 @@ export namespace Snapshot {
         throw new Error(`Snapshot diff failed: name-status exited with code ${statuses.code}`)
       }
 
-      for (const line of statuses.text.trim().split("\n")) {
+      for (const line of statuses.text.split("\n")) {
         if (!line) continue
         const parsed = parseNameStatusLine(line)
         if (!parsed) continue
@@ -785,7 +785,7 @@ export namespace Snapshot {
         throw new Error(`Snapshot diff failed: numstat exited with code ${numstat.code}`)
       }
 
-      for (const line of numstat.text.trim().split("\n")) {
+      for (const line of numstat.text.split("\n")) {
         if (!line) continue
         const parsed = parseNumstatLine(line)
         if (!parsed) continue
