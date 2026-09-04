@@ -73,6 +73,17 @@ describe("notifyTerminal", () => {
     expect(writes[0].endsWith("\x07")).toBe(true)
   })
 
+  test.each([224, 225])("preserves Unicode at the notification limit after %i ASCII characters", (length) => {
+    const { stream, writes } = fakeStdout()
+    const emoji = String.fromCodePoint(0x1f680)
+    notifyTerminal({ title: "ax-code", body: "x".repeat(length) + emoji, key: "unicode-limit" }, stream, supportedEnv)
+
+    expect(writes[0].length).toBeLessThanOrEqual(240)
+    expect(writes[0].isWellFormed()).toBe(true)
+    expect(writes[0].includes(emoji)).toBe(length === 224)
+    expect(Buffer.from(writes[0]).toString("utf8")).not.toContain(String.fromCodePoint(0xfffd))
+  })
+
   test("wraps the sequence in a tmux DCS passthrough with ESC doubled", () => {
     const { stream, writes } = fakeStdout()
     notifyTerminal({ title: "ax-code", body: "Task complete", key: "k4" }, stream, {

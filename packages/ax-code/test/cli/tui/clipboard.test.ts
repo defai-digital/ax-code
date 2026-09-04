@@ -83,6 +83,22 @@ describe("OSC 52 mux and sequence", () => {
     expect(osc52ClipboardSequence("x".repeat(OSC52_MAX_BYTES + 1), "none")).toBeUndefined()
   })
 
+  test.each([
+    { label: "two-byte code points", body: String.fromCodePoint(0xe9).repeat(130) },
+    { label: "three-byte code points", body: String.fromCodePoint(0x4e2d).repeat(100) },
+    { label: "a surrogate pair at the chunk boundary", body: "x".repeat(247) + String.fromCodePoint(0x1f680) },
+  ])("preserves $label within Screen byte limits", ({ body }) => {
+    const sequence = `\x1b]9;${body}\x07`
+    const wire = Buffer.from(wrapOscForMux(sequence, "screen")).toString("utf8")
+    const chunks = [...wire.matchAll(/\x1bP([\s\S]*?)\x1b\\/g)].map((match) => match[1])
+
+    expect(chunks.join("")).toBe(sequence)
+    for (const chunk of chunks) {
+      expect(Buffer.byteLength(chunk)).toBeLessThanOrEqual(SCREEN_PASSTHROUGH_CHUNK_SIZE)
+      expect(chunk.isWellFormed()).toBe(true)
+    }
+  })
+
   test("wrapOscForMux is the shared tmux/Screen envelope", () => {
     expect(wrapOscForMux("\x1b]9;hi\x07", "none")).toBe("\x1b]9;hi\x07")
     expect(wrapOscForMux("\x1b]9;hi\x07", "tmux")).toBe("\x1bPtmux;\x1b\x1b]9;hi\x07\x1b\\")

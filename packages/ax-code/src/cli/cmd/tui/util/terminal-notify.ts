@@ -59,7 +59,10 @@ export function notifyTerminal(
   const body = sanitize(input.body)
   let sequence: string
   if (supportsTerminalNotification(env)) {
-    const payload = `${title}: ${body}`.slice(0, MAX_PAYLOAD_LENGTH)
+    let payload = `${title}: ${body}`.slice(0, MAX_PAYLOAD_LENGTH)
+    // A UTF-16 slice can leave half an emoji at the limit. Drop that partial
+    // code point instead of writing a replacement character to the terminal.
+    if (/[\uD800-\uDBFF]$/.test(payload)) payload = payload.slice(0, -1)
     sequence = `${OSC_PREFIX}${payload}${OSC_SUFFIX}`
     // tmux/Screen strip unknown OSC unless wrapped in a DCS passthrough.
     // Screen must not use tmux DCS (OpenTUI #1334).

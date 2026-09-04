@@ -18,9 +18,21 @@ export function wrapOscForMux(sequence: string, mux: OscMux): string {
   }
   if (mux === "screen") {
     let wrapped = ""
-    for (let offset = 0; offset < sequence.length; offset += SCREEN_PASSTHROUGH_CHUNK_SIZE) {
-      wrapped += `\x1bP${sequence.slice(offset, offset + SCREEN_PASSTHROUGH_CHUNK_SIZE)}\x1b\\`
+    let chunk = ""
+    let bytes = 0
+    // Screen limits bytes, while string offsets count UTF-16 code units.
+    // Split only between complete code points so each envelope stays valid UTF-8.
+    for (const character of sequence) {
+      const size = Buffer.byteLength(character, "utf8")
+      if (bytes + size > SCREEN_PASSTHROUGH_CHUNK_SIZE) {
+        wrapped += `\x1bP${chunk}\x1b\\`
+        chunk = ""
+        bytes = 0
+      }
+      chunk += character
+      bytes += size
     }
+    if (chunk) wrapped += `\x1bP${chunk}\x1b\\`
     return wrapped
   }
   return sequence
