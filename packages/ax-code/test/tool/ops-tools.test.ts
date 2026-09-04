@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Permission } from "../../src/permission"
@@ -259,6 +261,71 @@ describe("ops_apply", () => {
       // The mismatch consumed the token (it is single-use) but journaled nothing.
       expect(OperationToken.consume({ token })).toEqual({ ok: false, reason: "already_consumed" })
       expect(OperationJournal.list(second.planID as any)).toHaveLength(1)
+    }),
+  )
+
+  test(
+    "snapshot_command captures before/after refs that differ when state changes",
+    withProject(async (ctx) => {
+      const { planID } = await createPlan(ctx)
+      const { token } = await approvePlan(ctx, planID)
+
+      await fs.writeFile(path.join(Instance.directory, "device-state.txt"), "rule 443 open\n")
+
+      const tool = await OpsApplyTool.init()
+      const result = await tool.execute(
+        {
+          approval_token: token,
+          plan_id: planID,
+          command: "printf 'rule 22 open\\n' > device-state.txt",
+          snapshot_command: "cat device-state.txt",
+          timeout_seconds: 600,
+        },
+        ctx,
+      )
+
+      expect(result.metadata.exit_code).toBe(0)
+      const before = result.metadata.before_snapshot_ref as string
+      const after = result.metadata.after_snapshot_ref as string
+      expect(before).toBe(Hash.fast("rule 443 open\n"))
+      expect(after).toBe(Hash.fast("rule 22 open\n"))
+      expect(before).not.toBe(after)
+      expect(result.output).toContain("before_snapshot_ref")
+
+      const entry = OperationJournal.latestEntry(planID as any)!
+      expect(entry.before_snapshot_ref).toBe(before)
+      expect(entry.after_snapshot_ref).toBe(after)
+      expect(entry.payload_json).toMatchObject({ snapshot_command: "cat device-state.txt" })
+      expect(OperationJournal.verifyChain(planID as any)).toEqual({ ok: true })
+    }),
+  )
+
+  test(
+    "snapshot command failure still applies and journals with null refs",
+    withProject(async (ctx) => {
+      const { planID } = await createPlan(ctx)
+      const { token } = await approvePlan(ctx, planID)
+
+      const tool = await OpsApplyTool.init()
+      const result = await tool.execute(
+        {
+          approval_token: token,
+          plan_id: planID,
+          command: "echo applied",
+          snapshot_command: "exit 3",
+          timeout_seconds: 600,
+        },
+        ctx,
+      )
+
+      expect(result.metadata.exit_code).toBe(0)
+      expect(result.metadata.before_snapshot_ref).toBeNull()
+      expect(result.metadata.after_snapshot_ref).toBeNull()
+
+      const entry = OperationJournal.latestEntry(planID as any)!
+      expect(entry.status).toBe("executed")
+      expect(entry.before_snapshot_ref).toBeNull()
+      expect(entry.after_snapshot_ref).toBeNull()
     }),
   )
 })

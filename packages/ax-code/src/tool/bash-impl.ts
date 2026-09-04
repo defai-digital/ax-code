@@ -51,6 +51,7 @@ import {
   stripShellQuotes,
   truncateBashMetadata,
 } from "./bash-helpers"
+import { recordDestructiveApproval } from "./ops-shared"
 
 import { BASH_MAX_METADATA_LENGTH as MAX_METADATA_LENGTH } from "@/constants/network"
 const DEFAULT_TIMEOUT = Flag.AX_CODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
@@ -958,6 +959,22 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             reasons: Object.fromEntries(destructiveCommands),
           },
         })
+
+        // Journal linkage (PRD sequencing item 3): record the approval next to
+        // the active operation plan — or the unplanned-mutations sentinel when
+        // no approved plan exists. Best-effort by contract: recordDestructive
+        // Approval never throws, so a journaling failure can never block or
+        // fail the command on this hot path.
+        try {
+          recordDestructiveApproval({
+            projectID: Instance.project.id,
+            sessionID: ctx.sessionID,
+            commands: Array.from(destructiveCommands.keys()),
+            reason: [...new Set(destructiveCommands.values())].join("; "),
+          })
+        } catch (error) {
+          log.warn("failed to journal bash_destructive approval; continuing", { error: toErrorMessage(error) })
+        }
       }
 
       if (patterns.size > 0) {

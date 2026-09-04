@@ -4,6 +4,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./ops_apply.txt"
 import { Instance } from "@/project/instance"
 import { Hash } from "@/util/hash"
+import { Log } from "@/util/log"
 import { OperationToken } from "@/operation/query"
 import { OpsExec } from "./ops-exec"
 import { appendPlanJournal, loadPlan } from "./ops-shared"
@@ -12,6 +13,8 @@ import { appendPlanJournal, loadPlan } from "./ops-shared"
 // Authorization is capability-based: a single-use, TTL-bound, plan-bound
 // approval token issued by ops_approve. The raw bearer token is never written
 // to the journal — only its sha256.
+
+const log = Log.create({ service: "tool.ops_apply" })
 
 export const TokenRedeemError = NamedError.create(
   "OpsTokenRedeemError",
@@ -26,6 +29,37 @@ export const TokenPlanMismatchError = NamedError.create(
 const EXCERPT_MAX_CHARS = 2000
 const TIMEOUT_DEFAULT_SECONDS = 600
 const TIMEOUT_MAX_SECONDS = 3600
+const SNAPSHOT_TIMEOUT_SECONDS = 120
+
+/**
+ * Runs a read-only snapshot command and hashes its stdout into a snapshot
+ * ref. Best-effort by design: a failing or slow snapshot command must never
+ * abort the apply — the ref simply stays null and the mutation proceeds.
+ */
+async function snapshotRef(input: { command: string; abort?: AbortSignal }): Promise<string | null> {
+  try {
+    const result = await OpsExec.run({
+      command: input.command,
+      timeoutSeconds: SNAPSHOT_TIMEOUT_SECONDS,
+      abort: input.abort,
+    })
+    if (result.exitCode !== 0) {
+      log.warn("snapshot command failed; continuing without snapshot ref", {
+        command: input.command,
+        exitCode: result.exitCode,
+        stderr: result.stderr.slice(0, 500),
+      })
+      return null
+    }
+    return Hash.fast(result.stdout)
+  } catch (error) {
+    log.warn("snapshot command errored; continuing without snapshot ref", {
+      command: input.command,
+      error: NamedError.message(error),
+    })
+    return null
+  }
+}
 
 export const OpsApplyTool = Tool.define("ops_apply", {
   description: DESCRIPTION,
@@ -33,6 +67,13 @@ export const OpsApplyTool = Tool.define("ops_apply", {
     approval_token: z.string().min(1).describe("Single-use approval token issued by ops_approve"),
     plan_id: z.string().min(1).describe("OperationPlanID the token is bound to"),
     command: z.string().min(1).describe("The mutation command to execute (e.g. terraform apply <planfile>)"),
+    snapshot_command: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        "Optional READ-ONLY command that dumps the relevant external state; run before and after the mutation so the apply entry carries before/after snapshot refs",
+      ),
     timeout_seconds: z
       .number()
       .int()
@@ -72,7 +113,12 @@ export const OpsApplyTool = Tool.define("ops_apply", {
       })
     }
 
-    // (b) Execute the mutation.
+    // (b) Optional read-only snapshot of the external state before mutation.
+    const beforeSnapshotRef = params.snapshot_command
+      ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
+      : null
+
+    // (c) Execute the mutation.
     const result = await OpsExec.run({
       command: params.command,
       cwd: params.cwd,
@@ -82,7 +128,13 @@ export const OpsApplyTool = Tool.define("ops_apply", {
     const combined = result.stdout + (result.stderr ? `\n${result.stderr}` : "")
     const excerpt = combined.slice(0, EXCERPT_MAX_CHARS)
 
-    // (c) Journal the outcome. The raw token never enters durable records —
+    // (d) The same snapshot command after the mutation, so the journal entry
+    // binds before/after state regardless of the mutation's exit code.
+    const afterSnapshotRef = params.snapshot_command
+      ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
+      : null
+
+    // (e) Journal the outcome. The raw token never enters durable records —
     // only its sha256, per the no-raw-credentials rule.
     const status = result.exitCode === 0 ? "executed" : "failed"
     const { sequence } = appendPlanJournal({
@@ -90,11 +142,14 @@ export const OpsApplyTool = Tool.define("ops_apply", {
       projectID,
       actor: "agent",
       status,
+      beforeSnapshotRef: beforeSnapshotRef ?? undefined,
+      afterSnapshotRef: afterSnapshotRef ?? undefined,
       payload: {
         command: params.command,
         exit_code: result.exitCode,
         output_excerpt: excerpt,
         approval_token_hash: Hash.fast(params.approval_token),
+        snapshot_command: params.snapshot_command,
       },
       sessionID: ctx.sessionID,
     })
@@ -105,6 +160,8 @@ export const OpsApplyTool = Tool.define("ops_apply", {
         timed_out: result.timedOut,
         output_truncated: result.truncated,
         output: combined,
+        before_snapshot_ref: beforeSnapshotRef,
+        after_snapshot_ref: afterSnapshotRef,
         journal_sequence: sequence,
       },
       null,
@@ -116,6 +173,8 @@ export const OpsApplyTool = Tool.define("ops_apply", {
       metadata: {
         exit_code: result.exitCode,
         timed_out: result.timedOut,
+        before_snapshot_ref: beforeSnapshotRef,
+        after_snapshot_ref: afterSnapshotRef,
         journal_sequence: sequence,
       },
     }
