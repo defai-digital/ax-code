@@ -216,9 +216,10 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
 
     // Capture mode before it gets reset
     const currentMode = store.mode
-    // Work mode (Agent | Council | Arena): remap free-text to slash command routes.
+    // Work modes remap normal prompts to slash commands; shell input must stay literal.
     const activeWorkMode = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
-    const workRouted = WorkMode.routeInput(activeWorkMode, inputText)
+    const workRouted: WorkMode.Routed =
+      currentMode === "shell" ? { kind: "prompt", text: inputText } : WorkMode.routeInput(activeWorkMode, inputText)
     const routedText =
       workRouted.kind === "command" ? `/${workRouted.command} ${workRouted.arguments}`.trimEnd() : workRouted.text
     const firstLine = routedText.split("\n")[0]
