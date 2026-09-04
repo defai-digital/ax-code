@@ -52,6 +52,20 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       risks: params.risks,
     })
     const markdown = GoalPlan.render(contract)
+    // The persisted plan must stay readable by the capped reader in
+    // session/goal-plan.ts. Reject oversized plans here — while the writer
+    // session is still running — so the error feeds back to the model and it
+    // can shorten and resubmit. Failing later, at GoalPlan.write time, would
+    // surface only after the writer has already stopped, dead-locking the
+    // goal in "paused" with no contract.
+    const bytes = Buffer.byteLength(markdown, "utf8")
+    if (bytes > GoalPlan.MAX_READ_BYTES) {
+      throw new Error(
+        `The rendered goal plan is ${bytes} bytes, exceeding the ${GoalPlan.MAX_READ_BYTES}-byte limit. ` +
+          "Shorten the acceptance criteria, verification steps, implementation approach, and task checklist " +
+          "(aim for concise single-line items) and call submit_goal_plan again.",
+      )
+    }
     return {
       title: `Submitted ${contract.kind} goal plan`,
       output: markdown,

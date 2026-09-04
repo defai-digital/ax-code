@@ -47,4 +47,12 @@ Call submit_goal_plan with:
   steps; these are how-guidance, never the judged contract)
 - risks only when the objective contradicts itself or the environment
 
+## Size budget
+
+The rendered plan must stay under 8192 bytes (UTF-8). Keep every field
+concise: short single-line acceptance criteria and verification steps, a
+brief implementation approach, and checklist items of a few words each. An
+oversized submission is rejected with an error — shorten the fields and
+call submit_goal_plan again.
+
 After submit_goal_plan succeeds, stop.
