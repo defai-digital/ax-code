@@ -156,6 +156,7 @@ export namespace Permission {
   export type Error = DeniedError | RejectedError | CorrectedError
 
   export const AskInput = Request.partial({ id: true }).extend({
+    patterns: z.string().array().min(1, "Permission requests must include at least one pattern"),
     ruleset: Ruleset,
     agent: z.string().optional(),
   })
@@ -734,7 +735,10 @@ export namespace Permission {
   }
 
   export async function ask(input: z.infer<typeof AskInput>, options?: { signal?: AbortSignal }) {
-    return askPromise(input, options)
+    // An empty target list skips every rule, including explicit denies and
+    // interactive-only checks. Validate before entering the permission state.
+    const patterns = AskInput.shape.patterns.parse(input.patterns)
+    return askPromise({ ...input, patterns }, options)
   }
 
   export async function reply(input: z.infer<typeof ReplyInput>) {
