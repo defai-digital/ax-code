@@ -59,7 +59,16 @@ afterEach(() => {
   lastStreamErrorSpy = undefined
 })
 
-async function createProcessorFixture(root: string) {
+function processorDependencies(overrides: Partial<SessionProcessor.Dependencies>): SessionProcessor.Dependencies {
+  return {
+    stream: (input) => LLM.stream(input),
+    lastStreamError: (stream) => LLM.lastStreamError(stream),
+    sleep: (ms, signal) => SessionRetry.sleep(ms, signal),
+    ...overrides,
+  }
+}
+
+async function createProcessorFixture(root: string, deps?: SessionProcessor.Dependencies) {
   const session = await Session.create({})
   const user = await Session.updateMessage({
     id: MessageID.ascending(),
@@ -89,12 +98,15 @@ async function createProcessorFixture(root: string) {
     providerID: model.providerID,
     time: { created: Date.now() },
   } as MessageV2.Assistant)
-  const processor = SessionProcessor.create({
-    assistantMessage: assistant as MessageV2.Assistant,
-    sessionID: session.id,
-    model,
-    abort: AbortSignal.any([]),
-  })
+  const processor = SessionProcessor.create(
+    {
+      assistantMessage: assistant as MessageV2.Assistant,
+      sessionID: session.id,
+      model,
+      abort: AbortSignal.any([]),
+    },
+    deps,
+  )
   const streamInput: LLM.StreamInput = {
     user: user as MessageV2.User,
     agent: await Agent.get("build"),
@@ -216,26 +228,32 @@ describe("session.processor", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const { processor, streamInput } = await createProcessorFixture(tmp.path)
         const contextOverflow = {
           type: "error",
           error: { code: "context_length_exceeded" },
         }
-        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValueOnce({
-          fullStream: (async function* () {
-            yield { type: "start" }
-            yield { type: "start-step" }
-            yield { type: "finish-step", finishReason: "error", usage: undefined }
-            yield { type: "finish" }
-          })(),
-        } as any)
-        lastStreamErrorSpy = vi.spyOn(LLM, "lastStreamError").mockReturnValue(contextOverflow)
+        const stream = vi.fn(
+          async () =>
+            ({
+              fullStream: (async function* () {
+                yield { type: "start" }
+                yield { type: "start-step" }
+                yield { type: "finish-step", finishReason: "error", usage: undefined }
+                yield { type: "finish" }
+              })(),
+            }) as any,
+        )
+        const lastStreamError = vi.fn(() => contextOverflow)
+        const { processor, streamInput } = await createProcessorFixture(
+          tmp.path,
+          processorDependencies({ stream, lastStreamError }),
+        )
 
         const result = await processor.process(streamInput)
 
         expect(result).toBe("compact")
-        expect(streamSpy).toHaveBeenCalledTimes(1)
-        expect(lastStreamErrorSpy).toHaveBeenCalledTimes(1)
+        expect(stream).toHaveBeenCalledTimes(1)
+        expect(lastStreamError).toHaveBeenCalledTimes(1)
         expect(processor.message.error).toBeUndefined()
       },
     })
@@ -982,17 +1000,20 @@ describe("session.processor", () => {
           isRetryable: true,
         }).toObject()
 
-        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+        const stream = vi.fn(async () => {
           throw err
         })
-        sleepSpy = vi.spyOn(SessionRetry, "sleep").mockResolvedValue()
+        const sleep = vi.fn(async () => {})
 
-        const processor = SessionProcessor.create({
-          assistantMessage: assistant as MessageV2.Assistant,
-          sessionID: session.id,
-          model,
-          abort: AbortSignal.any([]),
-        })
+        const processor = SessionProcessor.create(
+          {
+            assistantMessage: assistant as MessageV2.Assistant,
+            sessionID: session.id,
+            model,
+            abort: AbortSignal.any([]),
+          },
+          processorDependencies({ stream, sleep }),
+        )
 
         const result = await processor.process({
           user: user as MessageV2.User,
@@ -1006,8 +1027,8 @@ describe("session.processor", () => {
         })
 
         expect(result).toBe("stop")
-        expect(streamSpy.mock.calls.length).toBe(SessionRetry.RETRY_MAX_ATTEMPTS + 1)
-        expect(sleepSpy.mock.calls.length).toBe(SessionRetry.RETRY_MAX_ATTEMPTS)
+        expect(stream.mock.calls.length).toBe(SessionRetry.RETRY_MAX_ATTEMPTS + 1)
+        expect(sleep.mock.calls.length).toBe(SessionRetry.RETRY_MAX_ATTEMPTS)
         expect(processor.message.error).toBeDefined()
       },
     })

@@ -46,6 +46,31 @@ import { FILE_PATH_ALIAS_KEYS } from "@/tool/file-path"
 export namespace SessionProcessor {
   const log = Log.create({ service: "session.processor" })
 
+  /**
+   * Process-boundary effects that focused tests may replace without mutating
+   * module namespaces. Safety, persistence, dispatch, cancellation, and
+   * lifecycle dependencies intentionally remain concrete.
+   */
+  export interface Dependencies {
+    stream: typeof LLM.stream
+    lastStreamError: typeof LLM.lastStreamError
+    sleep: typeof SessionRetry.sleep
+  }
+
+  // Resolve lazily so existing instrumentation and module spies observe the
+  // same production calls instead of being bypassed by captured references.
+  const defaultDeps: Dependencies = {
+    get stream() {
+      return LLM.stream
+    },
+    get lastStreamError() {
+      return LLM.lastStreamError
+    },
+    get sleep() {
+      return SessionRetry.sleep
+    },
+  }
+
   /** Strip XML tags that could escape a <system-reminder> wrapper and inject arbitrary LLM instructions. */
   function sanitizeForXmlTag(input: string): string {
     return input.replace(/<\/?system-reminder\b[^>]*>/gi, "[tag-stripped]")
@@ -60,13 +85,16 @@ export namespace SessionProcessor {
     onProjection?: (projection: MediaProjection.Mode) => void
   }
 
-  export function create(input: {
-    assistantMessage: MessageV2.Assistant
-    sessionID: SessionID
-    model: Provider.Model
-    abort: AbortSignal
-    messages?: MessageV2.WithParts[]
-  }) {
+  export function create(
+    input: {
+      assistantMessage: MessageV2.Assistant
+      sessionID: SessionID
+      model: Provider.Model
+      abort: AbortSignal
+      messages?: MessageV2.WithParts[]
+    },
+    deps: Dependencies = defaultDeps,
+  ) {
     const toolcalls: Record<string, MessageV2.ToolPart> = {}
     const toolInputCache: Record<string, string> = {}
     const safeString = (value: unknown): string => {
@@ -412,7 +440,7 @@ export namespace SessionProcessor {
               | { type: "tool_call"; callID: string; tool: string; input: Record<string, unknown> }
             > = []
             lastStreamError = undefined
-            const stream = await LLM.stream({
+            const stream = await deps.stream({
               ...activeStreamInput,
               replay: {
                 messageID: input.assistantMessage.id,
@@ -1101,7 +1129,7 @@ export namespace SessionProcessor {
                     // errored or returned an empty completion. Capture the
                     // non-throwing onError cause so the empty-turn diagnostic
                     // can name it instead of reporting an unattributable stall.
-                    lastStreamError = LLM.lastStreamError(stream)
+                    lastStreamError = deps.lastStreamError(stream)
                     log.warn("provider usage missing", {
                       ...usageLog,
                       streamError: lastStreamError === undefined ? undefined : toErrorMessage(lastStreamError),
@@ -1489,7 +1517,7 @@ export namespace SessionProcessor {
                     message: retry,
                     next: Date.now() + delay,
                   })
-                  await SessionRetry.sleep(delay, input.abort).catch((error) => {
+                  await deps.sleep(delay, input.abort).catch((error) => {
                     if (input.abort.aborted) return
                     log.warn("retry sleep failed, retrying immediately", {
                       command: "session.prompt.process",
