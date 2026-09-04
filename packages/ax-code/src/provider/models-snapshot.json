@@ -20178,8 +20178,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 128000,
-          "input": 128000,
+          "context": 32000,
+          "input": 32000,
           "output": 115200
         }
       },
@@ -24269,8 +24269,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 32768,
-          "input": 32768,
+          "context": 8192,
+          "input": 8192,
           "output": 26214
         }
       },
@@ -27280,32 +27280,6 @@
           "context": 400000,
           "input": 400000,
           "output": 128000
-        }
-      },
-      "Steelskull/L3.3-MS-Evayale-70B": {
-        "id": "Steelskull/L3.3-MS-Evayale-70B",
-        "name": "Evayale 70b ",
-        "description": "Open Llama instruction model for multilingual chat, reasoning, and coding",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "structured_output": false,
-        "release_date": "2024-01-01",
-        "last_updated": "2024-12-06",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "open_weights": true,
-        "limit": {
-          "context": 16384,
-          "input": 16384,
-          "output": 16384
         }
       },
       "Steelskull/L3.3-Nevoria-R1-70b": {
@@ -31152,8 +31126,8 @@
         },
         "open_weights": true,
         "limit": {
-          "context": 131072,
-          "input": 131072,
+          "context": 32768,
+          "input": 32768,
           "output": 65536
         }
       },

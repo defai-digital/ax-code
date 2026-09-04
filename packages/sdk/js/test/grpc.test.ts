@@ -41,8 +41,8 @@ describe("gRPC SDK facade", () => {
     expect(resolveAxCodeGrpcProtoUrl("file:///app/node_modules/@defai-digital/ax-code-sdk/dist/grpc.js").pathname).toBe(
       "/app/node_modules/@defai-digital/ax-code-sdk/dist/proto/ax_code/v1/headless.proto",
     )
-    expect(resolveAxCodeGrpcProtoUrl("https://jsr.io/@defai-digital/ax-code-sdk/2.2.1/dist/grpc.js").href).toBe(
-      "https://jsr.io/@defai-digital/ax-code-sdk/2.2.1/dist/proto/ax_code/v1/headless.proto",
+    expect(resolveAxCodeGrpcProtoUrl("https://jsr.io/@defai-digital/ax-code-sdk/2.2.2/dist/grpc.js").href).toBe(
+      "https://jsr.io/@defai-digital/ax-code-sdk/2.2.2/dist/proto/ax_code/v1/headless.proto",
     )
   })
 

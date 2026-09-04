@@ -6,6 +6,14 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.11.1] - 2026-09-04
+
+### Fixed
+
+- Fix runtime lifecycle cleanup and headless event projection across success, retry, abort, and failure paths.
+- Harden provider loading, PTY cleanup, shell execution, and destructive-command classification.
+- Update the generated SDK contract for the corrected headless event stream.
+
 ## [7.11.0] - 2026-09-04
 
 ### Changed
