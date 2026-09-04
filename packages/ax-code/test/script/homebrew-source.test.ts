@@ -15,6 +15,13 @@ const axCodePackageJson = path.join(repoRoot, "packages/ax-code/package.json")
 const axCodeNodeTuiBuildScript = path.join(repoRoot, "packages/ax-code/script/build-node-tui.ts")
 const axCodeNodeLauncherScript = path.join(repoRoot, "packages/ax-code/script/node-launcher.ts")
 const axCodeCiWorkflow = path.join(repoRoot, ".github/workflows/ax-code-ci.yml")
+const releaseArchives = [
+  "ax-code-darwin-arm64.zip",
+  "ax-code-windows-x64.zip",
+  "ax-code-windows-arm64.zip",
+  "ax-code-linux-x64.tar.gz",
+  "ax-code-linux-arm64.tar.gz",
+]
 
 const retiredNpmDistributionFiles = [
   ".github/scripts/update-homebrew-source.sh",
@@ -145,8 +152,10 @@ describe("distribution support guardrails", () => {
     expect(publishJob![0]).toContain("node script/github-release-assets.mjs publish")
     expect(publishJob![0]).toContain("cp install.ps1 packages/ax-code/dist/install.ps1")
     expect(publishJob![0]).toContain("packages/ax-code/dist/install.ps1")
-    expect(publishJob![0]).toContain("*.tar.gz.minisig")
-    expect(publishJob![0]).toContain("*.zip.minisig")
+    for (const archive of releaseArchives) {
+      expect(publishJob![0]).toContain(`packages/ax-code/dist/${archive}`)
+      expect(publishJob![0]).toContain(`packages/ax-code/dist/${archive}.minisig`)
+    }
     expect(publishJob![0]).toContain("Continuing existing draft release $TAG")
     expect(publishJob![0]).toContain("Publish verified release")
     expect(text).not.toMatch(/\n  finalize:/)
@@ -179,7 +188,7 @@ describe("distribution support guardrails", () => {
     expect(job).toContain("pnpm exec tsx script/sign-release-assets.ts --dist-dir packages/ax-code/dist")
     expect(job).toContain("missing minisign signature for ${asset}")
     expect(job).toContain("shopt -s nullglob")
-    expect(job).toContain("no release assets found to upload")
+    expect(job).toContain("required release asset is missing")
     expect(job).not.toContain('gh release upload "$TAG" "$f" --clobber || true')
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Create GitHub release"))
     expect(job.indexOf("Sign release assets")).toBeLessThan(job.indexOf("Upload release assets"))
@@ -336,7 +345,9 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
     expect(text).toContain("- linux")
-    expect(text).toContain("application/vnd.github.raw+json")
+    expect(text).toContain("https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install")
+    expect(text).toContain("curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors")
+    expect(text).not.toContain("api.github.com/repos/${{ github.repository }}/contents/install")
     expect(text).toContain('| SHELL=/bin/zsh bash -s -- --version "$VERSION"')
     expect(text).toContain('| SHELL=/bin/bash bash -s -- --version "$VERSION"')
     expect(text).toContain("ubuntu-24.04")
@@ -414,7 +425,8 @@ describe("distribution support guardrails", () => {
     expect(linuxJob![0]).toContain("set-isolated-home-env.sh")
     expect(linuxJob![0]).toContain("ubuntu-24.04")
     expect(linuxJob![0]).toContain("ubuntu-24.04-arm")
-    expect(linuxJob![0]).toContain("application/vnd.github.raw+json")
+    expect(linuxJob![0]).toContain("https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install")
+    expect(linuxJob![0]).toContain("curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors")
     expect(linuxJob![0]).toContain("/bin/bash -lic 'command -v ax-code'")
 
     expect(isolatedHome).toContain("AX_CODE_TEST_HOME")
