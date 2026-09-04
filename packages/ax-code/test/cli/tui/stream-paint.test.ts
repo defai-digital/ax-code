@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   streamPaintDecision,
   streamPaintIntervalMs,
+  streamPaintTimerMayFire,
   STREAM_PAINT_MAX_MS,
   STREAM_PAINT_MS,
 } from "../../../src/cli/cmd/tui/routes/session/stream-paint"
@@ -50,5 +51,20 @@ describe("streamPaintDecision", () => {
       action: "schedule",
       delayMs: 50,
     })
+  })
+
+  test("a later final snapshot paints immediately even if a schedule was pending", () => {
+    const pending = streamPaintDecision({ final: false, now: 10, lastPaintAt: 0, length: 10 })
+    expect(pending).toEqual({ action: "schedule", delayMs: STREAM_PAINT_MS - 10 })
+    expect(streamPaintDecision({ final: true, now: 12, lastPaintAt: 0, length: 10 })).toEqual({
+      action: "paint-now",
+    })
+  })
+})
+
+describe("streamPaintTimerMayFire", () => {
+  test("disposed timers must not apply a cancelled frame", () => {
+    expect(streamPaintTimerMayFire(false)).toBe(true)
+    expect(streamPaintTimerMayFire(true)).toBe(false)
   })
 })

@@ -9,7 +9,6 @@ import { Filesystem } from "../../../../util/filesystem"
 import { Process } from "../../../../util/process"
 import { which } from "../../../../util/which"
 import { Log } from "../../../../util/log"
-import { pickFirstEnvValue } from "./env"
 import { toErrorMessage } from "../../../../util/error-message"
 
 const log = Log.create({ service: "tui.clipboard" })
@@ -36,10 +35,46 @@ export function isWsl(): boolean {
  * Writes text to clipboard via OSC 52 escape sequence.
  * This allows clipboard operations to work over SSH by having
  * the terminal emulator handle the clipboard locally.
+ *
+ * GNU Screen (STY) must not use tmux DCS wrapping: Screen consumes an inner
+ * ST and leaves the host terminal with an unterminated OSC 52. Port of
+ * OpenTUI #1334 — BEL-terminated OSC, DCS `\x1bP`…`\x1b\\` chunks of 252.
  */
-const OSC52_MAX_BYTES = 100_000
+export const OSC52_MAX_BYTES = 100_000
+export const SCREEN_PASSTHROUGH_CHUNK_SIZE = 252
 const CLIPBOARD_PROC_TIMEOUT_MS = 5_000
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+
+export type Osc52Mux = "none" | "tmux" | "screen"
+
+export function osc52MuxFromEnv(env: Record<string, string | undefined> = process.env): Osc52Mux {
+  if (env.TMUX) return "tmux"
+  if (env.STY) return "screen"
+  return "none"
+}
+
+export function osc52ClipboardSequence(
+  text: string,
+  mux: Osc52Mux = "none",
+  maxBytes = OSC52_MAX_BYTES,
+): string | undefined {
+  if (Buffer.byteLength(text, "utf8") > maxBytes) return undefined
+  const base64 = Buffer.from(text).toString("base64")
+  // BEL terminator: Screen forwards this intact; ST (`\x1b\\`) is consumed as
+  // the inner DCS end and leaves the outer terminal with a truncated OSC.
+  const inner = `\x1b]52;c;${base64}\x07`
+  if (mux === "tmux") {
+    return `\x1bPtmux;${inner.replaceAll("\x1b", "\x1b\x1b")}\x1b\\`
+  }
+  if (mux === "screen") {
+    let sequence = ""
+    for (let offset = 0; offset < inner.length; offset += SCREEN_PASSTHROUGH_CHUNK_SIZE) {
+      sequence += `\x1bP${inner.slice(offset, offset + SCREEN_PASSTHROUGH_CHUNK_SIZE)}\x1b\\`
+    }
+    return sequence
+  }
+  return inner
+}
 
 type ProcWithStdin = {
   exited: Promise<unknown>
@@ -48,11 +83,8 @@ type ProcWithStdin = {
 
 function writeOsc52(text: string): boolean {
   if (!process.stdout.isTTY) return false
-  if (Buffer.byteLength(text, "utf8") > OSC52_MAX_BYTES) return false
-  const base64 = Buffer.from(text).toString("base64")
-  const osc52 = `\x1b]52;c;${base64}\x07`
-  const passthrough = pickFirstEnvValue({ env: process.env, names: ["TMUX", "STY"] })
-  const sequence = passthrough ? `\x1bPtmux;\x1b${osc52}\x1b\\` : osc52
+  const sequence = osc52ClipboardSequence(text, osc52MuxFromEnv())
+  if (!sequence) return false
   process.stdout.write(sequence)
   return true
 }

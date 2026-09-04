@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { computeDiffLines } from "../../../src/cli/cmd/tui/component/dialog-diff-viewer"
+import {
+  capDiffDetailLines,
+  computeDiffLines,
+  DIFF_DETAIL_MAX_LINES,
+} from "../../../src/cli/cmd/tui/component/dialog-diff-viewer"
 
 // Reference: the previous unbounded O(m*n) LCS with a full number[][] matrix.
 // The hardened computeDiffLines must produce byte-identical output to this for
@@ -115,5 +119,20 @@ describe("computeDiffLines (diff viewer LCS hardening)", () => {
     // Degenerate ordering: all removals first, then all additions.
     for (let k = 0; k < size; k++) expect(out[k]).toEqual({ type: "remove", text: `- before-${k}` })
     for (let k = 0; k < size; k++) expect(out[size + k]).toEqual({ type: "add", text: `+ after-${k}` })
+  })
+})
+
+describe("capDiffDetailLines", () => {
+  test("keeps short lists intact", () => {
+    expect(capDiffDetailLines(["a", "b"], 10)).toEqual({ visible: ["a", "b"], hidden: 0 })
+  })
+
+  test("keeps the head of a huge display list and reports the tail length", () => {
+    const lines = Array.from({ length: DIFF_DETAIL_MAX_LINES + 17 }, (_, i) => i)
+    const capped = capDiffDetailLines(lines)
+    expect(capped.visible).toHaveLength(DIFF_DETAIL_MAX_LINES)
+    expect(capped.visible[0]).toBe(0)
+    expect(capped.visible.at(-1)).toBe(DIFF_DETAIL_MAX_LINES - 1)
+    expect(capped.hidden).toBe(17)
   })
 })

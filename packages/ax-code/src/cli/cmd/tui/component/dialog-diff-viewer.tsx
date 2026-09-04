@@ -10,6 +10,15 @@ import path from "path"
 // block the UI thread — a ~20k-line file (e.g. a lockfile) OOM-crashes the TUI
 // and even a few thousand lines freezes input. Cap the work the LCS can do.
 const LCS_CELL_BUDGET = 1_000_000
+// Bound DialogSelect option construction (OpenTUI #1462 class): a lockfile
+// diff can still produce tens of thousands of display rows after the LCS
+// budget. Do not slice the patch string itself — that breaks the parser.
+export const DIFF_DETAIL_MAX_LINES = 2_000
+
+export function capDiffDetailLines<T>(lines: T[], max = DIFF_DETAIL_MAX_LINES): { visible: T[]; hidden: number } {
+  if (lines.length <= max) return { visible: lines, hidden: 0 }
+  return { visible: lines.slice(0, max), hidden: lines.length - max }
+}
 
 export function computeDiffLines(
   before: string,
@@ -115,13 +124,24 @@ function DialogDiffDetail(props: { diff: Snapshot.FileDiff }) {
     if (lines().length === 0) {
       return [{ title: "No diff content available", value: "empty", disabled: true }]
     }
-    return lines().map((line, i) => ({
+    const capped = capDiffDetailLines(lines())
+    const options: DialogSelectOption<string>[] = capped.visible.map((line, i) => ({
       title: "",
       description: line.text || " ",
       value: String(i),
       descriptionFg: line.type === "add" ? theme.success : line.type === "remove" ? theme.error : undefined,
       disabled: true,
     }))
+    if (capped.hidden > 0) {
+      options.push({
+        title: "",
+        description: `… truncated, ${capped.hidden} more lines`,
+        value: "truncated",
+        descriptionFg: theme.textMuted,
+        disabled: true,
+      })
+    }
+    return options
   })
 
   return (

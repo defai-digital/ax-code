@@ -24,6 +24,11 @@ export function streamPaintIntervalMs(length: number) {
 
 export type StreamPaintDecision = { action: "paint-now" } | { action: "schedule"; delayMs: number }
 
+// OpenTUI #1170: a cancelled/disposed paint must not apply later (no revive).
+export function streamPaintTimerMayFire(disposed: boolean): boolean {
+  return !disposed
+}
+
 // Pure timing decision for one streaming update, kept separate from the Solid
 // hook so it stays unit-testable without a renderer.
 export function streamPaintDecision(input: {
@@ -32,6 +37,8 @@ export function streamPaintDecision(input: {
   lastPaintAt: number
   length: number
 }): StreamPaintDecision {
+  // OpenTUI #1457: a final snapshot always paints immediately, even if a
+  // previous scheduled frame was cancelled under backpressure.
   if (input.final) return { action: "paint-now" }
   const remaining = Math.max(0, streamPaintIntervalMs(input.length) - (input.now - input.lastPaintAt))
   if (remaining === 0) return { action: "paint-now" }
@@ -45,6 +52,7 @@ export function createStreamPaintThrottle(input: { text: () => string; final: ()
   const [paintedText, setPaintedText] = createSignal(input.text())
   let paintCancel: (() => void) | undefined
   let lastPaintAt = 0
+  let disposed = false
   createEffect(() => {
     const next = input.text()
     const decision = streamPaintDecision({
@@ -62,6 +70,7 @@ export function createStreamPaintThrottle(input: { text: () => string; final: ()
     }
     paintCancel = scheduleTuiTimeout(
       () => {
+        if (!streamPaintTimerMayFire(disposed)) return
         paintCancel = undefined
         lastPaintAt = Date.now()
         setPaintedText(input.text())
@@ -70,6 +79,7 @@ export function createStreamPaintThrottle(input: { text: () => string; final: ()
     )
   })
   onCleanup(() => {
+    disposed = true
     paintCancel?.()
   })
   return paintedText
