@@ -7,6 +7,7 @@ import {
   OSC52_MAX_BYTES,
   SCREEN_PASSTHROUGH_CHUNK_SIZE,
 } from "../../../src/cli/cmd/tui/util/clipboard"
+import { wrapOscForMux } from "../../../src/cli/cmd/tui/util/osc-passthrough"
 
 describe("TUI clipboard helpers", () => {
   test("decodes valid PNG base64 from clipboard image probes", () => {
@@ -80,5 +81,11 @@ describe("OSC 52 mux and sequence", () => {
 
   test("rejects payloads over the OSC 52 byte cap", () => {
     expect(osc52ClipboardSequence("x".repeat(OSC52_MAX_BYTES + 1), "none")).toBeUndefined()
+  })
+
+  test("wrapOscForMux is the shared tmux/Screen envelope", () => {
+    expect(wrapOscForMux("\x1b]9;hi\x07", "none")).toBe("\x1b]9;hi\x07")
+    expect(wrapOscForMux("\x1b]9;hi\x07", "tmux")).toBe("\x1bPtmux;\x1b\x1b]9;hi\x07\x1b\\")
+    expect(wrapOscForMux("\x1b]9;hi\x07", "screen")).toBe("\x1bP\x1b]9;hi\x07\x1b\\")
   })
 })

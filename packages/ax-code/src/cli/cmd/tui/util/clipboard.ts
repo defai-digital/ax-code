@@ -10,6 +10,7 @@ import { Process } from "../../../../util/process"
 import { which } from "../../../../util/which"
 import { Log } from "../../../../util/log"
 import { toErrorMessage } from "../../../../util/error-message"
+import { oscMuxFromEnv, wrapOscForMux, type OscMux } from "./osc-passthrough"
 
 const log = Log.create({ service: "tui.clipboard" })
 
@@ -41,17 +42,10 @@ export function isWsl(): boolean {
  * OpenTUI #1334 — BEL-terminated OSC, DCS `\x1bP`…`\x1b\\` chunks of 252.
  */
 export const OSC52_MAX_BYTES = 100_000
-export const SCREEN_PASSTHROUGH_CHUNK_SIZE = 252
+export { SCREEN_PASSTHROUGH_CHUNK_SIZE, oscMuxFromEnv as osc52MuxFromEnv } from "./osc-passthrough"
+export type Osc52Mux = OscMux
 const CLIPBOARD_PROC_TIMEOUT_MS = 5_000
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
-
-export type Osc52Mux = "none" | "tmux" | "screen"
-
-export function osc52MuxFromEnv(env: Record<string, string | undefined> = process.env): Osc52Mux {
-  if (env.TMUX) return "tmux"
-  if (env.STY) return "screen"
-  return "none"
-}
 
 export function osc52ClipboardSequence(
   text: string,
@@ -62,18 +56,7 @@ export function osc52ClipboardSequence(
   const base64 = Buffer.from(text).toString("base64")
   // BEL terminator: Screen forwards this intact; ST (`\x1b\\`) is consumed as
   // the inner DCS end and leaves the outer terminal with a truncated OSC.
-  const inner = `\x1b]52;c;${base64}\x07`
-  if (mux === "tmux") {
-    return `\x1bPtmux;${inner.replaceAll("\x1b", "\x1b\x1b")}\x1b\\`
-  }
-  if (mux === "screen") {
-    let sequence = ""
-    for (let offset = 0; offset < inner.length; offset += SCREEN_PASSTHROUGH_CHUNK_SIZE) {
-      sequence += `\x1bP${inner.slice(offset, offset + SCREEN_PASSTHROUGH_CHUNK_SIZE)}\x1b\\`
-    }
-    return sequence
-  }
-  return inner
+  return wrapOscForMux(`\x1b]52;c;${base64}\x07`, mux)
 }
 
 type ProcWithStdin = {
@@ -83,7 +66,7 @@ type ProcWithStdin = {
 
 function writeOsc52(text: string): boolean {
   if (!process.stdout.isTTY) return false
-  const sequence = osc52ClipboardSequence(text, osc52MuxFromEnv())
+  const sequence = osc52ClipboardSequence(text, oscMuxFromEnv())
   if (!sequence) return false
   process.stdout.write(sequence)
   return true

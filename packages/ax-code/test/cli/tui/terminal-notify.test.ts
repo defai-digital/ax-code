@@ -82,6 +82,26 @@ describe("notifyTerminal", () => {
     expect(writes).toEqual(["\x1bPtmux;\x1b\x1b]9;ax-code: Task complete\x07\x1b\\"])
   })
 
+  test("wraps GNU Screen with DCS and BEL, not tmux DCS", () => {
+    const { stream, writes } = fakeStdout()
+    notifyTerminal({ title: "ax-code", body: "Task complete", key: "k4-screen" }, stream, {
+      ...supportedEnv,
+      STY: "12345.pts-0.host",
+    })
+    expect(writes).toEqual(["\x1bP\x1b]9;ax-code: Task complete\x07\x1b\\"])
+    expect(writes[0]).not.toContain("tmux;")
+  })
+
+  test("prefers tmux wrapping when both TMUX and STY are set", () => {
+    const { stream, writes } = fakeStdout()
+    notifyTerminal({ title: "ax-code", body: "Task complete", key: "k4-both" }, stream, {
+      ...supportedEnv,
+      TMUX: "/tmp/tmux-1000/default,1234,0",
+      STY: "12345.pts-0.host",
+    })
+    expect(writes).toEqual(["\x1bPtmux;\x1b\x1b]9;ax-code: Task complete\x07\x1b\\"])
+  })
+
   test("writes a bare BEL on unsupported terminals", () => {
     const { stream, writes } = fakeStdout()
     const result = notifyTerminal({ title: "ax-code", body: "Task complete", key: "k5" }, stream, unsupportedEnv)

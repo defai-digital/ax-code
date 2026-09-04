@@ -42,6 +42,17 @@ describe("collapsed Edit diff rendering", () => {
     expect(fileEdits).toMatch(/maxHeight=\{collapsed\(\) \? 30 : undefined\}/)
     expect(fileEdits).toMatch(/overflow=\{collapsed\(\) \? "hidden" : undefined\}/)
   })
+
+  test("ApplyPatch collapses the same way and never slices the raw patch", async () => {
+    const fileEdits = await fs.readFile(FILE_EDITS_SRC, "utf8")
+    expect(fileEdits).toContain("function ApplyPatchFile")
+    expect(fileEdits).toContain("diff={rawDiff()}")
+    expect(fileEdits).not.toMatch(/rawDiff\(\)\s*\.split\("\\n"\)\s*\.slice/)
+    const applyStart = fileEdits.indexOf("function ApplyPatchFile")
+    const applyBlock = fileEdits.slice(applyStart, fileEdits.indexOf("export function ApplyPatch"))
+    expect(applyBlock).toMatch(/maxHeight=\{collapsed\(\) \? 30 : undefined\}/)
+    expect(applyBlock).toMatch(/overflow=\{collapsed\(\) \? "hidden" : undefined\}/)
+  })
 })
 
 describe("v2 SDK result.error handling", () => {

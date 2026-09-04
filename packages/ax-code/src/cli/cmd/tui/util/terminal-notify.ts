@@ -2,6 +2,8 @@
 // that support it, a bare BEL as fallback elsewhere. Each notification carries
 // a fire-once key so reactive re-renders cannot spam the terminal.
 
+import { oscMuxFromEnv, wrapOscForMux } from "./osc-passthrough"
+
 type NotifyStream = {
   write: (chunk: string) => boolean
   writable?: boolean
@@ -59,9 +61,9 @@ export function notifyTerminal(
   if (supportsTerminalNotification(env)) {
     const payload = `${title}: ${body}`.slice(0, MAX_PAYLOAD_LENGTH)
     sequence = `${OSC_PREFIX}${payload}${OSC_SUFFIX}`
-    // tmux strips unknown escape sequences unless they are wrapped in a DCS
-    // passthrough with every ESC doubled.
-    if (env.TMUX) sequence = `\x1bPtmux;${sequence.replace(/\x1b/g, "\x1b\x1b")}\x1b\\`
+    // tmux/Screen strip unknown OSC unless wrapped in a DCS passthrough.
+    // Screen must not use tmux DCS (OpenTUI #1334).
+    sequence = wrapOscForMux(sequence, oscMuxFromEnv(env))
   } else {
     // Unsupported terminal: BEL still flashes/beeps in most terminals.
     sequence = OSC_SUFFIX

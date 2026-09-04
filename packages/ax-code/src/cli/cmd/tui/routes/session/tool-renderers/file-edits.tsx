@@ -202,9 +202,88 @@ export function Edit(props: ToolProps<typeof EditTool>) {
   )
 }
 
+function applyPatchFileTitle(file: { type: string; relativePath: string; filePath: string }) {
+  if (file.type === "delete") return "# Deleted " + file.relativePath
+  if (file.type === "add") return "# Created " + file.relativePath
+  if (file.type === "move") return "# Moved " + normalize(file.filePath) + " → " + file.relativePath
+  return "← Patched " + file.relativePath
+}
+
+function ApplyPatchFile(props: {
+  file: {
+    type: string
+    relativePath: string
+    filePath: string
+    deletions: number
+    diff?: string
+    movePath?: string
+  }
+  part: ToolProps<typeof ApplyPatchTool>["part"]
+  view: (filePath: string) => ReturnType<typeof diffDisplayView>
+  diagnostics?: Record<string, Record<string, any>[]>
+}) {
+  const { theme, syntax } = useTheme()
+  const [expanded, setExpanded] = createSignal(false)
+  const rawDiff = createMemo(() => props.file.diff ?? "")
+  const overflow = createMemo(() => rawDiff().split("\n").length > 30)
+  // Never truncate the patch string itself — slicing mid-hunk makes the
+  // diff parser throw. Collapse by clipping preview height, matching Edit.
+  const collapsed = createMemo(() => overflow() && !expanded())
+  const fileSummary = createMemo(() => diffSummary(rawDiff()))
+
+  return (
+    <BlockTool
+      title={applyPatchFileTitle(props.file)}
+      part={props.part}
+      onClick={overflow() ? () => setExpanded((prev) => !prev) : undefined}
+    >
+      <Show
+        when={props.file.type !== "delete"}
+        fallback={<text fg={theme.diffRemoved}>- {Locale.pluralize(props.file.deletions, "{} line", "{} lines")}</text>}
+      >
+        <Show when={fileSummary()}>
+          {(s) => (
+            <text paddingLeft={1} fg={theme.textMuted}>
+              {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} · <span style={{ fg: theme.success }}>+{s().added}</span>{" "}
+              <span style={{ fg: theme.error }}>−{s().removed}</span>
+            </text>
+          )}
+        </Show>
+        <box paddingLeft={1} maxHeight={collapsed() ? 30 : undefined} overflow={collapsed() ? "hidden" : undefined}>
+          <SessionDiffRenderer
+            diff={rawDiff()}
+            display={props.view(props.file.filePath)}
+            syntaxStyle={syntax()}
+            colors={{
+              fg: theme.text,
+              addedBg: theme.diffAddedBg,
+              removedBg: theme.diffRemovedBg,
+              contextBg: theme.diffContextBg,
+              addedSignColor: theme.diffHighlightAdded,
+              removedSignColor: theme.diffHighlightRemoved,
+              lineNumberFg: theme.diffLineNumber,
+              lineNumberBg: theme.diffContextBg,
+              addedLineNumberBg: theme.diffAddedLineNumberBg,
+              removedLineNumberBg: theme.diffRemovedLineNumberBg,
+            }}
+          />
+        </box>
+        <Show when={collapsed()}>
+          <text paddingLeft={1} fg={theme.textMuted}>
+            …
+          </text>
+        </Show>
+        <Show when={overflow()}>
+          <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+        </Show>
+        <Diagnostics diagnostics={props.diagnostics} filePath={props.file.movePath ?? props.file.filePath} />
+      </Show>
+    </BlockTool>
+  )
+}
+
 export function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
   const ctx = useSessionRouteContext()
-  const { theme, syntax } = useTheme()
 
   const files = createMemo(() => props.metadata.files ?? [])
 
@@ -218,66 +297,13 @@ export function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
       })
   })
 
-  function Diff(p: { diff: string; filePath: string }) {
-    return (
-      <box paddingLeft={1}>
-        <SessionDiffRenderer
-          diff={p.diff}
-          display={view()(p.filePath)}
-          syntaxStyle={syntax()}
-          colors={{
-            fg: theme.text,
-            addedBg: theme.diffAddedBg,
-            removedBg: theme.diffRemovedBg,
-            contextBg: theme.diffContextBg,
-            addedSignColor: theme.diffHighlightAdded,
-            removedSignColor: theme.diffHighlightRemoved,
-            lineNumberFg: theme.diffLineNumber,
-            lineNumberBg: theme.diffContextBg,
-            addedLineNumberBg: theme.diffAddedLineNumberBg,
-            removedLineNumberBg: theme.diffRemovedLineNumberBg,
-          }}
-        />
-      </box>
-    )
-  }
-
-  function title(file: { type: string; relativePath: string; filePath: string; deletions: number }) {
-    if (file.type === "delete") return "# Deleted " + file.relativePath
-    if (file.type === "add") return "# Created " + file.relativePath
-    if (file.type === "move") return "# Moved " + normalize(file.filePath) + " → " + file.relativePath
-    return "← Patched " + file.relativePath
-  }
-
   return (
     <Switch>
       <Match when={files().length > 0}>
         <For each={files()}>
-          {(file) => {
-            const fileSummary = createMemo(() => diffSummary(file.diff))
-            return (
-              <BlockTool title={title(file)} part={props.part}>
-                <Show
-                  when={file.type !== "delete"}
-                  fallback={
-                    <text fg={theme.diffRemoved}>- {Locale.pluralize(file.deletions, "{} line", "{} lines")}</text>
-                  }
-                >
-                  <Show when={fileSummary()}>
-                    {(s) => (
-                      <text paddingLeft={1} fg={theme.textMuted}>
-                        {s().hunks} {s().hunks === 1 ? "hunk" : "hunks"} ·{" "}
-                        <span style={{ fg: theme.success }}>+{s().added}</span>{" "}
-                        <span style={{ fg: theme.error }}>−{s().removed}</span>
-                      </text>
-                    )}
-                  </Show>
-                  <Diff diff={file.diff} filePath={file.filePath} />
-                  <Diagnostics diagnostics={props.metadata.diagnostics} filePath={file.movePath ?? file.filePath} />
-                </Show>
-              </BlockTool>
-            )
-          }}
+          {(file) => (
+            <ApplyPatchFile file={file} part={props.part} view={view()} diagnostics={props.metadata.diagnostics} />
+          )}
         </For>
       </Match>
       <Match when={true}>
