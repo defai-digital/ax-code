@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.11.2] - 2026-09-04
+
+### Fixed
+
+- Give each headless IPC subscriber an independent bounded event queue, drain queued events on disconnect, and request an authoritative resync after overflow.
+- Reconcile independently coalesced part snapshots and deltas without losing streamed text or blocking legitimate terminal trimming and rollback.
+- Reject oversized goal plans before writer completion and preserve the structured plan artifact without generic output truncation, preventing paused goal-plan loops.
+- Make model snapshot drift checks detect retired providers, ignore object-key ordering, fail on fetch errors, and keep the compatibility entry point executable.
+- Pin bash installer smoke tests to the release tag, select the exact GitHub Actions runs created by a release or dispatch, and require every supported archive and detached signature before publication.
+
+### Changed
+
+- Move model catalog freshness enforcement to a scheduled, read-only GitHub Actions drift check.
+
 ## [7.11.1] - 2026-09-04
 
 ### Fixed
