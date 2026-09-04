@@ -13,13 +13,16 @@ const TUI_ROOT = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
 describe("tui stability phase wiring (ADR-047)", () => {
   test("app uses lifecycle terminal suspend and scheduleTuiTimeout for putJson", async () => {
     const app = await fs.readFile(path.join(TUI_ROOT, "app.tsx"), "utf8")
+    const commands = await fs.readFile(path.join(TUI_ROOT, "app-commands.ts"), "utf8")
 
     expect(app).toContain('from "@tui/util/terminal-suspend"')
     expect(app).toContain("createTerminalSuspendController")
-    expect(app).toContain("terminalSuspend.suspend(")
+    expect(commands).toContain("terminalSuspend.suspend(")
     expect(app).toContain("terminalSuspend.dispose()")
     expect(app).not.toMatch(/process\.once\(\s*["']SIGCONT["']/)
     expect(app).not.toMatch(/process\.kill\(\s*0\s*,\s*["']SIGTSTP["']/)
+    expect(commands).not.toMatch(/process\.once\(\s*["']SIGCONT["']/)
+    expect(commands).not.toMatch(/process\.kill\(\s*0\s*,\s*["']SIGTSTP["']/)
     expect(app).toContain('name: "app-put-json-timeout"')
     expect(app).toContain("scheduleTuiTimeout(() => ctrl.abort()")
   })

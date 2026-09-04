@@ -6,6 +6,9 @@ const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
 const REPO_ROOT = path.resolve(PACKAGE_ROOT, "../..")
 const TUI_ROOT = path.join(PACKAGE_ROOT, "src/cli/cmd/tui")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
+const APP_COMMANDS_SRC = path.join(TUI_ROOT, "app-commands.ts")
+const PROMPT_COMMANDS_SRC = path.join(TUI_ROOT, "component/prompt/prompt-commands.tsx")
+const PROMPT_PASTE_SRC = path.join(TUI_ROOT, "component/prompt/prompt-paste.ts")
 const EVENT_SRC = path.join(TUI_ROOT, "event.ts")
 const HELPER_SRC = path.join(TUI_ROOT, "context/helper.tsx")
 const RENDERER_SRC = path.join(TUI_ROOT, "renderer.ts")
@@ -266,12 +269,12 @@ describe("AX Code TUI stability guardrails", () => {
   })
 
   test("does not register the terminal suspend command on Windows", async () => {
-    const app = await fs.readFile(APP_SRC, "utf8")
+    const commands = await fs.readFile(APP_COMMANDS_SRC, "utf8")
 
     // SIGTSTP does not exist on Windows (process.kill(0, "SIGTSTP") throws),
     // so the command must be gated out at registration time.
-    expect(app).toContain('...(process.platform === "win32"')
-    expect(app).toContain('value: "terminal.suspend"')
+    expect(commands).toContain('...(process.platform === "win32"')
+    expect(commands).toContain('value: "terminal.suspend"')
   })
 
   test("does not eagerly import the heavy session route on app startup", async () => {
@@ -734,12 +737,12 @@ describe("AX Code TUI stability guardrails", () => {
   })
 
   test("opens docs through a failure-safe app command", async () => {
-    const app = await fs.readFile(APP_SRC, "utf8")
+    const commands = await fs.readFile(APP_COMMANDS_SRC, "utf8")
 
-    expect(app).toContain('value: "docs.open"')
-    expect(app).toContain('Log.Default.warn("failed to open docs", { error })')
-    expect(app).toContain('message: error instanceof Error ? error.message : "Failed to open docs"')
-    expect(app).toContain("dialog.clear()")
+    expect(commands).toContain('value: "docs.open"')
+    expect(commands).toContain('Log.Default.warn("failed to open docs", { error })')
+    expect(commands).toContain('message: error instanceof Error ? error.message : "Failed to open docs"')
+    expect(commands).toContain("dialog.clear()")
   })
 
   test("surfaces error-boundary issue URL copy failures instead of silently rejecting", async () => {
@@ -941,13 +944,13 @@ describe("AX Code TUI stability guardrails", () => {
   })
 
   test("handles prompt session interrupts without leaking unhandled rejections", async () => {
-    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const commands = await fs.readFile(PROMPT_COMMANDS_SRC, "utf8")
 
-    expect(prompt).toContain('log.warn("prompt session interrupt failed"')
-    expect(prompt).toContain('message: error instanceof Error ? error.message : "Failed to interrupt session"')
-    expect(prompt).toContain("void sdk.client.session")
-    expect(prompt).toContain(".abort({")
-    expect(prompt).toContain(".catch((error) => {")
+    expect(commands).toContain('log.warn("prompt session interrupt failed"')
+    expect(commands).toContain('message: error instanceof Error ? error.message : "Failed to interrupt session"')
+    expect(commands).toContain("void sdk.client.session")
+    expect(commands).toContain(".abort({")
+    expect(commands).toContain(".catch((error) => {")
   })
 
   test("keeps pending prompt submission cancellable with explicit stage state", async () => {
@@ -1126,14 +1129,14 @@ describe("AX Code TUI stability guardrails", () => {
   })
 
   test("handles pasted SVG and image read failures without silently falling back to raw paths", async () => {
-    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const paste = await fs.readFile(PROMPT_PASTE_SRC, "utf8")
 
-    expect(prompt).toContain('log.warn("prompt svg paste read failed"')
-    expect(prompt).toContain('message: error instanceof Error ? error.message : "Failed to read pasted SVG"')
-    expect(prompt).toContain('log.warn("prompt image paste read failed"')
-    expect(prompt).toContain('message: error instanceof Error ? error.message : "Failed to read pasted image"')
-    expect(prompt).toContain("event.preventDefault()")
-    expect(prompt).toContain("return undefined")
+    expect(paste).toContain('host.log.warn("prompt svg paste read failed"')
+    expect(paste).toContain('message: error instanceof Error ? error.message : "Failed to read pasted SVG"')
+    expect(paste).toContain('host.log.warn("prompt image paste read failed"')
+    expect(paste).toContain('message: error instanceof Error ? error.message : "Failed to read pasted image"')
+    expect(paste).toContain("event.preventDefault()")
+    expect(paste).toContain("return undefined")
   })
 
   test("syncs prompt store immediately after terminal paste inserts", async () => {
@@ -1145,9 +1148,10 @@ describe("AX Code TUI stability guardrails", () => {
     const syncStart = prompt.indexOf("function syncPromptInputFromRenderable")
     const syncEnd = prompt.indexOf("function requestInputLayoutRefresh", syncStart)
     const syncBody = prompt.slice(syncStart, syncEnd)
-    const pasteStart = prompt.indexOf("async function handleTerminalPaste(event: PasteEvent)")
-    const pasteEnd = prompt.indexOf("async function pasteWindowsClipboardText", pasteStart)
-    const pasteBody = prompt.slice(pasteStart, pasteEnd)
+    const paste = await fs.readFile(PROMPT_PASTE_SRC, "utf8")
+    const pasteStart = paste.indexOf("async function handleTerminalPaste(event: PasteEvent)")
+    const pasteEnd = paste.indexOf("async function pasteWindowsClipboardText", pasteStart)
+    const pasteBody = paste.slice(pasteStart, pasteEnd)
 
     expect(refreshBody).toContain("syncPromptInputFromRenderable({ autocomplete: options.autocomplete })")
     expect(syncBody).toContain("sanitizePromptInput(raw)")
@@ -1160,15 +1164,15 @@ describe("AX Code TUI stability guardrails", () => {
     expect(prompt).toContain("function suppressAutocompleteForNextContentChange()")
     expect(prompt).toContain("createPromptPasteSubmitGate")
     expect(prompt).toContain("pasteSubmitGate.deferSubmitUntilPasteHandled()")
-    expect(prompt).toContain("onPaste={handleTerminalPaste}")
+    expect(prompt).toContain("onPaste={paste.handleTerminalPaste}")
     expect(prompt).toContain("const suppressAutocomplete = suppressAutocompleteOnNextContentChange")
     expect(prompt).toContain(
       "syncPromptInputFromRenderable({ autocomplete: suppressAutocomplete ? false : undefined })",
     )
     expect(pasteBody).toContain("event.preventDefault()")
-    expect(pasteBody).toContain("suppressAutocompleteForNextContentChange()")
-    expect(pasteBody).toContain("input.insertText(normalizedText)")
-    expect(pasteBody).toContain("requestInputLayoutRefresh({ autocomplete: false })")
+    expect(pasteBody).toContain("host.suppressAutocompleteForNextContentChange()")
+    expect(pasteBody).toContain("host.input.insertText(normalizedText)")
+    expect(pasteBody).toContain("host.requestInputLayoutRefresh({ autocomplete: false })")
   })
 
   test("keeps dialog selection post-update work on cancellable microtasks", async () => {
@@ -1271,14 +1275,15 @@ describe("AX Code TUI stability guardrails", () => {
 
     expect(promptHelpers).toContain("function stringIndexFromDisplayOffset(")
     expect(promptHelpers).toContain("export function expandPromptTextParts(")
-    expect(prompt).toContain("const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)")
+    const promptCommands = await fs.readFile(PROMPT_COMMANDS_SRC, "utf8")
+    expect(promptCommands).toContain("const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)")
     // End-of-buffer cursor checks go through endDisplayOffset: the native
     // buffer counts "\n" as 1 while stringWidth counts it as 0, so a raw
     // stringWidth comparison breaks history navigation on multi-line prompts.
     expect(prompt).toContain("input.cursorOffset === endDisplayOffset(input.plainText)")
     expect(prompt).toContain("input.cursorOffset = endDisplayOffset(input.plainText)")
     expect(prompt).not.toContain("stringWidth(input.plainText)")
-    expect(prompt).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
+    expect(promptCommands).toContain('message: "No editor configured. Set VISUAL or EDITOR to use /editor."')
     // A server-generated user message (auto-route, plan_exit) moves the agent
     // chip and restores its model only for this session. Persisting it as the
     // agent's global override would shadow config pins in unrelated sessions.

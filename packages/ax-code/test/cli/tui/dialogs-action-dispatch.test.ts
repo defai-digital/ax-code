@@ -18,7 +18,7 @@ const DIALOG_CONFIRM_SRC = path.join(TUI_ROOT, "ui/dialog-confirm.tsx")
 const DIALOG_SELECT_SRC = path.join(TUI_ROOT, "ui/dialog-select.tsx")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")
 const DIALOG_MODEL_SRC = path.join(TUI_ROOT, "component/dialog-model.tsx")
-const APP_SRC = path.join(TUI_ROOT, "app.tsx")
+const APP_COMMANDS_SRC = path.join(TUI_ROOT, "app-commands.ts")
 
 describe("tui dialog action dispatch", () => {
   test("dialog confirm invokes the handler synchronously so show() resolves the choice", async () => {
@@ -104,11 +104,11 @@ describe("tui dialog action dispatch", () => {
   })
 
   test("heap snapshot palette action cannot float an unhandled rejection", async () => {
-    const app = await fs.readFile(APP_SRC, "utf8")
+    const commands = await fs.readFile(APP_COMMANDS_SRC, "utf8")
 
-    const snapshotIndex = app.indexOf("props.onSnapshot?.()")
+    const snapshotIndex = commands.indexOf("onSnapshot?.()")
     expect(snapshotIndex).toBeGreaterThan(0)
-    const block = app.slice(snapshotIndex - 400, snapshotIndex + 700)
+    const block = commands.slice(snapshotIndex - 400, snapshotIndex + 700)
     expect(block).toContain("try {")
     expect(block).toContain("} catch (error) {")
     expect(block).toContain('"Failed to write heap snapshot"')

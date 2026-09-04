@@ -1,12 +1,4 @@
-import {
-  BoxRenderable,
-  TextareaRenderable,
-  MouseEvent,
-  PasteEvent,
-  KeyEvent,
-  MouseButton,
-  decodePasteBytes,
-} from "@ax-code/tui"
+import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent, MouseButton } from "@ax-code/tui"
 import {
   createEffect,
   createMemo,
@@ -20,9 +12,6 @@ import {
   Match,
   For,
 } from "solid-js"
-import path from "path"
-import { Filesystem } from "@/util/filesystem"
-import { stringWidth } from "@/bun/node-compat"
 import { providerModelEquals, providerModelKey } from "@/provider/model-key"
 import { shouldAdoptMessageModelFromHistory } from "@tui/context/local-util"
 import { effortDisplay } from "@/provider/effort-label"
@@ -40,7 +29,6 @@ import {
   enqueueFollowUp,
   followUpEditRequest,
   forgetFollowUpSession,
-  markFollowUpAbort,
   reconcileFollowUpDrain,
   removeQueuedFollowUp,
 } from "./follow-up-queue-store"
@@ -52,13 +40,11 @@ import { usePromptStash } from "./stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/tui/solid"
-import { Editor } from "@tui/util/editor"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { blurRenderable, focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { useExit } from "../../context/exit"
 import { Clipboard } from "../../util/clipboard"
-import type { FilePart } from "@ax-code/sdk/v2"
 import { TuiEvent } from "../../event"
 import { iife } from "@/util/iife"
 import { Locale } from "@/util/locale"
@@ -72,8 +58,6 @@ import { axEngineDownloadChip } from "../ax-engine-downloads-view-model"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { useKV } from "../../context/kv"
 import { useTextareaKeybindings } from "../textarea-keybindings"
-import { isNativeShiftPressed, shouldDetectNativeShiftEnter } from "@tui/util/native-shift-enter"
-import { Flag } from "@/flag/flag"
 import { Usage } from "../../routes/session/usage"
 import { Log } from "@/util/log"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
@@ -115,18 +99,17 @@ import {
   type SubmitStage,
 } from "./submit-state"
 import { connectionChipText, footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
-import { parsePastedFilePath } from "./prompt-filepath"
 import { responseErrorMessage } from "@tui/util/error-message"
 import {
   endDisplayOffset,
-  expandPromptTextParts,
   hasUnfinishedTodosInPromptParts,
   promptPartExtmarkView,
-  relocatePromptPartAfterEditor,
   setPromptPartSourceRange,
 } from "./prompt-helpers"
 import { PLACEHOLDERS, SHELL_PLACEHOLDERS, SUBMIT_ACCEPT_TIMEOUT_MS } from "./prompt-config"
 import { submitPromptRoute } from "./prompt-submit"
+import { promptCommands } from "./prompt-commands"
+import { createPromptPaste } from "./prompt-paste"
 import type { AsyncSessionRoute, PromptProps, PromptRef } from "./prompt-types"
 import { Installation } from "@/installation"
 import { useTuiConfig } from "../../context/tui-config"
@@ -771,194 +754,23 @@ export function Prompt(props: PromptProps) {
     ),
   )
 
-  command.register(() => {
-    return [
-      {
-        title: "Clear prompt",
-        value: "prompt.clear",
-        category: "Prompt",
-        hidden: true,
-        onSelect: (dialog) => {
-          input.extmarks.clear()
-          input.clear()
-          setStore("prompt", {
-            input: "",
-            parts: [],
-          })
-          setStore("extmarkToPartIndex", new Map())
-          setExpandedPastes(new Set<number>())
-          dialog.clear()
-        },
-      },
-      {
-        title: "Submit prompt",
-        value: "prompt.submit",
-        keybind: "input_submit",
-        category: "Prompt",
-        hidden: true,
-        onSelect: (dialog) => {
-          if (!input.focused) return
-          // Terminals that cannot report Shift+Enter at all (Apple Terminal,
-          // Windows console): this command only ever fires for a bare CR, so
-          // when the OS says Shift is physically held the user really pressed
-          // Shift+Enter — insert a newline instead of submitting. Same
-          // approach as kimi-code's native modifier polling.
-          if (Flag.AX_CODE_TUI_NATIVE_SHIFT_ENTER && shouldDetectNativeShiftEnter() && isNativeShiftPressed()) {
-            input.insertText("\n")
-            dialog.clear()
-            return
-          }
-          submit()
-          dialog.clear()
-        },
-      },
-      {
-        title: "Paste",
-        value: "prompt.paste",
-        keybind: "input_paste",
-        category: "Prompt",
-        hidden: true,
-        onSelect: async () => {
-          await pasteClipboardImage()
-        },
-      },
-      {
-        title: "Exit shell mode",
-        value: "shell.exit",
-        keybind: "session_interrupt",
-        category: "Session",
-        hidden: true,
-        enabled: store.mode === "shell",
-        onSelect: (dialog) => {
-          if (autocomplete.visible) return
-          if (!input.focused) return
-          setStore("mode", "normal")
-          dialog.clear()
-        },
-      },
-      {
-        title: "Interrupt session",
-        value: "session.interrupt",
-        keybind: "session_interrupt",
-        category: "Session",
-        hidden: true,
-        enabled: status().type !== "idle" && store.mode !== "shell",
-        onSelect: (dialog) => {
-          if (autocomplete.visible) return
-          if (!input.focused) return
-          if (!props.sessionID) return
-
-          // Suppress auto-draining the follow-up queue right after a manual
-          // interrupt so we don't immediately resend on the busy -> idle edge.
-          markFollowUpAbort(props.sessionID)
-          void sdk.client.session
-            .abort({
-              sessionID: props.sessionID,
-            })
-            .catch((error) => {
-              log.warn("prompt session interrupt failed", {
-                error,
-                sessionID: props.sessionID,
-              })
-              toast.show({
-                message: error instanceof Error ? error.message : "Failed to interrupt session",
-                variant: "error",
-              })
-            })
-          dialog.clear()
-        },
-      },
-      {
-        title: "Open editor",
-        category: "Session",
-        keybind: "editor_open",
-        value: "prompt.editor",
-        slash: {
-          name: "editor",
-          hidden: true,
-        },
-        onSelect: async (dialog) => {
-          dialog.clear()
-
-          const text = expandPromptTextParts(store.prompt.input, store.prompt.parts)
-
-          const nonTextParts = store.prompt.parts.filter((p) => p.type !== "text")
-
-          const value = text
-          const result = await Editor.open({ value, renderer })
-          if (result.status === "missing-editor") {
-            toast.show({
-              message: "No editor configured. Set VISUAL or EDITOR to use /editor.",
-              variant: "warning",
-            })
-            return
-          }
-          if (result.status === "cancelled") return
-          const content = result.content
-
-          input.setText(content)
-
-          // Update positions for nonTextParts based on their location in new content
-          // Filter out parts whose virtual text was deleted
-          // this handles a case where the user edits the text in the editor
-          // such that the virtual text moves around or is deleted
-          const updatedNonTextParts = nonTextParts
-            .map((part) => relocatePromptPartAfterEditor(part, content))
-            .filter((part) => part !== null)
-
-          setStore("prompt", {
-            input: content,
-            // keep only the non-text parts because the text parts were
-            // already expanded inline
-            parts: updatedNonTextParts,
-          })
-          restoreExtmarksFromParts(updatedNonTextParts)
-          input.cursorOffset = endDisplayOffset(content)
-        },
-      },
-      {
-        title: allPastesExpanded() ? "Collapse pasted previews" : "Expand pasted previews",
-        value: "prompt.paste.preview.toggle",
-        category: "Prompt",
-        enabled: pasteViews().length > 0,
-        onSelect: (dialog) => {
-          setAllPastePreviews(!allPastesExpanded())
-          dialog.clear()
-        },
-      },
-      {
-        title: "Skills",
-        value: "prompt.skills",
-        category: "Prompt",
-        slash: {
-          name: "skills",
-          hidden: true,
-        },
-        onSelect: () => {
-          const marker = dialog.stack.at(-1)
-          import("../dialog-skill")
-            .then(({ DialogSkill }) => {
-              if (dialog.stack.at(-1) !== marker) return
-              dialog.replace(() => (
-                <DialogSkill
-                  onSelect={(skill) => {
-                    input.setText(`/${skill} `)
-                    setStore("prompt", {
-                      input: `/${skill} `,
-                      parts: [],
-                    })
-                    input.gotoBufferEnd()
-                  }}
-                />
-              ))
-            })
-            .catch((error) => {
-              log.warn("failed to load skill dialog", { error })
-              toast.show({ message: "Failed to open skills", variant: "error" })
-            })
-        },
-      },
-    ]
+  const paste = createPromptPaste({
+    get input() {
+      return input
+    },
+    get store() {
+      return store
+    },
+    setStore,
+    pasteStyleId,
+    promptPartTypeId: () => promptPartTypeId,
+    inputBlocked,
+    disablePasteSummary: () => !!sync.data.config.experimental?.disable_paste_summary,
+    suppressAutocompleteForNextContentChange,
+    requestInputLayoutRefresh,
+    pasteSubmitGate,
+    log,
+    toast,
   })
 
   const ref: PromptRef = {
@@ -1080,72 +892,29 @@ export function Prompt(props: PromptProps) {
     )
   }
 
-  command.register(() => [
-    {
-      title: "Stash prompt",
-      value: "prompt.stash",
-      category: "Prompt",
-      enabled: !!store.prompt.input,
-      onSelect: (dialog) => {
-        if (!store.prompt.input) return
-        stash.push({
-          input: store.prompt.input,
-          parts: store.prompt.parts,
-        })
-        input.extmarks.clear()
-        input.clear()
-        setStore("prompt", { input: "", parts: [] })
-        setStore("extmarkToPartIndex", new Map())
-        setExpandedPastes(new Set<number>())
-        dialog.clear()
-      },
-    },
-    {
-      title: "Stash pop",
-      value: "prompt.stash.pop",
-      category: "Prompt",
-      enabled: stash.list().length > 0,
-      onSelect: (dialog) => {
-        const entry = stash.pop()
-        if (entry) {
-          input.setText(entry.input)
-          setStore("prompt", { input: entry.input, parts: entry.parts })
-          restoreExtmarksFromParts(entry.parts)
-          setExpandedPastes(new Set<number>())
-          input.gotoBufferEnd()
-        }
-        dialog.clear()
-      },
-    },
-    {
-      title: "Stash list",
-      value: "prompt.stash.list",
-      category: "Prompt",
-      enabled: stash.list().length > 0,
-      onSelect: (dialog) => {
-        const marker = dialog.stack.at(-1)
-        import("../dialog-stash")
-          .then(({ DialogStash }) => {
-            if (dialog.stack.at(-1) !== marker) return
-            dialog.replace(() => (
-              <DialogStash
-                onSelect={(entry) => {
-                  input.setText(entry.input)
-                  setStore("prompt", { input: entry.input, parts: entry.parts })
-                  restoreExtmarksFromParts(entry.parts)
-                  setExpandedPastes(new Set<number>())
-                  input.gotoBufferEnd()
-                }}
-              />
-            ))
-          })
-          .catch((error) => {
-            log.warn("failed to load stash dialog", { error })
-            toast.show({ message: "Failed to open stash", variant: "error" })
-          })
-      },
-    },
-  ])
+  command.register(() =>
+    promptCommands({
+      input,
+      store,
+      setStore,
+      setExpandedPastes,
+      submit,
+      pasteClipboardImage: paste.pasteClipboardImage,
+      autocompleteVisible: () => !!autocomplete.visible,
+      sessionID: () => props.sessionID,
+      statusType: () => status().type,
+      sdk,
+      log,
+      toast,
+      renderer,
+      restoreExtmarksFromParts,
+      allPastesExpanded,
+      pasteViewsLength: () => pasteViews().length,
+      setAllPastePreviews,
+      dialog,
+      stash,
+    }),
+  )
 
   function requestHeaders() {
     return directoryRequestHeaders({
@@ -1523,207 +1292,6 @@ export function Prompt(props: PromptProps) {
     submitAbort?.abort(createSubmitAbortError())
   })
 
-  function pasteText(text: string, virtualText: string) {
-    const currentOffset = input.visualCursor.offset
-    const extmarkStart = currentOffset
-    // extmark offsets are display-width (cell) units, not UTF-16 length —
-    // a non-ASCII filename in the SVG placeholder would otherwise misplace
-    // extmarkEnd and desync the highlighted range from the inserted text.
-    const extmarkEnd = extmarkStart + stringWidth(virtualText)
-
-    suppressAutocompleteForNextContentChange()
-    input.insertText(virtualText + " ")
-
-    const extmarkId = input.extmarks.create({
-      start: extmarkStart,
-      end: extmarkEnd,
-      virtual: true,
-      styleId: pasteStyleId,
-      typeId: promptPartTypeId,
-    })
-
-    setStore(
-      produce((draft) => {
-        const partIndex = draft.prompt.parts.length
-        draft.prompt.parts.push({
-          type: "text" as const,
-          text,
-          source: {
-            text: {
-              start: extmarkStart,
-              end: extmarkEnd,
-              value: virtualText,
-            },
-          },
-        })
-        draft.extmarkToPartIndex.set(extmarkId, partIndex)
-      }),
-    )
-    requestInputLayoutRefresh({ autocomplete: false })
-  }
-
-  async function pasteImage(file: { filename?: string; content: string; mime: string }) {
-    const currentOffset = input.visualCursor.offset
-    const extmarkStart = currentOffset
-    const count = store.prompt.parts.filter((x) => x.type === "file" && x.mime.startsWith("image/")).length
-    const virtualText = `[Image ${count + 1}]`
-    const extmarkEnd = extmarkStart + virtualText.length
-    const textToInsert = virtualText + " "
-
-    suppressAutocompleteForNextContentChange()
-    input.insertText(textToInsert)
-
-    const extmarkId = input.extmarks.create({
-      start: extmarkStart,
-      end: extmarkEnd,
-      virtual: true,
-      styleId: pasteStyleId,
-      typeId: promptPartTypeId,
-    })
-
-    const part: Omit<FilePart, "id" | "messageID" | "sessionID"> = {
-      type: "file" as const,
-      mime: file.mime,
-      filename: file.filename,
-      url: `data:${file.mime};base64,${file.content}`,
-      source: {
-        type: "file",
-        path: file.filename ?? "",
-        text: {
-          start: extmarkStart,
-          end: extmarkEnd,
-          value: virtualText,
-        },
-      },
-    }
-    setStore(
-      produce((draft) => {
-        const partIndex = draft.prompt.parts.length
-        draft.prompt.parts.push(part)
-        draft.extmarkToPartIndex.set(extmarkId, partIndex)
-      }),
-    )
-    requestInputLayoutRefresh({ autocomplete: false })
-    return
-  }
-
-  async function pasteClipboardImage() {
-    const content = await Clipboard.read()
-    if (!content?.mime.startsWith("image/")) return false
-    await pasteImage({
-      filename: "clipboard",
-      mime: content.mime,
-      content: content.data,
-    })
-    return true
-  }
-
-  async function handleTerminalPaste(event: PasteEvent) {
-    if (inputBlocked()) {
-      event.preventDefault()
-      return
-    }
-
-    let submitDeferred: boolean | undefined
-    pasteSubmitGate.beginPasteHandling()
-    try {
-      // Normalize line endings at the boundary.
-      // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste.
-      const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-      const pastedContent = normalizedText.trim()
-      if (!pastedContent) {
-        event.preventDefault()
-        submitDeferred = await pasteClipboardImage()
-        return
-      }
-
-      // Drag/drop into terminal arrives as pasted text with shell-style
-      // backslash escapes (spaces, iCloud's com\~apple\~CloudDocs,
-      // parentheses, etc.). Decode those before filesystem access.
-      const filepath = parsePastedFilePath(pastedContent)
-      const isUrl = /^(https?):\/\//.test(filepath)
-      if (!isUrl) {
-        try {
-          const mime = Filesystem.mimeType(filepath)
-          const filename = path.basename(filepath)
-          // Handle SVG as raw text content, not as base64 image.
-          if (mime === "image/svg+xml") {
-            event.preventDefault()
-            const content = await Filesystem.readText(filepath).catch((error) => {
-              log.warn("prompt svg paste read failed", { error, filepath })
-              toast.show({
-                message: error instanceof Error ? error.message : "Failed to read pasted SVG",
-                variant: "error",
-              })
-              return undefined
-            })
-            if (content) {
-              pasteText(content, `[SVG: ${filename ?? "image"}]`)
-              return
-            }
-            // Fall through to plain-text paste if read failed.
-          }
-          if (mime.startsWith("image/")) {
-            event.preventDefault()
-            const content = await Filesystem.readArrayBuffer(filepath)
-              .then((buffer) => Buffer.from(buffer).toString("base64"))
-              .catch((error) => {
-                log.warn("prompt image paste read failed", { error, filepath, mime })
-                toast.show({
-                  message: error instanceof Error ? error.message : "Failed to read pasted image",
-                  variant: "error",
-                })
-                return undefined
-              })
-            if (content) {
-              await pasteImage({
-                filename,
-                mime,
-                content,
-              })
-              return
-            }
-            // Fall through to plain-text paste if read failed.
-          }
-        } catch {}
-      }
-
-      const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-      if ((lineCount >= 3 || pastedContent.length > 150) && !sync.data.config.experimental?.disable_paste_summary) {
-        event.preventDefault()
-        suppressAutocompleteForNextContentChange()
-        pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
-        return
-      }
-
-      event.preventDefault()
-      suppressAutocompleteForNextContentChange()
-      input.insertText(normalizedText)
-      requestInputLayoutRefresh({ autocomplete: false })
-    } finally {
-      pasteSubmitGate.finishPasteHandling({ submitDeferred })
-    }
-  }
-
-  async function pasteWindowsClipboardText() {
-    pasteSubmitGate.beginPasteHandling()
-    let handledPaste = false
-    try {
-      const text = windowsClipboardTextPaste({
-        content: await Clipboard.read(),
-        platform: process.platform,
-      })
-      if (!text) return false
-
-      input.insertText(text)
-      requestInputLayoutRefresh({ autocomplete: false })
-      handledPaste = true
-      return true
-    } finally {
-      pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste })
-    }
-  }
-
   const highlight = createMemo(() => {
     if (keybind.leader) return theme.border
     if (store.mode === "shell") return theme.primary
@@ -1972,7 +1540,7 @@ export function Prompt(props: PromptProps) {
                     const content = await Clipboard.read()
                     if (content?.mime.startsWith("image/")) {
                       e.preventDefault()
-                      await pasteImage({
+                      await paste.pasteImage({
                         filename: "clipboard",
                         mime: content.mime,
                         content: content.data,
@@ -2100,7 +1668,7 @@ export function Prompt(props: PromptProps) {
                     input.cursorOffset = endDisplayOffset(input.plainText)
                 }
               }}
-              onPaste={handleTerminalPaste}
+              onPaste={paste.handleTerminalPaste}
               ref={(r: TextareaRenderable) => {
                 input = r
                 if (promptPartTypeId === 0) {
@@ -2115,7 +1683,7 @@ export function Prompt(props: PromptProps) {
 
                 r.preventDefault()
                 r.stopPropagation()
-                void pasteWindowsClipboardText()
+                void paste.pasteWindowsClipboardText()
               }}
               focusedBackgroundColor={theme.backgroundElement}
               cursorColor={theme.text}
