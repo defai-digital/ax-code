@@ -511,7 +511,18 @@ for (const [name, src] of nativePkgs) {
     console.warn(`native addon source missing: ${src} (run pnpm build:native) — ${name} will fall back to JS`)
     continue
   }
-  fs.cpSync(src, path.join(axScope, name), { recursive: true, dereference: true })
+  // These workspace packages use @napi-rs/cli only to build their addon. Its
+  // pnpm workspace link can point outside the staged runtime, which must never
+  // be shipped or represented in the signed runtime manifest. The published
+  // addon package has no runtime dependencies, so copy only its package files.
+  fs.cpSync(src, path.join(axScope, name), {
+    recursive: true,
+    dereference: true,
+    filter: (candidate) => {
+      const relative = path.relative(src, candidate)
+      return relative === "" || !relative.split(path.sep).includes("node_modules")
+    },
+  })
   shippedNative++
 }
 
