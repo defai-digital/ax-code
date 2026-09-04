@@ -1,0 +1,32 @@
+name: models-drift
+
+on:
+  schedule:
+    - cron: "43 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: models-drift
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check models snapshot drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check models snapshot
+        run: pnpm --dir packages/ax-code exec tsx script/update-models.ts --check

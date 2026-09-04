@@ -1,5 +1,6 @@
 #!/usr/bin/env -S npx tsx
 
-import { main } from "../packages/ax-code/script/update-models"
-
-process.exit(await main(process.argv.slice(2)))
+// Compatibility entry point. The canonical script executes on import and
+// reads process.argv directly, so a dynamic import preserves flags such as
+// --check without requiring a second, divergent implementation.
+await import("../packages/ax-code/script/update-models")

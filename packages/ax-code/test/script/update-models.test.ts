@@ -6,9 +6,10 @@ import { spawnSync } from "node:child_process"
 
 const packageRoot = path.join(import.meta.dirname, "../..")
 const updateModelsScript = path.join(packageRoot, "script/update-models.ts")
+const compatibilityUpdateModelsScript = path.join(packageRoot, "../../tools/update-models.ts")
 
-function runUpdateModels(env: NodeJS.ProcessEnv, args: string[] = []) {
-  return spawnSync(process.execPath, ["--import", "tsx", updateModelsScript, ...args], {
+function runUpdateModels(env: NodeJS.ProcessEnv, args: string[] = [], script = updateModelsScript) {
+  return spawnSync(process.execPath, ["--import", "tsx", script, ...args], {
     env,
     cwd: packageRoot,
   })
@@ -519,14 +520,13 @@ describe("update-models script", () => {
     expect(data.deepseek?.models?.["deepseek-reasoner"]).toBeUndefined()
   })
 
-  test("handles network failure gracefully", async () => {
+  test("fails when the model catalog cannot be fetched", async () => {
     const result = runUpdateModels({
       ...process.env,
       AX_CODE_MODELS_URL: "http://localhost:19999", // unreachable
     })
 
-    // Should exit 0 (not block commits) even on network failure
-    expect(result.status).toBe(0)
+    expect(result.status).toBe(2)
     const stderr = result.output?.[2]?.toString()
     expect(stderr).toContain("Failed to fetch models")
   })
@@ -654,6 +654,67 @@ describe("update-models script", () => {
     )
     expect(result.status).toBe(1)
     expect(result.output?.[2]?.toString()).toContain("out of date")
+  })
+
+  test("--check reports a retired provider in the committed snapshot and update removes it", async () => {
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    const initial = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+    expect(initial.status).toBe(0)
+
+    const stale = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    stale.xai = {
+      id: "xai",
+      name: "xAI",
+      env: ["XAI_API_KEY"],
+      models: {},
+    }
+    await writeFile(snapshotPath, JSON.stringify(stale, null, 2) + "\n")
+
+    const check = runUpdateModels(
+      {
+        ...process.env,
+        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+      },
+      ["--check"],
+    )
+    expect(check.status).toBe(1)
+    expect(check.output?.[2]?.toString()).toContain("out of date")
+    expect(JSON.parse(await readFile(snapshotPath, "utf-8")).xai).toBeDefined()
+
+    const update = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+    expect(update.status).toBe(0)
+    expect(update.output?.[1]?.toString()).toContain("Updated models-snapshot.json")
+    expect(JSON.parse(await readFile(snapshotPath, "utf-8")).xai).toBeUndefined()
+  })
+
+  test("compatibility entry point forwards --check without mutating the snapshot", async () => {
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    const before = await readFile(snapshotPath, "utf-8")
+
+    const result = runUpdateModels(
+      {
+        ...process.env,
+        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+      },
+      ["--check"],
+      compatibilityUpdateModelsScript,
+    )
+
+    expect(result.status).toBe(1)
+    expect(result.output?.[2]?.toString()).toContain("out of date")
+    expect(await readFile(snapshotPath, "utf-8")).toBe(before)
   })
 
   test("--check exits 2 when the fetch fails", async () => {

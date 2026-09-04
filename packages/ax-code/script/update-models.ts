@@ -38,10 +38,9 @@ async function loadFetchedModels(): Promise<Record<string, any>> {
     })
     .catch((err) => {
       console.error(`Failed to fetch models: ${err.message}`)
-      // A drift check that cannot fetch must fail loudly (exit 2) instead of
-      // reporting a false "up to date". A best-effort manual update still
-      // exits 0 so a temporary network outage is not a hard error.
-      process.exit(checkMode ? 2 : 0)
+      // A failed update must never report success: callers would otherwise
+      // continue with a stale snapshot while believing regeneration finished.
+      process.exit(2)
     })
 }
 
@@ -49,11 +48,11 @@ const fetched = await loadFetchedModels()
 
 const existing = await readJson<Record<string, any>>(snapshotPath).catch((): Record<string, any> => ({}))
 
-// Retired providers must not survive a refresh, whether they come from the
-// upstream catalog or a stale local snapshot.
+// Retired providers must not survive the freshly generated snapshot. Keep the
+// committed snapshot untouched until comparison: deleting retired entries from
+// `existing` would hide exactly the stale-on-disk drift that --check must report.
 for (const id of RETIRED_PROVIDER_IDS) {
   delete fetched[id]
-  delete existing[id]
 }
 
 // Preserve local-only provider entries that models.dev doesn't include
@@ -1199,8 +1198,8 @@ for (const providerID of GLM_CODING_PROVIDER_IDS) {
 
 // Strip cost fields from every model — cost telemetry is removed from
 // ax-code, and zod will silently drop these on parse anyway. Removing them
-// here keeps the snapshot small and prevents the pre-commit hook from
-// re-introducing thousands of dead JSON entries on each regeneration.
+// here keeps the snapshot small and prevents manual or scheduled regeneration
+// from re-introducing thousands of dead JSON entries.
 // Also strips nested experimental.modes.<name>.cost which models.dev uses
 // to surface alternate-mode pricing.
 type ModelEntry = {

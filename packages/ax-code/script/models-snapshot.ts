@@ -72,8 +72,18 @@ export function formatModelsSnapshot(snapshot: ModelsSnapshot) {
   return JSON.stringify(snapshot, null, 2) + "\n"
 }
 
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeJson)
+  if (!value || typeof value !== "object") return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, canonicalizeJson(entry)]),
+  )
+}
+
 function modelsSnapshotKey(snapshot: ModelsSnapshot) {
-  return JSON.stringify(snapshot)
+  return JSON.stringify(canonicalizeJson(snapshot))
 }
 
 export function modelsSnapshotChanged(existing: ModelsSnapshot, next: ModelsSnapshot) {
