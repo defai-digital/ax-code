@@ -6,8 +6,8 @@
  * that aren't in the upstream API.
  *
  * Usage:
- *   pnpm --dir packages/ax-code exec tsx script/update-models.ts
- *   # or via pre-commit hook (auto-runs before each commit)
+ *   pnpm --dir packages/ax-code exec tsx script/update-models.ts            # update snapshot
+ *   pnpm --dir packages/ax-code exec tsx script/update-models.ts --check    # drift check (exit 1 on drift, 2 on fetch failure)
  */
 
 import path from "path"
@@ -20,6 +20,9 @@ const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
 const modelsUrl = process.env.AX_CODE_MODELS_URL || "https://models.dev"
 const modelsFixturePath = process.env.AX_CODE_MODELS_FIXTURE_PATH
+// `--check` compares the freshly fetched + transformed data against the
+// committed snapshot and exits non-zero on drift, without writing anything.
+const checkMode = process.argv.includes("--check")
 
 async function loadFetchedModels(): Promise<Record<string, any>> {
   if (modelsFixturePath) {
@@ -35,7 +38,10 @@ async function loadFetchedModels(): Promise<Record<string, any>> {
     })
     .catch((err) => {
       console.error(`Failed to fetch models: ${err.message}`)
-      process.exit(0) // don't block commit if network is down
+      // A drift check that cannot fetch must fail loudly (exit 2) instead of
+      // reporting a false "up to date". A best-effort manual update still
+      // exits 0 so a temporary network outage is not a hard error.
+      process.exit(checkMode ? 2 : 0)
     })
 }
 
@@ -1389,6 +1395,41 @@ if (anthropic?.models) {
       : ANTHROPIC_1M_BETA
     model.headers = { ...(model.headers ?? {}), "anthropic-beta": merged }
   }
+}
+
+// Strip metadata fields the runtime zod schema drops at parse time (see
+// src/provider/models.ts). They would otherwise bloat the committed snapshot
+// (~5 MB -> ~3 MB) without ever being consumed. If a future schema change
+// starts consuming one of these, remove it from the corresponding list.
+const UNUSED_MODEL_FIELDS = [
+  "description",
+  "knowledge",
+  "last_updated",
+  "open_weights",
+  "reasoning_options",
+  "structured_output",
+] as const
+function stripUnusedFields(snapshot: Record<string, any>) {
+  for (const provider of Object.values(snapshot)) {
+    if (!provider || typeof provider !== "object") continue
+    for (const model of Object.values((provider as { models?: Record<string, any> }).models ?? {})) {
+      if (!model || typeof model !== "object") continue
+      for (const key of UNUSED_MODEL_FIELDS) delete model[key]
+    }
+  }
+  return snapshot
+}
+stripUnusedFields(fetched)
+
+if (checkMode) {
+  if (modelsSnapshotChanged(existing, fetched)) {
+    console.error(
+      "models-snapshot.json is out of date; regenerate with `pnpm --dir packages/ax-code exec tsx script/update-models.ts`",
+    )
+    process.exit(1)
+  }
+  console.log("models-snapshot.json is up to date")
+  process.exit(0)
 }
 
 if (!modelsSnapshotChanged(existing, fetched)) {

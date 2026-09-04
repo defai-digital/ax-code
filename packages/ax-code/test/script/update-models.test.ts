@@ -7,8 +7,8 @@ import { spawnSync } from "node:child_process"
 const packageRoot = path.join(import.meta.dirname, "../..")
 const updateModelsScript = path.join(packageRoot, "script/update-models.ts")
 
-function runUpdateModels(env: NodeJS.ProcessEnv) {
-  return spawnSync(process.execPath, ["--import", "tsx", updateModelsScript], {
+function runUpdateModels(env: NodeJS.ProcessEnv, args: string[] = []) {
+  return spawnSync(process.execPath, ["--import", "tsx", updateModelsScript, ...args], {
     env,
     cwd: packageRoot,
   })
@@ -529,6 +529,143 @@ describe("update-models script", () => {
     expect(result.status).toBe(0)
     const stderr = result.output?.[2]?.toString()
     expect(stderr).toContain("Failed to fetch models")
+  })
+
+  test("strips unused model metadata fields while preserving schema-declared fields", async () => {
+    await using tmp = await tmpdir()
+    const fixturePath = path.join(tmp.path, "models-fixture.json")
+    const snapshotPath = path.join(tmp.path, "models-snapshot.json")
+    await writeFile(
+      fixturePath,
+      JSON.stringify({
+        anthropic: {
+          id: "anthropic",
+          name: "Anthropic",
+          env: ["ANTHROPIC_API_KEY"],
+          models: {
+            "claude-sonnet-5": {
+              id: "claude-sonnet-5",
+              name: "Claude Sonnet 5",
+              family: "claude",
+              release_date: "2026-01-01",
+              description: "should be stripped",
+              reasoning_options: [{ id: "high" }],
+              last_updated: "2026-01-01",
+              knowledge: "2026-01",
+              open_weights: false,
+              structured_output: true,
+              limit: { context: 200_000, output: 64_000 },
+              modalities: { input: ["text"], output: ["text"] },
+            },
+          },
+        },
+      }),
+    )
+    await writeFile(snapshotPath, "{}\n")
+
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+    expect(result.status).toBe(0)
+
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    const model = data.anthropic.models["claude-sonnet-5"]
+    for (const key of [
+      "description",
+      "reasoning_options",
+      "last_updated",
+      "knowledge",
+      "open_weights",
+      "structured_output",
+    ]) {
+      expect(model[key]).toBeUndefined()
+    }
+    // Schema-declared fields must survive the strip.
+    expect(model.limit).toEqual({ context: 200_000, output: 64_000 })
+    expect(model.modalities).toEqual({ input: ["text"], output: ["text"] })
+  })
+
+  test("strip is a no-op when the unused fields are already absent", async () => {
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    await writeFile(snapshotPath, "{}\n")
+
+    const result = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+    expect(result.status).toBe(0)
+    const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
+    expect(data.anthropic.models["claude-sonnet-5"].limit).toEqual({ context: 200_000, output: 64_000 })
+  })
+
+  test("--check exits 0 and does not write when the snapshot is up to date", async () => {
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+
+    // Generate the snapshot once, then run a drift check against it.
+    const writeResult = runUpdateModels({
+      ...process.env,
+      AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+      AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+    })
+    expect(writeResult.status).toBe(0)
+    const before = await readFile(snapshotPath, "utf-8")
+
+    const checkResult = runUpdateModels(
+      {
+        ...process.env,
+        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+      },
+      ["--check"],
+    )
+    expect(checkResult.status).toBe(0)
+    expect(checkResult.output?.[1]?.toString()).toContain("up to date")
+    // A check must never mutate the snapshot.
+    expect(await readFile(snapshotPath, "utf-8")).toBe(before)
+  })
+
+  test("--check exits 1 when the snapshot is drifted", async () => {
+    await using tmp = await tmpdir()
+    const { fixturePath, snapshotPath } = await createModelsFixture(tmp.path)
+    // Seed a snapshot that differs from what the fixture would produce.
+    await writeFile(
+      snapshotPath,
+      JSON.stringify({
+        anthropic: {
+          id: "anthropic",
+          name: "Anthropic",
+          models: { "claude-sonnet-5": { id: "claude-sonnet-5", name: "Stale", limit: { context: 1, output: 1 } } },
+        },
+      }),
+    )
+
+    const result = runUpdateModels(
+      {
+        ...process.env,
+        AX_CODE_MODELS_FIXTURE_PATH: fixturePath,
+        AX_CODE_MODELS_SNAPSHOT_PATH: snapshotPath,
+      },
+      ["--check"],
+    )
+    expect(result.status).toBe(1)
+    expect(result.output?.[2]?.toString()).toContain("out of date")
+  })
+
+  test("--check exits 2 when the fetch fails", async () => {
+    const result = runUpdateModels(
+      {
+        ...process.env,
+        AX_CODE_MODELS_URL: "http://localhost:19999", // unreachable
+      },
+      ["--check"],
+    )
+    expect(result.status).toBe(2)
+    expect(result.output?.[2]?.toString()).toContain("Failed to fetch models")
   })
 })
 
