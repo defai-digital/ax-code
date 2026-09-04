@@ -21,6 +21,60 @@ describe("Env.parseBoolean", () => {
   })
 })
 
+describe("Env.redactInlineEnvAssignments", () => {
+  test("redacts sensitive-looking KEY=VALUE assignments", () => {
+    expect(Env.redactInlineEnvAssignments("AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI aws s3 ls")).toBe(
+      "AWS_SECRET_ACCESS_KEY=[redacted] aws s3 ls",
+    )
+    expect(Env.redactInlineEnvAssignments("AZURE_CLIENT_SECRET=abc123 az login")).toBe(
+      "AZURE_CLIENT_SECRET=[redacted] az login",
+    )
+    expect(Env.redactInlineEnvAssignments("TF_TOKEN_example_org=xxxx terraform plan")).toBe(
+      "TF_TOKEN_example_org=[redacted] terraform plan",
+    )
+    expect(Env.redactInlineEnvAssignments("CLOUDFLARE_API_TOKEN=zzzz wrangler deploy")).toBe(
+      "CLOUDFLARE_API_TOKEN=[redacted] wrangler deploy",
+    )
+  })
+
+  test("redacts credential URLs on credential-URL names and URL userinfo values", () => {
+    expect(Env.redactInlineEnvAssignments("DATABASE_URL=postgres://u:pw@host/db psql")).toBe(
+      "DATABASE_URL=[redacted] psql",
+    )
+    // URL userinfo redacts even when the key name looks innocuous.
+    expect(Env.redactInlineEnvAssignments("FOO=postgres://u:pw@host/db run")).toBe("FOO=[redacted] run")
+    expect(Env.redactInlineEnvAssignments("REF=https://user:pass@example.com/repo.git clone")).toBe(
+      "REF=[redacted] clone",
+    )
+  })
+
+  test("leaves non-sensitive assignments and flag spellings unchanged", () => {
+    const command =
+      "FOO=bar PATH=/usr/bin AWS_REGION=us-east-1 NODE_ENV=production deploy --env=production --flag=value"
+    expect(Env.redactInlineEnvAssignments(command)).toBe(command)
+  })
+
+  test("redacts multiple assignments and semicolon-separated commands", () => {
+    expect(Env.redactInlineEnvAssignments("AWS_SECRET_ACCESS_KEY=aaa bash run.sh;GH_PAT=bbb git push")).toBe(
+      "AWS_SECRET_ACCESS_KEY=[redacted] bash run.sh;GH_PAT=[redacted] git push",
+    )
+  })
+
+  test("preserves the prefix boundary character and quoted values", () => {
+    expect(Env.redactInlineEnvAssignments("  API_KEY=abc curl")).toBe("  API_KEY=[redacted] curl")
+    // Values terminated by quotes/semi-colons are not consumed past the boundary.
+    expect(Env.redactInlineEnvAssignments('SECRET_KEY=abc; echo "SECRET_KEY=abc"')).toBe(
+      'SECRET_KEY=[redacted]; echo "SECRET_KEY=abc"',
+    )
+  })
+
+  test("is idempotent", () => {
+    const once = Env.redactInlineEnvAssignments("AWS_SECRET_ACCESS_KEY=awskey AWS_REGION=us-east-1 aws s3 ls")
+    expect(Env.redactInlineEnvAssignments(once)).toBe(once)
+    expect(once).toBe("AWS_SECRET_ACCESS_KEY=[redacted] AWS_REGION=us-east-1 aws s3 ls")
+  })
+})
+
 describe("Env.sanitize", () => {
   test("redacts secret-like environment variable names even without separators", () => {
     const env = {

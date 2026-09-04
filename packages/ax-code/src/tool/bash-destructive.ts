@@ -19,6 +19,11 @@ import { parseShellArgs } from "@/util/shell-args"
  * quoting) are not matched here — those already fall back to prompting for
  * the entire raw command in bash-impl.ts when tree-sitter finds no
  * command nodes.
+ *
+ * Cloud-mutating gates: aws/gcloud/az/kubectl/doctl/wrangler mutations,
+ * terraform apply without a reviewed plan, ssh commit-without-confirm, and
+ * curl write methods against cloud control-plane hosts also require the
+ * interactive `bash_destructive` confirmation below.
  */
 
 type WrapperSpec = {
@@ -289,7 +294,6 @@ function classifyGit(args: string[]): string | undefined {
   const resolved = gitSubcommand(args)
   if (!resolved) return undefined
   const { subcommand, rest } = resolved
-
   if (subcommand === "push") {
     if (hasShortFlag(rest, "f") || hasLongFlag(rest, "--force") || hasLongFlag(rest, "--force-with-lease")) {
       return "git push --force rewrites remote history"
@@ -319,6 +323,176 @@ function classifyGit(args: string[]): string | undefined {
   return undefined
 }
 
+const ENV_ASSIGNMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/
+
+// Per-CLI global flags that consume the following argv token as their value.
+// Used by skipValueFlagArgs so option values cannot be mistaken for
+// subcommands or resource names (`gcloud --project prod compute instances
+// delete vm` must still surface `delete`).
+const AWS_VALUE_FLAGS: ReadonlySet<string> = new Set(["--profile", "--region", "--output", "--endpoint-url"])
+const GCLOUD_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  "--project",
+  "--configuration",
+  "--zone",
+  "--region",
+  "--account",
+  "--format",
+  "--filter",
+  "--impersonate-service-account",
+])
+const AZ_VALUE_FLAGS: ReadonlySet<string> = new Set(["-o", "--output", "--query", "--subscription", "--resource-group"])
+const KUBECTL_VALUE_FLAGS: ReadonlySet<string> = new Set([
+  "-n",
+  "--namespace",
+  "--context",
+  "--kubeconfig",
+  "--cluster",
+  "--user",
+])
+const DOCTL_VALUE_FLAGS: ReadonlySet<string> = new Set(["-t", "--access-token", "--context", "--output"])
+const WRANGLER_VALUE_FLAGS: ReadonlySet<string> = new Set(["-c", "--config", "--env", "--account-id"])
+const TERRAFORM_APPLY_VALUE_FLAGS: ReadonlySet<string> = new Set(["-var", "-var-file", "-target", "-backup"])
+
+// Returns the positional tokens of `args` with value-taking flags and their
+// values consumed: `--flag value` and `--flag=value` are skipped, bare flags
+// are skipped, everything else is collected in order.
+function skipValueFlagArgs(args: string[], valueFlags: ReadonlySet<string>): string[] {
+  const positional: string[] = []
+  let index = 0
+  while (index < args.length) {
+    const arg = args[index]
+    if (arg === undefined) break
+    if (arg.startsWith("-")) {
+      const equals = arg.indexOf("=")
+      const flag = equals === -1 ? arg : arg.slice(0, equals)
+      index += equals === -1 && valueFlags.has(flag) ? 2 : 1
+      continue
+    }
+    positional.push(arg)
+    index += 1
+  }
+  return positional
+}
+
+function hasDeleteOrDestroyVerb(positionals: string[]): boolean {
+  return positionals.some(
+    (positional) => positional.toLowerCase() === "delete" || positional.toLowerCase() === "destroy",
+  )
+}
+
+function classifyAws(args: string[]): string | undefined {
+  // aws supports both spellings of the EC2 dry-run flag; a dry run changes
+  // nothing, so it stays on the normal bash permission path.
+  if (hasLongFlag(args, "--dry-run") || args.includes("--dryrun")) return undefined
+  const positionals = skipValueFlagArgs(args, AWS_VALUE_FLAGS)
+  const service = positionals[0]
+  const verb = positionals[1]
+  if (!service || !verb) return undefined
+  if (/^(delete|terminate|remove)-/.test(verb)) {
+    return `aws ${service} ${verb} deletes cloud resources`
+  }
+  if (service === "s3" && (verb === "rm" || verb === "rb")) {
+    return `aws s3 ${verb} deletes objects or buckets`
+  }
+  return undefined
+}
+
+function classifyGcloudAzDoctl(args: string[], valueFlags: ReadonlySet<string>, cli: string): string | undefined {
+  const positionals = skipValueFlagArgs(args, valueFlags)
+  if (hasDeleteOrDestroyVerb(positionals)) return `${cli} delete/destroy removes cloud resources`
+  return undefined
+}
+
+function classifyKubectl(args: string[]): string | undefined {
+  const positionals = skipValueFlagArgs(args, KUBECTL_VALUE_FLAGS)
+  const operation = positionals[0]
+  if (operation === "delete") {
+    if (hasLongFlag(args, "--dry-run")) return undefined
+    return "kubectl delete removes cluster objects"
+  }
+  if (operation === "apply" && hasLongFlag(args, "--prune")) {
+    return "kubectl apply --prune deletes objects not in the manifest"
+  }
+  return undefined
+}
+
+function classifyWrangler(args: string[]): string | undefined {
+  const positionals = skipValueFlagArgs(args, WRANGLER_VALUE_FLAGS)
+  if (positionals.some((positional) => positional === "delete" || positional === "rollback")) {
+    return "wrangler delete/rollback removes or reverts deployed resources"
+  }
+  return undefined
+}
+
+const SSH_COMMIT_PATTERN = /\bcommit\b/i
+const SSH_COMMIT_EXCLUSIONS = [/\bconfirmed\b/i, /\bcommit\s+check\b/i, /\bgit\s+commit\b/i]
+
+function classifySsh(args: string[]): string | undefined {
+  // Choice: rather than modeling ssh's option grammar, we check the LAST
+  // non-flag argv token as the remote command string. Flag values (e.g. the
+  // `22` in `-p 22`) are ignored because they precede the remote command;
+  // remote commands with their own flags (`commit check`) are usually a
+  // single quoted argv token, and the exclusions still catch the rest.
+  const remoteCommand = [...args].reverse().find((arg) => !arg.startsWith("-"))
+  if (!remoteCommand) return undefined
+  if (!SSH_COMMIT_PATTERN.test(remoteCommand)) return undefined
+  if (SSH_COMMIT_EXCLUSIONS.some((pattern) => pattern.test(remoteCommand))) return undefined
+  return "ssh running a remote device 'commit' without commit-confirm"
+}
+
+const CURL_DATA_FLAGS: ReadonlySet<string> = new Set(["-d", "--data", "-F", "--form", "-T", "--upload-file"])
+const CURL_MUTATING_METHODS: ReadonlySet<string> = new Set(["POST", "PUT", "DELETE", "PATCH"])
+// Hosts of cloud control planes (plus instance-metadata endpoints). The
+// trailing `$` keeps the match on hostnames only: an IP literal such as
+// 169.254.169.254 never matches, so metadata-token fetches against a
+// link-local address stay on the normal bash path.
+const CURL_CLOUD_HOST_PATTERN =
+  /(amazonaws\.com|googleapis\.com|management\.azure\.com|azure\.com|api\.digitalocean\.com|api\.cloudflare\.com|cloudflare\.com|api\.ovh\.com|runpod\.ai|metadata\.google\.internal)$/i
+
+function classifyCurl(args: string[]): string | undefined {
+  let method: string | undefined
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index]
+    if (arg === undefined) break
+    if (arg === "-X" || arg === "--request") {
+      method = args[index + 1]
+      index += 1
+      continue
+    }
+    if (arg.startsWith("-X") && arg.length > 2) {
+      method = arg.slice(2)
+      continue
+    }
+    if (arg.startsWith("--request=")) {
+      method = arg.slice("--request=".length)
+    }
+  }
+  if (!method) {
+    // No explicit method: curl implies POST when a data/upload body flag is
+    // present (including `--data=...` spellings), GET otherwise.
+    const hasBody = args.some((arg) => {
+      const equals = arg.indexOf("=")
+      const flag = equals === -1 ? arg : arg.slice(0, equals)
+      return CURL_DATA_FLAGS.has(flag)
+    })
+    method = hasBody ? "POST" : "GET"
+  }
+  const methodName = method.toUpperCase()
+  if (!CURL_MUTATING_METHODS.has(methodName)) return undefined
+  const url = [...args].reverse().find((arg) => /^https?:\/\//i.test(arg))
+  if (!url) return undefined
+  let host: string
+  try {
+    host = new URL(url).hostname
+  } catch {
+    return undefined
+  }
+  if (CURL_CLOUD_HOST_PATTERN.test(host)) {
+    return `curl ${methodName} against a cloud control-plane host mutates remote resources`
+  }
+  return undefined
+}
+
 /**
  * Returns a human-readable reason when the parsed command argv is
  * destructive, or undefined when it is not. `parts` is the argv of a single
@@ -326,7 +500,15 @@ function classifyGit(args: string[]): string | undefined {
  * or preserved — quotes are ignored for matching.
  */
 export function classifyDestructiveCommand(parts: string[]): string | undefined {
-  const resolved = findWrappedCommand(parts)
+  // Leading environment assignments (`AWS_PROFILE=prod aws ...`) are not the
+  // command itself; skip them before wrapper resolution. (tree-sitter
+  // usually drops these as variable_assignment nodes upstream, but direct
+  // callers pass them through.)
+  let assignmentIndex = 0
+  while (assignmentIndex < parts.length && ENV_ASSIGNMENT_PATTERN.test(parts[assignmentIndex] ?? "")) {
+    assignmentIndex += 1
+  }
+  const resolved = findWrappedCommand(parts.slice(assignmentIndex))
   if (!resolved) return undefined
   const { name, args } = resolved
 
@@ -357,7 +539,27 @@ export function classifyDestructiveCommand(parts: string[]): string | undefined 
     if (subcommand === "apply" && hasLongFlag(args, "-auto-approve")) {
       return "terraform apply -auto-approve changes infrastructure without review"
     }
+    if (subcommand === "apply") {
+      // `-out` only writes a plan file; `apply <plan.tfplan>` applies a
+      // previously reviewed plan. Bare `terraform apply` (optionally with
+      // -var/-target overrides) changes infrastructure without one.
+      if (hasLongFlag(args, "-out")) return undefined
+      const subcommandIndex = args.findIndex((arg) => !arg.startsWith("-"))
+      const positionals = skipValueFlagArgs(args.slice(subcommandIndex + 1), TERRAFORM_APPLY_VALUE_FLAGS)
+      if (positionals.length === 0) {
+        return "terraform apply without an explicit plan file changes infrastructure without a reviewed plan"
+      }
+    }
   }
+
+  if (name === "aws") return classifyAws(args)
+  if (name === "gcloud") return classifyGcloudAzDoctl(args, GCLOUD_VALUE_FLAGS, "gcloud")
+  if (name === "az") return classifyGcloudAzDoctl(args, AZ_VALUE_FLAGS, "az")
+  if (name === "doctl") return classifyGcloudAzDoctl(args, DOCTL_VALUE_FLAGS, "doctl")
+  if (name === "kubectl") return classifyKubectl(args)
+  if (name === "wrangler") return classifyWrangler(args)
+  if (name === "ssh") return classifySsh(args)
+  if (name === "curl") return classifyCurl(args)
 
   return undefined
 }

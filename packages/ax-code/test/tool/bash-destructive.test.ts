@@ -94,4 +94,111 @@ describe("classifyDestructiveCommand", () => {
     expect(classifyDestructiveCommand([])).toBeUndefined()
     expect(classifyDestructiveCommand(["ls", "-la"])).toBeUndefined()
   })
+
+  test("flags aws mutating verbs", () => {
+    expect(classifyDestructiveCommand(["aws", "ec2", "terminate-instances", "--instance-ids", "i-1"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["aws", "iam", "delete-user", "--user-name", "x"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["aws", "s3", "rm", "s3://b/k"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["aws", "s3", "rb", "s3://b", "--force"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["sudo", "aws", "ec2", "delete-volume", "--volume-id", "v-1"])).toBeTruthy()
+  })
+
+  test("skips leading environment assignments before the command name", () => {
+    expect(
+      classifyDestructiveCommand(["AWS_PROFILE=prod", "aws", "ec2", "delete-vpc", "--vpc-id", "vpc-1"]),
+    ).toBeTruthy()
+    expect(classifyDestructiveCommand(["AWS_PROFILE=prod", "aws", "ec2", "describe-instances"])).toBeUndefined()
+  })
+
+  test("does not flag aws read-only or dry-run usage", () => {
+    expect(classifyDestructiveCommand(["aws", "ec2", "describe-instances"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["aws", "s3", "ls"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["aws", "iam", "list-users"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["aws", "ec2", "terminate-instances", "--dry-run"])).toBeUndefined()
+  })
+
+  test("flags gcloud, az, and doctl delete/destroy verbs past value flags", () => {
+    expect(
+      classifyDestructiveCommand(["gcloud", "--project", "prod", "compute", "instances", "delete", "vm1"]),
+    ).toBeTruthy()
+    expect(classifyDestructiveCommand(["gcloud", "secrets", "versions", "destroy", "1", "--secret", "s"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["az", "group", "delete", "-n", "rg"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["doctl", "compute", "droplet", "delete", "12345"])).toBeTruthy()
+  })
+
+  test("does not flag gcloud, az, and doctl read-only usage", () => {
+    expect(classifyDestructiveCommand(["gcloud", "compute", "instances", "list"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["az", "vm", "list"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["doctl", "compute", "droplet", "list"])).toBeUndefined()
+  })
+
+  test("flags kubectl delete and apply --prune", () => {
+    expect(classifyDestructiveCommand(["kubectl", "delete", "deployment", "api"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["kubectl", "-n", "prod", "delete", "pod", "x"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["kubectl", "apply", "-f", "x.yaml", "--prune", "-l", "app=y"])).toBeTruthy()
+  })
+
+  test("does not flag kubectl reads, dry-run deletes, or plain applies", () => {
+    expect(classifyDestructiveCommand(["kubectl", "get", "pods"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["kubectl", "delete", "--dry-run=client", "pod", "x"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["kubectl", "apply", "-f", "manifest.yaml"])).toBeUndefined()
+  })
+
+  test("flags wrangler delete and rollback", () => {
+    expect(classifyDestructiveCommand(["wrangler", "delete"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["wrangler", "d1", "delete", "my-db"])).toBeTruthy()
+  })
+
+  test("does not flag wrangler deploy or list", () => {
+    expect(classifyDestructiveCommand(["wrangler", "deploy"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["wrangler", "d1", "list"])).toBeUndefined()
+  })
+
+  test("flags terraform apply without a reviewed plan file", () => {
+    expect(classifyDestructiveCommand(["terraform", "apply"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["terraform", "apply", "-var-file=prod.tfvars"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["terraform", "apply", "-target=module.foo"])).toBeTruthy()
+  })
+
+  test("does not flag terraform plan, validate, or reviewed applies", () => {
+    expect(classifyDestructiveCommand(["terraform", "plan"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["terraform", "apply", "plan.tfplan"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["terraform", "apply", "-var-file=x.tfvars", "plan.tfplan"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["terraform", "apply", "-out=tfplan"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["terraform", "validate"])).toBeUndefined()
+  })
+
+  test("flags ssh remote device commit without commit-confirm", () => {
+    expect(classifyDestructiveCommand(["ssh", "router", "commit"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["ssh", "admin@r1", "configure; commit"])).toBeTruthy()
+  })
+
+  test("does not flag ssh reads or commit-confirm/commit check/git commit", () => {
+    expect(classifyDestructiveCommand(["ssh", "host", "uptime"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["ssh", "router", "commit confirmed 5"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["ssh", "router", "commit check"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["ssh", "host", "git commit -m x"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["ssh", "router", "show configuration"])).toBeUndefined()
+  })
+
+  test("flags curl mutating methods against cloud control-plane hosts", () => {
+    expect(
+      classifyDestructiveCommand(["curl", "-X", "DELETE", "https://api.cloudflare.com/client/v4/zones/1"]),
+    ).toBeTruthy()
+    expect(classifyDestructiveCommand(["curl", "-XDELETE", "https://api.digitalocean.com/v2/droplets/1"])).toBeTruthy()
+    expect(
+      classifyDestructiveCommand(["curl", "-d", "@f.json", "https://ec2.amazonaws.com/?Action=TerminateInstances"]),
+    ).toBeTruthy()
+  })
+
+  test("does not flag curl reads, plain fetches, or non-cloud posts", () => {
+    expect(
+      classifyDestructiveCommand(["curl", "-X", "GET", "https://api.cloudflare.com/client/v4/zones"]),
+    ).toBeUndefined()
+    expect(classifyDestructiveCommand(["curl", "https://example.com"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["curl", "-X", "POST", "http://localhost:3000/api"])).toBeUndefined()
+    expect(
+      classifyDestructiveCommand(["curl", "-X", "POST", "http://169.254.169.254/latest/api/token"]),
+    ).toBeUndefined()
+  })
 })

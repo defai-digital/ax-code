@@ -42,6 +42,7 @@ import { MediaProjection } from "./media-projection"
 import { Instance } from "@/project/instance"
 import { Filesystem } from "@/util/filesystem"
 import { FILE_PATH_ALIAS_KEYS } from "@/tool/file-path"
+import { Env } from "@/util/env"
 
 export namespace SessionProcessor {
   const log = Log.create({ service: "session.processor" })
@@ -74,6 +75,19 @@ export namespace SessionProcessor {
   /** Strip XML tags that could escape a <system-reminder> wrapper and inject arbitrary LLM instructions. */
   function sanitizeForXmlTag(input: string): string {
     return input.replace(/<\/?system-reminder\b[^>]*>/gi, "[tag-stripped]")
+  }
+
+  /**
+   * Redact inline credential assignments from a bash tool input before it is
+   * persisted (event log, message parts, doom-loop fingerprints). The
+   * stream's original `value.input` still drives actual tool execution
+   * upstream of the processor — never route this redacted copy back into
+   * execution. Returns a shallow copy so the caller's input is untouched.
+   */
+  export function redactPersistedBashInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
+    const command = input["command"]
+    if (tool !== "bash" || typeof command !== "string") return input
+    return { ...input, command: Env.redactInlineEnvAssignments(command) }
   }
 
   export type Info = Awaited<ReturnType<typeof create>>
@@ -175,9 +189,14 @@ export namespace SessionProcessor {
     }) => {
       recentToolRing.push({
         tool: input.tool,
+        // The cache holds the redacted canonical form from tool-call time;
+        // the fallback paths (cache miss) must redact too so ring entries
+        // never smuggle a credential back in via the raw event input.
         input:
           toolInputCache[input.toolCallId] ??
-          (input.eventInput ? safeStringify(input.eventInput) : safeStringify(input.fallbackInput)),
+          (input.eventInput
+            ? safeStringify(redactPersistedBashInput(input.tool, jsonSafeInput(input.eventInput)))
+            : safeStringify(redactPersistedBashInput(input.tool, jsonSafeInput(input.fallbackInput)))),
         output: input.output === undefined ? undefined : canonicalize(input.output),
       })
       if (recentToolRing.length > recentToolRingLimit) recentToolRing.shift()
@@ -656,11 +675,15 @@ export namespace SessionProcessor {
                     }
                   }
 
+                  // stepParts feeds the durable `llm.output` event and
+                  // `tool.call` feeds the event log — persist the redacted
+                  // copy; execution already consumed the original upstream.
+                  const persistedInput = redactPersistedBashInput(value.toolName, toolInput)
                   stepParts.push({
                     type: "tool_call",
                     callID: value.toolCallId,
                     tool: value.toolName,
-                    input: toolInput,
+                    input: persistedInput,
                   })
                   Recorder.emit({
                     type: "tool.call",
@@ -668,7 +691,7 @@ export namespace SessionProcessor {
                     messageID: input.assistantMessage.id,
                     tool: value.toolName,
                     callID: value.toolCallId,
-                    input: toolInput,
+                    input: persistedInput,
                     stepIndex: attempt,
                   })
                   // Some providers stream `tool-call` without a preceding
@@ -690,7 +713,7 @@ export namespace SessionProcessor {
                     toolcalls[value.toolCallId] = match
                   }
                   if (match) {
-                    const storedInput = jsonSafeInput(value.input)
+                    const storedInput = redactPersistedBashInput(value.toolName, jsonSafeInput(value.input))
                     const part = await Session.updatePart.force({
                       ...match,
                       tool: value.toolName,
@@ -715,7 +738,11 @@ export namespace SessionProcessor {
                     // k>=2 (a longer cycle is itself stronger evidence).
                     // Cache the canonical form so tool-result does not
                     // re-walk the input graph (PERF-02).
-                    const inputStr = canonicalize(value.input)
+                    // Canonicalize the same redacted copy that was persisted
+                    // above so doom-loop fingerprints match the stored part
+                    // (and the tool-result cache reuse below stays
+                    // consistent) even when the command held credentials.
+                    const inputStr = canonicalize(storedInput)
                     toolInputCache[value.toolCallId] = inputStr
                     const allRecent = [...recentToolRing, { tool: value.toolName, input: inputStr }]
                     const cycleLen = detectCycle(allRecent, AUTONOMOUS_MAX_CYCLE_LEN)
@@ -828,7 +855,10 @@ export namespace SessionProcessor {
                   const match = toolcalls[value.toolCallId]
                   if (match && match.state.status === "running") {
                     const toolEndTime = Date.now()
-                    const storedInput = value.input === undefined ? match.state.input : jsonSafeInput(value.input)
+                    const storedInput =
+                      value.input === undefined
+                        ? match.state.input
+                        : redactPersistedBashInput(match.tool, jsonSafeInput(value.input))
                     // Reuse the form computed at tool-call time so doom-loop
                     // comparisons stay consistent and we avoid a second full
                     // object-graph walk on large tool inputs (PERF-02).
@@ -943,7 +973,10 @@ export namespace SessionProcessor {
                     const errorMsg = toErrorMessage(value.error)
                     const errorCode = value.error instanceof Error ? value.error.name : "Unknown"
                     const toolErrorEnd = Date.now()
-                    const toolInput = value.input === undefined ? match.state.input : jsonSafeInput(value.input)
+                    const toolInput =
+                      value.input === undefined
+                        ? match.state.input
+                        : redactPersistedBashInput(match.tool, jsonSafeInput(value.input))
 
                     // Self-correction: analyze the failure BEFORE persisting
                     // the tool error so we can append the reflection prompt

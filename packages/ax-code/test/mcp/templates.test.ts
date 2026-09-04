@@ -18,6 +18,14 @@ describe("mcp templates", () => {
     expect(Object.keys(byCategory()).length).toBeGreaterThan(0)
   })
 
+  test("cloud provider templates are registered", () => {
+    for (const name of ["aws", "gcp", "cloudflare", "digitalocean"]) {
+      expect(names(), `missing template: ${name}`).toContain(name)
+    }
+    expect(find("aws")?.type).toBe("local")
+    expect(find("digitalocean")?.envRequired).toContain("DIGITALOCEAN_ACCESS_TOKEN")
+  })
+
   describe("toConfig", () => {
     test("local template merges collected environment into config", () => {
       const github = find("github")!

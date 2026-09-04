@@ -150,7 +150,44 @@ export const TEMPLATES: McpTemplate[] = [
     args: ["-y", "@cloudflare/mcp-server-cloudflare"],
     envRequired: ["CLOUDFLARE_API_TOKEN"],
     envDescription: { CLOUDFLARE_API_TOKEN: "Get from https://dash.cloudflare.com/profile/api-tokens" },
+    docs: "https://github.com/cloudflare/mcp-server-cloudflare",
   },
+  {
+    name: "aws",
+    description: "AWS API via the AWS Labs MCP server (requires Python/uv)",
+    category: "Cloud",
+    type: "local",
+    command: "uvx",
+    args: ["awslabs.aws-api-mcp-server@latest"],
+    envDescription: {
+      AWS_PROFILE: "Optional; falls back to ambient AWS credentials (see aws-labs MCP docs for read-only modes)",
+    },
+    docs: "https://github.com/awslabs/mcp",
+  },
+  {
+    name: "gcp",
+    description: "Google Cloud — Cloud Run services and jobs via cloud-run-mcp",
+    category: "Cloud",
+    type: "local",
+    command: "npx",
+    args: ["-y", "cloud-run-mcp@latest"],
+    docs: "https://github.com/GoogleCloudPlatform/cloud-run-mcp",
+  },
+  {
+    name: "digitalocean",
+    description: "DigitalOcean — droplets, Kubernetes, databases, firewalls",
+    category: "Cloud",
+    type: "local",
+    command: "npx",
+    args: ["-y", "@digitalocean/mcp@latest"],
+    envRequired: ["DIGITALOCEAN_ACCESS_TOKEN"],
+    envDescription: {
+      DIGITALOCEAN_ACCESS_TOKEN: "Get from https://cloud.digitalocean.com/account/api/tokens",
+    },
+    docs: "https://github.com/digitalocean-labs/mcp-digitalocean",
+  },
+  // OVHcloud and RunPod have no credible maintained MCP server yet — use the
+  // ovh CLI / RunPod GraphQL API through the cloud-ops-* skill packs instead.
 
   // === Communication ===
   {

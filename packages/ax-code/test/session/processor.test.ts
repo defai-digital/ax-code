@@ -1556,4 +1556,71 @@ describe("session.processor", () => {
       },
     })
   })
+
+  test("persists redacted bash input while leaving non-bash inputs untouched", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const secretCommand = "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI AWS_REGION=us-east-1 aws s3 ls"
+        const redactedCommand = "AWS_SECRET_ACCESS_KEY=[redacted] AWS_REGION=us-east-1 aws s3 ls"
+        streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue({
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            yield { type: "tool-input-start", id: "call_bash", toolName: "bash" }
+            yield { type: "tool-call", toolCallId: "call_bash", toolName: "bash", input: { command: secretCommand } }
+            yield {
+              type: "tool-result",
+              toolCallId: "call_bash",
+              input: { command: secretCommand },
+              output: { output: "ok", title: "Bash", metadata: {}, attachments: [] },
+            }
+            yield { type: "tool-input-start", id: "call_glob", toolName: "glob" }
+            yield {
+              type: "tool-call",
+              toolCallId: "call_glob",
+              toolName: "glob",
+              input: { pattern: "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI" },
+            }
+            yield {
+              type: "tool-result",
+              toolCallId: "call_glob",
+              input: { pattern: "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI" },
+              output: { output: "match", title: "Glob", metadata: {}, attachments: [] },
+            }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 10, totalTokens: 110 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any)
+
+        const result = await processor.process(streamInput)
+
+        expect(result).toBe("continue")
+        const saved = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+        const toolParts = saved.parts.filter((part) => part.type === "tool")
+        expect(toolParts).toHaveLength(2)
+
+        const bashPart = toolParts.find((part) => part.tool === "bash")
+        expect(bashPart).toBeDefined()
+        expect(bashPart?.state.status).toBe("completed")
+        if (bashPart?.state.status === "completed") {
+          expect(bashPart.state.input).toEqual({ command: redactedCommand })
+        }
+
+        const globPart = toolParts.find((part) => part.tool === "glob")
+        expect(globPart).toBeDefined()
+        if (globPart?.state.status === "completed") {
+          // Non-bash tools persist verbatim — only bash `command` is redacted.
+          expect(globPart.state.input).toEqual({ pattern: "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI" })
+        }
+      },
+    })
+  })
 })

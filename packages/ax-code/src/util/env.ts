@@ -149,6 +149,31 @@ export namespace Env {
     )
   }
 
+  // Inline `KEY=VALUE` spellings in shell command lines. The prefix boundary
+  // (start, whitespace, or `;`) keeps flag spellings like `--env=production`
+  // untouched because `-` is not a valid assignment boundary.
+  const INLINE_ENV_ASSIGNMENT = /(^|[\s;])((?:[A-Za-z_][A-Za-z0-9_]*)=)([^\s"';]+)/g
+  // Any assigned value carrying credentials as URL userinfo
+  // (scheme://user:pass@…) is redacted even when the variable name looks
+  // innocuous (e.g. FOO=postgres://u:pw@host/db).
+  const URL_USERINFO_VALUE = /^[a-z][a-z0-9+.-]*:\/\/[^/\s]*@/
+
+  /**
+   * Redact inline `KEY=VALUE` credential assignments from a shell command
+   * before it is persisted (event log, message parts, doom-loop
+   * fingerprints). Callers must keep executing the original string — this
+   * copy is for durable records only.
+   */
+  export function redactInlineEnvAssignments(value: string): string {
+    return value.replace(INLINE_ENV_ASSIGNMENT, (match, prefix: string, assignment: string, assigned: string) => {
+      const name = assignment.slice(0, -1)
+      const sensitiveName =
+        isSensitiveName(name) || PAT_NAME.test(name) || WEBHOOK_NAME.test(name) || CREDENTIAL_URL_NAME.test(name)
+      if (!sensitiveName && !URL_USERINFO_VALUE.test(assigned)) return match
+      return `${prefix}${assignment}[redacted]`
+    })
+  }
+
   // Interpret an environment-variable string as a tri-state boolean.
   // Truthy: "true"/"1"/"yes"/"on"; falsy: "false"/"0"/"no"/"off"; anything
   // else (incl. unset) → undefined so callers can distinguish "explicitly

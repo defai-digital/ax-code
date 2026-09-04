@@ -185,6 +185,13 @@ export namespace Skill {
     "incident-observability",
     "auth-boundaries",
     "queue-worker",
+    "cloud-ops-aws",
+    "cloud-ops-gcp",
+    "cloud-ops-cloudflare",
+    "cloud-ops-digitalocean",
+    "cloud-ops-runpod",
+    "vyos-firewall",
+    "junos-firewall",
   ])
 
   /** Visible reliability pack — also listed as slash commands. */
