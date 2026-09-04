@@ -2,6 +2,8 @@ import { toErrorMessage } from "./error-message"
 import { parseJsonPayload } from "./json-value"
 
 export namespace Rpc {
+  export type Context = { signal: AbortSignal }
+
   type SerializedError = {
     name?: string
     message: string
@@ -9,7 +11,7 @@ export namespace Rpc {
   }
 
   type Definition = {
-    [method: string]: (input: any) => any
+    [method: string]: (input: any, context: Context) => any
   }
 
   type MessageTarget = {
@@ -122,6 +124,7 @@ export namespace Rpc {
   }
 
   export function listen(rpc: Definition) {
+    const active = new Map<number, AbortController>()
     bindEmitMessage((data) => postMessage(data), "listen")
     onmessage = async (evt) => {
       // Malformed messages must not crash the worker: onmessage is a raw
@@ -129,9 +132,17 @@ export namespace Rpc {
       // strands every in-flight RPC promise. Parse defensively and drop.
       const parsed = parseWireMessage(evt.data)
       if (!parsed) return
+      if (parsed.type === "rpc.cancel") {
+        const controller = active.get(parsed.id)
+        active.delete(parsed.id)
+        controller?.abort()
+        return
+      }
       if (parsed.type === "rpc.request") {
         const handler = rpc[parsed.method]
         if (typeof handler !== "function") return
+        const controller = new AbortController()
+        active.set(parsed.id, controller)
         // Route responses through `emitMessage` so the same indirection
         // applies to both rpc.result/rpc.error and rpc.event frames.
         // Calling postMessage directly here was the same as
@@ -139,10 +150,13 @@ export namespace Rpc {
         // from `emit()` and `listenStdio`'s `safeWrite`-based path,
         // which made future wrapping (logging, buffering) fragile.
         try {
-          const result = await handler(parsed.input)
-          emitMessage?.(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
+          const result = await handler(parsed.input, { signal: controller.signal })
+          if (!controller.signal.aborted) emitMessage?.(JSON.stringify({ type: "rpc.result", result, id: parsed.id }))
         } catch (error) {
-          emitMessage?.(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }))
+          if (!controller.signal.aborted)
+            emitMessage?.(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }))
+        } finally {
+          if (active.get(parsed.id) === controller) active.delete(parsed.id)
         }
       }
     }
@@ -161,6 +175,7 @@ export namespace Rpc {
   ) {
     const stdin = io.stdin ?? process.stdin
     const stdout = io.stdout ?? process.stdout
+    const active = new Map<number, AbortController>()
     let stdoutBroken = false
     // Without an "error" handler, an EPIPE on stdout (parent closed our
     // stdin pipe during shutdown) crashes the backend. Mark the pipe
@@ -191,14 +206,25 @@ export namespace Rpc {
       if (!line.trim()) return
       const parsed = parseWireMessage(line)
       if (!parsed) return
+      if (parsed.type === "rpc.cancel") {
+        const controller = active.get(parsed.id)
+        active.delete(parsed.id)
+        controller?.abort()
+        return
+      }
       if (parsed.type !== "rpc.request") return
       const handler = rpc[parsed.method]
       if (typeof handler !== "function") return
+      const controller = new AbortController()
+      active.set(parsed.id, controller)
       try {
-        const result = await handler(parsed.input)
-        safeWrite(JSON.stringify({ type: "rpc.result", result, id: parsed.id }) + "\n")
+        const result = await handler(parsed.input, { signal: controller.signal })
+        if (!controller.signal.aborted) safeWrite(JSON.stringify({ type: "rpc.result", result, id: parsed.id }) + "\n")
       } catch (error) {
-        safeWrite(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }) + "\n")
+        if (!controller.signal.aborted)
+          safeWrite(JSON.stringify({ type: "rpc.error", error: serializeError(error), id: parsed.id }) + "\n")
+      } finally {
+        if (active.get(parsed.id) === controller) active.delete(parsed.id)
       }
     }
 
@@ -217,6 +243,8 @@ export namespace Rpc {
       const finish = () => {
         if (settled) return
         settled = true
+        for (const controller of active.values()) controller.abort()
+        active.clear()
         resolve()
       }
       stdin.on("data", (chunk) => {
@@ -247,8 +275,8 @@ export namespace Rpc {
 
   type PendingEntry = {
     resolve: (value: any) => void
-    reject: (reason: Error) => void
-    timer: ReturnType<typeof setTimeout>
+    reject: (reason: unknown) => void
+    cleanup: () => void
   }
 
   export function client<T extends Definition>(target: MessageTarget) {
@@ -271,7 +299,7 @@ export namespace Rpc {
       wireClosed = true
       const error = wireClosedError()
       for (const [pendingId, entry] of pending) {
-        clearTimeout(entry.timer)
+        entry.cleanup()
         entry.reject(error)
         pending.delete(pendingId)
       }
@@ -280,6 +308,15 @@ export namespace Rpc {
     // A process transport can exit while the TUI is still constructing its
     // client. Honor that already-observed failure after installing the handler.
     if (target.wireClosed) handleWireDeath()
+    const cancelRequest = (requestId: number) => {
+      try {
+        target.postMessage(JSON.stringify({ type: "rpc.cancel", id: requestId }))
+      } catch {
+        // The cancelled caller is already settled; fail other pending calls
+        // if the cancellation frame discovers a broken transport.
+        handleWireDeath()
+      }
+    }
     target.onmessage = async (evt) => {
       // See Rpc.listen — drop malformed messages instead of crashing.
       const parsed = parseWireMessage(evt.data)
@@ -287,7 +324,7 @@ export namespace Rpc {
       if (parsed.type === "rpc.result" || parsed.type === "rpc.error") {
         const entry = pending.get(parsed.id)
         if (entry) {
-          clearTimeout(entry.timer)
+          entry.cleanup()
           pending.delete(parsed.id)
           if (parsed.type === "rpc.error") {
             entry.reject(hydrateError(parsed.error))
@@ -321,23 +358,51 @@ export namespace Rpc {
       }
     }
     return {
-      call<Method extends keyof T>(method: Method, input: Parameters<T[Method]>[0]): Promise<ReturnType<T[Method]>> {
+      call<Method extends keyof T>(
+        method: Method,
+        input: Parameters<T[Method]>[0],
+        options?: { signal?: AbortSignal },
+      ): Promise<ReturnType<T[Method]>> {
+        const signal = options?.signal
+        if (signal?.aborted) return Promise.reject(signal.reason)
         if (wireClosed) return Promise.reject(wireClosedError())
         const requestId = id
         id = id >= ID_WRAP ? 0 : id + 1
         return new Promise((resolve, reject) => {
+          let sent = false
+          const onAbort = () => {
+            const entry = pending.get(requestId)
+            if (!entry) return
+            entry.cleanup()
+            pending.delete(requestId)
+            reject(signal?.reason)
+            if (sent) cancelRequest(requestId)
+          }
           const timer = setTimeout(() => {
+            cleanup()
             pending.delete(requestId)
             reject(new Error(`RPC call "${String(method)}" timed out after ${RPC_TIMEOUT_MS}ms`))
+            cancelRequest(requestId)
           }, RPC_TIMEOUT_MS)
-          pending.set(requestId, { resolve, reject, timer })
+          const cleanup = () => {
+            clearTimeout(timer)
+            signal?.removeEventListener("abort", onAbort)
+          }
+          pending.set(requestId, { resolve, reject, cleanup })
+          signal?.addEventListener("abort", onAbort, { once: true })
           try {
-            target.postMessage(JSON.stringify({ type: "rpc.request", method, input, id: requestId }))
+            const message = JSON.stringify({ type: "rpc.request", method, input, id: requestId })
+            if (signal?.aborted) {
+              onAbort()
+              return
+            }
+            sent = true
+            target.postMessage(message)
           } catch (error) {
             // A dead/closed transport throws synchronously on send. Without
             // cleanup the pending entry and its timer would leak until the
             // 60s timeout fires, keeping the event loop alive.
-            clearTimeout(timer)
+            cleanup()
             pending.delete(requestId)
             reject(error instanceof Error ? error : new Error(toErrorMessage(error)))
           }

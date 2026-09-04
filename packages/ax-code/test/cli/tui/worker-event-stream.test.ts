@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 
 // Regression coverage for the worker's setWorkspace race: two concurrent
 // setWorkspace RPCs both passed the check-then-act teardown in
@@ -13,6 +13,9 @@ const streamState = vi.hoisted(() => ({
   emitted: [] as unknown[],
   onEvent: undefined as undefined | ((event: unknown) => void),
 }))
+
+const serverFetch = vi.hoisted(() => vi.fn(async (_request: Request) => new Response("")))
+afterEach(() => serverFetch.mockReset())
 
 vi.mock("@tui/util/resilient-stream", () => ({
   runResilientStream: (opts: { signal: AbortSignal; onEvent?: (event: unknown) => void }) => {
@@ -43,7 +46,7 @@ vi.mock("@/installation/runtime-mode", () => ({ runtimeMode: () => "test" }))
 vi.mock("@/cli/boolean-flag", () => ({ cliBooleanFlagValue: () => false }))
 vi.mock("@/server/server", () => ({
   Server: {
-    Default: () => ({ fetch: async () => new Response("") }),
+    Default: () => ({ fetch: serverFetch }),
     listen: async () => ({ stop: async () => {}, url: new URL("http://localhost:1/") }),
   },
 }))
@@ -76,6 +79,42 @@ vi.mock("@/server/runtime-auth", () => ({
 }))
 vi.mock("@/util/signals", () => ({ registerShutdownSignals: () => () => {} }))
 vi.mock("@/provider/ax-engine", () => ({ stopServer: async () => {} }))
+
+describe("worker RPC fetch", () => {
+  test("propagates RPC cancellation to the server Request", async () => {
+    const { rpc } = await import("@tui/worker")
+    const gate = Promise.withResolvers<Response>()
+    serverFetch.mockReturnValue(gate.promise)
+    const controller = new AbortController()
+    const pending = rpc.fetch(
+      { url: "http://internal.test/provider/operation", method: "POST", headers: {} },
+      { signal: controller.signal },
+    )
+    try {
+      const request = serverFetch.mock.calls[0]?.[0]
+      expect(request?.signal.aborted).toBe(false)
+
+      controller.abort()
+
+      expect(request?.signal.aborted).toBe(true)
+      expect(request?.headers.has("x-test-auth")).toBe(true)
+    } finally {
+      gate.resolve(new Response("done"))
+      await pending
+    }
+  })
+
+  test("keeps the internal-origin restriction with an RPC signal", async () => {
+    const { rpc } = await import("@tui/worker")
+    await expect(
+      rpc.fetch(
+        { url: "https://outside.test/resource", method: "GET", headers: {} },
+        { signal: new AbortController().signal },
+      ),
+    ).rejects.toThrow("RPC fetch denied for non-internal origin")
+    expect(serverFetch).not.toHaveBeenCalled()
+  })
+})
 
 describe("worker event stream lifecycle", () => {
   test("concurrent setWorkspace calls install exactly one stream; shutdown drains it", async () => {

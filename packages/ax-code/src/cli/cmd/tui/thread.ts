@@ -465,17 +465,24 @@ async function createBackendRuntime(input: {
   }
 }
 
-function createWorkerFetch(client: RpcClient): typeof fetch {
+export function createWorkerFetch(client: RpcClient): typeof fetch {
   const fn = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = new Request(input, init)
+    request.signal.throwIfAborted()
     const body = request.body ? await request.text() : undefined
-    const result = await client.call("fetch", {
-      url: request.url,
-      method: request.method,
-      headers: Object.fromEntries(request.headers.entries()),
-      body,
-    })
-    return new Response(result.body, {
+    const result = await client.call(
+      "fetch",
+      {
+        url: request.url,
+        method: request.method,
+        headers: Object.fromEntries(request.headers.entries()),
+        body,
+      },
+      { signal: request.signal },
+    )
+    request.signal.throwIfAborted()
+    const nullBody = request.method === "HEAD" || [204, 205, 304].includes(result.status)
+    return new Response(nullBody ? null : result.body, {
       status: result.status,
       headers: result.headers,
     })

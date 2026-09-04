@@ -242,7 +242,10 @@ export const rpc = {
       cwd: process.cwd(),
     }
   },
-  async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
+  async fetch(
+    input: { url: string; method: string; headers: Record<string, string>; body?: string },
+    context?: Rpc.Context,
+  ) {
     assertRpcFetchUrlAllowed(input.url)
     const headers = { ...input.headers }
     const auth = getAuthorizationHeader()
@@ -255,6 +258,7 @@ export const rpc = {
       method: input.method,
       headers,
       body: input.body,
+      signal: context?.signal,
     })
     const response = await Server.Default().fetch(request)
     const body = await response.text()

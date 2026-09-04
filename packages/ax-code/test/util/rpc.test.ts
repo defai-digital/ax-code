@@ -21,6 +21,7 @@ function createRpcPair() {
 
   const prevOnMessage = globalThis.onmessage
   const prevPostMessage = globalThis.postMessage
+  globalThis.onmessage = null
   globalThis.postMessage = ((data: string) => {
     queueMicrotask(() => {
       target.onmessage?.({ data })
@@ -36,6 +37,41 @@ function createRpcPair() {
   }
 }
 
+function createStdioRpcPair(definition: Parameters<typeof Rpc.listen>[0]) {
+  const stdin = new EventEmitter() as EventEmitter & { setEncoding: (encoding: BufferEncoding) => typeof stdin }
+  stdin.setEncoding = () => stdin
+  const target: Endpoint = {
+    onmessage: null,
+    postMessage(data) {
+      queueMicrotask(() => stdin.emit("data", data + "\n"))
+    },
+  }
+  const stdout = {
+    write(data: string) {
+      queueMicrotask(() => target.onmessage?.({ data }))
+      return true
+    },
+    on() {
+      return stdout
+    },
+  }
+  const done = Rpc.listenStdio(definition, {
+    stdin: stdin as unknown as Pick<NodeJS.ReadStream, "on" | "setEncoding">,
+    stdout: stdout as unknown as Pick<NodeJS.WriteStream, "write" | "on">,
+  })
+  return {
+    target,
+    async restore() {
+      stdin.emit("close")
+      await done
+    },
+  }
+}
+
+async function flushMicrotasks() {
+  for (let index = 0; index < 10; index++) await Promise.resolve()
+}
+
 afterEach(() => {
   globalThis.onmessage = null
   // The Rpc namespace's `emitMessage` channel is a singleton with a
@@ -43,9 +79,185 @@ afterEach(() => {
   // exactly once). Tests legitimately swap between them, so reset
   // between cases.
   Rpc._resetEmitMessageForTest()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe("Rpc", () => {
+  describe.each(["worker", "stdio"] as const)("%s cancellation", (transport) => {
+    function connect(definition: Parameters<typeof Rpc.listen>[0]) {
+      if (transport === "stdio") return createStdioRpcPair(definition)
+      const pair = createRpcPair()
+      Rpc.listen(definition)
+      return pair
+    }
+
+    test("rejects pre-aborted calls without dispatching", async () => {
+      const run = vi.fn(() => "ok")
+      const pair = connect({ run })
+      try {
+        const client = Rpc.client<{ run(input: undefined): string }>(pair.target)
+        const controller = new AbortController()
+        controller.abort()
+
+        await expect(client.call("run", undefined, { signal: controller.signal })).rejects.toMatchObject({
+          name: "AbortError",
+        })
+        expect(run).not.toHaveBeenCalled()
+      } finally {
+        await pair.restore()
+      }
+    })
+
+    test("rejects promptly, cancels the server signal, and removes the deadline", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+      const gate = Promise.withResolvers<string>()
+      let serverSignal: AbortSignal | undefined
+      const pair = connect({
+        run(_input: undefined, context?: { signal: AbortSignal }) {
+          serverSignal = context?.signal
+          return gate.promise
+        },
+      })
+      const client = Rpc.client<{ run(input: undefined): Promise<string> }>(pair.target)
+      const controller = new AbortController()
+      const settled = vi.fn()
+      const pending = client.call("run", undefined, { signal: controller.signal }).then(settled, settled)
+      try {
+        await flushMicrotasks()
+        controller.abort()
+        await flushMicrotasks()
+
+        expect(settled).toHaveBeenCalledWith(expect.objectContaining({ name: "AbortError" }))
+        expect(serverSignal?.aborted).toBe(true)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        gate.resolve("late success")
+        await pending
+        await pair.restore()
+      }
+    })
+
+    test("cancels server work when the RPC deadline expires", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+      const gate = Promise.withResolvers<string>()
+      let serverSignal: AbortSignal | undefined
+      const pair = connect({
+        run(_input: undefined, context?: { signal: AbortSignal }) {
+          serverSignal = context?.signal
+          return gate.promise
+        },
+      })
+      const client = Rpc.client<{ run(input: undefined): Promise<string> }>(pair.target)
+      const pending = client.call("run", undefined).catch((error: unknown) => error)
+      try {
+        await vi.advanceTimersByTimeAsync(60_000)
+
+        expect(await pending).toEqual(expect.objectContaining({ message: expect.stringContaining("timed out") }))
+        expect(serverSignal?.aborted).toBe(true)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        gate.resolve("late success")
+        await flushMicrotasks()
+        await pair.restore()
+      }
+    })
+
+    test("removes cancellation listeners after success", async () => {
+      const pair = connect({ run: () => "ok" })
+      try {
+        const client = Rpc.client<{ run(input: undefined): string }>(pair.target)
+        const controller = new AbortController()
+        const removeListener = vi.spyOn(controller.signal, "removeEventListener")
+
+        await expect(client.call("run", undefined, { signal: controller.signal })).resolves.toBe("ok")
+
+        expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function))
+      } finally {
+        await pair.restore()
+      }
+    })
+
+    test("removes cancellation listeners after a server error", async () => {
+      const pair = connect({
+        run() {
+          throw new Error("server failure")
+        },
+      })
+      try {
+        const client = Rpc.client<{ run(input: undefined): string }>(pair.target)
+        const controller = new AbortController()
+        const removeListener = vi.spyOn(controller.signal, "removeEventListener")
+
+        await expect(client.call("run", undefined, { signal: controller.signal })).rejects.toThrow("server failure")
+
+        expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function))
+      } finally {
+        await pair.restore()
+      }
+    })
+
+    test("does not cancel a completed or subsequent call", async () => {
+      const serverSignals: AbortSignal[] = []
+      const pair = connect({
+        run(_input: undefined, context: { signal: AbortSignal }) {
+          serverSignals.push(context.signal)
+          return "ok"
+        },
+      })
+      try {
+        const client = Rpc.client<{ run(input: undefined): string }>(pair.target)
+        const controller = new AbortController()
+
+        await client.call("run", undefined, { signal: controller.signal })
+        controller.abort()
+        await expect(client.call("run", undefined)).resolves.toBe("ok")
+
+        expect(serverSignals.map((signal) => signal.aborted)).toEqual([false, false])
+      } finally {
+        await pair.restore()
+      }
+    })
+  })
+
+  test("cleans up cancellation when the wire dies", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const target: Endpoint = { onmessage: null, postMessage: vi.fn() }
+    const client = Rpc.client<{ run(input: undefined): string }>(target)
+    const controller = new AbortController()
+    const removeListener = vi.spyOn(controller.signal, "removeEventListener")
+    const pending = client.call("run", undefined, { signal: controller.signal })
+
+    target.onWireDeath?.()
+
+    await expect(pending).rejects.toThrow("RPC wire closed")
+    expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function))
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  test("does not send a request cancelled during serialization", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] })
+    const postMessage = vi.fn()
+    const target: Endpoint = { onmessage: null, postMessage }
+    const client = Rpc.client<{ run(input: { toJSON(): string }): string }>(target)
+    const controller = new AbortController()
+
+    await expect(
+      client.call(
+        "run",
+        {
+          toJSON() {
+            controller.abort()
+            return "cancelled"
+          },
+        },
+        { signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({ name: "AbortError" })
+    expect(postMessage).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   test("decodeWireMessage accepts only decoded object messages", () => {
     expect(Rpc.decodeWireMessage({ type: "rpc.request", id: 1 })).toEqual({ type: "rpc.request", id: 1 })
     expect(Rpc.decodeWireMessage(null)).toBeUndefined()
