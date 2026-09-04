@@ -874,7 +874,7 @@ export function Prompt(props: PromptProps) {
 
   command.register(() =>
     promptCommands({
-      input,
+      input: () => input,
       store,
       setStore,
       setExpandedPastes,

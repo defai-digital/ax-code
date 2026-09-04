@@ -1,6 +1,7 @@
 import { Flag } from "@/flag/flag"
 import { isNativeShiftPressed, shouldDetectNativeShiftEnter } from "@tui/util/native-shift-enter"
 import { Editor } from "@tui/util/editor"
+import { errorPayloadMessage } from "@tui/util/error-message"
 import type { DialogContext } from "@tui/ui/dialog"
 import type { CommandOption } from "../dialog-command"
 import { endDisplayOffset, expandPromptTextParts, relocatePromptPartAfterEditor } from "./prompt-helpers"
@@ -24,7 +25,7 @@ type PromptCommandStore = {
 }
 
 export type PromptCommandsInput = {
-  input: PromptComposer
+  input: () => PromptComposer
   store: PromptCommandStore
   setStore: (...args: any[]) => void
   setExpandedPastes: (value: Set<number>) => void
@@ -79,8 +80,8 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       category: "Prompt",
       hidden: true,
       onSelect: (dialog) => {
-        composer.extmarks.clear()
-        composer.clear()
+        composer().extmarks.clear()
+        composer().clear()
         setStore("prompt", {
           input: "",
           parts: [],
@@ -97,14 +98,14 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       category: "Prompt",
       hidden: true,
       onSelect: (dialog) => {
-        if (!composer.focused) return
+        if (!composer().focused) return
         // Terminals that cannot report Shift+Enter at all (Apple Terminal,
         // Windows console): this command only ever fires for a bare CR, so
         // when the OS says Shift is physically held the user really pressed
         // Shift+Enter — insert a newline instead of submitting. Same
         // approach as kimi-code's native modifier polling.
         if (Flag.AX_CODE_TUI_NATIVE_SHIFT_ENTER && shouldDetectNativeShiftEnter() && isNativeShiftPressed()) {
-          composer.insertText("\n")
+          composer().insertText("\n")
           dialog.clear()
           return
         }
@@ -131,7 +132,7 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       enabled: store.mode === "shell",
       onSelect: (dialog) => {
         if (autocompleteVisible()) return
-        if (!composer.focused) return
+        if (!composer().focused) return
         setStore("mode", "normal")
         dialog.clear()
       },
@@ -145,7 +146,7 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       enabled: statusType() !== "idle" && store.mode !== "shell",
       onSelect: (dialog) => {
         if (autocompleteVisible()) return
-        if (!composer.focused) return
+        if (!composer().focused) return
         const currentSessionID = sessionID()
         if (!currentSessionID) return
 
@@ -155,6 +156,14 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
         void sdk.client.session
           .abort({
             sessionID: currentSessionID,
+          })
+          .then((result) => {
+            const error = (result as { error?: unknown } | undefined)?.error
+            if (error) {
+              throw new Error(
+                typeof error === "string" ? error : (errorPayloadMessage(error) ?? "Failed to interrupt session"),
+              )
+            }
           })
           .catch((error) => {
             log.warn("prompt session interrupt failed", {
@@ -197,7 +206,7 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
         if (result.status === "cancelled") return
         const content = result.content
 
-        composer.setText(content)
+        composer().setText(content)
 
         // Update positions for nonTextParts based on their location in new content
         // Filter out parts whose virtual text was deleted
@@ -214,7 +223,7 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
           parts: updatedNonTextParts,
         })
         restoreExtmarksFromParts(updatedNonTextParts)
-        composer.cursorOffset = endDisplayOffset(content)
+        composer().cursorOffset = endDisplayOffset(content)
       },
     },
     {
@@ -243,12 +252,12 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
             dialog.replace(() => (
               <DialogSkill
                 onSelect={(skill) => {
-                  composer.setText(`/${skill} `)
+                  composer().setText(`/${skill} `)
                   setStore("prompt", {
                     input: `/${skill} `,
                     parts: [],
                   })
-                  composer.gotoBufferEnd()
+                  composer().gotoBufferEnd()
                 }}
               />
             ))
@@ -270,8 +279,8 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
           input: store.prompt.input,
           parts: store.prompt.parts,
         })
-        composer.extmarks.clear()
-        composer.clear()
+        composer().extmarks.clear()
+        composer().clear()
         setStore("prompt", { input: "", parts: [] })
         setStore("extmarkToPartIndex", new Map())
         setExpandedPastes(new Set<number>())
@@ -286,11 +295,11 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       onSelect: (dialog) => {
         const entry = stash.pop()
         if (entry) {
-          composer.setText(entry.input)
+          composer().setText(entry.input)
           setStore("prompt", { input: entry.input, parts: entry.parts })
           restoreExtmarksFromParts(entry.parts)
           setExpandedPastes(new Set<number>())
-          composer.gotoBufferEnd()
+          composer().gotoBufferEnd()
         }
         dialog.clear()
       },
@@ -308,11 +317,11 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
             dialog.replace(() => (
               <DialogStash
                 onSelect={(entry) => {
-                  composer.setText(entry.input)
+                  composer().setText(entry.input)
                   setStore("prompt", { input: entry.input, parts: entry.parts })
                   restoreExtmarksFromParts(entry.parts)
                   setExpandedPastes(new Set<number>())
-                  composer.gotoBufferEnd()
+                  composer().gotoBufferEnd()
                 }}
               />
             ))
