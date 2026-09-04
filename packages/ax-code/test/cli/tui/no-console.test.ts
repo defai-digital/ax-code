@@ -6,6 +6,7 @@ const TUI_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
 const APP_SRC = path.join(TUI_SRC, "app.tsx")
 const RENDERER_SRC = path.join(TUI_SRC, "renderer.ts")
 const PROMPT_SRC = path.join(TUI_SRC, "component/prompt/index.tsx")
+const HOME_SRC = path.join(TUI_SRC, "routes/home.tsx")
 const SESSION_HEADER_SRC = path.join(TUI_SRC, "routes/session/header.tsx")
 const SESSION_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-message.tsx")
 const TIMELINE_FORK_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-fork-from-timeline.tsx")
@@ -126,6 +127,23 @@ describe("tui console hygiene", () => {
 
     expect(theme).not.toContain("colors.palette[0]!")
     expect(theme).not.toContain("colors.palette[7]!")
+  })
+
+  test("opens the model picker when the model name is clicked", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const home = await fs.readFile(HOME_SRC, "utf8")
+
+    // The click routes through the registered "Switch model" command path —
+    // the same path as the model_list keybind and the /model slash command.
+    const CLICK_RE = /<box[^>]*onMouseUp=\{\(\) => command\.trigger\("model\.list"\)\}[^>]*>/
+    const TEXT_CLICK_RE = /<text[^>]*onMouseUp=\{\(\) => command\.trigger\("model\.list"\)\}/
+
+    for (const src of [prompt, home]) {
+      expect(src).toMatch(CLICK_RE)
+      // The handler must live on the wrapping <box>, never directly on <text>
+      // (clicks on text nested in a flex row are unreliable).
+      expect(src).not.toMatch(TEXT_CLICK_RE)
+    }
   })
 
   test("opens sidebar actions on mouseup after suppressing header toggle", async () => {

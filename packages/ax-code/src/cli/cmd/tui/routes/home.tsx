@@ -13,6 +13,7 @@ import { useTerminalDimensions } from "@ax-code/tui/solid"
 import { useTheme } from "@tui/context/theme"
 import { Logo } from "../component/logo"
 import { ModeChips } from "../component/mode-chips"
+import { useCommandDialog } from "../component/dialog-command"
 import { recentSessions, recentSessionTitle } from "../component/session-picker-view-model"
 import { homeStatusBarLayout, homeStatusBarMcpWidth } from "./home-layout"
 import { Locale } from "@/util/locale"
@@ -65,6 +66,7 @@ export function Home() {
   const args = useArgs()
   const local = useLocal()
   const toast = useToast()
+  const command = useCommandDialog()
   const mcp = createMemo(() => isNonEmptyRecord(sync.data.mcp))
   const mcpError = createMemo(() => {
     return Object.values(sync.data.mcp).some((x) => x.status === "failed")
@@ -185,9 +187,23 @@ export function Home() {
         </box>
         <Show when={!modelLoading()}>
           <box flexShrink={0} maxWidth={75} paddingTop={1}>
-            <text fg={theme.textMuted} selectable={false}>
-              {agentLabel()} · {local.model.parsed().model} · {directory()}
-            </text>
+            <box flexDirection="row" flexShrink={0}>
+              <text fg={theme.textMuted} selectable={false}>
+                {agentLabel()} ·{" "}
+              </text>
+              {/* Clicking the model name opens the model picker via the same
+                  registered-command path as the model_list keybind. The handler
+                  lives on the wrapping box, never on <text> (see ModeChips). */}
+              <box flexShrink={0} onMouseUp={() => command.trigger("model.list")}>
+                <text fg={theme.textMuted} selectable={false}>
+                  {local.model.parsed().model}
+                </text>
+              </box>
+              <text fg={theme.textMuted} selectable={false} flexShrink={1}>
+                {" "}
+                · {directory()}
+              </text>
+            </box>
           </box>
         </Show>
         <box height={1} minHeight={0} flexShrink={1} />

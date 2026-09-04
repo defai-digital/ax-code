@@ -2170,10 +2170,19 @@ export function Prompt(props: PromptProps) {
               </text>
               <Show when={store.mode === "normal"}>
                 <box flexDirection="row" gap={1}>
-                  <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
-                    {local.model.parsed().model}
-                  </text>
-                  <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                  {/* Clicking the model name opens the model picker — the same
+                      registered-command path as the model_list keybind and the
+                      /model slash command. The handler lives on the wrapping
+                      box, never on <text>: clicks on text nested in a flex row
+                      are unreliable (see ModeChips). Connection/download/effort
+                      chips stay outside on purpose — they are status, not the
+                      model identity. */}
+                  <box flexDirection="row" gap={1} flexShrink={0} onMouseUp={() => command.trigger("model.list")}>
+                    <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
+                      {local.model.parsed().model}
+                    </text>
+                    <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                  </box>
                   <Show when={connectionChip()}>
                     {(chip) => (
                       <>
