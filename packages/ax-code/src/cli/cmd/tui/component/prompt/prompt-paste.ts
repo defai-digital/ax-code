@@ -148,7 +148,7 @@ export function createPromptPaste(host: PromptPasteHost) {
       // Windows ConPTY/Terminal often sends CR-only newlines in bracketed paste.
       const normalizedText = decodePasteBytes(event.bytes).replace(/\r\n/g, "\n").replace(/\r/g, "\n")
       const pastedContent = normalizedText.trim()
-      if (!pastedContent) {
+      if (!normalizedText) {
         event.preventDefault()
         submitDeferred = await pasteClipboardImage()
         return
@@ -159,7 +159,7 @@ export function createPromptPaste(host: PromptPasteHost) {
       // parentheses, etc.). Decode those before filesystem access.
       const filepath = parsePastedFilePath(pastedContent)
       const isUrl = /^(https?):\/\//.test(filepath)
-      if (!isUrl) {
+      if (pastedContent && !isUrl) {
         try {
           const mime = Filesystem.mimeType(filepath)
           const filename = path.basename(filepath)
@@ -179,8 +179,7 @@ export function createPromptPaste(host: PromptPasteHost) {
               return
             }
             // Fall through to plain-text paste if read failed.
-          }
-          if (mime.startsWith("image/")) {
+          } else if (mime.startsWith("image/")) {
             event.preventDefault()
             const content = await Filesystem.readArrayBuffer(filepath)
               .then((buffer) => Buffer.from(buffer).toString("base64"))
@@ -205,11 +204,11 @@ export function createPromptPaste(host: PromptPasteHost) {
         } catch {}
       }
 
-      const lineCount = (pastedContent.match(/\n/g)?.length ?? 0) + 1
-      if ((lineCount >= 3 || pastedContent.length > 150) && !host.disablePasteSummary()) {
+      const lineCount = (normalizedText.match(/\n/g)?.length ?? 0) + 1
+      if ((lineCount >= 3 || normalizedText.length > 150) && !host.disablePasteSummary()) {
         event.preventDefault()
         host.suppressAutocompleteForNextContentChange()
-        pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+        pasteText(normalizedText, `[Pasted ~${lineCount} lines]`)
         return
       }
 
