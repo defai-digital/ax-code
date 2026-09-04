@@ -185,7 +185,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       log.info("tui.prompt.submit: blocked", { inputBlocked: inputBlocked(), submitInFlight })
       return
     }
-    if (submitInFlight) {
+    if (submitInFlight || cancelRouteHandoff) {
       log.info("tui.prompt.submit: already in flight")
       return
     }
@@ -350,7 +350,6 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       DiagnosticLog.recordProcess("tui.promptSubmitRouteHandoffStarted", {
         sessionID: nextSessionID,
       })
-      setDraftSessionID(undefined)
       blurRenderable(input, { name: "prompt-route-handoff-blur" })
       cancelRouteHandoff?.()
       cancelRouteHandoff = scheduleTuiTimeout(
@@ -360,6 +359,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
           DiagnosticLog.recordProcess("tui.promptSubmitRouteNavigateStarted", {
             sessionID: nextSessionID,
           })
+          setDraftSessionID(undefined)
           route.navigate({
             type: "session",
             sessionID: nextSessionID,
@@ -411,6 +411,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       if (startingNewSession) {
         if (!sessionID) throw new Error("Session id allocation failed")
         submitAction = "Session creation"
+        setSubmitStage("creating-session")
 
         const res = (await withTimeout(
           sdk.client.session.create(
@@ -517,7 +518,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         })
       }
     } catch (error) {
-      if (isSubmitAbortError(error)) return
+      if (nextSubmitAbort.signal.aborted || isSubmitAbortError(error)) return
       reportSubmitFailure(submitAction, error)
       return
     } finally {

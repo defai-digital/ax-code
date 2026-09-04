@@ -1,12 +1,16 @@
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { WorkMode } from "../../../src/mode/work-mode"
 import {
   createPromptSubmitController,
   type PromptSubmitHost,
 } from "../../../src/cli/cmd/tui/component/prompt/prompt-submit-controller"
 
+afterEach(() => vi.useRealTimers())
+
 function setup(input: { mode: "normal" | "shell"; workMode: WorkMode.Id; text: string }) {
   const requests: Request[] = []
+  let pending = false
+  let draftSessionID: string | undefined
   const model = { providerID: "test-provider", modelID: "test-model" }
   const host: PromptSubmitHost = {
     input: { extmarks: { getAllForTypeId: () => [], clear: vi.fn() }, clear: vi.fn() },
@@ -45,14 +49,27 @@ function setup(input: { mode: "normal" | "shell"; workMode: WorkMode.Id; text: s
     status: () => ({ type: "idle" }),
     queueModeEnabled: () => false,
     axEngineDownloadJob: () => undefined,
-    setSubmitPending: vi.fn(),
-    submitPending: () => false,
+    setSubmitPending: vi.fn((value) => {
+      pending = value
+    }),
+    submitPending: () => pending,
     setSubmitStage: vi.fn(),
-    draftSessionID: () => undefined,
-    setDraftSessionID: vi.fn(),
+    draftSessionID: () => draftSessionID,
+    setDraftSessionID: vi.fn((value) => {
+      draftSessionID = value
+    }),
     syncInputCursorColor: vi.fn(),
   }
   return { controller: createPromptSubmitController(host), host, requests, model }
+}
+
+function setupNewSession() {
+  const fixture = setup({ mode: "normal", workMode: "agent", text: "Review the change" })
+  const create = vi.fn(async ({ id }: { id: string }) => ({ data: { id } }))
+  fixture.host.sessionID = () => undefined
+  fixture.host.sdk.client = { session: { create } }
+  fixture.host.sync.set = vi.fn()
+  return { ...fixture, create }
 }
 
 describe.each(WorkMode.ALL)("prompt submission in %s work mode", (workMode) => {
@@ -88,5 +105,85 @@ describe.each(WorkMode.ALL)("prompt submission in %s work mode", (workMode) => {
       expect(new URL(requests[0].url).pathname).toBe("/session/ses_test/command_async")
       expect(body).toMatchObject({ command: workMode, arguments: "Review this change" })
     }
+  })
+})
+
+describe("prompt submission lifecycle", () => {
+  test("does not submit again while navigation to a new session is pending", async () => {
+    vi.useFakeTimers()
+    const { controller, host, create, requests } = setupNewSession()
+
+    await controller.submit()
+    await controller.submit()
+
+    expect(create).toHaveBeenCalledOnce()
+    expect(requests).toHaveLength(1)
+    expect(host.history.append).toHaveBeenCalledOnce()
+    await vi.runAllTimersAsync()
+    expect(host.route.navigate).toHaveBeenCalledOnce()
+  })
+
+  test("keeps the new session pinned until the deferred navigation", async () => {
+    vi.useFakeTimers()
+    const { controller, host, create } = setupNewSession()
+
+    await controller.submit()
+
+    const sessionID = create.mock.calls[0][0].id
+    expect(host.draftSessionID()).toBe(sessionID)
+    await vi.runAllTimersAsync()
+    expect(host.route.navigate).toHaveBeenCalledWith({ type: "session", sessionID })
+    expect(host.draftSessionID()).toBeUndefined()
+  })
+
+  test("shows the session creation stage while the server is pending", async () => {
+    const { controller, host, create } = setupNewSession()
+    let finish!: (result: { data: { id: string } }) => void
+    create.mockImplementation(() => new Promise((resolve) => (finish = resolve)))
+    const pending = controller.submit()
+    try {
+      expect(host.submitPending()).toBe(true)
+      expect(host.setSubmitStage).toHaveBeenCalledWith("creating-session")
+    } finally {
+      controller.cancelPendingSubmit()
+      finish({ data: { id: "ses_cancelled" } })
+      await pending
+    }
+  })
+
+  test("ignores a late session creation failure after the user cancels", async () => {
+    const { controller, host, create } = setupNewSession()
+    let fail!: (error: Error) => void
+    create.mockImplementation(() => new Promise((_resolve, reject) => (fail = reject)))
+    const pending = controller.submit()
+
+    expect(controller.cancelPendingSubmit()).toBe(true)
+    fail(new Error("The cancelled request failed later"))
+    await pending
+
+    expect(host.toast.show).toHaveBeenCalledTimes(1)
+    expect(host.toast.show).toHaveBeenCalledWith(expect.objectContaining({ variant: "info" }))
+    expect(host.history.append).not.toHaveBeenCalled()
+    expect(host.route.navigate).not.toHaveBeenCalled()
+  })
+
+  test("reuses a created session when dispatch fails and the user retries", async () => {
+    vi.useFakeTimers()
+    const { controller, host, create, requests } = setupNewSession()
+    const fetch = host.sdk.fetch
+    host.sdk.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockImplementation(fetch)
+
+    await controller.submit()
+    expect(host.submitPending()).toBe(false)
+    await controller.submit()
+    await vi.runAllTimersAsync()
+
+    expect(create).toHaveBeenCalledOnce()
+    const sessionID = create.mock.calls[0][0].id
+    expect(new URL(requests[0].url).pathname).toBe(`/session/${sessionID}/prompt_async`)
+    expect(host.route.navigate).toHaveBeenCalledWith({ type: "session", sessionID })
   })
 })
