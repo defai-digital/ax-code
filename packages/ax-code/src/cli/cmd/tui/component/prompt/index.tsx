@@ -897,6 +897,7 @@ export function Prompt(props: PromptProps) {
   )
 
   onCleanup(() => {
+    paste.dispose()
     submitController.dispose()
   })
 
@@ -1146,6 +1147,10 @@ export function Prompt(props: PromptProps) {
                   let handledPaste = false
                   try {
                     const content = await Clipboard.read()
+                    if (!paste.canPaste()) {
+                      e.preventDefault()
+                      return
+                    }
                     if (content?.mime.startsWith("image/")) {
                       e.preventDefault()
                       await paste.pasteImage({
@@ -1169,9 +1174,9 @@ export function Prompt(props: PromptProps) {
                     // This handler is async and AX Code TUI invokes it fire-and-forget —
                     // a clipboard failure must not become an unhandled rejection.
                     log.warn("tui.prompt.onKeyDown: clipboard paste failed", { error })
-                    toast.show({ variant: "error", message: "Failed to read clipboard" })
+                    if (paste.canPaste()) toast.show({ variant: "error", message: "Failed to read clipboard" })
                   } finally {
-                    pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste })
+                    pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste && paste.canPaste() })
                   }
                   // If no supported clipboard fallback applies, let the default paste behavior continue.
                 }

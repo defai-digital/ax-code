@@ -8,8 +8,10 @@ import { Clipboard } from "../../util/clipboard"
 import { parsePastedFilePath } from "./prompt-filepath"
 import { windowsClipboardTextPaste } from "./view-model"
 import type { PromptInfo } from "./history"
+import { isRenderableAlive } from "../../util/renderable-safety"
 
 type PromptPasteComposer = {
+  isDestroyed?: boolean
   visualCursor: { offset: number }
   insertText: (text: string) => void
   extmarks: {
@@ -40,7 +42,14 @@ export type PromptPasteHost = {
 }
 
 export function createPromptPaste(host: PromptPasteHost) {
+  let disposed = false
+
+  function canPaste() {
+    return !disposed && isRenderableAlive(host.input) && !host.inputBlocked()
+  }
+
   function pasteText(text: string, virtualText: string) {
+    if (!canPaste()) return
     const currentOffset = host.input.visualCursor.offset
     const extmarkStart = currentOffset
     // extmark offsets are display-width (cell) units, not UTF-16 length —
@@ -80,6 +89,7 @@ export function createPromptPaste(host: PromptPasteHost) {
   }
 
   async function pasteImage(file: { filename?: string; content: string; mime: string }) {
+    if (!canPaste()) return false
     const currentOffset = host.input.visualCursor.offset
     const extmarkStart = currentOffset
     const count = host.store.prompt.parts.filter((x) => x.type === "file" && x.mime.startsWith("image/")).length
@@ -121,22 +131,22 @@ export function createPromptPaste(host: PromptPasteHost) {
       }),
     )
     host.requestInputLayoutRefresh({ autocomplete: false })
-    return
+    return true
   }
 
   async function pasteClipboardImage() {
+    if (!canPaste()) return false
     const content = await Clipboard.read()
     if (!content?.mime.startsWith("image/")) return false
-    await pasteImage({
+    return pasteImage({
       filename: "clipboard",
       mime: content.mime,
       content: content.data,
     })
-    return true
   }
 
   async function handleTerminalPaste(event: PasteEvent) {
-    if (host.inputBlocked()) {
+    if (!canPaste()) {
       event.preventDefault()
       return
     }
@@ -168,12 +178,14 @@ export function createPromptPaste(host: PromptPasteHost) {
             event.preventDefault()
             const content = await Filesystem.readText(filepath).catch((error) => {
               host.log.warn("prompt svg paste read failed", { error, filepath })
+              if (!canPaste()) return undefined
               host.toast.show({
                 message: error instanceof Error ? error.message : "Failed to read pasted SVG",
                 variant: "error",
               })
               return undefined
             })
+            if (!canPaste()) return
             if (content) {
               pasteText(content, `[SVG: ${filename ?? "image"}]`)
               return
@@ -185,12 +197,14 @@ export function createPromptPaste(host: PromptPasteHost) {
               .then((buffer) => Buffer.from(buffer).toString("base64"))
               .catch((error) => {
                 host.log.warn("prompt image paste read failed", { error, filepath, mime })
+                if (!canPaste()) return undefined
                 host.toast.show({
                   message: error instanceof Error ? error.message : "Failed to read pasted image",
                   variant: "error",
                 })
                 return undefined
               })
+            if (!canPaste()) return
             if (content) {
               await pasteImage({
                 filename,
@@ -217,11 +231,12 @@ export function createPromptPaste(host: PromptPasteHost) {
       host.input.insertText(normalizedText)
       host.requestInputLayoutRefresh({ autocomplete: false })
     } finally {
-      host.pasteSubmitGate.finishPasteHandling({ submitDeferred })
+      host.pasteSubmitGate.finishPasteHandling({ submitDeferred: canPaste() ? submitDeferred : false })
     }
   }
 
   async function pasteWindowsClipboardText() {
+    if (!canPaste()) return false
     host.pasteSubmitGate.beginPasteHandling()
     let handledPaste = false
     try {
@@ -229,18 +244,22 @@ export function createPromptPaste(host: PromptPasteHost) {
         content: await Clipboard.read(),
         platform: process.platform,
       })
-      if (!text) return false
+      if (!text || !canPaste()) return false
 
       host.input.insertText(text)
       host.requestInputLayoutRefresh({ autocomplete: false })
       handledPaste = true
       return true
     } finally {
-      host.pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste })
+      host.pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste && canPaste() })
     }
   }
 
   return {
+    canPaste,
+    dispose() {
+      disposed = true
+    },
     pasteText,
     pasteImage,
     pasteClipboardImage,
