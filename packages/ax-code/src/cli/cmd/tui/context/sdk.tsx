@@ -57,6 +57,19 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
       })
     }
 
+    async function fetchWithHeaders(input: RequestInfo | URL, init?: RequestInit) {
+      const requestFetch = props.fetch ?? fetch
+      if (!props.headers) return requestFetch(input, init)
+
+      const request = new Request(input, init)
+      // Direct TUI routes need the same attach authentication as SDK calls.
+      // Keep configured credentials scoped to the connected server's origin.
+      if (new URL(request.url).origin !== new URL(props.url).origin) return requestFetch(request)
+      const headers = new Headers(props.headers)
+      request.headers.forEach((value, name) => headers.set(name, value))
+      return requestFetch(new Request(request, { headers }))
+    }
+
     let sdk = createSDK()
 
     const emitter = createGlobalEmitter<{
@@ -207,7 +220,7 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
         return workspaceID() ?? props.directory
       },
       event: emitter,
-      fetch: props.fetch ?? fetch,
+      fetch: fetchWithHeaders,
       setWorkspace(next?: string) {
         if (workspaceID() === next) return
         setWorkspaceID(next)
