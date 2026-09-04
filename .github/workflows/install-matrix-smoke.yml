@@ -100,8 +100,11 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p "$HOME/.rbenv/shims" "$HOME/.qoder/entry" "$HOME/.cache/ax-code/tools"
           export PATH="$HOME/.rbenv/shims:$HOME/.qoder/entry:$HOME/.cache/ax-code/tools:$PATH"
-          INSTALLER_URL="https://api.github.com/repos/${{ github.repository }}/contents/install?ref=main"
-          curl -fsSL -H "Accept: application/vnd.github.raw+json" "$INSTALLER_URL" \
+          # Pin the installer to the release under test. Fetching `main` can
+          # silently test a newer script, while the unauthenticated Contents
+          # API can return 403 under shared-runner rate limits.
+          INSTALLER_URL="https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install"
+          curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "$INSTALLER_URL" \
             | SHELL=/bin/zsh bash -s -- --version "$VERSION"
           RESOLVED="$(HOME="$HOME" /bin/zsh -lic 'command -v ax-code')"
           EXPECTED="$HOME/.ax-code/bin/ax-code"
@@ -441,8 +444,10 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          INSTALLER_URL="https://api.github.com/repos/${{ github.repository }}/contents/install?ref=main"
-          curl -fsSL -H "Accept: application/vnd.github.raw+json" "$INSTALLER_URL" \
+          # Use the installer committed with the release, not a moving `main`
+          # branch or the rate-limited unauthenticated Contents API.
+          INSTALLER_URL="https://raw.githubusercontent.com/${{ github.repository }}/v${VERSION}/install"
+          curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "$INSTALLER_URL" \
             | SHELL=/bin/bash bash -s -- --version "$VERSION"
           RESOLVED="$(HOME="$HOME" /bin/bash -lic 'command -v ax-code')"
           echo "Resolved ax-code to $RESOLVED"

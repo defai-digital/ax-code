@@ -14,7 +14,9 @@ import {
   normalizeVersion,
   parsePublishGithubReleaseArgs,
   publishPlan,
+  selectWorkflowRunID,
   trackedInternalPrivacyIssue,
+  workflowRunListArgs,
 } from "./publish-github-release"
 
 describe("publish-github-release helpers", () => {
@@ -114,7 +116,45 @@ describe("publish-github-release helpers", () => {
     expect(options.repo).toBe("owner/repo")
     expect(options.assetDir).toBe("/tmp/assets")
     expect(options.existingTag).toBe(true)
-    expect(options.skipWatch).toBe(true)
+    expect(options.skipReleaseWatch).toBe(true)
+  })
+
+  test("accepts a pnpm-forwarded argument separator", () => {
+    const options = parsePublishGithubReleaseArgs(["--", "--version", "v5.10.1"], {}, "/repo", "/home/ax")
+    expect(options.version).toBe("5.10.1")
+    expect(options.tag).toBe("v5.10.1")
+  })
+
+  test("filters release workflow discovery to the exact tag push", () => {
+    expect(
+      workflowRunListArgs("release.yml", "owner/repo", {
+        branch: "v5.10.1",
+        event: "push",
+      }),
+    ).toEqual([
+      "run",
+      "list",
+      "--repo",
+      "owner/repo",
+      "--workflow",
+      "release.yml",
+      "--limit",
+      "100",
+      "--branch",
+      "v5.10.1",
+      "--event",
+      "push",
+      "--json",
+      "databaseId",
+      "--jq",
+      ".[].databaseId",
+    ])
+  })
+
+  test("selects only a workflow run created after dispatch", () => {
+    const previous = new Set(["100", "99"])
+    expect(selectWorkflowRunID(["100", "99"], previous)).toBeUndefined()
+    expect(selectWorkflowRunID(["101", "100", "99"], previous)).toBe("101")
   })
 
   test("describes the publish plan", () => {

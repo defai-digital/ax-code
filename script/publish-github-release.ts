@@ -18,9 +18,16 @@ export type PublishGithubReleaseOptions = {
   existingTag: boolean
   allowDirty: boolean
   allowNonMain: boolean
-  skipWatch: boolean
+  skipReleaseWatch: boolean
   skipInstallSmoke: boolean
   installChannel?: "all" | "macos" | "homebrew" | "windows" | "linux"
+}
+
+export type WorkflowRunQuery = {
+  branch?: string
+  commit?: string
+  event?: string
+  excludeRunIDs?: ReadonlySet<string>
 }
 
 type RunOptions = {
@@ -131,8 +138,12 @@ export function parsePublishGithubReleaseArgs(
   home = os.homedir(),
 ): PublishGithubReleaseOptions & { help: boolean } {
   const packageVersion = readPackageVersion()
+  // pnpm versions differ on whether `pnpm run <script> -- ...` removes the
+  // separator. Accept a literal leading separator so the documented command
+  // works even when pnpm forwards it to this script.
+  const normalizedArgs = args[0] === "--" ? args.slice(1) : args
   const parsed = parseArgs({
-    args,
+    args: normalizedArgs,
     options: {
       version: { type: "string", short: "v", default: packageVersion },
       tag: { type: "string" },
@@ -171,7 +182,7 @@ export function parsePublishGithubReleaseArgs(
     existingTag: Boolean(parsed.values["existing-tag"]),
     allowDirty: Boolean(parsed.values["allow-dirty"]),
     allowNonMain: Boolean(parsed.values["allow-non-main"]),
-    skipWatch: Boolean(parsed.values["skip-watch"]),
+    skipReleaseWatch: Boolean(parsed.values["skip-watch"]),
     skipInstallSmoke: Boolean(parsed.values["skip-install-smoke"]),
     installChannel: channel as PublishGithubReleaseOptions["installChannel"],
     help: Boolean(parsed.values.help),
@@ -291,23 +302,44 @@ function createAndPushTag(options: PublishGithubReleaseOptions) {
   run("git", ["push", "origin", options.tag], { dryRun: options.dryRun })
 }
 
-function latestWorkflowRunID(workflow: string, branch: string | undefined, options: PublishGithubReleaseOptions) {
-  const args = ["run", "list", "--repo", options.repo, "--workflow", workflow, "--limit", "1", "--json", "databaseId"]
-  if (branch) args.push("--branch", branch)
-  args.push("--jq", ".[0].databaseId")
-  return run("gh", args, { capture: true, dryRun: options.dryRun })
+export function workflowRunListArgs(workflow: string, repo: string, query: WorkflowRunQuery = {}) {
+  const args = ["run", "list", "--repo", repo, "--workflow", workflow, "--limit", "100"]
+  if (query.branch) args.push("--branch", query.branch)
+  if (query.commit) args.push("--commit", query.commit)
+  if (query.event) args.push("--event", query.event)
+  args.push("--json", "databaseId", "--jq", ".[].databaseId")
+  return args
+}
+
+export function selectWorkflowRunID(runIDs: readonly string[], excluded: ReadonlySet<string> = new Set()) {
+  return runIDs.find((runID) => runID.length > 0 && !excluded.has(runID))
+}
+
+function workflowRunIDs(workflow: string, query: WorkflowRunQuery, options: PublishGithubReleaseOptions) {
+  const out = run("gh", workflowRunListArgs(workflow, options.repo, query), {
+    capture: true,
+    dryRun: options.dryRun,
+  })
+  if (options.dryRun) return []
+  return out
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
 }
 
 function waitForWorkflowRunID(
   workflow: string,
-  branch: string | undefined,
+  query: WorkflowRunQuery,
   label: string,
   options: PublishGithubReleaseOptions,
 ) {
-  if (options.dryRun) return latestWorkflowRunID(workflow, branch, options) || "<run-id>"
+  if (options.dryRun) {
+    workflowRunIDs(workflow, query, options)
+    return "<run-id>"
+  }
 
   for (let attempt = 1; attempt <= 60; attempt++) {
-    const runID = latestWorkflowRunID(workflow, branch, options)
+    const runID = selectWorkflowRunID(workflowRunIDs(workflow, query, options), query.excludeRunIDs)
     if (runID) return runID
     console.log(`Waiting for ${label} workflow run to appear (${attempt}/60)...`)
     sleep(5_000)
@@ -316,17 +348,8 @@ function waitForWorkflowRunID(
   throw new Error(`Could not find ${label} workflow run after waiting 5 minutes`)
 }
 
-function watchWorkflow(
-  workflow: string,
-  branch: string | undefined,
-  label: string,
-  options: PublishGithubReleaseOptions,
-) {
-  if (options.skipWatch) {
-    console.log(`Skipping ${label} workflow watch`)
-    return
-  }
-  const runID = waitForWorkflowRunID(workflow, branch, label, options)
+function watchWorkflow(workflow: string, query: WorkflowRunQuery, label: string, options: PublishGithubReleaseOptions) {
+  const runID = waitForWorkflowRunID(workflow, query, label, options)
   run("gh", ["run", "watch", runID, "--repo", options.repo, "--exit-status"], { dryRun: options.dryRun })
 }
 
@@ -387,6 +410,11 @@ function dispatchInstallSmoke(options: PublishGithubReleaseOptions) {
     return
   }
   const channel = options.installChannel ?? defaultInstallChannel(options.version)
+  // Workflow dispatch does not return a run ID. Snapshot all existing manual
+  // runs first, then wait for a new ID so an older successful smoke cannot be
+  // mistaken for the dispatch that follows.
+  const query: WorkflowRunQuery = { event: "workflow_dispatch" }
+  const previousRunIDs = new Set(workflowRunIDs("install-matrix-smoke.yml", query, options))
   run(
     "gh",
     [
@@ -402,7 +430,12 @@ function dispatchInstallSmoke(options: PublishGithubReleaseOptions) {
     ],
     { dryRun: options.dryRun },
   )
-  watchWorkflow("install-matrix-smoke.yml", undefined, "install matrix smoke", options)
+  watchWorkflow(
+    "install-matrix-smoke.yml",
+    { ...query, excludeRunIDs: previousRunIDs },
+    "install matrix smoke",
+    options,
+  )
 }
 
 export function publishPlan(options: PublishGithubReleaseOptions) {
@@ -410,7 +443,7 @@ export function publishPlan(options: PublishGithubReleaseOptions) {
   return [
     `publish ${options.tag} to ${options.repo}`,
     options.existingTag ? "continue from existing tag" : "create and push annotated release tag",
-    options.skipWatch ? "skip release workflow watch" : "watch release.yml",
+    options.skipReleaseWatch ? "skip release workflow watch" : "watch release.yml",
     `independently verify release signatures with ${AX_CODE_MINISIGN_PUBLIC_KEY_FILE}`,
     options.skipInstallSmoke ? "skip install matrix smoke" : `dispatch install-matrix-smoke.yml channel=${channel}`,
   ]
@@ -431,9 +464,14 @@ async function main() {
   ensurePreflight(options)
   tagExists(options.tag, options)
   createAndPushTag(options)
-  // release.yml is triggered by tag pushes, not branches. Passing the tag name
-  // as --branch would filter out the run and the watch would time out.
-  watchWorkflow("release.yml", undefined, "release", options)
+  if (options.skipReleaseWatch) {
+    console.log("Skipping release workflow watch")
+  } else {
+    // A tag push is exposed as headBranch=<tag> by GitHub Actions. Filtering by
+    // both the tag and push event prevents the previous release run from being
+    // selected while the new run is still being created.
+    watchWorkflow("release.yml", { branch: options.tag, event: "push" }, "release", options)
+  }
 
   const assetDir = releaseAssetDir(options)
   console.log(`Using release asset directory: ${assetDir}`)

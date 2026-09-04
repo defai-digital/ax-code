@@ -491,12 +491,27 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           TAG="$AX_CODE_RELEASE_TAG"
-          shopt -s nullglob
-          files=(docs/release/ax-minisign.pub packages/ax-code/dist/install.ps1 packages/ax-code/dist/install.ps1.minisig packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.tar.gz.minisig packages/ax-code/dist/*.zip packages/ax-code/dist/*.zip.minisig)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "::error::no release assets found to upload"
-            exit 1
-          fi
+          files=(
+            docs/release/ax-minisign.pub
+            packages/ax-code/dist/install.ps1
+            packages/ax-code/dist/install.ps1.minisig
+            packages/ax-code/dist/ax-code-darwin-arm64.zip
+            packages/ax-code/dist/ax-code-darwin-arm64.zip.minisig
+            packages/ax-code/dist/ax-code-windows-x64.zip
+            packages/ax-code/dist/ax-code-windows-x64.zip.minisig
+            packages/ax-code/dist/ax-code-windows-arm64.zip
+            packages/ax-code/dist/ax-code-windows-arm64.zip.minisig
+            packages/ax-code/dist/ax-code-linux-x64.tar.gz
+            packages/ax-code/dist/ax-code-linux-x64.tar.gz.minisig
+            packages/ax-code/dist/ax-code-linux-arm64.tar.gz
+            packages/ax-code/dist/ax-code-linux-arm64.tar.gz.minisig
+          )
+          for file in "${files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::required release asset is missing: $file"
+              exit 1
+            fi
+          done
           node script/github-release-assets.mjs upload --repo "$REPOSITORY" --tag "$TAG" "${files[@]}"
 
       - name: Verify uploaded release signatures
@@ -511,16 +526,20 @@ jobs:
           node script/github-release-assets.mjs download --repo "$REPOSITORY" --tag "$TAG" --dir "$VERIFY_DIR"
           cmp docs/release/ax-minisign.pub "$VERIFY_DIR/ax-minisign.pub"
 
-          verified=0
-          shopt -s nullglob
-          assets=("$VERIFY_DIR/install.ps1" "$VERIFY_DIR"/*.tar.gz "$VERIFY_DIR"/*.zip)
+          assets=(
+            "$VERIFY_DIR/install.ps1"
+            "$VERIFY_DIR/ax-code-darwin-arm64.zip"
+            "$VERIFY_DIR/ax-code-windows-x64.zip"
+            "$VERIFY_DIR/ax-code-windows-arm64.zip"
+            "$VERIFY_DIR/ax-code-linux-x64.tar.gz"
+            "$VERIFY_DIR/ax-code-linux-arm64.tar.gz"
+          )
           for asset in "${assets[@]}"; do
             signature="${asset}.minisig"
+            test -f "$asset"
             test -f "$signature"
             minisign -V -p docs/release/ax-minisign.pub -m "$asset" -x "$signature"
-            verified=$((verified + 1))
           done
-          test "$verified" -gt 0
 
       - name: Publish verified release
         env:
