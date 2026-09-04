@@ -14,21 +14,31 @@ type DialogHost = {
 
 export type TuiDialogLoaders = ReturnType<typeof createTuiDialogLoaders>
 
-async function replaceLazyDialog(input: {
+const pendingDialogLoads = new WeakMap<DialogHost, symbol>()
+
+export async function replaceLazyDialog(input: {
   dialog: DialogHost
   toast: Toast
-  load: () => Promise<() => JSX.Element>
+  load: () => Promise<(() => JSX.Element) | undefined>
   warn: string
   fail: string
 }) {
-  const marker = input.dialog.stack.at(-1)
+  // Every host transition replaces the stack array, including empty -> open
+  // -> empty. A top-item marker cannot distinguish those transitions.
+  const marker = input.dialog.stack
+  const request = Symbol()
+  pendingDialogLoads.set(input.dialog, request)
+  const current = () => pendingDialogLoads.get(input.dialog) === request && input.dialog.stack === marker
   try {
     const view = await input.load()
-    if (input.dialog.stack.at(-1) !== marker) return
+    if (!view || !current()) return
     input.dialog.replace(view)
   } catch (error) {
     Log.Default.warn(input.warn, { error })
+    if (!current()) return
     input.toast.show({ message: input.fail, variant: "error" })
+  } finally {
+    if (pendingDialogLoads.get(input.dialog) === request) pendingDialogLoads.delete(input.dialog)
   }
 }
 
@@ -71,26 +81,25 @@ export function createTuiDialogLoaders(input: {
           return () => <ModelDialog />
         },
       }),
-    async showEffortDialog() {
-      const marker = input.dialog.stack.at(-1)
-      try {
-        if (input.variantCount() === 0) {
-          const model = input.currentModelName()
-          await DialogAlert.show(
-            input.dialog,
-            "Effort",
-            `${model ?? "This model"} does not expose effort levels.\n\nEffort is available on Anthropic Claude, OpenAI GPT/Codex CLI, Grok Build CLI, Google Gemini, Claude Code, and OpenAI-compatible providers. Other providers can define custom levels under provider.<id>.models.<model>.variants in ax-code.json.`,
-          )
-          return
-        }
-        const { DialogEffort: EffortDialog } = await import("@tui/component/dialog-effort")
-        if (input.dialog.stack.at(-1) !== marker) return
-        input.dialog.replace(() => <EffortDialog />)
-      } catch (error) {
-        Log.Default.warn("failed to load effort dialog", { error })
-        input.toast.show({ message: "Failed to open effort dialog", variant: "error" })
-      }
-    },
+    showEffortDialog: () =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load effort dialog",
+        fail: "Failed to open effort dialog",
+        load: async () => {
+          if (input.variantCount() === 0) {
+            const model = input.currentModelName()
+            await DialogAlert.show(
+              input.dialog,
+              "Effort",
+              `${model ?? "This model"} does not expose effort levels.\n\nEffort is available on Anthropic Claude, OpenAI GPT/Codex CLI, Grok Build CLI, Google Gemini, Claude Code, and OpenAI-compatible providers. Other providers can define custom levels under provider.<id>.models.<model>.variants in ax-code.json.`,
+            )
+            return
+          }
+          const { DialogEffort: EffortDialog } = await import("@tui/component/dialog-effort")
+          return () => <EffortDialog />
+        },
+      }),
     showSessionListDialog: () =>
       replaceLazyDialog({
         ...host,

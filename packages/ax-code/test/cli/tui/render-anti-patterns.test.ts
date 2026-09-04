@@ -721,8 +721,9 @@ describe("AX Code TUI stability guardrails", () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
     expect(app).toContain("createTuiDialogLoaders")
-    expect(dialogs).toContain("const marker = input.dialog.stack.at(-1)")
-    expect(dialogs).toContain("if (input.dialog.stack.at(-1) !== marker) return")
+    expect(dialogs).toContain("const marker = input.dialog.stack")
+    expect(dialogs).toContain("pendingDialogLoads.get(input.dialog) === request && input.dialog.stack === marker")
+    expect(dialogs).toContain("if (!view || !current()) return")
     expect(dialogs).toContain('fail: "Failed to open provider dialog"')
     expect(dialogs).toContain('fail: "Failed to open model dialog"')
     expect(dialogs).toContain('fail: "Failed to open session list"')
