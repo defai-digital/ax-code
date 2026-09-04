@@ -318,6 +318,19 @@ describe("headless SDK types", () => {
     })
 
     expect(state.part["msg-1"]?.[0]?.text).toBe("hello world")
+
+    // An equal snapshot acknowledges the delta high-water mark. A later
+    // authoritative prefix rollback must then apply instead of being treated
+    // as the earlier stale snapshot forever.
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "hello world" } },
+    })
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "hello" } },
+    })
+    expect(state.part["msg-1"]?.[0]?.text).toBe("hello")
   })
 
   test("a shorter snapshot that is not a prefix applies (legitimate rewrite)", () => {
@@ -340,6 +353,67 @@ describe("headless SDK types", () => {
     })
 
     expect(state.part["msg-1"]?.[0]?.text).toBe("rewritten")
+  })
+
+  test("a terminal snapshot may trim pending streamed text", () => {
+    const state = createHeadlessProjectionState<
+      { id: string },
+      unknown,
+      unknown,
+      unknown,
+      { id: string; sessionID: string },
+      { id: string; messageID: string; type: string; text: string; time?: { start: number; end?: number } }
+    >()
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "hello" } },
+    })
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.delta",
+      properties: {
+        sessionID: "sess-1",
+        messageID: "msg-1",
+        partID: "part-1",
+        field: "text",
+        delta: "   ",
+      },
+    } as any)
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "part-1",
+          messageID: "msg-1",
+          type: "text",
+          text: "hello",
+          time: { start: 1, end: 2 },
+        },
+      },
+    })
+
+    expect(state.part["msg-1"]?.[0]?.text).toBe("hello")
+    expect(state.part["msg-1"]?.[0]?.time?.end).toBe(2)
+  })
+
+  test("a prefix rollback applies when no newer delta is pending", () => {
+    const state = createHeadlessProjectionState<
+      { id: string },
+      unknown,
+      unknown,
+      unknown,
+      { id: string; sessionID: string },
+      { id: string; messageID: string; type: string; text: string }
+    >()
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "hello world" } },
+    })
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "hello" } },
+    })
+
+    expect(state.part["msg-1"]?.[0]?.text).toBe("hello")
   })
 
   test("session.deleted removes task queue items scoped to the deleted session", () => {

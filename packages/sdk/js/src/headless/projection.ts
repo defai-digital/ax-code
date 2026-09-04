@@ -7,6 +7,7 @@ import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStat
 const INTERACTIVE_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["isolation_escalation", "bash_destructive"])
 const NEVER_AUTONOMOUS_AUTOAPPROVE_PERMISSIONS: ReadonlySet<string> = new Set(["computer"])
 const DEFAULT_MAX_SESSION_MESSAGES = 100
+const pendingPartDeltaText = new WeakMap<object, Map<string, Map<string, string>>>()
 
 export interface HeadlessProjectionState<
   TSession extends { id: string },
@@ -202,13 +203,13 @@ export function applyHeadlessProjectionEvent<
       return { handled: true, effects }
 
     case "message.part.updated":
-      upsertPart(state.part, event.properties.part)
+      upsertPart(state, event.properties.part)
       return { handled: true, effects }
 
     case "message.part.delta":
       if (event.properties.field === "text") {
         appendPartTextDelta(
-          state.part,
+          state,
           event.properties.messageID,
           event.properties.partID,
           event.properties.delta,
@@ -218,7 +219,7 @@ export function applyHeadlessProjectionEvent<
       return { handled: true, effects }
 
     case "message.part.removed":
-      removePart(state.part, event.properties.messageID, event.properties.partID)
+      removePart(state, event.properties.messageID, event.properties.partID)
       return { handled: true, effects }
 
     case "vcs.branch.updated":
@@ -342,23 +343,6 @@ function upsertByID<T extends { id: string }>(list: T[], item: T) {
 
 function mergeSnapshotInPlace<T extends { id: string }>(existing: T, incoming: T) {
   for (const key of Object.keys(incoming) as Array<keyof T>) {
-    // Part snapshots and deltas are delivered on independently coalesced
-    // channels. A stale snapshot must not rewind text already applied from a
-    // newer offset delta. On an append-only delta stream a stale snapshot is a
-    // prefix of the already-extended text, so only skip prefix truncations;
-    // legitimate rewrites/rollbacks change content and still apply.
-    if (key === "text") {
-      const previous = (existing as { text?: unknown }).text
-      const next = (incoming as { text?: unknown }).text
-      if (
-        typeof previous === "string" &&
-        typeof next === "string" &&
-        next.length < previous.length &&
-        previous.startsWith(next)
-      ) {
-        continue
-      }
-    }
     existing[key] = incoming[key]
   }
 }
@@ -384,6 +368,7 @@ function deleteSessionState<
   })
   for (const message of state.message[sessionID] ?? []) {
     delete state.part[message.id]
+    clearPendingMessageDeltaText(state, message.id)
   }
   delete state.permission[sessionID]
   delete state.question[sessionID]
@@ -414,6 +399,7 @@ function upsertMessage<
   upsertByID(list, message)
   for (const removed of shiftOverflow(list, maxSessionMessages)) {
     delete state.part[removed.id]
+    clearPendingMessageDeltaText(state, removed.id)
   }
   state.message[message.sessionID] = list
 }
@@ -434,41 +420,141 @@ function removeMessage<
 ) {
   removeByID(state.message[sessionID] ?? [], messageID)
   delete state.part[messageID]
+  clearPendingMessageDeltaText(state, messageID)
 }
 
-function upsertPart<TPart extends { id: string; messageID: string }>(parts: Record<string, TPart[]>, part: TPart) {
-  const list = parts[part.messageID] ?? []
-  upsertByID(list, part)
-  parts[part.messageID] = list
+function upsertPart<
+  TSession extends { id: string },
+  TTodo,
+  TDiff,
+  TStatus,
+  TMessage extends { id: string; sessionID: string },
+  TPart extends { id: string; messageID: string },
+  TRisk,
+  TGoal,
+>(state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>, part: TPart) {
+  const list = state.part[part.messageID] ?? []
+  const result = binarySearch(list, part.id, (entry) => entry.id)
+  if (result.found) mergePartSnapshotInPlace(state, list[result.index], part)
+  else list.splice(result.index, 0, part)
+  state.part[part.messageID] = list
 }
 
-function appendPartTextDelta<TPart extends { id: string; messageID: string }>(
-  parts: Record<string, TPart[]>,
+function appendPartTextDelta<
+  TSession extends { id: string },
+  TTodo,
+  TDiff,
+  TStatus,
+  TMessage extends { id: string; sessionID: string },
+  TPart extends { id: string; messageID: string },
+  TRisk,
+  TGoal,
+>(
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
   messageID: string,
   partID: string,
   delta: string,
   offset?: number,
 ) {
-  const list = parts[messageID] ?? []
+  const list = state.part[messageID] ?? []
   const result = binarySearch(list, partID, (entry) => entry.id)
   if (!result.found) return
   const part = list[result.index] as TPart & { type?: string; text?: string }
   if (part.type !== "text" && part.type !== "reasoning") return
   const current = part.text ?? ""
+  let next: string
   if (typeof offset === "number") {
     if (offset > current.length) return
-    part.text = current + delta.slice(current.length - offset)
-    return
+    next = current + delta.slice(current.length - offset)
+  } else {
+    next = current + delta
   }
-  part.text = current + delta
+  if (next === current) return
+  part.text = next
+  setPendingPartDeltaText(state, messageID, partID, next)
 }
 
-function removePart<TPart extends { id: string; messageID: string }>(
-  parts: Record<string, TPart[]>,
+function removePart<
+  TSession extends { id: string },
+  TTodo,
+  TDiff,
+  TStatus,
+  TMessage extends { id: string; sessionID: string },
+  TPart extends { id: string; messageID: string },
+  TRisk,
+  TGoal,
+>(
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
   messageID: string,
   partID: string,
 ) {
-  removeByID(parts[messageID] ?? [], partID)
+  removeByID(state.part[messageID] ?? [], partID)
+  clearPendingPartDeltaText(state, messageID, partID)
+}
+
+function mergePartSnapshotInPlace<TPart extends { id: string; messageID: string }>(
+  state: object,
+  existing: TPart,
+  incoming: TPart,
+) {
+  const previous = (existing as { text?: unknown }).text
+  const next = (incoming as { text?: unknown }).text
+  const pending = getPendingPartDeltaText(state, incoming.messageID, incoming.id)
+  const terminal = typeof (incoming as { time?: { end?: unknown } }).time?.end === "number"
+  // Only protect text actually extended by a delta and not yet acknowledged
+  // by an equal/newer snapshot. Otherwise a legitimate prefix rollback would
+  // be indistinguishable from a stale coalesced snapshot and ignored forever.
+  // A terminal snapshot is authoritative and may legitimately trim trailing
+  // whitespace from the accumulated stream.
+  const preservePendingDelta =
+    !terminal &&
+    typeof pending === "string" &&
+    previous === pending &&
+    typeof next === "string" &&
+    next.length < pending.length &&
+    pending.startsWith(next)
+
+  for (const key of Object.keys(incoming) as Array<keyof TPart>) {
+    if (key === "text" && preservePendingDelta) continue
+    existing[key] = incoming[key]
+  }
+  if (Object.prototype.hasOwnProperty.call(incoming, "text") && !preservePendingDelta) {
+    clearPendingPartDeltaText(state, incoming.messageID, incoming.id)
+  }
+}
+
+function getPendingPartDeltaText(state: object, messageID: string, partID: string) {
+  return pendingPartDeltaText.get(state)?.get(messageID)?.get(partID)
+}
+
+function setPendingPartDeltaText(state: object, messageID: string, partID: string, text: string) {
+  let messages = pendingPartDeltaText.get(state)
+  if (!messages) {
+    messages = new Map()
+    pendingPartDeltaText.set(state, messages)
+  }
+  let parts = messages.get(messageID)
+  if (!parts) {
+    parts = new Map()
+    messages.set(messageID, parts)
+  }
+  parts.set(partID, text)
+}
+
+function clearPendingPartDeltaText(state: object, messageID: string, partID: string) {
+  const messages = pendingPartDeltaText.get(state)
+  const parts = messages?.get(messageID)
+  if (!messages || !parts) return
+  parts.delete(partID)
+  if (parts.size === 0) messages.delete(messageID)
+  if (messages.size === 0) pendingPartDeltaText.delete(state)
+}
+
+function clearPendingMessageDeltaText(state: object, messageID: string) {
+  const messages = pendingPartDeltaText.get(state)
+  if (!messages) return
+  messages.delete(messageID)
+  if (messages.size === 0) pendingPartDeltaText.delete(state)
 }
 
 function removeByID<T extends { id: string }>(list: T[], id: string) {

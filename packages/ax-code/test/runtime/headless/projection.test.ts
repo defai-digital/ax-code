@@ -10,7 +10,13 @@ type Todo = { id: string }
 type Diff = { path: string }
 type Status = { type: "idle" | "busy" }
 type Message = { id: string; sessionID: string }
-type Part = { id: string; messageID: string; type?: string; text?: string }
+type Part = {
+  id: string
+  messageID: string
+  type?: string
+  text?: string
+  time?: { start: number; end?: number }
+}
 type TaskQueueItem = { id: string; sessionID?: string; status: "queued" | "running" | "completed" }
 
 describe("headless projection", () => {
@@ -453,7 +459,7 @@ describe("headless projection", () => {
     expect(state.session_error.ses_1).toBeUndefined()
   })
 
-  test("part and message snapshots merge in place (stable identity) and stale text never rewinds", () => {
+  test("part and message snapshots merge in place and only causally stale text is preserved", () => {
     const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
 
     applyHeadlessProjectionEvent(state, {
@@ -471,21 +477,20 @@ describe("headless projection", () => {
     expect(state.part["msg_1"]?.[0]).toBe(originalPart)
     expect(originalPart?.text).toBe("hello world")
 
+    // A snapshot from before the delta must not rewind accumulated text.
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hel" } },
+    })
+    expect(state.part["msg_1"]?.[0]).toBe(originalPart)
+    expect(originalPart?.text).toBe("hello world")
+
     // A fresh snapshot merges onto the same object instead of replacing it —
     // replacing would swap the Solid store proxy identity and remount the
     // whole message row in the TUI on every part-snapshot window.
     applyHeadlessProjectionEvent(state, {
       type: "message.part.updated",
       properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hello world!" } },
-    })
-    expect(state.part["msg_1"]?.[0]).toBe(originalPart)
-    expect(originalPart?.text).toBe("hello world!")
-
-    // A stale snapshot (shorter than the already-applied deltas) must not
-    // rewind accumulated text.
-    applyHeadlessProjectionEvent(state, {
-      type: "message.part.updated",
-      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hel" } },
     })
     expect(originalPart?.text).toBe("hello world!")
 
@@ -500,6 +505,49 @@ describe("headless projection", () => {
       properties: { info: { id: "msg_1", sessionID: "ses_1" } },
     })
     expect(state.message["ses_1"]?.[0]).toBe(originalMessage)
+  })
+
+  test("an authoritative prefix rollback applies when no newer delta is pending", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hello world" } },
+    })
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hello" } },
+    })
+
+    expect(state.part["msg_1"]?.[0]?.text).toBe("hello")
+  })
+
+  test("a terminal snapshot may trim pending streamed text", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "prt_1", messageID: "msg_1", type: "text", text: "hello" } },
+    })
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.delta",
+      properties: { sessionID: "ses_1", messageID: "msg_1", partID: "prt_1", field: "text", delta: "   " },
+    })
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: {
+        part: {
+          id: "prt_1",
+          messageID: "msg_1",
+          type: "text",
+          text: "hello",
+          time: { start: 1, end: 2 },
+        },
+      },
+    })
+
+    expect(state.part["msg_1"]?.[0]?.text).toBe("hello")
+    expect(state.part["msg_1"]?.[0]?.time?.end).toBe(2)
   })
 
   test("a delta already contained in an applied snapshot does not duplicate text", () => {

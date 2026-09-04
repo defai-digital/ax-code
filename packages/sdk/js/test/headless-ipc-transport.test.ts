@@ -264,7 +264,101 @@ describe("ipc transport client", () => {
       expect(r1.value).toEqual({ type: "server.connected" })
       expect(r2.done).toBe(false)
       expect(r2.value).toEqual({ type: "server.connected" })
+
+      // Both generators are paused at their previous yield here. An event
+      // arriving now must be buffered independently for both subscribers,
+      // rather than placed into one shared queue that the first .next() steals.
+      for (const socket of sockets) {
+        await writeIpcMessage(socket, {
+          type: "event",
+          event: { type: "session.created", properties: { info: { id: "sess-buffered" } } },
+        })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      const buffered1 = sub1.next()
+      const buffered2 = sub2.next()
+      // Unblock an incorrect shared-queue implementation promptly instead of
+      // waiting for the test timeout.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      for (const socket of sockets) {
+        await writeIpcMessage(socket, { type: "event", event: { type: "server.heartbeat" } })
+      }
+
+      const [b1, b2] = await Promise.all([buffered1, buffered2])
+      const expected = { type: "session.created", properties: { info: { id: "sess-buffered" } } }
+      expect(b1.value).toEqual(expected)
+      expect(b2.value).toEqual(expected)
     } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("drains buffered events before ending after a remote disconnect", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
+
+      const subscription = transport.subscribe()[Symbol.asyncIterator]()
+      const firstPromise = subscription.next()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      for (const socket of sockets) {
+        await writeIpcMessage(socket, { type: "event", event: { type: "server.connected" } })
+      }
+      expect((await firstPromise).value).toEqual({ type: "server.connected" })
+
+      const tail = [
+        { type: "session.created", properties: { info: { id: "sess-tail" } } },
+        { type: "server.heartbeat" },
+      ]
+      for (const socket of [...sockets]) {
+        for (const event of tail) await writeIpcMessage(socket, { type: "event", event })
+        socket.end()
+      }
+
+      expect((await subscription.next()).value).toEqual(tail[0])
+      expect((await subscription.next()).value).toEqual(tail[1])
+      expect((await subscription.next()).done).toBe(true)
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("requests resynchronization when a subscriber queue overflows", async () => {
+    const transport = createIpcTransport({ socketPath })
+    const controller = new AbortController()
+    try {
+      await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
+
+      const subscription = transport.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
+      const firstPromise = subscription.next()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      for (const socket of sockets) {
+        await writeIpcMessage(socket, { type: "event", event: { type: "server.connected" } })
+      }
+      await firstPromise
+
+      for (const socket of sockets) {
+        for (let index = 0; index <= 1000; index += 1) {
+          await writeIpcMessage(socket, {
+            type: "event",
+            event: { type: "session.created", properties: { info: { id: `sess-${index}` } } },
+          })
+        }
+      }
+      // A response written after the event burst proves the reader has handled
+      // every preceding event frame before the assertion below.
+      await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
+
+      expect(await subscription.next()).toEqual({
+        done: false,
+        value: {
+          type: "server.resync_required",
+          properties: { reason: "buffer_overflow", cursor: "ipc:buffer_overflow" },
+        },
+      })
+    } finally {
+      controller.abort()
       await transport.close?.()
     }
   })
