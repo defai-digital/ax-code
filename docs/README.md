@@ -29,6 +29,7 @@ pages are the ones linked here.
 | Connect a hosted, CLI, custom, or local provider         | [Supported Providers and Models](providers/supported-providers.md)      |
 | Try AX Code with a free-tier model API                   | [Free-Tier API Quickstart](providers/free-tier-apis.md)                 |
 | Run an agent with safe filesystem and network boundaries | [Sandbox Mode](guides/sandbox.md)                                       |
+| Administer cloud or network infrastructure safely        | [Cloud Operations Mode](guides/cloud-operations.md)                     |
 | Run unattended or in CI                                  | [Autonomous Mode](guides/autonomous.md)                                 |
 | Run recurring prompts or schedule durable tasks          | [Loop Mode and Scheduled Tasks](guides/loop-mode.md)                    |
 | Keep scheduled work running across process or host exits | [Long-Running Operations](guides/long-running-operations.md)            |
@@ -52,6 +53,7 @@ pages are the ones linked here.
   audit export.
 - [Verified Multi-Model Changes](guides/verified-multi-model-change.md) — the council and arena workflow end to end.
 - [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
+- [Cloud Operations Mode](guides/cloud-operations.md) — plan/approve/apply workflow, approval tokens, and the `cloudops` agent posture.
 - [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, headless use, and safeguards.
 - [Loop Mode and Scheduled Tasks](guides/loop-mode.md) — recurring prompts, durable schedules, and long-run limits.
 - [Long-Running Operations](guides/long-running-operations.md) — supervised service examples, recovery semantics, and

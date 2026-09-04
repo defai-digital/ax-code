@@ -334,10 +334,75 @@ test("native primary specialists default to unbounded steps", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      for (const name of ["build", "react", "security", "architect", "debug", "perf", "devops", "test"] as const) {
+      for (const name of [
+        "build",
+        "react",
+        "security",
+        "architect",
+        "debug",
+        "perf",
+        "devops",
+        "cloudops",
+        "test",
+      ] as const) {
         const agent = await Agent.get(name)
         expect(agent?.steps, name).toBeUndefined()
       }
+    },
+  })
+})
+
+test("cloudops agent has the cloud operations permission posture and prompt", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const cloudops = await Agent.get("cloudops")
+      expect(cloudops).toBeDefined()
+      expect(cloudops?.mode).toBe("primary")
+      expect(cloudops?.native).toBe(true)
+      expect(cloudops?.tier).toBe("specialist")
+      // Read-only-safe ops tools are allowed without asking.
+      expect(evalPerm(cloudops, "ops_plan")).toBe("allow")
+      expect(evalPerm(cloudops, "ops_diff")).toBe("allow")
+      expect(evalPerm(cloudops, "ops_verify")).toBe("allow")
+      expect(evalPerm(cloudops, "ops_journal")).toBe("allow")
+      // bash asks; ops_approve/ops_apply stay on their interactive paths
+      // (INTERACTIVE_ONLY ask and the plan-bound token gate respectively).
+      expect(evalPerm(cloudops, "bash")).toBe("ask")
+      // Nothing the base set allows is denied.
+      expect(evalPerm(cloudops, "read")).toBe("allow")
+      expect(evalPerm(cloudops, "edit")).toBe("allow")
+      expect(evalPerm(cloudops, "webfetch")).toBe("allow")
+      // The prompt drives the full ops workflow.
+      expect(cloudops?.prompt).toContain("ops_plan")
+      expect(cloudops?.prompt).toContain("ops_diff")
+      expect(cloudops?.prompt).toContain("ops_approve")
+      expect(cloudops?.prompt).toContain("ops_apply")
+      expect(cloudops?.prompt).toContain("ops_verify")
+      expect(cloudops?.prompt).toContain("ops_journal")
+      expect(cloudops?.prompt).toContain("commit-confirm")
+    },
+  })
+})
+
+test("cloudops project permission config still tightens over agent defaults", async () => {
+  await using tmp = await tmpdir({
+    config: {
+      permission: {
+        bash: "deny",
+      },
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const cloudops = await Agent.get("cloudops")
+      // Project-level deny rules survive the untrusted-config restriction
+      // (denyOnlyPermission) and merge after the agent default, so they
+      // still tighten the posture. Loosening to "allow" must come from a
+      // trusted source (global/managed config), not the repository.
+      expect(evalPerm(cloudops, "bash")).toBe("deny")
     },
   })
 })
@@ -819,6 +884,7 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
         debug: { disable: true },
         perf: { disable: true },
         devops: { disable: true },
+        cloudops: { disable: true },
         test: { disable: true },
       },
     },
@@ -854,7 +920,7 @@ test("native agents have correct tier assignments", async () => {
         expect(Agent.resolveTier(agent!)).toBe("core")
       }
 
-      const specialist = ["security", "architect", "debug", "perf", "devops", "test"]
+      const specialist = ["security", "architect", "debug", "perf", "devops", "cloudops", "test"]
       for (const name of specialist) {
         const agent = await Agent.get(name)
         expect(Agent.resolveTier(agent!)).toBe("specialist")

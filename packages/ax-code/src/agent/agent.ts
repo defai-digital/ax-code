@@ -17,6 +17,7 @@ import PROMPT_SECURITY from "./prompt/security.txt"
 import PROMPT_ARCHITECT from "./prompt/architect.txt"
 import PROMPT_DEBUG from "./prompt/debug.txt"
 import PROMPT_DEVOPS from "./prompt/devops.txt"
+import PROMPT_CLOUDOPS from "./prompt/cloudops.txt"
 import PROMPT_PERF from "./prompt/perf.txt"
 import PROMPT_TEST from "./prompt/test.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
@@ -149,6 +150,7 @@ export namespace Agent {
       "debug",
       "perf",
       "devops",
+      "cloudops",
       "test",
       "compaction",
       "title",
@@ -328,6 +330,35 @@ export namespace Agent {
           "DevOps Engineer agent. Handles Docker, CI/CD, deployment, infrastructure config, and operational concerns. Can create and modify Dockerfiles, pipeline configs, K8s manifests, and deployment scripts.",
         prompt: PROMPT_DEVOPS,
         permission: Permission.merge(defaults, policy("devops"), allowQuestion, user),
+        options: {},
+        mode: "primary",
+        native: true,
+      },
+      cloudops: {
+        name: "cloudops",
+        displayName: "Cloud Ops",
+        tier: "specialist",
+        description:
+          "Cloud Operations agent for high-blast-radius infrastructure administration (cloud providers and network devices). Read-only first: every external mutation flows through the ops plan/approve/apply workflow with hash-pinned, single-use approval tokens. Shell commands ask before running.",
+        prompt: PROMPT_CLOUDOPS,
+        // PRD-2026-09-04-cloud-operations-mode (sequencing item 5): the
+        // cloud-ops mode posture. ops_plan/ops_diff/ops_verify/ops_journal
+        // are read-only-safe and allowed; bash asks; ops_approve is
+        // INTERACTIVE_ONLY (always asks) and ops_apply stays on its
+        // plan-bound token gate inside the tool, so neither gets a rule.
+        permission: Permission.merge(
+          defaults,
+          policy("cloudops"),
+          Permission.fromConfig({
+            bash: "ask",
+            ops_plan: "allow",
+            ops_diff: "allow",
+            ops_verify: "allow",
+            ops_journal: "allow",
+          }),
+          allowQuestion,
+          user,
+        ),
         options: {},
         mode: "primary",
         native: true,
