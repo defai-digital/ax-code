@@ -15,6 +15,7 @@ import { createRequire } from "node:module"
 import fs from "fs/promises"
 import path from "path"
 import { NamedError } from "@ax-code/util/error"
+import { withTimeout } from "@/util/timeout"
 
 export namespace Pty {
   const log = Log.create({ service: "pty" })
@@ -23,6 +24,7 @@ export namespace Pty {
   const BUFFER_CHUNK = 64 * 1024
   const TERM_VALUE = "xterm-256color"
   const AX_CODE_TERMINAL_VALUE = "1"
+  const EXIT_EVENT_TIMEOUT_MS = 2_000
   const FORBIDDEN_USER_ENV_KEYS = new Set([
     "LD_PRELOAD",
     "DYLD_INSERT_LIBRARIES",
@@ -57,6 +59,9 @@ export namespace Pty {
     cursor: number
     subscribers: Map<unknown, Socket>
     dispose: Array<{ dispose: () => void }>
+    exited: Promise<void>
+    resolveExited: () => void
+    removing?: Promise<void>
   }
 
   type ReplayMeta = {
@@ -275,7 +280,10 @@ export namespace Pty {
   export const Event = {
     Created: BusEvent.define("pty.created", z.object({ info: Info })),
     Updated: BusEvent.define("pty.updated", z.object({ info: Info })),
-    Exited: BusEvent.define("pty.exited", z.object({ id: PtyID.zod, exitCode: z.number() })),
+    Exited: BusEvent.define(
+      "pty.exited",
+      z.object({ id: PtyID.zod, exitCode: z.number(), signal: z.number().optional() }),
+    ),
     Deleted: BusEvent.define("pty.deleted", z.object({ id: PtyID.zod })),
   }
 
@@ -288,11 +296,6 @@ export namespace Pty {
       }
     }
     session.dispose = []
-    try {
-      session.process.kill()
-    } catch (error) {
-      log.warn("pty process kill failed during teardown", { error })
-    }
     for (const ws of session.subscribers.values()) {
       try {
         ws.close()
@@ -303,6 +306,37 @@ export namespace Pty {
     session.subscribers.clear()
   }
 
+  async function killProcessTree(session: Active) {
+    await Shell.killTree({
+      pid: session.process.pid,
+      kill: (signal) => session.process.kill(typeof signal === "string" ? signal : undefined),
+    })
+  }
+
+  function hasExited(session: Active) {
+    return session.info.status === "exited"
+  }
+
+  async function terminate(session: Active) {
+    if (hasExited(session)) return
+    await killProcessTree(session)
+    if (hasExited(session)) return
+    await withTimeout(
+      session.exited,
+      EXIT_EVENT_TIMEOUT_MS,
+      `PTY ${session.info.id} did not report exit after process-tree termination`,
+    ).catch((error) => {
+      // SIGKILL cannot be ignored, so a missing native exit callback after the
+      // bounded wait is an observer failure rather than a live process. Use a
+      // non-success sentinel and finish cleanup without hanging the server.
+      log.warn("pty exit event missing after termination", { id: session.info.id, error })
+      if (hasExited(session)) return
+      session.info.status = "exited"
+      Bus.publishDetached(Event.Exited, { id: session.info.id, exitCode: -1 })
+      session.resolveExited()
+    })
+  }
+
   const state = Instance.state(
     () => ({
       dir: Instance.directory,
@@ -310,7 +344,12 @@ export namespace Pty {
     }),
     async (state) => {
       for (const session of state.sessions.values()) {
+        // Instance disposal is not a user-visible PTY removal. Detach event
+        // listeners first, then still terminate the complete process tree.
         teardown(session)
+        await killProcessTree(session).catch((error) => {
+          log.warn("pty process-tree kill failed during instance disposal", { id: session.info.id, error })
+        })
       }
       state.sessions.clear()
     },
@@ -421,7 +460,7 @@ export namespace Pty {
         .at(-1)
         ?.replace(/\.exe$/i, "") ?? command
     if (["sh", "bash", "zsh", "dash", "ash", "ksh", "csh", "tcsh"].includes(shell)) {
-      args.push("-l")
+      args.unshift("-l")
     }
 
     const cwd = await resolveCwd(input)
@@ -454,6 +493,10 @@ export namespace Pty {
       status: "running",
       pid: proc.pid,
     } as const
+    let resolveExited!: () => void
+    const exited = new Promise<void>((resolve) => {
+      resolveExited = resolve
+    })
     const session: Active = {
       info,
       process: proc,
@@ -462,6 +505,8 @@ export namespace Pty {
       cursor: 0,
       subscribers: new Map(),
       dispose: [],
+      exited,
+      resolveExited,
     }
     current.sessions.set(id, session)
     const onData = proc.onData(
@@ -497,11 +542,12 @@ export namespace Pty {
       }),
     )
     const onExit = proc.onExit(
-      Instance.bind(({ exitCode }) => {
+      Instance.bind(({ exitCode, signal }) => {
         if (session.info.status === "exited") return
-        log.info("session exited", { id, exitCode })
+        log.info("session exited", { id, exitCode, signal })
         session.info.status = "exited"
-        Bus.publishDetached(Event.Exited, { id, exitCode })
+        Bus.publishDetached(Event.Exited, { id, exitCode, signal })
+        session.resolveExited()
         void remove(id).catch((error) => log.warn("failed to remove exited pty", { id, error }))
       }),
     )
@@ -528,13 +574,15 @@ export namespace Pty {
     const current = state()
     const session = current.sessions.get(id)
     if (!session) return
-    current.sessions.delete(id)
-    log.info("removing session", { id })
-    if (session.info.status !== "exited") {
-      session.info.status = "exited"
-      Bus.publishDetached(Event.Exited, { id, exitCode: 0 })
-    }
-    teardown(session)
-    Bus.publishDetached(Event.Deleted, { id: session.info.id })
+    if (session.removing) return session.removing
+    session.removing = (async () => {
+      log.info("removing session", { id })
+      await terminate(session)
+      if (current.sessions.get(id) !== session) return
+      current.sessions.delete(id)
+      teardown(session)
+      Bus.publishDetached(Event.Deleted, { id: session.info.id })
+    })()
+    return session.removing
   }
 }

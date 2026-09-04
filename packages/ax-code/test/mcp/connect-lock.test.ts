@@ -7,14 +7,17 @@ let resolveConnectStarted!: () => void
 let releaseConnect!: () => void
 let connectRelease!: Promise<void>
 let failListTools = false
+let failConversion = false
 let hangListTools = false
 let exposeToolNames = false
+let closeInvokesOnclose = false
 let nextTransportPid = 5001
 type MockClientState = {
   closed: boolean
   listToolsCalls: number
   transport?: unknown
   notificationHandler?: () => Promise<void>
+  onclose?: () => void
 }
 let createdClients: MockClientState[] = []
 let delayedListCommand: string | undefined
@@ -35,8 +38,10 @@ function resetConnectGate() {
 function resetGate() {
   resetConnectGate()
   failListTools = false
+  failConversion = false
   hangListTools = false
   exposeToolNames = false
+  closeInvokesOnclose = false
   nextTransportPid = 5001
   createdClients = []
   delayedListCommand = undefined
@@ -78,6 +83,16 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
       }
       if (hangListTools) return new Promise<never>(() => {})
       if (failListTools) throw new Error("list failed")
+      if (failConversion && this.listToolsCalls > 1) {
+        return {
+          tools: [
+            {
+              name: "oversized",
+              inputSchema: { type: "object", description: "x".repeat(70_000) },
+            },
+          ],
+        }
+      }
       if (exposeToolNames) {
         return {
           tools: [
@@ -98,6 +113,7 @@ vi.mock("@modelcontextprotocol/sdk/client/index.js", () => ({
 
     async close() {
       this.closed = true
+      if (closeInvokesOnclose) this.onclose?.()
     }
   },
 }))
@@ -328,6 +344,48 @@ test("a stale listTools failure cannot downgrade a replacement client", async ()
       expect(current.transport?.command).toBe("new")
       expect(current.closed).toBe(false)
       expect(Object.keys(await MCP.tools())).toEqual(["race_tool_new"])
+    },
+  })
+})
+
+test("a stale client close cannot downgrade a successful reconnect", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      mcp: {
+        reconnect: { type: "local", command: ["reconnect"] },
+      },
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const entry = await Config.mcpEntry("reconnect")
+      if (!entry || !("type" in entry.config)) throw new Error("missing reconnect MCP fixture")
+      await McpTrust.trust("reconnect", entry.config, entry.source)
+
+      const initialClients = MCP.clients()
+      await connectStarted
+      releaseConnect()
+      const first = (await initialClients).reconnect as unknown as MockClientState
+
+      failConversion = true
+      await MCP.tools()
+      expect((await MCP.status()).reconnect?.status).toBe("failed")
+      expect((await MCP.clients()).reconnect).toBe(first)
+
+      resetConnectGate()
+      closeInvokesOnclose = true
+      const reconnect = MCP.connect("reconnect")
+      await connectStarted
+      releaseConnect()
+      await reconnect
+      await sleep(0)
+
+      expect(first.closed).toBe(true)
+      expect((await MCP.clients()).reconnect).not.toBe(first)
+      expect((await MCP.status()).reconnect).toEqual({ status: "connected" })
     },
   })
 })

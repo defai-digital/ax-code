@@ -21,6 +21,7 @@ import type {
   AuthSetErrors,
   AuthSetResponses,
   AutonomousGetResponses,
+  AutonomousSetErrors,
   AutonomousSetResponses,
   CapabilityListResponses,
   CommandListResponses,
@@ -66,6 +67,7 @@ import type {
   InstanceDisposeResponses,
   InstanceRestartResponses,
   IsolationGetResponses,
+  IsolationSetErrors,
   IsolationSetResponses,
   LspStatusResponses,
   McpAddErrors,
@@ -260,6 +262,7 @@ import type {
   SkillTestTriggerResponses,
   SkillValidateResponses,
   SmartLlmGetResponses,
+  SmartLlmSetErrors,
   SmartLlmSetResponses,
   SubtaskPartInput,
   SuperLongGetResponses,
@@ -1009,7 +1012,7 @@ export class Isolation extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).put<IsolationSetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).put<IsolationSetResponses, IsolationSetErrors, ThrowOnError>({
       url: "/isolation",
       ...options,
       ...params,
@@ -1065,7 +1068,7 @@ export class Autonomous extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).put<AutonomousSetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).put<AutonomousSetResponses, AutonomousSetErrors, ThrowOnError>({
       url: "/autonomous",
       ...options,
       ...params,
@@ -1121,7 +1124,7 @@ export class SmartLlm extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).put<SmartLlmSetResponses, unknown, ThrowOnError>({
+    return (options?.client ?? this.client).put<SmartLlmSetResponses, SmartLlmSetErrors, ThrowOnError>({
       url: "/smart-llm",
       ...options,
       ...params,

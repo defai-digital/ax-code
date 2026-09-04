@@ -28,7 +28,11 @@ const valuesByDirectory = new Map<string, Map<ScopedFlagName, boolean>>()
 // merely mirrors whichever directory wrote it last.
 const managed = new Set<ScopedFlagName>()
 
-const SCOPED_FLAG_NAMES: ReadonlySet<string> = new Set(["AX_CODE_AUTONOMOUS", "AX_CODE_SUPER_LONG", "AX_CODE_SMART_LLM"])
+const SCOPED_FLAG_NAMES: ReadonlySet<string> = new Set([
+  "AX_CODE_AUTONOMOUS",
+  "AX_CODE_SUPER_LONG",
+  "AX_CODE_SMART_LLM",
+])
 
 export function isScopedFlagName(name: string): name is ScopedFlagName {
   return SCOPED_FLAG_NAMES.has(name)
@@ -89,12 +93,14 @@ export namespace ScopedFlag {
     return peek("AX_CODE_SUPER_LONG")
   }
 
-  /**
-   * Smart-LLM routing for the current instance directory, or undefined when
-   * no scoped value is known. Callers feed this in ahead of the process-
-   * global flag fallback.
-   */
-  export function smartLlm(): boolean | undefined {
-    return peek("AX_CODE_SMART_LLM")
+  /** Smart-LLM routing for the current instance directory. */
+  export function smartLlm(): boolean {
+    const scoped = peek("AX_CODE_SMART_LLM")
+    if (scoped !== undefined) return scoped
+    // Once a route has reconciled this process-global env, its value belongs
+    // to whichever directory wrote it last. A new directory with no setting
+    // must use the feature's default (off), not inherit that stale mirror.
+    if (resolveDirectory?.() && isManaged("AX_CODE_SMART_LLM")) return false
+    return Flag.AX_CODE_SMART_LLM
   }
 }

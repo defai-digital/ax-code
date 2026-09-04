@@ -1,6 +1,13 @@
 import type { PermissionRequest, QuestionRequest } from "../v2/index.js"
 import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event.js"
 
+// Keep this public SDK projection aligned with the runtime permission policy.
+// These requests must remain pending for an explicit human reply even when a
+// headless consumer enables autonomous projection effects.
+const INTERACTIVE_ONLY_PERMISSIONS: ReadonlySet<string> = new Set(["isolation_escalation", "bash_destructive"])
+const NEVER_AUTONOMOUS_AUTOAPPROVE_PERMISSIONS: ReadonlySet<string> = new Set(["computer"])
+const DEFAULT_MAX_SESSION_MESSAGES = 100
+
 export interface HeadlessProjectionState<
   TSession extends { id: string },
   TTodo,
@@ -98,13 +105,22 @@ export function applyHeadlessProjectionEvent<
       state.stream_health = "connected"
       return { handled: true, effects }
 
+    case "server.serialization_error":
+    case "server.resync_required":
+      effects.push({ type: "bootstrap.reload" })
+      return { handled: true, effects }
+
     case "server.instance.disposed":
       state.stream_health = "unavailable"
       effects.push({ type: "bootstrap.reload" })
       return { handled: true, effects }
 
     case "permission.asked":
-      if (options.autonomous) {
+      if (
+        options.autonomous &&
+        !INTERACTIVE_ONLY_PERMISSIONS.has(event.properties.permission) &&
+        !NEVER_AUTONOMOUS_AUTOAPPROVE_PERMISSIONS.has(event.properties.permission)
+      ) {
         effects.push({ type: "permission.auto_reply", requestID: event.properties.id })
         return { handled: true, effects }
       }
@@ -191,7 +207,13 @@ export function applyHeadlessProjectionEvent<
 
     case "message.part.delta":
       if (event.properties.field === "text") {
-        appendPartTextDelta(state.part, event.properties.messageID, event.properties.partID, event.properties.delta)
+        appendPartTextDelta(
+          state.part,
+          event.properties.messageID,
+          event.properties.partID,
+          event.properties.delta,
+          event.properties.offset,
+        )
       }
       return { handled: true, effects }
 
@@ -210,6 +232,9 @@ export function applyHeadlessProjectionEvent<
     case "lsp.updated":
       effects.push({ type: "runtime.probe", key: "lsp" }, { type: "runtime.probe", key: "debug-engine" })
       return { handled: true, effects }
+
+    case "provider.updated":
+      return { handled: false, effects }
 
     case "code.index.progress":
     case "code.index.state":
@@ -309,10 +334,24 @@ function removeRequest<TRequest extends { id: string }>(
 function upsertByID<T extends { id: string }>(list: T[], item: T) {
   const result = binarySearch(list, item.id, (entry) => entry.id)
   if (result.found) {
-    list.splice(result.index, 1, item)
+    mergeSnapshotInPlace(list[result.index], item)
     return
   }
   list.splice(result.index, 0, item)
+}
+
+function mergeSnapshotInPlace<T extends { id: string }>(existing: T, incoming: T) {
+  for (const key of Object.keys(incoming) as Array<keyof T>) {
+    // Part snapshots and deltas are delivered on independently coalesced
+    // channels. A stale snapshot must not rewind text already applied from a
+    // newer offset delta.
+    if (key === "text") {
+      const previous = (existing as { text?: unknown }).text
+      const next = (incoming as { text?: unknown }).text
+      if (typeof previous === "string" && typeof next === "string" && next.length < previous.length) continue
+    }
+    existing[key] = incoming[key]
+  }
 }
 
 function deleteSessionState<
@@ -324,8 +363,16 @@ function deleteSessionState<
   TPart extends { id: string; messageID: string },
   TRisk = unknown,
   TGoal = unknown,
->(state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>, sessionID: string) {
-  removeByID(state.session, sessionID)
+  TTaskQueueItem extends { id: string } = { id: string },
+>(
+  state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal, TTaskQueueItem>,
+  sessionID: string,
+) {
+  state.session = state.session.filter((session) => session.id !== sessionID)
+  state.task_queue = state.task_queue.filter((item) => {
+    const scoped = item as TTaskQueueItem & { sessionID?: string }
+    return scoped.sessionID !== sessionID
+  })
   for (const message of state.message[sessionID] ?? []) {
     delete state.part[message.id]
   }
@@ -352,7 +399,7 @@ function upsertMessage<
 >(
   state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>,
   message: TMessage,
-  maxSessionMessages = 100,
+  maxSessionMessages = DEFAULT_MAX_SESSION_MESSAGES,
 ) {
   const list = state.message[message.sessionID] ?? []
   upsertByID(list, message)
@@ -391,13 +438,20 @@ function appendPartTextDelta<TPart extends { id: string; messageID: string }>(
   messageID: string,
   partID: string,
   delta: string,
+  offset?: number,
 ) {
   const list = parts[messageID] ?? []
   const result = binarySearch(list, partID, (entry) => entry.id)
   if (!result.found) return
   const part = list[result.index] as TPart & { type?: string; text?: string }
   if (part.type !== "text" && part.type !== "reasoning") return
-  part.text = (part.text ?? "") + delta
+  const current = part.text ?? ""
+  if (typeof offset === "number") {
+    if (offset > current.length) return
+    part.text = current + delta.slice(current.length - offset)
+    return
+  }
+  part.text = current + delta
 }
 
 function removePart<TPart extends { id: string; messageID: string }>(
@@ -416,7 +470,8 @@ function removeByID<T extends { id: string }>(list: T[], id: string) {
 }
 
 function shiftOverflow<T>(list: T[], maxSize: number) {
-  const limit = Math.max(0, Math.floor(maxSize))
+  const finiteMaxSize = Number.isFinite(maxSize) ? maxSize : DEFAULT_MAX_SESSION_MESSAGES
+  const limit = Math.max(0, Math.floor(finiteMaxSize))
   if (list.length <= limit) return []
   return list.splice(0, list.length - limit)
 }

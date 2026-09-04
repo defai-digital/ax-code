@@ -235,4 +235,25 @@ describe("classifyComplexity cross-directory env leak", () => {
       },
     })
   })
+
+  test("a new directory defaults off after another directory rewrites the global flag", async () => {
+    await using dirA = await tmpdir({})
+    await using dirB = await tmpdir({})
+
+    await Instance.provide({
+      directory: dirA.path,
+      fn: async () => {
+        ScopedFlag.recordCurrent("AX_CODE_SMART_LLM", true)
+      },
+    })
+    process.env["AX_CODE_SMART_LLM"] = "true"
+
+    await Instance.provide({
+      directory: dirB.path,
+      fn: async () => {
+        const result = await classifyComplexity("what is 2+2?")
+        expect(result.complexity).toBeNull()
+      },
+    })
+  })
 })

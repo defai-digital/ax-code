@@ -188,14 +188,16 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
     const reachable = await initialFetcher(`${initialEndpoint.discoveryHost}/api/tags`, {
       signal: AbortSignal.timeout(2000),
     })
-      .then((r) => {
+      .then(async (r) => {
+        const reachable = r.ok
+        await r.arrayBuffer().catch(() => undefined)
         if (!r.ok)
           log.debug("Ollama-compatible reachability probe returned non-OK", {
             providerID,
             host: initialEndpoint.discoveryHost,
             status: r.status,
           })
-        return r.ok
+        return reachable
       })
       .catch((error) => {
         log.debug("Ollama-compatible reachability probe failed", {
@@ -219,12 +221,14 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
           },
         )
         if (!res?.ok) {
-          if (res)
+          if (res) {
+            await res.arrayBuffer().catch(() => undefined)
             log.debug("Ollama-compatible model discovery returned non-OK", {
               providerID,
               host: endpoint.discoveryHost,
               status: res.status,
             })
+          }
           return {}
         }
         let data: { models: { name: string }[] } | null = null
@@ -333,12 +337,15 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
 // with the ChatGPT app. Codex CLI models are version-coupled, so prefer the
 // newest executable found on the real PATH rather than failing a selected
 // model solely because an older duplicate appears first.
-const cliBinaryCache = new Map<string, Promise<string | null>>()
+const cliBinaryPending = new Map<string, Promise<string | null>>()
 
-async function resolveCliBinary(providerID: string, binary: string) {
+export async function resolveCliBinary(providerID: string, binary: string) {
   const cacheKey = `${providerID}:${binary}`
-  const cached = cliBinaryCache.get(cacheKey)
-  if (cached) return cached
+  // JavaScript does not yield between this lookup and registering `resolving`;
+  // after the await, the identity guard below prevents stale cleanup.
+  // @scan-suppress race_scan
+  const pending = cliBinaryPending.get(cacheKey)
+  if (pending) return pending
 
   const resolving = (async () => {
     const primary = which(binary)
@@ -365,8 +372,15 @@ async function resolveCliBinary(providerID: string, binary: string) {
     return selected
   })()
 
-  cliBinaryCache.set(cacheKey, resolving)
-  return resolving
+  cliBinaryPending.set(cacheKey, resolving)
+  try {
+    return await resolving
+  } finally {
+    // Deduplicate only concurrent lookups. A permanent cache would retain both
+    // misses and stale paths after a provider CLI is installed or upgraded
+    // while AX Code is still running.
+    if (cliBinaryPending.get(cacheKey) === resolving) cliBinaryPending.delete(cacheKey)
+  }
 }
 
 function cliModels(providerID: string, provider: Provider.Info, resolved?: string): Record<string, Provider.Model> {

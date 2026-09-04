@@ -1,6 +1,6 @@
 import { afterEach, test, expect, describe, vi } from "vitest"
 import path from "path"
-import { writeFile, readFile } from "fs/promises"
+import { chmod, writeFile, readFile } from "fs/promises"
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
@@ -8,6 +8,7 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { which } from "../../src/util/which"
 import { selectPreferredCodexBinary } from "../../src/provider/cli/binary"
+import { resolveCliBinary } from "../../src/provider/loaders"
 
 const originalFetch = globalThis.fetch
 
@@ -55,6 +56,21 @@ async function expectMissingCliProvider(input: {
 }
 
 describe("CLI provider loaders", () => {
+  test("rechecks a CLI binary that was installed after an earlier miss", async () => {
+    await using tmp = await tmpdir()
+    const binary = `ax-code-dynamic-cli-${process.pid}-${Date.now()}`
+    const executable = path.join(tmp.path, process.platform === "win32" ? `${binary}.cmd` : binary)
+    vi.stubEnv("PATH", tmp.path)
+    if (process.platform === "win32") vi.stubEnv("PATHEXT", ".CMD")
+
+    expect(await resolveCliBinary("dynamic-cli-test", binary)).toBeNull()
+
+    await writeFile(executable, process.platform === "win32" ? "@echo off\r\n" : "#!/bin/sh\n")
+    await chmod(executable, 0o755)
+
+    expect(path.normalize((await resolveCliBinary("dynamic-cli-test", binary)) ?? "")).toBe(path.normalize(executable))
+  })
+
   test("prefers the newest Codex executable when PATH contains a stale launcher", () => {
     expect(
       selectPreferredCodexBinary([
@@ -209,6 +225,41 @@ describe("online provider loaders", () => {
 })
 
 describe("offline provider loaders", () => {
+  test("ollama drains reachability and non-OK discovery responses", async () => {
+    const drained: number[] = []
+    let calls = 0
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (url !== "http://localhost:11434/api/tags") throw new Error(`unexpected fetch: ${url}`)
+      const call = ++calls
+      if (call > 2) throw new Error(`unexpected Ollama fetch call: ${call}`)
+      return {
+        ok: call === 1,
+        status: call === 1 ? 200 : 503,
+        arrayBuffer: async () => {
+          drained.push(call)
+          return new ArrayBuffer(0)
+        },
+      } as Response
+    }) as typeof fetch
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ enabled_providers: ["ollama"] }))
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        await Provider.list()
+      },
+    })
+
+    expect(drained).toEqual([1, 2])
+  })
+
   test("ollama provider survives deferred discovery and loads discovered models", async () => {
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)

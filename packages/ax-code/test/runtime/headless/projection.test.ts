@@ -41,6 +41,17 @@ describe("headless projection", () => {
     expect(result).toEqual({ handled: true, effects: [{ type: "bootstrap.reload" }] })
   })
 
+  test("requests an authoritative bootstrap when an event cannot be serialized", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+
+    const result = applyHeadlessProjectionEvent(state, {
+      type: "server.serialization_error",
+      properties: { error: "event payload was not serializable" },
+    } as any)
+
+    expect(result).toEqual({ handled: true, effects: [{ type: "bootstrap.reload" }] })
+  })
+
   test("stores request prompts when autonomy is disabled and emits effects when autonomy is enabled", () => {
     const manual = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
     const autonomous = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()

@@ -3,6 +3,8 @@ import z from "zod"
 
 export const RuntimeEvent = {
   Connected: BusEvent.define("server.connected", z.object({})),
+  Heartbeat: BusEvent.define("server.heartbeat", z.object({})),
+  SerializationError: BusEvent.define("server.serialization_error", z.object({ error: z.string() })),
   ResyncRequired: BusEvent.define(
     "server.resync_required",
     z.object({

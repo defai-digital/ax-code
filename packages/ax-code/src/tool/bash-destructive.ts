@@ -1,3 +1,5 @@
+import { parseShellArgs } from "@/util/shell-args"
+
 /**
  * Deterministic classification of destructive shell commands (ADR-004
  * follow-up). Commands matched here always require interactive user
@@ -19,13 +21,87 @@
  * command nodes.
  */
 
-// Wrappers that execute their trailing argv. The classifier looks through
-// these to the wrapped command. Leading flags on the wrapper are skipped;
-// flag values are not tracked (e.g. `sudo -u root rm -rf /` classifies via
-// the `rm` found after skipping `-u`... `root` breaks the scan — see
-// findWrappedCommand), so a flag-with-value wrapper can slip a command
-// past this scan. The generic bash permission still covers those.
-const COMMAND_WRAPPERS: ReadonlySet<string> = new Set(["sudo", "doas", "command", "nohup", "time", "env", "xargs"])
+type WrapperSpec = {
+  readonly valueFlags: ReadonlySet<string>
+  readonly positionalArgs?: number
+  readonly nonExecutingFlags?: ReadonlySet<string>
+}
+
+// Wrappers that execute their trailing argv. Value-taking flags must be
+// consumed with their values: treating every option as a standalone flag
+// lets an option value (for example, `root` in `sudo -u root rm`) hide the
+// actual command from the destructive-operation classifier.
+const COMMAND_WRAPPERS: ReadonlyMap<string, WrapperSpec> = new Map([
+  [
+    "sudo",
+    {
+      valueFlags: new Set([
+        "-a",
+        "-C",
+        "-D",
+        "-g",
+        "-h",
+        "-p",
+        "-R",
+        "-r",
+        "-T",
+        "-u",
+        "-U",
+        "--auth-type",
+        "--chdir",
+        "--close-from",
+        "--command-timeout",
+        "--group",
+        "--host",
+        "--other-user",
+        "--prompt",
+        "--role",
+        "--chroot",
+        "--type",
+        "--user",
+      ]),
+    },
+  ],
+  ["doas", { valueFlags: new Set(["-C", "-u"]) }],
+  ["command", { valueFlags: new Set(), nonExecutingFlags: new Set(["-v", "-V"]) }],
+  ["nohup", { valueFlags: new Set() }],
+  ["time", { valueFlags: new Set(["-f", "-o", "--format", "--output"]) }],
+  ["env", { valueFlags: new Set(["-a", "-C", "-S", "-u", "--argv0", "--chdir", "--split-string", "--unset"]) }],
+  [
+    "xargs",
+    {
+      valueFlags: new Set([
+        "-a",
+        "-d",
+        "-E",
+        "-I",
+        "-L",
+        "-n",
+        "-P",
+        "-s",
+        "--arg-file",
+        "--delimiter",
+        "--eof",
+        "--max-args",
+        "--max-chars",
+        "--max-lines",
+        "--max-procs",
+        "--process-slot-var",
+        "--replace",
+      ]),
+    },
+  ],
+  ["nice", { valueFlags: new Set(["-n", "--adjustment"]) }],
+  ["timeout", { valueFlags: new Set(["-k", "-s", "--kill-after", "--signal"]), positionalArgs: 1 }],
+  ["setsid", { valueFlags: new Set() }],
+  ["stdbuf", { valueFlags: new Set(["-e", "-i", "-o", "--error", "--input", "--output"]) }],
+  [
+    "ionice",
+    {
+      valueFlags: new Set(["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"]),
+    },
+  ],
+])
 
 const SQL_CLIENTS: ReadonlySet<string> = new Set([
   "psql",
@@ -63,27 +139,117 @@ function isRootishTarget(arg: string): boolean {
 // wrapper commands (sudo, env, xargs, ...) and skipping wrapper flags and
 // env assignments (VAR=value).
 export function findWrappedCommand(parts: string[]): { name: string; args: string[] } | undefined {
+  let commandParts = parts
   let index = 0
-  while (index < parts.length) {
-    const part = parts[index]
+  while (index < commandParts.length) {
+    const part = commandParts[index]
     if (part === undefined) return undefined
     const name = baseCommandName(part)
-    if (COMMAND_WRAPPERS.has(name)) {
-      index += 1
-      while (index < parts.length) {
-        const candidate = parts[index]
-        if (candidate === undefined) return undefined
-        if (candidate.startsWith("-") || /^[A-Za-z_][A-Za-z0-9_]*=/.test(candidate)) {
-          index += 1
-          continue
-        }
-        break
+    if (name === "env") {
+      const expanded = expandEnvSplitString(commandParts, index + 1)
+      if (expanded) {
+        commandParts = expanded
+        continue
       }
+    }
+    const wrapper = COMMAND_WRAPPERS.get(name)
+    if (wrapper) {
+      index = skipWrapperArguments(commandParts, index + 1, wrapper)
+      if (index < 0) return undefined
       continue
     }
-    return { name, args: parts.slice(index + 1) }
+    return { name, args: commandParts.slice(index + 1) }
   }
   return undefined
+}
+
+function expandEnvSplitString(parts: string[], start: number): string[] | undefined {
+  const wrapper = COMMAND_WRAPPERS.get("env")!
+  let index = start
+  while (index < parts.length) {
+    const candidate = parts[index]
+    if (candidate === undefined || candidate === "--" || !candidate.startsWith("-") || candidate === "-") return
+
+    let splitValue: string | undefined
+    let consumed = 1
+    if (candidate === "--split-string") {
+      splitValue = parts[index + 1]
+      consumed = 2
+    } else if (candidate.startsWith("--split-string=")) {
+      splitValue = candidate.slice("--split-string=".length)
+    } else if (!candidate.startsWith("--")) {
+      for (let offset = 1; offset < candidate.length; offset += 1) {
+        const flag = `-${candidate[offset]}`
+        if (flag === "-S") {
+          splitValue = candidate.slice(offset + 1) || parts[index + 1]
+          consumed = candidate.slice(offset + 1) ? 1 : 2
+          break
+        }
+        // Once a value-taking option is found, the rest of this token belongs
+        // to that option and cannot contain another flag.
+        if (wrapper.valueFlags.has(flag)) break
+      }
+    }
+
+    if (splitValue !== undefined) {
+      const quote = splitValue[0]
+      const unquoted =
+        splitValue.length >= 2 && (quote === '"' || quote === "'") && splitValue.at(-1) === quote
+          ? splitValue.slice(1, -1)
+          : splitValue
+      return [...parts.slice(0, index), ...parseShellArgs(unquoted), ...parts.slice(index + consumed)]
+    }
+
+    const option = parseWrapperOption(candidate, wrapper)
+    index += option.consumesNext ? 2 : 1
+  }
+  return undefined
+}
+
+function skipWrapperArguments(parts: string[], start: number, wrapper: WrapperSpec): number {
+  let index = start
+  while (index < parts.length) {
+    const candidate = parts[index]
+    if (candidate === undefined) return -1
+    if (candidate === "--") {
+      index += 1
+      break
+    }
+    if (!candidate.startsWith("-") || candidate === "-") break
+    const option = parseWrapperOption(candidate, wrapper)
+    if (option.nonExecuting) return -1
+    index += 1
+    if (option.consumesNext) index += 1
+  }
+
+  let positional = wrapper.positionalArgs ?? 0
+  while (positional > 0 && index < parts.length) {
+    index += 1
+    positional -= 1
+  }
+  if (parts[index] === "--") index += 1
+
+  while (index < parts.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(parts[index] ?? "")) index += 1
+  return index
+}
+
+function parseWrapperOption(candidate: string, wrapper: WrapperSpec) {
+  if (candidate.startsWith("--")) {
+    const equals = candidate.indexOf("=")
+    const flag = equals === -1 ? candidate : candidate.slice(0, equals)
+    return {
+      nonExecuting: wrapper.nonExecutingFlags?.has(flag) ?? false,
+      consumesNext: equals === -1 && wrapper.valueFlags.has(flag),
+    }
+  }
+
+  for (let index = 1; index < candidate.length; index += 1) {
+    const flag = `-${candidate[index]}`
+    if (wrapper.nonExecutingFlags?.has(flag)) return { nonExecuting: true, consumesNext: false }
+    if (!wrapper.valueFlags.has(flag)) continue
+    return { nonExecuting: false, consumesNext: index === candidate.length - 1 }
+  }
+  return { nonExecuting: false, consumesNext: false }
 }
 
 // git global flags that take a value (skipped along with their value when
@@ -144,7 +310,9 @@ function classifyGit(args: string[]): string | undefined {
   }
   if (
     subcommand === "branch" &&
-    (rest.includes("-D") || (hasLongFlag(rest, "--delete") && hasLongFlag(rest, "--force")))
+    (hasShortFlag(rest, "D") ||
+      ((hasShortFlag(rest, "d") || hasLongFlag(rest, "--delete")) &&
+        (hasShortFlag(rest, "f") || hasLongFlag(rest, "--force"))))
   ) {
     return "git branch -D force-deletes a branch"
   }

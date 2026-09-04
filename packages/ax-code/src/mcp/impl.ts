@@ -1036,7 +1036,6 @@ export namespace MCP {
       return
     }
 
-    s.status[name] = result.status
     if (result.mcpClient) {
       // Close existing client if present to prevent memory leaks
       const existingClient = s.clients[name]
@@ -1050,6 +1049,10 @@ export namespace MCP {
       delete s.clients[name]
       await closeIfPossible(existingClient, name, "reconnect did not connect")
     }
+    // Closing the previous client can invoke its onclose callback
+    // synchronously. Commit the replacement status last so that stale close
+    // handling cannot downgrade a successful reconnect.
+    s.status[name] = result.status
   }
 
   export async function disconnect(name: string) {

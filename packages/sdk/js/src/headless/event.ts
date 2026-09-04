@@ -9,8 +9,18 @@ export type HeadlessMessageEvent<
   | { type: "message.updated"; properties: { info: TMessage } }
   | { type: "message.removed"; properties: { sessionID: string; messageID: string } }
   | { type: "message.part.updated"; properties: { part: TPart } }
-  | { type: "message.part.delta"; properties: { messageID: string; partID: string; field: string; delta: string } }
-  | { type: "message.part.removed"; properties: { messageID: string; partID: string } }
+  | {
+      type: "message.part.delta"
+      properties: {
+        sessionID: string
+        messageID: string
+        partID: string
+        field: string
+        delta: string
+        offset?: number
+      }
+    }
+  | { type: "message.part.removed"; properties: { sessionID: string; messageID: string; partID: string } }
 
 export type HeadlessRequestEvent =
   | { type: "permission.asked"; properties: PermissionRequest }
@@ -81,6 +91,7 @@ export interface WorkflowVerificationProperties {
 export type HeadlessRuntimeStatusEvent =
   | { type: "mcp.tools.changed" }
   | { type: "lsp.updated" }
+  | { type: "provider.updated" }
   | { type: "code.index.progress" }
   | { type: "code.index.state" }
   | { type: "vcs.branch.updated"; properties: { branch: string } }
@@ -134,6 +145,14 @@ export type HeadlessScheduledTaskEvent<TScheduledTask> =
 export type HeadlessControlEvent =
   | { type: "server.connected"; properties: Record<string, never> }
   | { type: "server.heartbeat"; properties: Record<string, never> }
+  | { type: "server.serialization_error"; properties: { error: string } }
+  | {
+      type: "server.resync_required"
+      properties: {
+        reason: "invalid_cursor" | "server_restarted" | "cursor_expired" | "cursor_ahead" | "buffer_overflow"
+        cursor: string
+      }
+    }
   | { type: "server.instance.disposed" }
 
 export type HeadlessRuntimeEvent<
@@ -182,6 +201,7 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "scheduled.task.deleted",
   "mcp.tools.changed",
   "lsp.updated",
+  "provider.updated",
   "code.index.progress",
   "code.index.state",
   "vcs.branch.updated",
@@ -211,6 +231,8 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "workflow.verification.attached",
   "server.connected",
   "server.heartbeat",
+  "server.serialization_error",
+  "server.resync_required",
   "server.instance.disposed",
 ])
 

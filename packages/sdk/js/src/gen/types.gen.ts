@@ -927,6 +927,8 @@ export type Event =
   | EventProjectUpdated
   | EventServerInstanceDisposed
   | EventServerConnected
+  | EventServerHeartbeat
+  | EventServerSerializationError
   | EventServerResyncRequired
   | EventGlobalDisposed
   | EventFileWatcherUpdated
@@ -1255,6 +1257,7 @@ export type EventPtyExited = {
   properties: {
     id: string
     exitCode: number
+    signal?: number
   }
 }
 
@@ -1759,6 +1762,13 @@ export type EventServerConnected = {
   }
 }
 
+export type EventServerHeartbeat = {
+  type: "server.heartbeat"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
 export type EventServerInstanceDisposed = {
   type: "server.instance.disposed"
   properties: {
@@ -1771,6 +1781,13 @@ export type EventServerResyncRequired = {
   properties: {
     reason: "invalid_cursor" | "server_restarted" | "cursor_expired" | "cursor_ahead" | "buffer_overflow"
     cursor: string
+  }
+}
+
+export type EventServerSerializationError = {
+  type: "server.serialization_error"
+  properties: {
+    error: string
   }
 }
 
@@ -5130,6 +5147,15 @@ export type IsolationSetData = {
   url: "/isolation"
 }
 
+export type IsolationSetErrors = {
+  /**
+   * Internal server error
+   */
+  500: AppErrorEnvelope
+}
+
+export type IsolationSetError = IsolationSetErrors[keyof IsolationSetErrors]
+
 export type IsolationSetResponses = {
   /**
    * Updated isolation state
@@ -5168,6 +5194,15 @@ export type AutonomousSetData = {
   url: "/autonomous"
 }
 
+export type AutonomousSetErrors = {
+  /**
+   * Internal server error
+   */
+  500: AppErrorEnvelope
+}
+
+export type AutonomousSetError = AutonomousSetErrors[keyof AutonomousSetErrors]
+
 export type AutonomousSetResponses = {
   /**
    * Updated autonomous state
@@ -5205,6 +5240,15 @@ export type SmartLlmSetData = {
   }
   url: "/smart-llm"
 }
+
+export type SmartLlmSetErrors = {
+  /**
+   * Internal server error
+   */
+  500: AppErrorEnvelope
+}
+
+export type SmartLlmSetError = SmartLlmSetErrors[keyof SmartLlmSetErrors]
 
 export type SmartLlmSetResponses = {
   /**
@@ -5249,6 +5293,10 @@ export type SuperLongSetErrors = {
    * Conflict
    */
   409: AppErrorEnvelope
+  /**
+   * Internal server error
+   */
+  500: AppErrorEnvelope
 }
 
 export type SuperLongSetError = SuperLongSetErrors[keyof SuperLongSetErrors]

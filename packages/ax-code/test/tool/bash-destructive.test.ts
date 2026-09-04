@@ -31,6 +31,10 @@ describe("classifyDestructiveCommand", () => {
     expect(classifyDestructiveCommand(["git", "reset", "--hard", "HEAD~3"])).toBeTruthy()
     expect(classifyDestructiveCommand(["git", "clean", "-fdx"])).toBeTruthy()
     expect(classifyDestructiveCommand(["git", "branch", "-D", "feature"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["git", "branch", "-Df", "feature"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["git", "branch", "-fD", "feature"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["git", "branch", "-d", "-f", "feature"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["git", "branch", "--delete", "--force", "feature"])).toBeTruthy()
     expect(classifyDestructiveCommand(["git", "-C", "/repo", "push", "--force"])).toBeTruthy()
   })
 
@@ -45,9 +49,29 @@ describe("classifyDestructiveCommand", () => {
 
   test("looks through wrapper commands", () => {
     expect(classifyDestructiveCommand(["sudo", "rm", "-rf", "/var/data"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["sudo", "-u", "root", "rm", "-rf", "/var/data"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["sudo", "-nu", "root", "rm", "-rf", "/var/data"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["doas", "-u", "root", "git", "push", "--force"])).toBeTruthy()
     expect(classifyDestructiveCommand(["env", "FOO=bar", "git", "push", "--force"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["env", "-u", "TOKEN", "git", "push", "--force"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["env", "-S", "rm -rf build"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["sudo", "env", "--split-string=git push --force"])).toBeTruthy()
     expect(classifyDestructiveCommand(["xargs", "rm", "-rf"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["xargs", "-n", "1", "rm", "-rf"])).toBeTruthy()
     expect(classifyDestructiveCommand(["nohup", "shutdown", "-h", "now"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["nice", "-n", "10", "rm", "-rf", "build"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["timeout", "--signal", "TERM", "30", "rm", "-rf", "build"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["setsid", "rm", "-rf", "build"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["stdbuf", "-o", "L", "rm", "-rf", "build"])).toBeTruthy()
+    expect(classifyDestructiveCommand(["ionice", "-c", "2", "-n", "7", "rm", "-rf", "build"])).toBeTruthy()
+  })
+
+  test("does not mistake wrapper option values for commands", () => {
+    expect(classifyDestructiveCommand(["sudo", "-p", "rm", "ls"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["env", "-u", "rm", "ls"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["env", "-S", "printf hello"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["time", "-o", "rm", "ls"])).toBeUndefined()
+    expect(classifyDestructiveCommand(["xargs", "-I", "rm", "echo", "rm"])).toBeUndefined()
   })
 
   test("flags disk, system, and database destroyers", () => {

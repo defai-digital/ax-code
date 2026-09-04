@@ -3,7 +3,7 @@
   "scope": "packages/ax-code/src, packages/ax-code-intel/src, packages/ax-code-reason/src",
   "scanners": {
     "race_scan": {
-      "count": 55,
+      "count": 54,
       "findings": [
         {
           "fingerprint": "06f87a1f14481b595da798d0184f8ce120d3e0ff858065f7e48ca62e2c8c57cd",
@@ -28,15 +28,6 @@
           "file": "src/provider/ax-engine/server.ts",
           "line": 536,
           "endLine": 543,
-          "severity": "high",
-          "kind": "toctou",
-          "summary": "toctou"
-        },
-        {
-          "fingerprint": "4b523692403734c9088c2974f46d92f93ada7826f437a958629fd483bb46e54c",
-          "file": "src/provider/loaders.ts",
-          "line": 340,
-          "endLine": 368,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -457,7 +448,7 @@
       ]
     },
     "lifecycle_scan": {
-      "count": 189,
+      "count": 188,
       "findings": [
         {
           "fingerprint": "5e669e96cecbb54dd6aa558bf9f99c8c79d6d172210ad08cda98b84e207f3c4c",
@@ -1578,14 +1569,6 @@
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
-        },
-        {
-          "fingerprint": "0fdee5ba04281f754f9a5aba5bef77480ffbfb272069899a65be65ab919d59cb",
-          "file": "src/provider/loaders.ts",
-          "line": 368,
-          "severity": "medium",
-          "kind": "map_growth:unbounded_growth",
-          "summary": "map_growth:unbounded_growth"
         },
         {
           "fingerprint": "e267da0add9e1f6d4dc318753dfa47706020a70c7e8f6ec4c1c175a07169a51c",

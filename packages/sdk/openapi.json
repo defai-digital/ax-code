@@ -1514,6 +1514,16 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -1605,6 +1615,16 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -1685,6 +1705,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SmartLlmState"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
                 }
               }
             }
@@ -1774,6 +1804,16 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -37578,6 +37618,12 @@
             "$ref": "#/components/schemas/Event.server.connected"
           },
           {
+            "$ref": "#/components/schemas/Event.server.heartbeat"
+          },
+          {
+            "$ref": "#/components/schemas/Event.server.serialization_error"
+          },
+          {
             "$ref": "#/components/schemas/Event.server.resync_required"
           },
           {
@@ -38760,6 +38806,9 @@
                 "pattern": "^pty_.*"
               },
               "exitCode": {
+                "type": "number"
+              },
+              "signal": {
                 "type": "number"
               }
             },
@@ -40777,6 +40826,23 @@
           "properties"
         ]
       },
+      "Event.server.heartbeat": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.heartbeat"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {}
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event.server.instance.disposed": {
         "type": "object",
         "properties": {
@@ -40828,6 +40894,30 @@
             "required": [
               "reason",
               "cursor"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.server.serialization_error": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "server.serialization_error"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "error"
             ]
           }
         },

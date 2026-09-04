@@ -9,6 +9,7 @@ import { persistProjectConfigResponse } from "./project-config"
 import { Config } from "../../config/config"
 import { Instance } from "@/project/instance"
 import { JsonBoolean } from "./query"
+import { errors } from "../error"
 
 const log = Log.create({ service: "isolation" })
 
@@ -71,6 +72,7 @@ export const IsolationRoutes = lazy(() =>
               },
             },
           },
+          ...errors(500),
         },
       }),
       validator("json", z.object({ mode: IsolationMode, network: JsonBoolean.optional() })),
@@ -82,7 +84,7 @@ export const IsolationRoutes = lazy(() =>
         // to false for workspace-write. See #240.
         const requestedNetwork = c.req.valid("json").network
         const network = mode === "read-only" ? false : (requestedNetwork ?? mode === "full-access")
-        const persisted = await persistProjectConfigResponse({
+        await persistProjectConfigResponse({
           log,
           context: "isolation mode",
           update: (config) => {
@@ -93,8 +95,6 @@ export const IsolationRoutes = lazy(() =>
             config.isolation = { ...prev, mode, network }
           },
         })
-        if (persisted) return c.json(persisted, 500)
-
         // Refresh the per-directory config cache so tool execution observes
         // the persisted setting immediately. Report the effective state: an
         // explicit CLI/env override remains authoritative until restart.

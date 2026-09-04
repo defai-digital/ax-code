@@ -122,7 +122,7 @@ describe("pty", () => {
     expect(replay.meta).toEqual({ cursor: 6 })
   })
 
-  test("publishes created, exited, deleted in order for a short-lived process", async () => {
+  test("publishes created, exited, deleted in order for an immediately exiting process", async () => {
     if (process.platform === "win32") return
 
     await using dir = await tmpdir({ git: true })
@@ -141,8 +141,8 @@ describe("pty", () => {
         try {
           const info = await Pty.create({
             command: "/usr/bin/env",
-            args: ["sh", "-c", "sleep 0.1"],
-            title: "sleep",
+            args: ["true"],
+            title: "true",
           })
           id = info.id
 
@@ -192,6 +192,90 @@ describe("pty", () => {
     })
   })
 
+  test("waits for a real PTY exit and kills its process group before deletion", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: dir.path,
+      fn: async () => {
+        const events: Array<{ type: "exited" | "deleted"; exitCode?: number; signal?: number }> = []
+        let targetID: PtyID | undefined
+        const off = [
+          Bus.subscribe(Pty.Event.Exited, (evt) => {
+            if (evt.properties.id !== targetID) return
+            const properties = evt.properties as typeof evt.properties & { signal?: number }
+            events.push({
+              type: "exited",
+              exitCode: properties.exitCode,
+              signal: properties.signal,
+            })
+          }),
+          Bus.subscribe(Pty.Event.Deleted, (evt) => {
+            if (evt.properties.id === targetID) events.push({ type: "deleted" })
+          }),
+        ]
+        const output: string[] = []
+        let info: Awaited<ReturnType<typeof Pty.create>> | undefined
+        let childPID: number | undefined
+
+        try {
+          info = await Pty.create({
+            command: "/usr/bin/env",
+            args: [
+              "sh",
+              "-c",
+              `trap '' HUP TERM
+sh -c 'trap "" HUP TERM; while :; do sleep 1; done' &
+echo CHILD:$!
+wait`,
+            ],
+            title: "stubborn-tree",
+          })
+          targetID = info.id
+          await Pty.connect(info.id, {
+            readyState: 1,
+            send(data) {
+              if (typeof data === "string") output.push(data)
+            },
+            close() {},
+          })
+          await wait(() => /CHILD:\d+/.test(output.join("")))
+          childPID = Number(/CHILD:(\d+)/.exec(output.join(""))?.[1])
+          expect(Number.isSafeInteger(childPID)).toBe(true)
+
+          await Pty.remove(info.id)
+          await wait(() => events.some((event) => event.type === "deleted"))
+          await wait(() => {
+            try {
+              process.kill(childPID!, 0)
+              return false
+            } catch {
+              return true
+            }
+          })
+
+          expect(events.map((event) => event.type)).toEqual(["exited", "deleted"])
+          expect(events[0]?.signal).toBeGreaterThan(0)
+        } finally {
+          off.forEach((unsubscribe) => unsubscribe())
+          if (info) {
+            try {
+              process.kill(-info.pid, "SIGKILL")
+            } catch {}
+            await Pty.remove(info.id)
+          }
+          if (childPID) {
+            try {
+              process.kill(childPID, "SIGKILL")
+            } catch {}
+          }
+        }
+      },
+    })
+  })
+
   test("does not append login args to non-shell commands", async () => {
     await using dir = await tmpdir({ git: true })
 
@@ -201,6 +285,24 @@ describe("pty", () => {
         const info = await Pty.create({ command: "ssh", args: ["-V"], title: "ssh" })
         try {
           expect(info.args).toEqual(["-V"])
+        } finally {
+          await Pty.remove(info.id)
+        }
+      },
+    })
+  })
+
+  test("prepends the login flag before user-provided shell arguments", async () => {
+    if (process.platform === "win32") return
+
+    await using dir = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: dir.path,
+      fn: async () => {
+        const info = await Pty.create({ command: "/bin/sh", args: ["-c", "sleep 5"], title: "sh" })
+        try {
+          expect(info.args).toEqual(["-l", "-c", "sleep 5"])
         } finally {
           await Pty.remove(info.id)
         }

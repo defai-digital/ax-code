@@ -18,10 +18,11 @@ export namespace Shell {
     opts?: { exited?: () => boolean; signal?: NodeJS.Signals | number },
   ): Promise<void> {
     const pid = proc.pid
-    if (!pid || opts?.exited?.()) return
+    if (!pid) return
     const signal: NodeJS.Signals | number = opts?.signal ?? "SIGTERM"
 
     if (process.platform === "win32") {
+      if (opts?.exited?.()) return
       await new Promise<void>((resolve) => {
         const killer = spawn("taskkill", ["/pid", String(pid), "/f", "/t"], {
           stdio: "ignore",
@@ -33,24 +34,36 @@ export namespace Shell {
       return
     }
 
+    let signaledGroup = false
     try {
       process.kill(-pid, signal)
+      signaledGroup = true
+    } catch {
+      // The process may not be a group leader. Fall back to its direct PID.
+    }
+
+    if (signaledGroup) {
+      await sleep(SIGKILL_TIMEOUT_MS)
+      try {
+        // The leader can exit on SIGTERM while a descendant ignores it. Probe
+        // the process group itself instead of using the leader's exit state.
+        process.kill(-pid, 0)
+        process.kill(-pid, "SIGKILL")
+      } catch {
+        // ESRCH means the entire group exited during the grace period.
+      }
+      return
+    }
+
+    if (opts?.exited?.()) return
+    try {
+      proc.kill(signal)
       await sleep(SIGKILL_TIMEOUT_MS)
       if (!opts?.exited?.()) {
-        process.kill(-pid, "SIGKILL")
+        proc.kill("SIGKILL")
       }
-    } catch (_e) {
-      // First kill attempt with requested signal failed (ESRCH = already exited,
-      // EPERM = not a group leader). Fall back to direct kill.
-      try {
-        proc.kill(signal)
-        await sleep(SIGKILL_TIMEOUT_MS)
-        if (!opts?.exited?.()) {
-          proc.kill("SIGKILL")
-        }
-      } catch {
-        // Process already exited — nothing left to kill.
-      }
+    } catch {
+      // Process already exited — nothing left to kill.
     }
   }
   const BLACKLIST = new Set(["fish", "nu"])

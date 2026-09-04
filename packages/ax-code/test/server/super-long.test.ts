@@ -6,6 +6,7 @@ import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
 import { Session } from "../../src/session"
 import type { SessionID } from "../../src/session/schema"
+import { ScopedFlag } from "../../src/flag/scoped"
 
 const OVERRIDE = "AX_CODE_SUPER_LONG_SESSION_OVERRIDE"
 
@@ -419,6 +420,7 @@ describe("super-long route", () => {
             elapsedMs: null,
             remainingMs: null,
           })
+          expect(ScopedFlag.superLong()).toBe(false)
         },
       })
     })

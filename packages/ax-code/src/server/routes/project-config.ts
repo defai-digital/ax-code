@@ -33,14 +33,11 @@ type PersistProjectConfigResponseOptions = {
   update: (config: Config.Info) => void | Promise<void>
 }
 
-export async function persistProjectConfigResponse(
-  options: PersistProjectConfigResponseOptions,
-): Promise<{ error: string } | undefined> {
+export async function persistProjectConfigResponse(options: PersistProjectConfigResponseOptions): Promise<void> {
   const persisted = await persistProjectConfig(options.update, {
     onError: createPersistErrorLogger(options.log, options.context),
   })
-  if (!persisted) return { error: PROJECT_CONFIG_PERSIST_ERROR }
-  return undefined
+  if (!persisted) throw new Error(PROJECT_CONFIG_PERSIST_ERROR)
 }
 
 type PersistProjectConfigFeatureResponseOptions<FeatureValue extends string | boolean, ResponseState> = {
@@ -51,10 +48,10 @@ type PersistProjectConfigFeatureResponseOptions<FeatureValue extends string | bo
 
 export async function persistProjectConfigFeatureResponse<FeatureValue extends string | boolean, ResponseState>(
   options: PersistProjectConfigFeatureResponseOptions<FeatureValue, ResponseState>,
-): Promise<{ error: string } | ResponseState> {
-  const persisted = await persistProjectConfigResponse(options)
-  if (persisted) return persisted
-  FeatureFlag.set(options.featureFlag, options.featureValue)
+): Promise<ResponseState> {
+  await persistProjectConfigResponse(options)
+  // FeatureFlag.set writes one process.env key; it is not an unbounded Set.
+  FeatureFlag.set(options.featureFlag, options.featureValue) // @scan-suppress lifecycle_scan
   // Also record per directory: the env is process-global and last-writer-wins
   // across projects, so runtime readers prefer the scoped value.
   if (typeof options.featureValue === "boolean" && isScopedFlagName(options.featureFlag)) {

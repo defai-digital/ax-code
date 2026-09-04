@@ -8,7 +8,8 @@ import {
   persistProjectConfigBooleanFeatureResponse,
   readProjectConfigFeatureState,
 } from "./project-config"
-import { Flag } from "../../flag/flag"
+import { ScopedFlag } from "../../flag/scoped"
+import { errors } from "../error"
 
 const log = Log.create({ service: "smart-llm" })
 const SmartLlmState = BooleanFeatureState.meta({ ref: "SmartLlmState" })
@@ -35,7 +36,7 @@ export const SmartLlmRoutes = lazy(() =>
       async (c) => {
         const state = await readProjectConfigFeatureState({
           featureFlag: "AX_CODE_SMART_LLM",
-          read: (config) => config?.routing?.llm ?? Flag.AX_CODE_SMART_LLM,
+          read: (config) => config?.routing?.llm ?? ScopedFlag.smartLlm(),
         })
         return c.json(state)
       },
@@ -55,6 +56,7 @@ export const SmartLlmRoutes = lazy(() =>
               },
             },
           },
+          ...errors(500),
         },
       }),
       validator("json", BooleanFeatureState),
@@ -70,7 +72,6 @@ export const SmartLlmRoutes = lazy(() =>
             config.routing.llm = enabled
           },
         })
-        if ("error" in state) return c.json(state, 500)
         log.info("smart LLM routing changed", { enabled })
         return c.json(state)
       },

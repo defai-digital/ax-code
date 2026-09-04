@@ -185,6 +185,7 @@ export const SuperLongRoutes = lazy(() =>
         // same as GET /.
         delete process.env[SUPER_LONG_OVERRIDE]
         process.env[SUPER_LONG_BASE] = String(enabled)
+        ScopedFlag.recordCurrent("AX_CODE_SUPER_LONG", enabled)
         const runtimeConfig = SuperLongPolicy.fromConfig(config?.super_long)
         const durationDecision = SuperLongPolicy.duration(runtimeConfig.requestedDurationMs)
         const durationMs = durationDecision.ok ? durationDecision.durationMs : null
@@ -220,7 +221,7 @@ export const SuperLongRoutes = lazy(() =>
               },
             },
           },
-          ...errors(409),
+          ...errors(409, 500),
         },
       }),
       validator("json", BooleanFeatureState),
@@ -257,7 +258,6 @@ export const SuperLongRoutes = lazy(() =>
             }
           },
         })
-        if ("error" in state) return c.json(state, 500)
         // Keep the session override in sync for the current process so
         // runtimeState() picks up the change immediately without a
         // restart.

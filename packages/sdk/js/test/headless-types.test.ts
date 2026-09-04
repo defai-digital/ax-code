@@ -15,6 +15,9 @@ describe("headless SDK types", () => {
     expect(HEADLESS_RUNTIME_EVENT_TYPES.has("session.error")).toBe(true)
     expect(HEADLESS_RUNTIME_EVENT_TYPES.has("scheduled.task.created")).toBe(true)
     expect(HEADLESS_RUNTIME_EVENT_TYPES.has("workflow.verification.attached")).toBe(true)
+    expect(HEADLESS_RUNTIME_EVENT_TYPES.has("server.resync_required")).toBe(true)
+    expect(HEADLESS_RUNTIME_EVENT_TYPES.has("server.serialization_error")).toBe(true)
+    expect(HEADLESS_RUNTIME_EVENT_TYPES.has("provider.updated")).toBe(true)
   })
 
   test("exports a headless runtime schema version", () => {
@@ -193,7 +196,14 @@ describe("headless SDK types", () => {
       { id: string; sessionID: string },
       { id: string; messageID: string }
     >()
-    const perm = { id: "req-1", sessionID: "sess-1", type: "bash", title: "Run", description: "", command: "ls" } as any
+    const perm = {
+      id: "req-1",
+      sessionID: "sess-1",
+      permission: "bash",
+      patterns: ["ls"],
+      metadata: {},
+      always: ["ls"],
+    }
     const result = applyHeadlessProjectionEvent(
       state,
       { type: "permission.asked", properties: perm },
@@ -202,6 +212,162 @@ describe("headless SDK types", () => {
     expect(result.effects).toHaveLength(1)
     expect(result.effects[0]?.type).toBe("permission.auto_reply")
     expect(state.permission["sess-1"] ?? []).toHaveLength(0)
+  })
+
+  test.each(["isolation_escalation", "bash_destructive", "computer"])(
+    "permission.asked keeps %s pending when autonomous is true",
+    (permission) => {
+      const state = createHeadlessProjectionState<
+        { id: string },
+        unknown,
+        unknown,
+        unknown,
+        { id: string; sessionID: string },
+        { id: string; messageID: string }
+      >()
+      const request = {
+        id: "req-1",
+        sessionID: "sess-1",
+        permission,
+        patterns: ["*"],
+        metadata: {},
+        always: [],
+      }
+
+      const result = applyHeadlessProjectionEvent(
+        state,
+        { type: "permission.asked", properties: request },
+        { autonomous: true },
+      )
+
+      expect(result.effects).toEqual([])
+      expect(state.permission["sess-1"]).toEqual([request])
+    },
+  )
+
+  test("server.resync_required requests an authoritative bootstrap reload", () => {
+    const state = createHeadlessProjectionState()
+    const event = {
+      type: "server.resync_required",
+      properties: { reason: "buffer_overflow", cursor: "42" },
+    } as const
+
+    expect(isHeadlessRuntimeEvent(event)).toBe(true)
+    expect(applyHeadlessProjectionEvent(state, event as any)).toEqual({
+      handled: true,
+      effects: [{ type: "bootstrap.reload" }],
+    })
+  })
+
+  test("server.serialization_error requests an authoritative bootstrap reload", () => {
+    const state = createHeadlessProjectionState()
+    const event = {
+      type: "server.serialization_error",
+      properties: { error: "event payload was not serializable" },
+    } as const
+
+    expect(isHeadlessRuntimeEvent(event)).toBe(true)
+    expect(applyHeadlessProjectionEvent(state, event as any)).toEqual({
+      handled: true,
+      effects: [{ type: "bootstrap.reload" }],
+    })
+  })
+
+  test("offset deltas do not duplicate text already received in a part snapshot", () => {
+    const state = createHeadlessProjectionState<
+      { id: string },
+      unknown,
+      unknown,
+      unknown,
+      { id: string; sessionID: string },
+      { id: string; messageID: string; type: string; text: string }
+    >()
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "hello" } },
+    })
+
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.delta",
+      properties: {
+        sessionID: "sess-1",
+        messageID: "msg-1",
+        partID: "part-1",
+        field: "text",
+        delta: "hello",
+        offset: 0,
+      },
+    } as any)
+
+    expect(state.part["msg-1"]?.[0]?.text).toBe("hello")
+
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.delta",
+      properties: {
+        sessionID: "sess-1",
+        messageID: "msg-1",
+        partID: "part-1",
+        field: "text",
+        delta: " world",
+        offset: 5,
+      },
+    } as any)
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "hello" } },
+    })
+
+    expect(state.part["msg-1"]?.[0]?.text).toBe("hello world")
+  })
+
+  test("session.deleted removes task queue items scoped to the deleted session", () => {
+    const state = createHeadlessProjectionState<
+      { id: string },
+      unknown,
+      unknown,
+      unknown,
+      { id: string; sessionID: string },
+      { id: string; messageID: string },
+      unknown,
+      unknown,
+      { id: string; sessionID?: string }
+    >()
+    state.session = [{ id: "sess-1" }, { id: "sess-2" }]
+    state.task_queue = [
+      { id: "task-1", sessionID: "sess-1" },
+      { id: "task-2", sessionID: "sess-2" },
+    ]
+
+    applyHeadlessProjectionEvent(state, {
+      type: "session.deleted",
+      properties: { info: { id: "sess-1" } },
+    })
+
+    expect(state.session).toEqual([{ id: "sess-2" }])
+    expect(state.task_queue).toEqual([{ id: "task-2", sessionID: "sess-2" }])
+  })
+
+  test("a non-finite message cap falls back to the bounded default", () => {
+    const state = createHeadlessProjectionState<
+      { id: string },
+      unknown,
+      unknown,
+      unknown,
+      { id: string; sessionID: string },
+      { id: string; messageID: string }
+    >()
+
+    for (let index = 0; index < 101; index += 1) {
+      const id = `msg-${String(index).padStart(3, "0")}`
+      applyHeadlessProjectionEvent(
+        state,
+        { type: "message.updated", properties: { info: { id, sessionID: "sess-1" } } },
+        { maxSessionMessages: Number.NaN },
+      )
+    }
+
+    expect(state.message["sess-1"]).toHaveLength(100)
+    expect(state.message["sess-1"]?.[0]?.id).toBe("msg-001")
   })
 
   test("workflow runtime events request workflow probe refreshes", () => {

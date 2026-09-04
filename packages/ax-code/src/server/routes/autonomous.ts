@@ -5,6 +5,7 @@ import { Log } from "../../util/log"
 import { lazy } from "../../util/lazy"
 import { FeatureFlag } from "../../util/feature-flags"
 import { ScopedFlag } from "../../flag/scoped"
+import { errors } from "../error"
 import {
   BooleanFeatureState,
   persistProjectConfigBooleanFeatureResponse,
@@ -64,6 +65,7 @@ export const AutonomousRoutes = lazy(() =>
               },
             },
           },
+          ...errors(500),
         },
       }),
       validator("json", BooleanFeatureState),
@@ -93,7 +95,6 @@ export const AutonomousRoutes = lazy(() =>
             }
           },
         })
-        if ("error" in state) return c.json(state, 500)
         if (!enabled) {
           // When autonomous is disabled, super-long must also be
           // suppressed. Clear both the session override AND the
