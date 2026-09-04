@@ -63,8 +63,13 @@ export namespace Recorder {
   }
 
   export function begin(sessionID: SessionID) {
-    const token = (sessions.get(sessionID)?.token ?? 0) + 1
-    sessions.set(sessionID, { sequence: 0, token })
+    const previous = sessions.get(sessionID)
+    const token = (previous?.token ?? 0) + 1
+    // A prompt loop is only one recording window within a durable session.
+    // Preserve queued events on an active restart, or resume from storage
+    // after end() removed the in-memory counter.
+    const sequence = previous?.sequence ?? EventQuery.nextSequence(sessionID)
+    sessions.set(sessionID, { sequence, token })
     while (sessions.size > MAX_SESSIONS) {
       const oldest = sessions.keys().next().value
       if (oldest === undefined || oldest === sessionID) break

@@ -250,6 +250,20 @@ export namespace EventQuery {
     return row?.count ?? 0
   }
 
+  export function nextSequence(sessionID: SessionID): number {
+    const store = SessionShard.storeFor(sessionID)
+    const row = store.use((db) =>
+      db
+        .select({ sequence: EventLogTable.sequence })
+        .from(EventLogTable)
+        .where(eq(EventLogTable.session_id, sessionID))
+        .orderBy(desc(EventLogTable.sequence))
+        .limit(1)
+        .get(),
+    )
+    return row ? row.sequence + 1 : 0
+  }
+
   export type AllSinceRow = {
     session_id: SessionID
     event_data: ReplayEvent
