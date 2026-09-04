@@ -31,6 +31,14 @@ const SAFE_PERMISSIONS: ReadonlySet<string> = new Set([
   "code_intelligence",
   "skill",
   "todoread",
+  // Cloud Operations control-plane records (PRD-2026-09-04): opening a plan,
+  // attaching a diff artifact, verifying with read-only assertions, and
+  // reading the journal. None of these mutate external state — ops_apply is
+  // the only mutation path and is classified RISK below.
+  "ops_plan",
+  "ops_diff",
+  "ops_verify",
+  "ops_journal",
 ])
 
 /**
@@ -74,6 +82,11 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   "monitor",
   "image_gen",
   "computer",
+  // Cloud Operations sanctioned mutation path (PRD-2026-09-04). The
+  // capability check lives in ops_apply itself (single-use plan-bound
+  // approval token); the permission still never auto-approves outside
+  // full-access isolation.
+  "ops_apply",
 ])
 
 export function classify(permission: string): RiskClass {

@@ -1,0 +1,5 @@
+Attach the machine-checkable diff artifact to an operation plan.
+
+Use this after producing the concrete plan output for an opened plan: a `terraform plan -out=<file>`, a Junos `show | compare`, a VyOS commit-confirm dry-run, or cloud CLI dry-run output. Pass a stable reference to that artifact (path or hash-addressed store ref) plus a short summary of what the diff shows.
+
+The plan's canonical hash does not change when a diff is attached in v1 — a refreshed diff is journaled as a new entry on the same plan. Plan revision supersession (a new plan hash replacing an old one) is a later phase. The diff is what the human reviews before approving, so always attach it before calling `ops_approve`.

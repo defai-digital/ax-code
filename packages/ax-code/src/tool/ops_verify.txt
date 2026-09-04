@@ -1,0 +1,5 @@
+Verify an operation plan by running declarative read-only assertions and recording the evidence in the journal.
+
+Use this after `ops_apply` to confirm the external state actually matches the approved intent. Each assertion runs its command and passes when the combined stdout/stderr contains the expected string and the command exits 0. Assertion commands MUST be read-only — `describe`, `get`, `show`, `list`, `terraform show`, config diffs. Never put a mutating command here: mutations only go through `ops_apply` with a valid approval token.
+
+The outcome is journaled as "verified" when every assertion passes, "failed" otherwise, so the audit trail shows both the mutation and its verification evidence.

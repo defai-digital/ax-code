@@ -1,0 +1,5 @@
+Open an operation plan for an infrastructure change before mutating any external state.
+
+Use this as the first step of any cloud or network administration task (AWS, GCP, Cloudflare, OVHcloud, DigitalOcean, RunPod, VyOS, Junos). Describe the target (provider/account/region or device), the intent, and every step with its effect, reversibility (reversible | hard | irreversible), and blast_radius (low | med | high). The plan produces a canonical hash that the later `ops_approve` step pins — approval applies to exactly this hash, so args drift is detectable.
+
+The machine-checkable diff/plan artifact (terraform plan -out, `show | compare`, CLI dry-run output) must be produced and reviewed, then attached with `ops_diff`, before any human approval. Never skip straight to mutation: the chain is ops_plan → ops_diff → ops_approve → ops_apply.

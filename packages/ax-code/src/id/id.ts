@@ -31,6 +31,9 @@ export namespace Identifier {
     workflow_child: "wfc",
     workflow_artifact: "wfa",
     workflow_budget: "wfb",
+    operation_plan: "opl",
+    operation_journal: "ojr",
+    operation_token: "otk",
   } as const
 
   export type Prefix = keyof typeof prefixes

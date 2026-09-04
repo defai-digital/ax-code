@@ -1,0 +1,5 @@
+Request human approval for an operation plan.
+
+Use this after the plan and its machine-checkable diff are attached and reviewed. This is an interactive-only gate: the user is shown the plan's canonical hash and must confirm every call — no wildcard rule or autonomous mode can pre-approve it, and no durable "always allow" grant is offered.
+
+On approval the plan moves to "approved" and a single-use approval token is issued: TTL-bound (default 10 minutes, max 60), bound to this plan's canonical hash, and revealed exactly once in the result. Hand it to `ops_apply` as `approval_token`. A failed apply does not refund the token — retrying requires re-approval. If the user denies, the plan is marked "rejected" and the denial is journaled.

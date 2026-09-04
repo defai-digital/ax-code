@@ -218,7 +218,13 @@ export namespace Permission {
   // auto-reply. This prevents agent default rules like
   // {permission:"*",action:"allow",pattern:"*"} and headless projection
   // from silently bypassing critical safety checks.
-  export const INTERACTIVE_ONLY: ReadonlySet<string> = new Set(["isolation_escalation", "bash_destructive"])
+  export const INTERACTIVE_ONLY: ReadonlySet<string> = new Set([
+    "isolation_escalation",
+    "bash_destructive",
+    // Cloud Operations approval gate (PRD-2026-09-04-cloud-operations-mode):
+    // approving a plan must never be pre-approved by wildcard rules.
+    "ops_approve",
+  ])
 
   export const EXACT_GRANT_ONLY_PERMISSIONS: ReadonlySet<string> = EXACT_GRANT_ONLY
 

@@ -1,0 +1,5 @@
+Read the operation journal — the append-only audit trail of infrastructure plans and changes.
+
+Use this to inspect what was planned, approved, executed, verified, or failed. Pass `plan_id` to see one plan's entries in sequence order (each entry carries a hash chained to its predecessor, so history tampering is detectable), or omit it to list entries across all plans of the current project, newest first. Filter by `status` and bound the result with `limit`.
+
+This view is read-only: it never changes plans, tokens, or the journal.

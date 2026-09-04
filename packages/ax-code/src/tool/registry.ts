@@ -56,6 +56,12 @@ import { ApplyPatchTool } from "./apply_patch"
 import { RegisterFindingTool } from "./register_finding"
 import { VerifyProjectTool } from "./verify_project"
 import { ReviewCompleteTool } from "./review_complete"
+import { OpsPlanTool } from "./ops_plan"
+import { OpsDiffTool } from "./ops_diff"
+import { OpsApproveTool } from "./ops_approve"
+import { OpsApplyTool } from "./ops_apply"
+import { OpsVerifyTool } from "./ops_verify"
+import { OpsJournalTool } from "./ops_journal"
 import { MemorySaveTool } from "./memory"
 import { GetGoalTool, CreateGoalTool, UpdateGoalTool } from "./goal"
 import { SubmitGoalPlanTool } from "./submit_goal_plan"
@@ -305,6 +311,12 @@ export namespace ToolRegistry {
       RegisterFindingTool,
       VerifyProjectTool,
       ReviewCompleteTool,
+      OpsPlanTool,
+      OpsDiffTool,
+      OpsApproveTool,
+      OpsApplyTool,
+      OpsVerifyTool,
+      OpsJournalTool,
       DebugOpenCaseTool,
       DebugCaptureEvidenceTool,
       DebugPlanInstrumentationTool,
