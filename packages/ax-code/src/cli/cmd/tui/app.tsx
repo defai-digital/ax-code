@@ -90,6 +90,7 @@ import { launchWebUi } from "@/desktop/webui"
 import { formatTuiUpgradeCompleteMessage } from "./upgrade-check-view-model"
 import { parseIsolationState } from "./context/sync-runtime-store"
 import { parseJsonPayload } from "@/util/json-value"
+import { createTuiDialogLoaders } from "./tui-dialogs"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -284,146 +285,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     if (input.navigateHome) route.navigate({ type: "home" })
   }
 
-  async function showProviderDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogProvider: ProviderDialog } = await import("@tui/component/dialog-provider")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <ProviderDialog />)
-    } catch (error) {
-      Log.Default.warn("failed to load provider dialog", { error })
-      toast.show({ message: "Failed to open provider dialog", variant: "error" })
-    }
-  }
-
-  async function showProvidersDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogProviders } = await import("@tui/component/dialog-providers")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogProviders />)
-    } catch (error) {
-      Log.Default.warn("failed to load providers dialog", { error })
-      toast.show({ message: "Failed to open providers dialog", variant: "error" })
-    }
-  }
-
-  async function showModelDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogModel: ModelDialog } = await import("@tui/component/dialog-model")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <ModelDialog />)
-    } catch (error) {
-      Log.Default.warn("failed to load model dialog", { error })
-      toast.show({ message: "Failed to open model dialog", variant: "error" })
-    }
-  }
-
-  async function showEffortDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      if (local.model.variant.list().length === 0) {
-        const model = local.model.parsed().model
-        await DialogAlert.show(
-          dialog,
-          "Effort",
-          `${model ?? "This model"} does not expose effort levels.\n\nEffort is available on Anthropic Claude, OpenAI GPT/Codex CLI, Grok Build CLI, Google Gemini, Claude Code, and OpenAI-compatible providers. Other providers can define custom levels under provider.<id>.models.<model>.variants in ax-code.json.`,
-        )
-        return
-      }
-      const { DialogEffort: EffortDialog } = await import("@tui/component/dialog-effort")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <EffortDialog />)
-    } catch (error) {
-      Log.Default.warn("failed to load effort dialog", { error })
-      toast.show({ message: "Failed to open effort dialog", variant: "error" })
-    }
-  }
-
-  async function showSessionListDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogSessionList } = await import("@tui/component/dialog-session-list")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogSessionList />)
-    } catch (error) {
-      Log.Default.warn("failed to load session list dialog", { error })
-      toast.show({ message: "Failed to open session list", variant: "error" })
-    }
-  }
-
-  async function showWorkspaceListDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogWorkspaceList } = await import("@tui/component/dialog-workspace-list")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogWorkspaceList />)
-    } catch (error) {
-      Log.Default.warn("failed to load workspace list dialog", { error })
-      toast.show({ message: "Failed to open workspace list", variant: "error" })
-    }
-  }
-
-  async function showAgentDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogAgent } = await import("@tui/component/dialog-agent")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogAgent />)
-    } catch (error) {
-      Log.Default.warn("failed to load agent dialog", { error })
-      toast.show({ message: "Failed to open agent list", variant: "error" })
-    }
-  }
-
-  async function showMcpDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogMcp } = await import("@tui/component/dialog-mcp")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogMcp />)
-    } catch (error) {
-      Log.Default.warn("failed to load mcp dialog", { error })
-      toast.show({ message: "Failed to open MCP list", variant: "error" })
-    }
-  }
-
-  async function showStatusDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogStatus } = await import("@tui/component/dialog-status")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogStatus />)
-    } catch (error) {
-      Log.Default.warn("failed to load status dialog", { error })
-      toast.show({ message: "Failed to open status", variant: "error" })
-    }
-  }
-
-  async function showThemeListDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogThemeList } = await import("@tui/component/dialog-theme-list")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogThemeList />)
-    } catch (error) {
-      Log.Default.warn("failed to load theme dialog", { error })
-      toast.show({ message: "Failed to open themes", variant: "error" })
-    }
-  }
-
-  async function showHelpDialog() {
-    const marker = dialog.stack.at(-1)
-    try {
-      const { DialogHelp } = await import("./ui/dialog-help")
-      if (dialog.stack.at(-1) !== marker) return
-      dialog.replace(() => <DialogHelp />)
-    } catch (error) {
-      Log.Default.warn("failed to load help dialog", { error })
-      toast.show({ message: "Failed to open help", variant: "error" })
-    }
-  }
+  const dialogs = createTuiDialogLoaders({
+    dialog,
+    toast,
+    variantCount: () => local.model.variant.list().length,
+    currentModelName: () => local.model.parsed().model,
+  })
 
   useKeyboard((evt) => {
     if (!Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
@@ -932,7 +799,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       (isEmpty, wasEmpty) => {
         // only trigger when we transition into an empty-provider state
         if (!isEmpty || wasEmpty) return
-        void showProviderDialog()
+        void dialogs.showProviderDialog()
       },
     ),
   )
@@ -950,7 +817,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         aliases: ["resume", "continue"],
       },
       onSelect: () => {
-        void showSessionListDialog()
+        void dialogs.showSessionListDialog()
       },
     },
     ...(Flag.AX_CODE_EXPERIMENTAL_WORKSPACES
@@ -961,7 +828,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
             category: "Workspace",
             suggested: true,
             onSelect: () => {
-              void showWorkspaceListDialog()
+              void dialogs.showWorkspaceListDialog()
             },
           },
         ]
@@ -1025,7 +892,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         aliases: ["models"],
       },
       onSelect: () => {
-        void showModelDialog()
+        void dialogs.showModelDialog()
       },
     },
     {
@@ -1079,7 +946,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         hidden: true,
       },
       onSelect: () => {
-        void showAgentDialog()
+        void dialogs.showAgentDialog()
       },
     },
     {
@@ -1090,7 +957,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "mcp",
       },
       onSelect: () => {
-        void showMcpDialog()
+        void dialogs.showMcpDialog()
       },
     },
     {
@@ -1113,7 +980,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         hidden: true,
       },
       onSelect: () => {
-        void showEffortDialog()
+        void dialogs.showEffortDialog()
       },
     },
     {
@@ -1158,7 +1025,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "connect",
       },
       onSelect: () => {
-        void showProviderDialog()
+        void dialogs.showProviderDialog()
       },
       category: "Provider",
     },
@@ -1169,7 +1036,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "providers",
       },
       onSelect: () => {
-        void showProvidersDialog()
+        void dialogs.showProvidersDialog()
       },
       category: "Provider",
     },
@@ -1181,7 +1048,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "status",
       },
       onSelect: () => {
-        void showStatusDialog()
+        void dialogs.showStatusDialog()
       },
       category: "System",
     },
@@ -1195,7 +1062,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         hidden: true,
       },
       onSelect: () => {
-        void showThemeListDialog()
+        void dialogs.showThemeListDialog()
       },
       category: "System",
     },
@@ -1225,7 +1092,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         name: "help",
       },
       onSelect: () => {
-        void showHelpDialog()
+        void dialogs.showHelpDialog()
       },
       category: "System",
     },

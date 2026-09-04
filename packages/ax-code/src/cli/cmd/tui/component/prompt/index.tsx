@@ -126,6 +126,7 @@ import {
   setPromptPartSourceRange,
 } from "./prompt-helpers"
 import { PLACEHOLDERS, SHELL_PLACEHOLDERS, SUBMIT_ACCEPT_TIMEOUT_MS } from "./prompt-config"
+import { submitPromptRoute } from "./prompt-submit"
 import type { AsyncSessionRoute, PromptProps, PromptRef } from "./prompt-types"
 import { Installation } from "@/installation"
 import { useTuiConfig } from "../../context/tui-config"
@@ -1161,52 +1162,12 @@ export function Prompt(props: PromptProps) {
     action: string
     signal: AbortSignal
   }) {
-    const startedAt = performance.now()
-    DiagnosticLog.recordProcess("tui.promptSubmitAcceptStarted", {
-      sessionID: input.sessionID,
-      path: input.path,
-      action: input.action,
+    await submitPromptRoute({
+      ...input,
+      url: sdk.url,
+      headers: requestHeaders(),
+      fetch: sdk.fetch,
     })
-    const response = await withTimeout(
-      sdk.fetch(`${sdk.url}/session/${encodeURIComponent(input.sessionID)}/${input.path}`, {
-        method: "POST",
-        headers: requestHeaders(),
-        body: JSON.stringify(input.body),
-        signal: input.signal,
-      }),
-      SUBMIT_ACCEPT_TIMEOUT_MS,
-      `${input.action} acceptance timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
-    ).catch((error) => {
-      DiagnosticLog.recordProcess("tui.promptSubmitAcceptFailed", {
-        sessionID: input.sessionID,
-        path: input.path,
-        action: input.action,
-        elapsedMs: Math.round(performance.now() - startedAt),
-        error,
-      })
-      throw error
-    })
-
-    if (response.status === 202 || response.ok) {
-      DiagnosticLog.recordProcess("tui.promptSubmitAccepted", {
-        sessionID: input.sessionID,
-        path: input.path,
-        action: input.action,
-        status: response.status,
-        elapsedMs: Math.round(performance.now() - startedAt),
-      })
-      return
-    }
-    const message = await responseErrorMessage(response)
-    DiagnosticLog.recordProcess("tui.promptSubmitRejected", {
-      sessionID: input.sessionID,
-      path: input.path,
-      action: input.action,
-      status: response.status,
-      elapsedMs: Math.round(performance.now() - startedAt),
-      message,
-    })
-    throw new Error(message)
   }
 
   async function submit() {

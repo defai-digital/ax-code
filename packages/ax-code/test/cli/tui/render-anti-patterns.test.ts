@@ -713,19 +713,21 @@ describe("AX Code TUI stability guardrails", () => {
 
   test("keeps app-level lazy dialog loaders marker-guarded and user-visible on failure", async () => {
     const app = await fs.readFile(APP_SRC, "utf8")
+    const dialogs = await fs.readFile(path.join(TUI_ROOT, "tui-dialogs.tsx"), "utf8")
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
-    expect(app).toContain("const marker = dialog.stack.at(-1)")
-    expect(app).toContain("if (dialog.stack.at(-1) !== marker) return")
-    expect(app).toContain('toast.show({ message: "Failed to open provider dialog", variant: "error" })')
-    expect(app).toContain('toast.show({ message: "Failed to open model dialog", variant: "error" })')
-    expect(app).toContain('toast.show({ message: "Failed to open session list", variant: "error" })')
-    expect(app).toContain('toast.show({ message: "Failed to open workspace list", variant: "error" })')
-    expect(app).toContain('toast.show({ message: "Failed to open agent list", variant: "error" })')
-    expect(app).toContain('toast.show({ message: "Failed to open MCP list", variant: "error" })')
-    expect(app).toContain('toast.show({ message: "Failed to open status", variant: "error" })')
-    expect(app).toContain('toast.show({ message: "Failed to open themes", variant: "error" })')
-    expect(app).toContain('toast.show({ message: "Failed to open help", variant: "error" })')
+    expect(app).toContain("createTuiDialogLoaders")
+    expect(dialogs).toContain("const marker = input.dialog.stack.at(-1)")
+    expect(dialogs).toContain("if (input.dialog.stack.at(-1) !== marker) return")
+    expect(dialogs).toContain('fail: "Failed to open provider dialog"')
+    expect(dialogs).toContain('fail: "Failed to open model dialog"')
+    expect(dialogs).toContain('fail: "Failed to open session list"')
+    expect(dialogs).toContain('fail: "Failed to open workspace list"')
+    expect(dialogs).toContain('fail: "Failed to open agent list"')
+    expect(dialogs).toContain('fail: "Failed to open MCP list"')
+    expect(dialogs).toContain('fail: "Failed to open status"')
+    expect(dialogs).toContain('fail: "Failed to open themes"')
+    expect(dialogs).toContain('fail: "Failed to open help"')
 
     expect(prompt).toContain("if (dialog.stack.at(-1) !== marker) return")
     expect(prompt).toContain('toast.show({ message: "Failed to open provider dialog", variant: "error" })')
@@ -1047,11 +1049,11 @@ describe("AX Code TUI stability guardrails", () => {
   })
 
   test("hides assistant thinking spinner once the message has an error", async () => {
-    const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
+    const transcript = await fs.readFile(path.join(TUI_ROOT, "routes/session/transcript.tsx"), "utf8")
 
-    expect(session).toContain("isAssistantThinkingActive")
-    expect(session).toContain("sessionStatusType: statusType")
-    expect(session).toContain('props.message.error?.name === "MessageAbortedError"')
+    expect(transcript).toContain("isAssistantThinkingActive")
+    expect(transcript).toContain("sessionStatusType: statusType")
+    expect(transcript).toContain('props.message.error?.name === "MessageAbortedError"')
   })
 
   test("keeps newly-created prompt sessions durable before the route handoff", async () => {

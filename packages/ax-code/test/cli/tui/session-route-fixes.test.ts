@@ -126,18 +126,18 @@ describe("fork pre-filled prompt on session navigation", () => {
 
 describe("streaming tool-output fold stability", () => {
   test("display-part wrappers are identity-cached so expanded rows survive streamed updates", async () => {
-    const sessionIndex = await fs.readFile(SESSION_INDEX_SRC, "utf8")
+    const transcript = await fs.readFile(path.join(TUI_ROOT, "routes/session/transcript.tsx"), "utf8")
 
     // A bare createMemo(() => coalesceParts(...)) fabricates new wrappers
     // each run; <For> keys by identity, so every streamed part recreated all
     // rows and reset their per-row expanded signals.
-    expect(sessionIndex).not.toMatch(/createMemo\(\(\) => coalesceParts\(props\.parts\)\)/)
-    expect(sessionIndex).toContain("displayPartCache")
-    expect(sessionIndex).toContain("function sameDisplayPart(")
+    expect(transcript).not.toMatch(/createMemo\(\(\) => coalesceParts\(props\.parts\)\)/)
+    expect(transcript).toContain("displayPartCache")
+    expect(transcript).toContain("function sameDisplayPart(")
     // Cache keys distinguish singles (part.id) from coalesced runs (first
     // callID) so the two kinds cannot collide.
-    expect(sessionIndex).toContain("`single:${entry.part.id}`")
-    expect(sessionIndex).toContain("`coalesced:${entry.key}`")
+    expect(transcript).toContain("`single:${entry.part.id}`")
+    expect(transcript).toContain("`coalesced:${entry.key}`")
   })
 })
 
