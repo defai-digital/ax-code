@@ -72,6 +72,12 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       metadata: {
         kind: contract.kind,
         acceptanceIds: contract.acceptance.map((item) => item.id),
+        // The output IS the persisted artifact: the orchestrator re-reads it
+        // from the tool part after this session ends and feeds it to
+        // GoalPlan.write. The byte cap above already bounds it to 8 KiB, so
+        // opt out of the generic line-truncation pass — a truncated plan would
+        // parse-fail (or silently lose sections) only after the writer stopped.
+        truncated: false,
       },
     }
   },

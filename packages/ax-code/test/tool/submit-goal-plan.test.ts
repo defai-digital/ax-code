@@ -95,4 +95,41 @@ describe("submit_goal_plan", () => {
     expect(Buffer.byteLength(result.output, "utf8")).toBeLessThanOrEqual(GoalPlan.MAX_READ_BYTES)
     expect(() => GoalPlan.parse(result.output)).not.toThrow()
   })
+
+  test("opts out of generic output truncation so the persisted plan stays intact", async () => {
+    // A plan of many tiny single-character non-goals can stay under the byte
+    // cap while exceeding the generic 2000-line truncation threshold. Without
+    // the bypass, the tool part stored for the orchestrator would lose its
+    // tail sections and GoalPlan.write would fail (or freeze a truncated
+    // contract) only after the writer session has stopped.
+    const tool = await SubmitGoalPlanTool.init()
+    const result = await tool.execute(
+      {
+        kind: "code-change",
+        title: "x",
+        acceptance: ["a"],
+        verification: [{ tag: "gating", action: "a", observation: "a" }],
+        nonGoals: Array.from({ length: 1985 }, () => "a"),
+        assumedScope: "a",
+        implementationApproach: "a",
+        taskChecklist: ["a", "b"],
+      },
+      {
+        sessionID: "ses_test" as any,
+        messageID: MessageID.ascending(),
+        agent: "goal-plan-writer",
+        abort: new AbortController().signal,
+        messages: [],
+        extra: {},
+        metadata() {},
+        async ask() {},
+      },
+    )
+    const { Truncate } = await import("../../src/tool/truncate")
+    expect(Buffer.byteLength(result.output, "utf8")).toBeLessThanOrEqual(GoalPlan.MAX_READ_BYTES)
+    expect(result.output.split("\n").length).toBeGreaterThan(Truncate.MAX_LINES)
+    expect(result.metadata.truncated).toBe(false)
+    expect(result.output).toContain("## Task checklist")
+    expect(() => GoalPlan.parse(result.output)).not.toThrow()
+  })
 })
