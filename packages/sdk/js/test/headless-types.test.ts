@@ -320,6 +320,28 @@ describe("headless SDK types", () => {
     expect(state.part["msg-1"]?.[0]?.text).toBe("hello world")
   })
 
+  test("a shorter snapshot that is not a prefix applies (legitimate rewrite)", () => {
+    const state = createHeadlessProjectionState<
+      { id: string },
+      unknown,
+      unknown,
+      unknown,
+      { id: string; sessionID: string },
+      { id: string; messageID: string; type: string; text: string }
+    >()
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "hello world this is long" } },
+    })
+
+    applyHeadlessProjectionEvent(state, {
+      type: "message.part.updated",
+      properties: { part: { id: "part-1", messageID: "msg-1", type: "text", text: "rewritten" } },
+    })
+
+    expect(state.part["msg-1"]?.[0]?.text).toBe("rewritten")
+  })
+
   test("session.deleted removes task queue items scoped to the deleted session", () => {
     const state = createHeadlessProjectionState<
       { id: string },

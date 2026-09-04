@@ -344,11 +344,20 @@ function mergeSnapshotInPlace<T extends { id: string }>(existing: T, incoming: T
   for (const key of Object.keys(incoming) as Array<keyof T>) {
     // Part snapshots and deltas are delivered on independently coalesced
     // channels. A stale snapshot must not rewind text already applied from a
-    // newer offset delta.
+    // newer offset delta. On an append-only delta stream a stale snapshot is a
+    // prefix of the already-extended text, so only skip prefix truncations;
+    // legitimate rewrites/rollbacks change content and still apply.
     if (key === "text") {
       const previous = (existing as { text?: unknown }).text
       const next = (incoming as { text?: unknown }).text
-      if (typeof previous === "string" && typeof next === "string" && next.length < previous.length) continue
+      if (
+        typeof previous === "string" &&
+        typeof next === "string" &&
+        next.length < previous.length &&
+        previous.startsWith(next)
+      ) {
+        continue
+      }
     }
     existing[key] = incoming[key]
   }

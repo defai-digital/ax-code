@@ -276,6 +276,10 @@ export async function startHeadlessBackend(options: HeadlessBackendOptions = {})
       proc.stderr?.off("data", onStderr)
       proc.off("error", onError)
       proc.off("exit", onExit)
+      // Keep the child's pipes flowing after startup so a chatty backend does
+      // not block on a full pipe buffer once we stop forwarding startup logs.
+      proc.stdout?.resume()
+      proc.stderr?.resume()
     }
 
     const onStdout = (chunk: Buffer) => {

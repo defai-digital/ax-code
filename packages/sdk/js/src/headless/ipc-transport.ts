@@ -37,6 +37,11 @@ type IpcTransportResponse = {
   body?: unknown
 }
 
+// Bound the event buffer so request-only consumers (which never subscribe)
+// cannot grow memory without limit, while still absorbing bursts between a
+// subscriber's .next() calls.
+const MAX_BUFFERED_EVENTS = 1000
+
 export async function connectIpcTransport(options: IpcTransportOptions): Promise<IpcTransportConnectResult> {
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) {
@@ -120,8 +125,14 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
     if (pendingConnection) return pendingConnection
     pendingConnection = connectIpcTransport(options)
       .then((conn) => {
-        connection = conn
         pendingConnection = undefined
+        // close() may have run while the connection was being established.
+        // Destroy the late-arriving socket so it cannot leak or start a reader.
+        if (closed) {
+          conn.socket.destroy()
+          throw new Error("IPC transport closed")
+        }
+        connection = conn
         startReader(conn)
         return conn
       })
@@ -167,11 +178,18 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
       case "event": {
         const event = normalizeIpcEvent(message.event, options.directory)
         if (!event) return
-        const waiter = eventWaiters.shift()
-        if (waiter) {
-          waiter.resolve({ value: event, done: false })
+        // Broadcast each event to every active subscriber. The HTTP transport
+        // gives each subscribe() call an independent SSE stream, so a single
+        // consumer must never steal events from another. When no subscriber is
+        // currently pulling, buffer into a bounded queue so bursts between
+        // .next() calls are not lost, but request-only consumers cannot grow
+        // memory without bound.
+        if (eventWaiters.length > 0) {
+          const waiters = eventWaiters.splice(0)
+          for (const waiter of waiters) waiter.resolve({ value: event, done: false })
         } else {
           eventQueue.push(event)
+          if (eventQueue.length > MAX_BUFFERED_EVENTS) eventQueue.shift()
         }
         break
       }
@@ -186,8 +204,11 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
     for (const pending of requests) {
       pending.reject(error)
     }
+    // End event subscriptions cleanly rather than throwing into consumers'
+    // loops. A fire-and-forget for-await over subscribe() must not surface an
+    // unhandled rejection when the transport is closed or the socket dies.
     for (const waiter of waiters) {
-      waiter.reject(error)
+      waiter.resolve({ value: undefined, done: true })
     }
   }
 
@@ -200,7 +221,7 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
       id,
       method: request.method,
       path: request.path,
-      query: request.query,
+      query: sanitizeQuery(request.query),
       headers: baseHeaders,
     }
     if (request.body !== undefined) {
@@ -209,7 +230,15 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
     const responsePromise = new Promise<IpcTransportResponse>((resolve, reject) => {
       pendingRequests.set(id, { resolve, reject })
     })
-    await writeIpcMessage(conn.socket, message)
+    try {
+      await writeIpcMessage(conn.socket, message)
+    } catch (error) {
+      // The request never reached the server, so no response will arrive.
+      // Remove the pending entry to avoid failing it later with no observer
+      // (an unhandled rejection that crashes Node >= 15).
+      pendingRequests.delete(id)
+      throw error
+    }
     return responsePromise
   }
 
@@ -258,35 +287,50 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
     async *subscribe(options: HeadlessTransportSubscribeOptions = {}): AsyncGenerator<Event> {
       await ensureConnection()
       const signal = options.signal
-      while (!closed && !(signal?.aborted ?? false)) {
-        if (eventQueue.length > 0) {
-          yield eventQueue.shift()!
-          continue
-        }
-        const next = await new Promise<IteratorResult<Event, undefined>>((resolve, reject) => {
-          const waiter = { resolve, reject }
-          eventWaiters.push(waiter)
-          if (signal) {
-            const onAbort = () => {
-              // Remove the waiter from the queue so it is not resolved twice.
-              const idx = eventWaiters.indexOf(waiter)
-              if (idx !== -1) eventWaiters.splice(idx, 1)
-              reject(new Error("IPC subscription aborted"))
-            }
-            signal.addEventListener("abort", onAbort, { once: true })
-            // Wrap resolve/reject so the abort listener is always cleaned up.
-            waiter.resolve = (value) => {
-              signal.removeEventListener("abort", onAbort)
-              resolve(value)
-            }
-            waiter.reject = (error) => {
-              signal.removeEventListener("abort", onAbort)
-              reject(error)
-            }
+      let waiter:
+        | { resolve: (value: IteratorResult<Event, undefined>) => void; reject: (error: Error) => void }
+        | undefined
+      try {
+        while (!closed && !(signal?.aborted ?? false)) {
+          if (eventQueue.length > 0) {
+            yield eventQueue.shift()!
+            continue
           }
-        })
-        if (next.done) break
-        yield next.value
+          const next = await new Promise<IteratorResult<Event, undefined>>((resolve, reject) => {
+            waiter = { resolve, reject }
+            eventWaiters.push(waiter)
+            if (signal) {
+              const onAbort = () => {
+                // End iteration cleanly, matching the HTTP/SSE transport which
+                // completes on abort instead of throwing into the consumer.
+                if (waiter === undefined) return
+                const idx = eventWaiters.indexOf(waiter)
+                if (idx !== -1) eventWaiters.splice(idx, 1)
+                resolve({ value: undefined, done: true })
+              }
+              signal.addEventListener("abort", onAbort, { once: true })
+              // Wrap resolve/reject so the abort listener is always cleaned up.
+              waiter.resolve = (value) => {
+                signal.removeEventListener("abort", onAbort)
+                resolve(value)
+              }
+              waiter.reject = (error) => {
+                signal.removeEventListener("abort", onAbort)
+                reject(error)
+              }
+            }
+          })
+          if (next.done) break
+          yield next.value
+        }
+      } finally {
+        // If the consumer returns early (break out of for-await), detach the
+        // waiter so it cannot be delivered a stale event or a spurious
+        // rejection after the generator has finished.
+        if (waiter !== undefined) {
+          const idx = eventWaiters.indexOf(waiter)
+          if (idx !== -1) eventWaiters.splice(idx, 1)
+        }
       }
     },
 
@@ -296,6 +340,12 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
       // Fail all pending callers before destroying the socket so they receive
       // a clean error rather than a raw socket destruction error from the reader.
       failAllPending(new Error("IPC transport closed"))
+      // A connection may still be in flight; wait for it and destroy the
+      // late-arriving socket so it cannot leak or keep the process alive.
+      if (pendingConnection) {
+        const conn = await pendingConnection.catch(() => undefined)
+        conn?.socket.destroy()
+      }
       connection?.socket.destroy()
       if (readerPromise) {
         // Swallow reader termination errors; the socket is already destroyed.
@@ -321,6 +371,14 @@ export class IpcTransportError extends Error {
 
 function generateRequestId(): string {
   return randomUUID()
+}
+
+function sanitizeQuery(query: HeadlessTransportRequest["query"]) {
+  if (!query) return query
+  return Object.fromEntries(Object.entries(query).filter(([, value]) => value !== undefined)) as Record<
+    string,
+    string | number | boolean
+  >
 }
 
 function normalizeIpcEvent(value: unknown, directory?: string): Event | undefined {

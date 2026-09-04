@@ -242,6 +242,66 @@ describe("ipc transport client", () => {
       await transport.close?.()
     }
   })
+
+  test("broadcasts each event to every concurrent subscriber", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
+
+      const sub1 = transport.subscribe()[Symbol.asyncIterator]()
+      const sub2 = transport.subscribe()[Symbol.asyncIterator]()
+      const p1 = sub1.next()
+      const p2 = sub2.next()
+
+      // Allow both generators to register their waiters.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      for (const socket of sockets) {
+        await writeIpcMessage(socket, { type: "event", event: { type: "server.connected" } })
+      }
+
+      const [r1, r2] = await Promise.all([p1, p2])
+      expect(r1.done).toBe(false)
+      expect(r1.value).toEqual({ type: "server.connected" })
+      expect(r2.done).toBe(false)
+      expect(r2.value).toEqual({ type: "server.connected" })
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("abort ends a pending subscription cleanly instead of throwing", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      await transport.requestJson<unknown>({ path: "/global/health", method: "GET" })
+
+      const controller = new AbortController()
+      const subscription = transport.subscribe({ signal: controller.signal })[Symbol.asyncIterator]()
+      const nextPromise = subscription.next()
+
+      // Wait for the waiter to be registered, then abort while it is pending.
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      controller.abort()
+
+      const next = await nextPromise
+      expect(next.done).toBe(true)
+    } finally {
+      await transport.close?.()
+    }
+  })
+
+  test("drops undefined query values before writing the request frame", async () => {
+    const transport = createIpcTransport({ socketPath })
+    try {
+      await transport.requestJson<unknown>({
+        path: "/global/health",
+        method: "GET",
+        query: { a: 1, b: undefined, c: "x" },
+      })
+      expect(lastRequest?.query).toEqual({ a: 1, c: "x" })
+    } finally {
+      await transport.close?.()
+    }
+  })
 })
 
 function listen(server: Server, socketPath: string): Promise<void> {
