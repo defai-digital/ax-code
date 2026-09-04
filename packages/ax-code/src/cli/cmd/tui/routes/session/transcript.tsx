@@ -74,7 +74,7 @@ export function UserMessage(props: {
 }) {
   const ctx = use()
   const local = useLocal()
-  const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && !x.synthetic ? [x] : []))[0])
+  const text = createMemo(() => props.parts.filter((part): part is TextPart => part.type === "text" && !part.synthetic))
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
   const sync = useSync()
   const { theme } = useTheme()
@@ -100,7 +100,7 @@ export function UserMessage(props: {
 
   return (
     <>
-      <Show when={text()}>
+      <Show when={text().length > 0 || files().length > 0}>
         <box
           id={props.message.id}
           border={["left"]}
@@ -126,7 +126,7 @@ export function UserMessage(props: {
               <span style={{ fg: color() }}>◆ </span>
               <span style={{ fg: theme.text }}>you</span>
             </text>
-            <text fg={theme.text}>{text()?.text}</text>
+            <For each={text()}>{(part) => <text fg={theme.text}>{part.text}</text>}</For>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
