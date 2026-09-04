@@ -9,6 +9,7 @@ const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const APP_COMMANDS_SRC = path.join(TUI_ROOT, "app-commands.ts")
 const PROMPT_COMMANDS_SRC = path.join(TUI_ROOT, "component/prompt/prompt-commands.tsx")
 const PROMPT_PASTE_SRC = path.join(TUI_ROOT, "component/prompt/prompt-paste.ts")
+const PROMPT_SUBMIT_CONTROLLER_SRC = path.join(TUI_ROOT, "component/prompt/prompt-submit-controller.ts")
 const EVENT_SRC = path.join(TUI_ROOT, "event.ts")
 const HELPER_SRC = path.join(TUI_ROOT, "context/helper.tsx")
 const RENDERER_SRC = path.join(TUI_ROOT, "renderer.ts")
@@ -833,6 +834,7 @@ describe("AX Code TUI stability guardrails", () => {
     const timer = await fs.readFile(TIMER_SRC, "utf8")
     const app = await fs.readFile(APP_SRC, "utf8")
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const promptSubmit = await fs.readFile(PROMPT_SUBMIT_CONTROLLER_SRC, "utf8")
     const session = await fs.readFile(SESSION_ROUTE_SRC, "utf8")
     const toast = await fs.readFile(TOAST_SRC, "utf8")
     const keybind = await fs.readFile(path.join(TUI_ROOT, "context/keybind.tsx"), "utf8")
@@ -846,7 +848,7 @@ describe("AX Code TUI stability guardrails", () => {
     for (const [text, name] of [
       [app, "app-session-fork-retry"],
       [prompt, "prompt-status-tick"],
-      [prompt, "prompt-route-handoff"],
+      [promptSubmit, "prompt-route-handoff"],
       [prompt, "prompt-retry-countdown"],
       [session, "session-status-tick"],
       [session, "session-sync-retry"],
@@ -955,17 +957,18 @@ describe("AX Code TUI stability guardrails", () => {
 
   test("keeps pending prompt submission cancellable with explicit stage state", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const submit = await fs.readFile(PROMPT_SUBMIT_CONTROLLER_SRC, "utf8")
 
     expect(prompt).toContain("pendingSubmitKeyIntent")
     expect(prompt).toContain("cancelPendingSubmit")
-    expect(prompt).toContain("new AbortController()")
-    expect(prompt).toContain("let submitInFlight = false")
-    expect(prompt).toContain("submitRunID++")
-    expect(prompt).toContain("cancelRouteHandoff = undefined")
-    expect(prompt).toContain("if (startingNewSession) sessionID = SessionID.descending()")
-    expect(prompt).toContain("setSubmitPending(true)")
-    expect(prompt).toContain('setSubmitStage("dispatching")')
-    expect(prompt).toContain("pending: submitPending() || submitInFlight")
+    expect(submit).toContain("new AbortController()")
+    expect(submit).toContain("let submitInFlight = false")
+    expect(submit).toContain("submitRunID++")
+    expect(submit).toContain("cancelRouteHandoff = undefined")
+    expect(submit).toContain("if (startingNewSession) sessionID = SessionID.descending()")
+    expect(submit).toContain("setSubmitPending(true)")
+    expect(submit).toContain('setSubmitStage("dispatching")')
+    expect(prompt).toContain("pending: submitPending() || submitController.submitInFlight")
     expect(prompt).toContain("useTextareaKeybindings({ submit: false, interceptEnter: true })")
     expect(prompt).toContain("function isPromptSubmitKey(event: KeyEvent)")
     expect(prompt).toContain("isUnmodifiedPromptSubmitKey(event)")
@@ -996,9 +999,10 @@ describe("AX Code TUI stability guardrails", () => {
     expect(autocomplete).toContain("if (!select()) return false")
     expect(autocomplete).toContain("onKeyDown: (e: KeyEvent) => boolean")
 
-    const submitStart = prompt.indexOf("async function submit()")
-    const submitEnd = prompt.indexOf("const selectedModel", submitStart)
-    const submitBody = prompt.slice(submitStart, submitEnd)
+    const submitSrc = await fs.readFile(PROMPT_SUBMIT_CONTROLLER_SRC, "utf8")
+    const submitStart = submitSrc.indexOf("async function submit()")
+    const submitEnd = submitSrc.indexOf("const selectedModel", submitStart)
+    const submitBody = submitSrc.slice(submitStart, submitEnd)
     const slashDispatch = submitBody.indexOf("command.trySlash(slashName)")
     const autocompleteReturn = submitBody.indexOf("if (autocomplete?.visible) {")
 
@@ -1060,29 +1064,29 @@ describe("AX Code TUI stability guardrails", () => {
   })
 
   test("keeps newly-created prompt sessions durable before the route handoff", async () => {
-    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const submit = await fs.readFile(PROMPT_SUBMIT_CONTROLLER_SRC, "utf8")
 
-    expect(prompt).toContain("const startingNewSession = sessionID == null")
-    expect(prompt).toContain("settlePromptLocally({ clearPrompt: !startingNewSession })")
-    expect(prompt).toContain("function settlePromptLocally(options: { clearPrompt: boolean })")
-    expect(prompt).toContain("finishPendingSubmit()")
-    expect(prompt).toContain("routeToSession(sessionID)")
-    expect(prompt).toContain("let cancelRouteHandoff: (() => void) | undefined")
-    expect(prompt).toContain('blurRenderable(input, { name: "prompt-route-handoff-blur" })')
-    expect(prompt).toContain("cancelRouteHandoff = scheduleTuiTimeout(")
-    expect(prompt).toContain('name: "prompt-route-handoff"')
-    expect(prompt).toContain("if (submitRunID !== runID) return")
-    expect(prompt).toContain("sdk.client.session.create(")
+    expect(submit).toContain("const startingNewSession = sessionID == null")
+    expect(submit).toContain("settlePromptLocally({ clearPrompt: !startingNewSession })")
+    expect(submit).toContain("function settlePromptLocally(options: { clearPrompt: boolean })")
+    expect(submit).toContain("finishPendingSubmit()")
+    expect(submit).toContain("routeToSession(sessionID)")
+    expect(submit).toContain("let cancelRouteHandoff: (() => void) | undefined")
+    expect(submit).toContain('blurRenderable(input, { name: "prompt-route-handoff-blur" })')
+    expect(submit).toContain("cancelRouteHandoff = scheduleTuiTimeout(")
+    expect(submit).toContain('name: "prompt-route-handoff"')
+    expect(submit).toContain("if (submitRunID !== runID) return")
+    expect(submit).toContain("sdk.client.session.create(")
     // New sessions must be created in the intended workspace, not the pinned one.
-    expect(prompt).toContain("directory: props.workspaceID ?? sdk.baseDirectory")
-    expect(prompt).toContain("upsertSessionInStore(createdSession)")
-    expect(prompt).toContain('setSubmitStage("dispatching")')
-    expect(prompt.indexOf("upsertSessionInStore(createdSession)")).toBeLessThan(
-      prompt.lastIndexOf("routeToSession(sessionID)"),
+    expect(submit).toContain("directory: props.workspaceID ?? sdk.baseDirectory")
+    expect(submit).toContain("upsertSessionInStore(createdSession)")
+    expect(submit).toContain('setSubmitStage("dispatching")')
+    expect(submit.indexOf("upsertSessionInStore(createdSession)")).toBeLessThan(
+      submit.lastIndexOf("routeToSession(sessionID)"),
     )
-    expect(prompt.indexOf('path: "prompt_async"')).toBeLessThan(prompt.lastIndexOf("routeToSession(sessionID)"))
-    expect(prompt).not.toContain("releaseSubmitAbort()")
-    expect(prompt).not.toContain("await Promise.resolve()")
+    expect(submit.indexOf('path: "prompt_async"')).toBeLessThan(submit.lastIndexOf("routeToSession(sessionID)"))
+    expect(submit).not.toContain("releaseSubmitAbort()")
+    expect(submit).not.toContain("await Promise.resolve()")
   })
 
   test("initializes session sdk before reactive workspace effects use it", async () => {
@@ -1420,14 +1424,14 @@ describe("AX Code TUI stability guardrails", () => {
   })
 
   test("navigates new prompt sessions with a bounded route handoff", async () => {
-    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const submit = await fs.readFile(PROMPT_SUBMIT_CONTROLLER_SRC, "utf8")
 
-    expect(prompt).toContain("upsertSessionInStore")
-    expect(prompt).toContain("cancelRouteHandoff = scheduleTuiTimeout(")
-    expect(prompt).toContain("cancelRouteHandoff?.()")
-    expect(prompt).toContain('type: "session"')
-    expect(prompt).not.toContain("temporary hack to make sure the message is sent")
-    expect(prompt).not.toContain("navigationTimer = setTimeout")
+    expect(submit).toContain("upsertSessionInStore")
+    expect(submit).toContain("cancelRouteHandoff = scheduleTuiTimeout(")
+    expect(submit).toContain("cancelRouteHandoff?.()")
+    expect(submit).toContain('type: "session"')
+    expect(submit).not.toContain("temporary hack to make sure the message is sent")
+    expect(submit).not.toContain("navigationTimer = setTimeout")
   })
 
   test("keeps doctor checking the AX Code TUI preload dependency with bundled-runtime awareness", async () => {

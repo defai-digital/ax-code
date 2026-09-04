@@ -46,7 +46,7 @@ describe("tui console hygiene", () => {
   })
 
   test("submits prompts through the async endpoint", async () => {
-    const text = await fs.readFile(PROMPT_SRC, "utf8")
+    const text = await fs.readFile(path.join(TUI_SRC, "component/prompt/prompt-submit-controller.ts"), "utf8")
 
     expect(text).toContain("submitAsyncRoute")
     expect(text).toContain('path: "prompt_async"')
