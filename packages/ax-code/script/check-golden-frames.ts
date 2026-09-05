@@ -32,8 +32,8 @@ import {
   t,
   type RGBA,
   type CapturedFrame,
-} from "@ax-code/tui"
-import { createTestRenderer, type TestRendererSetup } from "@ax-code/tui/testing"
+} from "ax-tui"
+import { createTestRenderer, type TestRendererSetup } from "ax-tui/testing"
 import { readText, writeText } from "./fs-compat"
 
 const SNAPSHOT_DIR = path.resolve(import.meta.dirname, "../test/cli/tui/__snapshots__/golden-frames")

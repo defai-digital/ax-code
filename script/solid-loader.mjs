@@ -11,12 +11,12 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 const require = createRequire(import.meta.url)
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../packages/ax-code")
 
-// Babel + presets come from @ax-code/tui/solid's own dependency tree. Resolve
-// @ax-code/tui/solid from the ax-code package (where it's a dependency), then
+// Babel + presets come from ax-tui/solid's own dependency tree. Resolve
+// ax-tui/solid from the ax-code package (where it's a dependency), then
 // resolve its nested babel deps relative to its entry.
 // Lazy-load Babel only when a .tsx file is encountered (optimizes startup time).
 const pkgRequire = createRequire(pathToFileURL(path.join(pkgRoot, "package.json")).href)
-const osRequire = createRequire(pkgRequire.resolve("@ax-code/tui/solid"))
+const osRequire = createRequire(pkgRequire.resolve("ax-tui/solid"))
 let babel, solidPreset, tsPreset
 function getBabel() {
   if (!babel) {
@@ -32,7 +32,7 @@ const aliases = new Map([
   ["bun-pty", pathToFileURL(path.join(pkgRoot, "src/pty/bun-pty-node-stub.ts")).href],
   // The TUI is a terminal renderer, not Solid SSR. Node's default "node"
   // condition resolves bare solid-js imports to the server runtime, while
-  // @ax-code/tui/solid uses the client runtime directly. Keep all TUI Solid imports
+  // ax-tui/solid uses the client runtime directly. Keep all TUI Solid imports
   // on the same client modules to avoid mixed runtime state.
   ["solid-js", pathToFileURL(pkgRequire.resolve("solid-js/dist/solid.js")).href],
   ["solid-js/store", pathToFileURL(pkgRequire.resolve("solid-js/store/dist/store.js")).href],
@@ -80,7 +80,7 @@ registerHooks({
         filename: file,
         configFile: false,
         babelrc: false,
-        presets: [[solidPreset, { moduleName: "@ax-code/tui/solid", generate: "universal" }], [tsPreset]],
+        presets: [[solidPreset, { moduleName: "ax-tui/solid", generate: "universal" }], [tsPreset]],
       })
       return { format: "module", source: out.code ?? code, shortCircuit: true }
     }

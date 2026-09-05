@@ -1,6 +1,6 @@
-import type { ColorInput } from "@ax-code/tui"
-import { RGBA } from "@ax-code/tui"
-import type { ColorGenerator } from "@ax-code/tui/spinner"
+import type { ColorInput } from "ax-tui"
+import { RGBA } from "ax-tui"
+import type { ColorGenerator } from "ax-tui/spinner"
 
 interface AdvancedGradientOptions {
   colors: ColorInput[]

@@ -1,6 +1,6 @@
 import { useSync } from "@tui/context/sync"
 import { createMemo, createEffect, untrack, type Accessor, For, Match, Show, Switch } from "solid-js"
-import { useTerminalDimensions } from "@ax-code/tui/solid"
+import { useTerminalDimensions } from "ax-tui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import { Installation } from "@/installation"

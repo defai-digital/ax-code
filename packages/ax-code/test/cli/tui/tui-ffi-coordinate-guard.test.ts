@@ -11,7 +11,7 @@ import path from "node:path"
 // scrolled above the viewport produces a negative y, and a gutter wider than its
 // container a negative width — either threw on every frame.
 //
-// The fix lives in the vendored @ax-code/tui package, which sanitizes
+// The fix lives in the vendored ax-tui package, which sanitizes
 // geometry at the FFI boundary. The native path needs --experimental-ffi
 // (absent in the default suite), so instead of driving real FFI this test loads
 // the *actual shipped* guard code from the installed package and executes it
@@ -19,14 +19,14 @@ import path from "node:path"
 // extraction fails and this test goes red before the crash can ship again.
 
 function ffiSource(): string {
-  const entry = fileURLToPath(import.meta.resolve("@ax-code/tui"))
+  const entry = fileURLToPath(import.meta.resolve("ax-tui"))
   const dir = path.dirname(entry)
   const file = fs
     .readdirSync(dir)
     .filter((f) => /^index-.*\.js$/.test(f))
     .map((f) => path.join(dir, f))
     .find((f) => fs.readFileSync(f, "utf8").includes("bufferFillRect(buffer, x, y, width, height, color)"))
-  if (!file) throw new Error("Could not locate the @ax-code/tui FFI render module")
+  if (!file) throw new Error("Could not locate the ax-tui FFI render module")
   return fs.readFileSync(file, "utf8")
 }
 
@@ -46,7 +46,7 @@ const POINT_DRAW_METHODS = [
 // Extract the shared origin guard and run it as real code.
 function loadFfiCellOrigin(): (x: number, y: number) => { x: number; y: number } | null {
   const match = SRC.match(/function ffiCellOrigin\(x, y\) \{[\s\S]*?\n\}/)
-  if (!match) throw new Error("AX Code TUI guard missing: ffiCellOrigin() not found in @ax-code/tui")
+  if (!match) throw new Error("AX Code TUI guard missing: ffiCellOrigin() not found in ax-tui")
   return new Function(`${match[0]}\nreturn ffiCellOrigin`)() as never
 }
 
@@ -62,7 +62,7 @@ function loadFillRectSanitizer(): (
   const match = SRC.match(
     /bufferFillRect\(buffer, x, y, width, height, color\) \{\n([\s\S]*?)\n {4}const bg2 = rgbaPtr\(color\);?/,
   )
-  if (!match) throw new Error("AX Code TUI guard missing: bufferFillRect sanitization not found in @ax-code/tui")
+  if (!match) throw new Error("AX Code TUI guard missing: bufferFillRect sanitization not found in ax-tui")
   const body = `${match[1]}\nreturn { x, y, width, height };`
   const fn = new Function("x", "y", "width", "height", body) as (
     x: number,
@@ -76,7 +76,7 @@ function loadFillRectSanitizer(): (
 const isU32 = (n: number) => Number.isInteger(n) && n >= 0 && n < 2 ** 32
 
 describe("AX Code TUI FFI coordinate guard", () => {
-  test("the guard is present in the installed @ax-code/tui", () => {
+  test("the guard is present in the installed ax-tui", () => {
     expect(SRC).toContain("function ffiCellOrigin(x, y)")
     // Every u32 point-draw method routes its origin through the guard.
     for (const method of POINT_DRAW_METHODS) {

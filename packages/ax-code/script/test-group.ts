@@ -84,19 +84,17 @@ const recovery = new Set([
   "test/session/session-recovery.test.ts",
 ])
 
-// Focused, Node 24-safe coverage for the AX Code TUI package boundary.
+// Focused, Node 24-safe coverage for the ax-tui consumption boundary.
 // Native source-mode rendering remains in `check:tui-snapshot` under Node 26.
+// Framework-internal tests (spinner, vendored-native-resolver,
+// package-integrity) moved to the ax-tui repo with ADR-074.
 const tuiRenderer = new Set([
   "test/cli/tui/tui-ffi-coordinate-guard.test.ts",
   "test/cli/tui/tui-ffi-pointer-pin.test.ts",
-  "test/cli/tui/tui-spinner-renderable.test.ts",
-  "test/cli/tui/tui-spinner.test.ts",
-  "test/cli/tui/tui-vendored-native-resolver.test.ts",
   "test/cli/tui/render-anti-patterns.test.ts",
   "test/script/build-deps.test.ts",
   "test/script/check-tui-layering.test.ts",
   "test/script/esbuild-solid-plugin.test.ts",
-  "test/script/tui-package-integrity.test.ts",
   "test/script/tui-startup-smoke.test.ts",
   "test/script/workspace-metadata.test.ts",
 ])

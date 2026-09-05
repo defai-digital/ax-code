@@ -111,7 +111,7 @@ describe("node-compat Bun.$ shell", () => {
 })
 
 describe("node-compat stringWidth", () => {
-  // These must match packages/ax-code-tui's vendored native renderer
+  // These must match the ax-tui package's vendored native renderer
   // (upstream sst/opentui, packages/core/src/zig/utf8.zig `eawToWidth`) or
   // this shim's cursor/wrap/truncate math drifts from what actually renders.
   test("CJK ideographs and kana are two columns wide", () => {

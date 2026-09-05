@@ -1,4 +1,4 @@
-import { TextAttributes } from "@ax-code/tui"
+import { TextAttributes } from "ax-tui"
 import type { JSX } from "solid-js"
 import { Spinner } from "../component/spinner"
 import { useTheme } from "../context/theme"

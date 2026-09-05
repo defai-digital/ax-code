@@ -3,7 +3,7 @@ import { collectPackageRuntimeDependencies, resolveInstalledPackagePath } from "
 
 describe("script.build-deps", () => {
   test("resolves scoped package install paths inside node_modules", () => {
-    expect(resolveInstalledPackagePath("/repo/node_modules", "@ax-code/tui")).toBe("/repo/node_modules/@ax-code/tui")
+    expect(resolveInstalledPackagePath("/repo/node_modules", "ax-tui")).toBe("/repo/node_modules/ax-tui")
     expect(resolveInstalledPackagePath("/repo/node_modules", "semver")).toBe("/repo/node_modules/semver")
   })
 
@@ -12,7 +12,7 @@ describe("script.build-deps", () => {
       collectPackageRuntimeDependencies([
         {
           dependencies: {
-            "@ax-code/tui": "workspace:*",
+            "ax-tui": "workspace:*",
             entities: "7.0.1",
             "s-js": "^0.4.9",
           },
@@ -22,7 +22,7 @@ describe("script.build-deps", () => {
         },
         {
           dependencies: {
-            "@ax-code/tui/solid": "workspace:*",
+            "ax-tui/solid": "workspace:*",
             "cli-spinners": "^3.3.0",
             "local-dev-only": "link:../local-dev-only",
             "catalog-only": "catalog:",

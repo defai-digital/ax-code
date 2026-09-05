@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot } from "solid-js"
-import { KeyEvent, parseKeypress } from "@ax-code/tui"
+import { KeyEvent, parseKeypress } from "ax-tui"
 import { DialogProvider, type DialogContext } from "../../../src/cli/cmd/tui/ui/dialog"
 import { DialogSelect, type DialogSelectRef } from "../../../src/cli/cmd/tui/ui/dialog-select"
 
@@ -10,7 +10,7 @@ const mocked = vi.hoisted(() => ({
   selectedText: "",
 }))
 
-vi.mock("@ax-code/tui/solid", async () => {
+vi.mock("ax-tui/solid", async () => {
   const { onCleanup } = await import("solid-js")
   return {
     useKeyboard: (handler: (event: KeyEvent) => void) => {

@@ -90,7 +90,7 @@ describe("distribution support guardrails", () => {
     // steps — which run after fix_dynamic_linkage — restore it. `preserve_rpath` is not a
     // real Homebrew DSL method and would raise NoMethodError on formula load.
     expect(text).not.toContain("preserve_rpath")
-    expect(text).toContain("node_modules/@ax-code/tui/vendor/darwin-arm64/libopentui.dylib")
+    expect(text).toContain("node_modules/ax-tui/vendor/darwin-arm64/libopentui.dylib")
     expect(text).toContain('system "gzip"')
     expect(text).toContain("post_install_steps do")
     expect(text).toContain('run "/usr/bin/gunzip"')
@@ -334,7 +334,7 @@ describe("distribution support guardrails", () => {
 
     expect(script).toContain("post_install_steps do")
     expect(script).toContain(
-      'if_path_exists "node_modules/@ax-code/tui/vendor/darwin-arm64/libopentui.dylib.gz", base: :libexec do',
+      'if_path_exists "node_modules/ax-tui/vendor/darwin-arm64/libopentui.dylib.gz", base: :libexec do',
     )
     expect(script).toContain('run "/usr/bin/gunzip"')
     expect(script).not.toContain("def post_install")

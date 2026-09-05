@@ -9,7 +9,7 @@
 
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, For, Match, on, onMount, Show, Switch } from "solid-js"
-import { useTerminalDimensions } from "@ax-code/tui/solid"
+import { useTerminalDimensions } from "ax-tui/solid"
 import { useTheme } from "@tui/context/theme"
 import { Logo } from "../component/logo"
 import { ModeChips } from "../component/mode-chips"

@@ -1,5 +1,5 @@
-import { render, type JSX } from "@ax-code/tui/solid"
-import type { CliRendererConfig } from "@ax-code/tui"
+import { render, type JSX } from "ax-tui/solid"
+import type { CliRendererConfig } from "ax-tui"
 import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"

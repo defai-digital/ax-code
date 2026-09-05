@@ -30,14 +30,11 @@ describe("script.check-no-effect-solid-in-v4", () => {
     await mkdir(path.join(tmp.path, "src/runtime"), { recursive: true })
     await writeFile(path.join(tmp.path, "src/runtime/effect.ts"), `import { Effect } from "effect"\n`)
     await writeFile(path.join(tmp.path, "src/cli/cmd/tui/input/solid.ts"), `import { batch } from "solid-js"\n`)
-    await writeFile(
-      path.join(tmp.path, "src/cli/cmd/tui/native/renderer.ts"),
-      `import { render } from "@ax-code/tui"\n`,
-    )
+    await writeFile(path.join(tmp.path, "src/cli/cmd/tui/native/renderer.ts"), `import { render } from "ax-tui"\n`)
 
     expect((await V4Guardrails.check(tmp.path)).map((item) => V4Guardrails.format(item))).toEqual([
       "src/cli/cmd/tui/input/solid.ts imports solid-js (solid)",
-      "src/cli/cmd/tui/native/renderer.ts imports @ax-code/tui (tui)",
+      "src/cli/cmd/tui/native/renderer.ts imports ax-tui (tui)",
       "src/runtime/effect.ts imports effect (effect)",
     ])
   })

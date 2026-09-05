@@ -1,4 +1,4 @@
-import { TextAttributes } from "@ax-code/tui"
+import { TextAttributes } from "ax-tui"
 import { useTheme } from "@tui/context/theme"
 import { createMemo, For, onMount, Show } from "solid-js"
 import { useDialog } from "../../ui/dialog"

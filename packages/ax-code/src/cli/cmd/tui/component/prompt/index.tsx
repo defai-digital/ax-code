@@ -1,4 +1,4 @@
-import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent, MouseButton } from "@ax-code/tui"
+import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent, MouseButton } from "ax-tui"
 import {
   createEffect,
   createMemo,
@@ -35,7 +35,7 @@ import { usePromptHistory, type PromptInfo } from "./history"
 import { usePromptStash } from "./stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/tui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { blurRenderable, focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 import { scheduleTuiInterval } from "@tui/util/timer"

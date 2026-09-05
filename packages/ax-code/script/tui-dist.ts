@@ -1,10 +1,15 @@
 /**
- * Distribution allowlist for the private @ax-code/tui package.
+ * Distribution allowlist for bundling the ax-tui package into the AX Code
+ * Node TUI distribution.
  *
- * The CLI copies this workspace package beside the Node TUI bundle because it
- * is not published to npm. The workspace tree still contains upstream
- * tests, type-only files, unused highlight grammars, and reviewable patch
- * docs — none of that belongs in a shipping archive.
+ * The AX Code CLI copies the installed ax-tui package beside its Node TUI
+ * bundle instead of installing it from a registry. The installed tree still
+ * contains upstream tests, type-only files, unused highlight grammars, and
+ * reviewable patch docs — none of that belongs in a shipping archive.
+ *
+ * These helpers are the consumer-side counterpart of the framework's release
+ * contract; they moved here with ADR-074 when the framework extraction made
+ * `script/tui-dist.ts` part of the ax-tui repo.
  */
 import { relative } from "node:path"
 
@@ -25,10 +30,10 @@ const TUI_TRANSFORM_DEPENDENCIES = new Set([
 ])
 
 /**
- * Drop dependencies used exclusively by the public `@ax-code/tui/solid/transform`
- * entry from the precompiled CLI distribution. The package manifest keeps
+ * Drop dependencies used exclusively by the public `ax-tui/solid/transform`
+ * entry from a precompiled downstream distribution. The package manifest keeps
  * these as production dependencies so the exported transform remains usable
- * when the source package is consumed inside this workspace.
+ * when the source package is consumed directly.
  */
 export function withoutTuiTransformDependencies(deps?: Record<string, string>) {
   return Object.fromEntries(Object.entries(deps ?? {}).filter(([name]) => !TUI_TRANSFORM_DEPENDENCIES.has(name)))
@@ -64,7 +69,7 @@ function materializeDependencyVersions(
 
 /**
  * Rewrite the copied package manifest to describe the precompiled distribution
- * rather than the source workspace. Type declarations, Bun/build entries, and
+ * rather than the source package. Type declarations, Bun/build entries, and
  * the Solid transform are intentionally pruned by the copy allowlist; leaving
  * their exports or dependencies behind creates a package with dangling public
  * paths and a misleading install contract.

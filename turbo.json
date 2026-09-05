@@ -8,9 +8,6 @@
       "dependsOn": [],
       "outputs": ["dist/**"]
     },
-    "@ax-code/tui#build": {
-      "outputs": ["spinner/dist/**"]
-    },
     "ax-code#test": {
       "dependsOn": ["^build"],
       "outputs": []

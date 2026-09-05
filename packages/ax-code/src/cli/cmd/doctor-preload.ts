@@ -58,17 +58,17 @@ export function getTuiPreloadCheck(input: TuiPreloadCheckInput = {}): DoctorChec
 
   try {
     const resolveFn = input.resolveSync ?? resolveSync
-    resolveFn("@ax-code/tui/solid/preload", input.importMetaDir ?? import.meta.dirname)
+    resolveFn("ax-tui/solid/preload", input.importMetaDir ?? import.meta.dirname)
     return {
       name: "TUI preload",
       status: "ok",
-      detail: "@ax-code/tui/solid/preload resolved",
+      detail: "ax-tui/solid/preload resolved",
     }
   } catch {
     return {
       name: "TUI preload",
       status: "fail",
-      detail: "@ax-code/tui/solid/preload not found — source/dev TUI may fail to start. Run: pnpm install",
+      detail: "ax-tui/solid/preload not found — source/dev TUI may fail to start. Run: pnpm install",
     }
   }
 }

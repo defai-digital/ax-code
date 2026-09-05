@@ -25,7 +25,7 @@
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
     "jsx": "preserve",
-    "jsxImportSource": "@ax-code/tui/solid",
+    "jsxImportSource": "ax-tui/solid",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": ["node"],
     "noUncheckedIndexedAccess": false,

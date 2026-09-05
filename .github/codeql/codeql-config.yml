@@ -1,8 +1,6 @@
 name: ax-code-codeql
 
 paths-ignore:
-  - "packages/ax-code-tui/**"
-  - "packages/ax-code-tui/solid/scripts/**"
   - "**/*.test.ts"
   - "**/*.test.tsx"
   - "**/test/**"

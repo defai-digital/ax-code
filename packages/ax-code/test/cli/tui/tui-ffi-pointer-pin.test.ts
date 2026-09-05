@@ -16,7 +16,7 @@ import path from "node:path"
 // retainPointerTarget's WeakMap) could be collected before the Zig side read
 // it, which segfaulted the whole CLI during long streaming sessions.
 //
-// The fix lives in the vendored @ax-code/tui package: every pointer
+// The fix lives in the vendored ax-tui package: every pointer
 // source handed to nodeFfi.getRawPointer() is first pinned in a fixed-size
 // strong ring (pinNodePointerSource), keeping it reachable until well after
 // the synchronous native call that consumes its address has returned. This
@@ -25,14 +25,14 @@ import path from "node:path"
 // before the crash can ship again.
 
 function ffiSource(): string {
-  const entry = fileURLToPath(import.meta.resolve("@ax-code/tui"))
+  const entry = fileURLToPath(import.meta.resolve("ax-tui"))
   const dir = path.dirname(entry)
   const file = fs
     .readdirSync(dir)
     .filter((f) => /^index-.*\.js$/.test(f))
     .map((f) => path.join(dir, f))
     .find((f) => fs.readFileSync(f, "utf8").includes("bufferFillRect(buffer, x, y, width, height, color)"))
-  if (!file) throw new Error("Could not locate the @ax-code/tui FFI render module")
+  if (!file) throw new Error("Could not locate the ax-tui FFI render module")
   return fs.readFileSync(file, "utf8")
 }
 
@@ -49,9 +49,9 @@ interface PinApi {
 // code, isolated per call so each test gets a fresh ring.
 function loadPinApi(): PinApi {
   const ring = SRC.match(/var NODE_POINTER_PIN_SLOTS[\s\S]*?function pinNodePointerSource\(value\) \{[\s\S]*?\n\}/)
-  if (!ring) throw new Error("AX Code TUI pin missing: pinNodePointerSource ring not found in @ax-code/tui")
+  if (!ring) throw new Error("AX Code TUI pin missing: pinNodePointerSource ring not found in ax-tui")
   const source = SRC.match(/function toNodeSourcePointer\(nodeFfi, value\) \{[\s\S]*?\n\}/)
-  if (!source) throw new Error("AX Code TUI pin missing: toNodeSourcePointer not found in @ax-code/tui")
+  if (!source) throw new Error("AX Code TUI pin missing: toNodeSourcePointer not found in ax-tui")
   const body = [
     'const NODE_PTR_VALUE = "node:ffi ptr() only supports ArrayBuffer and ArrayBufferView values."',
     ring[0],

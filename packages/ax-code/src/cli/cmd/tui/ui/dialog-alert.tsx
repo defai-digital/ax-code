@@ -1,7 +1,7 @@
-import { TextAttributes } from "@ax-code/tui"
+import { TextAttributes } from "ax-tui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
-import { useKeyboard } from "@ax-code/tui/solid"
+import { useKeyboard } from "ax-tui/solid"
 
 export type DialogAlertProps = {
   title: string

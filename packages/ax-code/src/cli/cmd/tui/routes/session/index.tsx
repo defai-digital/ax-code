@@ -19,7 +19,7 @@ import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { Chip } from "@tui/ui/primitives/chip"
 import { selectedForeground, tint, useTheme } from "@tui/context/theme"
-import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA } from "@ax-code/tui"
+import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA } from "ax-tui"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type {
   AssistantMessage as AssistantMessageInfo,
@@ -32,7 +32,7 @@ import type {
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
 import { effortLabel } from "@/provider/effort-label"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/tui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"

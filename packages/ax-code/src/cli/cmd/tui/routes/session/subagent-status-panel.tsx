@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, Show } from "solid-js"
-import type { MouseEvent } from "@ax-code/tui"
-import { useRenderer } from "@ax-code/tui/solid"
+import type { MouseEvent } from "ax-tui"
+import { useRenderer } from "ax-tui/solid"
 import { Spinner } from "@tui/component/spinner"
 import { shouldUseTuiAnimations } from "@tui/component/spinner-profile"
 import { useKV } from "@tui/context/kv"

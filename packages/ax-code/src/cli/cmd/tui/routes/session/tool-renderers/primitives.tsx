@@ -1,6 +1,6 @@
 import { createMemo, createSignal, Match, Show, Switch } from "solid-js"
-import { BoxRenderable, TextAttributes, type RGBA } from "@ax-code/tui"
-import { useRenderer, type JSX } from "@ax-code/tui/solid"
+import { BoxRenderable, TextAttributes, type RGBA } from "ax-tui"
+import { useRenderer, type JSX } from "ax-tui/solid"
 import { SplitBorder } from "@tui/component/border"
 import { Spinner } from "@tui/component/spinner"
 import { useSync } from "@tui/context/sync"

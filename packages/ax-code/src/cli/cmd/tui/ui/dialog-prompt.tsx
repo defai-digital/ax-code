@@ -1,4 +1,4 @@
-import { TextareaRenderable, TextAttributes } from "@ax-code/tui"
+import { TextareaRenderable, TextAttributes } from "ax-tui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
 import { onCleanup, onMount, Show, type JSX } from "solid-js"

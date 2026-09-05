@@ -6,7 +6,7 @@
 // transform-time Babel dependencies are not bundled into standalone binaries.
 // The preload is idempotent, so double-loading via bunfig.toml + this import
 // is safe in source-launcher mode.
-import "@ax-code/tui/solid/preload"
+import "ax-tui/solid/preload"
 
 import { hooks, run } from "./cli/boot"
 

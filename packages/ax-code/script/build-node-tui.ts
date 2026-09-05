@@ -12,7 +12,7 @@ import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { WINDOWS_UTF8_WARNING } from "./source-launcher"
 import { unixNodeLauncherScript } from "./node-launcher"
-import { shouldCopyTuiDistPath, toTuiDistPackageJson, withoutTuiTransformDependencies } from "../../../script/tui-dist"
+import { shouldCopyTuiDistPath, toTuiDistPackageJson, withoutTuiTransformDependencies } from "./tui-dist"
 import pkg from "../package.json"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
@@ -207,11 +207,11 @@ const result = await esbuild.build({
   conditions: ["node"],
   // Native / Bun-only ids kept external, loaded at runtime from node_modules
   // shipped beside the bundle (TUI FFI lib, node-pty .node, bun:* are
-  // never hit on Node). Do not inline @ax-code/tui: the native
+  // never hit on Node). Do not inline ax-tui: the native
   // library and tree-sitter assets resolve via import.meta.url on the
   // hashed vendor chunks. Bundling a narrow source entry is a follow-up
-  // (see packages/ax-code-tui/MAINTENANCE.md).
-  external: ["bun:ffi", "bun:sqlite", "node-pty-prebuilt-multiarch", "@ax-code/tui", "@ax-code/tui/*"],
+  // (see the ax-tui repo's MAINTENANCE.md).
+  external: ["bun:ffi", "bun:sqlite", "node-pty-prebuilt-multiarch", "ax-tui", "ax-tui/*"],
   plugins: [
     {
       name: "ax-node-overrides",
@@ -320,11 +320,16 @@ await writeText(
 )
 
 // --- Make the distribution self-contained (Bun-free) -----------------------
-// The bundle externalizes the native FFI/.node packages and AX Code TUI; ship them
+// The bundle externalizes the native FFI/.node packages and ax-tui; ship them
 // in node_modules beside the bundle so the dist runs anywhere `node` is present.
 const deps = pkg.dependencies as Record<string, string>
-// Read the AX Code TUI package to collect its runtime dependencies.
-const tuiSourceDir = path.join(dir, "..", "ax-code-tui")
+// Read the installed ax-tui package (a link: dependency on the sibling
+// checkout) to collect its runtime dependencies.
+const tuiSourceDir = (() => {
+  const linked = path.join(dir, "node_modules", "ax-tui")
+  if (fs.existsSync(path.join(linked, "package.json"))) return linked
+  throw new Error(`Cannot resolve installed ax-tui package at ${linked}; run pnpm install`)
+})()
 const tuiPkg = JSON.parse(fs.readFileSync(path.join(tuiSourceDir, "package.json"), "utf8")) as {
   dependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
@@ -362,9 +367,9 @@ const distDeps: Record<string, string> = {
   "tree-sitter-javascript": deps["tree-sitter-javascript"],
   "tree-sitter-typescript": deps["tree-sitter-typescript"],
 }
-// @ax-code/tui is a private workspace package; copy it directly into the
+// ax-tui is a private workspace package; copy it directly into the
 // distribution instead of asking npm to install it.
-const vendoredTuiPackage: [string, string] = ["@ax-code/tui", tuiSourceDir]
+const vendoredTuiPackage: [string, string] = ["ax-tui", tuiSourceDir]
 await writeText(
   path.join(outRoot, "package.json"),
   JSON.stringify({ name: "ax-code-dist", private: true, type: "module", dependencies: distDeps }, null, 2) + "\n",
@@ -412,7 +417,7 @@ for (const [spec, patchRel] of Object.entries(rootPkg.pnpm?.patchedDependencies 
   console.log(`Re-applied pnpm patch for ${name} (${files.length} file(s)) into the distribution`)
 }
 
-// Copy @ax-code/tui into the distribution. It is not published independently,
+// Copy ax-tui into the distribution. It is not published independently,
 // so npm cannot install it while assembling the release tree.
 const distAxScope = path.join(outRoot, "node_modules", "@ax-code")
 fs.mkdirSync(distAxScope, { recursive: true })
@@ -435,7 +440,7 @@ const tuiDistManifest = toTuiDistPackageJson(
 await writeText(tuiDistManifestPath, JSON.stringify(tuiDistManifest, null, 2) + "\n")
 console.log(`Copied ${tuiPackageName} into the distribution`)
 
-// The vendored @ax-code/tui carries all 8 upstream native targets
+// The vendored ax-tui carries all 8 upstream native targets
 // under vendor/<target>/. Stage only the build target's library into the
 // distribution (every archive must not ship all ~30 MB of binaries) and
 // verify it against the committed manifest BEFORE codesigning — signing

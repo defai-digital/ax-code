@@ -1,5 +1,5 @@
 import { For, Show, createSignal } from "solid-js"
-import { useRenderer } from "@ax-code/tui/solid"
+import { useRenderer } from "ax-tui/solid"
 import { useTheme } from "@tui/context/theme"
 import type { PinnedInputBanner } from "./last-input-view-model"
 

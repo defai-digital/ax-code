@@ -1,6 +1,6 @@
 import type { JSX } from "solid-js"
-import type { MouseEvent, RGBA } from "@ax-code/tui"
-import { useRenderer } from "@ax-code/tui/solid"
+import type { MouseEvent, RGBA } from "ax-tui"
+import { useRenderer } from "ax-tui/solid"
 import open from "open"
 import { useToast } from "./toast"
 import { Log } from "@/util/log"

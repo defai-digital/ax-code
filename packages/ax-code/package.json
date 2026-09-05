@@ -97,7 +97,7 @@
     "@ax-code/script": "workspace:*",
     "@ax-code/sdk": "workspace:*",
     "@ax-code/terminal": "workspace:*",
-    "@ax-code/tui": "workspace:*",
+    "ax-tui": "link:../../../ax-tui",
     "@ax-code/util": "workspace:*",
     "@clack/prompts": "1.6.0",
     "@hono/node-server": "^2.0.5",

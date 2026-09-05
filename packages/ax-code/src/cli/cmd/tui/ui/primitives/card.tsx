@@ -1,4 +1,4 @@
-import type { RGBA } from "@ax-code/tui"
+import type { RGBA } from "ax-tui"
 import type { ParentProps } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { EmptyBorder } from "@tui/component/border"

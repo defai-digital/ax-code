@@ -11,9 +11,6 @@ on:
       - "packages/ax-code/**"
       - "packages/ax-code-intel/**"
       - "packages/ax-code-reason/**"
-      - "packages/ax-code-tui/**"
-      - "packages/ax-code-tui/solid/**"
-      - "packages/ax-code-tui/spinner/**"
       - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
@@ -33,9 +30,6 @@ on:
       - "packages/ax-code/**"
       - "packages/ax-code-intel/**"
       - "packages/ax-code-reason/**"
-      - "packages/ax-code-tui/**"
-      - "packages/ax-code-tui/solid/**"
-      - "packages/ax-code-tui/spinner/**"
       - "crates/**"
       - "packages/sdk/**"
       - "packages/util/**"
@@ -118,9 +112,6 @@ jobs:
 
       - name: Test extracted core packages
         run: pnpm run test:extracted-packages
-
-      - name: Check AX Code TUI package
-        run: pnpm run check:tui-package
 
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build
@@ -225,7 +216,13 @@ jobs:
           path: .internal/reports/testing/junit/*.xml
           if-no-files-found: ignore
 
+  # Disabled during the ADR-074 interim state: the TUI framework is consumed
+  # via a local pnpm link to the sibling ax-tui checkout, which GitHub Actions
+  # cannot resolve. Re-enable once packages/ax-code pins
+  # jsr:@defai-digital/ax-tui (see .internal/adr/ADR-074 and
+  # .internal/prd/PRD-2026-09-05-ax-tui-extraction.md).
   tui-node26-smoke:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     env:
       AX_CODE_DISABLE_SHARE: "true"

@@ -1,5 +1,5 @@
-import { TextAttributes } from "@ax-code/tui"
-import type { RGBA } from "@ax-code/tui"
+import { TextAttributes } from "ax-tui"
+import type { RGBA } from "ax-tui"
 import { For, Show, createMemo } from "solid-js"
 import { gradientLineRuns } from "./color"
 import { useVisualCapability } from "./capability-context"

@@ -10,7 +10,7 @@ const mocked = vi.hoisted(() => ({
   },
 }))
 
-vi.mock("@ax-code/tui/solid", () => ({ render: mocked.render }))
+vi.mock("ax-tui/solid", () => ({ render: mocked.render }))
 vi.mock("@/flag/flag", () => ({ Flag: mocked.flag }))
 
 import { renderTui, type TuiRenderRoot } from "../../../src/cli/cmd/tui/renderer"

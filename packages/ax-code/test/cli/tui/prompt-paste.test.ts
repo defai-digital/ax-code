@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { createStore } from "solid-js/store"
-import { PasteEvent } from "@ax-code/tui"
+import { PasteEvent } from "ax-tui"
 import { Filesystem } from "../../../src/util/filesystem"
 import { Clipboard } from "../../../src/cli/cmd/tui/util/clipboard"
 import { createPromptPaste, type PromptPasteHost } from "../../../src/cli/cmd/tui/component/prompt/prompt-paste"

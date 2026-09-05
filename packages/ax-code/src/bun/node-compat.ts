@@ -248,7 +248,7 @@ async function connect(input: { hostname?: string; port: number }) {
 }
 
 // Emoji/dingbat code points the TUI's native renderer (vendored from upstream
-// sst/opentui; see packages/ax-code-tui/vendor/manifest.json and the
+// sst/opentui; see the ax-tui framework's vendor/manifest.json and the
 // `eawToWidth` table in that project's packages/core/src/zig/utf8.zig) always
 // draws two columns wide, even though their Unicode East Asian Width property
 // is Ambiguous/Neutral rather than Wide/Fullwidth. This table is transcribed

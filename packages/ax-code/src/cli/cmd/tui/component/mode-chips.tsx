@@ -7,7 +7,7 @@
 // app-wide, so the row is safe to render on every route.
 
 import { createMemo } from "solid-js"
-import { RGBA } from "@ax-code/tui"
+import { RGBA } from "ax-tui"
 import { WorkMode } from "@/mode/work-mode"
 import { selectedForeground, useTheme } from "@tui/context/theme"
 import { useSync } from "@tui/context/sync"

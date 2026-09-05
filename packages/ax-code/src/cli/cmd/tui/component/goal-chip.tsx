@@ -7,8 +7,8 @@
 // the goal dialog (the `session.goal` command).
 
 import { createMemo, Show } from "solid-js"
-import type { RGBA } from "@ax-code/tui"
-import { useTerminalDimensions } from "@ax-code/tui/solid"
+import type { RGBA } from "ax-tui"
+import { useTerminalDimensions } from "ax-tui/solid"
 import { useSync } from "@tui/context/sync"
 import { selectedForeground, useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "@tui/component/dialog-command"

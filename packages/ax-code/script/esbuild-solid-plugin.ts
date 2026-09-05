@@ -12,7 +12,7 @@ type TransformSolidSource = (
 let cachedTransform: TransformSolidSource | undefined
 async function getTransform() {
   if (cachedTransform) return cachedTransform
-  const mod = await import("@ax-code/tui/solid/transform")
+  const mod = await import("ax-tui/solid/transform")
   cachedTransform = mod.transformSolidSource
   return cachedTransform!
 }
@@ -21,9 +21,9 @@ async function getTransform() {
 const fileCache = new Map<string, { mtime: number; contents: string }>()
 
 export function solidEsbuildPlugin(options: { moduleName?: string } = {}): Plugin {
-  const moduleName = options.moduleName ?? "@ax-code/tui/solid"
+  const moduleName = options.moduleName ?? "ax-tui/solid"
   return {
-    name: "ax-code-tui-solid",
+    name: "ax-tui-solid",
     setup(build) {
       // Only .tsx carries JSX; plain .ts is left to esbuild's default loader.
       build.onLoad({ filter: /\.tsx$/ }, async (args) => {

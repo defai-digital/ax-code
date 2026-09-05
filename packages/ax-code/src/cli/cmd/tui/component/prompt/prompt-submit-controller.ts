@@ -1,6 +1,6 @@
 import { produce } from "solid-js/store"
 import type { Session } from "@ax-code/sdk/v2"
-import type { TextareaRenderable } from "@ax-code/tui"
+import type { TextareaRenderable } from "ax-tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { iife } from "@/util/iife"
 import { withTimeout } from "@/util/timeout"

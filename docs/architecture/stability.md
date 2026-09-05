@@ -25,7 +25,7 @@ The supported runtime stack is:
 - Runtime: Node bundled
 - UI: **AX Code TUI + Solid** (primary default)
 - Render: Zig (production); the native libraries are fully vendored in-repo
-  (`packages/ax-code-tui/vendor/`, hash-pinned by `vendor/manifest.json`) —
+  (vendored inside the standalone ax-tui framework, hash-pinned by its `vendor/manifest.json`) —
   no upstream `@opentui/*` npm packages are involved at install or runtime
 - Yoga is not a selectable mode; AX Code TUI's native renderer remains the default
 

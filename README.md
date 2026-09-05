@@ -233,7 +233,7 @@ AX Code began on the MIT-licensed [OpenCode](https://github.com/anomalyco/openco
 The repository also includes code with upstream history from these MIT-licensed projects:
 
 - [OpenCode](https://github.com/anomalyco/opencode): the CLI, runtime, session, provider, and tool foundations. See [NOTICE](NOTICE).
-- [OpenTUI](https://github.com/anomalyco/opentui): the renderer snapshot underlying AX Code TUI. AX Code owns the `@ax-code/tui` package, integration, patches, and release process.
+- [OpenTUI](https://github.com/sst/opentui): the renderer snapshot underlying the ax-tui framework. The framework is maintained standalone in the ax-tui project (MIT); AX Code consumes it as a dependency.
 - [ax-cli](https://github.com/defai-digital/ax-cli): selected AX/CLI capabilities ported from DEFAI's earlier project. See [NOTICE](NOTICE).
 
 These notices preserve license provenance and upstream credit. They do not mean the upstream projects maintain AX Code or current DEFAI modifications.
@@ -242,4 +242,4 @@ These notices preserve license provenance and upstream credit. They do not mean 
 
 AX Code is licensed under the [Apache License, Version 2.0](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital).
 
-Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT). The AX Code TUI package at `packages/ax-code-tui` retains the MIT license and attribution of its upstream renderer lineage. See [NOTICE](NOTICE), [LICENSE-MIT](LICENSE-MIT), and the provenance section above.
+Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT). The terminal UI framework is the standalone ax-tui project (MIT), derived from OpenTUI with attribution retained. See [NOTICE](NOTICE) and [LICENSE-MIT](LICENSE-MIT).

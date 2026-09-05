@@ -1,7 +1,7 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from "@ax-code/tui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
-import { MouseButton, TextAttributes, type MouseEvent } from "@ax-code/tui"
+import { MouseButton, TextAttributes, type MouseEvent } from "ax-tui"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import {
   type Component,

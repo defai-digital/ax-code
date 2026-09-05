@@ -15,7 +15,7 @@ describe("script.check-tui-layering", () => {
     )
     await writeFile(
       path.join(tmp.path, "src/cli/cmd/tui/ui/dialog.tsx"),
-      `import { useRenderer } from "@ax-code/tui/solid"\nexport const value = useRenderer\n`,
+      `import { useRenderer } from "ax-tui/solid"\nexport const value = useRenderer\n`,
     )
 
     expect(await TuiLayeringGuardrails.check(tmp.path)).toEqual([])
@@ -31,12 +31,12 @@ describe("script.check-tui-layering", () => {
     )
     await writeFile(
       path.join(tmp.path, "src/cli/cmd/tui/util/microtask.ts"),
-      `import { render } from "@ax-code/tui/solid"\nexport const value = render\n`,
+      `import { render } from "ax-tui/solid"\nexport const value = render\n`,
     )
 
     expect((await TuiLayeringGuardrails.check(tmp.path)).map((item) => TuiLayeringGuardrails.format(item))).toEqual([
       "src/cli/cmd/tui/routes/session/view-model.ts imports solid-js (solid)",
-      "src/cli/cmd/tui/util/microtask.ts imports @ax-code/tui/solid (renderer)",
+      "src/cli/cmd/tui/util/microtask.ts imports ax-tui/solid (renderer)",
     ])
   })
 

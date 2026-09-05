@@ -9,9 +9,8 @@ import { resolveDesktopHandoff } from "../../../src/cli/cmd/tui/navigation/deskt
 const SRC_ROOT = path.resolve(import.meta.dirname, "../../../src")
 const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
 const TUI_RENDERER_RE =
-  /(?:from\s+["'](?:@ax-code\/tui(?:\/|["'])|@opentui\/|opentui-spinner)|import\s+["'](?:@ax-code\/tui(?:\/|["'])|@opentui\/|opentui-spinner))/
-const SPINNER_SOLID_RE =
-  /(?:from\s+["']@ax-code\/tui\/spinner\/solid["']|import\s+["']@ax-code\/tui\/spinner\/solid["'])/
+  /(?:from\s+["'](?:ax-tui(?:\/|["'])|@opentui\/|opentui-spinner)|import\s+["'](?:ax-tui(?:\/|["'])|@opentui\/|opentui-spinner))/
+const SPINNER_SOLID_RE = /(?:from\s+["']ax-tui\/spinner\/solid["']|import\s+["']ax-tui\/spinner\/solid["'])/
 const TUI_ALLOWED_OUTSIDE_TUI = new Set([
   path.join(SRC_ROOT, "cli/cmd/doctor-preload.ts"),
   // Entry point must register the AX Code TUI Solid transform plugin before
@@ -89,8 +88,8 @@ describe("AX Code TUI renderer contract", () => {
   })
 
   test("detects every supported spinner Solid import form", () => {
-    expect(SPINNER_SOLID_RE.test('import "@ax-code/tui/spinner/solid"')).toBe(true)
-    expect(SPINNER_SOLID_RE.test("import '@ax-code/tui/spinner/solid'")).toBe(true)
+    expect(SPINNER_SOLID_RE.test('import "ax-tui/spinner/solid"')).toBe(true)
+    expect(SPINNER_SOLID_RE.test("import 'ax-tui/spinner/solid'")).toBe(true)
   })
 
   test("keeps renderer-neutral planning helpers independent of AX Code TUI", async () => {

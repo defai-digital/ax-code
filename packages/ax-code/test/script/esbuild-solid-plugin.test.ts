@@ -28,12 +28,12 @@ describe("script.esbuild-solid-plugin", () => {
       format: "esm",
       platform: "node",
       plugins: [solidEsbuildPlugin()],
-      external: ["@ax-code/tui/solid"],
+      external: ["ax-tui/solid"],
       logLevel: "silent",
     })
 
     const output = await readFile(outfile, "utf8")
-    expect(output).toContain('from "@ax-code/tui/solid"')
+    expect(output).toContain('from "ax-tui/solid"')
     expect(output).toContain('createElement("text")')
     expect(output).not.toContain("<text>")
   })

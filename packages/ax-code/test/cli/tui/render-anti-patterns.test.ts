@@ -95,7 +95,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain('from "./renderer"')
     expect(app).toContain("getTuiRenderProfile")
     expect(app).not.toMatch(/runNativeTuiSlice|AX_CODE_TUI_NATIVE/i)
-    expect(renderer).toContain('from "@ax-code/tui/solid"')
+    expect(renderer).toContain('from "ax-tui/solid"')
     expect(renderer).toContain("render(root, createTuiRenderOptionsFromProfile(profile, options))")
   })
 
@@ -1441,7 +1441,7 @@ describe("AX Code TUI stability guardrails", () => {
     // resolveSync is now imported from ../../bun/node-compat (Bun→Node
     // migration) instead of the Bun global.
     expect(doctor).toContain("resolveFn(")
-    expect(doctor).toContain('"@ax-code/tui/solid/preload"')
+    expect(doctor).toContain('"ax-tui/solid/preload"')
     expect(doctor).toContain("Bundled runtime")
     expect(doctor).toContain("source/dev TUI may fail to start")
   })

@@ -1,5 +1,5 @@
 import { createMemo } from "solid-js"
-import type { KeyBinding } from "@ax-code/tui"
+import type { KeyBinding } from "ax-tui"
 import { useKeybind } from "../context/keybind"
 import { Keybind } from "@/util/keybind"
 

@@ -21,8 +21,8 @@ function isSolid(spec: string) {
 
 function isTui(spec: string) {
   return (
-    spec === "@ax-code/tui" ||
-    spec.startsWith("@ax-code/tui/") ||
+    spec === "ax-tui" ||
+    spec.startsWith("ax-tui/") ||
     spec.startsWith("@opentui/") ||
     spec.startsWith("@ax-code/opentui-")
   )

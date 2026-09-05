@@ -24,7 +24,7 @@ process.env.TSX_TSCONFIG_PATH = path.join(ROOT, "tsconfig.json")
 
 // Launch the real CLI from source under Node exactly as `pnpm dev`/`cli` do:
 // the Node entry is src/index-node-tui.ts (src/index.ts imports the Bun-only
-// @ax-code/tui/solid/preload). tsx strips TS; the solid loader transforms JSX;
+// ax-tui/solid/preload). tsx strips TS; the solid loader transforms JSX;
 // --experimental-ffi enables AX Code TUI's node:ffi backend. (`bun run src/index.ts`
 // no longer applies — `node run` is not a thing.)
 function cmd(...args: string[]) {

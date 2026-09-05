@@ -1,4 +1,4 @@
-import type { JSX } from "@ax-code/tui/solid"
+import type { JSX } from "ax-tui/solid"
 import { sessionToolRendererKey, type SessionToolRendererKey } from "../tool-rendering"
 import { CodeSearch, Glob, Grep, List, Skill, WebFetch, WebSearch } from "./basic"
 import { RefactorPlan, RefactorApply, ImpactAnalyze, DedupScan } from "./dre"

@@ -1,10 +1,10 @@
 import { Show } from "solid-js"
 import { useTheme } from "../context/theme"
 import { useKV } from "../context/kv"
-import type { JSX } from "@ax-code/tui/solid"
-import type { RGBA } from "@ax-code/tui"
-import type { ColorGenerator } from "@ax-code/tui/spinner"
-import "@ax-code/tui/spinner/solid"
+import type { JSX } from "ax-tui/solid"
+import type { RGBA } from "ax-tui"
+import type { ColorGenerator } from "ax-tui/spinner"
+import "ax-tui/spinner/solid"
 import { shouldUseTuiAnimations } from "./spinner-profile"
 
 const frames = ["|", "/", "-", "\\"]

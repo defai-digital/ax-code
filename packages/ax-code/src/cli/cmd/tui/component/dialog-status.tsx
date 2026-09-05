@@ -1,4 +1,4 @@
-import { TextAttributes } from "@ax-code/tui"
+import { TextAttributes } from "ax-tui"
 import { fileURLToPath } from "url"
 import { useTheme } from "../context/theme"
 import { useDialog } from "@tui/ui/dialog"

@@ -1,6 +1,6 @@
 import path from "path"
 import { produce } from "solid-js/store"
-import { decodePasteBytes, type PasteEvent } from "@ax-code/tui"
+import { decodePasteBytes, type PasteEvent } from "ax-tui"
 import type { FilePart } from "@ax-code/sdk/v2"
 import { stringWidth } from "@/bun/node-compat"
 import { Filesystem } from "@/util/filesystem"

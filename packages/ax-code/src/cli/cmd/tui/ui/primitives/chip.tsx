@@ -1,4 +1,4 @@
-import type { JSX } from "@ax-code/tui/solid"
+import type { JSX } from "ax-tui/solid"
 import { Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { Spinner } from "@tui/component/spinner"
