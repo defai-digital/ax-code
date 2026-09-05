@@ -6,6 +6,20 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Add Cloud Operations Mode: six provider-agnostic tools (`ops_plan`, `ops_diff`, `ops_approve`, `ops_apply`, `ops_verify`, `ops_journal`) implementing a plan → approve → apply → verify → audit workflow. Approvals are INTERACTIVE_ONLY and issue a single-use, TTL-bound, plan-hash-bound token that `ops_apply` redeems before executing; `ops_apply` supports read-only before/after snapshot commands, and every step lands in an append-only, hash-chained operation journal that survives session deletion.
+- Add the `cloudops` specialist agent for cloud and network-device operations, with an operator guide at `docs/guides/cloud-operations.md`.
+- Add seven builtin cloud/network skill packs (AWS, GCP, Cloudflare, DigitalOcean, RunPod, VyOS firewall, Juniper Junos firewall) enforcing read-only-first inventory, plan-before-mutate, rollback recipes, and mandatory commit-confirm discipline for network devices.
+- Add MCP server templates for AWS (AWS Labs), GCP (cloud-run-mcp), and DigitalOcean.
+- Add cloud-ops strict mode (`ops.strict`, trusted config only): destructive bash commands are hard-denied and mutations must go through the token-gated `ops_apply` path.
+
+### Changed
+
+- Extend the destructive-command classifier to cloud and network mutations: aws/gcloud/az/doctl delete/terminate/remove, `kubectl delete` and `apply --prune`, wrangler delete/rollback, `terraform apply` without a reviewed plan file, SSH remote device commits without commit-confirm, and curl mutations against cloud control-plane APIs.
+- Record every approved destructive bash command in the operation journal, chained to the session's active plan or to a per-project unplanned-mutations sentinel plan.
+- Redact inline credential assignments (for example `AWS_SECRET_ACCESS_KEY=...`) from persisted bash tool inputs in the event log and message parts.
+
 ## [7.11.2] - 2026-09-04
 
 ### Fixed
