@@ -34,7 +34,7 @@ available for AX Code runtime compatibility, but new app integrations should use
 ## Install
 
 ```bash
-pnpm add jsr:@defai-digital/ax-code-sdk@2.2.5
+pnpm add jsr:@defai-digital/ax-code-sdk@2.2.6
 ```
 
 This command becomes available after the first JSR release. pnpm remains the package manager; the `jsr:` protocol
@@ -188,7 +188,7 @@ test("CI bot scans for CVEs", async () => {
 ```ts
 import { SDK_VERSION, isSDKVersionCompatible } from "@defai-digital/ax-code-sdk"
 
-console.log(SDK_VERSION) // "2.2.5"
+console.log(SDK_VERSION) // "2.2.6"
 if (!isSDKVersionCompatible("^2.0.0")) {
   throw new Error("Incompatible SDK version")
 }
@@ -273,7 +273,7 @@ Use this package for first-party TypeScript and JavaScript integrations. For fir
 
 ## Migration from the 1.4.0 workspace SDK
 
-| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.2.5)                                           |
+| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.2.6)                                           |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"`         |
 | `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@defai-digital/ax-code-sdk/headless"`         |
