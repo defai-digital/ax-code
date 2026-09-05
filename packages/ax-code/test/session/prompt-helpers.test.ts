@@ -25,6 +25,7 @@ import {
   parseGoalArguments,
   chooseFallbackModel,
   providerFallbackLookupDecision,
+  providerFallbackNotice,
   providerFallbackSwitchState,
   processorLoopDecision,
   readToolCallText,
@@ -834,6 +835,21 @@ describe("session.prompt helpers", () => {
     })
     expect(blankReasonSwitch.reason).toBe("unknown error")
     expect(blankReasonSwitch.message).toBe("Provider anthropic failed: unknown error. Switching to openai/gpt-5.")
+  })
+
+  test("builds the single clean user-facing fallback notice (#415)", () => {
+    // The per-hop switch messages ("Provider X failed: ... Switching to Y.")
+    // are log-only; the notice rendered in the response names the originally
+    // requested provider and the provider actually serving — one line, no
+    // raw failure text, even across a multi-hop chain.
+    const notice = providerFallbackNotice({
+      origin: ProviderID.make("zai-coding-plan"),
+      serving: { providerID: ProviderID.make("ax-trust-defai-digital"), modelID: ModelID.make("glm-5.3") },
+    })
+    expect(notice).toBe("Note: Using ax-trust-defai-digital/glm-5.3 (zai-coding-plan unavailable)")
+    expect(notice).not.toContain("failed")
+    expect(notice).not.toContain("Switching to")
+    expect(notice).not.toContain("Authentication Failed")
   })
 
   test("normalizes invalid fallback provider error counts before resuming", () => {

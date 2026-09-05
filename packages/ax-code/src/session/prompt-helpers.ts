@@ -20,6 +20,7 @@ export {
   pendingCompactionDecision,
   processorLoopDecision,
   providerFallbackLookupDecision,
+  providerFallbackNotice,
   providerFallbackSwitchState,
   shouldScheduleUsageCompaction,
 } from "./prompt-loop-decisions"

@@ -114,6 +114,14 @@ function block(info: Inline, output: string | undefined, full: boolean) {
   UI.empty()
 }
 
+// `--format json` is a newline-delimited JSON (NDJSON) event stream — one
+// JSON object per line, not a single JSON document — kept as-is for backward
+// compatibility. `jsonl` and `ndjson` are explicit aliases for the same
+// stream (#419).
+export function isRunEventStreamFormat(format: string | undefined): boolean {
+  return format === "json" || format === "jsonl" || format === "ndjson"
+}
+
 export function formatRunToolFallbackInput(input: unknown): string {
   if (!isNonEmptyRecord(input)) return "Unknown"
   const seen = new WeakSet<object>()
@@ -416,9 +424,11 @@ export const RunCommand = cmd({
       })
       .option("format", {
         type: "string",
-        choices: ["default", "json"],
+        choices: ["default", "json", "jsonl", "ndjson"],
         default: "default",
-        describe: "format: default (formatted) or json (raw JSON events)",
+        describe:
+          "output format: default (formatted) or json/jsonl/ndjson " +
+          "(newline-delimited JSON event stream — one JSON object per line, not a single JSON document)",
       })
       .option("output-file", {
         alias: ["o"],
@@ -648,7 +658,7 @@ export const RunCommand = cmd({
       }
 
       function emit(type: string, data: Record<string, unknown>) {
-        if (args.format === "json") {
+        if (isRunEventStreamFormat(args.format)) {
           process.stdout.write(JSON.stringify({ type, timestamp: Date.now(), sessionID, ...data }) + EOL)
           return true
         }
@@ -675,7 +685,7 @@ export const RunCommand = cmd({
           if (
             event.type === "message.updated" &&
             event.properties.info.role === "assistant" &&
-            args.format !== "json" &&
+            !isRunEventStreamFormat(args.format) &&
             toggles.get("start") !== true
           ) {
             UI.empty()
@@ -724,7 +734,7 @@ export const RunCommand = cmd({
               part.type === "tool" &&
               part.tool === "task" &&
               part.state.status === "running" &&
-              args.format !== "json"
+              !isRunEventStreamFormat(args.format)
             ) {
               if (toggles.get(part.id) === true) continue
               task(props<typeof TaskTool>(part))

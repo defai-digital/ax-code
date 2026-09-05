@@ -311,6 +311,17 @@ function providerAccountFailureMessage(message: string | undefined) {
   )
 }
 
+/**
+ * The single user-facing notice for an automatic provider fallback (#415).
+ * Per-attempt failure details stay in the log (WARN, via
+ * `providerFallbackSwitchState`); the rendered response only ever carries
+ * this one clean line naming the originally requested provider and the
+ * provider actually serving the fallback turn — even on a multi-hop chain.
+ */
+export function providerFallbackNotice(input: { origin: ProviderID; serving: ProviderModelIdentity }) {
+  return `Note: Using ${providerModelKey(input.serving)} (${input.origin} unavailable)`
+}
+
 export function providerFallbackSwitchState(input: {
   current: ProviderModelIdentity
   fallback: ProviderModelIdentity

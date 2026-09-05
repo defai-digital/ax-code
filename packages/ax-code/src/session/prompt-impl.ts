@@ -1,4 +1,4 @@
-import { SessionID, type MessageID, type SessionStop } from "./schema"
+import { SessionID, type MessageID, type PartID, type SessionStop } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
 import { SessionRevert } from "./revert"
@@ -21,7 +21,7 @@ import { Config } from "@/config/config"
 import { fn } from "@/util/fn"
 import { assertWorkSessionSendable } from "./work-session"
 import { agentInfo, modelInfo } from "./prompt-agent-model-info"
-import { processorLoopDecision } from "./prompt-loop-decisions"
+import { processorLoopDecision, providerFallbackNotice } from "./prompt-loop-decisions"
 import {
   maybeSchedulePreflightCompaction,
   maybeScheduleUsageCompaction,
@@ -478,11 +478,18 @@ export namespace SessionPrompt {
     let cachedModel: PromptCacheEntry<Provider.Model>
     let resolvedUserModelCache: { source: string; model: MessageV2.User["model"] } | undefined
     let fallbackModelOverride: MessageV2.User["model"] | undefined
-    // Pending user-facing notice for an automatic provider fallback (#394).
-    // Persisted as a synthetic text part on the next assistant message so the
-    // TUI transcript and `ax-code run` both show which provider actually
-    // answered; unlike a session.error it carries no terminal-failure meaning.
-    let pendingFallbackNotice: string | undefined
+    // Pending user-facing notice for an automatic provider fallback (#394,
+    // #415). Only the ORIGINALLY requested provider is recorded here; the
+    // single clean notice persisted on the fallback turn's assistant message
+    // ("Note: Using X (Y unavailable)") is built from this plus the model
+    // actually serving. Each failed hop's raw error message stays in the log
+    // (WARN) so the response text / `ax-code run` output is never polluted
+    // with per-attempt "Provider ... failed" lines. `fallbackNoticePart`
+    // tracks the persisted part so it can be withdrawn if the fallback turn
+    // itself fails into another hop — the final transcript carries at most
+    // ONE notice, on the message of the provider that actually answered.
+    let fallbackNoticeOrigin: ProviderID | undefined
+    let fallbackNoticePart: { messageID: MessageID; partID: PartID } | undefined
     const failedFallbackProviderIDs = new Set<ProviderID>()
     // Cache session history — only load from DB on first step, refresh on subsequent steps
     let cachedMsgs: MessageV2.WithParts[] | undefined
@@ -529,7 +536,8 @@ export namespace SessionPrompt {
       pendingMaxOutputTokens = undefined
       activeTurnProfile = undefined
       fallbackModelOverride = undefined
-      pendingFallbackNotice = undefined
+      fallbackNoticeOrigin = undefined
+      fallbackNoticePart = undefined
       failedFallbackProviderIDs.clear()
       cachedMsgs = undefined
       cachedAgent = undefined
@@ -1105,22 +1113,31 @@ export namespace SessionPrompt {
         messages: msgs,
       })
       lastProducedAssistantID = processor.message.id
-      if (pendingFallbackNotice) {
+      // Persist at most once per fallback chain: a multi-step turn creates a
+      // new assistant message per step, but the notice belongs to the chain,
+      // not each step.
+      if (fallbackNoticeOrigin && !fallbackNoticePart) {
         // Surface the automatic provider switch on the fallback turn's own
         // assistant message (created above with the fallback model). A
         // completed synthetic text part renders in the TUI transcript and is
         // printed by `ax-code run`, without any terminal-error semantics.
+        // Exactly ONE clean notice names the originally requested provider and
+        // the provider actually serving; the per-hop failure messages stay in
+        // the log so response text is never polluted (#415). The part is
+        // withdrawn again if this turn fails into yet another fallback hop.
         const now = Date.now()
-        await Session.updatePart(
-          textPart({
-            messageID: processor.message.id,
-            sessionID,
-            text: pendingFallbackNotice,
-            synthetic: true,
-            time: { start: now, end: now },
+        const part = textPart({
+          messageID: processor.message.id,
+          sessionID,
+          text: providerFallbackNotice({
+            origin: fallbackNoticeOrigin,
+            serving: { providerID: model.providerID, modelID: model.id },
           }),
-        )
-        pendingFallbackNotice = undefined
+          synthetic: true,
+          time: { start: now, end: now },
+        })
+        await Session.updatePart(part)
+        fallbackNoticePart = { messageID: processor.message.id, partID: part.id }
       }
       using _ = defer(() => clearPromptProcessorInstructions(processor))
 
@@ -1868,11 +1885,18 @@ export namespace SessionPrompt {
       }
       if (errorTransition.action === "retry") {
         failedFallbackProviderIDs.add(lastUser.model.providerID)
-        // Multi-hop fallback (A -> B -> C) keeps each hop's notice so the
-        // transcript records the full chain, not just the last switch.
-        pendingFallbackNotice = pendingFallbackNotice
-          ? `${pendingFallbackNotice}\n${errorTransition.fallbackNotice}`
-          : errorTransition.fallbackNotice
+        // Multi-hop fallback (A -> B -> C): remember only the FIRST failed
+        // provider — the notice persisted on the fallback turn names the
+        // origin and the provider actually serving. Each hop's raw failure
+        // message is logged (WARN) by handlePromptLoopError, never rendered
+        // (#415). The notice part persisted for THIS turn named a provider
+        // that failed to serve, so withdraw it; the next hop re-persists a
+        // single notice for the provider that ends up answering.
+        fallbackNoticeOrigin ??= lastUser.model.providerID
+        if (fallbackNoticePart) {
+          await Session.removePart({ sessionID, ...fallbackNoticePart })
+          fallbackNoticePart = undefined
+        }
         continue
       }
       if (errorTransition.action === "stop") {
@@ -1913,6 +1937,12 @@ export namespace SessionPrompt {
         }
         continue
       }
+
+      // The turn completed without a provider error: the fallback notice (if
+      // any) on this message is final — exactly one clean notice names the
+      // origin and the provider that actually served (#415).
+      fallbackNoticeOrigin = undefined
+      fallbackNoticePart = undefined
 
       const processorDecision = processorLoopDecision({
         result,

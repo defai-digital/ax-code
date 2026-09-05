@@ -1,4 +1,6 @@
 import { describe, expect, test } from "vitest"
+import path from "node:path"
+import { readFile } from "node:fs/promises"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-errors"
 import { isLoopbackBaseURL } from "../../src/session/prompt-provider-fallback"
@@ -803,5 +805,20 @@ describe("isLoopbackBaseURL", () => {
     expect(isLoopbackBaseURL("not a url")).toBe(false)
     expect(isLoopbackBaseURL(undefined)).toBe(false)
     expect(isLoopbackBaseURL("")).toBe(false)
+  })
+})
+
+describe("fallback notice rendering (#415)", () => {
+  test("per-hop failure messages are log-only; the loop persists one clean notice", async () => {
+    const src = await readFile(path.join(import.meta.dirname, "../../src/session/prompt-impl.ts"), "utf-8")
+    // The loop builds the user-facing line from the shared helper instead of
+    // accumulating each hop's raw "Provider ... failed" switch message.
+    expect(src).toContain("providerFallbackNotice({")
+    expect(src).not.toContain("pendingFallbackNotice")
+    expect(src).toContain("fallbackNoticeOrigin ??= lastUser.model.providerID")
+    // The transition still carries the per-hop switch message, but only for
+    // logging — handlePromptLoopError emits it at WARN via deps.warn.
+    const errorsSrc = await readFile(path.join(import.meta.dirname, "../../src/session/prompt-loop-errors.ts"), "utf-8")
+    expect(errorsSrc).toContain('log.warn)("switching to fallback provider"')
   })
 })

@@ -145,6 +145,98 @@ describe("session.prompt flow", () => {
     })
   })
 
+  test("persists one clean fallback notice instead of per-attempt failure text (#415)", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    // Multi-hop chain: subconscious -> fallback -> fallback2, with each hop
+    // failing auth. The rendered transcript must carry exactly one synthetic
+    // notice naming the originally requested provider and the provider
+    // actually serving — never the raw "Provider ... failed" hop messages.
+    const withProvider = (providerID: string, modelID: string): Provider.Model => ({
+      ...model,
+      id: modelID as any,
+      providerID: providerID as any,
+      api: { ...model.api, id: modelID },
+    })
+    const successStream = (text: string) =>
+      ({
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text }
+          yield { type: "text-end", id: "text_1" }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+          }
+          yield { type: "finish" }
+        })(),
+      }) as any
+
+    modelSpy = vi
+      .spyOn(Provider, "getModel")
+      .mockImplementation(async (providerID: any, modelID: any) => withProvider(providerID, modelID))
+    const listSpy = vi.spyOn(Provider, "list").mockResolvedValue({
+      fallback: { id: "fallback", models: { "fallback-model": withProvider("fallback", "fallback-model") } },
+      fallback2: { id: "fallback2", models: { "fallback-model-2": withProvider("fallback2", "fallback-model-2") } },
+    } as any)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    const authFailure = () =>
+      new APICallError({
+        message: "Authentication Failed",
+        url: "https://example.com/v1/chat/completions",
+        requestBodyValues: {},
+        statusCode: 401,
+        responseHeaders: {},
+        responseBody: "",
+      })
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation((input: any) => {
+      // Small-model side calls (title generation) always succeed; the turn
+      // stream rejects while the chain is on a provider that fails auth.
+      if (input.small) return Promise.resolve(successStream("title"))
+      if (input.model.providerID === "subconscious" || input.model.providerID === "fallback") {
+        return Promise.reject(authFailure())
+      }
+      return Promise.resolve(successStream("hello from fallback2"))
+    })
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Fallback Notice Test" })
+
+          const msg = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "say hello" }],
+          })
+
+          expect(msg.parts.some((part) => part.type === "text" && part.text.includes("hello from fallback2"))).toBe(
+            true,
+          )
+
+          const messages = await Session.messages({ sessionID: session.id })
+          const texts = messages.flatMap((message) =>
+            message.parts.filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text"),
+          )
+          const notices = texts.filter((part) => part.synthetic)
+          expect(notices).toHaveLength(1)
+          expect(notices[0]!.text).toBe("Note: Using fallback2/fallback-model-2 (subconscious unavailable)")
+          for (const part of texts) {
+            expect(part.text).not.toContain("Authentication Failed")
+            expect(part.text).not.toContain("Switching to")
+            expect(part.text).not.toContain("failed:")
+          }
+        },
+      })
+    } finally {
+      listSpy.mockRestore()
+    }
+  })
+
   test("stops autonomous prompt loop after completion gate allows a finished turn", async () => {
     await using tmp = await tmpdir({ git: true })
     const previousAutonomous = process.env["AX_CODE_AUTONOMOUS"]
