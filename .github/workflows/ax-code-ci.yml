@@ -218,11 +218,12 @@ jobs:
 
   # Disabled during the ADR-074 interim state: the TUI framework is consumed
   # via a local pnpm link to the sibling ax-tui checkout, which GitHub Actions
-  # cannot resolve. Re-enable once packages/ax-code pins
-  # jsr:@defai-digital/ax-tui (see .internal/adr/ADR-074 and
+  # cannot resolve. Set repository variable AX_CODE_TUI_NODE26_SMOKE=true to
+  # re-enable after packages/ax-code pins jsr:@defai-digital/ax-tui
+  # (see .internal/adr/ADR-074 and
   # .internal/prd/PRD-2026-09-05-ax-tui-extraction.md).
   tui-node26-smoke:
-    if: ${{ false }}
+    if: ${{ vars.AX_CODE_TUI_NODE26_SMOKE == 'true' }}
     runs-on: ubuntu-latest
     env:
       AX_CODE_DISABLE_SHARE: "true"
