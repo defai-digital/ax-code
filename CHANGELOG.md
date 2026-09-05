@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.12.1] - 2026-09-05
+
+### Changed
+
+- Add a typed dependency seam for session processor stream, retry, and delay effects.
+
 ## [7.12.0] - 2026-09-05
 
 ### Added
