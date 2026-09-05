@@ -34,6 +34,7 @@ import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
 import { Shell } from "@/shell/shell"
 import { readNonTtyStdin } from "@/cli/stdin"
+import { knownCommands, unknownProjectError } from "./project-arg"
 import {
   nextTuiStartupUpgradeCheckState,
   shouldRunTuiStartupUpgradeCheck,
@@ -665,6 +666,19 @@ export const TuiThreadCommand = cmd({
       const next = args.project
         ? Filesystem.resolve(path.isAbsolute(args.project) ? args.project : path.join(root, args.project))
         : root
+      // Issue #414: a bare positional word that is not an existing path is a
+      // mistyped subcommand (e.g. `ax-code config`), not a directory to open.
+      // Report an unknown-command error instead of a confusing chdir failure.
+      // Real directory arguments (`.`, `~`, absolute/relative paths, including
+      // ones that no longer exist) keep the original chdir error path.
+      if (args.project) {
+        const errorMessage = unknownProjectError(args.project, await Filesystem.exists(next), knownCommands())
+        if (errorMessage) {
+          UI.error(errorMessage)
+          process.exitCode = 1
+          return
+        }
+      }
       try {
         process.chdir(next)
       } catch {

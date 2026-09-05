@@ -4,10 +4,13 @@ import { readFile } from "node:fs/promises"
 import {
   findRunModelError,
   formatRunToolFallbackInput,
+  isRunEventStreamFormat,
   refreshRunProvidersOnModelMiss,
   resolveRunAgentDisplayName,
   resolveRunModel,
+  RunCommand,
 } from "../../src/cli/cmd/run"
+import { tmpdir } from "../fixture/fixture"
 
 test("run command fallback tool formatter handles non-json-safe input", () => {
   const input: Record<string, unknown> = { count: 1n }
@@ -477,4 +480,48 @@ test("run command json format still short-circuits before tool rendering", async
   const render = src.indexOf("tool(part)", emitShort)
   expect(emitShort).toBeGreaterThan(-1)
   expect(render).toBeGreaterThan(emitShort)
+})
+
+test("run --format jsonl/ndjson alias the NDJSON event stream (#419)", async () => {
+  // `json` is the legacy name for the newline-delimited JSON event stream;
+  // the aliases make the NDJSON nature explicit and all three select the
+  // exact same emit path, so downstream parsers see identical output.
+  expect(isRunEventStreamFormat("json")).toBe(true)
+  expect(isRunEventStreamFormat("jsonl")).toBe(true)
+  expect(isRunEventStreamFormat("ndjson")).toBe(true)
+  expect(isRunEventStreamFormat("default")).toBe(false)
+  expect(isRunEventStreamFormat(undefined)).toBe(false)
+
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
+  expect(src).toContain('choices: ["default", "json", "jsonl", "ndjson"]')
+  // Help text must say the stream is newline-delimited — not a single JSON
+  // document — so `| jq` users pick the right tool (#419).
+  expect(src).toContain("newline-delimited JSON event stream")
+  expect(src).toContain("not a single JSON document")
+  // Every format gate routes through the shared helper so the aliases behave
+  // identically to `json` in the event loop.
+  expect(src).toContain("if (isRunEventStreamFormat(args.format)) {")
+  expect(src).toContain("!isRunEventStreamFormat(args.format)")
+  expect(src).not.toContain('args.format === "json"')
+  expect(src).not.toContain('args.format !== "json"')
+})
+
+test("run exits 1 when --fork is passed without --continue or --session (#416)", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const previous = process.cwd()
+  process.chdir(tmp.path)
+  try {
+    await expect(
+      RunCommand.handler({
+        message: ["hello"],
+        fork: true,
+        command: false,
+        "--": [],
+      } as never),
+    ).rejects.toThrow()
+    expect(process.exitCode).toBe(1)
+  } finally {
+    process.chdir(previous)
+    process.exitCode = undefined
+  }
 })

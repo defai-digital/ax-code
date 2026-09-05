@@ -50,6 +50,7 @@ import { WebUiCommand } from "./cmd/webui"
 import { WorkflowCommand } from "./cmd/workflow"
 import { TaskCommand } from "./cmd/task"
 import { fatal } from "./bootstrap/fatal"
+import { setKnownCommands } from "./cmd/tui/project-arg"
 import { init } from "./bootstrap/env"
 import { ensureWindowsUtf8Console } from "./bootstrap/windows-console"
 import { migrate } from "./bootstrap/migrate"
@@ -109,6 +110,22 @@ const cmds = [
   DesignCheckCommand,
   ContextCommand,
 ]
+
+// Issue #414: names for the unknown-command error emitted by the default
+// `[project]` command. Derived from the registered command table so the list
+// stays in sync as commands are added or removed; hidden/internal commands
+// (describe: false) and the default command itself are excluded. "completion"
+// is registered by yargs rather than the table, so it is added explicitly.
+setKnownCommands([
+  "completion",
+  ...cmds.flatMap((command) => {
+    const first = Array.isArray(command.command) ? command.command[0] : command.command
+    const name = first.split(" ")[0]
+    const hidden = (command as { describe?: unknown }).describe === false
+    if (name === "$0" || hidden) return []
+    return [name]
+  }),
+])
 
 let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
 let hooksInstalled = false
