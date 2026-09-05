@@ -79,20 +79,22 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("depends_on arch: :arm64")
     expect(text).toContain("depends_on :macos")
     expect(text).toContain('license "Apache-2.0"')
+    expect(text).not.toContain('version "${VERSION}"')
     // node-bundled: install the whole tree into libexec and depend on node, not
     // a single compiled binary. Bun is gone entirely.
     expect(text).toContain('libexec.install Dir["*"]')
     // The AX Code TUI dylib has zero Mach-O header padding, so Homebrew's
     // fix_dynamic_linkage cannot relocate its @rpath install id and `brew install`
     // exits non-zero. There is no formula DSL to skip relocation, so the install
-    // gzips the dylib (hiding it from the Mach-O linkage scan) and post_install —
-    // which runs after fix_dynamic_linkage — restores it. `preserve_rpath` is not a
+    // gzips the dylib (hiding it from the Mach-O linkage scan) and post-install
+    // steps — which run after fix_dynamic_linkage — restore it. `preserve_rpath` is not a
     // real Homebrew DSL method and would raise NoMethodError on formula load.
     expect(text).not.toContain("preserve_rpath")
     expect(text).toContain("node_modules/@ax-code/tui/vendor/darwin-arm64/libopentui.dylib")
     expect(text).toContain('system "gzip"')
-    expect(text).toContain("def post_install")
-    expect(text).toContain('system "gunzip"')
+    expect(text).toContain("post_install_steps do")
+    expect(text).toContain('run "/usr/bin/gunzip"')
+    expect(text).not.toContain("def post_install")
     expect(text).toContain('depends_on "node"')
     expect(text).toContain("--experimental-ffi")
     expect(text).toContain("--disable-warning=ExperimentalWarning")
@@ -100,6 +102,8 @@ describe("distribution support guardrails", () => {
     expect(text).not.toContain('bin.install "ax-code"')
     expect(text).not.toContain('depends_on "bun"')
     expect(text).not.toContain("bundle/index.js")
+    expect(text).toContain("\\`brew upgrade\\`")
+    expect(text).toContain("\\`ax-code --version\\`")
     // Homebrew skips linking the formula while a cask named "ax-code" (the
     // deprecated Desktop cask token) is installed, which can leave the CLI
     // missing from PATH after upgrades (issue #342). The formula must warn
@@ -323,6 +327,17 @@ describe("distribution support guardrails", () => {
     expect(script).toContain('download_asset "${DARWIN_ARM64_ASSET}.minisig"')
     expect(script).toContain("minisign -V")
     expect(script.indexOf("minisign -V")).toBeLessThan(script.indexOf("cat > /tmp/ax-code.rb"))
+  })
+
+  test("Homebrew formula uses structured post-install steps", async () => {
+    const script = await readFile(path.join(repoRoot, ".github/scripts/update-homebrew.sh"), "utf-8")
+
+    expect(script).toContain("post_install_steps do")
+    expect(script).toContain(
+      'if_path_exists "node_modules/@ax-code/tui/vendor/darwin-arm64/libopentui.dylib.gz", base: :libexec do',
+    )
+    expect(script).toContain('run "/usr/bin/gunzip"')
+    expect(script).not.toContain("def post_install")
   })
 
   test("Homebrew rejects a read-only tap token before retrying pushes", async () => {

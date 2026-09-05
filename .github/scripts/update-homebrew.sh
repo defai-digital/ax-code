@@ -25,7 +25,7 @@ fi
 
 VERSION="${RELEASE_TAG#v}"
 # VERSION is interpolated, unescaped, into a Ruby heredoc below (the
-# generated formula's `version "${VERSION}"` and `url` lines) that gets
+# generated formula's `url` line) that gets
 # committed to a public Homebrew tap and later *executed* as Ruby by every
 # user's `brew install`/`brew upgrade`. RELEASE_TAG can originate from the
 # release workflow's free-text workflow_dispatch `tag` input with no format
@@ -164,7 +164,6 @@ class AxCode < Formula
   desc "Sovereign AI coding agent — provider-agnostic, LSP-first"
   homepage "https://github.com/defai-digital/ax-code"
   url "${RELEASE_BASE}/${DARWIN_ARM64_ASSET}"
-  version "${VERSION}"
   sha256 "${DARWIN_ARM64_SHA}"
   license "Apache-2.0"
 
@@ -195,12 +194,14 @@ class AxCode < Formula
     system "gzip", "-n", "--", dylib if dylib.exist?
   end
 
-  def post_install
-    gz = libexec/"#{AX_TUI_DYLIB}.gz"
-    return unless gz.exist?
-
-    chmod 0755, gz.dirname
-    system "gunzip", "--", gz
+  post_install_steps do
+    if_path_exists "node_modules/@ax-code/tui/vendor/darwin-arm64/libopentui.dylib.gz", base: :libexec do
+      set_permissions "node_modules/@ax-code/tui/vendor/darwin-arm64", "0755", base: :libexec, recursive: false
+      run "/usr/bin/gunzip",
+          args:           ["--", "{{libexec}}/node_modules/@ax-code/tui/vendor/darwin-arm64/libopentui.dylib.gz"],
+          writable_paths: ["node_modules/@ax-code/tui/vendor/darwin-arm64"],
+          writable_base:  :libexec
+    end
   end
 
   # Homebrew refuses to link any formula while an installed cask shares its
@@ -210,7 +211,7 @@ class AxCode < Formula
   # trigger the skip; give those users the exact recovery commands.
   #
   # A checkout or curl launcher in ~/.local/bin is typically earlier on PATH
-  # than Homebrew, so `brew upgrade` succeeds while `ax-code --version` keeps
+  # than Homebrew, so \`brew upgrade\` succeeds while \`ax-code --version\` keeps
   # reporting the shadowed binary.
   def caveats
     messages = []
@@ -234,7 +235,7 @@ class AxCode < Formula
       File.expand_path("~/bin/ax-code"),
     ].select { |candidate| File.exist?(candidate) }.reject do |candidate|
       File.realpath(candidate).include?("/Cellar/")
-    rescue StandardError
+    rescue
       false
     end
 
@@ -243,7 +244,7 @@ class AxCode < Formula
         Another ax-code launcher is installed outside Homebrew:
           #{shadowed.join("\n          ")}
 
-        If that path is earlier than #{HOMEBREW_PREFIX}/bin in PATH, `ax-code`
+        If that path is earlier than #{HOMEBREW_PREFIX}/bin in PATH, \`ax-code\`
         will keep reporting the previous version after this upgrade. Check with:
           which -a ax-code
           hash -r
