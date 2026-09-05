@@ -1139,7 +1139,7 @@ export namespace Session {
     return part
   })
 
-  export const WriteScopeError = NamedError.create("SessionWriteScopeError", z.object({ message: z.string() }))
+  export const WriteScopeError = MessageWrite.ScopeError
 
   function validatePartScope(parts: MessageV2.Part[], sessionID: SessionID, messageID?: MessageID) {
     for (const part of parts) {

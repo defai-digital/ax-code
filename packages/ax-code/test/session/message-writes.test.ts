@@ -83,6 +83,32 @@ describe.each([false, true])("session writes with shards=%s", (sharded) => {
     })
   })
 
+  test("message upserts reject reassignment to another session without changing data or publishing events", async () => {
+    await withSession(async (info) => {
+      const otherSession = await Session.create({})
+      await Session.updateMessage(info)
+      const reassigned = { ...info, sessionID: otherSession.id, agent: "review" }
+      const events: MessageV2.Info[] = []
+      const unsubscribe = Bus.subscribe(MessageV2.Event.Updated, (event) => {
+        events.push(event.properties.info)
+      })
+      try {
+        await expect(Session.updateMessage(reassigned)).rejects.toMatchObject({ name: "SessionWriteScopeError" })
+        await expect(Session.updateMessageWithParts(reassigned, [])).rejects.toMatchObject({
+          name: "SessionWriteScopeError",
+        })
+        expect(messageRow(info)).toMatchObject({
+          id: info.id,
+          session_id: info.sessionID,
+          data: { agent: "build" },
+        })
+        expect(events).toEqual([])
+      } finally {
+        unsubscribe()
+      }
+    })
+  })
+
   test("all part write paths preserve creation time and encode distinct JSON payloads", async () => {
     await withSession(async (info) => {
       await Session.updateMessage(info)
@@ -139,6 +165,55 @@ describe.each([false, true])("session writes with shards=%s", (sharded) => {
       } finally {
         unsubscribe()
       }
+    })
+  })
+
+  test("part upserts reject reassignment to another message without changing data or publishing events", async () => {
+    await withSession(async (info) => {
+      const other = { ...userMessage(info.sessionID), agent: "review" }
+      await Session.updateMessage(info)
+      await Session.updateMessage(other)
+      const original = textPart(info, "original")
+      await Session.updatePart(original)
+      const reassigned = { ...original, messageID: other.id, text: "reassigned" }
+      const events: MessageV2.Part[] = []
+      const unsubscribe = Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
+        events.push(event.properties.part)
+      })
+      try {
+        await expect(Session.updatePart(reassigned)).rejects.toMatchObject({ name: "SessionWriteScopeError" })
+        await expect(Session.updateParts([reassigned])).rejects.toMatchObject({ name: "SessionWriteScopeError" })
+        await expect(Session.updateMessageWithParts(other, [reassigned])).rejects.toMatchObject({
+          name: "SessionWriteScopeError",
+        })
+        expect(partRows(info)).toEqual([
+          expect.objectContaining({
+            id: original.id,
+            message_id: info.id,
+            data: { type: "text", text: "original" },
+          }),
+        ])
+        expect(partRows(other)).toEqual([])
+        expect(events).toEqual([])
+      } finally {
+        unsubscribe()
+      }
+    })
+  })
+
+  test("conflicting ownership within a new part batch rolls back every row", async () => {
+    await withSession(async (info) => {
+      const other = userMessage(info.sessionID)
+      await Session.updateMessage(info)
+      await Session.updateMessage(other)
+      const original = textPart(info, "original")
+      const reassigned = { ...original, messageID: other.id, text: "reassigned" }
+
+      await expect(Session.updateParts([original, reassigned])).rejects.toMatchObject({
+        name: "SessionWriteScopeError",
+      })
+      expect(partRows(info)).toEqual([])
+      expect(partRows(other)).toEqual([])
     })
   })
 

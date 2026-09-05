@@ -1,15 +1,31 @@
 import { type Database, sql } from "../storage/db"
 import type { MessageV2 } from "./message-v2"
 import { MessageTable, PartTable } from "./session.sql"
+import { NamedError } from "@ax-code/util/error"
+import z from "zod"
 
-// SQL only: callers own scope validation, store selection, transactions, and events.
+// SQL only: callers own store selection, transaction boundaries, and events.
+// Conflict guards enforce immutable row ownership at the final write boundary.
 export namespace MessageWrite {
+  export const ScopeError = NamedError.create("SessionWriteScopeError", z.object({ message: z.string() }))
+
+  function assertOwned(result: { changes: number | bigint }, kind: "message" | "part", id: string) {
+    if (Number(result.changes) === 1) return
+    throw new ScopeError({ message: `Cannot reassign ${kind} ${id} to a different owner` })
+  }
+
   export function message(db: Database.TxOrDb, info: MessageV2.Info, timeUpdated: number) {
     const { id, sessionID, ...data } = info
-    db.insert(MessageTable)
+    const result = db
+      .insert(MessageTable)
       .values({ id, session_id: sessionID, time_created: info.time.created, data })
-      .onConflictDoUpdate({ target: MessageTable.id, set: { data, time_updated: timeUpdated } })
+      .onConflictDoUpdate({
+        target: MessageTable.id,
+        set: { data, time_updated: timeUpdated },
+        setWhere: sql`${MessageTable.session_id} = excluded.session_id`,
+      })
       .run()
+    assertOwned(result, "message", id)
   }
 
   function partRow(part: MessageV2.Part, time: number) {
@@ -34,11 +50,16 @@ export namespace MessageWrite {
               data: sql.placeholder("data"),
             },
       )
-      .onConflictDoUpdate({ target: PartTable.id, set: { data: sql`excluded.data`, time_updated: time } })
+      .onConflictDoUpdate({
+        target: PartTable.id,
+        set: { data: sql`excluded.data`, time_updated: time },
+        setWhere: sql`${PartTable.message_id} = excluded.message_id and ${PartTable.session_id} = excluded.session_id`,
+      })
 
     // Single writes do not benefit from constructing and binding placeholders.
     if (parts.length === 1) {
-      upsert.run()
+      const result = upsert.run()
+      assertOwned(result, "part", parts[0].id)
       return
     }
 
@@ -46,7 +67,8 @@ export namespace MessageWrite {
     // reuse across transaction contexts or closed/evicted shard connections.
     const prepared = upsert.prepare()
     for (const part of parts) {
-      prepared.run(partRow(part, time))
+      const result = prepared.run(partRow(part, time))
+      assertOwned(result, "part", part.id)
     }
   }
 }
