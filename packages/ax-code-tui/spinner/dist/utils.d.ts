@@ -1,4 +1,4 @@
-import type { ColorInput } from "@ax-code/tui";
+import type { ColorInput } from "@ax-code/tui"
 /**
  * Function that generates a color for a specific character at a specific frame.
  * Used by the spinner to apply per-character, per-frame color effects.
@@ -9,7 +9,12 @@ import type { ColorInput } from "@ax-code/tui";
  * @param totalChars - Total number of characters in the current frame
  * @returns Color for this specific character at this specific frame
  */
-export type ColorGenerator = (frameIndex: number, charIndex: number, totalFrames: number, totalChars: number) => ColorInput;
+export type ColorGenerator = (
+  frameIndex: number,
+  charIndex: number,
+  totalFrames: number,
+  totalChars: number,
+) => ColorInput
 /**
  * Maximum display width across a set of frames, using a per-frame measurer.
  *
@@ -18,11 +23,11 @@ export type ColorGenerator = (frameIndex: number, charIndex: number, totalFrames
  * under-count wide/emoji glyphs. Keep this computation in a pure helper so it
  * is unit-testable without loading the native render library.
  */
-export declare function maxFrameDisplayWidth(frames: readonly string[], measure: (frame: string) => number): number;
+export declare function maxFrameDisplayWidth(frames: readonly string[], measure: (frame: string) => number): number
 /**
  * Creates a static color generator that always returns the same color.
  */
-export declare function createStatic(color: ColorInput): ColorGenerator;
+export declare function createStatic(color: ColorInput): ColorGenerator
 /**
  * Creates a pulsing color effect that cycles through colors at a given speed.
  *
@@ -31,7 +36,7 @@ export declare function createStatic(color: ColorInput): ColorGenerator;
  * const colorGen = createPulse(["red", "orange", "yellow"], 0.5);
  * ```
  */
-export declare function createPulse(colors: ColorInput[], speed?: number): ColorGenerator;
+export declare function createPulse(colors: ColorInput[], speed?: number): ColorGenerator
 /**
  * Creates a wave pattern that moves across characters.
  *
@@ -40,9 +45,9 @@ export declare function createPulse(colors: ColorInput[], speed?: number): Color
  * const colorGen = createWave(["#ff0000", "#00ff00", "#0000ff"]);
  * ```
  */
-export declare function createWave(colors: ColorInput[]): ColorGenerator;
+export declare function createWave(colors: ColorInput[]): ColorGenerator
 /**
  * Creates a rainbow gradient that cycles through the spectrum across characters.
  * Uses HSL-style hue rotation mapped to a discrete color palette.
  */
-export declare function createRainbow(): ColorGenerator;
+export declare function createRainbow(): ColorGenerator
