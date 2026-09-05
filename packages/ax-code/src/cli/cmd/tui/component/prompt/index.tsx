@@ -78,6 +78,7 @@ import { calculateCompactionBudget, effectiveTokenTotal } from "@/session/compac
 import { Gauge } from "@tui/ui/primitives/gauge"
 import { KeyHint } from "@tui/ui/primitives/key-hint"
 import { footerHintWidth, promptFooterLayout } from "./footer-layout"
+import { createFooterTipCycle, FOOTER_TIP_ROTATE_MS, FOOTER_TIPS, footerTipWidth } from "./footer-tips"
 import { computeSessionMainPaneWidth } from "../../routes/session/layout"
 import { pendingSubmitKeyIntent, pendingSubmitStatusText, type SubmitStage } from "./submit-state"
 import { connectionChipText, footerLivenessIndicator, footerLivenessTextFrame } from "./liveness-view-model"
@@ -621,6 +622,23 @@ export function Prompt(props: PromptProps) {
       label: hasDraft ? "clear" : "exit",
     }
   })
+  const footerTipCycle = createFooterTipCycle(FOOTER_TIPS.length)
+  const [footerTipIndex, setFooterTipIndex] = createSignal(footerTipCycle.next())
+  onMount(() => {
+    const cancel = scheduleTuiInterval(
+      () => {
+        setFooterTipIndex(footerTipCycle.next())
+      },
+      {
+        name: "footer-tip-rotate",
+        delayMs: FOOTER_TIP_ROTATE_MS,
+        unref: true,
+      },
+    )
+
+    onCleanup(cancel)
+  })
+  const footerTip = createMemo(() => FOOTER_TIPS[footerTipIndex()] ?? FOOTER_TIPS[0]!)
   const footerLayout = createMemo(() =>
     promptFooterLayout({
       contentWidth: promptContentWidth(),
@@ -630,6 +648,7 @@ export function Prompt(props: PromptProps) {
         local.model.variant.list().length > 0 ? footerHintWidth(keybind.print("variant_cycle"), "variants") : 0,
       shellWidth: footerHintWidth("esc", "exit shell mode"),
       clearWidth: footerHintWidth("ctrl+c", "clear"),
+      tipWidth: footerTipWidth(footerTip()),
     }),
   )
 
@@ -1576,6 +1595,9 @@ export function Prompt(props: PromptProps) {
                 <KeyHint keys="esc" label="interrupt" />
               </Show>
             </box>
+          </Show>
+          <Show when={footerLayout().showTip}>
+            <text fg={theme.textMuted}>{footerTip()}</text>
           </Show>
           <Show when={status().type !== "retry"}>
             <box

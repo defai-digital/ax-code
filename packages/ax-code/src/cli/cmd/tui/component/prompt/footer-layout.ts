@@ -6,6 +6,7 @@ export type PromptFooterLayout = {
   showVariants: boolean
   showShellHint: boolean
   showClearHint: boolean
+  showTip: boolean
 }
 
 export function footerHintWidth(key: string, label: string) {
@@ -19,6 +20,7 @@ export function promptFooterLayout(input: {
   variantsWidth: number
   shellWidth: number
   clearWidth: number
+  tipWidth?: number
 }) {
   const inlineBudget = Math.max(0, input.contentWidth - INLINE_STATUS_RESERVE)
   const firstHintWidth = input.mode === "shell" ? input.shellWidth : input.clearWidth
@@ -35,6 +37,7 @@ export function promptFooterLayout(input: {
       showVariants: false,
       showShellHint: remaining >= input.shellWidth,
       showClearHint: false,
+      showTip: false,
     } satisfies PromptFooterLayout
   }
 
@@ -45,12 +48,18 @@ export function promptFooterLayout(input: {
 
   if (input.variantsWidth > 0 && remaining >= (showClearHint ? GROUP_GAP : 0) + input.variantsWidth) {
     showVariants = true
+    remaining -= input.variantsWidth + (showClearHint ? GROUP_GAP : 0)
   }
+
+  // Rotating usage tip is lowest priority: only inline mode, only when every
+  // hint above still fits and spare width remains for the tip itself.
+  const showTip = !stacked && input.tipWidth !== undefined && input.tipWidth > 0 && remaining >= input.tipWidth
 
   return {
     stacked,
     showVariants,
     showShellHint: false,
     showClearHint,
+    showTip,
   } satisfies PromptFooterLayout
 }
