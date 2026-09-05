@@ -39,6 +39,13 @@ export namespace Process {
     detached?: boolean
     kill?: NodeJS.Signals | number
     timeout?: number
+    /**
+     * Unref the child (and its pipe sockets) so a still-running child does not
+     * keep the parent process alive. Used for best-effort background probes
+     * where the parent may be a short-lived CLI that should exit without
+     * waiting for the child.
+     */
+    unref?: boolean
   }
 
   export interface RunOptions extends Omit<Options, "stdout" | "stderr"> {
@@ -195,6 +202,11 @@ export namespace Process {
 
     const child = proc as Child
     child.exited = exited
+    if (opts.unref) {
+      proc.unref()
+      if (opts.stdout === "pipe") (proc.stdout as unknown as { unref?: () => void })?.unref?.()
+      if (opts.stderr === "pipe") (proc.stderr as unknown as { unref?: () => void })?.unref?.()
+    }
     return child
   }
 
@@ -207,6 +219,7 @@ export namespace Process {
       abort: opts.abort,
       kill: opts.kill,
       timeout: opts.timeout,
+      unref: opts.unref,
       stdout: "pipe",
       stderr: "pipe",
     })

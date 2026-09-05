@@ -1,7 +1,7 @@
 import type { Argv } from "yargs"
 import { cmd } from "../cmd"
 import type { Session } from "../../../session"
-import { bootstrap } from "../../bootstrap"
+import { bootstrap, bootstrapReadonly } from "../../bootstrap"
 import { UI } from "../../ui"
 import { Locale } from "../../../util/locale"
 import { Flag } from "../../../flag/flag"
@@ -455,7 +455,7 @@ export const SessionListCommand = cmd({
   handler: async (args) => {
     const { Session } = await import("../../../session")
     const { Process } = await import("../../../util/process")
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       const sessions = [...Session.list({ roots: true, limit: args.maxCount })]
 
       if (sessions.length === 0) {

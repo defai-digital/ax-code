@@ -35,6 +35,10 @@ async function checkClaudeAuth(binary: string): Promise<string | undefined> {
       env: cliEnv([], "claude-code"),
       abort: AbortSignal.timeout(5_000),
       nothrow: true,
+      // Best-effort probe: the result is only an auth hint, so a short-lived
+      // CLI process (e.g. `ax-code context`) must not be kept alive until the
+      // child exits — discovery fires this in the background during shutdown.
+      unref: true,
     })
 
     for (const line of [out.stdout, out.stderr]

@@ -246,3 +246,20 @@ export async function InstanceBootstrap() {
   }
   ScheduledTask.initScheduler({ keepAlive: true })
 }
+
+/**
+ * Minimal bootstrap for short-lived, read-only CLI commands (`session list`,
+ * `skill list`, `context`, ...). Skips every interactive-session service —
+ * task queue recovery, plugin/LSP/diagnostic init, provider warmup and its
+ * CLI probes, workspace prewarm, file watchers, snapshot init, session
+ * auto-prune, and the scheduled-task scheduler — so the process can exit as
+ * soon as the command handler finishes instead of waiting for background
+ * warmups (e.g. CLI-provider auth probes spawning child processes) to drain.
+ *
+ * Subsystems initialize lazily on first real use; the next TUI/server start
+ * runs the full bootstrap, so skipping recovery/prune here only defers work
+ * that a long-lived process owns anyway.
+ */
+export async function InstanceBootstrapReadonly() {
+  Log.Default.info("bootstrapping (read-only)", { directory: Instance.directory })
+}

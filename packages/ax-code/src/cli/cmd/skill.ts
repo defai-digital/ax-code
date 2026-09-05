@@ -16,7 +16,7 @@ import {
   type SkillTriggerReport,
   type SkillValidationReport,
 } from "../../skill/authoring"
-import { bootstrap } from "../bootstrap"
+import { bootstrap, bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
 
 export {
@@ -89,7 +89,7 @@ const SkillListCommand = cmd({
       describe: "output machine-readable JSON",
     }),
   async handler(args) {
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       const skills = await Skill.all()
       if (args.json) {
         process.stdout.write(JSON.stringify(skills, null, 2) + EOL)
@@ -149,7 +149,7 @@ const SkillValidateCommand = cmd({
       describe: "output machine-readable JSON",
     }),
   async handler(args) {
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       const report = buildSkillValidationReport(await Skill.all())
       if (args.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + EOL)
@@ -170,7 +170,7 @@ const SkillDoctorCommand = cmd({
       describe: "output machine-readable JSON",
     }),
   async handler(args) {
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       const report = buildSkillDoctorReport(await Skill.all())
       if (args.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + EOL)
@@ -197,7 +197,7 @@ const SkillTestTriggerCommand = cmd({
         describe: "output machine-readable JSON",
       }),
   async handler(args) {
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       const files = ((args.files as string[] | undefined) ?? []).filter(Boolean)
       const report = buildSkillTriggerReport(await Skill.all(), files)
       if (args.json) {

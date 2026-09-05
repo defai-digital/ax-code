@@ -1,7 +1,7 @@
 import { cmd } from "./cmd"
 import { UI } from "../ui"
 import * as prompts from "@clack/prompts"
-import { bootstrap } from "../bootstrap"
+import { bootstrapReadonly } from "../bootstrap"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
 import { Provider } from "../../provider/provider"
@@ -20,7 +20,7 @@ export const ContextCommand = cmd({
     UI.empty()
     prompts.intro("Context Stats")
 
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       const sessions = [...Session.list({ limit: 1000 })]
 
       if (sessions.length === 0) {
