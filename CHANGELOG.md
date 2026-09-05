@@ -6,6 +6,8 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.12.0] - 2026-09-05
+
 ### Added
 
 - Add Cloud Operations Mode: six provider-agnostic tools (`ops_plan`, `ops_diff`, `ops_approve`, `ops_apply`, `ops_verify`, `ops_journal`) implementing a plan → approve → apply → verify → audit workflow. Approvals are INTERACTIVE_ONLY and issue a single-use, TTL-bound, plan-hash-bound token that `ops_apply` redeems before executing; `ops_apply` supports read-only before/after snapshot commands, and every step lands in an append-only, hash-chained operation journal that survives session deletion.
