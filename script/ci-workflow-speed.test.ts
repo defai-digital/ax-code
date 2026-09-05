@@ -31,4 +31,11 @@ describe("CI workflow speed policy", () => {
   test("the release workflow never cancels an in-flight publish", () => {
     expect(release).toMatch(/cancel-in-progress:\s*false/)
   })
+
+  test("the release workflow runs the self-scan before deterministic tests", () => {
+    const scan = release.indexOf("pnpm run check:self-scan")
+    const deterministic = release.indexOf("test:ci -- deterministic")
+    expect(scan).toBeGreaterThan(-1)
+    expect(deterministic).toBeGreaterThan(scan)
+  })
 })

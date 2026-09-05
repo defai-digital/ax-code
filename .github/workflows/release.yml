@@ -116,6 +116,9 @@ jobs:
       - name: Check repository structure
         run: pnpm run check:structure
 
+      - name: Run AX Code self-scan
+        run: pnpm run check:self-scan -- --report .internal/reports/qa/self-scan.md
+
       - name: Test
         run: pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 1
         env:
