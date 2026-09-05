@@ -31,7 +31,7 @@ for (const dir of CLOUD_SKILL_DIRS) {
     expect(parsed.data.description.length).toBeGreaterThan(0)
     expect(parsed.data.description).toContain("Use when")
 
-    expect(data.agent).toBe("devops")
+    expect(data.agent).toBe("cloudops")
     expect(typeof data["argument-hint"]).toBe("string")
     expect((data["argument-hint"] as string).length).toBeGreaterThan(0)
 

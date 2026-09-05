@@ -1,7 +1,7 @@
 ---
 name: cloud-ops-cloudflare
 description: Operate Cloudflare resources (Workers, R2, DNS, Pages) via wrangler and the API with read-only inventory first, versioned rollback, and explicit confirmation for deletes. Use when the user asks to inspect, change, or clean up Cloudflare infrastructure.
-agent: devops
+agent: cloudops
 argument-hint: <operation and target resources, e.g. "deploy the worker to production">
 ---
 

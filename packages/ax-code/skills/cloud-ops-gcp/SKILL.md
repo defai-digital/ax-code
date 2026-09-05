@@ -1,7 +1,7 @@
 ---
 name: cloud-ops-gcp
 description: Operate GCP resources (Compute Engine, GKE, Cloud SQL, Cloud Storage, IAM) with read-only inventory first, a confirm-before-delete plan, and an IaC rollback recipe. Use when the user asks to inspect, change, or clean up Google Cloud infrastructure.
-agent: devops
+agent: cloudops
 argument-hint: <operation and target resources, e.g. "resize the cloud sql instance in staging">
 ---
 

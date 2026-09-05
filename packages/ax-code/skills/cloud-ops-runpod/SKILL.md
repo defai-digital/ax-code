@@ -1,7 +1,7 @@
 ---
 name: cloud-ops-runpod
 description: Operate RunPod resources (pods, serverless endpoints, volumes, network storage) with read-only API/CLI inventory first and snapshot-before-delete discipline, because GraphQL deletions are FINAL. Use when the user asks to inspect, change, or clean up RunPod infrastructure.
-agent: devops
+agent: cloudops
 argument-hint: <operation and target resources, e.g. "stop the idle training pod">
 ---
 

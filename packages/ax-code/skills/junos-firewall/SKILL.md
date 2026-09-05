@@ -1,7 +1,7 @@
 ---
 name: junos-firewall
 description: Administer a Juniper Junos firewall or router over SSH using a private/exclusive candidate config, mandatory commit confirmed commits with automatic rollback, and pre-change configuration capture. Use when the user asks to change Junos firewall filter, NAT, interface, or routing configuration.
-agent: devops
+agent: cloudops
 argument-hint: <change to make, e.g. "add a firewall filter term allowing tcp/443 from the dmz">
 ---
 

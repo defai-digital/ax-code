@@ -1,7 +1,7 @@
 ---
 name: cloud-ops-aws
 description: Operate AWS resources (EC2, S3, RDS, IAM, Lambda) with read-only inventory first, a confirm-before-delete plan, and an IaC rollback recipe. Use when the user asks to inspect, change, or clean up AWS infrastructure.
-agent: devops
+agent: cloudops
 argument-hint: <operation and target resources, e.g. "resize the rds instance in prod">
 ---
 

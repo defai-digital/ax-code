@@ -1,7 +1,7 @@
 ---
 name: cloud-ops-digitalocean
 description: Operate DigitalOcean resources (Droplets, Volumes, Databases, Firewalls, Spaces) via doctl with read-only inventory first, pre-change snapshots, and an IaC rollback recipe. Use when the user asks to inspect, change, or clean up DigitalOcean infrastructure.
-agent: devops
+agent: cloudops
 argument-hint: <operation and target resources, e.g. "resize the staging droplet">
 ---
 

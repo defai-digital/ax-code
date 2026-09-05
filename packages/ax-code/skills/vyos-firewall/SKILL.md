@@ -1,7 +1,7 @@
 ---
 name: vyos-firewall
 description: Administer a VyOS router or firewall over SSH using config-mode staging, mandatory commit-confirm commits with automatic rollback, and pre-change configuration capture. Use when the user asks to change VyOS firewall, NAT, interface, or routing configuration.
-agent: devops
+agent: cloudops
 argument-hint: <change to make, e.g. "add a firewall rule allowing tcp/8443 from 10.0.0.0/8">
 ---
 
