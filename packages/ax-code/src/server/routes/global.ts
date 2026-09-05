@@ -6,7 +6,6 @@ import z from "zod"
 import semver from "semver"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
-import { AsyncQueue } from "@/util/queue"
 import { Instance } from "../../project/instance"
 import { Installation } from "@/installation"
 import { Log } from "../../util/log"
@@ -14,12 +13,10 @@ import { lazy } from "../../util/lazy"
 import { Config } from "../../config/config"
 import { redactConfig, stripRedactedConfig } from "./config"
 import { errors, invalidRequest } from "../error"
-import { encodeSsePayload, SSE_HARD_MAX, SSE_WARN_THRESHOLD } from "../sse-queue"
 import { Event } from "../event"
 import { ServiceManager } from "@/runtime/service-manager"
 import { Filesystem } from "@/util/filesystem"
-import type { EventJournalEntry } from "@/bus/event-journal"
-import type { GlobalBusEvent } from "@/bus/global"
+import { EventStream } from "../event-stream"
 
 const log = Log.create({ service: "server" })
 const SERVER_STARTED_AT = Date.now()
@@ -311,138 +308,16 @@ export const GlobalRoutes = lazy(() =>
         log.info("global event connected")
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
-        return streamSSE(c, async (stream) => {
-          type QueuedFrame = { data: string; id?: string }
-          const q = new AsyncQueue<QueuedFrame | null>()
-          let done = false
-          let warned = false
-          let heartbeat: ReturnType<typeof setInterval> | undefined
-          let unsubscribe = () => {}
-
-          const stop = () => {
-            if (done) return
-            done = true
-            if (heartbeat) clearInterval(heartbeat)
-            try {
-              unsubscribe()
-            } finally {
-              q.push(null)
-            }
-            log.info("global event disconnected")
-          }
-
-          const push = (entry: EventJournalEntry<GlobalBusEvent>) => {
-            if (done) return
-            if (q.size >= SSE_HARD_MAX) {
-              log.warn("global SSE queue overflow — disconnecting client", {
-                queueSize: q.size,
-                hardMax: SSE_HARD_MAX,
-              })
-              stop()
-              return
-            }
-            q.push({ data: entry.data, id: entry.id })
-            if (q.size >= SSE_WARN_THRESHOLD && !warned) {
-              warned = true
-              log.warn("global SSE queue approaching capacity", {
-                queueSize: q.size,
-                warnThreshold: SSE_WARN_THRESHOLD,
-                hardMax: SSE_HARD_MAX,
-              })
-            }
-          }
-
-          // Control frames (server.connected, server.heartbeat) bypass the
-          // data-frame overflow limit so a near-cap burst of real events
-          // can't tear down the connection on an otherwise-fine heartbeat.
-          const CONTROL_FRAME_QUEUE_LIMIT = 256
-          const pushControl = (payload: unknown, id?: string, limit = CONTROL_FRAME_QUEUE_LIMIT) => {
-            if (q.size >= limit) return
-            q.push({ data: encodeSsePayload(payload), id })
-          }
-
-          // This endpoint is mounted ahead of the per-request directory-
-          // scoping middleware in server.ts (so /global/health and
-          // /global/capabilities stay reachable without bootstrapping a
-          // project instance), which means there is no ambient
-          // Instance.directory here — reading it throws Context.NotFound
-          // and previously took the whole connection down before a single
-          // byte was written. These control frames are not tied to any one
-          // project anyway (unlike real events, which each carry their own
-          // originating directory from GlobalBus), so tag them with the
-          // same "global" sentinel already used by the dispose/upgrade
-          // events below instead of the per-request instance directory.
-          const GLOBAL_STREAM_DIRECTORY = "global"
-
-          // Send heartbeat every 10s to prevent stalled proxy streams.
-          heartbeat = setInterval(() => {
-            try {
-              pushControl({
-                directory: GLOBAL_STREAM_DIRECTORY,
-                payload: {
-                  type: "server.heartbeat",
-                  properties: {},
-                },
-              })
-            } catch (error) {
-              log.warn("global event heartbeat failed", { error })
-            }
-          }, 10_000)
-          heartbeat.unref?.()
-
-          const lastEventID = c.req.header("Last-Event-ID")?.trim() || undefined
-          const subscription = GlobalBus.subscribeFrom(lastEventID, push)
-          unsubscribe = subscription.unsubscribe
-
-          if (subscription.replay?.type === "replay") {
-            for (const entry of subscription.replay.entries) {
-              push(entry)
-              if (done) break
-            }
-          } else if (subscription.replay?.type === "gap") {
-            pushControl(
-              {
-                directory: GLOBAL_STREAM_DIRECTORY,
-                payload: {
-                  type: Event.ResyncRequired.type,
-                  properties: {
-                    reason: subscription.replay.reason,
-                    cursor: subscription.replay.cursor,
-                  },
-                },
-              },
-              subscription.replay.cursor,
-              SSE_HARD_MAX,
-            )
-          }
-
-          // Queue the acknowledgement after replay. Consumers may now treat
-          // server.connected as proof that the live subscription is attached.
-          if (!done) {
-            pushControl(
-              {
-                directory: GLOBAL_STREAM_DIRECTORY,
-                payload: {
-                  type: Event.Connected.type,
-                  properties: {},
-                },
-              },
-              subscription.cursor,
-              SSE_HARD_MAX,
-            )
-          }
-
-          stream.onAbort(stop)
-
-          try {
-            for await (const data of q) {
-              if (data === null) return
-              await stream.writeSSE(data)
-            }
-          } finally {
-            stop()
-          }
-        })
+        return streamSSE(c, (stream) =>
+          EventStream.run(stream, {
+            label: "global",
+            cursor: c.req.header("Last-Event-ID")?.trim() || undefined,
+            subscribe: (cursor, listener) => GlobalBus.subscribeFrom(cursor, listener),
+            // Global routes run before Instance middleware; control frames
+            // therefore use the global sentinel, never Instance.directory.
+            control: (payload) => ({ directory: "global", payload }),
+          }),
+        )
       },
     )
     .get(

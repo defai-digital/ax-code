@@ -9,7 +9,10 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
-const ReconnectTestEvent = BusEvent.define("reconnect.local.test", z.object({ value: z.number() }))
+const ReconnectTestEvent = BusEvent.define(
+  "reconnect.local.test",
+  z.object({ value: z.number(), directory: z.string().optional() }),
+)
 
 type ParsedSseFrame = {
   id?: string
@@ -50,6 +53,33 @@ async function readSseFrames(response: Response, count: number): Promise<ParsedS
 }
 
 describe("GET /event resume", () => {
+  test("filters replay by directory and delivers disposal before closing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.Default()
+        const eventUrl = `/event?directory=${encodeURIComponent(tmp.path)}`
+        const [connected] = await readSseFrames(await app.request(eventUrl), 1)
+        await Bus.publish(ReconnectTestEvent, { value: 1, directory: `${tmp.path}/other` })
+        await Bus.publish(ReconnectTestEvent, { value: 2, directory: tmp.path })
+        const response = await app.request(eventUrl, {
+          headers: { "Last-Event-ID": connected!.id! },
+        })
+        await Bus.publish(ReconnectTestEvent, { value: 3, directory: `${tmp.path}/other` })
+        await Bus.publish(Bus.InstanceDisposed, { directory: tmp.path })
+        // Asking for an extra frame must still finish once disposal closes the stream.
+        const frames = await readSseFrames(response, 4)
+        expect(frames.map((frame) => frame.data.type)).toEqual([
+          "reconnect.local.test",
+          "server.connected",
+          Bus.InstanceDisposed.type,
+        ])
+        expect(frames[0].data.properties).toEqual({ value: 2, directory: tmp.path })
+      },
+    })
+  })
+
   test("replays project events missed during a transient disconnect", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

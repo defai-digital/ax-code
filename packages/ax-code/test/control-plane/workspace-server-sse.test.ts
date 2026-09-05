@@ -1,6 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
-import fs from "fs/promises"
-import path from "path"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { Log } from "../../src/util/log"
 import { WorkspaceServer } from "../../src/control-plane/workspace-server/server"
 import { parseSSE } from "../../src/control-plane/sse"
@@ -49,6 +47,28 @@ async function readWorkspaceSseFrames(response: Response, count: number) {
 }
 
 describe("control-plane/workspace-server SSE", () => {
+  test("failed subscription setup releases its heartbeat timer", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] })
+    const error = new Error("subscription unavailable")
+    const reported = vi.spyOn(console, "error").mockImplementation(() => {})
+    const subscribe = vi.spyOn(GlobalBus, "subscribeFrom").mockImplementation(() => {
+      throw error
+    })
+    try {
+      const response = await WorkspaceServer.App().request("/event", {
+        headers: { [AX_CODE_WORKSPACE_HEADER]: "wrk_failed_subscription" },
+      })
+      await response.text()
+      expect(reported).toHaveBeenCalledWith(error)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      subscribe.mockRestore()
+      reported.mockRestore()
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
   test("rejects non-loopback listen", () => {
     expect(() => WorkspaceServer.Listen({ hostname: "0.0.0.0", port: 0 })).toThrow(/local-only/)
   })
@@ -218,27 +238,36 @@ describe("control-plane/workspace-server SSE", () => {
     expect(frames[1]?.id).toBe(frames[0]?.id)
   })
 
-  test("heartbeat respects the workspace SSE queue cap", async () => {
-    const src = await fs.readFile(
-      path.join(import.meta.dirname, "../../src/control-plane/workspace-server/server.ts"),
-      "utf-8",
-    )
-    const start = src.indexOf("const heartbeat = setInterval")
-    const end = src.indexOf("}, 10_000)", start)
-    expect(start).toBeGreaterThan(-1)
-    expect(end).toBeGreaterThan(start)
-    const block = src.slice(start, end)
-
-    expect(block).toContain("if (q.size >= SSE_MAX_QUEUE) return")
-  })
-
-  test("backpressure disconnects for replay instead of silently dropping events", async () => {
-    const src = await fs.readFile(
-      path.join(import.meta.dirname, "../../src/control-plane/workspace-server/server.ts"),
-      "utf-8",
-    )
-
-    expect(src).toContain("workspace SSE queue full; disconnecting client for resync")
-    expect(src).not.toContain("workspace SSE queue full; dropping events")
+  test.each([1022, 1023])("preserves the workspace replay boundary at %i retained events", async (count) => {
+    const app = WorkspaceServer.App()
+    const workspaceID = `wrk_replay_capacity_${count}`
+    const headers = { [AX_CODE_WORKSPACE_HEADER]: workspaceID }
+    const [connected] = await readWorkspaceSseFrames(await app.request("/event", { headers }), 1)
+    for (let i = 0; i < count; i++) {
+      GlobalBus.emit("event", {
+        directory: workspaceID,
+        payload: { type: "workspace.capacity.test", properties: { value: i } },
+      })
+    }
+    GlobalBus.emit("event", {
+      directory: "wrk_unrelated_capacity",
+      payload: { type: "workspace.unrelated.test", properties: {} },
+    })
+    const resumed = await app.request("/event", {
+      headers: { ...headers, "Last-Event-ID": connected!.id! },
+    })
+    const frames = await readWorkspaceSseFrames(resumed, count === 1022 ? 1023 : 2)
+    expect(frames.at(-1)?.data.type).toBe("server.connected")
+    if (count === 1022) {
+      expect(frames.slice(0, -1).map((frame) => frame.data.properties?.value)).toEqual(
+        Array.from({ length: count }, (_, i) => i),
+      )
+    } else {
+      expect(frames[0]?.data).toMatchObject({
+        type: "server.resync_required",
+        properties: { reason: "buffer_overflow" },
+      })
+      expect(frames[0]?.id).toBe(frames[1]?.id)
+    }
   })
 })

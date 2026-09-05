@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { encodeSsePayload } from "@/util/sse-queue"
+import { Fifo } from "@/util/fifo"
 
 export const EVENT_JOURNAL_MAX_EVENTS = 2_048
 export const EVENT_JOURNAL_MAX_BYTES = 16 * 1024 * 1024
@@ -46,7 +47,7 @@ export class EventJournal<T> {
 
   private sequence = 0
   private bytes = 0
-  private entries: EventJournalEntry<T>[] = []
+  private entries = new Fifo<EventJournalEntry<T>>()
 
   constructor(options: EventJournalOptions = {}) {
     this.epoch = options.epoch ?? randomUUID()
@@ -72,14 +73,14 @@ export class EventJournal<T> {
     // journal's entire memory budget. Clearing the retained tail makes older
     // cursors fail closed with cursor_expired on their next reconnect.
     if (entry.bytes > this.maxBytes || this.maxEvents === 0) {
-      this.entries = []
+      this.entries.clear()
       this.bytes = 0
       return entry
     }
 
     this.entries.push(entry)
     this.bytes += entry.bytes
-    while (this.entries.length > this.maxEvents || this.bytes > this.maxBytes) {
+    while (this.entries.size > this.maxEvents || this.bytes > this.maxBytes) {
       const removed = this.entries.shift()
       if (!removed) break
       this.bytes -= removed.bytes
@@ -96,13 +97,15 @@ export class EventJournal<T> {
       return { type: "replay", cursor: this.cursor(), entries: [] }
     }
 
-    const earliestRetained = this.entries[0]?.sequence ?? this.sequence + 1
+    const earliestRetained = this.entries.peek()?.sequence ?? this.sequence + 1
     if (parsed.sequence < earliestRetained - 1) return this.gap("cursor_expired")
 
     return {
       type: "replay",
       cursor: this.cursor(),
-      entries: this.entries.filter((entry) => entry.sequence > parsed.sequence),
+      // Retention only evicts a prefix, so sequences in the live tail are
+      // contiguous. Copy just the requested suffix instead of scanning it all.
+      entries: this.entries.toArray(parsed.sequence - earliestRetained + 1),
     }
   }
 

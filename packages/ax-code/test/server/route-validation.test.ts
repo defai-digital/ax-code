@@ -1069,23 +1069,8 @@ describe("server route validation", () => {
     expect(parsePtyReconnectCursor("0x10")).toBeUndefined()
   })
 
-  test("sse stop handlers always close their queues even if unsubscribe throws", async () => {
-    const eventSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/event.ts"), "utf-8")
-    const globalSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/global.ts"), "utf-8")
-    expect(eventSrc).toContain("} finally {")
-    expect(eventSrc).toContain("q.push(null)")
-    expect(globalSrc).toContain("} finally {")
-    expect(globalSrc).toContain("q.push(null)")
-  })
-
-  test("event stream only forwards bus events from the current project", async () => {
-    const eventSrc = await fs.readFile(path.join(import.meta.dirname, "../../src/server/routes/event.ts"), "utf-8")
-    expect(eventSrc).toContain("const shouldForward")
-    expect(eventSrc).toContain("directory === undefined || directory === Instance.directory")
-    expect(eventSrc).toMatch(
-      /Bus\.subscribeAllFrom\(lastEventID, \(entry\) => \{\s*if \(!shouldForward\(entry\.value\)\) return/,
-    )
-  })
+  // SSE cleanup and directory isolation are exercised behaviorally in
+  // event-stream.test.ts and event-resume.test.ts, independent of route layout.
 
   test("log endpoint rejects oversized messages", async () => {
     await Instance.provide({

@@ -1,3 +1,5 @@
+import { Fifo } from "./fifo"
+
 /**
  * Bounded concurrency for outbound work (STAB-04).
  *
@@ -24,7 +26,7 @@ export type ConcurrencyLimiter = {
 export function createConcurrencyLimiter(max: number): ConcurrencyLimiter {
   const limit = Number.isFinite(max) ? Math.max(1, Math.floor(max)) : 1
   let active = 0
-  const waiters: Array<() => void> = []
+  const waiters = new Fifo<() => void>()
 
   async function acquire(): Promise<void> {
     // Free slot: take a new permit.
@@ -54,7 +56,7 @@ export function createConcurrencyLimiter(max: number): ConcurrencyLimiter {
   return {
     max: limit,
     active: () => active,
-    waiting: () => waiters.length,
+    waiting: () => waiters.size,
     async run<T>(fn: () => Promise<T>): Promise<T> {
       await acquire()
       try {

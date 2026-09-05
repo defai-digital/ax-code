@@ -1,52 +1,41 @@
+import { Fifo } from "./fifo"
+
 const CLOSED = Symbol("closed")
 
 /**
  * An async queue that supports both `next()` and `for await...of` iteration.
  *
- * Invariants:
- * - `count` tracks the number of non-CLOSED items in the internal queue.
- * - Items resolved directly via pending resolvers never touch `count`.
- * - The CLOSED sentinel does not affect `count`.
+ * `size` counts buffered values only. Values handed directly to waiting
+ * consumers and close notifications never occupy a queue slot.
  *
  * Note: `next()` throws when the queue is closed and drained, while the
  * async iterator returns gracefully. Use the iterator for consumption
  * patterns that should terminate cleanly on close.
  */
 export class AsyncQueue<T> implements AsyncIterable<T> {
-  private queue: (T | typeof CLOSED)[] = []
-  private resolvers: ((value: T | typeof CLOSED) => void)[] = []
-  private count = 0
+  private queue = new Fifo<T>()
+  private resolvers = new Fifo<(value: T | typeof CLOSED) => void>()
   private closed = false
 
   get size() {
-    return this.count
+    return this.queue.size
   }
 
   push(item: T) {
     if (this.closed) return
     const resolve = this.resolvers.shift()
     if (resolve) resolve(item)
-    else {
-      this.queue.push(item)
-      this.count++
-    }
+    else this.queue.push(item)
   }
 
   close() {
     if (this.closed) return
     this.closed = true
-    for (const resolve of this.resolvers) resolve(CLOSED)
-    this.resolvers.length = 0
-    this.queue.push(CLOSED)
+    while (this.resolvers.size > 0) this.resolvers.shift()!(CLOSED)
   }
 
   async next(): Promise<T> {
-    if (this.queue.length > 0) {
-      const item = this.queue.shift()!
-      if (item === CLOSED) throw new Error("AsyncQueue is closed")
-      this.count--
-      return item
-    }
+    if (this.queue.size > 0) return this.queue.shift()!
     if (this.closed) throw new Error("AsyncQueue is closed")
     return new Promise<T>((resolve, reject) =>
       this.resolvers.push((v) => {
@@ -59,10 +48,8 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
   async *[Symbol.asyncIterator]() {
     while (true) {
       let item: T | typeof CLOSED
-      if (this.queue.length > 0) {
+      if (this.queue.size > 0) {
         item = this.queue.shift()!
-        // Only decrement count for real items; CLOSED sentinel doesn't affect count.
-        if (item !== CLOSED) this.count--
       } else if (this.closed) {
         return
       } else {
