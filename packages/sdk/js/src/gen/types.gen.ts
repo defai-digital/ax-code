@@ -648,6 +648,15 @@ export type Config = {
     }
   }
   /**
+   * Cloud Operations mode settings (see docs/guides/cloud-operations.md)
+   */
+  ops?: {
+    /**
+     * Cloud-operations strict mode (default: false). When true, destructive-classified bash commands are denied outright — the interactive bash_destructive ask is replaced by a hard deny — and the model is directed to the sanctioned ops workflow (ops_plan -> ops_diff -> ops_approve -> ops_apply with an approved plan token). Set in trusted config only; untrusted project config cannot enable it.
+     */
+    strict?: boolean
+  }
+  /**
    * File attachment settings
    */
   attachment?: {

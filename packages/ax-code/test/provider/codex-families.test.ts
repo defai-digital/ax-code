@@ -26,7 +26,7 @@ describe("codex families", () => {
     ).openai?.models
     expect(openai).toBeDefined()
     expect(latestCodexFamilyModels(openai!).map((model) => model.id)).toEqual([
-      "gpt-5.6",
+      "gpt-6-astra",
       "gpt-5.4-mini",
       "gpt-5.3-codex-spark",
     ])
