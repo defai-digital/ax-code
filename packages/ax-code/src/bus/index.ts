@@ -9,7 +9,11 @@ import { EventJournal, type EventJournalEntry, type EventJournalReplay } from ".
 
 export namespace Bus {
   const log = Log.create({ service: "bus" })
-  const BUS_SUBSCRIBER_TIMEOUT_MS = 10_000
+  // Subscriber-owned callback boundaries must settle before the bus gives up
+  // waiting for them. Plugin event hooks have a 15-second deadline; keeping a
+  // small outer margin lets that boundary abort and retire a stalled plugin
+  // instead of allowing Bus.publish() to return while the hook is still live.
+  export const SUBSCRIBER_TIMEOUT_MS = 16_000
   type Subscription = (event: any) => void
   type SequencedSubscription = (entry: EventJournalEntry<any>) => void
   type Pending = Promise<unknown>[]
@@ -56,8 +60,8 @@ export namespace Bus {
         Promise.resolve()
           .then(() => sub(payload))
           .catch((err) => log.error("subscriber threw", { type, err })),
-        BUS_SUBSCRIBER_TIMEOUT_MS,
-        `Bus subscriber for "${type}" timed out after ${BUS_SUBSCRIBER_TIMEOUT_MS}ms`,
+        SUBSCRIBER_TIMEOUT_MS,
+        `Bus subscriber for "${type}" timed out after ${SUBSCRIBER_TIMEOUT_MS}ms`,
       ).catch((err) => log.error("subscriber timed out", { type, err })),
     )
   }

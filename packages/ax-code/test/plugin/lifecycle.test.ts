@@ -333,6 +333,7 @@ test("a stalled event observer cannot prevent healthy observers from receiving e
       const pending = Bus.publish(event, { value: "first" })
       await vi.advanceTimersByTimeAsync(0)
       expect(probe.calls).toBe(1)
+      expect(Bus.SUBSCRIBER_TIMEOUT_MS).toBeGreaterThan(PluginLifetime.CALLBACK_TIMEOUT_MS)
       await vi.advanceTimersByTimeAsync(PluginLifetime.CALLBACK_TIMEOUT_MS)
       await pending
       expect(probe.signal!.aborted).toBe(true)
