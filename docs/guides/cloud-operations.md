@@ -69,6 +69,29 @@ If the apply had failed at step 5, the token would be gone — step 4 would run 
 - **Skill packs carry provider runbooks.** `cloud-ops-aws`, `cloud-ops-gcp`, `cloud-ops-cloudflare`, `cloud-ops-digitalocean`, `cloud-ops-runpod`, `vyos-firewall`, and `junos-firewall` hold the read-only-first checklists, plan-before-mutate steps, and rollback patterns; the agent loads the matching pack before operating a surface. OVHcloud and other providers are covered through configured MCP servers and their documentation, not improvised CLI chains.
 - **Credentials never reach the record.** Inline credential assignments in persisted bash inputs are redacted before they reach the event log.
 
+## Strict mode
+
+By default, a destructive-classified bash command (the `bash_destructive` family: cloud/network mutating verbs, `rm -rf`, `git push --force`, and the rest of the classifier list) receives a non-bypassable interactive ask — the user can approve the one-off command and it runs. **Strict mode removes that option.**
+
+With strict mode enabled, a destructive-classified bash command is **denied outright**, before any ask. The deny message lists the classified commands with their reasons and directs the model to the sanctioned workflow: `ops_plan` → `ops_diff` → `ops_approve` (issues a single-use approval token) → `ops_apply`. Ad-hoc destructive shell mutations are no longer possible at all; every mutation must be planned, diffed, approved, and applied through the journal-backed path.
+
+Enable it in trusted config (`ax-code.json` in your user config directory, managed config, or a project config the user has explicitly trusted):
+
+```json
+{
+  "ops": {
+    "strict": true
+  }
+}
+```
+
+Notes:
+
+- **Interaction with the ask:** strict mode _replaces_ the `bash_destructive` ask with a hard deny. With the flag off (the default), behavior is exactly as described above — the interactive gate remains.
+- **Scope:** the flag is global config, not per-agent — it applies to every bash call in the session, including subagents. The `cloudops` agent cannot enable it by itself; agents carry permissions and prompts, not config.
+- **Trust-scoping:** untrusted, repository-committed project config cannot enable strict mode; opt in per machine (`AX_CODE_TRUST_PROJECT_CONFIG=1`) or set it in trusted user/managed config.
+- **`ops_apply` is unaffected:** the sanctioned mutation path has its own plan-bound token gate inside the tool and never consults this flag.
+
 ## Source of truth
 
 - `packages/ax-code/src/agent/agent.ts` — the `cloudops` agent definition and permission merge

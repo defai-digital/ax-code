@@ -229,6 +229,17 @@ export namespace Config {
       delete caps.blockedPaths
       copy.experimental = { ...copy.experimental, autonomous_caps: caps }
     }
+    // Cloud-operations strict mode changes permission-layer enforcement
+    // behavior (it replaces the bash_destructive ask with a hard deny). Like
+    // the executable/credential fields above, an untrusted committed config
+    // may not flip it; projects opt in via the out-of-repository trust switch
+    // or trusted user/managed config.
+    if (isRecord(copy.ops)) {
+      const ops = { ...copy.ops }
+      delete ops.strict
+      if (Object.keys(ops).length > 0) copy.ops = ops
+      else delete copy.ops
+    }
   }
   export const McpSourceKind = z.enum([
     "wellknown",

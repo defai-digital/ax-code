@@ -20,6 +20,9 @@ const e2e = new Set([
   // re-validation on Linux CI before returning to deterministic.
   "test/tool/bash.test.ts",
   "test/tool/bash-background.test.ts",
+  // Same real-spawn rationale as bash.test.ts: exercises BashTool.execute end
+  // to end (deny path, benign run, and the existing destructive ask flow).
+  "test/tool/bash-strict-mode.test.ts",
   // Needs process isolation: mock.module leaks across files in one Bun process.
   "test/code-intelligence/query-native-dispatch.test.ts",
   "test/mcp/headers.test.ts",

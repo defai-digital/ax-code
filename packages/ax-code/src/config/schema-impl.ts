@@ -998,6 +998,20 @@ export const Info = z
       })
       .optional()
       .describe("Computer-use (desktop control) integration. Disabled unless provider is set."),
+    ops: z
+      .object({
+        strict: z
+          .boolean()
+          .optional()
+          .describe(
+            "Cloud-operations strict mode (default: false). When true, destructive-classified bash commands are " +
+              "denied outright — the interactive bash_destructive ask is replaced by a hard deny — and the model is " +
+              "directed to the sanctioned ops workflow (ops_plan -> ops_diff -> ops_approve -> ops_apply with an " +
+              "approved plan token). Set in trusted config only; untrusted project config cannot enable it.",
+          ),
+      })
+      .optional()
+      .describe("Cloud Operations mode settings (see docs/guides/cloud-operations.md)"),
     attachment: z
       .object({
         image: z

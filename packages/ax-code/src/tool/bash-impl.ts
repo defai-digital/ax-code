@@ -34,6 +34,7 @@ import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
+import { denyDestructiveInOpsStrict } from "./bash-strict"
 import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
@@ -950,6 +951,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // so neither wildcard allow rules nor autonomous auto-approval can skip
       // this ask. No `always` patterns are offered — approval is per call.
       if (destructiveCommands.size > 0) {
+        // Cloud-operations strict mode (PRD-2026-09-04 P2): when `ops.strict`
+        // is enabled, the ask is replaced by a hard deny (enforceSafetyPolicy
+        // style) that directs the model to the ops plan/apply workflow. The
+        // flag is global config, so this also applies to subagent bash calls.
+        if (config.ops?.strict === true) denyDestructiveInOpsStrict(destructiveCommands)
+
         await ctx.ask({
           permission: "bash_destructive",
           patterns: Array.from(destructiveCommands.keys()),
