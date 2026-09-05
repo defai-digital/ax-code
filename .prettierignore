@@ -1,2 +1,4 @@
 sst-env.d.ts
 packages/ax-code/test/cli/tui/__snapshots__/golden-frames/
+# TypeScript owns these bytes; check:tui-spinner-dist compares compiler output.
+packages/ax-code-tui/spinner/dist/
