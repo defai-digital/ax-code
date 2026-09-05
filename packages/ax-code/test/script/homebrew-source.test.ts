@@ -325,6 +325,16 @@ describe("distribution support guardrails", () => {
     expect(script.indexOf("minisign -V")).toBeLessThan(script.indexOf("cat > /tmp/ax-code.rb"))
   })
 
+  test("Homebrew rejects a read-only tap token before retrying pushes", async () => {
+    const script = await readFile(path.join(repoRoot, ".github/scripts/update-homebrew.sh"), "utf-8")
+
+    expect(script).toContain("gh api \"repos/${repo}\" --jq '.permissions.push // false'")
+    expect(script).toContain("does not have push permission for ${repo}")
+    expect(script).toContain("${tap_name} push failed; refreshing and retrying")
+    expect(script).not.toContain("${tap_name} changed during publish")
+    expect(script).not.toContain('echo "::error::Could not publish ax-code to ${tap_name} after 5 attempts"')
+  })
+
   test("install matrix is dispatch-only so release.published cannot race package publication", async () => {
     const text = await readFile(installMatrixWorkflow, "utf-8")
     expect(text).toContain("permissions:")

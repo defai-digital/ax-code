@@ -281,6 +281,17 @@ try_update_tap() {
   # Switch to the tap write token only after all source-repo release assets have
   # been downloaded and hashed.
   export GH_TOKEN="${token}"
+  local can_push
+  if ! can_push="$(gh api "repos/${repo}" --jq '.permissions.push // false' 2>/dev/null)"; then
+    echo "::warning::${label} cannot access ${repo}; trying another configured token"
+    rm -rf "${tap_dir}"
+    return 1
+  fi
+  if [ "${can_push}" != "true" ]; then
+    echo "::warning::${label} does not have push permission for ${repo}; trying another configured token"
+    rm -rf "${tap_dir}"
+    return 1
+  fi
   gh auth setup-git || {
     status=$?
     rm -rf "${tap_dir}"
@@ -312,10 +323,10 @@ try_update_tap() {
           echo "${tap_name} updated to v${VERSION}"
           exit 0
         fi
-        echo "::warning::${tap_name} changed during publish; retrying (${attempt}/5)"
+        echo "::warning::${tap_name} push failed; refreshing and retrying (${attempt}/5)"
         sleep $((attempt * 2))
       done
-      echo "::error::Could not publish ax-code to ${tap_name} after 5 attempts"
+      echo "::warning::Could not publish ax-code to ${tap_name} with ${label} after 5 attempts"
       exit 1
     fi
   )
