@@ -13,7 +13,7 @@ LABEL="${3:-$CHANNEL}"
 CHECK_LABEL="${LABEL}"
 
 if [ "$CHANNEL" = "source" ]; then
-  # Source launcher runs on Node.js (Bun was removed from the project).
+  # Source launchers and packaged distributions both run on Node.js.
   RUNTIME_NAME="Node"
   RUNTIME_RE='source'
 else
