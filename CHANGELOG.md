@@ -20,6 +20,11 @@ changes belong to AX Coder.
 - Record every approved destructive bash command in the operation journal, chained to the session's active plan or to a per-project unplanned-mutations sentinel plan.
 - Redact inline credential assignments (for example `AWS_SECRET_ACCESS_KEY=...`) from persisted bash tool inputs in the event log and message parts.
 
+### Fixed
+
+- Bind Cloud Operations approval tokens to the exact apply command, snapshot command, and working directory; reject command drift and cross-project plan access before consuming a token.
+- Fail closed on mutating `ops_verify` and snapshot commands, preserve tokens on pre-aborted applies, and avoid recording canceled approval prompts as user rejections.
+
 ## [7.11.2] - 2026-09-04
 
 ### Fixed

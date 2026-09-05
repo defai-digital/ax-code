@@ -1,6 +1,6 @@
 Execute an approved operation plan's mutation command — the only sanctioned path for changing external state.
 
-Use this for the actual apply step of a cloud or network change (e.g. `terraform apply <planfile>`, commit-confirm on a device, cloud CLI mutation). Authorization is a valid `approval_token` from `ops_approve`: single-use, TTL-bound, and bound to the `plan_id` you pass. The token is redeemed before anything runs; an expired, already-consumed, or unknown token fails the call with nothing executed, and a token bound to a different plan is rejected.
+Use this for the actual apply step of a cloud or network change (e.g. `terraform apply <planfile>`, commit-confirm on a device, cloud CLI mutation). Authorization is a valid `approval_token` from `ops_approve`: single-use, TTL-bound, and bound to the `plan_id` you pass. The command, snapshot command, and working directory must exactly match the canonical plan. Drift is rejected before token redemption; an expired, already-consumed, or unknown token fails the call with nothing executed, and a token bound to a different plan is rejected without consuming it.
 
 Direct `bash` for mutations is discouraged — cloud/network mutating verbs are classified as destructive and gated separately. Failure does NOT refund the token: a failed or timed-out apply requires re-approval via `ops_approve` before retrying. The command's exit code and output are journaled; the raw token is never persisted.
 

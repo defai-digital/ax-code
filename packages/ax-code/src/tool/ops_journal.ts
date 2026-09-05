@@ -36,7 +36,7 @@ export const OpsJournalTool = Tool.define("ops_journal", {
     })
 
     const rows = params.plan_id
-      ? OperationJournal.list(OperationPlanIDOf(params.plan_id), { limit: params.limit })
+      ? OperationJournal.list(OperationPlanIDOf(params.plan_id, Instance.project.id), { limit: params.limit })
       : OperationJournal.listByProject(Instance.project.id, { status: params.status, limit: params.limit })
 
     const entries = rows.map((row) => ({
@@ -61,6 +61,6 @@ export const OpsJournalTool = Tool.define("ops_journal", {
 
 // Validates the plan exists (and so the error matches the other ops tools)
 // before listing its entries.
-function OperationPlanIDOf(planID: string) {
-  return loadPlan(planID).id
+function OperationPlanIDOf(planID: string, projectID: (typeof Instance.project)["id"]) {
+  return loadPlan(planID, projectID).id
 }

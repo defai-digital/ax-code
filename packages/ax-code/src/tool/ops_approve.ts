@@ -7,7 +7,8 @@ import { Database, and, eq, gte, isNull } from "@/storage/db"
 import { OperationPlanID, OperationTokenID } from "@/operation/id"
 import { OperationTokenTable } from "@/operation/operation.sql"
 import { OperationPlan, OperationToken } from "@/operation/query"
-import { appendPlanJournal, loadPlan } from "./ops-shared"
+import { appendPlanJournal, loadPlan, OperationPlanCanonical } from "./ops-shared"
+import { Permission } from "@/permission"
 
 // Human approval gate for an OperationPlan (PRD-2026-09-04-cloud-operations-mode).
 // The ask uses the "ops_approve" permission, which is INTERACTIVE_ONLY: no
@@ -56,8 +57,9 @@ export const OpsApproveTool = Tool.define("ops_approve", {
       .describe(`Token lifetime in minutes (default ${TTL_DEFAULT_MINUTES}, max ${TTL_MAX_MINUTES})`),
   }),
   async execute(params, ctx) {
-    const plan = loadPlan(params.plan_id)
     const projectID = Instance.project.id
+    const plan = loadPlan(params.plan_id, projectID)
+    const canonical = OperationPlanCanonical.parse(plan.canonical_json)
 
     if (plan.status === "approved" && hasLiveToken(plan.id)) {
       throw new AlreadyApprovedError({
@@ -78,9 +80,19 @@ export const OpsApproveTool = Tool.define("ops_approve", {
           tool: "ops_approve",
           kind: plan.kind,
           canonical_hash: plan.canonical_hash,
+          apply_command: canonical.apply_command,
+          snapshot_command: canonical.snapshot_command,
+          cwd: canonical.cwd,
         },
       })
     } catch (error) {
+      if (
+        !(error instanceof Permission.DeniedError) &&
+        !(error instanceof Permission.RejectedError) &&
+        !(error instanceof Permission.CorrectedError)
+      ) {
+        throw error
+      }
       OperationPlan.transition(plan.id, "rejected")
       appendPlanJournal({
         plan,

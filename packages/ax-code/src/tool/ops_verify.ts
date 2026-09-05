@@ -27,7 +27,8 @@ export const OpsVerifyTool = Tool.define("ops_verify", {
       .describe("Read-only assertions; every one must pass for the plan to verify"),
   }),
   async execute(params, ctx) {
-    const plan = loadPlan(params.plan_id)
+    const projectID = Instance.project.id
+    const plan = loadPlan(params.plan_id, projectID)
 
     await ctx.ask({
       permission: "ops_verify",
@@ -38,11 +39,14 @@ export const OpsVerifyTool = Tool.define("ops_verify", {
 
     const results: Array<{ command: string; expect: string; pass: boolean }> = []
     for (const assertion of params.assertions) {
+      ctx.abort.throwIfAborted()
+      OpsExec.assertReadOnly(assertion.command)
       const result = await OpsExec.run({
         command: assertion.command,
         timeoutSeconds: ASSERT_TIMEOUT_SECONDS,
         abort: ctx.abort,
       })
+      if (result.aborted) ctx.abort.throwIfAborted()
       const combined = result.stdout + (result.stderr ? `\n${result.stderr}` : "")
       results.push({
         command: assertion.command,
@@ -54,7 +58,7 @@ export const OpsVerifyTool = Tool.define("ops_verify", {
 
     const { sequence, entryHash } = appendPlanJournal({
       plan,
-      projectID: Instance.project.id,
+      projectID,
       actor: "agent",
       status: allPass ? "verified" : "failed",
       payload: { assertions: results, all_pass: allPass },

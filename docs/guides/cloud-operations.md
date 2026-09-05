@@ -15,7 +15,7 @@ Cloud Operations Mode is a ready-made posture for administering infrastructure �
 
 ## The workflow: plan → diff → approve → apply → verify → journal
 
-1. **ops_plan** — open an OperationPlan: target (provider/account/region or device), intent, and steps with effect, reversibility (`reversible | hard | irreversible`), and blast radius (`low | med | high`). Produces a canonical plan hash.
+1. **ops_plan** — open an OperationPlan: target (provider/account/region or device), intent, exact apply command and command context, and steps with effect, reversibility (`reversible | hard | irreversible`), and blast radius (`low | med | high`). Produces a canonical plan hash.
 2. **ops_diff** — produce and review the machine-checkable artifact (`terraform plan -out`, `show | compare`, CLI dry-run output) and attach it. No diff, no approval.
 3. **ops_approve** — the human approves the hash-pinned plan. This gate is interactive-only: no wildcard rule and no autonomous mode can pre-approve it, and no durable "always allow" grant is offered.
 4. **ops_apply** — execute the approved plan's mutation with the approval token. This is the only sanctioned mutation path; the token is redeemed before anything runs.
@@ -57,7 +57,7 @@ If the apply had failed at step 5, the token would be gone — step 4 would run 
 
 - **Single-use** — redeemed atomically at the start of `ops_apply`; a consumed, unknown, or expired token fails with nothing executed.
 - **TTL-bound** — default 10 minutes, maximum 60. Expiry is checked lazily at consume time; there is no background sweeper.
-- **Plan-bound** — the token is issued against the plan's canonical sha256 hash. A token presented for a different plan is rejected, which kills replay and cross-plan confusion.
+- **Plan-bound** — the token is issued against the plan's canonical sha256 hash, which includes the exact apply command, optional snapshot command, and working directory. Argument drift and tokens presented for a different plan are rejected before consumption, which prevents replay, cross-plan confusion, and command substitution.
 - **Revealed once** — the raw token appears exactly once in the `ops_approve` result and is never persisted (only its sha256 is stored).
 - **No refund** — a failed or timed-out apply does not return the token. Retrying requires re-approval through `ops_approve`.
 

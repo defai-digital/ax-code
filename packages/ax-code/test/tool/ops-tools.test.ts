@@ -6,13 +6,21 @@ import { Instance } from "../../src/project/instance"
 import { Permission } from "../../src/permission"
 import { Hash } from "../../src/util/hash"
 import { Log } from "../../src/util/log"
+import { ProjectID } from "../../src/project/schema"
 import { OperationJournal, OperationPlan, OperationToken } from "../../src/operation/query"
 import { OpsPlanTool } from "../../src/tool/ops_plan"
 import { OpsDiffTool } from "../../src/tool/ops_diff"
 import { AlreadyApprovedError, OpsApproveTool } from "../../src/tool/ops_approve"
-import { OpsApplyTool, TokenPlanMismatchError, TokenRedeemError } from "../../src/tool/ops_apply"
+import {
+  OpsApplyTool,
+  PlanArgumentsMismatchError,
+  TokenPlanMismatchError,
+  TokenRedeemError,
+} from "../../src/tool/ops_apply"
 import { OpsVerifyTool } from "../../src/tool/ops_verify"
 import { OpsJournalTool } from "../../src/tool/ops_journal"
+import { loadPlan, PlanNotFoundError } from "../../src/tool/ops-shared"
+import { OpsExec, OpsReadOnlyCommandError } from "../../src/tool/ops-exec"
 
 Log.init({ print: false })
 
@@ -57,8 +65,23 @@ const PLAN_INPUT = {
   kind: "vyos-firewall",
   target: "vyos@edge-01",
   intent: "Allow HTTPS through the edge firewall",
+  apply_command: "echo ok",
+  snapshot_command: undefined as string | undefined,
+  cwd: undefined as string | undefined,
   steps: [STEP],
 }
+
+describe("ops read-only commands", () => {
+  test("allows observation commands and rejects mutations, shell controls, and privilege wrappers", () => {
+    expect(() => OpsExec.assertReadOnly("aws ec2 describe-instances --region us-east-1")).not.toThrow()
+    expect(() => OpsExec.assertReadOnly("kubectl get pods -n default")).not.toThrow()
+    expect(() => OpsExec.assertReadOnly("gcloud compute instances create vm --format list")).toThrow(
+      OpsReadOnlyCommandError,
+    )
+    expect(() => OpsExec.assertReadOnly("sudo cat /etc/shadow")).toThrow(OpsReadOnlyCommandError)
+    expect(() => OpsExec.assertReadOnly("echo ok; touch changed")).toThrow(OpsReadOnlyCommandError)
+  })
+})
 
 async function createPlan(ctx: ReturnType<typeof makeCtx>, input: typeof PLAN_INPUT = PLAN_INPUT) {
   const tool = await OpsPlanTool.init()
@@ -85,6 +108,9 @@ describe("ops_plan", () => {
         target: PLAN_INPUT.target,
         intent: PLAN_INPUT.intent,
         steps: PLAN_INPUT.steps,
+        apply_command: PLAN_INPUT.apply_command,
+        snapshot_command: null,
+        cwd: null,
         diff_artifact_ref: null,
       }
       expect(canonicalHash).toBe(Hash.fast(JSON.stringify(canonical)))
@@ -99,6 +125,19 @@ describe("ops_plan", () => {
       expect(entries[0]!.payload_json).toEqual({ intent: PLAN_INPUT.intent, step_count: 1 })
       expect(entries[0]!.prev_entry_hash).toBeNull()
       expect(OperationJournal.verifyChain(planID as any)).toEqual({ ok: true })
+
+      expect(() => loadPlan(planID, ProjectID.make("project_other"))).toThrow(PlanNotFoundError)
+    }),
+  )
+
+  test(
+    "rejects a mutating snapshot command before creating a plan",
+    withProject(async (ctx) => {
+      const tool = await OpsPlanTool.init()
+      await expect(
+        tool.execute({ ...PLAN_INPUT, snapshot_command: "terraform destroy -auto-approve" }, ctx),
+      ).rejects.toThrow(/read-only/i)
+      expect(OperationPlan.listByProject(Instance.project.id)).toEqual([])
     }),
   )
 })
@@ -182,6 +221,24 @@ describe("ops_approve", () => {
   )
 
   test(
+    "does not mark the plan rejected when approval is aborted",
+    withProject(async (ctx) => {
+      const { planID } = await createPlan(ctx)
+      const abortedCtx = {
+        ...ctx,
+        ask: async () => {
+          throw new DOMException("Aborted", "AbortError")
+        },
+      }
+      const tool = await OpsApproveTool.init()
+      await expect(tool.execute({ plan_id: planID, ttl_minutes: 10 }, abortedCtx)).rejects.toThrow(/aborted/i)
+
+      expect(OperationPlan.get(planID as any)!.status).toBe("draft")
+      expect(OperationJournal.list(planID as any)).toHaveLength(1)
+    }),
+  )
+
+  test(
     "rejects re-approval while a live token exists",
     withProject(async (ctx) => {
       const { planID } = await createPlan(ctx)
@@ -233,7 +290,7 @@ describe("ops_apply", () => {
       const tool = await OpsApplyTool.init()
       await expect(
         tool.execute(
-          { approval_token: "no-such-token", plan_id: planID, command: "echo should-not-run", timeout_seconds: 600 },
+          { approval_token: "no-such-token", plan_id: planID, command: "echo ok", timeout_seconds: 600 },
           ctx,
         ),
       ).rejects.toThrow(TokenRedeemError)
@@ -247,7 +304,11 @@ describe("ops_apply", () => {
     "rejects a token bound to a different plan",
     withProject(async (ctx) => {
       const first = await createPlan(ctx)
-      const second = await createPlan(ctx, { ...PLAN_INPUT, intent: "Allow SSH through the edge firewall" })
+      const second = await createPlan(ctx, {
+        ...PLAN_INPUT,
+        intent: "Allow SSH through the edge firewall",
+        apply_command: "echo nope",
+      })
       const { token } = await approvePlan(ctx, first.planID)
 
       const tool = await OpsApplyTool.init()
@@ -258,16 +319,55 @@ describe("ops_apply", () => {
         ),
       ).rejects.toThrow(TokenPlanMismatchError)
 
-      // The mismatch consumed the token (it is single-use) but journaled nothing.
-      expect(OperationToken.consume({ token })).toEqual({ ok: false, reason: "already_consumed" })
+      // A mismatched request must not burn the valid token for its approved plan.
+      expect(OperationToken.consume({ token })).toEqual({ ok: true, planID: first.planID as any })
       expect(OperationJournal.list(second.planID as any)).toHaveLength(1)
+    }),
+  )
+
+  test(
+    "rejects command drift before consuming the approval token",
+    withProject(async (ctx) => {
+      const { planID } = await createPlan(ctx)
+      const { token } = await approvePlan(ctx, planID)
+
+      const tool = await OpsApplyTool.init()
+      await expect(
+        tool.execute({ approval_token: token, plan_id: planID, command: "echo changed", timeout_seconds: 600 }, ctx),
+      ).rejects.toThrow(PlanArgumentsMismatchError)
+
+      expect(OperationToken.consume({ token })).toEqual({ ok: true, planID: planID as any })
+      expect(OperationJournal.list(planID as any)).toHaveLength(2)
+    }),
+  )
+
+  test(
+    "does not consume a token or spawn a command when already aborted",
+    withProject(async (ctx) => {
+      const { planID } = await createPlan(ctx)
+      const { token } = await approvePlan(ctx, planID)
+      const controller = new AbortController()
+      controller.abort(new DOMException("Aborted", "AbortError"))
+      const abortedCtx = { ...ctx, abort: controller.signal }
+
+      const tool = await OpsApplyTool.init()
+      await expect(
+        tool.execute({ approval_token: token, plan_id: planID, command: "echo ok", timeout_seconds: 600 }, abortedCtx),
+      ).rejects.toThrow(/aborted/i)
+
+      expect(OperationToken.consume({ token })).toEqual({ ok: true, planID: planID as any })
+      expect(OperationJournal.list(planID as any)).toHaveLength(2)
     }),
   )
 
   test(
     "snapshot_command captures before/after refs that differ when state changes",
     withProject(async (ctx) => {
-      const { planID } = await createPlan(ctx)
+      const { planID } = await createPlan(ctx, {
+        ...PLAN_INPUT,
+        apply_command: "printf 'rule 22 open\\n' > device-state.txt",
+        snapshot_command: "cat device-state.txt",
+      })
       const { token } = await approvePlan(ctx, planID)
 
       await fs.writeFile(path.join(Instance.directory, "device-state.txt"), "rule 443 open\n")
@@ -303,7 +403,11 @@ describe("ops_apply", () => {
   test(
     "snapshot command failure still applies and journals with null refs",
     withProject(async (ctx) => {
-      const { planID } = await createPlan(ctx)
+      const { planID } = await createPlan(ctx, {
+        ...PLAN_INPUT,
+        apply_command: "echo applied",
+        snapshot_command: "exit 3",
+      })
       const { token } = await approvePlan(ctx, planID)
 
       const tool = await OpsApplyTool.init()
@@ -331,6 +435,21 @@ describe("ops_apply", () => {
 })
 
 describe("ops_verify", () => {
+  test(
+    "rejects mutating assertion commands before execution",
+    withProject(async (ctx) => {
+      const { planID } = await createPlan(ctx)
+      const tool = await OpsVerifyTool.init()
+      await expect(
+        tool.execute(
+          { plan_id: planID, assertions: [{ command: "terraform destroy -auto-approve", expect: "done" }] },
+          ctx,
+        ),
+      ).rejects.toThrow(/read-only/i)
+      expect(OperationJournal.list(planID as any)).toHaveLength(1)
+    }),
+  )
+
   test(
     "passing assertions journal 'verified'",
     withProject(async (ctx) => {

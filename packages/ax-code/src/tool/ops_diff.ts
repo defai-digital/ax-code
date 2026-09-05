@@ -21,7 +21,8 @@ export const OpsDiffTool = Tool.define("ops_diff", {
     summary: z.string().optional().describe("Short human-readable summary of what the diff shows"),
   }),
   async execute(params, ctx) {
-    const plan = loadPlan(params.plan_id)
+    const projectID = Instance.project.id
+    const plan = loadPlan(params.plan_id, projectID)
 
     await ctx.ask({
       permission: "ops_diff",
@@ -32,7 +33,7 @@ export const OpsDiffTool = Tool.define("ops_diff", {
 
     const { sequence, entryHash } = appendPlanJournal({
       plan,
-      projectID: Instance.project.id,
+      projectID,
       actor: "agent",
       status: "planned",
       payload: { diff_artifact_ref: params.diff_artifact_ref, summary: params.summary },

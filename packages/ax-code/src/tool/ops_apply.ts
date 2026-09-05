@@ -7,7 +7,7 @@ import { Hash } from "@/util/hash"
 import { Log } from "@/util/log"
 import { OperationToken } from "@/operation/query"
 import { OpsExec } from "./ops-exec"
-import { appendPlanJournal, loadPlan } from "./ops-shared"
+import { appendPlanJournal, loadPlan, OperationPlanCanonical } from "./ops-shared"
 
 // The ONLY sanctioned external-mutation path (PRD-2026-09-04-cloud-operations-mode).
 // Authorization is capability-based: a single-use, TTL-bound, plan-bound
@@ -26,6 +26,11 @@ export const TokenPlanMismatchError = NamedError.create(
   z.object({ planID: z.string(), tokenPlanID: z.string(), message: z.string() }),
 )
 
+export const PlanArgumentsMismatchError = NamedError.create(
+  "OpsPlanArgumentsMismatchError",
+  z.object({ planID: z.string(), field: z.enum(["command", "snapshot_command", "cwd"]), message: z.string() }),
+)
+
 const EXCERPT_MAX_CHARS = 2000
 const TIMEOUT_DEFAULT_SECONDS = 600
 const TIMEOUT_MAX_SECONDS = 3600
@@ -38,11 +43,13 @@ const SNAPSHOT_TIMEOUT_SECONDS = 120
  */
 async function snapshotRef(input: { command: string; abort?: AbortSignal }): Promise<string | null> {
   try {
+    OpsExec.assertReadOnly(input.command)
     const result = await OpsExec.run({
       command: input.command,
       timeoutSeconds: SNAPSHOT_TIMEOUT_SECONDS,
       abort: input.abort,
     })
+    if (result.aborted || input.abort?.aborted) input.abort?.throwIfAborted()
     if (result.exitCode !== 0) {
       log.warn("snapshot command failed; continuing without snapshot ref", {
         command: input.command,
@@ -53,6 +60,7 @@ async function snapshotRef(input: { command: string; abort?: AbortSignal }): Pro
     }
     return Hash.fast(result.stdout)
   } catch (error) {
+    if (input.abort?.aborted) throw error
     log.warn("snapshot command errored; continuing without snapshot ref", {
       command: input.command,
       error: NamedError.message(error),
@@ -84,8 +92,28 @@ export const OpsApplyTool = Tool.define("ops_apply", {
     cwd: z.string().optional().describe("Working directory; defaults to the current project directory"),
   }),
   async execute(params, ctx) {
-    const plan = loadPlan(params.plan_id)
+    ctx.abort.throwIfAborted()
     const projectID = Instance.project.id
+    const plan = loadPlan(params.plan_id, projectID)
+    const canonical = OperationPlanCanonical.parse(plan.canonical_json)
+    const requested = {
+      command: params.command,
+      snapshot_command: params.snapshot_command ?? null,
+      cwd: params.cwd ?? null,
+    }
+    const approved = {
+      command: canonical.apply_command,
+      snapshot_command: canonical.snapshot_command,
+      cwd: canonical.cwd,
+    }
+    for (const field of ["command", "snapshot_command", "cwd"] as const) {
+      if (requested[field] === approved[field]) continue
+      throw new PlanArgumentsMismatchError({
+        planID: plan.id,
+        field,
+        message: `ops_apply ${field} does not match the approved operation plan`,
+      })
+    }
 
     // Per-call confirmation with no durable grant; the token remains the
     // authoritative capability check below.
@@ -93,23 +121,34 @@ export const OpsApplyTool = Tool.define("ops_apply", {
       permission: "ops_apply",
       patterns: [plan.id],
       always: [],
-      metadata: { tool: "ops_apply", kind: plan.kind, canonical_hash: plan.canonical_hash },
+      metadata: {
+        tool: "ops_apply",
+        kind: plan.kind,
+        canonical_hash: plan.canonical_hash,
+        command: params.command,
+        snapshot_command: params.snapshot_command,
+        cwd: params.cwd,
+      },
     })
 
     // (a) Redeem the token BEFORE executing anything. Failure here means
     // nothing ran, so the journal is untouched.
-    const redeemed = OperationToken.consume({ token: params.approval_token })
+    const redeemed = OperationToken.consume({
+      token: params.approval_token,
+      planID: plan.id,
+      projectID,
+    })
     if (!redeemed.ok) {
+      if (redeemed.reason === "plan_mismatch") {
+        throw new TokenPlanMismatchError({
+          planID: plan.id,
+          tokenPlanID: redeemed.planID,
+          message: "Approval token is bound to a different plan",
+        })
+      }
       throw new TokenRedeemError({
         reason: redeemed.reason,
         message: `Approval token cannot be redeemed: ${redeemed.reason}`,
-      })
-    }
-    if (redeemed.planID !== plan.id) {
-      throw new TokenPlanMismatchError({
-        planID: plan.id,
-        tokenPlanID: redeemed.planID,
-        message: "Approval token is bound to a different plan",
       })
     }
 
@@ -117,6 +156,7 @@ export const OpsApplyTool = Tool.define("ops_apply", {
     const beforeSnapshotRef = params.snapshot_command
       ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
       : null
+    ctx.abort.throwIfAborted()
 
     // (c) Execute the mutation.
     const result = await OpsExec.run({
@@ -130,13 +170,14 @@ export const OpsApplyTool = Tool.define("ops_apply", {
 
     // (d) The same snapshot command after the mutation, so the journal entry
     // binds before/after state regardless of the mutation's exit code.
-    const afterSnapshotRef = params.snapshot_command
-      ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
-      : null
+    const afterSnapshotRef =
+      params.snapshot_command && !result.aborted
+        ? await snapshotRef({ command: params.snapshot_command, abort: ctx.abort })
+        : null
 
     // (e) Journal the outcome. The raw token never enters durable records —
     // only its sha256, per the no-raw-credentials rule.
-    const status = result.exitCode === 0 ? "executed" : "failed"
+    const status = result.aborted ? "aborted" : result.exitCode === 0 ? "executed" : "failed"
     const { sequence } = appendPlanJournal({
       plan,
       projectID,
@@ -147,6 +188,7 @@ export const OpsApplyTool = Tool.define("ops_apply", {
       payload: {
         command: params.command,
         exit_code: result.exitCode,
+        aborted: result.aborted,
         output_excerpt: excerpt,
         approval_token_hash: Hash.fast(params.approval_token),
         snapshot_command: params.snapshot_command,
@@ -158,6 +200,7 @@ export const OpsApplyTool = Tool.define("ops_apply", {
       {
         exit_code: result.exitCode,
         timed_out: result.timedOut,
+        aborted: result.aborted,
         output_truncated: result.truncated,
         output: combined,
         before_snapshot_ref: beforeSnapshotRef,
@@ -173,6 +216,7 @@ export const OpsApplyTool = Tool.define("ops_apply", {
       metadata: {
         exit_code: result.exitCode,
         timed_out: result.timedOut,
+        aborted: result.aborted,
         before_snapshot_ref: beforeSnapshotRef,
         after_snapshot_ref: afterSnapshotRef,
         journal_sequence: sequence,

@@ -226,6 +226,7 @@ export namespace OperationToken {
   export type ConsumeResult =
     | { ok: true; planID: OperationPlanID }
     | { ok: false; reason: "not_found" | "already_consumed" | "expired" }
+    | { ok: false; reason: "plan_mismatch"; planID: OperationPlanID }
 
   export type IssueInput = {
     id: OperationTokenID
@@ -265,7 +266,12 @@ export namespace OperationToken {
    * and both win — exactly one statement changes a row. The follow-up SELECT
    * only runs to disambiguate the failure reason and never re-checks state.
    */
-  export function consume(input: { token: string; now?: number }): ConsumeResult {
+  export function consume(input: {
+    token: string
+    now?: number
+    planID?: OperationPlanID
+    projectID?: ProjectID
+  }): ConsumeResult {
     const now = input.now ?? Date.now()
     const tokenHash = Hash.fast(input.token)
     return Database.transaction((db) => {
@@ -277,6 +283,8 @@ export namespace OperationToken {
             eq(OperationTokenTable.token_hash, tokenHash),
             isNull(OperationTokenTable.consumed_at),
             gte(OperationTokenTable.expires_at, now),
+            ...(input.planID ? [eq(OperationTokenTable.plan_id, input.planID)] : []),
+            ...(input.projectID ? [eq(OperationTokenTable.project_id, input.projectID)] : []),
           ),
         )
         .returning({ plan_id: OperationTokenTable.plan_id })
@@ -287,6 +295,8 @@ export namespace OperationToken {
         .select({
           expires_at: OperationTokenTable.expires_at,
           consumed_at: OperationTokenTable.consumed_at,
+          plan_id: OperationTokenTable.plan_id,
+          project_id: OperationTokenTable.project_id,
         })
         .from(OperationTokenTable)
         .where(eq(OperationTokenTable.token_hash, tokenHash))
@@ -294,6 +304,10 @@ export namespace OperationToken {
         .all()[0]
       if (!row) return { ok: false, reason: "not_found" }
       if (row.consumed_at !== null) return { ok: false, reason: "already_consumed" }
+      if (input.projectID && row.project_id !== input.projectID) return { ok: false, reason: "not_found" }
+      if (input.planID && row.plan_id !== input.planID) {
+        return { ok: false, reason: "plan_mismatch", planID: row.plan_id }
+      }
       return { ok: false, reason: "expired" }
     })
   }

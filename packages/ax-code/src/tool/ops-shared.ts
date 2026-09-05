@@ -12,10 +12,30 @@ export const PlanNotFoundError = NamedError.create(
   z.object({ planID: z.string(), message: z.string() }),
 )
 
-/** Loads a plan or fails the tool call with a typed, user-readable error. */
-export function loadPlan(planID: string): OperationPlan.Row {
+export const OperationPlanCanonical = z.object({
+  kind: z.string(),
+  target: z.string(),
+  intent: z.string(),
+  steps: z.array(
+    z.object({
+      description: z.string(),
+      effect: z.string(),
+      reversibility: z.enum(["reversible", "hard", "irreversible"]),
+      blast_radius: z.enum(["low", "med", "high"]),
+    }),
+  ),
+  apply_command: z.string().min(1),
+  snapshot_command: z.string().min(1).nullable(),
+  cwd: z.string().min(1).nullable(),
+  diff_artifact_ref: z.string().nullable(),
+})
+
+/** Loads a project-owned plan or fails without revealing cross-project IDs. */
+export function loadPlan(planID: string, projectID: ProjectID): OperationPlan.Row {
   const plan = OperationPlan.get(OperationPlanID.make(planID))
-  if (!plan) throw new PlanNotFoundError({ planID, message: `Operation plan not found: ${planID}` })
+  if (!plan || plan.project_id !== projectID) {
+    throw new PlanNotFoundError({ planID, message: `Operation plan not found: ${planID}` })
+  }
   return plan
 }
 
