@@ -34,4 +34,12 @@ describe("repo-structure workflow policy", () => {
     expect(workflow).toContain("script/check-tracked-internal.ts")
     expect(workflow).not.toContain("ax-internal")
   })
+
+  test("compiles SDK exports before self-scan imports the runtime", () => {
+    const install = workflow.indexOf("pnpm install --frozen-lockfile")
+    const build = workflow.indexOf("pnpm --dir packages/sdk/js exec tsc")
+    const scan = workflow.indexOf("pnpm run check:self-scan")
+    expect(build).toBeGreaterThan(install)
+    expect(scan).toBeGreaterThan(build)
+  })
 })

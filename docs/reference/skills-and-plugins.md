@@ -58,6 +58,29 @@ Configure plugins in `ax-code.json`:
 
 Plugins implement `@ax-code/plugin` hooks (`tool.execute.before`, `tool.execute.after`, `shell.env`, auth, etc.).
 
+### Callback lifetime
+
+Plugin factories receive optional `lifecycle` in their input. `lifecycle.signal` aborts when the instance is disposed
+or the plugin is retired. Register timers, watchers, and subscriptions with `lifecycle.onDispose(cleanup)`. The returned
+function unregisters that cleanup. Registrations run at most once; registering after disposal starts cleanup immediately.
+Cleanup callbacks start in reverse registration order, each with a one-second budget, and may finish concurrently.
+
+Transform hooks receive an optional third argument, `{ signal }`; config and event hooks receive it as their second
+argument. This signal cancels work while the callback is pending; use `lifecycle.signal` for work owned by the plugin
+beyond one callback. Pass signals to abortable operations. Initialization, config, event, and transform callbacks have a
+15-second deadline. A timeout retires the plugin for that instance and aborts its lifetime. Existing factories and
+two-argument transform hooks continue to work. Custom tool execution and interactive authentication retain their
+existing execution contracts.
+
+Transform inputs are read-only observations of plain data. Mutate the output draft and await all changes before
+returning. Successful output mutations become visible in registration order; failed or late changes are discarded.
+Event payload changes are never published. A permission denial remains a denial, and failed or retired permission
+hooks require asking unless a denial already exists.
+
+Arrays and plain objects are detached from runtime state. Schemas, functions, and class instances retain identity and
+must be treated as read-only. Plugins remain trusted JavaScript running in the runtime process: cancellation is
+cooperative and cannot stop synchronous infinite loops or undo external effects.
+
 ## Hooks packs
 
 See [Hooks](../guides/hooks.md) for the five official lifecycle packs (`format-after-edit`, `block-force-push`, `require-tests-on-stop`, `protect-env-files`, `log-bash-commands`).

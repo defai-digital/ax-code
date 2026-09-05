@@ -8,6 +8,7 @@ import { Flag } from "../../src/flag/flag"
 import { NamedError } from "@ax-code/util/error"
 import { fileURLToPath, pathToFileURL } from "url"
 import { Instance } from "../../src/project/instance"
+import { Plugin } from "../../src/plugin"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
@@ -795,6 +796,10 @@ describe("session.prompt shell cleanup", () => {
         },
       },
     })
+
+    // Plugin lifetimes intentionally retain root listeners until instance
+    // disposal. Initialize that scope before measuring command-owned listeners.
+    await Instance.provide({ directory: tmp.path, fn: () => Plugin.init() })
 
     const originalAdd = AbortSignal.prototype.addEventListener
     const originalRemove = AbortSignal.prototype.removeEventListener

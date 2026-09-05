@@ -28,7 +28,7 @@ async function main() {
   console.log(`Running ${name} tests (${next.length})`)
   // Pass the exact file list through the config's `include` via AX_TEST_FILES;
   // vitest positional filters can't reliably target an exact set (see config).
-  const proc = spawn(process.execPath, [vitestCli(), "run"], {
+  const proc = spawn(process.execPath, [vitestCli(), "run", ...(name === "runtime-contract" ? ["--retry=0"] : [])], {
     cwd: root,
     stdio: "inherit",
     env: { ...process.env, AX_TEST_FILES: next.join(",") },

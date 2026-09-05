@@ -17,6 +17,11 @@ import {
 } from "../../script/test-ci"
 
 describe("script.test-ci", () => {
+  test("never reruns runtime contracts even when CI or a flag requests retries", () => {
+    expect(resolveRerunOnFail({ group: "runtime-contract", flagValue: undefined, githubActions: "true" })).toBe(0)
+    expect(resolveRerunOnFail({ group: "runtime-contract", flagValue: "2", githubActions: "true" })).toBe(0)
+  })
+
   test("parses valid non-negative integers and keeps default when option missing", () => {
     const saved = process.argv
     try {

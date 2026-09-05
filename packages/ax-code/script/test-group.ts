@@ -56,6 +56,21 @@ const e2e = new Set([
   "test/tool/verify_project.test.ts",
 ])
 
+const runtimeContract = new Set([
+  "test/plugin/data.test.ts",
+  "test/plugin/lifetime.test.ts",
+  "test/plugin/lifecycle.test.ts",
+  "test/plugin/auth-override.test.ts",
+  "test/session/prompt-tools.test.ts",
+  "test/session/prompt.test.ts",
+  "test/tool/batch.test.ts",
+  "test/tool/bash.test.ts",
+  "test/tool/bash-background.test.ts",
+  "test/session/message-recovery.test.ts",
+  "test/permission/next.test.ts",
+  "test/tool/bash-strict-mode.test.ts",
+])
+
 const recovery = new Set([
   "test/account/repo.test.ts",
   "test/auth/auth.test.ts",
@@ -107,6 +122,7 @@ export async function list() {
 }
 
 export function pick(all: string[], name: string) {
+  if (name === "runtime-contract") return all.filter((file) => runtimeContract.has(file))
   if (name === "live") return all.filter((file) => live.has(file))
   if (name === "e2e") return all.filter((file) => e2e.has(file))
   if (name === "recovery") return all.filter((file) => recovery.has(file))
@@ -118,7 +134,7 @@ export function pick(all: string[], name: string) {
 }
 
 export function check(all: string[]) {
-  const known = [...new Set([...defaultExcludedTests, ...tuiRenderer])]
+  const known = [...new Set([...defaultExcludedTests, ...tuiRenderer, ...runtimeContract])]
   const miss = known.filter((file) => !all.includes(file))
   if (miss.length) throw new Error(`Missing grouped tests:\n${miss.join("\n")}`)
 }

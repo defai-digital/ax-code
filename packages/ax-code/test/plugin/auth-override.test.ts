@@ -122,20 +122,3 @@ describe("plugin.auth-override", () => {
     expect(plainMethods[ProviderID.make("github-copilot")]?.[0]?.label).not.toBe("Test Override Auth")
   }, 60000) // Plugin installation may trigger bun install in CI
 })
-
-const file = path.join(import.meta.dirname, "../../src/plugin/index.ts")
-
-describe("plugin.config-hook-error-isolation", () => {
-  test("config hooks are individually error-isolated in the layer factory", async () => {
-    const src = await fs.readFile(file, "utf-8")
-
-    // The config hook try/catch lives in the InstanceState factory (layer definition),
-    // not in init() which now just delegates to the Effect service.
-    expect(src).toContain("plugin config hook failed")
-
-    expect(src).toContain("for (const hook of [...hooks])")
-    expect(src).toContain("const config = (hook as any).config")
-    expect(src).toContain("Promise.resolve(config(cfg))")
-    expect(src).toContain("plugin config hook timed out")
-  })
-})

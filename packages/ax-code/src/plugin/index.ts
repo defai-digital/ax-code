@@ -1,38 +1,33 @@
-import type { Hooks, PluginInput, Plugin as PluginInstance } from "@ax-code/plugin"
+import type { Hooks, PluginHookContext, PluginInput, Plugin as PluginInstance } from "@ax-code/plugin"
 import { PRIVATE_GPU_AUTH_PLUGINS } from "../provider/private-gpu/auth-plugin"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
 import { BunProc } from "../bun"
 import { Session } from "../session"
-import { NamedError } from "@ax-code/util/error"
 import { Env } from "@/util/env"
 import { fileURLToPath, pathToFileURL } from "url"
-import { withTimeout } from "@/util/timeout"
+import { setMaxListeners } from "node:events"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Global } from "@/global"
-import { toErrorMessage } from "../util/error-message"
 import { RuntimeLocalClient } from "@/runtime/local-client"
+import { PluginLifetime } from "./lifetime"
+import { PluginData } from "./data"
 
 export namespace Plugin {
   const log = Log.create({ service: "plugin" })
-  const PLUGIN_TIMEOUT_MS = 15_000
-
-  type State = {
-    hooks: Hooks[]
-    unsubscribe: () => void
+  type Entry = { hooks: Hooks; lifetime: PluginLifetime.Handle }
+  type Store = {
+    controller: AbortController
+    entries: Entry[]
+    lifetimes: Set<PluginLifetime.Handle>
+    ready?: Promise<void>
+    unsubscribe?: () => void
   }
+  type TriggerName = Exclude<keyof Hooks, "event" | "config" | "auth" | "tool">
 
-  // Hook names that follow the (input, output) => Promise<void> trigger pattern
-  type TriggerName = {
-    [K in keyof Hooks]-?: NonNullable<Hooks[K]> extends (input: any, output: any) => Promise<void> ? K : never
-  }[keyof Hooks]
-
-  // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [...PRIVATE_GPU_AUTH_PLUGINS]
-
-  // Old npm package names for plugins that are now built-in — skip if users still have them in config
   const DEPRECATED_PLUGIN_PACKAGES = ["ax-code-openai-codex-auth", "ax-code-copilot-auth"]
 
   function isFileUrl(value: string) {
@@ -43,54 +38,80 @@ export namespace Plugin {
     }
   }
 
-  const state = Instance.state(
-    async () => {
-      const hooks: Hooks[] = []
-      const ctx = Instance.current
-      const client = RuntimeLocalClient.create({ directory: ctx.directory })
-      const cfg = await Config.get()
-      const input: PluginInput = {
-        client,
-        project: ctx.project,
-        worktree: ctx.worktree,
-        directory: ctx.directory,
-        get serverUrl(): URL {
-          return RuntimeLocalClient.url()
-        },
-        $: Bun.$.env(Env.sanitize(process.env)) as unknown as PluginInput["$"],
+  function failure(phase: string, error: unknown) {
+    // Plugin exceptions can embed prompts, credentials, or returned data.
+    log.error(`plugin ${phase} hook failed`, {
+      reason: PluginLifetime.Failure.isInstance(error) ? error.data.reason : "callback_error",
+    })
+  }
+
+  async function dispose(current: Store) {
+    current.controller.abort(PluginLifetime.disposed())
+    current.unsubscribe?.()
+    await Promise.all([...current.lifetimes].map((lifetime) => lifetime.dispose()))
+    current.lifetimes.clear()
+    current.entries.length = 0
+  }
+
+  function lifetime(current: Store) {
+    const result = PluginLifetime.create(current.controller.signal, () => log.error("plugin cleanup failed"))
+    current.lifetimes.add(result)
+    return result
+  }
+
+  async function load(current: Store) {
+    const signal = current.controller.signal
+    const ctx = Instance.current
+    const client = RuntimeLocalClient.create({ directory: ctx.directory })
+    const cfg = await Config.get()
+    signal.throwIfAborted()
+    const input: PluginInput = {
+      client,
+      project: ctx.project,
+      worktree: ctx.worktree,
+      directory: ctx.directory,
+      get serverUrl(): URL {
+        return RuntimeLocalClient.url()
+      },
+      $: Bun.$.env(Env.sanitize(process.env)) as unknown as PluginInput["$"],
+    }
+
+    async function initialize(factory: PluginInstance) {
+      signal.throwIfAborted()
+      const owner = lifetime(current)
+      try {
+        // Preserve lazy serverUrl resolution while giving each factory its own lifetime.
+        const pluginInput: PluginInput = Object.create(
+          Object.getPrototypeOf(input),
+          Object.getOwnPropertyDescriptors(input),
+        )
+        pluginInput.lifecycle = { signal: owner.signal, onDispose: owner.onDispose }
+        const hooks = await owner.run(() => factory(pluginInput))
+        signal.throwIfAborted()
+        if (!hooks || typeof hooks !== "object") throw new Error("Plugin factory did not return hooks")
+        current.entries.push({ hooks, lifetime: owner })
+      } catch (error) {
+        await owner.dispose()
+        signal.throwIfAborted()
+        failure("initialization", error)
       }
+    }
 
-      for (const plugin of INTERNAL_PLUGINS) {
-        log.info("loading internal plugin", { name: plugin.name })
-        const init = await withTimeout(
-          plugin(input),
-          PLUGIN_TIMEOUT_MS,
-          `initializing internal plugin timed out: ${plugin.name}`,
-        ).catch((err) => {
-          log.error("failed to load internal plugin", { name: plugin.name, error: err })
-        })
-        if (init) hooks.push(init)
-      }
+    for (const plugin of INTERNAL_PLUGINS) await initialize(plugin)
+    const plugins = cfg.plugin ?? []
+    if (plugins.length) await Config.waitForDependencies()
+    signal.throwIfAborted()
 
-      let plugins = cfg.plugin ?? []
-      if (plugins.length) await Config.waitForDependencies()
-
-      for (let plugin of plugins) {
-        if (DEPRECATED_PLUGIN_PACKAGES.some((pkg) => plugin.includes(pkg))) continue
-        log.info("loading plugin", { path: plugin })
+    for (let plugin of plugins) {
+      signal.throwIfAborted()
+      if (DEPRECATED_PLUGIN_PACKAGES.some((pkg) => plugin.includes(pkg))) continue
+      const loader = lifetime(current)
+      try {
         if (!isFileUrl(plugin)) {
           const idx = plugin.lastIndexOf("@")
           const pkg = idx > 0 ? plugin.substring(0, idx) : plugin
           const version = idx > 0 ? plugin.substring(idx + 1) : "latest"
-          plugin = await BunProc.install(pkg, version).catch((err) => {
-            const detail = toErrorMessage((err as { cause?: unknown }).cause ?? err)
-            log.error("failed to install plugin", { pkg, version, error: detail })
-            Session.publishError({
-              message: `Failed to install plugin ${pkg}@${version}: ${detail}`,
-            })
-            return ""
-          })
-          if (!plugin) continue
+          plugin = await loader.run(() => BunProc.install(pkg, version))
         } else {
           const pluginPath = fileURLToPath(plugin)
           const allowed =
@@ -98,65 +119,86 @@ export namespace Plugin {
             (Instance.worktree !== "/" && Filesystem.contains(Instance.worktree, pluginPath)) ||
             Filesystem.contains(Global.Path.config, pluginPath)
           if (!allowed) {
-            const message = `Refusing to load plugin outside trusted plugin directories: ${pluginPath}`
-            log.error("blocked plugin outside trusted directories", { pluginPath })
-            Session.publishError({ message })
+            Session.publishError({ message: "Refusing to load plugin outside trusted plugin directories" })
             continue
           }
           plugin = pathToFileURL(pluginPath).href
         }
-
-        await withTimeout(import(plugin), PLUGIN_TIMEOUT_MS, `loading plugin timed out: ${plugin}`)
-          .then(async (mod) => {
-            const seen = new Set<PluginInstance>()
-            for (const [_name, fn] of Object.entries<PluginInstance>(mod)) {
-              if (seen.has(fn)) continue
-              seen.add(fn)
-              hooks.push(await withTimeout(fn(input), PLUGIN_TIMEOUT_MS, `initializing plugin timed out: ${plugin}`))
-            }
-          })
-          .catch((err) => {
-            const message = NamedError.message(err)
-            log.error("failed to load plugin", { path: plugin, error: message })
-            Session.publishError({ message: `Failed to load plugin ${plugin}: ${message}` })
-          })
-      }
-
-      // Iterate a snapshot: a failing hook is spliced out of `hooks`, and
-      // mutating the array being iterated by `for...of` would skip the hook
-      // immediately after the failed one.
-      for (const hook of [...hooks]) {
-        try {
-          const config = (hook as any).config
-          if (config) {
-            await withTimeout(
-              Promise.resolve(config(cfg)),
-              PLUGIN_TIMEOUT_MS,
-              `plugin config hook timed out after ${PLUGIN_TIMEOUT_MS}ms`,
-            )
-          }
-        } catch (err) {
-          const index = hooks.indexOf(hook)
-          if (index !== -1) hooks.splice(index, 1)
-          log.error("plugin config hook failed", { error: err })
+        const mod: Record<string, unknown> = await loader.run(() => import(plugin))
+        const seen = new Set<unknown>()
+        for (const fn of Object.values(mod)) {
+          if (typeof fn !== "function" || seen.has(fn)) continue
+          seen.add(fn)
+          await initialize(fn as PluginInstance)
         }
+      } catch (error) {
+        signal.throwIfAborted()
+        failure("loading", error)
+        Session.publishError({ message: "Failed to load plugin; check its installation and callback deadlines" })
+      } finally {
+        await loader.dispose()
+        current.lifetimes.delete(loader)
       }
+    }
 
-      const unsubscribe = Bus.subscribeAll(async (event) => {
-        const results = await Promise.allSettled(hooks.map((hook) => hook["event"]?.({ event })))
-        for (const result of results) {
-          if (result.status === "rejected") {
-            log.error("plugin event hook failed", { event: event.type, error: result.reason })
+    for (const entry of [...current.entries]) {
+      if (!entry.hooks.config) continue
+      const draft = PluginData.copy(cfg)
+      try {
+        await entry.lifetime.run((context) => entry.hooks.config!(draft, context))
+        signal.throwIfAborted()
+        entry.lifetime.signal.throwIfAborted()
+        PluginData.commit(cfg, draft)
+      } catch (error) {
+        await entry.lifetime.dispose()
+        signal.throwIfAborted()
+        failure("config", error)
+      }
+    }
+    signal.throwIfAborted()
+    current.unsubscribe = Bus.subscribeAll(async (event) => {
+      if (signal.aborted) return
+      await Promise.all(
+        current.entries.map(async (entry) => {
+          if (!entry.hooks.event || entry.lifetime.signal.aborted) return
+          try {
+            const input = PluginData.copy({ event })
+            await entry.lifetime.run((context) => entry.hooks.event!(input, context))
+          } catch (error) {
+            if (!signal.aborted) failure("event", error)
           }
-        }
-      })
+        }),
+      )
+    })
+  }
 
-      return { hooks, unsubscribe } satisfies State
-    },
-    async (entry) => {
-      entry.unsubscribe()
-    },
-  )
+  // A synchronous store lets State.dispose abort an initializing plugin without
+  // first awaiting that plugin's loading promise.
+  const state = Instance.state(() => {
+    const current: Store = {
+      controller: new AbortController(),
+      entries: [],
+      lifetimes: new Set(),
+    }
+    setMaxListeners(0, current.controller.signal)
+    return current
+  }, dispose)
+
+  async function loaded() {
+    const current = state()
+    current.controller.signal.throwIfAborted()
+    current.ready ??= load(current).catch(async (error) => {
+      await Promise.all([...current.lifetimes].map((owner) => owner.dispose()))
+      current.entries.length = 0
+      current.lifetimes.clear()
+      // A transient Config/dependency failure can be retried in this instance.
+      current.ready = undefined
+      throw error
+    })
+    await PluginLifetime.wait(current.controller.signal, current.ready)
+    current.controller.signal.throwIfAborted()
+    return current
+  }
 
   export async function trigger<
     Name extends TriggerName,
@@ -164,30 +206,52 @@ export namespace Plugin {
     Output = Parameters<Required<Hooks>[Name]>[1],
   >(name: Name, input: Input, output: Output): Promise<Output> {
     if (!name) return output
-    const current = await state()
-    for (const hook of current.hooks) {
-      const fn = hook[name] as any
+    const current = await loaded()
+    const permission = name === "permission.ask" ? (output as { status: string }) : undefined
+    let denied = permission?.status === "deny"
+    let uncertain = false
+    for (const entry of current.entries) {
+      current.controller.signal.throwIfAborted()
+      const fn = entry.hooks[name] as
+        | ((input: Input, output: Output, context: PluginHookContext) => Promise<void>)
+        | undefined
       if (!fn) continue
-      try {
-        await fn(input, output)
-      } catch (err) {
-        // A throwing plugin hook must not brick the caller's flow (tool
-        // execution, system prompt build, LLM param build, compaction, shell
-        // env resolution, ...). Every other hook path in this module already
-        // isolates failures this way (the "event" subscription below uses
-        // Promise.allSettled, and the config-hook loop above splices out the
-        // offending hook) — `trigger` was the one path still propagating.
-        log.error("plugin trigger hook failed", { name, error: toErrorMessage(err) })
+      if (entry.lifetime.signal.aborted) {
+        // An unavailable permission participant remains uncertain on later
+        // requests; retiring it must never make an approval easier to obtain.
+        if (permission) {
+          uncertain = true
+          permission.status = denied ? "deny" : "ask"
+        }
+        continue
       }
+      try {
+        const draft = PluginData.copy(output)
+        const detachedInput = PluginData.copy(input)
+        await entry.lifetime.run((context) => fn(detachedInput, draft, context))
+        current.controller.signal.throwIfAborted()
+        entry.lifetime.signal.throwIfAborted()
+        if (permission) {
+          const decision = (draft as { status: string }).status
+          if (!["ask", "deny", "allow"].includes(decision)) throw new Error("Invalid plugin permission status")
+          denied ||= decision === "deny"
+        }
+        PluginData.commit(output, draft)
+      } catch (error) {
+        current.controller.signal.throwIfAborted()
+        uncertain = true
+        failure(name, error)
+      }
+      if (permission) permission.status = denied ? "deny" : uncertain ? "ask" : permission.status
     }
     return output
   }
 
   export async function list(): Promise<Hooks[]> {
-    return (await state()).hooks
+    return (await loaded()).entries.filter((entry) => !entry.lifetime.signal.aborted).map((entry) => entry.hooks)
   }
 
   export async function init() {
-    await state()
+    await loaded()
   }
 }

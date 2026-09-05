@@ -23,6 +23,18 @@ export type ProviderContext = {
   options: Record<string, any>
 }
 
+export type PluginHookContext = {
+  /** Cooperative cancellation for this callback's deadline or plugin disposal. */
+  signal: AbortSignal
+}
+
+export type PluginLifecycle = {
+  /** Aborted when the plugin is retired or its workspace instance is disposed. */
+  signal: AbortSignal
+  /** Register cleanup; the returned function unregisters this registration. */
+  onDispose(cleanup: () => void | Promise<void>): () => void
+}
+
 export type PluginInput = {
   client: AxCodeClient
   project: Project
@@ -30,6 +42,8 @@ export type PluginInput = {
   worktree: string
   serverUrl: URL
   $: BunShell
+  /** Supplied by current hosts. Optional for compatibility with older hosts. */
+  lifecycle?: PluginLifecycle
 }
 
 export type Plugin = (input: PluginInput) => Promise<Hooks>
@@ -163,8 +177,8 @@ export type AuthOAuthResult = { url: string; instructions: string } & (
 export type AuthOuathResult = AuthOAuthResult
 
 export interface Hooks {
-  event?: (input: { event: Event }) => Promise<void>
-  config?: (input: Config) => Promise<void>
+  event?: (input: { event: Event }, context?: PluginHookContext) => Promise<void>
+  config?: (input: Config, context?: PluginHookContext) => Promise<void>
   tool?: {
     [key: string]: ToolDefinition
   }
@@ -181,6 +195,7 @@ export interface Hooks {
       variant?: string
     },
     output: { message: UserMessage; parts: Part[] },
+    context?: PluginHookContext,
   ) => Promise<void>
   /**
    * Modify parameters sent to LLM
@@ -188,23 +203,32 @@ export interface Hooks {
   "chat.params"?: (
     input: { sessionID: string; agent: string; model: Model; provider: ProviderContext; message: UserMessage },
     output: { temperature: number; topP: number; topK: number; options: Record<string, any> },
+    context?: PluginHookContext,
   ) => Promise<void>
   "chat.headers"?: (
     input: { sessionID: string; agent: string; model: Model; provider: ProviderContext; message: UserMessage },
     output: { headers: Record<string, string> },
+    context?: PluginHookContext,
   ) => Promise<void>
-  "permission.ask"?: (input: PermissionRequest, output: { status: "ask" | "deny" | "allow" }) => Promise<void>
+  "permission.ask"?: (
+    input: PermissionRequest,
+    output: { status: "ask" | "deny" | "allow" },
+    context?: PluginHookContext,
+  ) => Promise<void>
   "command.execute.before"?: (
     input: { command: string; sessionID: string; arguments: string },
     output: { parts: Part[] },
+    context?: PluginHookContext,
   ) => Promise<void>
   "tool.execute.before"?: (
     input: { tool: string; sessionID: string; callID: string },
     output: { args: any },
+    context?: PluginHookContext,
   ) => Promise<void>
   "shell.env"?: (
     input: { cwd: string; sessionID?: string; callID?: string },
     output: { env: Record<string, string> },
+    context?: PluginHookContext,
   ) => Promise<void>
   "tool.execute.after"?: (
     input: { tool: string; sessionID: string; callID: string; args: any },
@@ -213,6 +237,7 @@ export interface Hooks {
       output: string
       metadata: any
     },
+    context?: PluginHookContext,
   ) => Promise<void>
   "experimental.chat.messages.transform"?: (
     input: {},
@@ -222,12 +247,14 @@ export interface Hooks {
         parts: Part[]
       }[]
     },
+    context?: PluginHookContext,
   ) => Promise<void>
   "experimental.chat.system.transform"?: (
     input: { sessionID?: string; model: Model },
     output: {
       system: string[]
     },
+    context?: PluginHookContext,
   ) => Promise<void>
   /**
    * Called before session compaction starts. Allows plugins to customize
@@ -239,13 +266,19 @@ export interface Hooks {
   "experimental.session.compacting"?: (
     input: { sessionID: string },
     output: { context: string[]; prompt?: string },
+    context?: PluginHookContext,
   ) => Promise<void>
   "experimental.text.complete"?: (
     input: { sessionID: string; messageID: string; partID: string },
     output: { text: string },
+    context?: PluginHookContext,
   ) => Promise<void>
   /**
    * Modify tool definitions (description and parameters) sent to LLM
    */
-  "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: any }) => Promise<void>
+  "tool.definition"?: (
+    input: { toolID: string },
+    output: { description: string; parameters: any },
+    context?: PluginHookContext,
+  ) => Promise<void>
 }

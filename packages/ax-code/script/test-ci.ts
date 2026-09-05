@@ -61,7 +61,12 @@ export function num(name: string, fallback = 0) {
   return parsed
 }
 
-export function resolveRerunOnFail(input: { flagValue: string | undefined; githubActions: string | undefined }) {
+export function resolveRerunOnFail(input: {
+  flagValue: string | undefined
+  githubActions: string | undefined
+  group?: string
+}) {
+  if (input.group === "runtime-contract") return 0
   if (input.flagValue != null && input.flagValue !== "") {
     const parsed = Number.parseInt(input.flagValue, 10)
     if (Number.isNaN(parsed) || parsed < 0) {
@@ -205,6 +210,9 @@ async function run(
   // The exact file set is passed through the config's `include` via AX_TEST_FILES
   // (vitest positional filters can't reliably target an exact set).
   const command = [vitestCli(), "run", "--reporter=junit"]
+  // This lane measures first-attempt behavior independently of the normal
+  // deterministic group's timing-sensitive retry policy.
+  if (group === "runtime-contract") command.push("--retry=0")
   if (shardCoverage) {
     command.push("--reporter=blob", `--outputFile.junit=${file}`, `--outputFile.blob=${shardCoverage.blobFile}`)
   } else {
@@ -407,6 +415,7 @@ async function main() {
   }
 
   const reruns = resolveRerunOnFail({
+    group,
     flagValue: arg("--rerun-on-fail"),
     githubActions: process.env.GITHUB_ACTIONS,
   })

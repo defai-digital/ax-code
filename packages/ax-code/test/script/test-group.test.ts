@@ -1,11 +1,29 @@
 import { describe, expect, test } from "vitest"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-import { pick } from "../../script/test-group"
+import { check, list, pick } from "../../script/test-group"
 
 const repoRoot = path.resolve(import.meta.dirname, "../../../..")
 
 describe("test group classification", () => {
+  test("runtime contracts include real process, permission, recovery, and plugin tests", async () => {
+    const files = await list()
+    expect(() => check(files)).not.toThrow()
+    const contract = pick(files, "runtime-contract")
+    expect(contract).toEqual(
+      expect.arrayContaining([
+        "test/plugin/lifecycle.test.ts",
+        "test/tool/bash.test.ts",
+        "test/tool/bash-background.test.ts",
+        "test/tool/bash-strict-mode.test.ts",
+        "test/permission/next.test.ts",
+        "test/session/message-recovery.test.ts",
+      ]),
+    )
+    expect(contract).not.toContain("test/session/structured-output-integration.test.ts")
+    expect(contract).not.toContain("test/lsp/lsp-cache-integration.test.ts")
+  })
+
   test("package unit script uses the explicit unit group runner", async () => {
     const pkg = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
 
