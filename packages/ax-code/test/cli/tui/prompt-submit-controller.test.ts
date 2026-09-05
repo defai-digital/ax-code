@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, expectTypeOf, test, vi } from "vitest"
+import type { Session } from "@ax-code/sdk/v2"
 import { WorkMode } from "../../../src/mode/work-mode"
 import {
   createPromptSubmitController,
@@ -6,6 +7,18 @@ import {
 } from "../../../src/cli/cmd/tui/component/prompt/prompt-submit-controller"
 
 afterEach(() => vi.useRealTimers())
+
+function session(id: string): Session {
+  return {
+    id,
+    slug: "submit-fixture",
+    projectID: "project-fixture",
+    directory: "/test/workspace",
+    title: "Prompt submission fixture",
+    version: "1.0.0",
+    time: { created: 1, updated: 1 },
+  }
+}
 
 function setup(input: { mode: "normal" | "shell"; workMode: WorkMode.Id; text: string }) {
   const requests: Request[] = []
@@ -33,11 +46,21 @@ function setup(input: { mode: "normal" | "shell"; workMode: WorkMode.Id; text: s
     },
     kv: { get: () => input.workMode },
     command: { trySlash: vi.fn(() => false) },
-    sync: { data: { command: [{ name: "council" }, { name: "arena" }] } },
+    sync: {
+      data: {
+        command: [{ name: "council" }, { name: "arena" }],
+        provider: [],
+        provider_loaded: true,
+        provider_failed: false,
+      },
+      set: vi.fn(),
+    },
     sdk: {
       url: "http://localhost:4096",
       directory: "/test/workspace",
-      fetch: async (url: string, init: RequestInit) => {
+      baseDirectory: "/test/workspace",
+      client: { session: { create: vi.fn(async ({ id }) => ({ data: session(id) })) } },
+      fetch: async (url, init) => {
         requests.push(new Request(url, init))
         return new Response(null, { status: 202 })
       },
@@ -65,7 +88,7 @@ function setup(input: { mode: "normal" | "shell"; workMode: WorkMode.Id; text: s
 
 function setupNewSession() {
   const fixture = setup({ mode: "normal", workMode: "agent", text: "Review the change" })
-  const create = vi.fn(async ({ id }: { id: string }) => ({ data: { id } }))
+  const create = vi.fn(async ({ id }: { id: string }) => ({ data: session(id) }))
   fixture.host.sessionID = () => undefined
   fixture.host.sdk.client = { session: { create } }
   fixture.host.sync.set = vi.fn()
@@ -109,6 +132,29 @@ describe.each(WorkMode.ALL)("prompt submission in %s work mode", (workMode) => {
 })
 
 describe("prompt submission lifecycle", () => {
+  test("keeps the controller's integration boundaries typed", () => {
+    expectTypeOf<PromptSubmitHost["input"]>().not.toBeAny()
+    expectTypeOf<PromptSubmitHost["local"]>().not.toBeAny()
+    expectTypeOf<PromptSubmitHost["sync"]>().not.toBeAny()
+    expectTypeOf<PromptSubmitHost["sdk"]>().not.toBeAny()
+    expectTypeOf<ReturnType<PromptSubmitHost["axEngineDownloadJob"]>>().not.toBeAny()
+  })
+
+  test("preserves complete session metadata when inserting a created session", async () => {
+    vi.useFakeTimers()
+    const { controller, host, create } = setupNewSession()
+    let sessions: Session[] = []
+    host.sync.set = (key, update) => {
+      expect(key).toBe("session")
+      sessions = update(sessions)
+    }
+
+    await controller.submit()
+    await vi.runAllTimersAsync()
+
+    expect(sessions).toEqual([session(create.mock.calls[0][0].id)])
+  })
+
   test("does not submit again while navigation to a new session is pending", async () => {
     vi.useFakeTimers()
     const { controller, host, create, requests } = setupNewSession()
@@ -138,7 +184,7 @@ describe("prompt submission lifecycle", () => {
 
   test("shows the session creation stage while the server is pending", async () => {
     const { controller, host, create } = setupNewSession()
-    let finish!: (result: { data: { id: string } }) => void
+    let finish!: (result: { data: Session }) => void
     create.mockImplementation(() => new Promise((resolve) => (finish = resolve)))
     const pending = controller.submit()
     try {
@@ -146,7 +192,7 @@ describe("prompt submission lifecycle", () => {
       expect(host.setSubmitStage).toHaveBeenCalledWith("creating-session")
     } finally {
       controller.cancelPendingSubmit()
-      finish({ data: { id: "ses_cancelled" } })
+      finish({ data: session("ses_cancelled") })
       await pending
     }
   })

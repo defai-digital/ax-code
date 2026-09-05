@@ -1,16 +1,19 @@
 import { produce } from "solid-js/store"
+import type { Session } from "@ax-code/sdk/v2"
+import type { TextareaRenderable } from "@ax-code/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { iife } from "@/util/iife"
 import { withTimeout } from "@/util/timeout"
 import { WorkMode } from "@/mode/work-mode"
-import { providerModelKey } from "@/provider/model-key"
+import { providerModelKey, type ProviderModelKeyInput } from "@/provider/model-key"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { MessageID, PartID, SessionID } from "@/session/schema"
 import { directoryRequestHeaders } from "@tui/util/request-headers"
+import type { useSDK } from "@tui/context/sdk"
 import { blurRenderable } from "@tui/util/renderable-safety"
 import { scheduleTuiTimeout } from "@tui/util/timer"
 import { upsert } from "../../context/sync-util"
-import { axEngineDownloadChip } from "../ax-engine-downloads-view-model"
+import { axEngineDownloadChip, type AxEngineDownloadJobView } from "../ax-engine-downloads-view-model"
 import { isQueueableStatus } from "./follow-up-queue"
 import { enqueueFollowUp } from "./follow-up-queue-store"
 import { assign } from "./part"
@@ -27,10 +30,26 @@ type PromptSubmitStore = {
   extmarkToPartIndex: Map<number, number>
 }
 
+type PromptSubmitComposer = Pick<TextareaRenderable, "clear"> &
+  Partial<Pick<TextareaRenderable, "blur" | "isDestroyed">> & {
+    extmarks: Pick<TextareaRenderable["extmarks"], "getAllForTypeId" | "clear">
+  }
+
+type PromptSubmitSdk = Pick<ReturnType<typeof useSDK>, "url" | "directory" | "baseDirectory" | "fetch"> & {
+  client: {
+    session: {
+      create: (
+        parameters: { id: string; directory?: string },
+        options: { signal: AbortSignal },
+      ) => Promise<{ data?: Session; error?: unknown }>
+    }
+  }
+}
+
 export type PromptSubmitHost = {
-  input: any
+  input: PromptSubmitComposer
   store: PromptSubmitStore
-  setStore: (...args: any[]) => void
+  setStore: <Key extends keyof PromptSubmitStore>(key: Key, value: PromptSubmitStore[Key]) => void
   setExpandedPastes: (value: Set<number>) => void
   promptPartTypeId: () => number
   inputBlocked: () => boolean
@@ -42,11 +61,25 @@ export type PromptSubmitHost = {
   sessionID: () => string | undefined
   workspaceID: () => string | undefined
   autocomplete: { visible?: unknown } | undefined
-  local: any
+  local: {
+    model: {
+      current: () => ProviderModelKeyInput | undefined
+      variant: { current: () => string | undefined }
+    }
+    agent: { current: () => { name: string } }
+  }
   kv: { get: (key: string, fallback: string) => string }
   command: { trySlash: (name: string) => boolean }
-  sync: any
-  sdk: any
+  sync: {
+    data: {
+      command: readonly { name: string }[]
+      provider: readonly unknown[]
+      provider_loaded: boolean
+      provider_failed: boolean
+    }
+    set: (key: "session", update: (sessions: Session[]) => Session[]) => void
+  }
+  sdk: PromptSubmitSdk
   route: { navigate: (route: { type: "session"; sessionID: string }) => void }
   history: { append: (entry: PromptInfo & { mode: "normal" | "shell" }) => void }
   toast: {
@@ -59,7 +92,7 @@ export type PromptSubmitHost = {
   }
   status: () => { type: string }
   queueModeEnabled: () => boolean
-  axEngineDownloadJob: () => any
+  axEngineDownloadJob: () => AxEngineDownloadJobView | undefined
   setSubmitPending: (value: boolean) => void
   submitPending: () => boolean
   setSubmitStage: (value: SubmitStage | undefined) => void
@@ -112,10 +145,10 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     })
   }
 
-  function upsertSessionInStore(session: { id: string }) {
+  function upsertSessionInStore(session: Session) {
     host.sync.set(
       "session",
-      produce((draft: any) => {
+      produce((draft: Session[]) => {
         upsert(draft, session)
       }),
     )
@@ -413,14 +446,14 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         submitAction = "Session creation"
         setSubmitStage("creating-session")
 
-        const res = (await withTimeout(
+        const res = await withTimeout(
           sdk.client.session.create(
             { id: sessionID, directory: props.workspaceID ?? sdk.baseDirectory },
             { signal: nextSubmitAbort.signal },
           ),
           SUBMIT_ACCEPT_TIMEOUT_MS,
           `Session creation timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
-        )) as { error?: unknown; data?: { id: string } }
+        )
         if (res.error) throw new Error(errorMessage(res.error))
         if (!res.data?.id) throw new Error("Session creation returned no data")
 
