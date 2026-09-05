@@ -8,7 +8,7 @@ import { useDialog, type DialogContext } from "@tui/ui/dialog"
 import { useKeybind } from "@tui/context/keybind"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { CONFIRM_KEYS } from "@tui/util/keys"
-import { findRenderableChild, focusRenderable } from "@tui/util/renderable-safety"
+import { findRenderableChild, focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 import { useToast } from "@tui/ui/toast"
 import { Keybind } from "@/util/keybind"
 import { Locale } from "@/util/locale"
@@ -75,6 +75,15 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   })
 
   let input: InputRenderable
+
+  function clearSearch() {
+    if (!store.filter || !isRenderableAlive(input)) return false
+    // The native setter emits INPUT, keeping the query, cursor, and external
+    // onFilter consumer synchronized through the normal input path.
+    input.value = ""
+    return true
+  }
+  onCleanup(dialog.registerEscapeHandler(clearSearch))
 
   const flatten = createMemo(() => props.flat && store.filter.length > 0)
 
@@ -337,8 +346,13 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
             {props.title}
           </text>
-          <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
-            esc
+          <text
+            fg={theme.textMuted}
+            onMouseUp={() => {
+              if (!clearSearch()) dialog.clear()
+            }}
+          >
+            {store.filter ? "esc clear" : "esc"}
           </text>
         </box>
         <box paddingTop={1}>

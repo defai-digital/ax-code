@@ -86,6 +86,8 @@ function init() {
 
   const renderer = useRenderer()
 
+  const escapeHandlers = new WeakMap<(typeof store.stack)[number], () => boolean>()
+
   useKeyboard((evt) => {
     if (store.stack.length === 0) return
     if (evt.defaultPrevented) return
@@ -93,6 +95,14 @@ function init() {
     if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) {
       const current = store.stack.at(-1)
       if (!current) return
+      // Global dismissal runs before a picker can handle the key itself.
+      // Let only the current dialog consume Escape (for example, to clear
+      // search first); Ctrl+C remains an unconditional dismissal.
+      if (evt.name === "escape" && escapeHandlers.get(current)?.()) {
+        evt.preventDefault()
+        evt.stopPropagation()
+        return
+      }
       setStore("stack", store.stack.slice(0, -1))
       current.onClose?.()
       evt.preventDefault()
@@ -135,6 +145,14 @@ function init() {
   onCleanup(() => cancelRefocus?.())
 
   return {
+    registerEscapeHandler(handler: () => boolean) {
+      const item = store.stack.at(-1)
+      if (!item) return () => {}
+      escapeHandlers.set(item, handler)
+      return () => {
+        if (escapeHandlers.get(item) === handler) escapeHandlers.delete(item)
+      }
+    },
     clear() {
       for (const item of store.stack) {
         closeItem(item)

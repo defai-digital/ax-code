@@ -19,6 +19,7 @@ function host() {
     replace,
     size: "medium" as const,
     setSize: vi.fn(),
+    registerEscapeHandler: vi.fn(() => () => {}),
     clear() {
       stack = []
     },

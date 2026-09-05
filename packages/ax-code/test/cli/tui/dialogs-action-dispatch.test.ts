@@ -47,7 +47,9 @@ describe("tui dialog action dispatch", () => {
     expect(dialogSelect).toContain("() => Promise.all([option.onSelect?.(dialog), props.onSelect?.(option)])")
     // Row clicks go through confirmSelected (latch + toast) instead of a
     // bare runDialogSelectAction with no double-fire protection.
-    const mouseUpIndex = dialogSelect.indexOf("onMouseUp={() => {")
+    const optionRowIndex = dialogSelect.indexOf("id={optionID(optionIndex())}")
+    expect(optionRowIndex).toBeGreaterThan(0)
+    const mouseUpIndex = dialogSelect.indexOf("onMouseUp={() => {", optionRowIndex)
     const mouseUpBlock = dialogSelect.slice(mouseUpIndex, mouseUpIndex + 600)
     expect(mouseUpBlock).toContain("confirmSelected()")
     expect(mouseUpBlock).not.toContain("runDialogSelectAction")
