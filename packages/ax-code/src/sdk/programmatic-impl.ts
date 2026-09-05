@@ -668,7 +668,7 @@ async function* streamEvents(
   let agent = ""
   let modelInfo = { providerID: "", modelID: "" }
   let messageID = ""
-  let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+  let usage: { promptTokens: number; completionTokens: number; totalTokens: number }
   for await (const event of events.stream) {
     if (event.type === "message.updated") {
       const info = event.properties.info

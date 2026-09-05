@@ -128,7 +128,6 @@ export async function parseSSE(
         if (buf.trim()) emit(buf)
       }
     } finally {
-      buf = ""
       signal.removeEventListener("abort", cancel)
       // Funnel through the same guarded `cancel()` so an abort-driven
       // exit doesn't double-cancel.

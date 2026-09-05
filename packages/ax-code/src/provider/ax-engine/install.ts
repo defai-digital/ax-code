@@ -64,6 +64,11 @@ function optionalTrimmed(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined
 }
 
+function applyPinnedRelease(pinned: AxEngineBinaryRelease | undefined): AxEngineBinaryRelease | undefined {
+  if (!pinned?.url || !pinned.sha256) return undefined
+  return { ...pinned, teamId: optionalTrimmed(pinned.teamId) ?? optionalTrimmed(AX_ENGINE_EXPECTED_TEAM_ID) }
+}
+
 // Resolve the ax-engine release the current host should install, or undefined
 // when there is none. The binary only ships for Apple Silicon macOS. An
 // AX_ENGINE_INSTALL_URL env override wins over the pinned constant so a machine
@@ -86,11 +91,7 @@ export function resolveInstallableRelease(
     }
   }
 
-  const pinned = AX_ENGINE_BINARY_RELEASE
-  if (pinned && pinned.url && pinned.sha256) {
-    return { ...pinned, teamId: optionalTrimmed(pinned.teamId) ?? optionalTrimmed(AX_ENGINE_EXPECTED_TEAM_ID) }
-  }
-  return undefined
+  return applyPinnedRelease(AX_ENGINE_BINARY_RELEASE)
 }
 
 // Whether AX Code can offer a managed install on this host. Meant for status /

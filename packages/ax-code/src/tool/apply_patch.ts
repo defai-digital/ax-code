@@ -159,12 +159,11 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             if (Filesystem.errnoCode(error) === "EISDIR") throw new Error(`Path is a directory: ${filePath}`)
             throw new Error(`apply_patch verification failed: Failed to read file to update: ${filePath}`)
           }
-          let newContent = oldContent
+          let newContent: string
 
           // Apply the update chunks to get new content
           try {
-            const fileUpdate = Patch.deriveNewContentsFromChunks(filePath, hunk.chunks)
-            newContent = fileUpdate.content
+            newContent = Patch.deriveNewContentsFromChunks(filePath, hunk.chunks).content
           } catch (error) {
             const msg = toErrorMessage(error)
             throw new Error(`apply_patch verification failed: ${msg}`, { cause: error })

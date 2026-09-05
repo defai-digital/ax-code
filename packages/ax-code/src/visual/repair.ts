@@ -15,7 +15,7 @@
  */
 import crypto from "crypto"
 import type { VisualRun, VisualFinding, ViewportPreset, VisualTarget } from "./run"
-import { compareVisualRuns, formatCompareSummary, type CompareResult } from "./compare"
+import { formatCompareSummary, type CompareResult } from "./compare"
 import { mergeFindings, summarizeFindings, allFindingsResolved, type FindingsSummary } from "./findings"
 import { computeResidualRisk, formatResidualRisk, type ResidualRiskReport } from "./risk-summary"
 import { resolveViewports } from "./viewport"

@@ -25,8 +25,10 @@ const log = Log.create({ service: "tui.question" })
 // guard, log, toast, keep prompt mounted for retry) handles it.
 function replyError(error: unknown, fallback: string): Error {
   if (error instanceof Error) return error
-  const message = errorPayloadMessage(error) ?? (typeof error === "string" && error ? error : undefined)
-  return new Error(message ?? fallback)
+  const fromPayload = errorPayloadMessage(error)
+  if (fromPayload) return new Error(fromPayload)
+  if (typeof error === "string" && error.length > 0) return new Error(error)
+  return new Error(fallback)
 }
 
 // Bound so a dropped/stalled reply cannot latch `submitting` forever. Mirrors

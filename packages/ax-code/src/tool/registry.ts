@@ -471,11 +471,12 @@ export namespace ToolRegistry {
       if (current.generation === generation) current.cache = { key, result }
       return result
     })()
-    current.pending = { key, promise }
+    const inFlight = { key, promise }
+    current.pending = inFlight
     try {
-      return await promise
+      return await inFlight.promise
     } finally {
-      if (current.pending?.promise === promise) current.pending = undefined
+      if (current.pending === inFlight) current.pending = undefined
     }
   }
 }

@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { lstat, readFile, readdir, realpath } from "node:fs/promises"
+import { lstat, open, readFile, readdir, realpath } from "node:fs/promises"
 import path from "node:path"
 import { promisify } from "node:util"
 import { matchesAny } from "./glob.js"
@@ -151,23 +151,32 @@ export async function discoverSources(input: {
   for (const relative of unique) {
     if (!shouldInclude(relative, input.wikiDir, config)) continue
     const absolute = resolveInside(root, relative)
-    let info
+    let filePath = absolute
     try {
-      info = await lstat(absolute)
-      if (info.isSymbolicLink()) {
+      const linkInfo = await lstat(absolute)
+      if (linkInfo.isSymbolicLink()) {
         const target = await realpath(absolute)
         if (target !== rootReal && !target.startsWith(`${rootReal}${path.sep}`)) continue
-        info = await lstat(target)
+        filePath = target
       }
     } catch {
       continue
     }
-    if (!info.isFile() || info.size > (config.maxSourceBytes ?? 512_000)) continue
-    let content: Buffer
+    let fh
     try {
-      content = await readFile(absolute)
+      fh = await open(filePath, "r")
     } catch {
       continue
+    }
+    let content: Buffer
+    try {
+      const info = await fh.stat()
+      if (!info.isFile() || info.size > (config.maxSourceBytes ?? 512_000)) continue
+      content = await fh.readFile()
+    } catch {
+      continue
+    } finally {
+      await fh.close()
     }
     if (content.includes(0)) continue
     const extension = path.posix.extname(relative).toLowerCase()

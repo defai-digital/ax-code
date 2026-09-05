@@ -19,7 +19,7 @@ function createPayloadWithUnsafeKeys() {
     queryExtra: "safe-query",
   }
   Object.defineProperty(payload, "__proto__", {
-    value: "polluted",
+    value: { polluted: true },
     enumerable: true,
     configurable: true,
   })

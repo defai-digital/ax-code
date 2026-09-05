@@ -51,13 +51,11 @@ export async function isBinaryFile(filePath: string): Promise<boolean> {
       break
   }
 
-  const stat = await fs.stat(filePath).catch(() => undefined)
-  if (!stat?.isFile()) return false
-  if (stat.size === 0) return false
-
   const fh = await fs.open(filePath, "r").catch(() => undefined)
   if (!fh) return false
   try {
+    const stat = await fh.stat()
+    if (!stat.isFile() || stat.size === 0) return false
     const sampleSize = Math.min(BINARY_SAMPLE_BYTES, stat.size)
     const bytes = Buffer.alloc(sampleSize)
     const result = await fh.read(bytes, 0, sampleSize, 0)

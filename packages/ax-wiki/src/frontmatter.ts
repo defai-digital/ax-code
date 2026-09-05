@@ -8,6 +8,19 @@ function unique(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort()
 }
 
+function stripLeadingHeading(body: string): string {
+  const trimmed = body.trim()
+  if (!trimmed.startsWith("#")) return trimmed
+  let i = 0
+  while (i < trimmed.length && trimmed[i] === "#") i++
+  if (i === 0 || (trimmed[i] !== " " && trimmed[i] !== "\t")) return trimmed
+  const nl = trimmed.indexOf("\n", i)
+  if (nl < 0) return trimmed
+  let end = nl + 1
+  while (end < trimmed.length && trimmed[end] === "\n") end++
+  return trimmed.slice(end)
+}
+
 export function renderWikiPage(input: {
   page: WikiPlanPage
   result: WikiPageGenerationResult
@@ -15,7 +28,7 @@ export function renderWikiPage(input: {
 }): string {
   const symbols = unique(input.result.symbols ?? [])
   const sourcePaths = unique(input.sources.map((source) => source.path))
-  const body = input.result.body.trim().replace(/^#\s+.+?\n+/, "")
+  const body = stripLeadingHeading(input.result.body)
   const lines = [
     "---",
     `title: ${yamlString(input.page.title)}`,

@@ -26,7 +26,7 @@ const TIMEOUT_FORCE_KILL_GRACE_MS = 250
 
 export namespace Process {
   export type Stdio = "inherit" | "pipe" | "ignore" | number
-  export type Shell = boolean | string
+  export type Shell = boolean
 
   export interface Options {
     cwd?: string
@@ -124,14 +124,19 @@ export namespace Process {
     if (cmd.length === 0) throw new Error("Command is required")
     opts.abort?.throwIfAborted()
 
-    const proc = launch(cmd[0], cmd.slice(1), {
+    const spawnOpts: Parameters<typeof launch>[2] = {
       cwd: opts.cwd,
-      shell: opts.shell,
-      env: opts.env === null ? {} : (opts.env ?? undefined),
+      // Argv spawn only. Callers that need a shell must pass
+      // `Process.shellCommand(command)` as argv (`sh -c` / `cmd /c`).
+      shell: opts.shell === true,
       detached: opts.detached,
       stdio: [opts.stdin ?? "ignore", opts.stdout ?? "ignore", opts.stderr ?? "ignore"],
       windowsHide: process.platform === "win32",
-    })
+    }
+    if (opts.env === null) spawnOpts.env = {}
+    else if (opts.env) spawnOpts.env = { ...opts.env }
+
+    const proc = launch(cmd[0], cmd.slice(1), spawnOpts)
 
     let closed = false
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined

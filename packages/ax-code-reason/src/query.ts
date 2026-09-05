@@ -36,7 +36,11 @@ export namespace DebugEngineQuery {
   }
 
   export function listPlans(projectID: ProjectID, opts?: { status?: RefactorPlanStatus; limit?: number }): PlanRow[] {
-    return codeReasonHost().stores.plans.listPlans(projectID, opts)
+    if (!opts) return codeReasonHost().stores.plans.listPlans(projectID)
+    return codeReasonHost().stores.plans.listPlans(projectID, {
+      status: opts.status,
+      limit: normalizeQueryLimit(opts.limit),
+    })
   }
 
   export function updatePlanStatus(projectID: ProjectID, id: RefactorPlanID, status: RefactorPlanStatus): void {

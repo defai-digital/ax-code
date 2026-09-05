@@ -57,32 +57,60 @@ type ParsedFrame = {
 //   "    at /abs/path/file.ts:10:5"
 // The second form has no symbol name — we still resolve it via
 // CodeIntelligence.symbolsInFile + nearest-by-line-range.
+function isAllDigits(value: string): boolean {
+  if (value.length === 0) return false
+  for (let i = 0; i < value.length; i++) {
+    const c = value.charCodeAt(i)
+    if (c < 48 || c > 57) return false
+  }
+  return true
+}
+
+function parseFileLineCol(loc: string): { file: string; line: number } | undefined {
+  const lastColon = loc.lastIndexOf(":")
+  if (lastColon <= 0) return
+  const col = loc.slice(lastColon + 1)
+  if (!isAllDigits(col)) return
+  const prev = loc.lastIndexOf(":", lastColon - 1)
+  if (prev <= 0) return
+  const line = loc.slice(prev + 1, lastColon)
+  if (!isAllDigits(line)) return
+  const file = loc.slice(0, prev)
+  if (!file) return
+  return { file, line: Number(line) }
+}
+
 export function parseTypeScriptStack(stack: string): ParsedFrame[] {
   const out: ParsedFrame[] = []
   const lines = stack.split("\n")
   for (const raw of lines) {
     const trimmed = raw.trim()
     if (!trimmed.startsWith("at ")) continue
+    const rest = trimmed.slice(3)
     // Form 1: "at Symbol (/file:line:col)"
-    const match1 = trimmed.match(/^at\s+(.+?)\s+\((.+?):(\d+):(\d+)\)$/)
-    if (match1) {
-      out.push({
-        symbolName: match1[1],
-        file: match1[2],
-        line: Number(match1[3]),
-        raw: trimmed,
-      })
-      continue
+    if (rest.endsWith(")")) {
+      const open = rest.lastIndexOf(" (")
+      if (open >= 0) {
+        const loc = parseFileLineCol(rest.slice(open + 2, -1))
+        if (loc) {
+          out.push({
+            symbolName: rest.slice(0, open),
+            file: loc.file,
+            line: loc.line,
+            raw: trimmed,
+          })
+          continue
+        }
+      }
     }
     // Form 2: "at /file:line:col"
-    const match2 = trimmed.match(/^at\s+(.+?):(\d+):(\d+)$/)
-    if (match2) {
+    const loc = parseFileLineCol(rest)
+    if (loc) {
       out.push({
-        file: match2[1],
-        line: Number(match2[2]),
+        file: loc.file,
+        line: loc.line,
         raw: trimmed,
       })
-      continue
     }
   }
   return out
@@ -106,12 +134,26 @@ export function parsePythonStack(stack: string): ParsedFrame[] {
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]
     // `  File "/abs/path/file.py", line 42, in function_name`
-    const match = raw.match(/^\s*File\s+"([^"]+)",\s+line\s+(\d+),\s+in\s+(.+?)$/)
-    if (!match) continue
+    const fileTag = 'File "'
+    const fileStart = raw.indexOf(fileTag)
+    if (fileStart < 0) continue
+    const pathStart = fileStart + fileTag.length
+    const pathEnd = raw.indexOf('"', pathStart)
+    if (pathEnd < 0) continue
+    const lineTag = ", line "
+    if (!raw.startsWith(lineTag, pathEnd + 1)) continue
+    const lineStart = pathEnd + 1 + lineTag.length
+    let lineEnd = lineStart
+    while (lineEnd < raw.length && raw.charCodeAt(lineEnd) >= 48 && raw.charCodeAt(lineEnd) <= 57) lineEnd++
+    if (lineEnd === lineStart) continue
+    const inTag = ", in "
+    if (!raw.startsWith(inTag, lineEnd)) continue
+    const symbolName = raw.slice(lineEnd + inTag.length).trim()
+    if (!symbolName) continue
     out.push({
-      file: match[1],
-      line: Number(match[2]),
-      symbolName: match[3].trim(),
+      file: raw.slice(pathStart, pathEnd),
+      line: Number(raw.slice(lineStart, lineEnd)),
+      symbolName,
       raw: raw.trim(),
     })
   }

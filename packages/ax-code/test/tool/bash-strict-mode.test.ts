@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest"
+import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { BashTool } from "../../src/tool/bash"

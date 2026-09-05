@@ -5,7 +5,7 @@
  *   ALIBABA_TOKEN_PLAN_INTL_API_KEY=… pnpm --dir packages/ax-code exec tsx script/probe-token-plan-cv-control.ts
  */
 import { chromium } from "playwright-core"
-import { writeFile } from "node:fs/promises"
+import { mkdtemp, writeFile } from "node:fs/promises"
 import path from "node:path"
 import os from "node:os"
 
@@ -111,10 +111,8 @@ async function main() {
     process.exit(2)
   }
 
-  const tmp = path.join(os.tmpdir(), `ax-work-cv-${Date.now()}`)
+  const tmp = await mkdtemp(path.join(os.tmpdir(), "ax-work-cv-"))
   const htmlPath = path.join(tmp, "index.html")
-  const { mkdir } = await import("node:fs/promises")
-  await mkdir(tmp, { recursive: true })
   await writeFile(htmlPath, FIXTURE)
 
   const browser = await chromium.launch({
@@ -136,7 +134,7 @@ async function main() {
       document.title = "AX-WORK-CV-TEST"
     })
     const imagePng = await page.screenshot({ type: "png" })
-    const out = path.join(os.tmpdir(), `ax-work-cv-${model}.png`)
+    const out = path.join(tmp, `${model.replace(/[^a-zA-Z0-9._-]/g, "_")}.png`)
     await writeFile(out, imagePng)
     const box = await page.locator("#target").boundingBox()
     const pngWidth = imagePng.readUInt32BE(16)

@@ -337,7 +337,8 @@ const CLI_DEFAULT_MODEL_NAMES: Record<string, string> = {
 // with the ChatGPT app. Codex CLI models are version-coupled, so prefer the
 // newest executable found on the real PATH rather than failing a selected
 // model solely because an older duplicate appears first.
-const cliBinaryPending = new Map<string, Promise<string | null>>()
+type PendingCliBinary = { promise: Promise<string | null> }
+const cliBinaryPending = new Map<string, PendingCliBinary>()
 
 export async function resolveCliBinary(providerID: string, binary: string) {
   const cacheKey = `${providerID}:${binary}`
@@ -345,36 +346,38 @@ export async function resolveCliBinary(providerID: string, binary: string) {
   // after the await, the identity guard below prevents stale cleanup.
   // @scan-suppress race_scan
   const pending = cliBinaryPending.get(cacheKey)
-  if (pending) return pending
+  if (pending) return pending.promise
 
-  const resolving = (async () => {
-    const primary = which(binary)
-    if (!primary || providerID !== "codex-cli") return primary
+  const resolving: PendingCliBinary = {
+    promise: (async () => {
+      const primary = which(binary)
+      if (!primary || providerID !== "codex-cli") return primary
 
-    const candidates = [...new Set(whichAll(binary, undefined, { extraDirs: false }))]
-    if (candidates.length < 2) return primary
+      const candidates = [...new Set(whichAll(binary, undefined, { extraDirs: false }))]
+      if (candidates.length < 2) return primary
 
-    const inspected = await Promise.all(
-      candidates.map(async (candidate) => {
-        const result = await Process.run([candidate, "--version"], { timeout: 2_000, nothrow: true }).catch(
-          () => undefined,
-        )
-        return {
-          path: candidate,
-          version: result?.code === 0 ? `${result.stdout}\n${result.stderr}` : undefined,
-        }
-      }),
-    )
-    const selected = selectPreferredCodexBinary(inspected) ?? primary
-    if (selected !== primary) {
-      log.info("selected newer Codex CLI executable", { primary, selected })
-    }
-    return selected
-  })()
+      const inspected = await Promise.all(
+        candidates.map(async (candidate) => {
+          const result = await Process.run([candidate, "--version"], { timeout: 2_000, nothrow: true }).catch(
+            () => undefined,
+          )
+          return {
+            path: candidate,
+            version: result?.code === 0 ? `${result.stdout}\n${result.stderr}` : undefined,
+          }
+        }),
+      )
+      const selected = selectPreferredCodexBinary(inspected) ?? primary
+      if (selected !== primary) {
+        log.info("selected newer Codex CLI executable", { primary, selected })
+      }
+      return selected
+    })(),
+  }
 
   cliBinaryPending.set(cacheKey, resolving)
   try {
-    return await resolving
+    return await resolving.promise
   } finally {
     // Deduplicate only concurrent lookups. A permanent cache would retain both
     // misses and stale paths after a provider CLI is installed or upgraded

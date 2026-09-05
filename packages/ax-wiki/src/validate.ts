@@ -4,7 +4,24 @@ import { extractProtectedSections, managedContentHash, protectedSectionsBalanced
 import { AX_WIKI_GENERATOR } from "./types.js"
 import type { WikiManifest, WikiPlan, WikiSource, WikiValidationIssue, WikiValidationReport } from "./types.js"
 
-const MARKDOWN_LINK = /\[[^\]]*\]\(([^)]+)\)/g
+function markdownLinkTargets(content: string): string[] {
+  const targets: string[] = []
+  let from = 0
+  while (from < content.length) {
+    const mid = content.indexOf("](", from)
+    if (mid < 0) break
+    const open = content.lastIndexOf("[", mid)
+    if (open < 0 || content.indexOf("]", open + 1) !== mid) {
+      from = mid + 2
+      continue
+    }
+    const close = content.indexOf(")", mid + 2)
+    if (close < 0) break
+    targets.push(content.slice(mid + 2, close))
+    from = close + 1
+  }
+  return targets
+}
 
 export function validateWikiCandidate(input: {
   plan: WikiPlan
@@ -97,8 +114,8 @@ export function validateWikiCandidate(input: {
         })
       }
     }
-    for (const match of content.matchAll(MARKDOWN_LINK)) {
-      const target = match[1]!.split("#")[0]!
+    for (const href of markdownLinkTargets(content)) {
+      const target = href.split("#")[0]!
       if (!target || /^(https?:|mailto:|#)/.test(target) || target.startsWith("/")) continue
       const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(pagePath), target))
       if (target.endsWith(".md") && !knownPages.has(resolved)) {

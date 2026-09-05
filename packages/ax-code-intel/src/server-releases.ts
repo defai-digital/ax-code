@@ -135,11 +135,14 @@ export const checksumManifestSha256 = (content: string, assetName?: string) => {
     .filter(Boolean)
 
   for (const line of lines) {
-    const match = line.match(/^([a-f0-9]{64})(?:\s+\*?(.+))?$/i)
-    if (!match) continue
-    if (!assetName) return match[1].toLowerCase()
-    if (!match[2]) return match[1].toLowerCase()
-    if (match[2]?.trim() === assetName) return match[1].toLowerCase()
+    if (line.length < 64) continue
+    const hash = line.slice(0, 64)
+    if (!/^[a-f0-9]{64}$/i.test(hash)) continue
+    const rest = line.slice(64).trim()
+    if (!assetName) return hash.toLowerCase()
+    if (!rest) return hash.toLowerCase()
+    const name = rest.startsWith("*") ? rest.slice(1).trim() : rest
+    if (name === assetName) return hash.toLowerCase()
   }
 }
 

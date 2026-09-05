@@ -1,5 +1,4 @@
 import { ConfigMarkdown } from "../config/markdown"
-import { Shell } from "../shell/shell"
 import { Process } from "../util/process"
 
 const argsRegex = /(?:\[Image\s+\d+\]|"[^"]*"|'[^']*'|[^\s"']+)/gi
@@ -60,7 +59,7 @@ export async function commandTemplateText(input: {
   const run =
     input.run ??
     (async (cmd: string) => {
-      const out = await Process.text([cmd], { shell: Shell.preferred(), nothrow: true })
+      const out = await Process.text(Process.shellCommand(cmd), { nothrow: true })
       return out.text
     })
 

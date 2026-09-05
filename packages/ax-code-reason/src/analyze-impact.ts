@@ -40,19 +40,27 @@ const MAX_VISIT_BUDGET = 10000
 // We only care about file names here — individual hunks aren't needed
 // because we walk by symbol-in-file, not by line range. Accepts both
 // `--- a/path / +++ b/path` and `diff --git` headers.
+function restAfterPrefix(line: string, prefix: string): string | undefined {
+  if (!line.startsWith(prefix)) return
+  let i = prefix.length
+  while (i < line.length && (line[i] === " " || line[i] === "\t")) i++
+  if (i >= line.length) return
+  return line.slice(i)
+}
+
 export function extractFilesFromDiff(patch: string): string[] {
   const files = new Set<string>()
   const lines = patch.split("\n")
   for (const raw of lines) {
-    const plusMatch = raw.match(/^\+\+\+\s+(.+)$/)
-    if (plusMatch) {
-      const file = normalizePatchFile(plusMatch[1])
+    const plusPath = restAfterPrefix(raw, "+++")
+    if (plusPath) {
+      const file = normalizePatchFile(plusPath)
       if (file) files.add(file)
       continue
     }
-    const minusMatch = raw.match(/^---\s+(.+)$/)
-    if (minusMatch) {
-      const file = normalizePatchFile(minusMatch[1])
+    const minusPath = restAfterPrefix(raw, "---")
+    if (minusPath) {
+      const file = normalizePatchFile(minusPath)
       if (file) files.add(file)
       continue
     }

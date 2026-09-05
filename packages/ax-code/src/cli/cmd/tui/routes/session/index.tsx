@@ -2,7 +2,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  ErrorBoundary,
   For,
   mapArray,
   Match,
@@ -12,13 +11,10 @@ import {
   Show,
   Switch,
 } from "solid-js"
-import { Dynamic } from "solid-js/web"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { MAX_SESSION_MESSAGES, useSync } from "@tui/context/sync"
 import { SplitBorder } from "@tui/component/border"
-import { Spinner } from "@tui/component/spinner"
-import { Chip } from "@tui/ui/primitives/chip"
-import { selectedForeground, tint, useTheme } from "@tui/context/theme"
+import { tint, useTheme } from "@tui/context/theme"
 import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA } from "ax-tui"
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import type {
@@ -31,7 +27,6 @@ import type {
 } from "@ax-code/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
-import { effortLabel } from "@/provider/effort-label"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
@@ -46,7 +41,6 @@ import {
 } from "@tui/util/renderable-safety"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { Header } from "./header"
-import { isAssistantThinkingActive } from "./thinking-status"
 import { useDialog } from "../../ui/dialog"
 import { DialogPrompt } from "../../ui/dialog-prompt"
 import { DialogMessage } from "./dialog-message"
@@ -78,11 +72,9 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
-import { coalesceParts, type DisplayPart } from "./coalesce"
-import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
+import { autonomousActiveView } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
-import { createStreamPaintThrottle } from "./stream-paint"
 import { recoveredAssistantMessageIDs } from "./display"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
@@ -100,19 +92,8 @@ import { revertState, hiddenMessageIDs } from "./revert"
 import { displayCommands } from "./display-commands"
 import { sdkErrorMessage } from "./sdk-error-message"
 import { AssistantMessage, QueuedFollowUps, RouteIndicator, UserMessage } from "./transcript"
-import { userRoute } from "../../util/transcript"
 import { EventQuery } from "@/replay/query"
-import { buildRouteInfoByMessage, routeEvent } from "./route"
-import {
-  assistantMessageDuration,
-  assistantMessageStats,
-  assistantToolSummary,
-  codeDisplayView,
-  compactDelegatedLabel,
-  streamingTextRenderMode,
-  userMessageMetadataDensity,
-} from "./view-model"
-import { SessionCodeRenderer } from "./render-adapter"
+import { buildRouteInfoByMessage } from "./route"
 import { Log } from "@/util/log"
 import { compactionToastForActiveSession } from "./compaction-view-model"
 import { createReconnectRecoveryGate } from "../../util/reconnect-recovery"
@@ -134,10 +115,7 @@ import {
   type SubagentStatusItem,
 } from "./subagent-status-view"
 import { SubagentStatusPanel } from "./subagent-status-panel"
-import { SessionRouteContext as context, useSessionRouteContext as use } from "./context"
-import { coalescedToolLabel } from "./tool-rendering"
-import { toolRendererComponent } from "./tool-renderers"
-import { followUpPreview, type QueuedFollowUp } from "../../component/prompt/follow-up-queue"
+import { SessionRouteContext as context } from "./context"
 import { followUpQueue } from "../../component/prompt/follow-up-queue-store"
 
 addDefaultParsers(parsers.parsers)

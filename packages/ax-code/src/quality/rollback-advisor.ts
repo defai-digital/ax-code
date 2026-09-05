@@ -44,7 +44,7 @@ export namespace QualityRollbackAdvisor {
 
     const currentActiveSource = input.currentActiveSource ?? null
     const rationale: string[] = []
-    let action: RollbackAction = "keep"
+    let action: RollbackAction
 
     if (input.watch.overallStatus === "pass") {
       action = "keep"

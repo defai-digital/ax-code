@@ -206,11 +206,17 @@ export namespace MigrationLock {
   }
 
   function readSnapshot(target: string): Snapshot | undefined {
+    let fd: number
     try {
-      const before = fs.statSync(target)
+      fd = fs.openSync(target, "r")
+    } catch {
+      return undefined
+    }
+    try {
+      const before = fs.fstatSync(fd)
       if (!before.isFile()) throw new Error(`Migration lock path is not a regular file: ${target}`)
-      const text = fs.readFileSync(target, "utf-8")
-      const after = fs.statSync(target)
+      const text = fs.readFileSync(fd, "utf-8")
+      const after = fs.fstatSync(fd)
       if (
         before.dev !== after.dev ||
         before.ino !== after.ino ||
@@ -230,6 +236,8 @@ export namespace MigrationLock {
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return undefined
       throw error
+    } finally {
+      fs.closeSync(fd)
     }
   }
 

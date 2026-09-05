@@ -5,3 +5,14 @@ paths-ignore:
   - "**/*.test.tsx"
   - "**/test/**"
   - "**/tests/**"
+  # Extracted / generated TUI framework bundles. Framework maintenance lives in
+  # the sibling ax-tui repo; leftover hashed bundles are not source of truth.
+  - "packages/ax-code-tui/**"
+  - "**/*.min.js"
+  - "script/vendor-tui-native.ts"
+
+query-filters:
+  # napi-rs `#[napi] pub struct` FFI wrappers trip this query with no
+  # corresponding unsafe pointer arithmetic in our source.
+  - exclude:
+      id: rust/access-invalid-pointer

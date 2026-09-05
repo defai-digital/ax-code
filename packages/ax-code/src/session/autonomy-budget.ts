@@ -289,7 +289,7 @@ export function resolveAutonomyBudget(
     sources.push("autonomy.stall.tool_only_nudge")
   }
 
-  let toolOnlyFinalNudge = Math.max(1, maxToolOnlyTurns - 5)
+  let toolOnlyFinalNudge: number
   if (stall?.tool_only_final_nudge !== undefined) {
     toolOnlyFinalNudge = stall.tool_only_final_nudge
     sources.push("autonomy.stall.tool_only_final_nudge")

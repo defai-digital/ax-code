@@ -1,5 +1,5 @@
 import { Log } from "./internal/log"
-import { codeReasonHost, type Graph } from "./host"
+import type { Graph } from "./host"
 import { CodeNodeID } from "./id"
 import type { ProjectID } from "./id"
 import { DebugEngineQuery } from "./query"

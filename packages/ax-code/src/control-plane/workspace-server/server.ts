@@ -5,7 +5,6 @@ import { streamSSE } from "hono/streaming"
 import { GlobalBus, type GlobalBusEvent } from "@/bus/global"
 import { Flag } from "@/flag/flag"
 import { WorkspaceID } from "../schema"
-import { Log } from "@/util/log"
 import { assertAuthenticatedNetworkBind, normalizeLoopbackHostname } from "@/runtime/listen-security"
 import { encodeSsePayload } from "@/util/sse-queue"
 import { serve, type ServerHandle } from "@/server/runtime-adapter"
@@ -15,8 +14,6 @@ import {
   LEGACY_OPENCODE_WORKSPACE_HEADER,
   workspaceHeaderValue,
 } from "@/util/workspace-headers"
-
-const log = Log.create({ service: "workspace-server" })
 
 export namespace WorkspaceServer {
   export function App() {

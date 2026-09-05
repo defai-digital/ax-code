@@ -98,19 +98,16 @@ export namespace Incremental {
     const maxFiles = opts?.maxFiles ?? 500
     const includeGlobs = opts?.include ?? ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"]
 
-    // Build import patterns from changed file basenames
-    const patterns = changedFiles.map((f) => {
-      const base = path.basename(f, path.extname(f))
-      // Match import statements referencing this module — escape regex metacharacters
-      return base.replace(/[.+?^${}()|[\]\\]/g, "\\$&")
-    })
+    // Fixed-string grep of basenames (separate argv, never interpolated into a
+    // shell or `-E` regex). A superset of true importers is safe: extra files
+    // are only extra incremental work.
+    const bases = [
+      ...new Set(changedFiles.map((f) => path.basename(f, path.extname(f))).filter((base) => base.length > 0)),
+    ]
+    if (bases.length === 0) return []
 
-    if (patterns.length === 0) return []
-
-    // Use git grep for speed — it respects .gitignore automatically
-    const pattern = patterns.join("|")
     const result = await Process.text(
-      ["git", "grep", "-l", "-E", `from[[:space:]]+['"].*(${pattern})['"]`, "--", ...includeGlobs],
+      ["git", "grep", "-l", "-F", ...bases.flatMap((base) => ["-e", base]), "--", ...includeGlobs],
       {
         cwd,
         nothrow: true,

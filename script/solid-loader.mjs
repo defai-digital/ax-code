@@ -8,7 +8,6 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
-const require = createRequire(import.meta.url)
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../packages/ax-code")
 
 // Babel + presets come from ax-tui/solid's own dependency tree. Resolve

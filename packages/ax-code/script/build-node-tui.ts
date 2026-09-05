@@ -109,7 +109,7 @@ function candidateNodeRuntimePaths() {
 
   const seen = new Set<string>()
   return candidates.filter((candidate) => {
-    let real = candidate
+    let real: string
     try {
       real = fs.realpathSync(candidate)
     } catch {

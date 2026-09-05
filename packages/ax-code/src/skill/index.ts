@@ -216,7 +216,7 @@ export namespace Skill {
     "run",
   ])
 
-  declare const AX_CODE_BUILTIN_SKILLS: unknown
+  declare const AX_CODE_BUILTIN_SKILLS: unknown | undefined
 
   const BuiltinSkillEntry = z.object({
     location: z.string(),
@@ -236,17 +236,16 @@ export namespace Skill {
   }
 
   function readBuildTimeBuiltinSkills(): unknown | undefined {
-    try {
-      return AX_CODE_BUILTIN_SKILLS
-    } catch {
-      return undefined
-    }
+    // Bundled builds replace this identifier via esbuild `define`. Source
+    // runs may not define it; `typeof` does not throw for an unresolved binding.
+    return typeof AX_CODE_BUILTIN_SKILLS === "undefined" ? undefined : AX_CODE_BUILTIN_SKILLS
   }
 
   async function loadBuiltinSkills(): Promise<Array<{ location: string; content: string }>> {
-    const buildTimeBuiltinSkills = parseBuiltinSkillEntries(readBuildTimeBuiltinSkills() ?? [])
-    if (buildTimeBuiltinSkills.length > 0) {
-      return buildTimeBuiltinSkills
+    const rawBuiltinSkills = readBuildTimeBuiltinSkills()
+    if (rawBuiltinSkills !== undefined) {
+      const buildTimeBuiltinSkills = parseBuiltinSkillEntries(rawBuiltinSkills)
+      if (buildTimeBuiltinSkills.length > 0) return buildTimeBuiltinSkills
     }
 
     const builtinDir = path.resolve(import.meta.dirname, "../../skills")

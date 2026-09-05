@@ -7,8 +7,6 @@ import {
 } from "../src/quality/verification-envelope"
 import { makeEnvelope } from "./fixture/envelope"
 
-const source = { tool: "verify_project", version: "7.7.8", runId: "run-1" }
-
 describe("VerificationEnvelopeSchema failure shapes", () => {
   test("accepts every result status of the v1 enum", () => {
     for (const status of ["passed", "failed", "skipped", "timeout", "error"] as const) {

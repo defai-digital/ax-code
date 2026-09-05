@@ -90,8 +90,7 @@ describe("createMockAgent", () => {
   })
 
   test("dispose() is a no-op (doesn't throw)", async () => {
-    const agent = createMockAgent({ replies: ["ok"] })
-    await agent.dispose()
+    await createMockAgent({ replies: ["ok"] }).dispose()
   })
 
   test("throws on empty replies array", () => {

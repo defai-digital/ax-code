@@ -62,24 +62,92 @@ type DuplicateCandidatePool = {
 // signature string to produce a canonical form suitable for exact
 // equality bucketing. Keeps the structure (keywords, punctuation, type
 // names) and discards anything a refactor would rename.
+function collapseWhitespace(input: string): string {
+  let out = ""
+  let inWs = false
+  for (let i = 0; i < input.length; i++) {
+    const ch = input.charCodeAt(i)
+    const ws = ch === 32 || ch === 9 || ch === 10 || ch === 13 || ch === 12
+    if (ws) {
+      if (!inWs && out.length > 0) {
+        out += " "
+        inWs = true
+      }
+      continue
+    }
+    inWs = false
+    out += input[i]
+  }
+  return inWs ? out.slice(0, -1) : out
+}
+
+function mapParenGroups(input: string, rewrite: (inner: string) => string): string {
+  let out = ""
+  let i = 0
+  while (i < input.length) {
+    if (input[i] !== "(") {
+      out += input[i]
+      i++
+      continue
+    }
+    let depth = 1
+    let j = i + 1
+    while (j < input.length && depth > 0) {
+      if (input[j] === "(") depth++
+      else if (input[j] === ")") depth--
+      j++
+    }
+    out += `(${rewrite(input.slice(i + 1, j - 1))})`
+    i = j
+  }
+  return out
+}
+
+function dropParamNames(inner: string): string {
+  let out = ""
+  let i = 0
+  while (i < inner.length) {
+    const ch = inner[i]!
+    if (/[A-Za-z_$]/.test(ch)) {
+      let j = i + 1
+      while (j < inner.length && /[\w$]/.test(inner[j]!)) j++
+      let k = j
+      while (k < inner.length && (inner[k] === " " || inner[k] === "\t")) k++
+      if (inner[k] === ":") {
+        out += ":"
+        i = k + 1
+        continue
+      }
+    }
+    out += ch
+    i++
+  }
+  return out
+}
+
+function dropDefaults(inner: string): string {
+  let out = ""
+  let i = 0
+  while (i < inner.length) {
+    if (inner[i] === "=") {
+      i++
+      while (i < inner.length && inner[i] !== "," && inner[i] !== ")") i++
+      continue
+    }
+    out += inner[i]
+    i++
+  }
+  return out
+}
+
 export function normalizeSignature(sig: string): string {
-  return (
-    sig
-      // Collapse whitespace
-      .replace(/\s+/g, " ")
-      // Drop parameter names within parenthesized parameter lists:
-      // match `(name: Type)` → `(Type)`. Scoped to parens so that
-      // object property keys like `{ foo: bar }` are preserved.
-      .replace(/\(([^)]*)\)/g, (_, params) => "(" + params.replace(/\b([a-zA-Z_$][\w$]*)\s*:/g, ":") + ")")
-      // Drop default values within parameter lists: `= 0`, `= "foo"`
-      .replace(/\(([^)]*)\)/g, (_, params) => "(" + params.replace(/=\s*[^,)]+/g, "") + ")")
-      // Bucket number literals
-      .replace(/\b\d+(\.\d+)?\b/g, "N")
-      // Bucket string literals
-      .replace(/"[^"]*"/g, "S")
-      .replace(/'[^']*'/g, "S")
-      .trim()
-  )
+  let s = collapseWhitespace(sig)
+  s = mapParenGroups(s, dropParamNames)
+  s = mapParenGroups(s, dropDefaults)
+  s = s.replace(/\b\d+(\.\d+)?\b/g, "N")
+  s = s.replace(/"[^"]*"/g, "S")
+  s = s.replace(/'[^']*'/g, "S")
+  return s.trim()
 }
 
 function hashNormalized(sig: string): string {

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
-import { lstat, readFile, rename, rm, writeFile } from "node:fs/promises"
+import { constants as fsConstants } from "node:fs"
+import { open, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { AX_WIKI_DIR_DEFAULT, AX_WIKI_END, AX_WIKI_START, sanitizeWikiDir } from "./paths.js"
 
@@ -55,12 +56,24 @@ export async function ensureAgentsWikiPointers(
   const block = defaultAxWikiBlock(options.wikiDir)
   for (const name of files) {
     const file = path.join(resolvedRoot, name)
-    const info = await lstat(file).catch((error) => {
-      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") return undefined
-      throw error
-    })
-    if (info?.isSymbolicLink()) throw new Error(`AX Wiki refuses to update symlinked instruction file: ${name}`)
-    const existing = info ? await readFile(file, "utf8") : name === "AGENTS.md" ? "" : undefined
+    let existing: string | undefined
+    try {
+      const fh = await open(file, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+      try {
+        existing = await fh.readFile("utf8")
+      } finally {
+        await fh.close()
+      }
+    } catch (error) {
+      const code = error && typeof error === "object" && "code" in error ? String(error.code) : ""
+      if (code === "ENOENT") {
+        existing = name === "AGENTS.md" ? "" : undefined
+      } else if (code === "ELOOP" || code === "EMLINK") {
+        throw new Error(`AX Wiki refuses to update symlinked instruction file: ${name}`)
+      } else {
+        throw error
+      }
+    }
     if (existing === undefined) continue
     const next = upsertAxWikiBlock(existing, block)
     if (next === existing) continue

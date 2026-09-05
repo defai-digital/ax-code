@@ -203,7 +203,6 @@ export async function ensureTitle(input: {
         })
       }
       if (generated && generated !== title) {
-        title = generated
         return applyTitle(input.session.id, generated)
       }
     }

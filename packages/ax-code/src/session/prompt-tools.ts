@@ -36,9 +36,10 @@ const log = Log.create({ service: "session.prompt.tools" })
 // Schema transforms may capture project-defined tool schemas. Keep both the
 // LRU and in-flight work scoped to the active project instance so two projects
 // with the same tool ID/model cannot reuse each other's schema.
+type PendingSchema = { promise: Promise<any> }
 const schemaState = Instance.state(() => ({
   cache: new Map<string, any>(),
-  mcpPending: new Map<string, Promise<any>>(),
+  mcpPending: new Map<string, PendingSchema>(),
 }))
 const SCHEMA_CACHE_MAX = 500
 const SCHEMA_CACHE_DROP = 100
@@ -91,23 +92,25 @@ export async function transformMcpInputSchema(input: {
   }
 
   const pending = current.mcpPending.get(cacheKey)
-  if (pending) return pending
+  if (pending) return pending.promise
 
-  const promise = (async () => {
-    const cachedAfterAwait = current.cache.get(cacheKey)
-    if (cachedAfterAwait !== undefined) {
-      touchSchemaCache(current.cache, cacheKey, cachedAfterAwait)
-      return cachedAfterAwait
-    }
-    const transformed = ProviderTransform.schema(input.model, schemaJson)
-    setSchemaCache(current.cache, cacheKey, transformed)
-    return transformed
-  })()
-  current.mcpPending.set(cacheKey, promise)
+  const inFlight: PendingSchema = {
+    promise: (async () => {
+      const cachedAfterAwait = current.cache.get(cacheKey)
+      if (cachedAfterAwait !== undefined) {
+        touchSchemaCache(current.cache, cacheKey, cachedAfterAwait)
+        return cachedAfterAwait
+      }
+      const transformed = ProviderTransform.schema(input.model, schemaJson)
+      setSchemaCache(current.cache, cacheKey, transformed)
+      return transformed
+    })(),
+  }
+  current.mcpPending.set(cacheKey, inFlight)
   try {
-    return await promise
+    return await inFlight.promise
   } finally {
-    if (current.mcpPending.get(cacheKey) === promise) current.mcpPending.delete(cacheKey)
+    if (current.mcpPending.get(cacheKey) === inFlight) current.mcpPending.delete(cacheKey)
   }
 }
 
@@ -500,7 +503,6 @@ export async function resolveTools(input: ResolveToolsInput) {
               if (!error.path) {
                 if (error.reason !== "network") throw error
                 if (networkBypass) {
-                  lastError = error
                   throw error
                 }
                 await ctx.ask({
@@ -514,7 +516,6 @@ export async function resolveTools(input: ResolveToolsInput) {
                 continue
               }
               if (bypass.includes(error.path)) {
-                lastError = error
                 throw error
               }
               await ctx.ask({

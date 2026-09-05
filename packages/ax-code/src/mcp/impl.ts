@@ -373,7 +373,7 @@ export namespace MCP {
     disposed: boolean
     tools: {
       cached?: Record<string, ConvertedMcpTool>
-      pending?: Promise<Record<string, ConvertedMcpTool>>
+      pending?: { promise: Promise<Record<string, ConvertedMcpTool>> }
       unsubscribe?: () => void
       generation: number
     }
@@ -1132,7 +1132,7 @@ export namespace MCP {
     // the async window, one caller's result could bake a dead client
     // reference into the shared cache while the other completed a
     // clean fetch.
-    if (s.tools.pending) return s.tools.pending
+    if (s.tools.pending) return s.tools.pending.promise
     const generation = s.tools.generation
     const promise = (async () => {
       const result: Record<string, ConvertedMcpTool> = {}
@@ -1220,11 +1220,12 @@ export namespace MCP {
       }
       return result
     })()
-    s.tools.pending = promise
+    const inFlight = { promise }
+    s.tools.pending = inFlight
     try {
-      return await promise
+      return await inFlight.promise
     } finally {
-      if (s.tools.pending === promise) s.tools.pending = undefined
+      if (s.tools.pending === inFlight) s.tools.pending = undefined
     }
   }
 

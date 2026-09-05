@@ -19,6 +19,13 @@ import { WorkflowRun as WorkflowRunState, type WorkflowRunDetail } from "@/workf
 type WorkflowTemplateID = import("@/workflow/template").WorkflowTemplate.ID
 type WorkflowStartOptions = import("@/workflow/scheduler").WorkflowScheduler.StartOptions
 
+// Full-cron search horizon. Day-skipping keeps this cheap; schedules with no
+// occurrence inside the window (e.g. `0 0 29 2 *` checked right after a leap
+// year) are rejected up front instead of persisting active-never-fires rows.
+const CRON_SEARCH_DAYS = 4 * 366
+const MS_PER_DAY = 24 * 60 * 60 * 1_000
+const MS_PER_MINUTE = 60 * 1_000
+
 export namespace ScheduledTask {
   const log = Log.create({ service: "session.scheduled-task" })
   const MISSED_RUN_GRACE_MS = 5 * 60 * 1_000
@@ -34,10 +41,6 @@ export namespace ScheduledTask {
   const FAILURE_BACKOFF_MAX_MS = 60 * 60 * 1_000
   export const MAX_PROJECT_ACTIVE_TASKS = 100
   const MAX_COALESCE_ITERATIONS = 10_000
-  // Full-cron search horizon. Day-skipping keeps this cheap; schedules with no
-  // occurrence inside the window (e.g. `0 0 29 2 *` checked right after a leap
-  // year) are rejected up front instead of persisting active-never-fires rows.
-  const CRON_SEARCH_DAYS = 4 * 366
   const DEFAULT_RUN_DEADLINE_MS = 30 * 60 * 1_000
   const ORPHAN_GRACE_MS = 10 * 60 * 1_000
   const ONESHOT_RETENTION_MS = 90 * 24 * 60 * 60 * 1_000
@@ -45,8 +48,6 @@ export namespace ScheduledTask {
   // Capped below MISSED_RUN_GRACE_MS (minus poll latency) so a jitter-delayed
   // on-time fire can never be misclassified as missed.
   const JITTER_MAX_MS = 3 * 60 * 1_000
-  const MS_PER_DAY = 24 * 60 * 60 * 1_000
-  const MS_PER_MINUTE = 60 * 1_000
 
   export const Status = z.enum(["active", "paused", "disabled"])
   export type Status = z.infer<typeof Status>
@@ -1499,9 +1500,9 @@ function nextWeeklyRun(day: number, time: string, from: number, timezone?: strin
 function nextCronRun(expression: string, from: number, timezone?: string): number | undefined {
   const parsed = parseCronExpressionFull(expression)
   if (!parsed) return undefined
-  const horizonMs = 4 * 366 * 24 * 60 * 60 * 1000
+  const horizonMs = CRON_SEARCH_DAYS * MS_PER_DAY
   const endMs = from + horizonMs
-  const startMs = from - (from % 60_000) + 60_000
+  const startMs = from - (from % MS_PER_MINUTE) + MS_PER_MINUTE
   let ms = startMs
 
   if (!timezone) {
