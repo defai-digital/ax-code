@@ -16,6 +16,7 @@ import { Lock } from "@/util/lock"
 import { Log } from "../util/log"
 import { uniqueItems } from "../util/string-list"
 import { MessageV2 } from "./message-v2"
+import { MessageWrite } from "./message-write"
 import { SessionShard } from "./shard"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
@@ -1056,20 +1057,10 @@ export namespace Session {
   }
 
   export const updateMessage = fn(MessageV2.Info, async (msg) => {
-    const time_created = msg.time.created
-    const { id, sessionID, ...data } = msg
     const time_updated = Date.now()
-    const store = SessionShard.storeFor(sessionID, { write: true })
+    const store = SessionShard.storeFor(msg.sessionID, { write: true })
     store.use((db) => {
-      db.insert(MessageTable)
-        .values({
-          id,
-          session_id: sessionID,
-          time_created,
-          data,
-        })
-        .onConflictDoUpdate({ target: MessageTable.id, set: { data, time_updated } })
-        .run()
+      MessageWrite.message(db, msg, time_updated)
       store.effect(() =>
         Bus.publishDetached(MessageV2.Event.Updated, {
           info: msg,
@@ -1135,20 +1126,10 @@ export namespace Session {
   const UpdatePartInput = MessageV2.Part
 
   export const updatePart = fn(UpdatePartInput, async (part) => {
-    const { id, messageID, sessionID, ...data } = part
     const time = Date.now()
-    const store = SessionShard.storeFor(sessionID, { write: true })
+    const store = SessionShard.storeFor(part.sessionID, { write: true })
     store.use((db) => {
-      db.insert(PartTable)
-        .values({
-          id,
-          message_id: messageID,
-          session_id: sessionID,
-          time_created: time,
-          data,
-        })
-        .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
-        .run()
+      MessageWrite.parts(db, [part], time)
       store.effect(() =>
         Bus.publishDetached(MessageV2.Event.PartUpdated, {
           part: { ...part },
@@ -1158,6 +1139,19 @@ export namespace Session {
     return part
   })
 
+  export const WriteScopeError = NamedError.create("SessionWriteScopeError", z.object({ message: z.string() }))
+
+  function validatePartScope(parts: MessageV2.Part[], sessionID: SessionID, messageID?: MessageID) {
+    for (const part of parts) {
+      if (part.sessionID !== sessionID) {
+        throw new WriteScopeError({ message: `Part ${part.id} must belong to session ${sessionID}` })
+      }
+      if (messageID !== undefined && part.messageID !== messageID) {
+        throw new WriteScopeError({ message: `Part ${part.id} must belong to message ${messageID}` })
+      }
+    }
+  }
+
   // Batch variant of updatePart: one transaction per chunk instead of one DB
   // round-trip per part. Used by compaction pruning, which can touch hundreds
   // of parts at once. Chunked so a single transaction never holds the write
@@ -1165,6 +1159,8 @@ export namespace Session {
   // onConflictDoUpdate, so splitting the batch into separate commits is safe.
   export async function updateParts(parts: MessageV2.Part[]) {
     if (parts.length === 0) return parts
+    // Validate the entire array before routing or committing its first chunk.
+    validatePartScope(parts, parts[0].sessionID)
     const time = Date.now()
     const PARTS_BATCH_SIZE = 500
     // All parts in a batch belong to one session (compaction pruning).
@@ -1172,19 +1168,7 @@ export namespace Session {
     for (let i = 0; i < parts.length; i += PARTS_BATCH_SIZE) {
       const batch = parts.slice(i, i + PARTS_BATCH_SIZE)
       store.transaction((db) => {
-        for (const part of batch) {
-          const { id, messageID, sessionID, ...data } = part
-          db.insert(PartTable)
-            .values({
-              id,
-              message_id: messageID,
-              session_id: sessionID,
-              time_created: time,
-              data,
-            })
-            .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: time } })
-            .run()
-        }
+        MessageWrite.parts(db, batch, time)
         store.effect(() => {
           for (const part of batch) {
             Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } })
@@ -1196,34 +1180,13 @@ export namespace Session {
   }
 
   export async function updateMessageWithParts(info: MessageV2.Info, parts: MessageV2.Part[]) {
+    validatePartScope(parts, info.sessionID, info.id)
     const messageTimeUpdated = Date.now()
     const partTime = Date.now()
     const store = SessionShard.storeFor(info.sessionID, { write: true })
     store.transaction((db) => {
-      const { id, sessionID, ...data } = info
-      db.insert(MessageTable)
-        .values({
-          id,
-          session_id: sessionID,
-          time_created: info.time.created,
-          data,
-        })
-        .onConflictDoUpdate({ target: MessageTable.id, set: { data, time_updated: messageTimeUpdated } })
-        .run()
-
-      for (const part of parts) {
-        const { id, messageID, sessionID, ...data } = part
-        db.insert(PartTable)
-          .values({
-            id,
-            message_id: messageID,
-            session_id: sessionID,
-            time_created: partTime,
-            data,
-          })
-          .onConflictDoUpdate({ target: PartTable.id, set: { data, time_updated: partTime } })
-          .run()
-      }
+      MessageWrite.message(db, info, messageTimeUpdated)
+      MessageWrite.parts(db, parts, partTime)
     })
 
     await Bus.publish(MessageV2.Event.Updated, { info })
