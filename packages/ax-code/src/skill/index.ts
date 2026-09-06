@@ -216,8 +216,6 @@ export namespace Skill {
     "run",
   ])
 
-  declare const AX_CODE_BUILTIN_SKILLS: unknown | undefined
-
   const BuiltinSkillEntry = z.object({
     location: z.string(),
     content: z.string(),
@@ -236,9 +234,9 @@ export namespace Skill {
   }
 
   function readBuildTimeBuiltinSkills(): unknown | undefined {
-    // Bundled builds replace this identifier via esbuild `define`. Source
-    // runs may not define it; `typeof` does not throw for an unresolved binding.
-    return typeof AX_CODE_BUILTIN_SKILLS === "undefined" ? undefined : AX_CODE_BUILTIN_SKILLS
+    // Bundled builds set this on globalThis via the esbuild banner. Source
+    // runs leave it unset and fall through to the on-disk skills directory.
+    return (globalThis as { AX_CODE_BUILTIN_SKILLS?: unknown }).AX_CODE_BUILTIN_SKILLS
   }
 
   async function loadBuiltinSkills(): Promise<Array<{ location: string; content: string }>> {

@@ -136,7 +136,13 @@ export namespace Process {
     if (opts.env === null) spawnOpts.env = {}
     else if (opts.env) spawnOpts.env = { ...opts.env }
 
-    const proc = launch(cmd[0], cmd.slice(1), spawnOpts)
+    const file = cmd[0]
+    const args = cmd.slice(1)
+    // argv spawn: the file and arguments are not interpolated into a shell.
+    // Callers that need a shell pass `Process.shellCommand(...)`.
+    // codeql[js/shell-command-injection-from-environment]
+    // codeql[js/indirect-command-line-injection]
+    const proc = launch(file, args, spawnOpts)
 
     let closed = false
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined

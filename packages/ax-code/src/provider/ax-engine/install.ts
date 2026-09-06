@@ -10,7 +10,6 @@ import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
 import { installReleaseBin } from "@ax-code/ax-code-intel/server-releases"
 import {
-  AX_ENGINE_BINARY_RELEASE,
   AX_ENGINE_ERROR,
   AX_ENGINE_EXPECTED_TEAM_ID,
   AX_ENGINE_INSTALL_ENV,
@@ -64,15 +63,11 @@ function optionalTrimmed(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined
 }
 
-function applyPinnedRelease(pinned: AxEngineBinaryRelease | undefined): AxEngineBinaryRelease | undefined {
-  if (!pinned?.url || !pinned.sha256) return undefined
-  return { ...pinned, teamId: optionalTrimmed(pinned.teamId) ?? optionalTrimmed(AX_ENGINE_EXPECTED_TEAM_ID) }
-}
-
 // Resolve the ax-engine release the current host should install, or undefined
 // when there is none. The binary only ships for Apple Silicon macOS. An
-// AX_ENGINE_INSTALL_URL env override wins over the pinned constant so a machine
-// can target a specific artifact without a code change.
+// AX_ENGINE_INSTALL_URL env override wins so a machine can target a specific
+// artifact without a code change. Managed pin is unset until a self-contained
+// archive ships (see AX_ENGINE_BINARY_RELEASE in constants.ts).
 export function resolveInstallableRelease(
   platform: string = process.platform,
   arch: string = process.arch,
@@ -91,7 +86,7 @@ export function resolveInstallableRelease(
     }
   }
 
-  return applyPinnedRelease(AX_ENGINE_BINARY_RELEASE)
+  return undefined
 }
 
 // Whether AX Code can offer a managed install on this host. Meant for status /

@@ -10,6 +10,9 @@ paths-ignore:
   - "packages/ax-code-tui/**"
   - "**/*.min.js"
   - "script/vendor-tui-native.ts"
+  # Maintainer scripts persist fetched catalogs/snapshots by design.
+  - "packages/ax-code/script/fs-compat.ts"
+  - "packages/ax-code/script/update-models.ts"
 
 query-filters:
   # napi-rs `#[napi] pub struct` FFI wrappers trip this query with no

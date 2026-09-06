@@ -146,6 +146,7 @@ const result = await esbuild.build({
       "const require = __cr(import.meta.url);",
       "const __filename = __f2p(import.meta.url);",
       "const __dirname = __dn(__filename);",
+      `globalThis.AX_CODE_BUILTIN_SKILLS = ${JSON.stringify(builtinSkills)};`,
     ].join("\n"),
   },
   logLevel: "error",
