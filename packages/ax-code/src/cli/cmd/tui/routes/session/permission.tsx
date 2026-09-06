@@ -22,6 +22,7 @@ import { Global } from "@/global"
 import { withTimeout } from "@/util/timeout"
 import { errorPayloadMessage } from "../../util/error-message"
 import { CONFIRM_KEYS } from "../../util/keys"
+import { webMcpApprovalLines } from "@/mcp/webmcp-approval"
 import {
   createPermissionSubmitLatch,
   endPermissionSubmit,
@@ -283,7 +284,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   // Interactive-only permissions (e.g. isolation_escalation) are never
   // persisted, so offering "Allow always" is misleading. Hide it for those
   // permission types. See #239.
-  const INTERACTIVE_ONLY_PERMISSIONS = new Set(["isolation_escalation"])
+  const INTERACTIVE_ONLY_PERMISSIONS = new Set(["isolation_escalation", "webmcp"])
   const allowAlwaysAvailable = createMemo(() => !INTERACTIVE_ONLY_PERMISSIONS.has(props.request.permission))
   const baseOptions = createMemo(() => {
     const opts: Record<string, string> = { once: "Allow once", reject: "Reject" }
@@ -465,6 +466,20 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               <text fg={theme.textMuted}>{"URL: " + url}</text>
             </box>
           </Show>
+        ),
+      }
+    }
+
+    if (permission === "webmcp") {
+      return {
+        icon: "↗",
+        title: "Experimental WebMCP bridge call",
+        body: (
+          <box paddingLeft={1} flexDirection="column">
+            <For each={webMcpApprovalLines(props.request.metadata ?? {})}>
+              {(line) => <text fg={theme.textMuted}>{line}</text>}
+            </For>
+          </box>
         ),
       }
     }

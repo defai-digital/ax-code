@@ -18,6 +18,7 @@ import { ToolRegistry } from "../tool/registry"
 import { Tool } from "../tool/tool"
 import { MCP } from "../mcp"
 import { McpPermissionPattern } from "../mcp/permission-pattern"
+import { WebMcpProfile } from "../mcp/webmcp-profile"
 import { ProviderTransform } from "../provider/transform"
 import { Permission } from "@/permission"
 import { Isolation } from "@/isolation"
@@ -636,7 +637,17 @@ export async function resolveTools(input: ResolveToolsInput) {
         args,
         cwd: Instance.directory,
         execute: async () => {
-          const permissionPattern = McpPermissionPattern.derive(key, args, { worktree: Instance.worktree })
+          const policy = item.webmcp
+          const call = policy ? WebMcpProfile.validateCall(policy.profile, policy.toolName, args) : args
+          const webmcp = policy
+            ? WebMcpProfile.approvalMetadata(
+                policy.server,
+                policy.profile,
+                policy.toolName,
+                call as Record<string, unknown>,
+              )
+            : undefined
+          const permissionPattern = McpPermissionPattern.derive(key, webmcp ?? call, { worktree: Instance.worktree })
           await ctx.ask({
             permission: key,
             metadata: {
@@ -646,7 +657,15 @@ export async function resolveTools(input: ResolveToolsInput) {
             patterns: permissionPattern.patterns,
             always: permissionPattern.always,
           })
-          return execute(args, opts)
+          if (webmcp) {
+            await ctx.ask({
+              permission: "webmcp",
+              patterns: [key],
+              always: [],
+              metadata: webmcp,
+            })
+          }
+          return execute(call, opts)
         },
       })
 

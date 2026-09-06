@@ -20,6 +20,7 @@ import { BatchTool } from "../../src/tool/batch"
 import { Isolation } from "../../src/isolation"
 import { Permission } from "../../src/permission"
 import { Session } from "../../src/session"
+import { WebMcpProfile } from "../../src/mcp/webmcp-profile"
 
 describe("session.prompt-tools", () => {
   let schemaSpy: MockInstance | undefined
@@ -711,4 +712,89 @@ describe("session.prompt-tools", () => {
       },
     })
   })
+
+  test.each(["once", "reject", "abort"] as const)(
+    "WebMCP dispatch waits for an explicit per-call decision: %s",
+    async (decision) => {
+      await using tmp = await tmpdir({ git: true })
+      const execute = vi.fn().mockResolvedValue({ content: [{ type: "text", text: "fixture response" }] })
+      vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+      vi.spyOn(MCP, "tools").mockResolvedValue({
+        bridge_execute_webmcp_tool: {
+          inputSchema: WebMcpProfile.callSchema("execute_webmcp_tool"),
+          execute,
+          webmcp: {
+            server: "bridge",
+            toolName: "execute_webmcp_tool",
+            profile: { allowedOrigins: ["https://example.test"] },
+          },
+        },
+      })
+      vi.spyOn(Plugin, "trigger").mockImplementation(
+        (async (_name: string, _input: unknown, output: unknown) => output) as any,
+      )
+      vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+      const ask = vi.spyOn(Permission, "ask")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tools = await resolveTools({
+            agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+            session: { id: "ses_webmcp_tools", permission: [] } as any,
+            model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } } as any,
+            tools: {},
+            bypassAgentCheck: false,
+            messages: [],
+            processor: { message: { id: "msg_webmcp_tools" }, partFromToolCall: () => undefined } as any,
+          })
+          const tool = tools.bridge_execute_webmcp_tool
+          const controller = new AbortController()
+          const args = { pageId: 1, toolName: "fixture", input: '{"query":"private input"}' }
+          const outcome = Promise.resolve(
+            tool.execute!(args, {
+              toolCallId: "call_webmcp_tools",
+              messages: [],
+              abortSignal: controller.signal,
+            }),
+          ).then(
+            (result) => ({ result }),
+            (error: unknown) => ({ error }),
+          )
+          try {
+            await vi.waitFor(async () => expect(await Permission.list()).toHaveLength(1), { timeout: 5000 })
+            expect(execute).not.toHaveBeenCalled()
+            const [request] = await Permission.list()
+            expect(request).toMatchObject({
+              permission: "webmcp",
+              always: [],
+              metadata: { toolName: "fixture", pageId: 1 },
+            })
+            expect(ask.mock.calls.map(([input]) => input.permission)).toEqual(["bridge_execute_webmcp_tool", "webmcp"])
+            expect(JSON.stringify(ask.mock.calls)).not.toContain("private input")
+            args.toolName = "changed_during_approval"
+            if (decision === "abort") controller.abort()
+            else await Permission.reply({ requestID: request.id, reply: decision })
+            const result = await outcome
+            if (decision === "once") {
+              expect(result).toHaveProperty("result")
+              expect(execute).toHaveBeenCalledOnce()
+              expect(execute.mock.calls[0][0]).toEqual({
+                pageId: 1,
+                toolName: "fixture",
+                input: '{"query":"private input"}',
+              })
+              expect(JSON.stringify(result)).toContain("Untrusted MCP tool content")
+            } else {
+              expect(result).toHaveProperty("error")
+              expect(execute).not.toHaveBeenCalled()
+            }
+            expect(await Permission.list()).toHaveLength(0)
+          } finally {
+            controller.abort()
+            await outcome
+          }
+        },
+      })
+    },
+  )
 })

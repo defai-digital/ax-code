@@ -19,6 +19,7 @@ import { Permission } from "../../permission"
 import { parseJsonPayload } from "../../util/json-value"
 import { toErrorMessage } from "../../util/error-message"
 import { parseShellArgs } from "../../util/shell-args"
+import { McpWebMcpCommand } from "./mcp-webmcp"
 
 // Above this many MCP tools, LLM tool-selection accuracy degrades and the
 // extra schema overhead noticeably eats context. Mirrors the empirical
@@ -90,6 +91,7 @@ export const McpCommand = cmd({
       .command(McpTrustCommand)
       .command(McpUntrustCommand)
       .command(McpDebugCommand)
+      .command(McpWebMcpCommand)
       .demandCommand(),
   async handler() {},
 })

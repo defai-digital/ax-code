@@ -19,6 +19,8 @@ import { McpOAuthProvider } from "./oauth-provider"
 import { McpOAuthCallback } from "./oauth-callback"
 import { McpAuth } from "./auth"
 import { McpTrust } from "./trust"
+import { WebMcpProfile } from "./webmcp-profile"
+import { Global } from "@/global"
 import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
@@ -48,6 +50,10 @@ import {
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
+  // Bind admission to the actual connected client, including MCP.add() and
+  // reconnects. Reading current config instead could loosen an older client's
+  // policy or miss dynamically added clients. Weak ownership follows disposal.
+  const webMcpProfiles = new WeakMap<MCPClient, WebMcpProfile.Configuration>()
   const DEFAULT_TIMEOUT = MCP_DEFAULT_TIMEOUT_MS
   const MAX_STDERR_LINE = 2_000
   const isErrnoException = (error: unknown): error is NodeJS.ErrnoException =>
@@ -406,7 +412,7 @@ export namespace MCP {
             }
 
             // If disabled by config, mark as disabled without trying to connect
-            if (mcp.enabled === false) {
+            if (WebMcpProfile.disabled(mcp)) {
               status[key] = { status: "disabled" }
               return
             }
@@ -654,7 +660,7 @@ export namespace MCP {
   }
 
   async function create(key: string, mcp: Config.Mcp, owner: McpState) {
-    if (mcp.enabled === false) {
+    if (WebMcpProfile.disabled(mcp)) {
       log.info("mcp server disabled", { key })
       return {
         mcpClient: undefined,
@@ -662,6 +668,7 @@ export namespace MCP {
       }
     }
 
+    const webmcp = WebMcpProfile.validateLaunch(mcp)
     log.info("found", { key, type: mcp.type })
     let mcpClient: MCPClient | undefined
     let status: Status | undefined = undefined
@@ -829,7 +836,9 @@ export namespace MCP {
 
     if (mcp.type === "local") {
       const [cmd, ...args] = mcp.command
-      const cwd = Instance.directory
+      // The bridge's npx resolution must not consume a repository's .npmrc
+      // or a workspace-local package that shadows the reviewed package name.
+      const cwd = webmcp ? Global.Path.home : Instance.directory
       // Strip provider keys, tokens, passwords, etc. before forwarding
       // the environment to a local MCP server. Community MCP servers
       // are typically installed from npm and run arbitrary code — a
@@ -862,6 +871,7 @@ export namespace MCP {
       const connectTimeout = mcp.timeout ?? DEFAULT_TIMEOUT
       try {
         const client = createClient()
+        if (webmcp) webMcpProfiles.set(client, webmcp)
         await withTimeout(client.connect(transport), connectTimeout)
         rememberClientTransport(client, transport)
         registerNotificationHandlers(client, key, owner)
@@ -1180,7 +1190,9 @@ export namespace MCP {
 
       const listedTools = toolsResults.flatMap(({ clientName, client, toolsResult }) => {
         if (!toolsResult || "_failed" in toolsResult) return []
-        return toolsResult.tools.map((mcpTool) => ({ clientName, client, mcpTool }))
+        return toolsResult.tools
+          .filter((mcpTool) => !webMcpProfiles.has(client) || WebMcpProfile.allows(mcpTool.name))
+          .map((mcpTool) => ({ clientName, client, mcpTool }))
       })
       const permissionKeys = resolveMcpToolPermissionKeys(
         listedTools.map(({ clientName, mcpTool }) => ({ server: clientName, tool: mcpTool.name })),
@@ -1191,8 +1203,14 @@ export namespace MCP {
         const entry = isConfigured(mcpConfig) ? mcpConfig : undefined
         const timeout = requestTimeout(cfg, entry)
         const key = permissionKeys[index]!
+        const profile = webMcpProfiles.get(client)
         conversions.push(
-          convertMcpTool(mcpTool, client, timeout)
+          convertMcpTool(
+            mcpTool,
+            client,
+            timeout,
+            profile ? { server: clientName, toolName: mcpTool.name, profile } : undefined,
+          )
             .then((tool) => {
               if (s.disposed || s.clients[clientName] !== client) return
               result[key] = tool
@@ -1269,11 +1287,13 @@ export namespace MCP {
           return undefined
         })
         if (!listed) return []
-        return listed.tools.map((t) => ({
-          server,
-          name: t.name,
-          description: t.description,
-        }))
+        return listed.tools
+          .filter((t) => !webMcpProfiles.has(client) || WebMcpProfile.allows(t.name))
+          .map((t) => ({
+            server,
+            name: t.name,
+            description: t.description,
+          }))
       }),
     )
     const tools = results.flat()

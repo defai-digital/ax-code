@@ -224,6 +224,8 @@ export namespace Permission {
     // Cloud Operations approval gate (PRD-2026-09-04-cloud-operations-mode):
     // approving a plan must never be pre-approved by wildcard rules.
     "ops_approve",
+    // Page-defined tools are not trusted by a generic MCP wildcard grant.
+    "webmcp",
   ])
 
   export const EXACT_GRANT_ONLY_PERMISSIONS: ReadonlySet<string> = EXACT_GRANT_ONLY

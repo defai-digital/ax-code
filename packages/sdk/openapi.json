@@ -43554,6 +43554,9 @@
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991
+          },
+          "webmcp": {
+            "$ref": "#/components/schemas/WebMcpProfileConfig"
           }
         },
         "required": [
@@ -49842,6 +49845,35 @@
         "required": [
           "branch"
         ]
+      },
+      "WebMcpProfileConfig": {
+        "description": "Experimental pinned WebMCP bridge policy; requires explicit enablement and interactive approval for every call",
+        "type": "object",
+        "properties": {
+          "allowedOrigins": {
+            "minItems": 1,
+            "maxItems": 8,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 240
+            },
+            "description": "Exact permitted origins; no wildcards, credentials, paths, queries or fragments"
+          },
+          "headless": {
+            "description": "Use an isolated headless Chrome instead of a visible window",
+            "type": "boolean"
+          },
+          "executablePath": {
+            "description": "Optional explicit Chrome 150+ executable; never attaches to an existing browser session",
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "allowedOrigins"
+        ],
+        "additionalProperties": false
       },
       "WorkflowArtifactCompactEventRecord": {
         "type": "object",

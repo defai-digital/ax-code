@@ -96,6 +96,7 @@ export namespace McpTrust {
         type: config.type,
         command: config.command,
         environment: recordFingerprintShape(config.environment),
+        webmcp: config.webmcp,
       })
     }
 

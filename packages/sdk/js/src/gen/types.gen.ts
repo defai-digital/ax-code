@@ -2718,6 +2718,7 @@ export type McpLocalConfig = {
    * Timeout in ms for MCP server requests. Defaults to 30000 (30 seconds) if not specified.
    */
   timeout?: number
+  webmcp?: WebMcpProfileConfig
 }
 
 /** AX Code API schema `McpOAuthConfig` (auto-generated from the OpenAPI contract). */
@@ -4388,6 +4389,24 @@ export type UserMessage = {
 /** AX Code API schema `VcsInfo` (auto-generated from the OpenAPI contract). */
 export type VcsInfo = {
   branch: string
+}
+
+/**
+ * Experimental pinned WebMCP bridge policy; requires explicit enablement and interactive approval for every call
+ */
+export type WebMcpProfileConfig = {
+  /**
+   * Exact permitted origins; no wildcards, credentials, paths, queries or fragments
+   */
+  allowedOrigins: Array<string>
+  /**
+   * Use an isolated headless Chrome instead of a visible window
+   */
+  headless?: boolean
+  /**
+   * Optional explicit Chrome 150+ executable; never attaches to an existing browser session
+   */
+  executablePath?: string
 }
 
 /** AX Code API schema `WorkflowArtifactCompactEventRecord` (auto-generated from the OpenAPI contract). */

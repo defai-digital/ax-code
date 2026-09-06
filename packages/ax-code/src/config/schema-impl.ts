@@ -5,6 +5,7 @@ import { Log } from "../util/log"
 import { LSPServer } from "@ax-code/ax-code-intel/server"
 import { GITHUB_REPO_URL as REPO_URL } from "@/constants/project"
 import { MCP_DEFAULT_TIMEOUT_MS } from "@/mcp/constants"
+import { WebMcpProfile } from "@/mcp/webmcp-profile"
 
 const MODEL_SCHEMA_URL = "https://models.dev/model-schema.json#/$defs/Model"
 const MCP_TIMEOUT_MS = MCP_DEFAULT_TIMEOUT_MS
@@ -51,6 +52,9 @@ export const McpLocal = z
       .describe("Environment variables to set when running the MCP server"),
     enabled: z.boolean().optional().describe("Enable or disable the MCP server on startup"),
     timeout: McpTimeout,
+    webmcp: WebMcpProfile.Configuration.optional().describe(
+      "Experimental pinned WebMCP bridge policy; requires explicit enablement and interactive approval for every call",
+    ),
   })
   .strict()
   .meta({
