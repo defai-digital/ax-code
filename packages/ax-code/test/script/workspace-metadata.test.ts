@@ -30,7 +30,7 @@ describe("script.workspace-metadata", () => {
     expect(legacyRules).toEqual({})
   })
 
-  test("TUI dependencies use one validated workspace package", async () => {
+  test("TUI dependencies use one standalone framework package", async () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
     const packageJson = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/package.json"), "utf8"))
     const tsconfig = JSON.parse(await readFile(path.join(repoRoot, "packages/ax-code/tsconfig.json"), "utf8"))
@@ -38,7 +38,7 @@ describe("script.workspace-metadata", () => {
     const devDependencies = packageJson.devDependencies ?? {}
 
     // Transitional (ADR-074): the framework is consumed from the sibling
-    // standalone checkout until it is published to JSR and pinned here.
+    // standalone checkout until a JSR release passes consumer qualification.
     const axTuiDep = dependencies["ax-tui"]
     expect(typeof axTuiDep).toBe("string")
     expect(axTuiDep).toMatch(/^link:/)
@@ -68,7 +68,7 @@ describe("script.workspace-metadata", () => {
     expect(Object.keys(turbo.tasks ?? {}).filter((name) => /desktop|electron|openchamber/i.test(name))).toEqual([])
   })
 
-  test("AX Code TUI JSX runtime resolves through the workspace package", async () => {
+  test("AX Code TUI JSX runtime resolves through the installed framework package", async () => {
     await expect(import("ax-tui/solid/jsx-runtime")).resolves.toMatchObject({
       jsx: expect.any(Function),
     })

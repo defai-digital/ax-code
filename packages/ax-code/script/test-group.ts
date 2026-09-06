@@ -95,6 +95,7 @@ const tuiRenderer = new Set([
   "test/script/build-deps.test.ts",
   "test/script/check-tui-layering.test.ts",
   "test/script/esbuild-solid-plugin.test.ts",
+  "test/script/tui-dist.test.ts",
   "test/script/tui-startup-smoke.test.ts",
   "test/script/workspace-metadata.test.ts",
 ])

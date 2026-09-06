@@ -216,10 +216,10 @@ jobs:
           path: .internal/reports/testing/junit/*.xml
           if-no-files-found: ignore
 
-  # Disabled during the ADR-074 interim state: the TUI framework is consumed
-  # via a local pnpm link to the sibling ax-tui checkout, which GitHub Actions
-  # cannot resolve. Set repository variable AX_CODE_TUI_NODE26_SMOKE=true to
-  # re-enable after packages/ax-code pins jsr:@defai-digital/ax-tui
+  # Opt-in during the ADR-074 interim state: CI prepares a sibling ax-tui
+  # checkout for the local pnpm link. JSR 0.1.0 has an npm self-dependency and
+  # no native-library download path. Set AX_CODE_TUI_NODE26_SMOKE=true only
+  # after a qualified JSR release is pinned and passes native startup checks
   # (see .internal/adr/ADR-074 and
   # .internal/prd/PRD-2026-09-05-ax-tui-extraction.md).
   tui-node26-smoke:

@@ -12,7 +12,7 @@ import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { WINDOWS_UTF8_WARNING } from "./source-launcher"
 import { unixNodeLauncherScript } from "./node-launcher"
-import { shouldCopyTuiDistPath, toTuiDistPackageJson, withoutTuiTransformDependencies } from "./tui-dist"
+import { copyTuiDistPackage, toTuiDistPackageJson, withoutTuiTransformDependencies } from "./tui-dist"
 import pkg from "../package.json"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
@@ -324,12 +324,11 @@ await writeText(
 // The bundle externalizes the native FFI/.node packages and ax-tui; ship them
 // in node_modules beside the bundle so the dist runs anywhere `node` is present.
 const deps = pkg.dependencies as Record<string, string>
-// Read the installed ax-tui package (a link: dependency on the sibling
-// checkout) to collect its runtime dependencies.
+// Read the installed ax-tui package through the consumer's import alias.
 const tuiSourceDir = (() => {
-  const linked = path.join(dir, "node_modules", "ax-tui")
-  if (fs.existsSync(path.join(linked, "package.json"))) return linked
-  throw new Error(`Cannot resolve installed ax-tui package at ${linked}; run pnpm install`)
+  const installed = path.join(dir, "node_modules", "ax-tui")
+  if (fs.existsSync(path.join(installed, "package.json"))) return installed
+  throw new Error(`Cannot resolve installed ax-tui package at ${installed}; run pnpm install`)
 })()
 const tuiPkg = JSON.parse(fs.readFileSync(path.join(tuiSourceDir, "package.json"), "utf8")) as {
   dependencies?: Record<string, string>
@@ -368,9 +367,6 @@ const distDeps: Record<string, string> = {
   "tree-sitter-javascript": deps["tree-sitter-javascript"],
   "tree-sitter-typescript": deps["tree-sitter-typescript"],
 }
-// ax-tui is a private workspace package; copy it directly into the
-// distribution instead of asking npm to install it.
-const vendoredTuiPackage: [string, string] = ["ax-tui", tuiSourceDir]
 await writeText(
   path.join(outRoot, "package.json"),
   JSON.stringify({ name: "ax-code-dist", private: true, type: "module", dependencies: distDeps }, null, 2) + "\n",
@@ -418,20 +414,9 @@ for (const [spec, patchRel] of Object.entries(rootPkg.pnpm?.patchedDependencies 
   console.log(`Re-applied pnpm patch for ${name} (${files.length} file(s)) into the distribution`)
 }
 
-// Copy ax-tui into the distribution. It is not published independently,
-// so npm cannot install it while assembling the release tree.
-const distAxScope = path.join(outRoot, "node_modules", "@ax-code")
-fs.mkdirSync(distAxScope, { recursive: true })
-const [tuiPackageName, tuiCopySourceDir] = vendoredTuiPackage
-const tuiDistDir = path.join(distAxScope, "tui")
-if (!fs.existsSync(tuiCopySourceDir)) {
-  throw new Error(`AX Code TUI package missing: ${tuiCopySourceDir}`)
-}
-fs.cpSync(tuiCopySourceDir, tuiDistDir, {
-  recursive: true,
-  dereference: true,
-  filter: (src) => shouldCopyTuiDistPath(src, tuiCopySourceDir),
-})
+// Copy the already installed framework under the same ax-tui alias used by
+// the bundle and Homebrew. Keep framework-only tooling out of the archive.
+const tuiDistDir = copyTuiDistPackage(tuiSourceDir, path.join(outRoot, "node_modules"))
 const tuiDistManifestPath = path.join(tuiDistDir, "package.json")
 const tuiDistManifest = toTuiDistPackageJson(
   JSON.parse(await readText(tuiDistManifestPath)) as Record<string, unknown>,
@@ -439,17 +424,17 @@ const tuiDistManifest = toTuiDistPackageJson(
   resolveTuiCatalogVersion,
 )
 await writeText(tuiDistManifestPath, JSON.stringify(tuiDistManifest, null, 2) + "\n")
-console.log(`Copied ${tuiPackageName} into the distribution`)
+console.log("Copied ax-tui into the distribution")
 
-// The vendored ax-tui carries all 8 upstream native targets
-// under vendor/<target>/. Stage only the build target's library into the
+// The framework owns native delivery for both linked and JSR packages.
+// Stage only the build target's library into the
 // distribution (every archive must not ship all ~30 MB of binaries) and
 // verify it against the committed manifest BEFORE codesigning — signing
 // rewrites the dylib bytes, so hash checks must happen pre-sign.
 const vendorDistDir = path.join(tuiDistDir, "vendor")
 const buildTargetKey = `${process.platform}-${arch}`
 const vendorManifest = JSON.parse(await readText(path.join(vendorDistDir, "manifest.json"))) as {
-  targets?: Record<string, { lib: { file: string; sha256: string } }>
+  targets?: Record<string, { lib: { file: string; sha256: string }; licenseSha256: string }>
 }
 for (const entry of fs.readdirSync(vendorDistDir)) {
   if (entry === "manifest.json" || entry === buildTargetKey) continue
@@ -457,13 +442,21 @@ for (const entry of fs.readdirSync(vendorDistDir)) {
 }
 const stagedTarget = vendorManifest.targets?.[buildTargetKey]
 const stagedLib = stagedTarget ? path.join(vendorDistDir, buildTargetKey, stagedTarget.lib.file) : undefined
-if (!stagedTarget || !stagedLib || !fs.existsSync(stagedLib)) {
+if (!stagedTarget || !stagedLib) {
   console.error(`AX Code TUI native library for ${buildTargetKey} is missing from the distribution`)
   process.exit(1)
 }
+const { prepareNativeLibrary } = await import("ax-tui/native")
+const native = await prepareNativeLibrary(buildTargetKey as import("ax-tui/native").NativeTarget)
+fs.mkdirSync(path.dirname(stagedLib), { recursive: true })
+fs.copyFileSync(native.libraryPath, stagedLib)
+fs.copyFileSync(native.licensePath, path.join(path.dirname(stagedLib), "LICENSE"))
 const stagedHash = createHash("sha256").update(fs.readFileSync(stagedLib)).digest("hex")
-if (stagedHash !== stagedTarget.lib.sha256) {
-  console.error(`AX Code TUI native library for ${buildTargetKey} does not match vendor/manifest.json`)
+const stagedLicenseHash = createHash("sha256")
+  .update(fs.readFileSync(path.join(path.dirname(stagedLib), "LICENSE")))
+  .digest("hex")
+if (stagedHash !== stagedTarget.lib.sha256 || stagedLicenseHash !== stagedTarget.licenseSha256) {
+  console.error(`AX Code TUI native library or license for ${buildTargetKey} does not match vendor/manifest.json`)
   process.exit(1)
 }
 console.log(`Staged AX Code TUI native library for ${buildTargetKey} (hash verified)`)

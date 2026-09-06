@@ -121,7 +121,9 @@ describe("AX Code TUI stability guardrails", () => {
   test("keeps release dependency install from running optional native lifecycle scripts", async () => {
     const build = await fs.readFile(BUILD_NODE_TUI_SRC, "utf8")
 
-    expect(build).toContain("shouldCopyTuiDistPath")
+    expect(build).toContain('copyTuiDistPackage(tuiSourceDir, path.join(outRoot, "node_modules"))')
+    expect(build).toContain('await import("ax-tui/native")')
+    expect(build).toContain("stagedLicenseHash !== stagedTarget.licenseSha256")
     // AX Code TUI's public Solid transform owns its Babel dependencies, while the
     // precompiled CLI excludes that unshipped entry and its dependency set.
     expect(build).toContain("collectPackageRuntimeDependencies")

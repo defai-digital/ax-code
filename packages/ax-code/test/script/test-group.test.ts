@@ -31,18 +31,24 @@ describe("test group classification", () => {
     expect(pkg.scripts["test:tui-renderer"]).toBe("tsx script/test-groups.ts tui-renderer")
   })
 
-  test("provides an exact AX Code TUI package regression group", () => {
+  test("keeps consumer TUI regressions here and framework-only tests in ax-tui", async () => {
     const files = [
+      ...(await list()),
       "test/cli/tui/tui-spinner-renderable.test.ts",
       "test/cli/tui/tui-spinner.test.ts",
       "test/script/tui-package-integrity.test.ts",
-      "test/session/session.test.ts",
     ]
 
-    expect(pick(files, "tui-renderer")).toEqual([
-      "test/cli/tui/tui-spinner-renderable.test.ts",
-      "test/cli/tui/tui-spinner.test.ts",
-      "test/script/tui-package-integrity.test.ts",
+    expect(pick(files, "tui-renderer").sort()).toEqual([
+      "test/cli/tui/render-anti-patterns.test.ts",
+      "test/cli/tui/tui-ffi-coordinate-guard.test.ts",
+      "test/cli/tui/tui-ffi-pointer-pin.test.ts",
+      "test/script/build-deps.test.ts",
+      "test/script/check-tui-layering.test.ts",
+      "test/script/esbuild-solid-plugin.test.ts",
+      "test/script/tui-dist.test.ts",
+      "test/script/tui-startup-smoke.test.ts",
+      "test/script/workspace-metadata.test.ts",
     ])
   })
 

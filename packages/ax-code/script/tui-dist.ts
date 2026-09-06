@@ -11,7 +11,20 @@
  * contract; they moved here with ADR-074 when the framework extraction made
  * `script/tui-dist.ts` part of the ax-tui repo.
  */
-import { relative } from "node:path"
+import fs from "node:fs"
+import { join, relative } from "node:path"
+
+/** Copy the framework beside the CLI bundle using its runtime import name. */
+export function copyTuiDistPackage(packageRoot: string, nodeModulesDir: string) {
+  const target = join(nodeModulesDir, "ax-tui")
+  if (!fs.existsSync(packageRoot)) throw new Error(`AX Code TUI package missing: ${packageRoot}`)
+  fs.cpSync(packageRoot, target, {
+    recursive: true,
+    dereference: true,
+    filter: (src) => shouldCopyTuiDistPath(src, packageRoot),
+  })
+  return target
+}
 
 const DENY_PREFIXES = [
   "tests",
@@ -20,7 +33,27 @@ const DENY_PREFIXES = [
   "lib/tree-sitter/assets",
   "solid/patches",
   "spinner/src",
+  "chart/src",
 ] as const
+
+// A linked standalone checkout also contains its own tooling, tests, and
+// configuration. Only runtime directories and entry files belong in the CLI.
+const RUNTIME_DIRECTORIES = new Set([
+  "animation",
+  "assets",
+  "chart",
+  "lib",
+  "native",
+  "platform",
+  "plugins",
+  "post",
+  "renderables",
+  "solid",
+  "spinner",
+  "testing",
+  "vendor",
+])
+const RUNTIME_ENTRY = /^(?:index(?:-[\w-]+)?|parser\.worker|runtime-plugin[\w.-]*|testing|yoga)\.js$/
 
 const TUI_TRANSFORM_DEPENDENCIES = new Set([
   "@babel/core",
@@ -135,6 +168,20 @@ export function shouldCopyTuiDistPath(src: string, packageRoot: string) {
   const parts = rel.split("/")
   if (parts.includes("node_modules")) return false
   if (parts.some((part) => part.startsWith("."))) return false
+  if (
+    !RUNTIME_DIRECTORIES.has(parts[0]) &&
+    !(parts.length === 1 && (rel === "package.json" || rel === "LICENSE" || RUNTIME_ENTRY.test(rel)))
+  ) {
+    return false
+  }
+  if (
+    (parts[0] === "spinner" || parts[0] === "chart") &&
+    parts.length > 1 &&
+    parts[1] !== "dist" &&
+    !(parts.length === 2 && parts[1] === "LICENSE")
+  ) {
+    return false
+  }
 
   for (const prefix of DENY_PREFIXES) {
     if (rel === prefix || rel.startsWith(`${prefix}/`)) return false

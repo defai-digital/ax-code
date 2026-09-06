@@ -5,11 +5,7 @@ paths-ignore:
   - "**/*.test.tsx"
   - "**/test/**"
   - "**/tests/**"
-  # Extracted / generated TUI framework bundles. Framework maintenance lives in
-  # the sibling ax-tui repo; leftover hashed bundles are not source of truth.
-  - "packages/ax-code-tui/**"
   - "**/*.min.js"
-  - "script/vendor-tui-native.ts"
   # Maintainer scripts persist fetched catalogs/snapshots by design.
   - "packages/ax-code/script/fs-compat.ts"
   - "packages/ax-code/script/update-models.ts"
