@@ -11,9 +11,10 @@
  * Keep this the lowercase machine name: the Linux comm field truncates to 15
  * characters, pgrep/pm2-style tooling matches lowercase, and on Windows
  * process.title also drives SetConsoleTitle. The user-facing "AX-Code"
- * casing belongs to the OSC terminal title (util/terminal-title.ts), and
- * the OS-level executable name is branded by the node-bundled launcher
- * (script/build-node-tui.ts hardlinks node as "ax-code").
+ * casing belongs to the OSC terminal title (util/terminal-title.ts). Source
+ * mode additionally hardlinks the Node binary as "AX-Code" before spawn
+ * (script/node-ffi-runner-brand.mjs) so Apple Terminal / iTerm job names
+ * are not stuck on "node".
  */
 export const AX_CODE_PROCESS_TITLE = "ax-code"
 

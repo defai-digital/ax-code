@@ -21,7 +21,7 @@ import {
   TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
 } from "../../../src/cli/cmd/tui/terminal-cleanup"
 
-const TITLE_CLEAR_SEQUENCE = "\x1b]0;\x07"
+const TITLE_CLEAR_SEQUENCE = "\x1b]1;\x07\x1b]2;\x07"
 
 function captureStream(writes: string[] = []) {
   return {
@@ -97,7 +97,7 @@ describe("tui renderer profile", () => {
     const { writes, stream } = captureStream()
     expect(setTuiTerminalTitle("AX-Code", compatible, stream)).toBe(true)
     expect(clearTuiTerminalTitle(compatible, stream)).toBe(true)
-    expect(writes).toEqual(["\x1b]0;AX-Code\x07", TITLE_CLEAR_SEQUENCE])
+    expect(writes).toEqual(["\x1b]1;AX-Code\x07\x1b]2;AX-Code\x07", TITLE_CLEAR_SEQUENCE])
 
     const advanced = resolveTuiRenderProfile({
       advancedTerminal: true,
@@ -105,7 +105,7 @@ describe("tui renderer profile", () => {
     })
     const second = captureStream()
     expect(setTuiTerminalTitle("AX-Code", advanced, second.stream)).toBe(true)
-    expect(second.writes).toEqual(["\x1b]0;AX-Code\x07"])
+    expect(second.writes).toEqual(["\x1b]1;AX-Code\x07\x1b]2;AX-Code\x07"])
 
     for (const advancedTerminal of [false, true]) {
       const disabled = resolveTuiRenderProfile({
@@ -126,11 +126,11 @@ describe("tui renderer profile", () => {
     })
     const { writes, stream } = captureStream()
     setTuiTerminalTitle("ax-code\x07 |\x1b evil\n", profile, stream)
-    expect(writes).toEqual(["\x1b]0;ax-code  |  evil \x07"])
+    expect(writes).toEqual(["\x1b]1;ax-code  |  evil \x07\x1b]2;ax-code  |  evil \x07"])
     // C1 controls (\x80-\x9f, e.g. \x9b CSI) must go too — some terminals
     // still honor them, which would break out of the OSC sequence.
     setTuiTerminalTitle("a\x9bb\x80c", profile, stream)
-    expect(writes.at(-1)).toBe("\x1b]0;a b c\x07")
+    expect(writes.at(-1)).toBe("\x1b]1;a b c\x07\x1b]2;a b c\x07")
   })
 
   test("title writes are best-effort when stdout is degraded", () => {
@@ -162,10 +162,10 @@ describe("tui renderer profile", () => {
     // isTTY undefined (test fakes, some real contexts) and true still write.
     const fake = captureStream()
     expect(setTuiTerminalTitle("ax-code", profile, fake.stream)).toBe(true)
-    expect(fake.writes).toEqual(["\x1b]0;ax-code\x07"])
+    expect(fake.writes).toEqual(["\x1b]1;ax-code\x07\x1b]2;ax-code\x07"])
     const tty = captureStream()
     expect(setTuiTerminalTitle("ax-code", profile, { ...tty.stream, isTTY: true })).toBe(true)
-    expect(tty.writes).toEqual(["\x1b]0;ax-code\x07"])
+    expect(tty.writes).toEqual(["\x1b]1;ax-code\x07\x1b]2;ax-code\x07"])
   })
 
   test("detects terminal progress support from the environment", () => {
@@ -350,8 +350,8 @@ describe("tui renderer profile", () => {
     expect(writes).toEqual([TUI_TERMINAL_CRASH_RESET_SEQUENCE])
     // A lingering OSC 9;4 indicator would keep animating on a dead tab.
     expect(TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain(TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE)
-    // A stale OSC 0 title ("AX-Code") must not outlive a crashed TUI either.
-    expect(TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain("\x1b]0;\x07")
+    // A stale OSC 1/2 title ("AX-Code") must not outlive a crashed TUI either.
+    expect(TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain(TITLE_CLEAR_SEQUENCE)
   })
 
   test("destroyTuiRenderer resets terminal state before resolving", async () => {

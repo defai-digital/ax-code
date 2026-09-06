@@ -1,4 +1,5 @@
 import { Flag } from "@/flag/flag"
+import { axCodeTerminalTitleClearSequence } from "@/util/terminal-title"
 
 type FlushableStream = {
   write: (chunk: string, callback?: () => void) => boolean
@@ -31,9 +32,10 @@ export const TUI_KITTY_KEYBOARD_POP_SEQUENCE = "\x1b[<u"
 // reset can emit it without a terminal-cleanup -> renderer import cycle.
 export const TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE = "\x1b]9;4;3\x07"
 export const TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE = "\x1b]9;4;0\x07"
-// OSC 0 with an empty title. A crashed TUI must not leave a stale "AX-Code"
-// tab title on a dead terminal.
-export const TUI_TERMINAL_TITLE_CLEAR_SEQUENCE = "\x1b]0;\x07"
+// Empty OSC 1+2 titles. A crashed TUI must not leave a stale "AX-Code"
+// tab title on a dead terminal. Avoid OSC 0: Apple Terminal.app clears the
+// tab title on OSC 0 and then shows the job name.
+export const TUI_TERMINAL_TITLE_CLEAR_SEQUENCE = axCodeTerminalTitleClearSequence()
 
 export function createTuiTerminalCrashResetSequence(input: { kittyKeyboard?: boolean } = {}) {
   const kittyKeyboard = input.kittyKeyboard ?? true

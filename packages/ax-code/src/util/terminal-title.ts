@@ -58,7 +58,15 @@ export function sanitizeAxCodeTerminalTitle(title: string) {
 }
 
 export function axCodeTerminalTitleSequence(title: string = AX_CODE_TERMINAL_TITLE) {
-  return `\x1b]0;${sanitizeAxCodeTerminalTitle(title)}\x07`
+  const sanitized = sanitizeAxCodeTerminalTitle(title)
+  // OSC 1 = icon/tab, OSC 2 = window. Do not use OSC 0: Apple Terminal.app
+  // treats OSC 0 as "set window title and clear tab title", after which the
+  // tab falls back to the job name ("node" for source-mode launches).
+  return `\x1b]1;${sanitized}\x07\x1b]2;${sanitized}\x07`
+}
+
+export function axCodeTerminalTitleClearSequence() {
+  return axCodeTerminalTitleSequence("")
 }
 
 type TitleStream = {

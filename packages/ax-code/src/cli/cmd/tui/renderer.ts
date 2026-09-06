@@ -64,8 +64,9 @@ export function resolveTuiRenderProfile(input: {
     // Terminal title/progress are fire-and-forget OSC escapes written
     // directly to stdout (probe-free, same risk class as the kitty keyboard
     // flags push), so they are decoupled from the advanced profile and
-    // enabled by default. Without the title write the terminal tab just
-    // shows "node". AX_CODE_DISABLE_TERMINAL_TITLE opts out of both.
+    // enabled by default. Title writes use OSC 1+2 (not OSC 0): Apple
+    // Terminal.app clears the tab on OSC 0 and then shows the job name.
+    // AX_CODE_DISABLE_TERMINAL_TITLE opts out of both.
     allowTerminalTitle: !terminalTitleDisabled,
   }
 }

@@ -83,6 +83,29 @@ if [ ! -f "$AX_CODE_SOURCE_NODE_FFI_RUNNER" ]; then
 fi
 export AX_CODE_ORIGINAL_CWD="\$(pwd)"
 cd "$AX_CODE_SOURCE_CWD" || exit 1
-exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER" --import tsx --import "$AX_CODE_SOURCE_LOADER" --conditions=node "$AX_CODE_SOURCE_ENTRY" "$@"
+# Apple Terminal.app / iTerm job names use the executable basename. exec a
+# hardlink of node named AX-Code so the tab is not stuck on "node".
+AX_CODE_NODE_BIN=\$(command -v node) || {
+  echo "ax-code source launcher could not find node on PATH" >&2
+  exit 127
+}
+AX_CODE_NODE_REAL="\$AX_CODE_NODE_BIN"
+while [ -L "\$AX_CODE_NODE_REAL" ]; do
+  AX_CODE_NODE_LINK=\$(readlink "\$AX_CODE_NODE_REAL")
+  case "\$AX_CODE_NODE_LINK" in
+    /*) AX_CODE_NODE_REAL="\$AX_CODE_NODE_LINK" ;;
+    *) AX_CODE_NODE_REAL="\$(dirname "\$AX_CODE_NODE_REAL")/\$AX_CODE_NODE_LINK" ;;
+  esac
+done
+AX_CODE_NODE_DIR=\$(CDPATH= cd -- "\$(dirname -- "\$AX_CODE_NODE_REAL")" && pwd -P)
+AX_CODE_NODE_REAL="\$AX_CODE_NODE_DIR/\$(basename "\$AX_CODE_NODE_REAL")"
+AX_CODE_CACHE="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec"
+AX_CODE_BRANDED_NODE="\$AX_CODE_CACHE/AX-Code"
+mkdir -p "\$AX_CODE_CACHE"
+ln -f "\$AX_CODE_NODE_REAL" "\$AX_CODE_BRANDED_NODE" 2>/dev/null || cp "\$AX_CODE_NODE_REAL" "\$AX_CODE_BRANDED_NODE" 2>/dev/null || true
+if [ -x "\$AX_CODE_BRANDED_NODE" ]; then
+  exec "\$AX_CODE_BRANDED_NODE" "\$AX_CODE_SOURCE_NODE_FFI_RUNNER" --import tsx --import "\$AX_CODE_SOURCE_LOADER" --conditions=node "\$AX_CODE_SOURCE_ENTRY" "\$@"
+fi
+exec node "\$AX_CODE_SOURCE_NODE_FFI_RUNNER" --import tsx --import "\$AX_CODE_SOURCE_LOADER" --conditions=node "\$AX_CODE_SOURCE_ENTRY" "\$@"
 `
 }

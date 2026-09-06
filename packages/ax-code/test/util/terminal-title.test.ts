@@ -11,7 +11,7 @@ import {
 } from "../../src/util/terminal-title"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..")
-const TITLE_SEQUENCE = "\x1b]0;AX-Code\x07"
+const TITLE_SEQUENCE = "\x1b]1;AX-Code\x07\x1b]2;AX-Code\x07"
 
 function captureStream(writes: string[] = []) {
   return {
@@ -31,11 +31,13 @@ describe("terminal title", () => {
     expect(AX_CODE_TERMINAL_TITLE).toBe("AX-Code")
     expect(axCodeTerminalTitleSequence()).toBe(TITLE_SEQUENCE)
     expect(axCodeTerminalTitleSequence("AX-Code")).toBe(TITLE_SEQUENCE)
+    // Apple Terminal.app clears the tab on OSC 0 and then shows the job name.
+    expect(axCodeTerminalTitleSequence()).not.toContain("]0;")
   })
 
   test("sanitizes control characters out of OSC payloads", () => {
     expect(sanitizeAxCodeTerminalTitle("AX-Code\x07 |\x1b evil\n")).toBe("AX-Code  |  evil ")
-    expect(axCodeTerminalTitleSequence("a\x9bb\x80c")).toBe("\x1b]0;a b c\x07")
+    expect(axCodeTerminalTitleSequence("a\x9bb\x80c")).toBe("\x1b]1;a b c\x07\x1b]2;a b c\x07")
   })
 
   test("claims the title on a TTY-like stream and skips non-TTY or disabled", () => {
@@ -81,6 +83,8 @@ describe("terminal title", () => {
     expect(compiledEntry).toContain("claimAxCodeTerminalTitle()")
     expect(compiledEntry.indexOf("claimAxCodeTerminalTitle()")).toBeLessThan(compiledEntry.indexOf("hooks()"))
 
-    expect(runner).toContain("\\x1b]0;AX-Code\\x07")
+    expect(runner).toContain("axCodeJobTitleOsc")
+    expect(runner).toContain("resolveBrandedNodePath")
+    expect(runner).toContain("brandedSpawnOptions")
   })
 })

@@ -3,14 +3,13 @@ import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { prepareNodeArgs } from "./node-ffi-runner-args.mjs"
+import { axCodeJobTitleOsc, brandedSpawnOptions, resolveBrandedNodePath } from "./node-ffi-runner-brand.mjs"
 
 try {
   process.title = "ax-code"
 } catch {}
 
-// Claim the tab title before the child Node process even starts. Source-mode
-// argv is a long `node --experimental-ffi --import …` string; without this
-// write the tab shows "node" or that argv until the TUI module graph loads.
+// Claim the tab/window title before the child Node process even starts.
 function terminalTitleDisabled() {
   const value = String(process.env.AX_CODE_DISABLE_TERMINAL_TITLE ?? "")
     .trim()
@@ -19,7 +18,7 @@ function terminalTitleDisabled() {
 }
 if (process.stdout.isTTY && !terminalTitleDisabled()) {
   try {
-    process.stdout.write("\x1b]0;AX-Code\x07")
+    process.stdout.write(axCodeJobTitleOsc())
   } catch {}
 }
 
@@ -112,10 +111,13 @@ try {
   process.exit(1)
 }
 
-const result = spawnSync(runtime.path, [...ffiArgs, ...prepareNodeArgs(process.argv.slice(2))], {
-  stdio: "inherit",
-  env: process.env,
-})
+const tuiArgs = [...ffiArgs, ...prepareNodeArgs(process.argv.slice(2))]
+const brandedPath = resolveBrandedNodePath(runtime.path)
+const spawnOptions = brandedSpawnOptions(process.env)
+let result = spawnSync(brandedPath, tuiArgs, spawnOptions)
+if (result.error && brandedPath !== runtime.path) {
+  result = spawnSync(runtime.path, tuiArgs, spawnOptions)
+}
 
 if (result.error) {
   console.error(result.error.message)
