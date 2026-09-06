@@ -50,15 +50,30 @@ function operationLabel(operation: OperationInfo): string {
   return `\`${operation.verb.toUpperCase()} ${operation.path}\``
 }
 
-async function loadContract(openApiPath: string): Promise<Contract> {
-  const spec = JSON.parse(await fs.readFile(openApiPath, "utf8")) as {
-    paths?: Record<string, Record<string, { summary?: string; description?: string } | undefined>>
-    components?: { schemas?: Record<string, { description?: string }> }
+async function loadJsonObject(file: string): Promise<Record<string, unknown>> {
+  const text = await fs.readFile(file, "utf8")
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch (error) {
+    throw new Error(`Failed to parse ${file} as JSON`, { cause: error })
   }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${file} must contain a JSON object`)
+  }
+  return parsed as Record<string, unknown>
+}
+
+async function loadContract(openApiPath: string): Promise<Contract> {
+  const spec = await loadJsonObject(openApiPath)
+  const paths = spec.paths as
+    | Record<string, Record<string, { summary?: string; description?: string } | undefined>>
+    | undefined
+  const schemas = (spec.components as { schemas?: Record<string, { description?: string }> } | undefined)?.schemas
 
   const byVerbPath = new Map<string, OperationInfo>()
   const byPascalBase = new Map<string, OperationInfo>()
-  for (const [routePath, methods] of Object.entries(spec.paths ?? {})) {
+  for (const [routePath, methods] of Object.entries(paths ?? {})) {
     for (const [verb, rawOperation] of Object.entries(methods)) {
       if (!rawOperation || typeof rawOperation !== "object") continue
       const operation = rawOperation as { operationId?: string; summary?: string; description?: string }
@@ -77,7 +92,7 @@ async function loadContract(openApiPath: string): Promise<Contract> {
   }
 
   const schemaDescriptions = new Map<string, string>()
-  for (const [name, schema] of Object.entries(spec.components?.schemas ?? {})) {
+  for (const [name, schema] of Object.entries(schemas ?? {})) {
     const description = schema?.description?.trim()
     if (description) schemaDescriptions.set(name, description)
   }
@@ -231,7 +246,9 @@ function documentDeclarations(source: string, contract: Contract): string {
   return out.join("\n")
 }
 
-const HTTP_VERBS = "get|post|put|patch|delete|head|options|trace"
+const HTTP_VERB_RE = /\.(get|post|put|patch|delete|head|options|trace)[<(]/
+const URL_TEMPLATE_RE = /url: "([^"]+)"/
+const PUBLIC_METHOD_RE = /^\s*public [A-Za-z0-9_]+\s*[<(]/
 
 /** Attach operation docs to generated service methods, matched by verb + URL. */
 function documentSdkMethods(source: string, contract: Contract): string {
@@ -239,15 +256,15 @@ function documentSdkMethods(source: string, contract: Contract): string {
   const out: string[] = []
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (/^\s*public [A-Za-z0-9_]+\s*[<(]/.test(line) && !hasLeadingDoc(lines, i)) {
+    if (PUBLIC_METHOD_RE.test(line) && !hasLeadingDoc(lines, i)) {
       const indent = line.match(/^(\s*)/)?.[1] ?? ""
       let verb: string | undefined
       let url: string | undefined
       for (let j = i + 1; j < Math.min(i + 80, lines.length); j++) {
-        verb ??= lines[j].match(new RegExp(`\\.(${HTTP_VERBS})[<(]`))?.[1]
-        url ??= lines[j].match(/url: "([^"]+)"/)?.[1]
+        verb ??= lines[j].match(HTTP_VERB_RE)?.[1]
+        url ??= lines[j].match(URL_TEMPLATE_RE)?.[1]
         if (verb && url) break
-        if (/^\s*public [A-Za-z0-9_]+\s*[<(]/.test(lines[j]) || /^}/.test(lines[j])) break
+        if (PUBLIC_METHOD_RE.test(lines[j]) || /^}/.test(lines[j])) break
       }
       const operation = verb && url ? contract.byVerbPath.get(`${verb} ${url}`) : undefined
       if (operation) {
@@ -314,7 +331,8 @@ export async function documentGeneratedSources(packageDir: string): Promise<void
   const treeRoots = [path.join(packageDir, "src", "gen"), path.join(packageDir, "src", "v2", "gen")]
   for (const treeRoot of treeRoots) {
     for (const file of await walkTsFiles(treeRoot)) {
-      let source = await fs.readFile(file, "utf8")
+      const original = await fs.readFile(file, "utf8")
+      let source = original
       const relative = path.relative(treeRoot, file)
       if (relative === path.join("client", "index.ts")) {
         source = ensureModuleDoc(source)
@@ -324,7 +342,7 @@ export async function documentGeneratedSources(packageDir: string): Promise<void
         source = documentSdkMethods(source, contract)
         source = documentSdkClasses(source)
       }
-      await fs.writeFile(file, source)
+      if (source !== original) await fs.writeFile(file, source)
     }
   }
 }

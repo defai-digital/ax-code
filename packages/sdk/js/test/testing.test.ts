@@ -100,11 +100,6 @@ describe("createMockAgent", () => {
 
 describe("assertToolSuccess / assertToolFailure", () => {
   test("assertToolSuccess finds a successful tool call", () => {
-    const agent = createMockAgent({
-      replies: ["ok"],
-      toolCalls: [{ tool: "bash", input: { command: "ls" }, output: "file.txt" }],
-    })
-    // Manually build a result
     const result = {
       text: "ok",
       agent: "mock",
