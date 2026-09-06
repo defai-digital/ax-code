@@ -2,6 +2,12 @@ import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { describe, expect, test } from "vitest"
 import { SDK_VERSION } from "../src/version"
+import {
+  JSR_DESCRIPTION,
+  JSR_README_SOURCE,
+  JSR_RUNTIME_COMPAT,
+  assertJsrScoreMetadata,
+} from "../script/jsr-package-settings.ts"
 
 type PackageManifest = {
   name: string
@@ -60,8 +66,28 @@ describe("JSR package contract", () => {
       zod: "catalog:",
     })
     expect(packageJson.scripts["check:jsr"]).toContain("--dry-run")
+    expect(packageJson.scripts["check:jsr-score"]).toContain("jsr-package-settings.ts --check")
+    expect(packageJson.scripts["apply:jsr-settings"]).toContain("jsr-package-settings.ts")
     expect(packageJson.scripts["publish:jsr"]).toContain("jsr-publish.ts")
     expect(JSON.stringify(packageJson.scripts)).not.toMatch(/npm (?:pack|publish)/)
     expect(existsSync(resolve(packageRoot, "script/publish.ts"))).toBe(false)
+  })
+
+  test("declares the JSR package settings the score tab requires", () => {
+    expect(JSR_DESCRIPTION.length).toBeGreaterThan(0)
+    expect(JSR_DESCRIPTION.length).toBeLessThanOrEqual(250)
+    expect(JSR_README_SOURCE).toBe("readme")
+    const supported = Object.values(JSR_RUNTIME_COMPAT).filter((value) => value === true)
+    expect(supported.length).toBeGreaterThanOrEqual(2)
+    expect(JSR_RUNTIME_COMPAT.node).toBe(true)
+    expect(JSR_RUNTIME_COMPAT.deno).toBe(true)
+    expect(() =>
+      assertJsrScoreMetadata({
+        hasDescription: false,
+        atLeastOneRuntimeCompatible: true,
+        multipleRuntimesCompatible: true,
+        total: 16,
+      }),
+    ).toThrow(/description/)
   })
 })

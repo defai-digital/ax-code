@@ -3,6 +3,7 @@ import fs from "node:fs/promises"
 import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { JSR_DESCRIPTION } from "./jsr-package-settings.ts"
 
 type JsonObject = Record<string, unknown>
 
@@ -147,7 +148,7 @@ try {
   const publicManifest = {
     name: jsrName,
     version: jsrVersion,
-    description: "TypeScript SDK for the AX Code coding-agent runtime",
+    description: JSR_DESCRIPTION,
     type: "module",
     license: "Apache-2.0",
     engines: { node: ">=24" },

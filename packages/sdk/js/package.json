@@ -14,6 +14,8 @@
     "build": "tsx ./script/build.ts",
     "test": "vitest run",
     "check:jsr": "tsx ./script/jsr-publish.ts --dry-run",
+    "check:jsr-score": "tsx ./script/jsr-package-settings.ts --check",
+    "apply:jsr-settings": "tsx ./script/jsr-package-settings.ts",
     "publish:jsr": "tsx ./script/jsr-publish.ts"
   },
   "exports": {
