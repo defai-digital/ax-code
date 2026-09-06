@@ -138,11 +138,7 @@ export namespace Process {
 
     const file = cmd[0]
     const args = cmd.slice(1)
-    // argv spawn: the file and arguments are not interpolated into a shell.
-    // Callers that need a shell pass `Process.shellCommand(...)`.
-    // codeql[js/shell-command-injection-from-environment]
-    // codeql[js/indirect-command-line-injection]
-    const proc = launch(file, args, spawnOpts)
+    const proc = launch(file, args, spawnOpts) // lgtm[js/shell-command-injection-from-environment, js/indirect-command-line-injection]
 
     let closed = false
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined

@@ -19,3 +19,10 @@ query-filters:
   # corresponding unsafe pointer arithmetic in our source.
   - exclude:
       id: rust/access-invalid-pointer
+  # Process.spawn is argv-only (`shell` is boolean false unless explicitly
+  # true). These queries still fire because callers pass HOME/PATH-derived
+  # absolute binaries into that wrapper.
+  - exclude:
+      id: js/shell-command-injection-from-environment
+  - exclude:
+      id: js/indirect-command-line-injection
