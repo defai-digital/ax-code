@@ -2,14 +2,13 @@ import { execFile } from "node:child_process"
 import { constants as fsConstants } from "node:fs"
 import { open, readFile, readdir } from "node:fs/promises"
 import path from "node:path"
-import { promisify, TextDecoder } from "node:util"
+import { promisify } from "node:util"
 import { matchesAny } from "./glob.js"
 import { sha256 } from "./hash.js"
 import { AX_WIKI_CONFIG, AX_WIKI_INSTRUCTIONS, normalizePath, resolveInside } from "./paths.js"
 import type { AxWikiConfig, WikiSource } from "./types.js"
 
 const execFileAsync = promisify(execFile)
-const utf8Decoder = new TextDecoder("utf-8", { fatal: false })
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", "target", ".cache", ".turbo", "coverage"])
 const SKIP_FILES = new Set(["pnpm-lock.yaml", "package-lock.json", "yarn.lock", "bun.lock", "bun.lockb"])
 const TEXT_EXTENSIONS = new Set([
@@ -183,29 +182,13 @@ export async function discoverSources(input: {
   return sources
 }
 
-function trimIncompleteUtf8Tail(buffer: Buffer): Buffer {
-  const length = buffer.length
-  if (length === 0) return buffer
-
-  let continuationBytes = 0
-  let i = length - 1
-  while (i >= 0 && (buffer[i] & 0b1100_0000) === 0b1000_0000) {
-    continuationBytes++
-    i--
-  }
-  if (i < 0) return Buffer.alloc(0)
-
-  const lead = buffer[i]
-  let expected = 1
-  if ((lead & 0b1000_0000) === 0) expected = 1
-  else if ((lead & 0b1110_0000) === 0b1100_0000) expected = 2
-  else if ((lead & 0b1111_0000) === 0b1110_0000) expected = 3
-  else if ((lead & 0b1111_1000) === 0b1111_0000) expected = 4
-  else return buffer.slice(0, i)
-
-  const actual = continuationBytes + 1
-  if (actual < expected) return buffer.slice(0, i)
-  return buffer
+function decodeUtf8BytePrefix(buffer: Buffer, maxBytes: number): { content: string; truncated: boolean } {
+  const limit = Math.min(buffer.length, Math.max(0, maxBytes))
+  const clipped = buffer.subarray(0, limit)
+  // stream: true holds an incomplete trailing sequence instead of emitting U+FFFD.
+  // Discarding this decoder drops those leftover bytes at a byte-budget clip.
+  const content = new TextDecoder("utf-8", { fatal: false }).decode(clipped, { stream: true })
+  return { content, truncated: buffer.length > limit }
 }
 
 export async function readSourceEvidence(input: {
@@ -219,9 +202,8 @@ export async function readSourceEvidence(input: {
     if (remaining <= 0) break
     const perFile = Math.min(remaining, 32_000)
     const raw = await readFile(resolveInside(input.root, source.path)).catch(() => Buffer.alloc(0))
-    const clipped = trimIncompleteUtf8Tail(raw.subarray(0, perFile))
-    const content = utf8Decoder.decode(clipped)
-    output.push({ ...source, content, truncated: raw.length > clipped.length })
+    const { content, truncated } = decodeUtf8BytePrefix(raw, perFile)
+    output.push({ ...source, content, truncated })
     remaining -= Buffer.byteLength(content)
   }
   return output
