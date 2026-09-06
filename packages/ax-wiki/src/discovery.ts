@@ -182,6 +182,15 @@ export async function discoverSources(input: {
   return sources
 }
 
+function decodeUtf8BytePrefix(buffer: Buffer, maxBytes: number): { content: string; truncated: boolean } {
+  const limit = Math.min(buffer.length, Math.max(0, maxBytes))
+  const clipped = buffer.subarray(0, limit)
+  // stream: true holds an incomplete trailing sequence instead of emitting U+FFFD.
+  // Discarding this decoder drops those leftover bytes at a byte-budget clip.
+  const content = new TextDecoder("utf-8", { fatal: false }).decode(clipped, { stream: true })
+  return { content, truncated: buffer.length > limit }
+}
+
 export async function readSourceEvidence(input: {
   root: string
   sources: WikiSource[]
@@ -192,9 +201,9 @@ export async function readSourceEvidence(input: {
   for (const source of input.sources) {
     if (remaining <= 0) break
     const perFile = Math.min(remaining, 32_000)
-    const raw = await readFile(resolveInside(input.root, source.path), "utf8").catch(() => "")
-    const content = raw.slice(0, perFile)
-    output.push({ ...source, content, truncated: content.length < raw.length })
+    const raw = await readFile(resolveInside(input.root, source.path)).catch(() => Buffer.alloc(0))
+    const { content, truncated } = decodeUtf8BytePrefix(raw, perFile)
+    output.push({ ...source, content, truncated })
     remaining -= Buffer.byteLength(content)
   }
   return output
