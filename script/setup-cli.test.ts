@@ -117,6 +117,7 @@ describe("setup-cli helpers", () => {
     expect(unix).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
     expect(unix).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index-node-tui.ts"')
     expect(unix).toContain('AX_CODE_SOURCE_NODE_FFI_RUNNER="/repo/script/node-ffi-runner.mjs"')
+    expect(unix).toContain('AX_CODE_BRANDED_NODE="$AX_CODE_CACHE/bin/AX-Code"')
     expect(unix).toContain('exec "$AX_CODE_BRANDED_NODE" "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(unix).toContain('exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(unix).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')

@@ -99,10 +99,16 @@ while [ -L "\$AX_CODE_NODE_REAL" ]; do
 done
 AX_CODE_NODE_DIR=\$(CDPATH= cd -- "\$(dirname -- "\$AX_CODE_NODE_REAL")" && pwd -P)
 AX_CODE_NODE_REAL="\$AX_CODE_NODE_DIR/\$(basename "\$AX_CODE_NODE_REAL")"
-AX_CODE_CACHE="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec"
-AX_CODE_BRANDED_NODE="\$AX_CODE_CACHE/AX-Code"
-mkdir -p "\$AX_CODE_CACHE"
+AX_CODE_CACHE="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec/runtime"
+mkdir -p "\$AX_CODE_CACHE/bin" "\$AX_CODE_CACHE/lib"
+AX_CODE_BRANDED_NODE="\$AX_CODE_CACHE/bin/AX-Code"
 ln -f "\$AX_CODE_NODE_REAL" "\$AX_CODE_BRANDED_NODE" 2>/dev/null || cp "\$AX_CODE_NODE_REAL" "\$AX_CODE_BRANDED_NODE" 2>/dev/null || true
+if [ -d "\$AX_CODE_NODE_DIR/../lib" ]; then
+  for lib in "\$AX_CODE_NODE_DIR"/../lib/libnode*; do
+    [ -e "\$lib" ] || continue
+    ln -sf "\$lib" "\$AX_CODE_CACHE/lib/\$(basename "\$lib")" 2>/dev/null || true
+  done
+fi
 if [ -x "\$AX_CODE_BRANDED_NODE" ]; then
   exec "\$AX_CODE_BRANDED_NODE" "\$AX_CODE_SOURCE_NODE_FFI_RUNNER" --import tsx --import "\$AX_CODE_SOURCE_LOADER" --conditions=node "\$AX_CODE_SOURCE_ENTRY" "\$@"
 fi

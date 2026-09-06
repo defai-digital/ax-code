@@ -8,7 +8,7 @@ describe("script.source-launcher", () => {
     expect(out).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index-node-tui.ts"')
     expect(out).toContain('AX_CODE_SOURCE_NODE_FFI_RUNNER="/repo/script/node-ffi-runner.mjs"')
     expect(out).toContain('export AX_CODE_ORIGINAL_CWD="$(pwd)"')
-    expect(out).toContain('AX_CODE_BRANDED_NODE="$AX_CODE_CACHE/AX-Code"')
+    expect(out).toContain('AX_CODE_BRANDED_NODE="$AX_CODE_CACHE/bin/AX-Code"')
     expect(out).toContain('exec "$AX_CODE_BRANDED_NODE" "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(out).toContain('exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(out).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')

@@ -99,7 +99,7 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("--experimental-ffi")
     expect(text).toContain("--disable-warning=ExperimentalWarning")
     expect(text).toContain('formula_opt_bin("node")')
-    expect(text).toContain("$CACHE/AX-Code")
+    expect(text).toContain("$CACHE/bin/AX-Code")
     expect(text).not.toContain('bin.install "ax-code"')
     expect(text).not.toContain('depends_on "bun"')
     expect(text).not.toContain("bundle/index.js")

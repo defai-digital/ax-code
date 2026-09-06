@@ -52,7 +52,8 @@ describe("Unix node launcher", () => {
   test("brands the Node binary as AX-Code before exec", () => {
     const script = unixNodeLauncherScript()
     expect(script).toContain("brand_and_exec_node")
-    expect(script).toContain('branded="$real_dir/AX-Code"')
+    expect(script).toContain('branded="$cache/bin/AX-Code"')
+    expect(script).toContain("runtime")
     expect(script).not.toMatch(/^exec node /m)
   })
 })

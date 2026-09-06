@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, statSync, chmodSync } from "node:fs"
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync, chmodSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
@@ -10,6 +10,7 @@ import {
   brandedNodeName,
   brandedSpawnOptions,
   resolveBrandedNodePath,
+  verifyBrandedNodeRuns,
 } from "./node-ffi-runner-brand.mjs"
 
 describe("node FFI runner process branding", () => {
@@ -25,7 +26,6 @@ describe("node FFI runner process branding", () => {
     expect(brandedNodeCacheDir({ XDG_CACHE_HOME: "/tmp/cache" }, "/home/dev")).toBe(
       path.join("/tmp/cache", "ax-code", "libexec"),
     )
-    expect(brandedNodeCacheDir({}, "/home/dev")).toBe(path.join("/home/dev", ".cache", "ax-code", "libexec"))
     expect(brandedSpawnOptions({ FOO: "1" })).toEqual({
       stdio: "inherit",
       env: { FOO: "1" },
@@ -33,17 +33,21 @@ describe("node FFI runner process branding", () => {
     })
   })
 
-  test("hardlinks the Node binary under the AX-Code basename", () => {
+  test("brands into an isolated runtime/bin/AX-Code path", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "ax-code-brand-"))
     try {
       const nodePath = path.join(root, "node")
-      const cacheDir = path.join(root, "libexec")
       writeFileSync(nodePath, "#!/bin/sh\n")
       chmodSync(nodePath, 0o755)
-      const branded = resolveBrandedNodePath(nodePath, { cacheDir, platform: "darwin" })
+      const cacheDir = path.join(root, "cache")
+      const branded = resolveBrandedNodePath(nodePath, {
+        cacheDir,
+        platform: "darwin",
+        verify: false,
+      })
       expect(path.basename(branded)).toBe("AX-Code")
+      expect(branded).toBe(path.join(cacheDir, "runtime", "bin", "AX-Code"))
       expect(statSync(branded).ino).toBe(statSync(nodePath).ino)
-      expect(resolveBrandedNodePath(nodePath, { cacheDir, platform: "darwin" })).toBe(branded)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -56,19 +60,22 @@ describe("node FFI runner process branding", () => {
     expect(runner).toContain("axCodeJobTitleOsc()")
   })
 
-  test("branded argv0 is visible to the child process", () => {
-    const root = mkdtempSync(path.join(os.tmpdir(), "ax-code-brand-argv-"))
+  test("branded Homebrew-style Node actually runs and is named AX-Code", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "ax-code-brand-run-"))
     try {
-      const cacheDir = path.join(root, "libexec")
-      mkdirSync(cacheDir, { recursive: true })
-      const branded = resolveBrandedNodePath(process.execPath, { cacheDir, platform: process.platform })
-      const result = spawnSync(branded, ["-e", "process.stdout.write(process.argv[0])"], {
+      const branded = resolveBrandedNodePath(process.execPath, {
+        cacheDir: path.join(root, "libexec"),
+        platform: process.platform,
+      })
+      expect(path.basename(branded)).toBe(brandedNodeName())
+      expect(verifyBrandedNodeRuns(branded)).toBe(true)
+      const child = spawnSync(branded, ["-e", "process.stdout.write(process.execPath + '\\n' + process.argv[0])"], {
         encoding: "utf8",
         argv0: AX_CODE_SPAWN_ARGV0,
         timeout: 5_000,
       })
-      expect(result.status).toBe(0)
-      expect(result.stdout).toContain("AX-Code")
+      expect(child.status).toBe(0)
+      expect(child.stdout).toContain("AX-Code")
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

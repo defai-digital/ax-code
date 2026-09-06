@@ -187,11 +187,18 @@ class AxCode < Formula
     (bin/"ax-code").write <<~SH
       #!/bin/sh
       NODE_BIN="#{formula_opt_bin("node")}/node"
-      CACHE="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec"
-      mkdir -p "\$CACHE"
-      ln -f "\$NODE_BIN" "\$CACHE/AX-Code" 2>/dev/null || cp "\$NODE_BIN" "\$CACHE/AX-Code" 2>/dev/null || true
-      if [ -x "\$CACHE/AX-Code" ]; then
-        exec "\$CACHE/AX-Code" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
+      CACHE="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec/runtime"
+      mkdir -p "\$CACHE/bin" "\$CACHE/lib"
+      ln -f "\$NODE_BIN" "\$CACHE/bin/AX-Code" 2>/dev/null || cp "\$NODE_BIN" "\$CACHE/bin/AX-Code" 2>/dev/null || true
+      NODE_LIB="\$(CDPATH= cd -- "\$(dirname "\$NODE_BIN")/../lib" && pwd -P)" 2>/dev/null
+      if [ -d "\$NODE_LIB" ]; then
+        for lib in "\$NODE_LIB"/libnode*; do
+          [ -e "\$lib" ] || continue
+          ln -sf "\$lib" "\$CACHE/lib/\$(basename "\$lib")" 2>/dev/null || true
+        done
+      fi
+      if [ -x "\$CACHE/bin/AX-Code" ]; then
+        exec "\$CACHE/bin/AX-Code" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
       fi
       exec "\$NODE_BIN" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
     SH
