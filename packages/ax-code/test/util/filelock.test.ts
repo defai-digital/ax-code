@@ -6,6 +6,36 @@ import { currentLockHost } from "../../src/util/process-lock"
 import { tmpdir } from "../fixture/fixture"
 
 describe("util.filelock", () => {
+  test("a cancelled waiter leaves the held lock intact", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    using holder = await FileLock.acquire(filepath)
+    const body = await fs.readFile(filepath + ".lock", "utf8")
+    const controller = new AbortController()
+    const reason = new Error("Stop waiting")
+    const waiting = FileLock.acquire(filepath, { timeoutMs: 250, signal: controller.signal })
+    controller.abort(reason)
+    await expect(waiting).rejects.toBe(reason)
+    expect(await fs.readFile(filepath + ".lock", "utf8")).toBe(body)
+  })
+
+  test("a pre-cancelled acquisition never creates a lock", async () => {
+    await using tmp = await tmpdir()
+    const filepath = path.join(tmp.path, "state.json")
+    const reason = new Error("Already cancelled")
+    const acquisition = FileLock.acquire(filepath, { signal: AbortSignal.abort(reason) })
+    // Clean up the pre-fix unexpected success so the regression is isolated.
+    const result = await acquisition.then(
+      (lock) => {
+        lock[Symbol.dispose]()
+        return undefined
+      },
+      (error: unknown) => error,
+    )
+    expect(result).toBe(reason)
+    await expect(fs.access(filepath + ".lock")).rejects.toThrow()
+  })
+
   test("releases a lock owned by the current process", async () => {
     await using tmp = await tmpdir()
     const filepath = path.join(tmp.path, "state.json")

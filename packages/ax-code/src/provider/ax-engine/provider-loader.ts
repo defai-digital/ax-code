@@ -39,8 +39,8 @@ function reclaimManagedCopiesOnce() {
 // The OpenAI-compatible SDK is constructed once against the default port, but
 // ensureServer may bind a fallback port (31419+) when the preferred one is
 // held by a foreign process — the server's real address lives in its state,
-// not in the SDK. Track the base URL of the server this process last verified
-// or started and rewrite outgoing requests to it at fetch time, so a port
+// not in the SDK. Track only the managed server this process last verified
+// or started and rewrite managed requests to it at fetch time, so a port
 // fallback (or a respawn on a new port) still reaches the managed server even
 // through cached SDK/language-model instances.
 let activeServerBaseURL: string | undefined
@@ -72,7 +72,7 @@ function inputLimit(context: number, output: number) {
 
 function applyLiveContract(model: Provider.Model, contract: AxEngineLiveModelContract) {
   const context = contract.context ?? model.limit.context
-  const output = contract.output ?? model.limit.output
+  const output = Math.min(context, contract.output ?? model.limit.output)
   model.limit = {
     context,
     output,
@@ -230,7 +230,7 @@ export function axEngineLoader(): CustomLoader {
       )
       if (definitionID) return modelFromDefinition(definitionID, contract, modelBaseURL)
       const context = contract.context ?? 16_384
-      const output = contract.output ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS
+      const output = Math.min(context, contract.output ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS)
       return remember({
         id: ModelID.make(contract.id),
         providerID: ProviderID.make(AX_ENGINE_PROVIDER_ID),
@@ -291,14 +291,19 @@ export function axEngineLoader(): CustomLoader {
         // which broke context telemetry and usage-driven compaction.
         includeUsage: true,
         fetch: async (input: string | Request | URL, init?: RequestInit) => {
-          const headers = new Headers(init?.headers)
+          const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
           if (!headers.has("authorization")) {
             headers.set(
               "authorization",
               `Bearer ${resolveAxEngineApiKey(runtimeProvider.options, runtimeProvider.key)}`,
             )
           }
-          return fetch(rewriteToActiveAxEngineServer(input, baseURL), { ...init, headers })
+          // Attached endpoints belong to this provider instance. A managed
+          // fallback port (or another attached provider) must never redirect
+          // their prompts or credentials. Keep redirects inside the same
+          // trust boundary as the model discovery probe.
+          const target = configuredExternalBaseURL ? input : rewriteToActiveAxEngineServer(input, baseURL)
+          return fetch(target, { ...init, headers, redirect: "error" })
         },
       },
       async discoverModels(currentProvider) {
@@ -344,7 +349,6 @@ export function axEngineLoader(): CustomLoader {
           const contract = requireCodingContract(contracts, apiModelID)
           const ref = modelRefs.get(apiModelID)
           if (ref) applyLiveContract(ref, contract)
-          noteActiveAxEngineServer(externalBaseURL)
           return sdk.languageModel(apiModelID)
         }
 

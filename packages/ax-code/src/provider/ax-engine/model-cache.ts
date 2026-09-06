@@ -685,6 +685,7 @@ export async function downloadModel(input: {
   signal?: AbortSignal
   onProgress?: (progress: AxEngineDownloadProgress) => void
 }): Promise<AxEnginePrepareState> {
+  input.signal?.throwIfAborted()
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
   const quantization = input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization
   const quantizationDefinition = AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]
@@ -706,8 +707,13 @@ export async function downloadModel(input: {
     : [input.binaryPath, "download", repo, "--json"]
   if (dest) cmd.push(useMtpPackage ? "--output" : "--dest", dest)
 
-  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
+  using _ = await FileLock.acquire(AxEnginePaths.prepareLock, {
+    timeoutMs: 30_000,
+    staleMs: PREPARE_LOCK_STALE_MS,
+    signal: input.signal,
+  })
   await assertDiskSpace({ modelID, quantization, downloadDir: dest ?? HfCache.root() })
+  input.signal?.throwIfAborted()
   // Always inject AX_ENGINE_PYTHON when a managed/explicit Python with
   // huggingface_hub is available. Relying on parent env alone fails for CLI
   // launches and some Desktop paths that never set the variable.
@@ -729,6 +735,7 @@ export async function downloadModel(input: {
     // the engine (or hub) reports a real total in a progress message.
     expectedBytes: undefined,
   })
+  input.signal?.throwIfAborted()
   if (result.code !== 0) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${result.stderr.trim() || result.stdout.trim()}`)
   }
@@ -750,6 +757,7 @@ export async function downloadModel(input: {
       `${AX_ENGINE_ERROR.DownloadFailed}: downloaded model is missing required ${packageMarkerFor(modelID, quantization)} package contract`,
     )
   }
+  input.signal?.throwIfAborted()
   return markPreparedWithLockHeld({
     modelID,
     modelPath: parsed.dest,

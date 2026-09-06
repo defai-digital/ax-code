@@ -671,7 +671,8 @@ describe("ax-engine server lifecycle", () => {
 
         const status = await getServerStatus()
         expect(status.running).toBe(false)
-        await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+        // Status is observational; locked start/stop operations own cleanup.
+        await expect(fs.access(AxEnginePaths.serverState)).resolves.toBeUndefined()
       })
       // The unrelated process that recycled the pid must never be signalled.
       expect(alive(decoy.pid!)).toBe(true)

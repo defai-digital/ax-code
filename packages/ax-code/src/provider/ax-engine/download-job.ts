@@ -90,6 +90,7 @@ export async function startDownloadJob(
   const run = async (): Promise<AxEngineModelJobSummary> => {
     try {
       const eligibility = await requireEligibility()
+      controller.signal.throwIfAborted()
       const definition = AX_ENGINE_MODEL_DEFINITIONS[input.modelID]
       if (eligibility.memoryBytes !== undefined && eligibility.memoryBytes < definition.minMemoryBytes) {
         throw new Error(
@@ -97,10 +98,12 @@ export async function startDownloadJob(
         )
       }
       const dependency = await dependencyStatus()
+      controller.signal.throwIfAborted()
       if (!dependency.available || !dependency.binaryPath) {
         throw new Error(dependency.blockers[0] ?? `${AX_ENGINE_ERROR.BinaryMissing}: ax-engine binary is not available`)
       }
       const disk = await diskStatus({ modelID: input.modelID, quantization })
+      controller.signal.throwIfAborted()
       if (!disk.ok) throw new Error(disk.blockers[0] ?? `${AX_ENGINE_ERROR.InsufficientDisk}: insufficient disk space`)
       job.status = "running"
       job.startedAt = Date.now()

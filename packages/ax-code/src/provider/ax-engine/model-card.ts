@@ -119,15 +119,16 @@ export async function fetchAxEngineModelContracts(input: {
   baseURL: string
   apiKey?: string
   signal?: AbortSignal
+  timeoutMs?: number
 }): Promise<AxEngineLiveModelContract[]> {
   const baseURL = input.baseURL.replace(/\/+$/, "")
   const response = await fetch(`${baseURL}/models`, {
-    signal: input.signal ?? AbortSignal.timeout(2_000),
+    signal: AbortSignal.any([...(input.signal ? [input.signal] : []), AbortSignal.timeout(input.timeoutMs ?? 2_000)]),
     headers: { authorization: `Bearer ${input.apiKey ?? resolveAxEngineApiKey()}` },
     redirect: "error",
   })
   if (!response.ok) {
-    response.body?.cancel()
+    await response.body?.cancel()
     throw new Error(`ax-engine /v1/models returned HTTP ${response.status}`)
   }
   const contracts = parseAxEngineModelContracts(await response.json())

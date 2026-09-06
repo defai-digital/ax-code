@@ -117,8 +117,9 @@ export namespace FileLock {
    */
   export async function acquire(
     filepath: string,
-    opts?: { timeoutMs?: number; staleMs?: number },
+    opts?: { timeoutMs?: number; staleMs?: number; signal?: AbortSignal },
   ): Promise<Disposable> {
+    opts?.signal?.throwIfAborted()
     const target = filepath + ".lock"
     const timeout = opts?.timeoutMs ?? 10_000
     const staleMs = opts?.staleMs ?? DEFAULT_STALE_MS
@@ -127,14 +128,16 @@ export namespace FileLock {
     await fs.mkdir(path.dirname(target), { recursive: true })
 
     while (true) {
+      opts?.signal?.throwIfAborted()
       const created = await writeLockFile(target)
         .then(() => true)
         .catch((err: NodeJS.ErrnoException) => {
           if (err?.code === "EEXIST") return false
           throw err
         })
-      if (created) return makeDisposable(target)
+      if (created) return acquired(target, opts?.signal)
 
+      opts?.signal?.throwIfAborted()
       const stolen = await maybeSteal(target, staleMs)
       if (stolen) {
         const retry = await writeLockFile(target)
@@ -143,7 +146,7 @@ export namespace FileLock {
             if (err?.code === "EEXIST") return false
             throw err
           })
-        if (retry) return makeDisposable(target)
+        if (retry) return acquired(target, opts?.signal)
       }
 
       if (Date.now() >= deadline) {
@@ -151,6 +154,15 @@ export namespace FileLock {
       }
       await sleep(POLL_INTERVAL_MS)
     }
+  }
+
+  function acquired(target: string, signal?: AbortSignal): Disposable {
+    const lock = makeDisposable(target)
+    if (signal?.aborted) {
+      lock[Symbol.dispose]()
+      signal.throwIfAborted()
+    }
+    return lock
   }
 
   function makeDisposable(target: string): Disposable {

@@ -302,11 +302,13 @@ export async function isServerReady(baseURL: string, signal?: AbortSignal, apiKe
   return fetch(`${baseURL.replace(/\/+$/, "")}/models`, {
     signal: probeSignal,
     headers: { authorization: `Bearer ${apiKey}` },
+    redirect: "error",
   })
-    .then((res) => {
-      const ok = res.ok
-      if (!ok) res.body?.cancel()
-      return ok
+    .then(async (res) => {
+      // Health only needs the status code; release the body on every result
+      // so repeated polling cannot exhaust the connection pool.
+      await res.body?.cancel()
+      return res.ok
     })
     .catch(() => false)
 }
@@ -453,7 +455,8 @@ async function loadServerModel(input: {
 }) {
   const response = await fetch(`${input.baseURL.replace(/\/+$/, "")}/model/load`, {
     method: "POST",
-    signal: input.signal ?? AbortSignal.timeout(120_000),
+    signal: AbortSignal.any([...(input.signal ? [input.signal] : []), AbortSignal.timeout(120_000)]),
+    redirect: "error",
     headers: {
       authorization: `Bearer ${input.apiKey ?? resolveAxEngineApiKey()}`,
       "content-type": "application/json",
@@ -471,11 +474,11 @@ async function loadServerModel(input: {
   })
   if (!response.ok) {
     const text = await response.text().catch(() => "")
-    response.body?.cancel()
     throw new Error(
       `${AX_ENGINE_ERROR.ServerStartFailed}: ax-engine model load failed with HTTP ${response.status}${text ? `: ${text}` : ""}`,
     )
   }
+  await response.body?.cancel()
 }
 
 export async function getServerStatus(apiKey = resolveAxEngineApiKey()): Promise<AxEngineServerRuntimeStatus> {
@@ -490,13 +493,12 @@ export async function getServerStatus(apiKey = resolveAxEngineApiKey()): Promise
   const state = stateResult.state
   if (!state) return { running: false, ready: false, blockers: [] }
   const running = await serverProcessAlive(state)
-  if (!running) {
-    await removeServerState()
-    return { running: false, ready: false, blockers: [] }
-  }
+  // Status queries do not hold the lifecycle lock. A probe may finish after
+  // a start, reload, or stop has replaced this record; only locked lifecycle
+  // operations may persist or remove it.
+  if (!running) return { running: false, ready: false, blockers: [] }
   const ready = running && (await isServerReady(state.baseURL, undefined, apiKey))
   const nextState = ready ? { ...state, lastHealthAt: Date.now() } : state
-  if (ready) await writeServerState(nextState).catch(() => undefined)
   return {
     running,
     ready,
@@ -516,9 +518,11 @@ export async function getServerStatus(apiKey = resolveAxEngineApiKey()): Promise
 const inflightEnsure = new Map<string, Promise<AxEngineServerState>>()
 
 function ensureServerKey(options: AxEngineServerOptions): string {
-  return [
+  return JSON.stringify([
+    options.binaryPath,
     options.modelID,
     options.modelPath,
+    options.modelRevision,
     options.apiModelID,
     options.contextTokens ?? "",
     options.maxOutputTokens ?? "",
@@ -527,11 +531,19 @@ function ensureServerKey(options: AxEngineServerOptions): string {
     options.speculationProfile ?? "",
     options.mtpMode ?? "",
     options.baseURL ?? "",
+    options.preferredPort,
+    options.readyTimeoutMs,
     options.apiKey ?? "",
-  ].join("::")
+  ])
 }
 
 export async function ensureServer(options: AxEngineServerOptions): Promise<AxEngineServerState> {
+  options.signal?.throwIfAborted()
+  // Explicit cancellation belongs to one caller. Sharing its startup promise
+  // would let that caller abort another request, or ignore a joining caller's
+  // cancellation. Such calls serialize on the cancellable lifecycle lock;
+  // ordinary model/title resolution still coalesces without a caller signal.
+  if (options.signal) return ensureServerLocked(options)
   const key = ensureServerKey(options)
   const existing = inflightEnsure.get(key)
   if (existing) return existing
@@ -554,12 +566,18 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   // shorter than waitForReady's 240_000 — any second caller queued behind a
   // slow cold load would hit "timed out waiting for file lock" well before the
   // first start ever finished, surfacing as "start never works".
-  using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 260_000, staleMs: 5 * 60_000 })
+  using _ = await FileLock.acquire(AxEnginePaths.serverLock, {
+    timeoutMs: 260_000,
+    staleMs: 5 * 60_000,
+    signal: options.signal,
+  })
+  options.signal?.throwIfAborted()
   const existingResult = await readServerState()
   if (existingResult.error) {
     throw new Error(`${AX_ENGINE_ERROR.ServerStartFailed}: failed to read server state`)
   }
   const existing = existingResult.state
+  const binaryMatches = existing?.binaryPath === options.binaryPath
   // The context window is fixed at launch (KV-cache block pool), so a running
   // server whose contextTokens differ from the request — e.g. an older build
   // that started it at the default 16384 — must be relaunched, not reused.
@@ -588,8 +606,11 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const mtpModeMatches = existing?.mtpMode === mtpMode
   if (existing) {
     const alive = await serverProcessAlive(existing)
-    if (alive && (await isServerReady(existing.baseURL, options.signal, options.apiKey))) {
+    const ready = alive && (await isServerReady(existing.baseURL, options.signal, options.apiKey))
+    options.signal?.throwIfAborted()
+    if (ready) {
       if (
+        binaryMatches &&
         contextMatches &&
         maxOutputTokensMatches &&
         maxOutputTokensFlagMatches &&
@@ -597,7 +618,13 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         speculationMatches &&
         mtpModeMatches
       ) {
-        if (existing.modelID === options.modelID && existing.modelPath === options.modelPath) return existing
+        if (
+          existing.modelID === options.modelID &&
+          existing.modelPath === options.modelPath &&
+          existing.apiModelID === options.apiModelID &&
+          existing.modelRevision === options.modelRevision
+        )
+          return existing
         try {
           await loadServerModel({
             baseURL: existing.baseURL,
@@ -622,6 +649,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
           await writeServerState(nextState)
           return nextState
         } catch {
+          options.signal?.throwIfAborted()
           await terminateServerProcess(existing)
           await removeServerState()
         }
@@ -633,6 +661,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         log.info("relaunching ax-engine server: launch parameters changed", {
           pid: existing.pid,
           mismatches: [
+            !binaryMatches ? "binaryPath changed" : undefined,
             !contextMatches ? `contextTokens: ${existing.contextTokens} -> ${options.contextTokens}` : undefined,
             !maxOutputTokensMatches ? `maxOutputTokens: ${existing.maxOutputTokens} -> ${maxOutputTokens}` : undefined,
             !maxOutputTokensFlagMatches ? "maxOutputTokensFlag changed" : undefined,
@@ -660,6 +689,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     }
   }
 
+  options.signal?.throwIfAborted()
   await fs.mkdir(AxEnginePaths.state, { recursive: true })
   await fs.mkdir(AxEnginePaths.log, { recursive: true })
   await fs.mkdir(AxEnginePaths.prefixCache, { recursive: true })

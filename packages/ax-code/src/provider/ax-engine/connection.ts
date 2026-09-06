@@ -132,7 +132,8 @@ export async function probeAxEngineConnection(input: {
   const models = await fetchAxEngineModelContracts({
     baseURL,
     apiKey: input.apiKey ?? resolveAxEngineApiKey(),
-    signal: input.signal ?? AbortSignal.timeout(5_000),
+    signal: input.signal,
+    timeoutMs: 5_000,
   })
   if (!models.some((model) => model.toolcall)) {
     throw new Error(

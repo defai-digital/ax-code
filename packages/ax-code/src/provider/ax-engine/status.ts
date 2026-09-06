@@ -98,9 +98,10 @@ async function getCapabilityStatus(
     const response = await fetch(`${baseURL}/models`, {
       signal: AbortSignal.timeout(2000),
       headers: { authorization: `Bearer ${resolveAxEngineApiKey(options)}` },
+      redirect: "error",
     })
     if (!response.ok) {
-      response.body?.cancel()
+      await response.body?.cancel()
       throw new Error(`HTTP ${response.status}`)
     }
     const preferred = [server.state.apiModelID, server.state.modelID].filter(

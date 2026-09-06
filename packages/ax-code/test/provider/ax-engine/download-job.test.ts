@@ -46,7 +46,7 @@ function runtimeWith(download: typeof downloadModel): AxEngineDownloadJobRuntime
   }
 }
 
-const preparedState = {
+const preparedState: Awaited<ReturnType<typeof downloadModel>> = {
   modelID: MODEL_ID,
   quantization: "mlx6bit" as const,
   path: "/models/glm",
@@ -60,6 +60,33 @@ async function activeJobs() {
 }
 
 describe("ax-engine download jobs", () => {
+  test.each(["requireEligibility", "getDependencyStatus", "getDiskStatus"] as const)(
+    "cancellation during %s never starts the download or revives the job",
+    async (stage) => {
+      const gate = Promise.withResolvers<void>()
+      const entered = Promise.withResolvers<void>()
+      const download = vi.fn(async () => preparedState)
+      const runtime = runtimeWith(download)
+      const original = runtime[stage]!
+      Object.assign(runtime, {
+        [stage]: async () => {
+          entered.resolve()
+          await gate.promise
+          return original()
+        },
+      })
+      const job = await startDownloadJob({ modelID: MODEL_ID }, runtime)
+      await entered.promise
+      await cancelDownloadJob(job.id)
+      gate.resolve()
+      // Wait for preflight and its finally block, including the broken path
+      // that starts and immediately completes a download after cancellation.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(download).not.toHaveBeenCalled()
+      expect((await listDownloadJobs()).find((entry) => entry.id === job.id)?.status).toBe("cancelled")
+    },
+  )
+
   test("reuses the running job instead of starting a duplicate", async () => {
     let resolveDownload!: (state: typeof preparedState) => void
     let downloadStarted!: () => void
