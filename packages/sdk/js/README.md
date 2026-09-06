@@ -1,35 +1,8 @@
 # @defai-digital/ax-code-sdk
 
-Status: Active
-Scope: current-state
-Last reviewed: 2026-09-02
-Owner: ax-code sdk
+TypeScript SDK for integrating the [AX Code](https://github.com/defai-digital/ax-code) coding-agent runtime into your own applications.
 
-Distribution status: JSR registry setup is complete; the first public version has not been published yet. The public
-package is [`@defai-digital/ax-code-sdk`](https://jsr.io/@defai-digital/ax-code-sdk). The private monorepo workspace
-keeps the transition-only name `@ax-code/sdk`.
-
-TypeScript SDK for integrating the [ax-code](https://github.com/defai-digital/ax-code) AI coding agent with your own applications.
-
-Use the public SDK to supervise a compatible signed AX Code runtime through typed headless or gRPC boundaries, consume
-streaming events, project persistent session state, and test application integrations. Source hosts that deliberately
-provide the private runtime package may also use the in-process adapter and custom tools.
-
-## Choose the Right Integration Surface
-
-| Need                                | Use                                               | Why                                                                                     |
-| ----------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Interactive repository work         | `ax-code` TUI or `ax-code run`                    | Fastest path for humans working directly in a checkout                                  |
-| In-process AX Code source embedding | `@defai-digital/ax-code-sdk` with `createAgent()` | Lowest overhead and custom tools when the private runtime source package is resolvable  |
-| App shell or GUI backend            | `@defai-digital/ax-code-sdk/headless`             | Starts or attaches to a local backend with typed events and projected app state         |
-| Native desktop boundary             | `@defai-digital/ax-code-sdk/grpc`                 | Stable command/event contract, streaming, metadata, deadlines, and native host adapters |
-| Shared app interaction contracts    | `@defai-digital/ax-code-sdk/mode`                 | Work-mode routing shared by TUI and app clients                                         |
-| Provider connection picker          | `@defai-digital/ax-code-sdk/provider-connect`     | Stable provider-category taxonomy without runtime-source imports                        |
-| Editor-native workflow              | VS Code integration                               | Uses the installed CLI/runtime while staying inside the editor                          |
-
-The JavaScript package no longer exposes first-party HTTP client/server subpaths. HTTP/OpenAPI remains an internal
-runtime, fallback, and diagnostics layer behind the headless and gRPC SDKs. The legacy `@defai-digital/ax-code-sdk/v2` subpaths remain
-available for AX Code runtime compatibility, but new app integrations should use headless or gRPC.
+Use it to supervise a compatible signed AX Code runtime through typed **headless** or **gRPC** boundaries, consume streaming events, project session state, and test application integrations. Source hosts that deliberately provide the private runtime package may also use the in-process `createAgent()` adapter.
 
 ## Install
 
@@ -37,15 +10,35 @@ available for AX Code runtime compatibility, but new app integrations should use
 pnpm add jsr:@defai-digital/ax-code-sdk@2.3.0
 ```
 
-This command becomes available after the first JSR release. pnpm remains the package manager; the `jsr:` protocol
-selects JSR as the registry.
+```bash
+deno add jsr:@defai-digital/ax-code-sdk@2.3.0
+```
 
-Public applications should normally use `@defai-digital/ax-code-sdk/headless` or
-`@defai-digital/ax-code-sdk/grpc` with a compatible signed AX Code runtime. The in-process `createAgent()` entry point
-loads the private `ax-code` source package at call time. It works inside the AX Code source workspace or another host
-that deliberately provides that package; the runtime package is not independently distributed through JSR.
+```bash
+npx jsr add @defai-digital/ax-code-sdk@2.3.0
+```
 
-## Quick start
+Requires **Node.js 24+** (or Deno with Node compatibility). Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`.
+
+The workspace package name `@ax-code/sdk` is private to this monorepo. Public consumers always install `@defai-digital/ax-code-sdk` from JSR.
+
+## Choose an integration surface
+
+| Need                        | Use                                           | Why                                                                                     |
+| --------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Interactive repository work | `ax-code` TUI or `ax-code run`                | Fastest path for humans working in a checkout                                           |
+| App shell or GUI backend    | `@defai-digital/ax-code-sdk/headless`         | Starts or attaches to a local backend with typed events and projected state             |
+| Native desktop boundary     | `@defai-digital/ax-code-sdk/grpc`             | Stable command/event contract, streaming, metadata, deadlines, and native host adapters |
+| Shared work-mode contracts  | `@defai-digital/ax-code-sdk/mode`             | Mode ids and helpers shared by TUI and app clients                                      |
+| Provider connection picker  | `@defai-digital/ax-code-sdk/provider-connect` | Provider-category taxonomy without runtime-source imports                               |
+| In-process source embedding | `@defai-digital/ax-code-sdk` `createAgent()`  | Lowest overhead and custom tools when the private runtime package is resolvable         |
+| Editor-native workflow      | VS Code integration                           | Uses the installed CLI/runtime inside the editor                                        |
+
+Public applications should use `headless` or `grpc` with a compatible signed AX Code runtime. HTTP/OpenAPI stays behind those SDKs as a fallback and diagnostics layer. Legacy `@defai-digital/ax-code-sdk/v2` subpaths remain for runtime compatibility; new integrations should not start there.
+
+`createAgent()` loads the private `ax-code` source package at call time. The runtime is **not** published on JSR.
+
+## Quick start (headless)
 
 ```ts
 import { createHeadlessClient, startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"
@@ -67,136 +60,13 @@ try {
 }
 ```
 
-This example expects a compatible signed `ax-code` executable on `PATH`. Desktop hosts may pass its verified absolute
-path as the `binary` option.
+Desktop hosts may pass a verified absolute path as `binary`. See
+[example/headless-app.ts](https://github.com/defai-digital/ax-code/blob/HEAD/packages/sdk/js/example/headless-app.ts)
+for a projection-based app loop.
 
-## Custom tools
+## Headless backend
 
-This section applies to source hosts that provide the private runtime package. Define tools with Zod schemas; the
-`execute` function receives typed arguments.
-
-```ts
-import { createAgent, tool } from "@defai-digital/ax-code-sdk"
-import { z } from "zod"
-
-const deploy = tool({
-  name: "deploy_staging",
-  description: "Deploy the current branch to staging",
-  parameters: z.object({
-    service: z.enum(["api", "web", "worker"]),
-    skipTests: z.boolean().default(false),
-  }),
-  execute: async ({ service, skipTests }) => {
-    // Your code runs here, inside the agent's tool-call loop.
-    // Return any JSON-serializable value.
-    return { url: `https://staging.example.com/${service}` }
-  },
-})
-
-const agent = await createAgent({
-  directory: "/repo",
-  tools: [deploy],
-})
-```
-
-## One-shot vs streaming vs multi-turn
-
-```ts
-// One-shot — wait for the full response
-const result = await agent.run("Fix the login bug")
-console.log(result.text)
-
-// Streaming — async iterator of typed events
-for await (const event of agent.stream("Explain this codebase")) {
-  switch (event.type) {
-    case "text":
-      process.stdout.write(event.text)
-      break
-    case "tool-call":
-      console.log(`Calling ${event.tool}...`)
-      break
-    case "tool-result":
-      console.log(`${event.tool} → ${event.status}`)
-      break
-    case "done":
-      console.log(`\nTokens: ${event.result.usage.totalTokens}`)
-      break
-  }
-}
-
-// Multi-turn — persistent session across messages
-const session = await agent.session()
-await session.run("Read src/auth/index.ts")
-const result = await session.run("Now add input validation")
-```
-
-## Error handling
-
-```ts
-import { createAgent, ProviderError, ToolError, TimeoutError } from "@defai-digital/ax-code-sdk"
-
-try {
-  const result = await agent.run("Deploy to prod")
-} catch (e) {
-  if (e instanceof ProviderError && e.isRetryable) {
-    console.log("Rate limited, retry later")
-  } else if (e instanceof ToolError) {
-    console.log(`Tool "${e.tool}" failed: ${e.message}`)
-  } else if (e instanceof TimeoutError) {
-    console.log(`Timed out after ${e.timeout}ms`)
-  }
-}
-```
-
-## Authentication
-
-```ts
-// Option 1: Environment variable (auto-detected)
-// Set GOOGLE_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or GEMINI_API_KEY.
-
-// Option 2: Direct injection (no local config needed)
-const agent = await createAgent({
-  directory: ".",
-  auth: { provider: "google", apiKey: "google-api-key" },
-})
-
-// Option 3: Pre-configured via `ax-code providers login`
-const agent = await createAgent({ directory: "." })
-```
-
-## Testing
-
-Use `createMockAgent` to unit-test your agent integration without calling a real LLM.
-
-```ts
-import { createMockAgent, assertToolSuccess } from "@defai-digital/ax-code-sdk/testing"
-
-test("CI bot scans for CVEs", async () => {
-  const agent = createMockAgent({
-    replies: ["Found 2 CVEs. Opening PR to bump versions."],
-    toolCalls: [{ tool: "grep", input: { pattern: "CVE-" }, output: "CVE-2025-1234" }],
-  })
-
-  const result = await agent.run("scan for CVEs")
-  expect(result.text).toContain("2 CVEs")
-  assertToolSuccess(result, "grep")
-})
-```
-
-## Version compatibility
-
-```ts
-import { SDK_VERSION, isSDKVersionCompatible } from "@defai-digital/ax-code-sdk"
-
-console.log(SDK_VERSION) // "2.3.0"
-if (!isSDKVersionCompatible("^2.0.0")) {
-  throw new Error("Incompatible SDK version")
-}
-```
-
-## Headless backend SDK
-
-Use `@defai-digital/ax-code-sdk/headless` when your application needs to manage the AX Code server lifecycle, subscribe to a typed event stream, and maintain projected state — all without coupling to the internal runtime package.
+`startHeadlessBackend` spawns `ax-code serve` on a random loopback port, generates a one-time credential, waits for `/global/health`, and returns a handle. `close()` sends SIGTERM, then SIGKILL.
 
 ```ts
 import {
@@ -222,21 +92,14 @@ try {
 }
 ```
 
-`startHeadlessBackend` spawns `ax-code serve` on a random port, generates a one-time auth credential, verifies `/global/health`, and resolves once the server is ready. `close()` terminates the backend process tree with SIGTERM and a SIGKILL fallback.
+`createHeadlessProjectionState` and `applyHeadlessProjectionEvent` are pure TypeScript. App UIs should treat `permission`, `question`, `session_diff`, `todo`, `session_status`, and `session_error` as primary state. Autonomous replies are opt-in; supervised apps should render pending permission and question requests.
 
-The projection functions (`createHeadlessProjectionState`, `applyHeadlessProjectionEvent`) are pure TypeScript with no runtime dependencies — safe for use in any environment.
+## gRPC / native desktop
 
-App UIs should treat `permission`, `question`, `session_diff`, `todo`, `session_status`, and `session_error` as primary state. Autonomous replies are opt-in through projection options; supervised apps should render pending permission and question requests and answer them with the headless client helpers.
-
-See [`example/headless-app.ts`](./example/headless-app.ts) for a minimal app-style integration that starts a local backend, creates a session, sends a prompt, projects events, and shuts the backend down.
-
-## gRPC/native desktop SDK
-
-Use `@defai-digital/ax-code-sdk/grpc` for first-party desktop or native GUI integrations that want a gRPC-shaped command/event contract without exposing the full HTTP route tree to the app shell.
+Use `@defai-digital/ax-code-sdk/grpc` when a native host already owns the transport (Electron preload, Tauri, Rust, HTTP/2).
 
 ```ts
 import {
-  createAxCodeGrpcClientFromNativeBridge,
   createAxCodeGrpcClientFromNativeIpc,
   resolveAxCodeGrpcProtoUrl,
   startAxCodeGrpcHeadlessBackend,
@@ -245,49 +108,116 @@ import {
 const backend = await startAxCodeGrpcHeadlessBackend({ directory: "/path/to/workspace" })
 try {
   const client = backend.client
-
-  const bootstrap = await client.bootstrap.load({
-    include: { sessions: true, providers: true, providerList: true, path: true, vcs: true },
+  await client.bootstrap.load({
+    include: { sessions: true, providers: true, path: true, vcs: true },
   })
-  const terminal = await client.pty.create({ title: "Desktop shell" })
-
   const session = (await client.createSession({ title: "Desktop session" })) as { id: string }
-  const messages = await client.session.messages(session.id, { limit: 50 })
-  const skills = await client.app.skills()
-  const readme = await client.file.read("README.md")
-  const authMethods = await client.provider.auth()
-  const protoUrl = resolveAxCodeGrpcProtoUrl()
   await client.sendPrompt(session.id, { parts: [{ type: "text", text: "Review this project" }] })
+  const protoUrl = resolveAxCodeGrpcProtoUrl()
 } finally {
   await backend.close()
 }
 ```
 
-`bootstrap.load()` returns a partial GUI startup snapshot and an `errors` array for failed subrequests. `client.session` exposes session history and detail APIs for opening existing conversations without importing the full HTTP SDK. `client.app`, `client.instance`, `client.project`, `client.path`, `client.vcs`, `client.command`, `client.file`, `client.find`, and `client.tool` cover app logging, lifecycle controls, GUI discovery, and workspace navigation. `client.context` and `client.debugEngine` cover project context, cached-memory, template, and pending-plan diagnostics. `client.permission` and `client.question` cover supervised approval and clarification flows. `client.workflowRun` covers run lists, dashboard summaries, artifacts, eval summaries, and eval cases. `client.config`, `client.runtime`, `client.provider`, `client.auth`, `client.mcp`, `client.lsp`, and `client.formatter` cover runtime settings, provider settings, API-key auth, provider OAuth, MCP lifecycle/resource controls, and diagnostics status through the same native boundary. `client.subscribeEvents()` accepts optional `types` and `sessionID` filters for GUI projections. PTY terminal access is exposed through `client.pty` with bidirectional streaming for interactive shells. `createAxCodeGrpcClientFromHttp()` is a loopback-only compatibility bridge over the current headless HTTP/SSE/WebSocket backend. The legacy `allowRemoteHttpBridge` option no longer bypasses this restriction. Native hosts can implement the same transport interface and pass it to `createAxCodeGrpcClient({ transport })`. The canonical proto contract lives at [`../proto/ax_code/v1/headless.proto`](../proto/ax_code/v1/headless.proto), is included as a package asset, and is located at runtime with `resolveAxCodeGrpcProtoUrl()`.
+- `createAxCodeGrpcClientFromNativeIpc()` — structured-clone IPC (preload / Tauri).
+- `createAxCodeGrpcClientFromNativeBridge()` — same JavaScript realm, with `AbortSignal` and async iterables.
+- `createAxCodeGrpcClientFromNativeHandlers()` — bind method names to typed handlers; `requireHandlers` fails fast on gaps.
+- `startAxCodeGrpcNodeHttp2Server()` from `@defai-digital/ax-code-sdk/grpc/node` — expose the same bridge as a local HTTP/2 gRPC endpoint.
+- `AX_CODE_GRPC_METHOD_DESCRIPTORS` / `listAxCodeGrpcMethods()` — canonical method catalog for allowlists and proto names.
 
-For a desktop host that already owns a Rust, Tauri, Electron preload, or gRPC client boundary, use `createAxCodeGrpcClientFromNativeIpc()` for structured-clone IPC boundaries and implement `unary`, `serverStream`, and optionally `bidiStream` in the host. Use `createAxCodeGrpcNativeIpcBridgeFromChannels()` or `createAxCodeGrpcNativeIpcStream()` when the host exposes push-style subscriptions with unsubscribe callbacks. Use `createAxCodeGrpcClientFromNativeBridge()` only when both sides share a JavaScript realm and can pass `AbortSignal` and async iterables directly in the call object. Hosts that want less custom dispatch code can use `createAxCodeGrpcNativeBridgeFromHandlers()` or `createAxCodeGrpcClientFromNativeHandlers()` to bind method names to typed runtime handlers; pass `requireHandlers` to fail fast when an expected method set, domain, or stream kind is missing. Node-based desktop hosts can expose the same bridge as a real HTTP/2 gRPC endpoint with `startAxCodeGrpcNodeHttp2Server()` from `@defai-digital/ax-code-sdk/grpc/node`. Use `AX_CODE_GRPC_METHOD_DESCRIPTORS`, `listAxCodeGrpcMethods()`, `getAxCodeGrpcMethodDescriptor()`, `assertAxCodeGrpcMethodSupported()`, `listMissingAxCodeGrpcNativeHandlers()`, or `assertAxCodeGrpcNativeHandlers()` as the canonical method catalog and startup coverage gate for native handler coverage, service binding, preload allowlists, and proto request/response message names. The renderer keeps the same high-level client API without receiving the HTTP base URL, auth header, or PTY WebSocket endpoint.
+`createAxCodeGrpcClientFromHttp()` is loopback-only. The proto asset is
+[packages/sdk/proto/ax_code/v1/headless.proto](https://github.com/defai-digital/ax-code/blob/HEAD/packages/sdk/proto/ax_code/v1/headless.proto)
+and is resolved at runtime with `resolveAxCodeGrpcProtoUrl()`.
+
+## In-process agent (source hosts only)
+
+This path requires the private `ax-code` runtime package. It is not the public app-integration boundary.
+
+```ts
+import { createAgent, tool } from "@defai-digital/ax-code-sdk"
+import { z } from "zod"
+
+const deploy = tool({
+  name: "deploy_staging",
+  description: "Deploy the current branch to staging",
+  parameters: z.object({
+    service: z.enum(["api", "web", "worker"]),
+    skipTests: z.boolean().default(false),
+  }),
+  execute: async ({ service }) => ({ url: `https://staging.example.com/${service}` }),
+})
+
+const agent = await createAgent({ directory: "/repo", tools: [deploy] })
+
+const result = await agent.run("Fix the login bug")
+for await (const event of agent.stream("Explain this codebase")) {
+  if (event.type === "text") process.stdout.write(event.text)
+}
+const session = await agent.session()
+await session.run("Read src/auth/index.ts")
+await agent.dispose()
+```
+
+Authentication is auto-detected from environment variables, injected via `auth: { provider, apiKey }`, or taken from `ax-code providers login`.
+
+```ts
+import { ProviderError, ToolError, TimeoutError } from "@defai-digital/ax-code-sdk"
+
+try {
+  await agent.run("Deploy to prod")
+} catch (e) {
+  if (e instanceof ProviderError && e.isRetryable) console.log("Rate limited, retry later")
+  else if (e instanceof ToolError) console.log(`Tool "${e.tool}" failed: ${e.message}`)
+  else if (e instanceof TimeoutError) console.log(`Timed out after ${e.timeout}ms`)
+}
+```
+
+More examples:
+[example/programmatic.ts](https://github.com/defai-digital/ax-code/blob/HEAD/packages/sdk/js/example/programmatic.ts).
+
+## Testing
+
+```ts
+import { createMockAgent, assertToolSuccess } from "@defai-digital/ax-code-sdk/testing"
+
+test("CI bot scans for CVEs", async () => {
+  const agent = createMockAgent({
+    replies: ["Found 2 CVEs. Opening PR to bump versions."],
+    toolCalls: [{ tool: "grep", input: { pattern: "CVE-" }, output: "CVE-2025-1234" }],
+  })
+  const result = await agent.run("scan for CVEs")
+  expect(result.text).toContain("2 CVEs")
+  assertToolSuccess(result, "grep")
+})
+```
+
+## Version compatibility
+
+```ts
+import { SDK_VERSION, isSDKVersionCompatible } from "@defai-digital/ax-code-sdk"
+
+console.log(SDK_VERSION)
+if (!isSDKVersionCompatible("^2.0.0")) {
+  throw new Error("Incompatible SDK version")
+}
+```
 
 ## Cross-language integrations
 
-Use this package for first-party TypeScript and JavaScript integrations. For first-party desktop/native GUI work, prefer `@defai-digital/ax-code-sdk/grpc`; use `@defai-digital/ax-code-sdk/headless` when a local backend process is still the right lifecycle boundary. HTTP/SSE stays behind those SDKs as compatibility and debug infrastructure, not as a first-party JavaScript SDK surface. For Python, Go, Java, Rust, or other non-JavaScript runtimes, generate from the canonical repository gRPC proto or use the CLI/runtime boundary owned by that integration.
+This package is the first-party TypeScript/JavaScript SDK. For Python, Go, Java, Rust, or other runtimes, generate from the repository gRPC proto or use the CLI/runtime boundary owned by that integration.
 
-## Migration from the 1.4.0 workspace SDK
+## Migration from `@ax-code/sdk` 1.4.0
 
-| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.3.0)                                           |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"`         |
-| `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@defai-digital/ax-code-sdk/headless"`         |
-| `import { createAxCodeServer } from "@ax-code/sdk"`       | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"`         |
-| `import { createAgent } from "@ax-code/sdk/programmatic"` | `import { createAgent } from "@defai-digital/ax-code-sdk"`                           |
-| No custom tools                                           | `import { tool } from "@defai-digital/ax-code-sdk"` + `tools: [...]` on AgentOptions |
-| No testing utilities                                      | `import { createMockAgent } from "@defai-digital/ax-code-sdk/testing"`               |
-| No version check                                          | `import { SDK_VERSION } from "@defai-digital/ax-code-sdk"`                           |
+| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.3.0)                                   |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"` |
+| `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@defai-digital/ax-code-sdk/headless"` |
+| `import { createAxCodeServer } from "@ax-code/sdk"`       | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"` |
+| `import { createAgent } from "@ax-code/sdk/programmatic"` | `import { createAgent } from "@defai-digital/ax-code-sdk"`                   |
+| No custom tools                                           | `import { tool } from "@defai-digital/ax-code-sdk"`                          |
+| No testing utilities                                      | `import { createMockAgent } from "@defai-digital/ax-code-sdk/testing"`       |
 
-The `./programmatic` subpath still works (re-exports everything from `.`) for backward compatibility but should be considered deprecated.
-
-## More examples
-
-See [`example/programmatic.ts`](./example/programmatic.ts) for a full set of working examples including security scanning with auto-approve permissions.
+The `./programmatic` subpath still re-exports the default entry; treat it as deprecated.
 
 ## License
 

@@ -9,8 +9,10 @@
 
 import type { PermissionRequest, QuestionRequest } from "../v2/index.js"
 
+/** Schema version of the headless runtime event contract. Bump when event shapes change. */
 export const HEADLESS_RUNTIME_SCHEMA_VERSION = 1
 
+/** Message and part lifecycle events (updated, removed, delta). */
 export type HeadlessMessageEvent<
   TMessage extends { id: string; sessionID: string },
   TPart extends { id: string; messageID: string },
@@ -31,6 +33,7 @@ export type HeadlessMessageEvent<
     }
   | { type: "message.part.removed"; properties: { sessionID: string; messageID: string; partID: string } }
 
+/** Permission and question ask/reply/reject events. */
 export type HeadlessRequestEvent =
   | { type: "permission.asked"; properties: PermissionRequest }
   | { type: "permission.replied"; properties: { sessionID: string; requestID: string } }
@@ -38,10 +41,13 @@ export type HeadlessRequestEvent =
   | { type: "question.replied"; properties: { sessionID: string; requestID: string } }
   | { type: "question.rejected"; properties: { sessionID: string; requestID: string } }
 
+/** Status of a workflow run. */
 export type WorkflowRunStatus = "queued" | "running" | "blocked" | "paused" | "completed" | "failed" | "cancelled"
 
+/** Status of a workflow phase. */
 export type WorkflowPhaseStatus = "queued" | "running" | "completed" | "failed" | "cancelled"
 
+/** Status of a workflow child task. */
 export type WorkflowChildStatus =
   | "queued"
   | "running"
@@ -51,6 +57,7 @@ export type WorkflowChildStatus =
   | "failed"
   | "cancelled"
 
+/** Properties payload on workflow-run events. */
 export interface WorkflowRunProperties {
   id: string
   status: WorkflowRunStatus
@@ -58,6 +65,7 @@ export interface WorkflowRunProperties {
   sourceTemplateID?: string
 }
 
+/** Properties payload on workflow-phase events. */
 export interface WorkflowPhaseProperties {
   id: string
   runID: string
@@ -66,6 +74,7 @@ export interface WorkflowPhaseProperties {
   error?: string
 }
 
+/** Properties payload on workflow-child events. */
 export interface WorkflowChildProperties {
   id: string
   runID: string
@@ -75,6 +84,7 @@ export interface WorkflowChildProperties {
   error?: string
 }
 
+/** Properties payload on workflow-artifact events. */
 export interface WorkflowArtifactProperties {
   id: string
   runID: string
@@ -85,6 +95,7 @@ export interface WorkflowArtifactProperties {
   specArtifactID?: string
 }
 
+/** Properties payload on workflow-budget events. */
 export interface WorkflowBudgetProperties {
   id: string
   runID: string
@@ -92,11 +103,13 @@ export interface WorkflowBudgetProperties {
   message?: string
 }
 
+/** Properties payload on workflow-verification events. */
 export interface WorkflowVerificationProperties {
   id: string
   envelopeIDs: string[]
 }
 
+/** Runtime status events (MCP, LSP, index, VCS, workflow). */
 export type HeadlessRuntimeStatusEvent =
   | { type: "mcp.tools.changed" }
   | { type: "lsp.updated" }
@@ -129,8 +142,10 @@ export type HeadlessRuntimeStatusEvent =
   | { type: "workflow.budget.exceeded"; properties: WorkflowBudgetProperties }
   | { type: "workflow.verification.attached"; properties: WorkflowVerificationProperties }
 
+/** Subsystem a host should re-probe after a status event (`mcp`, `lsp`, `debug-engine`, `workflow`). */
 export type HeadlessRuntimeProbeKey = "mcp" | "lsp" | "debug-engine" | "workflow"
 
+/** Session lifecycle events (created, updated, status, diff, todo, goal, error). */
 export type HeadlessSessionEvent<TSession extends { id: string }, TTodo, TDiff, TStatus, TGoal = unknown> =
   | { type: "todo.updated"; properties: { sessionID: string; todos: TTodo[] } }
   | { type: "session.diff"; properties: { sessionID: string; diff: TDiff[] } }
@@ -141,16 +156,19 @@ export type HeadlessSessionEvent<TSession extends { id: string }, TTodo, TDiff, 
   | { type: "session.status"; properties: { sessionID: string; status: TStatus } }
   | { type: "session.error"; properties: { sessionID?: string; error: unknown; code?: string } }
 
+/** Task-queue created/updated/deleted events. */
 export type HeadlessTaskQueueEvent<TTaskQueueItem> =
   | { type: "task.queue.created"; properties: { item: TTaskQueueItem } }
   | { type: "task.queue.updated"; properties: { item: TTaskQueueItem } }
   | { type: "task.queue.deleted"; properties: { id: string; projectID: string; sessionID?: string } }
 
+/** Scheduled-task created/updated/deleted events. */
 export type HeadlessScheduledTaskEvent<TScheduledTask> =
   | { type: "scheduled.task.created"; properties: { task: TScheduledTask } }
   | { type: "scheduled.task.updated"; properties: { task: TScheduledTask } }
   | { type: "scheduled.task.deleted"; properties: { id: string; projectID: string } }
 
+/** Server control events (connected, heartbeat, resync, disposed). */
 export type HeadlessControlEvent =
   | { type: "server.connected"; properties: Record<string, never> }
   | { type: "server.heartbeat"; properties: Record<string, never> }
@@ -164,6 +182,7 @@ export type HeadlessControlEvent =
     }
   | { type: "server.instance.disposed" }
 
+/** Union of every typed headless runtime event a client can subscribe to. */
 export type HeadlessRuntimeEvent<
   TSession extends { id: string },
   TTodo,
@@ -183,6 +202,7 @@ export type HeadlessRuntimeEvent<
   | HeadlessRuntimeStatusEvent
   | HeadlessControlEvent
 
+/** Set of all known headless runtime event `type` strings. */
 export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "message.updated",
   "message.removed",
@@ -245,6 +265,7 @@ export const HEADLESS_RUNTIME_EVENT_TYPES = new Set<string>([
   "server.instance.disposed",
 ])
 
+/** Type guard: whether an unknown value looks like a headless runtime event. */
 export function isHeadlessRuntimeEvent(event: unknown): boolean {
   if (!event || typeof event !== "object") return false
   if (!("type" in event)) return false

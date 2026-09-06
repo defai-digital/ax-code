@@ -18,6 +18,7 @@ const NEVER_AUTONOMOUS_AUTOAPPROVE_PERMISSIONS: ReadonlySet<string> = new Set(["
 const DEFAULT_MAX_SESSION_MESSAGES = 100
 const pendingPartDeltaText = new WeakMap<object, Map<string, Map<string, string>>>()
 
+/** Projected app state folded from headless runtime events (sessions, messages, permissions, ...). */
 export interface HeadlessProjectionState<
   TSession extends { id: string },
   TTodo,
@@ -45,19 +46,23 @@ export interface HeadlessProjectionState<
   vcs: { branch: string } | undefined
 }
 
+/** Health of the event stream driving a projection. */
 export type HeadlessStreamHealth = "fixture" | "connecting" | "connected" | "unavailable" | "error"
 
+/** Side effect emitted while applying an event (auto-reply, runtime probe, bootstrap reload). */
 export type HeadlessProjectionEffect =
   | { type: "permission.auto_reply"; requestID: string }
   | { type: "question.auto_reply"; requestID: string; questions: QuestionRequest["questions"] }
   | { type: "runtime.probe"; key: HeadlessRuntimeProbeKey }
   | { type: "bootstrap.reload" }
 
+/** Result of applying one event to a projection (`handled` plus any effects). */
 export type HeadlessProjectionApplyResult = {
   handled: boolean
   effects: HeadlessProjectionEffect[]
 }
 
+/** Create an empty projection. Safe in any JS runtime; no I/O. */
 export function createHeadlessProjectionState<
   TSession extends { id: string },
   TTodo,
@@ -89,6 +94,7 @@ export function createHeadlessProjectionState<
   }
 }
 
+/** Fold one runtime event into a projection and return any follow-up effects. */
 export function applyHeadlessProjectionEvent<
   TSession extends { id: string },
   TTodo,
@@ -284,6 +290,7 @@ export function applyHeadlessProjectionEvent<
   return { handled: false, effects }
 }
 
+/** Which runtime subsystems a host should re-probe after a status event. */
 export function runtimeProbeKeysForEvent(event: HeadlessRuntimeStatusEvent): HeadlessRuntimeProbeKey[] {
   switch (event.type) {
     case "mcp.tools.changed":

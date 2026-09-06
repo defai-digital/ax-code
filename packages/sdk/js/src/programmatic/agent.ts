@@ -13,6 +13,12 @@ function isMissingRuntimeError(error: unknown) {
   return typeof value.message === "string" && value.message.includes("ax-code")
 }
 
+/**
+ * Create an in-process AX Code agent. Requires the private `ax-code` runtime
+ * package to be resolvable. Public apps should use
+ * `@defai-digital/ax-code-sdk/headless` or `@defai-digital/ax-code-sdk/grpc`
+ * with a signed runtime binary.
+ */
 export async function createAgent(options: AgentOptions): Promise<Agent> {
   let mod: Mod
   try {

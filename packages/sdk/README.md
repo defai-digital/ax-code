@@ -15,10 +15,9 @@ This directory owns the SDK and OpenAPI integration surfaces for AX Code. Use it
 | [`openapi.json`](openapi.json) | OpenAPI snapshot for HTTP clients and generated cross-language integrations                                             |
 | [`proto/`](proto/)             | Optional gRPC/native headless contract for first-party desktop GUI integrations                                         |
 
-The first-party JSR package [`@defai-digital/ax-code-sdk`](https://jsr.io/@defai-digital/ax-code-sdk) exists and is
-linked to `defai-digital/ax-code` for OIDC; its first version has not been published. Other languages should integrate
-through `ax-code serve` and generated clients based on `openapi.json` until a language has an owner, tests, and a
-release workflow.
+The first-party JSR package is [`@defai-digital/ax-code-sdk`](https://jsr.io/@defai-digital/ax-code-sdk). Other
+languages should integrate through `ax-code serve` and generated clients based on `openapi.json` until a language has
+an owner, tests, and a release workflow.
 
 ## Integration Choice
 

@@ -54,6 +54,7 @@ import { createHttpSseTransport } from "./http-transport.js"
 import type { HeadlessTransport } from "./transport.js"
 import { errorMessage, parseHeadlessRuntimeJsonBody, parseHeadlessRuntimeResponseBody } from "./util.js"
 
+/** Options for `createHeadlessClient`: base URL or custom transport, directory, and headers. */
 export type HeadlessClientOptions = {
   /**
    * Base URL of the headless runtime HTTP server. Required when no custom
@@ -72,19 +73,23 @@ export type HeadlessClientOptions = {
   transport?: HeadlessTransport
 }
 
+/** Options for `client.subscribe()` (currently an abort signal). */
 export type HeadlessSubscribeOptions = {
   signal?: AbortSignal
 }
 
+/** Input for `client.createSession()` (optional title). */
 export type HeadlessCreateSessionInput = {
   title?: string
 }
 
+/** Typed headless client: sessions, prompts, permissions, questions, workflows, and event subscribe. */
 export type HeadlessClient = ReturnType<typeof createHeadlessClient>
 
 const SESSION_SHARE_UNSUPPORTED_MESSAGE =
   "Session sharing is not supported by this headless backend; the HTTP /session/{sessionID}/share route has been removed."
 
+/** Payload of `GET /global/health` after the backend has become ready. */
 export type HeadlessGlobalHealth = {
   healthy: true
   version: string
@@ -119,6 +124,7 @@ export type HeadlessGlobalHealth = {
   }
 }
 
+/** Capability catalog advertised by a headless backend for app-shell feature detection. */
 export type HeadlessRuntimeCapabilities = {
   schemaVersion: 1
   product: "ax-code"
@@ -169,8 +175,10 @@ export type HeadlessRuntimeCapabilities = {
   }
 }
 
+/** Kind of a task-queue item (prompt, command, shell, followup, subagent, review, automation). */
 export type HeadlessTaskQueueKind = "prompt" | "command" | "shell" | "followup" | "subagent" | "review" | "automation"
 
+/** Lifecycle status of a task-queue item. */
 export type HeadlessTaskQueueStatus =
   | "queued"
   | "waiting_for_idle"
@@ -182,6 +190,7 @@ export type HeadlessTaskQueueStatus =
   | "completed"
   | "cancelled"
 
+/** One item in the headless task queue. */
 export type HeadlessTaskQueueItem = {
   id: string
   projectID: string
@@ -207,6 +216,7 @@ export type HeadlessTaskQueueItem = {
   }
 }
 
+/** Input for enqueueing a task-queue item. */
 export type HeadlessTaskQueueEnqueueInput = {
   sessionID?: string
   kind: HeadlessTaskQueueKind
@@ -220,6 +230,7 @@ export type HeadlessTaskQueueEnqueueInput = {
   priority?: number
 }
 
+/** Input for editing a queued item. */
 export type HeadlessTaskQueueEditInput = {
   title?: string
   worktree?: string | null
@@ -229,20 +240,24 @@ export type HeadlessTaskQueueEditInput = {
   priority?: number
 }
 
+/** Query for listing task-queue items. */
 export type HeadlessTaskQueueListInput = {
   sessionID?: string
   status?: HeadlessTaskQueueStatus
   limit?: number
 }
 
+/** Lifecycle status of a scheduled task (`active`, `paused`, `disabled`). */
 export type HeadlessScheduledTaskStatus = "active" | "paused" | "disabled"
 
+/** Schedule expression for a scheduled task (once, daily, weekly, or cron). */
 export type HeadlessScheduledTaskSchedule =
   | { type: "once"; runAt: number }
   | { type: "daily"; time: string; timezone?: string }
   | { type: "weekly"; day: number; time: string; timezone?: string }
   | { type: "cron"; expression: string; timezone?: string }
 
+/** Persisted scheduled task as returned by the headless API. */
 export type HeadlessScheduledTask = {
   id: string
   projectID: string
@@ -266,6 +281,7 @@ export type HeadlessScheduledTask = {
   }
 }
 
+/** Input for creating a scheduled task. */
 export type HeadlessScheduledTaskCreateInput = {
   title: string
   prompt: string
@@ -276,35 +292,50 @@ export type HeadlessScheduledTaskCreateInput = {
   workflowStartOptions?: Record<string, unknown>
 }
 
+/** Input for updating a scheduled task, including status. */
 export type HeadlessScheduledTaskUpdateInput = Partial<HeadlessScheduledTaskCreateInput> & {
   status?: HeadlessScheduledTaskStatus
 }
 
+/** Query for listing scheduled tasks. */
 export type HeadlessScheduledTaskListInput = {
   status?: HeadlessScheduledTaskStatus
   dueBefore?: number
   limit?: number
 }
 
+/** Result of triggering a scheduled task immediately. */
 export type HeadlessScheduledTaskRunNowResult = {
   task: HeadlessScheduledTask
   queueItem?: HeadlessTaskQueueItem
   workflowRun?: WorkflowRunGetResponse
 }
 
+/** Query for listing workflow runs (directory is supplied by the client). */
 export type HeadlessWorkflowRunListInput = Omit<NonNullable<WorkflowRunListData["query"]>, "directory">
+/** Query for the workflow-run dashboard summary. */
 export type HeadlessWorkflowRunDashboardInput = Omit<NonNullable<WorkflowRunDashboardData["query"]>, "directory">
+/** Body for creating a workflow run. */
 export type HeadlessWorkflowRunCreateInput = NonNullable<WorkflowRunCreateData["body"]>
+/** Body for requesting a workflow-run eval summary. */
 export type HeadlessWorkflowRunEvalSummaryInput = NonNullable<WorkflowRunEvalSummaryData["body"]>
+/** Body for saving a workflow run as a template. */
 export type HeadlessWorkflowRunSaveTemplateInput = NonNullable<WorkflowRunSaveTemplateData["body"]>
+/** Query for listing artifacts of a workflow run. */
 export type HeadlessWorkflowArtifactListInput = Omit<NonNullable<WorkflowRunArtifactsData["query"]>, "directory"> & {
   artifactID?: string
 }
+/** Query for retrying a workflow run. */
 export type HeadlessWorkflowRunRetryInput = Omit<NonNullable<WorkflowRunRetryData["query"]>, "directory">
+/** Body for saving a workflow template. */
 export type HeadlessWorkflowTemplateSaveInput = NonNullable<WorkflowTemplateSaveData["body"]>
+/** Body for creating a workflow routine. */
 export type HeadlessWorkflowRoutineCreateInput = NonNullable<WorkflowRoutineCreateData["body"]>
+/** Body for running a workflow routine. */
 export type HeadlessWorkflowRoutineRunInput = NonNullable<WorkflowRoutineRunData["body"]>
+/** Finding status used by workflow eval cases. */
 export type HeadlessWorkflowEvalCaseFindingStatus = "confirmed" | "likely" | "rejected" | "unverified"
+/** One workflow evaluation case, including seeds and baseline. */
 export type HeadlessWorkflowEvalCase = {
   id: string
   name: string
@@ -322,10 +353,12 @@ export type HeadlessWorkflowEvalCase = {
     rationale?: string
   }>
 }
+/** Input for running workflow eval cases. */
 export type HeadlessWorkflowEvalCaseRunInput = {
   caseID?: string
   now?: number
 }
+/** Summary of a workflow eval-case run, including promote/hold/rollback. */
 export type HeadlessWorkflowEvalCaseRunSummary = {
   caseID: string
   templateID: string
@@ -337,6 +370,7 @@ export type HeadlessWorkflowEvalCaseRunSummary = {
   summary: WorkflowRunEvalSummaryResponse
   metrics: Record<string, unknown>
 }
+/** Options for starting an existing workflow run. */
 export type HeadlessWorkflowRunStartInput = {
   allowScaleBeyondDefaults?: boolean
   allowWriteWorkflows?: boolean
@@ -344,6 +378,7 @@ export type HeadlessWorkflowRunStartInput = {
   enqueueChildren?: boolean
 }
 
+/** Aggregated session evidence (risk, DRE, semantic, rollback, optional branch rank). */
 export type HeadlessSessionEvidence = {
   sessionID: string
   risk?: unknown
@@ -357,11 +392,13 @@ export type HeadlessSessionEvidence = {
   }>
 }
 
+/** Options for loading session evidence (branch-rank inclusion). */
 export type HeadlessSessionEvidenceInput = {
   includeBranchRank?: boolean
   deepBranchRank?: boolean
 }
 
+/** Create a typed headless client against a running AX Code backend (URL + headers, or a custom transport). */
 export function createHeadlessClient(input: HeadlessClientOptions) {
   if (!input.transport && !input.baseUrl) {
     throw new Error("HeadlessClientOptions requires either baseUrl or transport")

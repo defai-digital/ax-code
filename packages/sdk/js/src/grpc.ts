@@ -35,10 +35,14 @@ import type {
 import { errorMessage } from "./internal/error.js"
 import { headersToRecord } from "./protocol.js"
 
+/** Fully qualified gRPC service name for the AX Code headless contract (`axcode.v1.AxCodeHeadless`). */
 export const AX_CODE_GRPC_SERVICE = "axcode.v1.AxCodeHeadless"
+/** Proto path of the headless gRPC contract relative to the `proto/` package root. */
 export const AX_CODE_GRPC_PROTO_PATH = "ax_code/v1/headless.proto"
+/** Packaged proto asset path (`proto/ax_code/v1/headless.proto`) shipped with the SDK. */
 export const AX_CODE_GRPC_PROTO_PACKAGE_PATH = `proto/${AX_CODE_GRPC_PROTO_PATH}`
 
+/** Canonical gRPC method paths for every `axcode.v1.AxCodeHeadless` RPC. */
 export const AX_CODE_GRPC_METHOD = {
   Health: `/${AX_CODE_GRPC_SERVICE}/Health`,
   CreateSession: `/${AX_CODE_GRPC_SERVICE}/CreateSession`,
@@ -155,15 +159,22 @@ export const AX_CODE_GRPC_METHOD = {
 type HeadlessHttpClient = ReturnType<typeof createHeadlessClient>
 type GrpcMethodMap = typeof AX_CODE_GRPC_METHOD
 
+/** RPC name in the `AX_CODE_GRPC_METHOD` table (for example `CreateSession`). */
 export type AxCodeGrpcMethodName = keyof GrpcMethodMap
+/** Fully qualified gRPC method path for one `axcode.v1.AxCodeHeadless` RPC. */
 export type AxCodeGrpcMethod = GrpcMethodMap[keyof GrpcMethodMap]
+/** Unary RPCs in the headless gRPC contract (everything except event and PTY streams). */
 export type AxCodeGrpcUnaryMethod = Exclude<
   AxCodeGrpcMethod,
   typeof AX_CODE_GRPC_METHOD.SubscribeEvents | typeof AX_CODE_GRPC_METHOD.ConnectPty
 >
+/** Server-streaming RPC path used by `SubscribeEvents`. */
 export type AxCodeGrpcStreamingMethod = typeof AX_CODE_GRPC_METHOD.SubscribeEvents
+/** Bidirectional streaming RPC path used by `ConnectPty`. */
 export type AxCodeGrpcBidirectionalStreamingMethod = typeof AX_CODE_GRPC_METHOD.ConnectPty
+/** gRPC streaming kind: unary, server-stream, or bidirectional stream. */
 export type AxCodeGrpcMethodKind = "unary" | "serverStream" | "bidiStream"
+/** Logical domain grouping for a gRPC method (session, config, pty, workflow, ...). */
 export type AxCodeGrpcMethodDomain =
   | "health"
   | "runtime"
@@ -184,6 +195,7 @@ export type AxCodeGrpcMethodDomain =
   | "scheduledTask"
   | "workflow"
   | "events"
+/** Catalog entry describing one gRPC method for native handler coverage and proto binding. */
 export type AxCodeGrpcMethodDescriptor = {
   readonly name: AxCodeGrpcMethodName
   readonly method: AxCodeGrpcMethod
@@ -194,13 +206,17 @@ export type AxCodeGrpcMethodDescriptor = {
   readonly httpBridge: boolean
   readonly stability: "active"
 }
+/** Optional filters when listing gRPC methods by kind, domain, or HTTP-bridge support. */
 export type AxCodeGrpcMethodDescriptorFilter = {
   kind?: AxCodeGrpcMethodKind
   domain?: AxCodeGrpcMethodDomain
   httpBridge?: boolean
 }
+/** String metadata map sent with a gRPC call (headers on the HTTP bridge). */
 export type AxCodeGrpcMetadata = Record<string, string>
+/** JSON-valued unary response wrapper used by most headless RPCs. */
 export type AxCodeGrpcJsonResponse<T = unknown> = { value: T }
+/** Untyped runtime event payload delivered on `SubscribeEvents`. */
 export type AxCodeGrpcRuntimeEvent = { type: string; properties?: unknown }
 
 const AX_CODE_GRPC_PROTO_TYPES: Readonly<Record<AxCodeGrpcMethodName, { requestType: string; responseType: string }>> =
@@ -317,6 +333,7 @@ const AX_CODE_GRPC_PROTO_TYPES: Readonly<Record<AxCodeGrpcMethodName, { requestT
     SubscribeEvents: { requestType: "SubscribeEventsRequest", responseType: "RuntimeEvent" },
   }
 
+/** Frozen catalog of every gRPC method: kind, domain, proto request/response names, and HTTP-bridge support. */
 export const AX_CODE_GRPC_METHOD_DESCRIPTORS: readonly AxCodeGrpcMethodDescriptor[] = Object.freeze(
   Object.entries(AX_CODE_GRPC_METHOD).map(([name, method]) => {
     const protoTypes = AX_CODE_GRPC_PROTO_TYPES[name as AxCodeGrpcMethodName]
@@ -337,6 +354,7 @@ const AX_CODE_GRPC_METHOD_DESCRIPTOR_BY_METHOD = new Map<AxCodeGrpcMethod, AxCod
   AX_CODE_GRPC_METHOD_DESCRIPTORS.map((descriptor) => [descriptor.method, descriptor]),
 )
 
+/** List gRPC method descriptors, optionally filtered by kind, domain, or HTTP-bridge support. */
 export function listAxCodeGrpcMethods(filter: AxCodeGrpcMethodDescriptorFilter = {}): AxCodeGrpcMethodDescriptor[] {
   return AX_CODE_GRPC_METHOD_DESCRIPTORS.filter((descriptor) => {
     if (filter.kind && descriptor.kind !== filter.kind) return false
@@ -346,10 +364,12 @@ export function listAxCodeGrpcMethods(filter: AxCodeGrpcMethodDescriptorFilter =
   })
 }
 
+/** Look up the catalog descriptor for a fully qualified gRPC method path. */
 export function getAxCodeGrpcMethodDescriptor(method: AxCodeGrpcMethod): AxCodeGrpcMethodDescriptor | undefined {
   return AX_CODE_GRPC_METHOD_DESCRIPTOR_BY_METHOD.get(method)
 }
 
+/** Throw if a method path is unknown or does not match the expected streaming kind. */
 export function assertAxCodeGrpcMethodSupported(
   method: AxCodeGrpcMethod,
   kind?: AxCodeGrpcMethodKind,
@@ -502,17 +522,20 @@ function axCodeGrpcMethodDomain(name: AxCodeGrpcMethodName): AxCodeGrpcMethodDom
   }
 }
 
+/** Per-call gRPC options: abort signal, deadline, and metadata. */
 export type AxCodeGrpcCallOptions = {
   signal?: AbortSignal
   timeoutMs?: number
   metadata?: AxCodeGrpcMetadata
 }
 
+/** Filter for `SubscribeEvents`: optional event types and session id. */
 export type AxCodeGrpcSubscribeEventsRequest = {
   types?: string[]
   sessionID?: string
 }
 
+/** Low-level gRPC transport: unary, server-stream, and optional bidirectional stream. */
 export type AxCodeGrpcTransport = {
   unary<TRequest, TResponse>(
     method: AxCodeGrpcUnaryMethod,
@@ -532,6 +555,7 @@ export type AxCodeGrpcTransport = {
   ): AsyncIterable<TResponse>
 }
 
+/** Native-bridge unary call object (method, request, metadata, abort, timeout). */
 export type AxCodeGrpcNativeUnaryCall<TRequest = unknown> = {
   method: AxCodeGrpcUnaryMethod
   request: TRequest
@@ -540,6 +564,7 @@ export type AxCodeGrpcNativeUnaryCall<TRequest = unknown> = {
   timeoutMs?: number
 }
 
+/** Native-bridge server-stream call object. */
 export type AxCodeGrpcNativeServerStreamCall<TRequest = unknown> = {
   method: AxCodeGrpcStreamingMethod
   request: TRequest
@@ -548,6 +573,7 @@ export type AxCodeGrpcNativeServerStreamCall<TRequest = unknown> = {
   timeoutMs?: number
 }
 
+/** Native-bridge bidirectional-stream call object, including the client input iterable. */
 export type AxCodeGrpcNativeBidiStreamCall<TRequest = unknown, TInput = unknown> = {
   method: AxCodeGrpcBidirectionalStreamingMethod
   request: TRequest
@@ -557,6 +583,10 @@ export type AxCodeGrpcNativeBidiStreamCall<TRequest = unknown, TInput = unknown>
   timeoutMs?: number
 }
 
+/**
+ * Same-JavaScript-realm native transport. Prefer this when both sides can pass `AbortSignal` and async
+ * iterables.
+ */
 export type AxCodeGrpcNativeBridge = {
   unary<TRequest, TResponse>(call: AxCodeGrpcNativeUnaryCall<TRequest>): Promise<TResponse>
   serverStream?<TRequest, TResponse>(call: AxCodeGrpcNativeServerStreamCall<TRequest>): AsyncIterable<TResponse>
@@ -565,6 +595,7 @@ export type AxCodeGrpcNativeBridge = {
   ): AsyncIterable<TResponse>
 }
 
+/** Structured-clone IPC unary call (no `AbortSignal`; use `timeoutMs`). */
 export type AxCodeGrpcNativeIpcUnaryCall<TRequest = unknown> = {
   method: AxCodeGrpcUnaryMethod
   request: TRequest
@@ -572,6 +603,7 @@ export type AxCodeGrpcNativeIpcUnaryCall<TRequest = unknown> = {
   timeoutMs?: number
 }
 
+/** Structured-clone IPC server-stream call. */
 export type AxCodeGrpcNativeIpcServerStreamCall<TRequest = unknown> = {
   method: AxCodeGrpcStreamingMethod
   request: TRequest
@@ -579,6 +611,7 @@ export type AxCodeGrpcNativeIpcServerStreamCall<TRequest = unknown> = {
   timeoutMs?: number
 }
 
+/** Structured-clone IPC bidirectional-stream call. */
 export type AxCodeGrpcNativeIpcBidiStreamCall<TRequest = unknown> = {
   method: AxCodeGrpcBidirectionalStreamingMethod
   request: TRequest
@@ -586,6 +619,7 @@ export type AxCodeGrpcNativeIpcBidiStreamCall<TRequest = unknown> = {
   timeoutMs?: number
 }
 
+/** IPC transport for Electron preload, Tauri, or other structured-clone boundaries. */
 export type AxCodeGrpcNativeIpcBridge = {
   unary<TRequest, TResponse>(call: AxCodeGrpcNativeIpcUnaryCall<TRequest>): Promise<TResponse>
   serverStream?<TRequest, TResponse>(call: AxCodeGrpcNativeIpcServerStreamCall<TRequest>): AsyncIterable<TResponse>
@@ -595,14 +629,17 @@ export type AxCodeGrpcNativeIpcBridge = {
   ): AsyncIterable<TResponse>
 }
 
+/** Push/close/fail controller used by channel-style IPC stream bridges. */
 export type AxCodeGrpcNativeIpcStreamController<T> = {
   push(value: T): void
   close(): void
   fail(error: unknown): void
 }
 
+/** Optional unsubscribe callback returned by a channel-style IPC stream. */
 export type AxCodeGrpcNativeIpcStreamCleanup = void | (() => void | Promise<void>)
 
+/** Channel-style IPC bridge that pushes stream items through a controller. */
 export type AxCodeGrpcNativeIpcChannelBridge = {
   unary<TRequest, TResponse>(call: AxCodeGrpcNativeIpcUnaryCall<TRequest>): Promise<TResponse>
   serverStream?<TRequest, TResponse>(
@@ -616,81 +653,98 @@ export type AxCodeGrpcNativeIpcChannelBridge = {
   ): AxCodeGrpcNativeIpcStreamCleanup | Promise<AxCodeGrpcNativeIpcStreamCleanup>
 }
 
+/** Handler context passed to native method implementations (method plus call options). */
 export type AxCodeGrpcNativeHandlerContext<TMethod extends AxCodeGrpcMethod = AxCodeGrpcMethod> =
   AxCodeGrpcCallOptions & {
     method: TMethod
   }
 
+/** Native unary handler bound to one gRPC method path. */
 export type AxCodeGrpcNativeUnaryHandler<TRequest = unknown, TResponse = unknown> = (
   request: TRequest,
   context: AxCodeGrpcNativeHandlerContext<AxCodeGrpcUnaryMethod>,
 ) => TResponse | Promise<TResponse>
 
+/** Native server-stream handler bound to one gRPC method path. */
 export type AxCodeGrpcNativeServerStreamHandler<TRequest = unknown, TResponse = unknown> = (
   request: TRequest,
   context: AxCodeGrpcNativeHandlerContext<AxCodeGrpcStreamingMethod>,
 ) => AsyncIterable<TResponse>
 
+/** Native bidirectional-stream handler bound to one gRPC method path. */
 export type AxCodeGrpcNativeBidiStreamHandler<TRequest = unknown, TInput = unknown, TResponse = unknown> = (
   request: TRequest,
   input: AsyncIterable<TInput>,
   context: AxCodeGrpcNativeHandlerContext<AxCodeGrpcBidirectionalStreamingMethod>,
 ) => AsyncIterable<TResponse>
 
+/** Map of gRPC method paths to native handlers, grouped by streaming kind. */
 export type AxCodeGrpcNativeHandlerMap = {
   unary?: Partial<Record<AxCodeGrpcUnaryMethod, AxCodeGrpcNativeUnaryHandler>>
   serverStream?: Partial<Record<AxCodeGrpcStreamingMethod, AxCodeGrpcNativeServerStreamHandler>>
   bidiStream?: Partial<Record<AxCodeGrpcBidirectionalStreamingMethod, AxCodeGrpcNativeBidiStreamHandler>>
 }
 
+/** Coverage filter for asserting that required native handlers are present. */
 export type AxCodeGrpcNativeHandlerCoverageFilter = AxCodeGrpcMethodDescriptorFilter & {
   methods?: readonly AxCodeGrpcMethod[]
 }
 
+/** Whether native handler coverage is required (`true`) or filtered to a subset of methods. */
 export type AxCodeGrpcNativeHandlerCoverageRequirement = true | AxCodeGrpcNativeHandlerCoverageFilter
 
+/** Options for building a native bridge from a handler map. */
 export type AxCodeGrpcNativeBridgeFromHandlersOptions = {
   requireHandlers?: AxCodeGrpcNativeHandlerCoverageRequirement
 }
 
+/** Health-check response from the headless gRPC service. */
 export type AxCodeGrpcHealthResponse = {
   status: "SERVING"
   transport?: "http-bridge" | "grpc"
 }
 
+/** Request payload for `CreateSession`. */
 export type AxCodeGrpcCreateSessionRequest = {
   session?: HeadlessCreateSessionInput
 }
 
+/** Request payload for `LoadSessionEvidence`. */
 export type AxCodeGrpcLoadSessionEvidenceRequest = {
   sessionID: string
   parameters?: HeadlessSessionEvidenceInput
 }
 
+/** Session-scoped request carrying `sessionID` and optional parameters. */
 export type AxCodeGrpcSessionRequest<TParameters = unknown> = {
   sessionID: string
   parameters?: TParameters
 }
 
+/** Session-scoped request carrying `sessionID` and an optional JSON body. */
 export type AxCodeGrpcSessionBodyRequest<TBody = unknown> = {
   sessionID: string
   body?: TBody
 }
 
+/** Request identifying one message inside a session. */
 export type AxCodeGrpcSessionMessageRequest = {
   sessionID: string
   messageID: string
 }
 
+/** Request identifying a permission or question by `requestID`. */
 export type AxCodeGrpcRequestIDRequest = {
   requestID: string
 }
 
+/** Request identifying a permission or question and supplying a JSON body. */
 export type AxCodeGrpcRequestBodyRequest<TBody = unknown> = {
   requestID: string
   body?: TBody
 }
 
+/** Named slice of GUI bootstrap state that `LoadBootstrap` can include. */
 export type AxCodeGrpcBootstrapField =
   | "sessions"
   | "providers"
@@ -709,11 +763,13 @@ export type AxCodeGrpcBootstrapField =
   | "formatter"
   | "vcs"
 
+/** Request payload for `LoadBootstrap`. */
 export type AxCodeGrpcBootstrapRequest = {
   include?: Partial<Record<AxCodeGrpcBootstrapField, boolean>>
   sessionListStart?: number
 }
 
+/** Partial GUI startup snapshot plus per-slice errors from `LoadBootstrap`. */
 export type AxCodeGrpcBootstrapResponse = Partial<Record<AxCodeGrpcBootstrapField, unknown>> & {
   errors: Array<{
     source: AxCodeGrpcBootstrapField
@@ -721,41 +777,49 @@ export type AxCodeGrpcBootstrapResponse = Partial<Record<AxCodeGrpcBootstrapFiel
   }>
 }
 
+/** Request payload for `ConnectPty` (terminal id and optional replay cursor). */
 export type AxCodeGrpcPtyConnectRequest = {
   id: string
   cursor?: number
 }
 
+/** Client-to-server PTY event (input, resize, or close). */
 export type AxCodeGrpcPtyClientEvent =
   | string
   | { type: "input"; data: string }
   | { type: "resize"; cols: number; rows: number }
   | { type: "close"; code?: number; reason?: string }
 
+/** Server-to-client PTY event (output, replay, or closed). */
 export type AxCodeGrpcPtyServerEvent =
   | { type: "output"; data: string }
   | { type: "replay"; cursor: number; from?: number; gap?: { requested: number; available: number } }
   | { type: "closed"; code?: number; reason?: string }
 
+/** Request payload for a task-queue command (pause, resume, cancel, retry, send-now). */
 export type AxCodeGrpcTaskQueueCommandRequest = {
   id: string
   command: "pause" | "resume" | "cancel" | "retry" | "send-now"
 }
 
+/** Request payload for a scheduled-task command (pause or resume). */
 export type AxCodeGrpcScheduledTaskCommandRequest = {
   id: string
   command: "pause" | "resume"
 }
 
+/** Request that identifies an MCP server or similar resource by name. */
 export type AxCodeGrpcNamedRequest = {
   name: string
 }
 
+/** Request payload for `AddMcpServer`. */
 export type AxCodeGrpcMcpAddRequest = {
   name: string
   config?: NonNullable<Parameters<HeadlessHttpClient["client"]["mcp"]["add"]>[0]>["config"]
 }
 
+/** Request payload for completing MCP OAuth (`CompleteMcpAuth`). */
 export type AxCodeGrpcMcpAuthCallbackRequest = AxCodeGrpcNamedRequest & {
   code?: string
 }
@@ -763,25 +827,30 @@ export type AxCodeGrpcMcpAuthCallbackRequest = AxCodeGrpcNamedRequest & {
 type AxCodeGrpcWorkflowRunStartInput = Parameters<HeadlessHttpClient["workflowRun"]["start"]>[1]
 type AxCodeGrpcWorkflowRunRetryInput = Parameters<HeadlessHttpClient["workflowRun"]["retry"]>[1]
 
+/** Request payload for a workflow-run command (start, pause, resume, cancel, retry). */
 export type AxCodeGrpcWorkflowRunCommandRequest = {
   runID: string
   command: "start" | "pause" | "resume" | "cancel" | "retry"
   body?: AxCodeGrpcWorkflowRunStartInput | AxCodeGrpcWorkflowRunRetryInput
 }
 
+/** Options for `createAxCodeGrpcClient`: a transport implementing the gRPC method table. */
 export type AxCodeGrpcClientOptions = {
   transport: AxCodeGrpcTransport
 }
 
+/** Options for `startAxCodeGrpcHeadlessBackend`, including an optional WebSocket factory. */
 export type AxCodeGrpcHeadlessBackendOptions = HeadlessBackendOptions & {
   webSocketFactory?: (url: string) => AxCodeGrpcWebSocketLike
 }
 
+/** Running gRPC headless backend: typed client plus `close()`. */
 export type AxCodeGrpcHeadlessBackendHandle = {
   client: ReturnType<typeof createAxCodeGrpcClient>
   close(): Promise<void>
 }
 
+/** Minimal WebSocket surface used by the loopback HTTP/PTY bridge. */
 export type AxCodeGrpcWebSocketLike = {
   readyState: number
   binaryType?: BinaryType
@@ -795,6 +864,7 @@ export type AxCodeGrpcWebSocketLike = {
   onclose?: ((event: { code?: number; reason?: string }) => void) | null
 }
 
+/** Loopback-only HTTP bridge options wrapping a headless client. */
 export type AxCodeGrpcHttpBridgeOptions = HeadlessClientOptions & {
   baseUrl: string
   webSocketFactory?: (url: string) => AxCodeGrpcWebSocketLike
@@ -804,6 +874,7 @@ export type AxCodeGrpcHttpBridgeOptions = HeadlessClientOptions & {
   allowRemoteHttpBridge?: boolean
 }
 
+/** Adapt a same-realm native bridge to the `AxCodeGrpcTransport` interface. */
 export function createAxCodeGrpcNativeBridgeTransport(bridge: AxCodeGrpcNativeBridge): AxCodeGrpcTransport {
   return {
     unary<TRequest, TResponse>(method: AxCodeGrpcUnaryMethod, request: TRequest, options?: AxCodeGrpcCallOptions) {
@@ -848,6 +919,7 @@ export function createAxCodeGrpcNativeBridgeTransport(bridge: AxCodeGrpcNativeBr
   }
 }
 
+/** Adapt a structured-clone IPC bridge to the `AxCodeGrpcTransport` interface. */
 export function createAxCodeGrpcNativeIpcTransport(bridge: AxCodeGrpcNativeIpcBridge): AxCodeGrpcTransport {
   return {
     unary<TRequest, TResponse>(method: AxCodeGrpcUnaryMethod, request: TRequest, options?: AxCodeGrpcCallOptions) {
@@ -894,6 +966,7 @@ export function createAxCodeGrpcNativeIpcTransport(bridge: AxCodeGrpcNativeIpcBr
   }
 }
 
+/** Build an IPC bridge from push-style channel callbacks with unsubscribe. */
 export function createAxCodeGrpcNativeIpcBridgeFromChannels(
   bridge: AxCodeGrpcNativeIpcChannelBridge,
 ): AxCodeGrpcNativeIpcBridge {
@@ -914,6 +987,7 @@ export function createAxCodeGrpcNativeIpcBridgeFromChannels(
   }
 }
 
+/** Create a push-style IPC stream with an async iterable and controller. */
 export function createAxCodeGrpcNativeIpcStream<T>(
   subscribe: (
     controller: AxCodeGrpcNativeIpcStreamController<T>,
@@ -967,6 +1041,7 @@ export function createAxCodeGrpcNativeIpcStream<T>(
   }
 }
 
+/** Bind a handler map to a native bridge; optionally require coverage. */
 export function createAxCodeGrpcNativeBridgeFromHandlers(
   handlers: AxCodeGrpcNativeHandlerMap,
   options: AxCodeGrpcNativeBridgeFromHandlersOptions = {},
@@ -993,6 +1068,7 @@ export function createAxCodeGrpcNativeBridgeFromHandlers(
   }
 }
 
+/** Return gRPC methods that are missing from a native handler map. */
 export function listMissingAxCodeGrpcNativeHandlers(
   handlers: AxCodeGrpcNativeHandlerMap,
   filter: AxCodeGrpcNativeHandlerCoverageFilter = {},
@@ -1003,6 +1079,7 @@ export function listMissingAxCodeGrpcNativeHandlers(
     .filter((descriptor) => !hasAxCodeGrpcNativeHandler(handlers, descriptor))
 }
 
+/** Throw if a native handler map is missing required methods. */
 export function assertAxCodeGrpcNativeHandlers(
   handlers: AxCodeGrpcNativeHandlerMap,
   filter: AxCodeGrpcNativeHandlerCoverageFilter = {},
@@ -1021,14 +1098,17 @@ function assertRequiredAxCodeGrpcNativeHandlers(
   assertAxCodeGrpcNativeHandlers(handlers, requirement === true ? {} : requirement)
 }
 
+/** Create a high-level gRPC client from a same-realm native bridge. */
 export function createAxCodeGrpcClientFromNativeBridge(bridge: AxCodeGrpcNativeBridge) {
   return createAxCodeGrpcClient({ transport: createAxCodeGrpcNativeBridgeTransport(bridge) })
 }
 
+/** Create a high-level gRPC client from a structured-clone IPC bridge. */
 export function createAxCodeGrpcClientFromNativeIpc(bridge: AxCodeGrpcNativeIpcBridge) {
   return createAxCodeGrpcClient({ transport: createAxCodeGrpcNativeIpcTransport(bridge) })
 }
 
+/** Create a high-level gRPC client by binding method names to typed handlers. */
 export function createAxCodeGrpcClientFromNativeHandlers(
   handlers: AxCodeGrpcNativeHandlerMap,
   options: AxCodeGrpcNativeBridgeFromHandlersOptions = {},
@@ -1036,6 +1116,7 @@ export function createAxCodeGrpcClientFromNativeHandlers(
   return createAxCodeGrpcClientFromNativeBridge(createAxCodeGrpcNativeBridgeFromHandlers(handlers, options))
 }
 
+/** Create a high-level gRPC client from an `AxCodeGrpcTransport`. */
 export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
   const transport = input.transport
   const unary = <TRequest, TResponse>(
@@ -1761,6 +1842,7 @@ export function createAxCodeGrpcClient(input: AxCodeGrpcClientOptions) {
   }
 }
 
+/** Loopback-only compatibility transport over the headless HTTP/SSE/WebSocket backend. */
 export function createAxCodeGrpcHttpBridge(input: AxCodeGrpcHttpBridgeOptions): AxCodeGrpcTransport {
   assertHttpBridgeBaseUrl(input)
   const clientFor = (options?: AxCodeGrpcCallOptions) =>
@@ -1805,12 +1887,15 @@ export function createAxCodeGrpcHttpBridge(input: AxCodeGrpcHttpBridgeOptions): 
   }
 }
 
+/** Create a gRPC-shaped client over the loopback HTTP bridge. */
 export function createAxCodeGrpcClientFromHttp(input: AxCodeGrpcHttpBridgeOptions) {
   return createAxCodeGrpcClient({ transport: createAxCodeGrpcHttpBridge(input) })
 }
 
+/** Alias for `createAxCodeGrpcClient`. */
 export const createAxCodeGrpcHeadlessClient = createAxCodeGrpcClient
 
+/** Spawn a local AX Code backend and return a gRPC-shaped client pointed at it. */
 export async function startAxCodeGrpcHeadlessBackend(
   options: AxCodeGrpcHeadlessBackendOptions = {},
 ): Promise<AxCodeGrpcHeadlessBackendHandle> {
@@ -1828,6 +1913,7 @@ export async function startAxCodeGrpcHeadlessBackend(
   }
 }
 
+/** Locate the packaged `headless.proto` asset from the current module URL. */
 export function resolveAxCodeGrpcProtoUrl(baseUrl: string | URL = import.meta.url): URL {
   const moduleUrl = typeof baseUrl === "string" ? new URL(baseUrl) : baseUrl
   const relativePath = moduleUrl.pathname.includes("/dist/")

@@ -23,12 +23,14 @@ import {
   assertAxCodeGrpcMethodSupported,
 } from "./grpc.js"
 
+/** Options for `startAxCodeGrpcNodeHttp2Server` (native bridge, loopback host, port). */
 export type AxCodeGrpcNodeHttp2ServerOptions = {
   bridge: AxCodeGrpcNativeBridge
   host?: string
   port?: number
 }
 
+/** Running Node HTTP/2 gRPC server: listen URL, server handle, and `close()`. */
 export type AxCodeGrpcNodeHttp2ServerHandle = {
   url: string
   server: Http2.Http2Server
@@ -217,6 +219,7 @@ const PROTO_CODECS: Record<string, ProtoCodec> = {
   },
 }
 
+/** Attach the AX Code gRPC native bridge to an existing Node `http2` server. */
 export function bindAxCodeGrpcNodeHttp2Server(server: Http2.Http2Server, bridge: AxCodeGrpcNativeBridge) {
   server.on("stream", (stream, headers) => {
     void handleAxCodeGrpcHttp2Stream(stream, headers, bridge).catch((error) => {
@@ -225,6 +228,7 @@ export function bindAxCodeGrpcNodeHttp2Server(server: Http2.Http2Server, bridge:
   })
 }
 
+/** Start a loopback Node HTTP/2 server that exposes the AX Code gRPC contract. */
 export async function startAxCodeGrpcNodeHttp2Server(
   options: AxCodeGrpcNodeHttp2ServerOptions,
 ): Promise<AxCodeGrpcNodeHttp2ServerHandle> {
@@ -261,18 +265,21 @@ export async function startAxCodeGrpcNodeHttp2Server(
   }
 }
 
+/** Encode a proto message by type name into protobuf bytes. */
 export function encodeAxCodeGrpcProtoMessage(messageType: string, value: unknown): Uint8Array {
   const codec = getCodec(messageType)
   const wireValue = codec.toWire?.(value) ?? ((value ?? {}) as Record<string, unknown>)
   return encodeProtoObject(codec, wireValue)
 }
 
+/** Decode protobuf bytes into a proto message by type name. */
 export function decodeAxCodeGrpcProtoMessage(messageType: string, bytes: Uint8Array): unknown {
   const codec = getCodec(messageType)
   const wireValue = decodeProtoObject(codec, bytes)
   return codec.fromWire?.(wireValue) ?? wireValue
 }
 
+/** Frame protobuf bytes with the gRPC HTTP/2 data-frame header. */
 export function encodeAxCodeGrpcFrame(message: Uint8Array): Uint8Array {
   const frame = new Uint8Array(message.byteLength + 5)
   frame[0] = 0
@@ -281,6 +288,7 @@ export function encodeAxCodeGrpcFrame(message: Uint8Array): Uint8Array {
   return frame
 }
 
+/** Split a byte buffer into complete gRPC data-frame payloads. */
 export function decodeAxCodeGrpcFrames(bytes: Uint8Array): Uint8Array[] {
   const decoder = new GrpcFrameDecoder()
   const frames = decoder.push(bytes)

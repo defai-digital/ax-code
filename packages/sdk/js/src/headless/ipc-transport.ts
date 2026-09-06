@@ -13,6 +13,7 @@ import {
   writeIpcMessage,
 } from "./ipc-protocol.js"
 
+/** Options for `createIpcTransport`: Unix socket path, directory, and headers. */
 export type IpcTransportOptions = {
   /** Path to the Unix domain socket or `host:port` for loopback fallback. */
   socketPath: string
@@ -26,6 +27,7 @@ export type IpcTransportOptions = {
   signal?: AbortSignal
 }
 
+/** Connected IPC socket plus an async iterator of framed messages. */
 export type IpcTransportConnectResult = {
   socket: Socket
   /** Async iterator of all framed messages received from the server. */
@@ -52,6 +54,7 @@ type IpcEventSubscriber = {
 // consumers to grow memory without limit.
 const MAX_BUFFERED_EVENTS = 1000
 
+/** Open an IPC socket and return the raw connection (socket plus message iterator). */
 export async function connectIpcTransport(options: IpcTransportOptions): Promise<IpcTransportConnectResult> {
   return new Promise((resolve, reject) => {
     if (options.signal?.aborted) {
@@ -113,6 +116,7 @@ async function* readMessages(socket: Socket): AsyncGenerator<IpcMessage> {
   }
 }
 
+/** Create a headless transport that talks to a local Unix-domain IPC socket. */
 export function createIpcTransport(options: IpcTransportOptions): HeadlessTransport {
   let connection: IpcTransportConnectResult | undefined
   let pendingConnection: Promise<IpcTransportConnectResult> | undefined
@@ -367,6 +371,7 @@ export function createIpcTransport(options: IpcTransportOptions): HeadlessTransp
   return transport
 }
 
+/** Error raised when the IPC backend returns an error frame. */
 export class IpcTransportError extends Error {
   readonly code: string
   readonly details: unknown

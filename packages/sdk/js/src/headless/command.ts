@@ -1,5 +1,7 @@
+/** Whether a runtime command should be accepted synchronously or queued asynchronously. */
 export type HeadlessRuntimeCommandMode = "sync" | "async"
 
+/** Model selector: a string id or `{ providerID, modelID }`. */
 export type HeadlessRuntimeModel =
   | string
   | {
@@ -7,11 +9,13 @@ export type HeadlessRuntimeModel =
       modelID: string
     }
 
+/** One prompt/command part (`type` plus arbitrary fields). */
 export type HeadlessRuntimePart = {
   type: string
   [key: string]: unknown
 }
 
+/** Body of a `session.prompt` runtime command. */
 export type HeadlessPromptBody = {
   parts: HeadlessRuntimePart[]
   agent?: string
@@ -23,6 +27,7 @@ export type HeadlessPromptBody = {
   [key: string]: unknown
 }
 
+/** Body of a `session.command` runtime command. */
 export type HeadlessCommandBody = {
   command: string
   arguments?: string
@@ -34,6 +39,7 @@ export type HeadlessCommandBody = {
   [key: string]: unknown
 }
 
+/** Body of a `session.shell` runtime command. */
 export type HeadlessShellBody = {
   command: string
   agent?: string
@@ -43,18 +49,21 @@ export type HeadlessShellBody = {
   [key: string]: unknown
 }
 
+/** Body of a `permission.reply` runtime command. */
 export type HeadlessPermissionReplyBody = {
   requestID: string
   reply?: "once" | "always" | "reject"
   [key: string]: unknown
 }
 
+/** Body of a `question.reply` runtime command. */
 export type HeadlessQuestionReplyBody = {
   requestID: string
   answers: unknown
   [key: string]: unknown
 }
 
+/** Discriminated union of commands a headless client can send to the runtime. */
 export type HeadlessRuntimeCommand =
   | {
       type: "session.prompt"
@@ -87,10 +96,12 @@ export type HeadlessRuntimeCommand =
       body: HeadlessQuestionReplyBody
     }
 
+/** Accepted result of sending a runtime command (`200` with body or `202` queued). */
 export type HeadlessRuntimeCommandResult =
   | { accepted: true; status: 202; body?: undefined }
   | { accepted: true; status: 200; body: unknown }
 
+/** Whether a runtime command may be sent with `mode: "async"`. */
 export function commandAcceptsAsyncMode(command: HeadlessRuntimeCommand) {
   return command.type === "session.prompt" || command.type === "session.command" || command.type === "session.shell"
 }

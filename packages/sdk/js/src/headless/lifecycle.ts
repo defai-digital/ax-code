@@ -17,8 +17,10 @@ const STARTUP_TIMEOUT_MS = 30_000
 const READY_LINE_PREFIX = "ax-code server listening on "
 const IPC_READY_LINE_PREFIX = "ax-code server ipc listening on "
 
+/** How the SDK talks to a spawned backend: loopback HTTP/SSE or a Unix-domain IPC socket. */
 export type HeadlessBackendTransport = "http-sse" | "ipc"
 
+/** Options for `startHeadlessBackend`: directory, binary, transport, auth, and diagnostics hooks. */
 export type HeadlessBackendOptions = {
   directory?: string
   hostname?: string
@@ -64,6 +66,7 @@ export type HeadlessBackendOptions = {
   fetch?: typeof fetch
 }
 
+/** Structured startup diagnostics captured while launching a headless backend. */
 export type HeadlessBackendDiagnostics = {
   launchedAt: string
   binary: string
@@ -89,6 +92,7 @@ export type HeadlessBackendDiagnostics = {
   capturedOutput?: string
 }
 
+/** Running headless backend: URL or socket, auth headers, diagnostics, and `close()`. */
 export type HeadlessBackendHandle = {
   url: string
   socketPath?: string
@@ -100,6 +104,7 @@ export type HeadlessBackendHandle = {
   signalCode: NodeJS.Signals | null
 }
 
+/** Thrown when `startHeadlessBackend` fails before the server becomes ready. */
 export class HeadlessBackendStartupError extends Error {
   readonly diagnostics: HeadlessBackendDiagnostics
 
@@ -110,6 +115,10 @@ export class HeadlessBackendStartupError extends Error {
   }
 }
 
+/**
+ * Spawn `ax-code serve` (or a provided binary), wait until `/global/health` succeeds, and return a
+ * closable handle.
+ */
 export async function startHeadlessBackend(options: HeadlessBackendOptions = {}): Promise<HeadlessBackendHandle> {
   const transport = options.transport ?? "http-sse"
   const hostname = normalizeLoopbackHostname(options.hostname ?? "127.0.0.1")

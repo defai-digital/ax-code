@@ -110,6 +110,7 @@ export interface SdkTool<I = unknown> {
 // Options & Configuration
 // ============================================================
 
+/** Options for `createAgent()`: workspace directory, model, tools, auth, and lifecycle hooks. */
 export interface AgentOptions {
   /** Project directory to operate in */
   directory: string
@@ -140,6 +141,7 @@ export interface AgentOptions {
   tools?: SdkTool[]
 }
 
+/** Direct API-key authentication, used when the host does not rely on `ax-code providers login`. */
 export interface AuthConfig {
   /** Provider to authenticate with */
   provider: string
@@ -147,6 +149,7 @@ export interface AuthConfig {
   apiKey: string
 }
 
+/** Optional callbacks fired during agent execution (tool calls, permissions, retries, errors). */
 export interface AgentHooks {
   /** Called when a tool starts executing. */
   onToolCall?: (tool: string, input: unknown) => void | Promise<void>
@@ -160,12 +163,14 @@ export interface AgentHooks {
   onRetry?: (attempt: number, error: Error) => void
 }
 
+/** Permission prompt raised by the runtime that a host may allow or deny. */
 export interface PermissionRequest {
   id: string
   permission: string
   patterns: string[]
 }
 
+/** Per-call overrides for `agent.run()` / `agent.stream()` (model, agent, timeout, abort signal). */
 export interface RunOptions {
   /** Override model for this call */
   model?: { providerID: string; modelID: string }
@@ -179,6 +184,7 @@ export interface RunOptions {
   timeout?: number
 }
 
+/** Final result of a completed agent run, including text, usage, and tool-call history. */
 export interface RunResult {
   /** Final text response */
   text: string
@@ -200,6 +206,7 @@ export interface RunResult {
   messageID: string
 }
 
+/** Record of one tool invocation made during an agent run. */
 export interface ToolCallInfo {
   tool: string
   input: unknown
@@ -208,6 +215,7 @@ export interface ToolCallInfo {
   duration?: number
 }
 
+/** Typed event yielded by `agent.stream()` (text, tool calls, reasoning, errors, completion). */
 export type StreamEvent =
   | { type: "text"; text: string }
   | { type: "tool-call"; tool: string; input: unknown; id: string }
@@ -222,6 +230,7 @@ export type StreamEvent =
 // Stream Handle (convenience wrapper)
 // ============================================================
 
+/** Streaming run handle: async iteration plus `.text()`, `.result()`, `.on()`, and `.cancel()`. */
 export interface StreamHandle extends AsyncIterable<StreamEvent> {
   /** Collect all text and return the final string */
   text(): Promise<string>
@@ -257,6 +266,7 @@ export interface SdkMessage {
 // Session & Agent interfaces
 // ============================================================
 
+/** Persistent multi-turn session created by `agent.session()`. */
 export interface SessionHandle {
   /** Session ID */
   readonly id: string
@@ -272,6 +282,7 @@ export interface SessionHandle {
   abort(): Promise<void>
 }
 
+/** In-process agent handle returned by `createAgent()`: one-shot runs, streaming, sessions, and disposal. */
 export interface Agent {
   /** Send a prompt and get the final result (creates a new session) */
   run(message: string, options?: RunOptions): Promise<RunResult>

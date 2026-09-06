@@ -1,8 +1,10 @@
 import { decode, encode } from "@msgpack/msgpack"
 import type { Socket } from "node:net"
 
+/** Length-prefixed IPC message: request, response, error, or event. */
 export type IpcMessage = IpcRequestMessage | IpcResponseMessage | IpcErrorMessage | IpcEventMessage
 
+/** IPC request frame (method, path, query, body, headers). */
 export type IpcRequestMessage = {
   type: "request"
   id: string
@@ -14,6 +16,7 @@ export type IpcRequestMessage = {
   headers?: Record<string, string>
 }
 
+/** IPC response frame (status and optional body). */
 export type IpcResponseMessage = {
   type: "response"
   id: string
@@ -21,6 +24,7 @@ export type IpcResponseMessage = {
   body?: unknown
 }
 
+/** IPC error frame (code, message, optional details). */
 export type IpcErrorMessage = {
   type: "error"
   id: string
@@ -29,11 +33,13 @@ export type IpcErrorMessage = {
   details?: unknown
 }
 
+/** IPC event frame wrapping a runtime event payload. */
 export type IpcEventMessage = {
   type: "event"
   event: unknown
 }
 
+/** Length-prefixed msgpack frame (`Uint8Array`). */
 export type IpcFrame = Uint8Array
 
 /**

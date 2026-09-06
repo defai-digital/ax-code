@@ -203,6 +203,7 @@ export function assertSdkHttpLoopbackBind(hostname: string, _allowNetworkBind: b
   )
 }
 
+/** Whether `hostname` is IPv4/IPv6 localhost after normalization. */
 export function isLoopbackHostname(hostname: string) {
   const normalized = normalizeLoopbackHostname(hostname)
   return normalized === "localhost" || normalized === "::1" || isIpv4Loopback(normalized)
