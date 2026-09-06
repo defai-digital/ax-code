@@ -197,6 +197,17 @@ describe("ax-engine platform gate", () => {
 
     expect(
       evaluateAxEngineModelFit({
+        eligibility: { ...supported, memoryBytes: undefined },
+        dependency,
+        disk,
+        model: missingModel,
+        minMemoryBytes: 16 * 1024 ** 3,
+        estimatedResources: true,
+      }),
+    ).toMatchObject({ state: "not-fit", downloadable: false, runnable: false })
+
+    expect(
+      evaluateAxEngineModelFit({
         eligibility: unsupported,
         dependency,
         disk,
@@ -281,15 +292,15 @@ describe("ax-engine capability status", () => {
 })
 
 describe("ax-engine model cache", () => {
-  test("normalizes unknown quantization to the conservative default", () => {
+  test("rejects explicit quantization mismatches without changing the selected artifact", () => {
     expect(normalizeQuantization("mlx6bit")).toBe("mlx6bit")
-    // 4-bit packs were dropped from the catalog, so "mlx4bit" no longer owns a
-    // quantization slot on any model and falls back to the default.
-    expect(normalizeQuantization("mlx4bit")).toBe("mlx6bit")
-    expect(normalizeQuantization("mlx4bit", AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID)).toBe("mlx6bit")
-    expect(normalizeQuantization("surprise")).toBe("mlx6bit")
-    expect(normalizeQuantization("toString")).toBe("mlx6bit")
-    expect(normalizeQuantization("constructor")).toBe("mlx6bit")
+    // Additional precisions are separate pinned Hub artifacts, selected with mlx.
+    for (const value of ["mlx4bit", "surprise", "toString", "constructor", "mlx"]) {
+      expect(() => normalizeQuantization(value)).toThrow("does not support quantization")
+    }
+    expect(() => normalizeQuantization("mlx4bit", AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID)).toThrow(
+      "does not support quantization",
+    )
   })
 
   test("defaults downloads into the deterministic AX Code managed model cache", () => {

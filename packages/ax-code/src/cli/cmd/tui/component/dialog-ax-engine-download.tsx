@@ -14,6 +14,7 @@ type AxEngineCatalogModel = AxEngineCatalogEntryState & {
   quantization: string
   hfRepo: string
   minDiskBytes: number
+  revision?: string
 }
 
 type AxEngineCatalog = { models?: AxEngineCatalogModel[] }
@@ -75,7 +76,7 @@ export async function fetchAxEngineDownloadOffer(
     modelID: entry.id,
     name: entry.name,
     quantization: entry.quantization,
-    hfRepo: entry.hfRepo,
+    hfRepo: entry.revision ? `${entry.hfRepo}@${entry.revision}` : entry.hfRepo,
     requiredGiB: Math.ceil(entry.minDiskBytes / 1024 ** 3),
   }
 }

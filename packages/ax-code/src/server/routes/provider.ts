@@ -14,7 +14,7 @@ import { PROVIDER_ID_PARAM, withProviderID } from "./route-params"
 import { redactProviderInfo } from "./config"
 import { Log } from "../../util/log"
 import {
-  AX_ENGINE_MODEL_IDS,
+  AxEngineModelIDSchema,
   AX_ENGINE_PROVIDER_ID,
   AX_ENGINE_QUANTIZATION_IDS,
   axEngineAttachProviderConfig,
@@ -72,7 +72,7 @@ export const AxEnginePrepareBody = z
   .object({
     modelPath: z.string().optional(),
     binaryPath: z.string().optional(),
-    modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
+    modelID: AxEngineModelIDSchema.optional(),
     quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
     download: JsonBoolean.optional(),
     start: JsonBoolean.optional(),
@@ -84,7 +84,7 @@ export const AxEngineStartBody = z
   .object({
     modelPath: z.string().optional(),
     binaryPath: z.string().optional(),
-    modelID: z.enum(AX_ENGINE_MODEL_IDS).optional(),
+    modelID: AxEngineModelIDSchema.optional(),
     quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
     download: JsonBoolean.optional(),
   })
@@ -93,13 +93,13 @@ export const AxEngineStartBody = z
 
 export const AxEngineModelActionBody = z
   .object({
-    // The catalog is 6-bit only, so this enum currently accepts just
-    // "mlx6bit". normalizeQuantization downstream still pins the value to the
-    // quantization the selected model actually ships.
+    // Published Hub artifacts use mlx; the legacy aliases retain mlx6bit.
     quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
   })
   .optional()
   .default({})
+
+export const AxEngineModelsQuery = z.object({ refresh: JsonBoolean.optional() })
 
 export const AlibabaPaiConnectionBody = z.object({
   baseURL: z.string().min(1).max(2_048),
@@ -538,8 +538,12 @@ export const ProviderRoutes = lazy(() =>
           },
         },
       }),
+      validator("query", AxEngineModelsQuery),
       async (c) => {
-        return c.json(await getAxEngineModelsCatalog())
+        const { refresh } = c.req.valid("query")
+        const result = await getAxEngineModelsCatalog({ refresh, signal: c.req.raw.signal })
+        if (refresh) await Provider.invalidate()
+        return c.json(result)
       },
     )
     .post(
@@ -638,8 +642,8 @@ export const ProviderRoutes = lazy(() =>
         const modelID = axEngineModelIDParam(c)
         if (!modelID) return invalidRequest(c, { message: "Unknown AX Engine model", details: { resource: "model" } })
         const body = c.req.valid("json")
-        const quantization = normalizeQuantization(body.quantization, modelID)
         try {
+          const quantization = normalizeQuantization(body.quantization, modelID)
           return c.json(await deleteAxEngineModel({ modelID, quantization }))
         } catch (error) {
           return axEngineInvalidRequest(c, error)
@@ -720,21 +724,25 @@ export const ProviderRoutes = lazy(() =>
       validator("json", AxEnginePrepareBody),
       async (c) => {
         const body = c.req.valid("json")
-        const modelID = normalizeModelID(body.modelID)
-        const quantization = normalizeQuantization(body.quantization, modelID)
-        const result = await prepareAxEngine({
-          modelID,
-          binaryPath: body.binaryPath,
-          modelPath: body.modelPath,
-          quantization,
-          download: body.download,
-          start: body.start,
-          signal: c.req.raw.signal,
-        })
-        await Provider.invalidate().catch((error) =>
-          log.warn("failed to invalidate provider after ax-engine prepare", { error }),
-        )
-        return c.json(result)
+        try {
+          const modelID = normalizeModelID(body.modelID)
+          const quantization = normalizeQuantization(body.quantization, modelID)
+          const result = await prepareAxEngine({
+            modelID,
+            binaryPath: body.binaryPath,
+            modelPath: body.modelPath,
+            quantization,
+            download: body.download,
+            start: body.start,
+            signal: c.req.raw.signal,
+          })
+          await Provider.invalidate().catch((error) =>
+            log.warn("failed to invalidate provider after ax-engine prepare", { error }),
+          )
+          return c.json(result)
+        } catch (error) {
+          return axEngineInvalidRequest(c, error)
+        }
       },
     )
     .post(
@@ -758,21 +766,25 @@ export const ProviderRoutes = lazy(() =>
       validator("json", AxEngineStartBody),
       async (c) => {
         const body = c.req.valid("json")
-        const modelID = normalizeModelID(body.modelID)
-        const quantization = normalizeQuantization(body.quantization, modelID)
-        const result = await prepareAxEngine({
-          modelID,
-          binaryPath: body.binaryPath,
-          modelPath: body.modelPath,
-          quantization,
-          download: body.download,
-          start: true,
-          signal: c.req.raw.signal,
-        })
-        await Provider.invalidate().catch((error) =>
-          log.warn("failed to invalidate provider after ax-engine start", { error }),
-        )
-        return c.json(result)
+        try {
+          const modelID = normalizeModelID(body.modelID)
+          const quantization = normalizeQuantization(body.quantization, modelID)
+          const result = await prepareAxEngine({
+            modelID,
+            binaryPath: body.binaryPath,
+            modelPath: body.modelPath,
+            quantization,
+            download: body.download,
+            start: true,
+            signal: c.req.raw.signal,
+          })
+          await Provider.invalidate().catch((error) =>
+            log.warn("failed to invalidate provider after ax-engine start", { error }),
+          )
+          return c.json(result)
+        } catch (error) {
+          return axEngineInvalidRequest(c, error)
+        }
       },
     )
     .post(

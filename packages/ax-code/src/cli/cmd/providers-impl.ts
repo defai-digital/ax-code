@@ -12,7 +12,7 @@ import { Instance } from "../../project/instance"
 import type { Hooks } from "@ax-code/plugin"
 import { Ssrf } from "../../util/ssrf"
 import { toErrorMessage } from "../../util/error-message"
-import { AX_ENGINE_MODEL_IDS, AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine"
+import { AX_ENGINE_QUANTIZATION_IDS } from "@/provider/ax-engine"
 import { Filesystem } from "@/util/filesystem"
 import { DEFAULT_SETUP_PROVIDER_IDS } from "@/provider/default-setup-providers"
 import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
@@ -294,10 +294,14 @@ export const ProvidersAxEngineCommand = cmd({
     yargs
       .positional("action", {
         describe: "action to run",
-        choices: ["status", "install", "prepare", "start", "stop"] as const,
+        choices: ["models", "status", "install", "prepare", "start", "stop"] as const,
       })
       .option("json", {
         describe: "print JSON output",
+        type: "boolean",
+      })
+      .option("refresh", {
+        describe: "refresh AutomatosX metadata for the models action (no weight downloads)",
         type: "boolean",
       })
       .option("model-path", {
@@ -305,8 +309,8 @@ export const ProvidersAxEngineCommand = cmd({
         type: "string",
       })
       .option("model", {
-        describe: "AX Engine model to prepare",
-        choices: AX_ENGINE_MODEL_IDS,
+        describe: "Legacy AX Engine model ID or pinned AutomatosX/repository@commit from the models catalog",
+        type: "string",
       })
       .option("binary-path", {
         describe: "ax-engine CLI path",
@@ -327,6 +331,7 @@ export const ProvidersAxEngineCommand = cmd({
   async handler(args) {
     const {
       getAxEngineStatus,
+      getAxEngineModelsCatalog,
       installAxEngineBinary,
       normalizeModelID,
       normalizeQuantization,
@@ -340,6 +345,18 @@ export const ProvidersAxEngineCommand = cmd({
       modelID: args.model,
       modelPath: args.modelPath,
       quantization: args.quantization,
+    }
+
+    if (action === "models") {
+      const result = await getAxEngineModelsCatalog({ refresh: args.refresh })
+      if (args.refresh) await Provider.invalidate()
+      if (args.json) console.log(JSON.stringify(result, null, 2))
+      else {
+        for (const warning of result.discovery.warnings) prompts.log.warn(warning)
+        for (const model of result.models)
+          prompts.log.info(`${model.id}\n  ${model.recommended ? "Recommended; " : ""}${model.fit.state}`)
+      }
+      return
     }
 
     if (action === "status") {

@@ -48,7 +48,6 @@ export namespace JsonParseGuard {
     "src/cli/cmd/workflow-impl.ts",
     "src/desktop/webui.ts",
     "src/mcp/discovery.ts",
-    "src/provider/ax-engine/hf-cache.ts",
     "src/provider/cli/json.ts",
     "src/server/ipc-transport.ts",
     "src/session/processor-impl.ts",

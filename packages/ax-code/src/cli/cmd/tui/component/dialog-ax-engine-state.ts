@@ -21,6 +21,8 @@ export function axEngineModelStateAnnotation(entry: {
   blockers?: readonly string[]
 }): string | undefined {
   switch (entry.state) {
+    case "verification-required":
+      return "Prepared; runtime verification required"
     case "downloadable":
       return "Not downloaded"
     case "downloading":
@@ -46,7 +48,7 @@ export function axEngineModelStateAnnotation(entry: {
 export function axEngineModelStateAnnotations(entries: readonly AxEngineCatalogEntryState[]): Map<string, string> {
   return new Map(
     entries.flatMap((entry) => {
-      if (entry.local?.present) return []
+      if (entry.local?.present && entry.fit?.state !== "verification-required") return []
       const annotation = axEngineModelStateAnnotation({ state: entry.fit?.state, blockers: entry.fit?.blockers })
       return annotation ? ([[entry.id, annotation]] as const) : []
     }),

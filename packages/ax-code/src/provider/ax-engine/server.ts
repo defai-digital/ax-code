@@ -15,7 +15,7 @@ import {
   AX_ENGINE_ERROR,
   AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION,
   AX_ENGINE_MTP_MODE,
-  AX_ENGINE_MODEL_IDS,
+  AxEngineModelIDSchema,
   AX_ENGINE_SPECULATION_PROFILE,
   resolveAxEngineApiKey,
 } from "./constants"
@@ -26,7 +26,7 @@ export const AxEngineServerState = z.object({
   pid: z.number().int().positive(),
   port: z.number().int().positive(),
   baseURL: z.string(),
-  modelID: z.enum(AX_ENGINE_MODEL_IDS),
+  modelID: AxEngineModelIDSchema,
   apiModelID: z.string().optional(),
   modelPath: z.string(),
   modelRevision: z.string().optional(),

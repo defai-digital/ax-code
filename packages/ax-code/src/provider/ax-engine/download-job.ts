@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto"
-import { AX_ENGINE_ERROR, AX_ENGINE_MODEL_DEFINITIONS, isAxEngineModelID } from "./constants"
+import { AX_ENGINE_ERROR, isAxEngineModelID } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { getDependencyStatus } from "./dependency"
+import { resolveAxEngineModelDefinition } from "./hub-catalog"
 import { completeProgress, indeterminateProgress, type AxEngineDownloadProgress } from "./download-progress"
 import { downloadModel, getDiskStatus, normalizeQuantization } from "./model-cache"
 import { requirePlatformEligibility } from "./platform"
@@ -91,8 +92,15 @@ export async function startDownloadJob(
     try {
       const eligibility = await requireEligibility()
       controller.signal.throwIfAborted()
-      const definition = AX_ENGINE_MODEL_DEFINITIONS[input.modelID]
-      if (eligibility.memoryBytes !== undefined && eligibility.memoryBytes < definition.minMemoryBytes) {
+      const definition = await resolveAxEngineModelDefinition(input.modelID, {
+        signal: controller.signal,
+        persist: true,
+      })
+      controller.signal.throwIfAborted()
+      if (
+        (definition.estimatedResources && eligibility.memoryBytes === undefined) ||
+        (eligibility.memoryBytes !== undefined && eligibility.memoryBytes < definition.minMemoryBytes)
+      ) {
         throw new Error(
           `${AX_ENGINE_ERROR.InsufficientMemory}: ${Math.ceil(definition.minMemoryBytes / 1024 ** 3)} GB unified memory is required`,
         )
@@ -110,6 +118,7 @@ export async function startDownloadJob(
       job.progress = indeterminateProgress("Starting download…")
       const prepared = await download({
         binaryPath: dependency.binaryPath,
+        ...(definition.revision ? { binaryVersion: dependency.version } : {}),
         modelID: input.modelID,
         quantization,
         signal: controller.signal,
@@ -173,6 +182,6 @@ export async function cancelDownloadJob(jobID: string): Promise<AxEngineModelJob
   return recentJobs.find((job) => job.id === jobID)
 }
 
-export function modelDisplayNameForJob(modelID: AxEngineModelID) {
-  return AX_ENGINE_MODEL_DEFINITIONS[modelID].name
+export async function modelDisplayNameForJob(modelID: AxEngineModelID) {
+  return (await resolveAxEngineModelDefinition(modelID)).name
 }

@@ -1,6 +1,7 @@
 import path from "path"
+import { createHash } from "node:crypto"
 import { Global } from "@/global"
-import { AX_ENGINE_MANAGED_BINARY_NAME } from "./constants"
+import { AX_ENGINE_MANAGED_BINARY_NAME, isAxEngineModelID, isAxEngineBuiltinModelID } from "./constants"
 import type { AxEngineModelID } from "./constants"
 
 function containedPath(base: string, ...segments: string[]) {
@@ -32,9 +33,19 @@ export namespace AxEnginePaths {
   export const prepareLock = containedPath(state, "prepare")
   export const installLock = containedPath(state, "install")
   export const serverLog = containedPath(log, "server.log")
+  export const hubCatalog = containedPath(state, "hub-catalog.json")
+  export const hubArtifacts = containedPath(state, "hub-artifacts")
 
   export function managedModelDir(modelID: AxEngineModelID, quantization: string) {
-    return containedPath(models, modelID, quantization)
+    if (!isAxEngineModelID(modelID)) throw new TypeError("Invalid AX Engine managed model ID")
+    const segment = isAxEngineBuiltinModelID(modelID)
+      ? modelID
+      : `hub-${createHash("sha256").update(modelID).digest("hex")}`
+    return containedPath(models, segment, quantization)
+  }
+
+  export function hubArtifact(modelID: AxEngineModelID) {
+    return containedPath(hubArtifacts, `${createHash("sha256").update(modelID).digest("hex")}.json`)
   }
 
   export function managedBinaryDir(version: string) {

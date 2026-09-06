@@ -18,7 +18,7 @@ import {
   AX_ENGINE_PROVIDER_ID,
 } from "./ax-engine/constants"
 import { DEDICATED_PRIVATE_GPU_VENDORS } from "./private-gpu/presets"
-import type { AxEngineModelID } from "./ax-engine/constants"
+import type { AxEngineBuiltinModelID } from "./ax-engine/constants"
 import fs from "fs/promises"
 import { isRetiredProviderID } from "./retired-providers"
 
@@ -96,7 +96,7 @@ export namespace ModelsDev {
 
   const DataSchema = z.record(z.string(), Provider)
 
-  function builtinAxEngineModel(modelID: AxEngineModelID): Model {
+  function builtinAxEngineModel(modelID: AxEngineBuiltinModelID): Model {
     const definition = AX_ENGINE_MODEL_DEFINITIONS[modelID]
     const minMemoryBytes = definition.minMemoryBytes
     const memoryBlockReason = modelMemoryBlockReason(AX_ENGINE_PROVIDER_ID, {

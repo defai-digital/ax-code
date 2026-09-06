@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { Filesystem } from "@/util/filesystem"
-import { AX_ENGINE_ERROR } from "./constants"
+import { AX_ENGINE_ERROR, axEngineHubReference } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
 import { HfCache } from "./hf-cache"
@@ -130,7 +130,9 @@ async function fallbackDeleteTarget(modelID: AxEngineModelID, quantization: AxEn
   // still be able to remove it. Restrict the fallback to paths derived from
   // the model catalog so arbitrary configured paths never become deletable.
   const repo = hfRepoFor(modelID, quantization)
-  const snapshot = repo ? await HfCache.snapshotDir(repo) : undefined
+  const snapshot = repo
+    ? await HfCache.snapshotDir(repo, undefined, undefined, axEngineHubReference(modelID)?.revision)
+    : undefined
   if (snapshot) return snapshot
 
   const managed = AxEnginePaths.managedModelDir(modelID, quantization)

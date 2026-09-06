@@ -14412,6 +14412,7 @@ export type ProviderAxEngineModelsData = {
   path?: never
   query?: {
     directory?: string
+    refresh?: boolean
   }
   url: "/provider/ax-engine/models"
 }
@@ -14427,7 +14428,7 @@ export type ProviderAxEngineModelsResponses = {
 /** Request payload shape for `POST /provider/ax-engine/models/{modelID}/download` — Download ax-engine local model */
 export type ProviderAxEngineModelDownloadData = {
   body?: {
-    quantization?: "mlx6bit"
+    quantization?: "mlx6bit" | "mlx"
   }
   path: {
     modelID: string
@@ -14511,7 +14512,7 @@ export type ProviderAxEngineDownloadCancelResponses = {
 /** Request payload shape for `DELETE /provider/ax-engine/models/{modelID}` — Delete ax-engine local model */
 export type ProviderAxEngineModelDeleteData = {
   body?: {
-    quantization?: "mlx6bit"
+    quantization?: "mlx6bit" | "mlx"
   }
   path: {
     modelID: string
@@ -14594,8 +14595,8 @@ export type ProviderAxEnginePrepareData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
-    quantization?: "mlx6bit"
+    modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit" | string
+    quantization?: "mlx6bit" | "mlx"
     download?: boolean
     start?: boolean
   }
@@ -14630,8 +14631,8 @@ export type ProviderAxEngineStartData = {
   body?: {
     modelPath?: string
     binaryPath?: string
-    modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit"
-    quantization?: "mlx6bit"
+    modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit" | string
+    quantization?: "mlx6bit" | "mlx"
     download?: boolean
   }
   path?: never

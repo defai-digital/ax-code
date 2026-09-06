@@ -1,6 +1,6 @@
 import z from "zod"
 import type { Provider } from "../provider"
-import { resolveAxEngineApiKey } from "./constants"
+import { AX_ENGINE_ERROR, resolveAxEngineApiKey } from "./constants"
 
 const Modalities = z
   .object({
@@ -63,6 +63,26 @@ export type AxEngineLiveModelContract = {
   codingOnly?: boolean
 }
 
+export function requireAxEngineCodingContract(
+  contracts: AxEngineLiveModelContract[],
+  apiModelID: string,
+  options: { requireText?: boolean } = {},
+) {
+  const contract = contracts.find((item) => item.id === apiModelID)
+  if (!contract) throw new Error(`ax-engine server does not advertise model ${apiModelID}`)
+  if (
+    !contract.toolcall ||
+    contract.capabilities.input?.text === false ||
+    contract.capabilities.output?.text === false ||
+    (options.requireText && (contract.capabilities.input?.text !== true || contract.capabilities.output?.text !== true))
+  ) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.ToolcallUnsupported}: ax-engine model ${apiModelID} does not advertise OpenAI structured tool calling with text input and output`,
+    )
+  }
+  return contract
+}
+
 export function parseAxEngineModelContracts(payload: unknown): AxEngineLiveModelContract[] {
   const parsed = AxEngineModelsResponse.safeParse(payload)
   if (!parsed.success) return []
@@ -89,7 +109,7 @@ export function parseAxEngineModelContracts(payload: unknown): AxEngineLiveModel
         toolcall,
         input: card.capabilities?.input
           ? {
-              text: card.capabilities.input.text ?? true,
+              text: card.capabilities.input.text ?? false,
               audio: card.capabilities.input.audio ?? false,
               image: card.capabilities.input.image ?? false,
               video: card.capabilities.input.video ?? false,
@@ -98,7 +118,7 @@ export function parseAxEngineModelContracts(payload: unknown): AxEngineLiveModel
           : undefined,
         output: card.capabilities?.output
           ? {
-              text: card.capabilities.output.text ?? true,
+              text: card.capabilities.output.text ?? false,
               audio: card.capabilities.output.audio ?? false,
               image: card.capabilities.output.image ?? false,
               video: card.capabilities.output.video ?? false,

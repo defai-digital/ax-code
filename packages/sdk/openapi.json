@@ -31638,6 +31638,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "summary": "List ax-engine local models",
@@ -31712,7 +31719,8 @@
                   "quantization": {
                     "type": "string",
                     "enum": [
-                      "mlx6bit"
+                      "mlx6bit",
+                      "mlx"
                     ]
                   }
                 }
@@ -31860,7 +31868,8 @@
                   "quantization": {
                     "type": "string",
                     "enum": [
-                      "mlx6bit"
+                      "mlx6bit",
+                      "mlx"
                     ]
                   }
                 }
@@ -31997,17 +32006,26 @@
                     "type": "string"
                   },
                   "modelID": {
-                    "type": "string",
-                    "enum": [
-                      "qwen3.8-27b-axq-6bit",
-                      "ornith-35b-axq-6bit",
-                      "qwen3-coder-next-axq-6bit"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "qwen3.8-27b-axq-6bit",
+                          "ornith-35b-axq-6bit",
+                          "qwen3-coder-next-axq-6bit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^AutomatosX\\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}@[a-f0-9]{40}$"
+                      }
                     ]
                   },
                   "quantization": {
                     "type": "string",
                     "enum": [
-                      "mlx6bit"
+                      "mlx6bit",
+                      "mlx"
                     ]
                   },
                   "download": {
@@ -32076,17 +32094,26 @@
                     "type": "string"
                   },
                   "modelID": {
-                    "type": "string",
-                    "enum": [
-                      "qwen3.8-27b-axq-6bit",
-                      "ornith-35b-axq-6bit",
-                      "qwen3-coder-next-axq-6bit"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "qwen3.8-27b-axq-6bit",
+                          "ornith-35b-axq-6bit",
+                          "qwen3-coder-next-axq-6bit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^AutomatosX\\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}@[a-f0-9]{40}$"
+                      }
                     ]
                   },
                   "quantization": {
                     "type": "string",
                     "enum": [
-                      "mlx6bit"
+                      "mlx6bit",
+                      "mlx"
                     ]
                   },
                   "download": {

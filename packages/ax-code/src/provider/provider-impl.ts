@@ -1175,7 +1175,10 @@ export namespace Provider {
     }
 
     const cached = s.models.get(key)
-    if (cached && s.generation === modelCacheGeneration) return cached
+    // A managed AX Engine server can switch models, and an attached server can
+    // change its capabilities independently of the provider catalog generation.
+    // Re-enter its loader to check readiness and the live coding contract.
+    if (cached && s.generation === modelCacheGeneration && model.providerID !== AX_ENGINE_PROVIDER_ID) return cached
     // In-flight dedup: the pending check below and the modelPending registration
     // after the loader promise is created run with no await in between, so concurrent
     // callers cannot both miss the pending entry and start duplicate loads.

@@ -1,7 +1,8 @@
+import z from "zod"
+
 export const AX_ENGINE_PROVIDER_ID = "ax-engine"
-// The supported local lineup is exactly three AXQuant families, 6-bit only:
-// Qwen3.8-27B (MTP), Ornith-1.0-35B, and Qwen3-Coder-Next. The 4-bit packs
-// were dropped from the catalog — 6-bit is the only supported quantization.
+// Stable recommended aliases. Additional AutomatosX artifacts are discovered
+// through hub-catalog.ts and use immutable repository@commit identifiers.
 export const AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID = "qwen3.8-27b-axq-6bit"
 export const AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID = "ornith-35b-axq-6bit"
 export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID = "qwen3-coder-next-axq-6bit"
@@ -20,6 +21,8 @@ export const AX_ENGINE_API_KEY = "local"
 // the opencode/Claude Code agentic default).
 export const AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS = 8_192
 export const AX_ENGINE_MIN_VERSION = "6.11.0"
+// First released tag containing the validated repository@revision downloader.
+export const AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION = "6.13.1"
 // First ax-engine version whose server accepts --max-output-tokens: the
 // advertised per-request output budget, split from --max-batch-tokens (the
 // scheduler's per-step width). Older binaries only know the conflated knob,
@@ -116,7 +119,15 @@ export const AX_ENGINE_MODEL_IDS = [
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
 ] as const
-export type AxEngineModelID = (typeof AX_ENGINE_MODEL_IDS)[number]
+export type AxEngineBuiltinModelID = (typeof AX_ENGINE_MODEL_IDS)[number]
+export type AxEngineHubModelID = `AutomatosX/${string}@${string}`
+export type AxEngineModelID = AxEngineBuiltinModelID | AxEngineHubModelID
+
+export const AX_ENGINE_HUB_MODEL_PATTERN = /^AutomatosX\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}@[a-f0-9]{40}$/
+export const AxEngineModelIDSchema = z.union([
+  z.enum(AX_ENGINE_MODEL_IDS),
+  z.string().regex(AX_ENGINE_HUB_MODEL_PATTERN) as z.ZodType<AxEngineHubModelID>,
+])
 
 // Managed serving policy, intentionally model-specific rather than normalized
 // to a cloud-provider context tier. These values drive both the provider's
@@ -128,9 +139,11 @@ export const AX_ENGINE_MODEL_CONTEXT_TOKENS = {
   [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
   [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
   [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,
-} as const satisfies Record<AxEngineModelID, number>
+} as const satisfies Record<AxEngineBuiltinModelID, number>
 
-export const AX_ENGINE_QUANTIZATION_IDS = ["mlx6bit"] as const
+// `mlx` preserves the exact publisher-selected precision of a pinned Hub pack.
+// `mlx6bit` remains the selector for the original three aliases.
+export const AX_ENGINE_QUANTIZATION_IDS = ["mlx6bit", "mlx"] as const
 export type AxEngineQuantization = (typeof AX_ENGINE_QUANTIZATION_IDS)[number]
 
 /** Absolute source path (repo-relative) for the managed model catalog contract. */
@@ -157,17 +170,22 @@ export type AxEngineModelDefinition = {
   /** Managed provider/server context cap from AX_ENGINE_MODEL_CONTEXT_TOKENS. */
   contextTokens: number
   outputTokens: number
+  revision?: string
+  sourceModel?: string
+  estimatedResources?: boolean
+  artifactFiles?: string[]
   /** Each catalog model ships exactly one quantization today; the map shape keeps room for more. */
   quantizations: Partial<Record<AxEngineQuantization, AxEngineQuantizationDefinition>>
 }
 
-export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelDefinition> = {
+export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngineModelDefinition> = {
   // Qwen3.8-27B AXQuant + MTP snapshots. Direct HF download: the hub packages
   // ship model-manifest.json and the AXQuant MTP sidecar contract.
   [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: {
     id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
     apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
     name: "Qwen3.8-27B AXQ 6-bit (Local MLX Auto)",
+    sourceModel: "Qwen/Qwen3.8-27B",
     defaultQuantization: "mlx6bit",
     releaseDate: "2026-08-14",
     reasoning: false,
@@ -196,6 +214,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     id: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
     apiModelID: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
     name: "Ornith-1.0-35B AXQ 6-bit (Local MLX)",
+    sourceModel: "deepreinforce-ai/Ornith-1.0-35B",
     defaultQuantization: "mlx6bit",
     releaseDate: "2026-08-13",
     reasoning: true,
@@ -226,6 +245,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
     id: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
     apiModelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
     name: "Qwen3-Coder-Next AXQ 6-bit (Local MLX)",
+    sourceModel: "Qwen/Qwen3-Coder-Next",
     defaultQuantization: "mlx6bit",
     releaseDate: "2026-06-14",
     reasoning: false,
@@ -253,7 +273,7 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineModelID, AxEngineModelD
   },
 }
 
-export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineModelID = AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID
+export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineBuiltinModelID = AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID
 
 export const AX_ENGINE_DEFAULT_QUANTIZATION: AxEngineQuantization = "mlx6bit"
 
@@ -272,11 +292,24 @@ export const AX_ENGINE_ERROR = {
   ServerStartFailed: "AX_ENGINE_SERVER_START_FAILED",
   ServerHealthFailed: "AX_ENGINE_SERVER_HEALTH_FAILED",
   ToolcallUnsupported: "AX_ENGINE_TOOLCALL_UNSUPPORTED",
+  ModelUnsupported: "AX_ENGINE_MODEL_UNSUPPORTED",
+  CatalogUnavailable: "AX_ENGINE_CATALOG_UNAVAILABLE",
 } as const
 
 export const AX_ENGINE_MIN_MACOS_MAJOR = 26
 export const AX_ENGINE_MIN_MEMORY_BYTES = 0
 
 export function isAxEngineModelID(value: unknown): value is AxEngineModelID {
-  return typeof value === "string" && AX_ENGINE_MODEL_IDS.includes(value as AxEngineModelID)
+  return isAxEngineBuiltinModelID(value) || (typeof value === "string" && AX_ENGINE_HUB_MODEL_PATTERN.test(value))
+}
+
+export function isAxEngineBuiltinModelID(value: unknown): value is AxEngineBuiltinModelID {
+  return typeof value === "string" && AX_ENGINE_MODEL_IDS.includes(value as AxEngineBuiltinModelID)
+}
+
+export function axEngineHubReference(value: AxEngineModelID) {
+  if (isAxEngineBuiltinModelID(value)) return undefined
+  if (!AX_ENGINE_HUB_MODEL_PATTERN.test(value)) throw new TypeError("Invalid pinned AutomatosX model reference")
+  const [repoID, revision] = value.split("@")
+  return { repoID, revision }
 }

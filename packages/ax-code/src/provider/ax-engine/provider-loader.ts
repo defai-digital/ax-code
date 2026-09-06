@@ -8,7 +8,7 @@ import {
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_MODEL_IDS,
   AX_ENGINE_PROVIDER_ID,
-  isAxEngineModelID,
+  isAxEngineBuiltinModelID,
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
 } from "./constants"
@@ -24,7 +24,13 @@ import {
 } from "./model-cache"
 import { ensureServer } from "./server"
 import { resolveAxEngineAttachBaseURL, resolveAxEngineConnectMode } from "./connection"
-import { fetchAxEngineModelContracts, type AxEngineLiveModelContract } from "./model-card"
+import {
+  fetchAxEngineModelContracts,
+  requireAxEngineCodingContract,
+  type AxEngineLiveModelContract,
+} from "./model-card"
+import { axEngineHubCatalog, resolveAxEngineModelDefinition } from "./hub-catalog"
+import type { AxEngineModelDefinition } from "./constants"
 
 // Reclaim legacy managed copies once per process. The loader runs whenever the
 // provider list is resolved; the guard keeps the (potentially large) directory
@@ -98,27 +104,21 @@ function applyLiveContract(model: Provider.Model, contract: AxEngineLiveModelCon
   }
 }
 
-function requireCodingContract(contracts: AxEngineLiveModelContract[], apiModelID: string) {
-  const contract = contracts.find((item) => item.id === apiModelID)
-  if (!contract) throw new Error(`ax-engine server does not advertise model ${apiModelID}`)
-  // AX Engine's coding_supported flag is advisory and currently true only for
-  // its Qwen chat template. Gemma and GLM can still be valid coding agents when
-  // the live card advertises structured OpenAI tool calling, which is the
-  // compatibility contract AX Code actually requires.
-  if (!contract.toolcall) {
-    throw new Error(
-      `${AX_ENGINE_ERROR.ToolcallUnsupported}: ax-engine model ${apiModelID} does not advertise OpenAI structured tool calling`,
-    )
-  }
-  return contract
-}
-
 async function ensureManagedReady(provider: Provider.Info, options: AxEngineModelOptions = {}, signal?: AbortSignal) {
   const modelID = normalizeModelID(options.modelID)
   const quantization = normalizeQuantization(options.quantization, modelID)
-  const apiModelID = AX_ENGINE_MODEL_DEFINITIONS[modelID].apiModelID
+  const definition = await resolveAxEngineModelDefinition(modelID, { signal })
+  const apiModelID = definition.apiModelID
 
-  await requirePlatformEligibility()
+  const eligibility = await requirePlatformEligibility()
+  if (
+    definition.estimatedResources &&
+    (eligibility.memoryBytes === undefined || eligibility.memoryBytes < definition.minMemoryBytes)
+  ) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.InsufficientMemory}: this package needs an estimated ${Math.ceil(definition.minMemoryBytes / 1024 ** 3)} GiB unified memory`,
+    )
+  }
 
   const dependency = await getDependencyStatus(provider.options)
   if (!dependency.available || !dependency.binaryPath) {
@@ -127,8 +127,7 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
 
   const model = await getModelStatus({ ...provider.options, ...options, modelID, quantization })
   if (!model.present || !model.path) {
-    const definition = AX_ENGINE_MODEL_DEFINITIONS[modelID]
-    const requiredBytes = requiredDiskBytes(modelID, quantization)
+    const requiredBytes = await requiredDiskBytes(modelID, quantization)
     const requiredGiB = Math.ceil(requiredBytes / 1024 ** 3)
     throw new Error(
       [
@@ -145,8 +144,8 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
     modelPath: model.path,
     modelRevision: model.revision,
     preferredPort: AX_ENGINE_DEFAULT_PORT,
-    contextTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].contextTokens,
-    maxOutputTokens: AX_ENGINE_MODEL_DEFINITIONS[modelID].outputTokens,
+    contextTokens: definition.contextTokens,
+    maxOutputTokens: definition.outputTokens,
     binaryVersion: dependency.version,
     maxConcurrentRequests: resolveAxEngineMaxConcurrentRequests(provider.options),
     apiKey: resolveAxEngineApiKey(provider.options, provider.key),
@@ -158,7 +157,7 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
     apiKey: resolveAxEngineApiKey(provider.options, provider.key),
     signal,
   })
-  return requireCodingContract(contracts, apiModelID)
+  return requireAxEngineCodingContract(contracts, apiModelID, { requireText: Boolean(definition.revision) })
 }
 
 export function axEngineLoader(): CustomLoader {
@@ -184,11 +183,11 @@ export function axEngineLoader(): CustomLoader {
     }
 
     function modelFromDefinition(
-      modelID: (typeof AX_ENGINE_MODEL_IDS)[number],
+      def: AxEngineModelDefinition,
       live?: AxEngineLiveModelContract,
       modelBaseURL = baseURL,
     ) {
-      const def = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+      const modelID = def.id
       const id = ModelID.make(modelID)
       const model: Provider.Model = {
         id,
@@ -215,6 +214,8 @@ export function axEngineLoader(): CustomLoader {
           modelID,
           apiModelID: def.apiModelID,
           quantization: def.defaultQuantization,
+          minMemoryBytes: def.minMemoryBytes,
+          ...(def.revision ? { axEngineCandidate: true, revision: def.revision } : {}),
         },
         headers: {},
         release_date: def.releaseDate,
@@ -228,7 +229,7 @@ export function axEngineLoader(): CustomLoader {
       const definitionID = AX_ENGINE_MODEL_IDS.find(
         (candidate) => AX_ENGINE_MODEL_DEFINITIONS[candidate].apiModelID === contract.id,
       )
-      if (definitionID) return modelFromDefinition(definitionID, contract, modelBaseURL)
+      if (definitionID) return modelFromDefinition(AX_ENGINE_MODEL_DEFINITIONS[definitionID], contract, modelBaseURL)
       const context = contract.context ?? 16_384
       const output = Math.min(context, contract.output ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS)
       return remember({
@@ -324,7 +325,11 @@ export function axEngineLoader(): CustomLoader {
         }
 
         for (const modelID of AX_ENGINE_MODEL_IDS) {
-          const model = modelFromDefinition(modelID)
+          const model = modelFromDefinition(AX_ENGINE_MODEL_DEFINITIONS[modelID])
+          models[model.id] = model
+        }
+        for (const definition of (await axEngineHubCatalog.inspect()).definitions) {
+          const model = modelFromDefinition(definition)
           models[model.id] = model
         }
         return models
@@ -338,7 +343,7 @@ export function axEngineLoader(): CustomLoader {
               : typeof options?.modelID === "string" && options.modelID.trim()
                 ? options.modelID.trim()
                 : modelID
-          const apiModelID = isAxEngineModelID(requestedModelID)
+          const apiModelID = isAxEngineBuiltinModelID(requestedModelID)
             ? AX_ENGINE_MODEL_DEFINITIONS[requestedModelID].apiModelID
             : requestedModelID
           const contracts = await fetchAxEngineModelContracts({
@@ -346,7 +351,7 @@ export function axEngineLoader(): CustomLoader {
             apiKey: resolveAxEngineApiKey(runtimeProvider.options, runtimeProvider.key),
             signal: undefined,
           })
-          const contract = requireCodingContract(contracts, apiModelID)
+          const contract = requireAxEngineCodingContract(contracts, apiModelID)
           const ref = modelRefs.get(apiModelID)
           if (ref) applyLiveContract(ref, contract)
           return sdk.languageModel(apiModelID)
@@ -357,7 +362,7 @@ export function axEngineLoader(): CustomLoader {
           modelID: normalizeModelID(options?.modelID ?? modelID),
         }
         const contract = await ensureManagedReady(runtimeProvider, selectedOptions)
-        const apiModelID = AX_ENGINE_MODEL_DEFINITIONS[selectedOptions.modelID].apiModelID
+        const apiModelID = contract.id
         const ref = modelRefs.get(apiModelID)
         if (ref) applyLiveContract(ref, contract)
         return sdk.languageModel(apiModelID)

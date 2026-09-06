@@ -4,7 +4,7 @@ import z from "zod"
 import semver from "semver"
 import { which } from "@/util/which"
 import { Process } from "@/util/process"
-import { AX_ENGINE_ERROR, AX_ENGINE_MIN_VERSION } from "./constants"
+import { AX_ENGINE_ERROR, AX_ENGINE_MIN_VERSION, AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION } from "./constants"
 import { getManagedBinary, isAxEngineInstallable } from "./install"
 import { parseJsonResult } from "@/util/json-value"
 
@@ -59,6 +59,12 @@ function unsupportedVersionBlocker(detected: string | undefined) {
   const parsed = semver.coerce(detected)
   if (!parsed || semver.gte(parsed, AX_ENGINE_MIN_VERSION)) return undefined
   return `${AX_ENGINE_ERROR.VersionUnsupported}: ax-engine ${parsed.version} is installed; ${AX_ENGINE_MIN_VERSION} or later is required`
+}
+
+export function pinnedDownloadVersionBlocker(detected: string | undefined) {
+  const version = detected ? semver.coerce(detected) : undefined
+  if (version && semver.gte(version, AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION)) return undefined
+  return `${AX_ENGINE_ERROR.VersionUnsupported}: pinned Hub artifacts require a verified AX Engine ${AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION} or later`
 }
 
 export async function getDependencyStatus(options: AxEngineDependencyOptions = {}): Promise<AxEngineDependencyStatus> {

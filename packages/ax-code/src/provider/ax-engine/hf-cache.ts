@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
+import { parseJsonStrict } from "@/util/json-value"
 
 // Resolve the Hugging Face Hub cache the way ax-engine's downloader does
 // (scripts/download_model.py): HF_HUB_CACHE, then HF_HOME/hub, then
@@ -29,8 +30,9 @@ export namespace HfCache {
     repo: string,
     env: NodeJS.ProcessEnv = process.env,
     home: string = os.homedir(),
+    revision?: string,
   ): Promise<string | undefined> {
-    return (await snapshotDirs(repo, env, home))[0]
+    return (await snapshotDirs(repo, env, home, revision))[0]
   }
 
   // Resolve the first complete snapshot, preferring refs/main but falling back
@@ -39,16 +41,27 @@ export namespace HfCache {
     repo: string,
     env: NodeJS.ProcessEnv = process.env,
     home: string = os.homedir(),
+    revision?: string,
   ): Promise<string | undefined> {
-    for (const dir of await snapshotDirs(repo, env, home)) {
+    for (const dir of await snapshotDirs(repo, env, home, revision)) {
       if (await isCompleteSnapshot(dir)) return dir
     }
     return undefined
   }
 
-  async function snapshotDirs(repo: string, env: NodeJS.ProcessEnv, home: string): Promise<string[]> {
+  async function snapshotDirs(
+    repo: string,
+    env: NodeJS.ProcessEnv,
+    home: string,
+    revision?: string,
+  ): Promise<string[]> {
     const base = repoDir(repo, env, home)
     const snapshots = path.join(base, "snapshots")
+    if (revision !== undefined) {
+      if (!/^[a-f0-9]{40}$/.test(revision)) throw new TypeError("Invalid pinned Hugging Face revision")
+      const pinned = path.join(snapshots, revision)
+      return (await isDir(pinned)) ? [pinned] : []
+    }
     const ordered: string[] = []
     const seen = new Set<string>()
 
@@ -121,7 +134,7 @@ export namespace HfCache {
 // undefined when the file is absent/unreadable (single-file repos have none).
 async function readWeightIndexShards(file: string): Promise<string[] | undefined> {
   try {
-    const parsed = JSON.parse(await fs.readFile(file, "utf8")) as { weight_map?: Record<string, unknown> }
+    const parsed = parseJsonStrict(await fs.readFile(file, "utf8")) as { weight_map?: Record<string, unknown> }
     if (!parsed || typeof parsed !== "object" || !parsed.weight_map || typeof parsed.weight_map !== "object") {
       return undefined
     }

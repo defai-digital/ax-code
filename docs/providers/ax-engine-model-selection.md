@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-18
+Last reviewed: 2026-09-06
 Owner: ax-code runtime
 
 AX Code can use AX Engine as a local provider on eligible Apple Silicon Macs. This page explains the
@@ -12,20 +12,59 @@ default is conservative, and how to choose a model by memory budget.
 Integration shape (sidecar HTTP, not in-process SDK): see
 [Local Engine Architecture](../architecture/local-engine.md).
 
-The current AX Code provider list is intentionally narrower than the full AX Engine research or benchmark
-matrix. In this checkout it exposes curated AutomatosX AXQ 6-bit MLX packs.
+AX Code includes three recommended AutomatosX AXQ 6-bit models and additional MLX candidates filtered
+through its product model catalog. A candidate must identify a supported conversational source model.
+Native execution and structured tool calling are checked by AX Engine when the model starts.
 
 ## Single source of truth
 
 | Layer                                                                                                                | Role                                                                                                      |
 | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [`packages/ax-code/src/provider/ax-engine/constants.ts`](../../packages/ax-code/src/provider/ax-engine/constants.ts) | **Only** place that defines built-in model ids, HF repos, disk/memory floors, and download mode           |
+| [`packages/ax-code/src/provider/ax-engine/constants.ts`](../../packages/ax-code/src/provider/ax-engine/constants.ts) | Stable recommended aliases, their package definitions, and protocol defaults                              |
+| `packages/ax-code/src/provider/ax-engine/hub-catalog.ts`                                                             | Bundled and refreshed AutomatosX metadata, filtered through AX Code's product policy                      |
 | `GET /provider/ax-engine/models`                                                                                     | Serves that catalog from the **running ax-code process** (includes `catalog.source` + `catalog.modelIDs`) |
 | Desktop Models UI                                                                                                    | Displays whatever the live API returns — it does not embed a second model list                            |
 
 If an external GUI shows an old list, its managed session is almost always spawning an older installed CLI
 (Homebrew/PATH) rather than this checkout. In AX Coder development, override `AX_CODE_BINARY` or
 `settings.axCodeBinary` when you intentionally want this source runtime.
+
+## Discover and prepare additional models
+
+List candidates and their local state, or explicitly refresh public Hub metadata:
+
+```bash
+ax-code providers ax-engine models --json
+ax-code providers ax-engine models --refresh --json
+```
+
+The bundled catalog works offline. Refreshing reads metadata without downloading weights or starting a
+server. The JSON response includes `discovery.decisions`, with a reason for each accepted, excluded, or
+unrecognized package. ASR, embeddings, and reward-only models are excluded from the coding-agent picker.
+Multimodal conversational models can qualify through their text path; image support requires a live check.
+
+Copy an exact model ID from the catalog and prepare it:
+
+```bash
+ax-code providers ax-engine prepare \
+  --model 'AutomatosX/<repository>@<40-character-commit>' \
+  --quantization mlx --download --start
+```
+
+`mlx` means the exact published artifact at its existing precision. It does not requantize weights.
+Pinned downloads require AX Engine 6.13.1 or later. The original three IDs continue to use `mlx6bit`.
+Unknown IDs and mismatched quantization selectors return an error instead of switching models.
+
+Additional candidates start with at most 32,768 context tokens and an 8,192-token output budget, bounded
+by package metadata. Resource estimates include weights, sidecars, KV cache, and runtime headroom. They
+are estimates rather than certified memory requirements. A `verification-required` state means weights
+are prepared but native capabilities have not yet been checked for the active server. Cloud tool-call,
+reasoning, context, vision, and MTP capabilities are not automatically transferred to a local package.
+`verified` confirms the active engine's advertised text and tool contract; it does not certify model
+quality or a successful multi-turn coding workflow for every package.
+
+Prepared revisions remain selectable after catalog refreshes. Refreshing never moves an existing model
+selection to another commit. Attached servers continue to supply their own live model catalog.
 
 ## Selection Criteria
 

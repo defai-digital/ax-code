@@ -17,7 +17,7 @@ import {
   AX_ENGINE_PROVIDER_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
-  type AxEngineModelID,
+  type AxEngineBuiltinModelID,
 } from "../../src/provider/ax-engine"
 import { MessageID, PartID } from "../../src/session/schema"
 
@@ -49,7 +49,7 @@ function createModel(opts: { context: number; output: number; input?: number; np
   } as Provider.Model
 }
 
-function createManagedAxEngineModel(modelID: AxEngineModelID): Provider.Model {
+function createManagedAxEngineModel(modelID: AxEngineBuiltinModelID): Provider.Model {
   const definition = AX_ENGINE_MODEL_DEFINITIONS[modelID]
   return {
     ...createModel({

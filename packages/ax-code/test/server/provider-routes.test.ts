@@ -356,9 +356,9 @@ describe("provider routes", () => {
   })
 
   test("ax-engine model action schema only accepts catalog quantizations", () => {
-    // The catalog is 6-bit only; dropped 4-bit packs and unknown values fail
-    // validation with a 400 instead of being silently normalized downstream.
+    // Legacy 6-bit aliases coexist with exact published MLX artifacts.
     expect(AxEngineModelActionBody.parse({ quantization: "mlx6bit" })).toEqual({ quantization: "mlx6bit" })
+    expect(AxEngineModelActionBody.parse({ quantization: "mlx" })).toEqual({ quantization: "mlx" })
     expect(AxEngineModelActionBody.safeParse({ quantization: "mlx4bit" }).success).toBe(false)
     expect(AxEngineModelActionBody.safeParse({ quantization: "mlx8bit" }).success).toBe(false)
   })
@@ -467,15 +467,35 @@ describe("provider routes", () => {
     const response = await Server.Default().request(`/provider/ax-engine/models?directory=${directory}`)
     expect(response.status).toBe(200)
     const body = (await response.json()) as { models: Array<{ id: string }> }
-    expect(body.models.map((model) => model.id)).toEqual([
+    expect(body.models.slice(0, 3).map((model) => model.id)).toEqual([
       "qwen3.8-27b-axq-6bit",
       "ornith-35b-axq-6bit",
       "qwen3-coder-next-axq-6bit",
     ])
+    const dynamic = body.models.filter((model) => model.id.startsWith("AutomatosX/"))
+    expect(dynamic.length).toBeGreaterThan(0)
+    expect(dynamic.every((model) => /@[a-f0-9]{40}$/.test(model.id))).toBe(true)
     expect((body as { catalog?: { source?: string; modelIDs?: string[] } }).catalog).toMatchObject({
       source: "packages/ax-code/src/provider/ax-engine/constants.ts",
-      modelIDs: ["qwen3.8-27b-axq-6bit", "ornith-35b-axq-6bit", "qwen3-coder-next-axq-6bit"],
+      modelIDs: body.models.map((model) => model.id),
     })
+  })
+
+  test("ax-engine schemas accept pinned Hub IDs and the route preserves encoded slashes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const modelID = `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"f".repeat(40)}`
+    expect(AxEnginePrepareBody.parse({ modelID, quantization: "mlx" })).toEqual({ modelID, quantization: "mlx" })
+    expect(AxEngineStartBody.safeParse({ modelID: "AutomatosX/AX-Test@main" }).success).toBe(false)
+    const response = await Server.Default().request(
+      `/provider/ax-engine/models/${encodeURIComponent(modelID)}?directory=${encodeURIComponent(tmp.path)}`,
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantization: "mlx" }),
+      },
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ modelID, deleted: false })
   })
 
   test("ax-engine model download route rejects unknown model ids", async () => {

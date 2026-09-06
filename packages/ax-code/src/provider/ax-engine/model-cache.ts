@@ -10,13 +10,17 @@ import {
   AX_ENGINE_DEFAULT_MODEL_ID,
   AX_ENGINE_ERROR,
   AX_ENGINE_MODEL_DEFINITIONS,
-  AX_ENGINE_MODEL_IDS,
+  AxEngineModelIDSchema,
+  axEngineHubReference,
+  isAxEngineBuiltinModelID,
   AX_ENGINE_QUANTIZATION_IDS,
   AX_ENGINE_DEFAULT_QUANTIZATION,
   isAxEngineModelID,
 } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
+import { resolveAxEngineModelDefinition } from "./hub-catalog"
+import { getDependencyStatus, pinnedDownloadVersionBlocker } from "./dependency"
 import { axEngineDownloadEnv } from "./python"
 import {
   applyProgressEvent,
@@ -47,13 +51,15 @@ const PREPARE_LOCK_STALE_MS = DOWNLOAD_TIMEOUT_MS + 30 * 60 * 1000
 // The Hugging Face repo that backs a model+quantization, used to locate the
 // shared snapshot the engine downloaded.
 export function hfRepoFor(modelID: AxEngineModelID, quantization: AxEngineQuantization): string | undefined {
-  const model = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+  const ref = axEngineHubReference(modelID)
+  if (ref) return ref.repoID
+  const model = AX_ENGINE_MODEL_DEFINITIONS[modelID as keyof typeof AX_ENGINE_MODEL_DEFINITIONS]
   return model.quantizations[quantization as keyof typeof model.quantizations]?.hfRepo
 }
 
 export const AxEngineModelStatus = z.object({
   present: z.boolean(),
-  modelID: z.enum(AX_ENGINE_MODEL_IDS),
+  modelID: AxEngineModelIDSchema,
   quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS),
   path: z.string().optional(),
   revision: z.string().optional(),
@@ -64,7 +70,7 @@ export const AxEngineModelStatus = z.object({
 export type AxEngineModelStatus = z.infer<typeof AxEngineModelStatus>
 
 export const AxEnginePrepareState = z.object({
-  modelID: z.enum(AX_ENGINE_MODEL_IDS),
+  modelID: AxEngineModelIDSchema,
   quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS),
   path: z.string(),
   revision: z.string().optional(),
@@ -74,7 +80,7 @@ export type AxEnginePrepareState = z.infer<typeof AxEnginePrepareState>
 
 export const AxEngineDiskStatus = z.object({
   path: z.string(),
-  modelID: z.enum(AX_ENGINE_MODEL_IDS),
+  modelID: AxEngineModelIDSchema,
   quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS),
   freeBytes: z.number().optional(),
   requiredBytes: z.number(),
@@ -92,18 +98,18 @@ export type AxEngineModelOptions = {
 }
 
 export function normalizeModelID(value: unknown): AxEngineModelID {
-  return isAxEngineModelID(value) ? value : AX_ENGINE_DEFAULT_MODEL_ID
+  if (value === undefined) return AX_ENGINE_DEFAULT_MODEL_ID
+  if (isAxEngineModelID(value)) return value
+  throw new Error(`${AX_ENGINE_ERROR.ModelUnsupported}: unknown AX Engine model ID`)
 }
 
 export function normalizeQuantization(
   value: unknown,
   modelID: AxEngineModelID = AX_ENGINE_DEFAULT_MODEL_ID,
 ): AxEngineQuantization {
-  const model = AX_ENGINE_MODEL_DEFINITIONS[modelID]
-  // `in` walks the prototype chain, so "toString"/"constructor" would pass —
-  // restrict to own keys of the quantization map.
-  if (typeof value === "string" && Object.hasOwn(model.quantizations, value)) return value as AxEngineQuantization
-  return model.defaultQuantization
+  const expected = isAxEngineBuiltinModelID(modelID) ? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization : "mlx"
+  if (value === undefined || value === expected) return expected
+  throw new Error(`${AX_ENGINE_ERROR.ModelUnsupported}: ${modelID} does not support quantization ${String(value)}`)
 }
 
 async function exists(file: string) {
@@ -145,8 +151,8 @@ async function directorySize(dir: string): Promise<number | undefined> {
   }
 }
 
-export function requiredDiskBytes(modelID: AxEngineModelID, quantization: AxEngineQuantization): number {
-  const model = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+export async function requiredDiskBytes(modelID: AxEngineModelID, quantization: AxEngineQuantization): Promise<number> {
+  const model = await resolveAxEngineModelDefinition(modelID)
   return model.quantizations[quantization as keyof typeof model.quantizations]?.minDiskBytes ?? 64 * 1024 ** 3
 }
 
@@ -183,7 +189,12 @@ export function evaluateDiskStatus(input: {
 }): AxEngineDiskStatus {
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
   const quantization = input.quantization ?? AX_ENGINE_DEFAULT_QUANTIZATION
-  const requiredBytes = input.requiredBytes ?? requiredDiskBytes(modelID, quantization)
+  const requiredBytes =
+    input.requiredBytes ??
+    (isAxEngineBuiltinModelID(modelID)
+      ? AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]?.minDiskBytes
+      : undefined) ??
+    64 * 1024 ** 3
   const blockers: string[] = []
 
   if (input.freeBytes === undefined) {
@@ -225,6 +236,7 @@ export async function getDiskStatus(options: AxEngineModelOptions = {}): Promise
     path: target,
     modelID,
     quantization,
+    requiredBytes: await requiredDiskBytes(modelID, quantization),
     freeBytes,
   })
 }
@@ -242,11 +254,16 @@ async function hasManifest(dir: string) {
 }
 
 function packageMarkerFor(modelID: AxEngineModelID, quantization: AxEngineQuantization) {
-  return AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]?.packageMarker
+  return isAxEngineBuiltinModelID(modelID)
+    ? AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]?.packageMarker
+    : undefined
 }
 
 function allowsDirectFallback(modelID: AxEngineModelID, quantization: AxEngineQuantization) {
-  return AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]?.directFallback ?? false
+  return (
+    isAxEngineBuiltinModelID(modelID) &&
+    (AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]?.directFallback ?? false)
+  )
 }
 
 async function hasPackageMarker(dir: string, modelID: AxEngineModelID, quantization: AxEngineQuantization) {
@@ -309,6 +326,30 @@ async function writeCompletionMarker(state: AxEnginePrepareState) {
   await Filesystem.writeJson(AxEnginePaths.completionMarker(state.path), state)
 }
 
+async function matchesPinnedArtifact(dir: string, modelID: AxEngineModelID, marker?: AxEnginePrepareState) {
+  const ref = axEngineHubReference(modelID)
+  if (!ref) return true
+  if (marker?.modelID === modelID && marker.revision === ref.revision) return true
+  return path.resolve(dir) === path.resolve(HfCache.repoDir(ref.repoID), "snapshots", ref.revision)
+}
+
+async function assertArtifactFiles(dir: string, modelID: AxEngineModelID) {
+  if (isAxEngineBuiltinModelID(modelID)) return
+  const definition = await resolveAxEngineModelDefinition(modelID, { offline: true })
+  for (const file of definition.artifactFiles ?? []) {
+    const target = path.resolve(dir, file)
+    if (
+      !Filesystem.contains(dir, target) ||
+      !(await fs
+        .stat(target)
+        .then((stat) => stat.isFile() && stat.size > 0)
+        .catch(() => false))
+    ) {
+      throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: pinned package is missing required file ${file}`)
+    }
+  }
+}
+
 export async function getModelStatus(options: AxEngineModelOptions = {}): Promise<AxEngineModelStatus> {
   const modelID = normalizeModelID(options.modelID)
   const quantization = normalizeQuantization(options.quantization, modelID)
@@ -336,7 +377,8 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
   // dir, so the standard cache wins for fresh setups while old layouts still
   // resolve.
   const repo = hfRepoFor(modelID, quantization)
-  const hfSnapshot = repo ? await HfCache.completeSnapshotDir(repo) : undefined
+  const ref = axEngineHubReference(modelID)
+  const hfSnapshot = repo ? await HfCache.completeSnapshotDir(repo, undefined, undefined, ref?.revision) : undefined
 
   const candidates = [
     configured,
@@ -355,12 +397,14 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
         ? await HfCache.isCompleteSnapshot(candidate)
         : !!matchingMarker || (await hasManifest(candidate))
       if (!complete || !(await hasRunnablePackageContract(candidate, modelID, quantization))) continue
+      if (ref && !(await matchesPinnedArtifact(candidate, modelID, matchingMarker))) continue
+      if (ref) await assertArtifactFiles(candidate, modelID)
       return {
         present: true,
         modelID,
         quantization,
         path: candidate,
-        revision: matchingMarker?.revision,
+        revision: ref?.revision ?? matchingMarker?.revision,
         bytes: await directorySize(candidate),
         complete: true,
         blockers: [],
@@ -391,7 +435,7 @@ export async function getModelStatus(options: AxEngineModelOptions = {}): Promis
     quantization,
     complete: false,
     blockers: [
-      `${AX_ENGINE_ERROR.ModelMissing}: prepare ${AX_ENGINE_MODEL_DEFINITIONS[modelID].name} before using ax-engine`,
+      `${AX_ENGINE_ERROR.ModelMissing}: prepare ${isAxEngineBuiltinModelID(modelID) ? AX_ENGINE_MODEL_DEFINITIONS[modelID].name : modelID} before using ax-engine`,
     ],
   }
 }
@@ -631,7 +675,8 @@ export async function markPrepared(input: {
 }): Promise<AxEnginePrepareState> {
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, { timeoutMs: 30_000, staleMs: PREPARE_LOCK_STALE_MS })
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
-  const quantization = input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization
+  const definition = await resolveAxEngineModelDefinition(modelID, { persist: true })
+  const quantization = normalizeQuantization(input.quantization, modelID)
   if (!(await exists(input.modelPath))) {
     throw new Error(`${AX_ENGINE_ERROR.ModelMissing}: model path does not exist`)
   }
@@ -647,11 +692,18 @@ export async function markPrepared(input: {
       `${AX_ENGINE_ERROR.ModelMissing}: model path is missing required ${packageMarkerFor(modelID, quantization)} package contract`,
     )
   }
+  if (
+    definition.revision &&
+    !(await matchesPinnedArtifact(input.modelPath, modelID, await readCompletionMarker(input.modelPath)))
+  ) {
+    throw new Error(`${AX_ENGINE_ERROR.ModelUnsupported}: model path does not match the pinned Hub artifact`)
+  }
+  await assertArtifactFiles(input.modelPath, modelID)
   const state: AxEnginePrepareState = {
     modelID,
     quantization,
     path: input.modelPath,
-    revision: input.revision,
+    revision: definition.revision ?? input.revision,
     preparedAt: Date.now(),
   }
   await writePrepareState(state)
@@ -679,6 +731,7 @@ async function markPreparedWithLockHeld(input: {
 
 export async function downloadModel(input: {
   binaryPath: string
+  binaryVersion?: string
   modelID?: AxEngineModelID
   quantization?: AxEngineQuantization
   dest?: string
@@ -687,13 +740,17 @@ export async function downloadModel(input: {
 }): Promise<AxEnginePrepareState> {
   input.signal?.throwIfAborted()
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
-  const quantization = input.quantization ?? AX_ENGINE_MODEL_DEFINITIONS[modelID].defaultQuantization
-  const quantizationDefinition = AX_ENGINE_MODEL_DEFINITIONS[modelID].quantizations[quantization]
+  const definition = await resolveAxEngineModelDefinition(modelID, { signal: input.signal, persist: true })
+  if (definition.revision) {
+    const version = input.binaryVersion ?? (await getDependencyStatus({ binaryPath: input.binaryPath })).version
+    const blocker = pinnedDownloadVersionBlocker(version)
+    if (blocker) throw new Error(blocker)
+  }
+  const quantization = normalizeQuantization(input.quantization, modelID)
+  const quantizationDefinition = definition.quantizations[quantization]
   const repo = quantizationDefinition?.hfRepo
   if (!quantizationDefinition || !repo) {
-    throw new Error(
-      `${AX_ENGINE_ERROR.DownloadFailed}: ${AX_ENGINE_MODEL_DEFINITIONS[modelID].name} does not support ${quantization}`,
-    )
+    throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${definition.name} does not support ${quantization}`)
   }
   // Only pass --dest when an explicit destination is requested. Without it the
   // engine downloads into the shared Hugging Face Hub cache (its documented
@@ -704,7 +761,7 @@ export async function downloadModel(input: {
   const useMtpPackage = downloadMode === "mtp"
   const cmd = useMtpPackage
     ? [input.binaryPath, "download-mtp", modelID, "--json"]
-    : [input.binaryPath, "download", repo, "--json"]
+    : [input.binaryPath, "download", definition.revision ? `${repo}@${definition.revision}` : repo, "--json"]
   if (dest) cmd.push(useMtpPackage ? "--output" : "--dest", dest)
 
   using _ = await FileLock.acquire(AxEnginePaths.prepareLock, {
@@ -744,12 +801,21 @@ export async function downloadModel(input: {
   if (!parsed.dest) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ax-engine download did not return a destination`)
   }
+  if (
+    definition.revision &&
+    (parsed.revision !== undefined
+      ? parsed.revision !== definition.revision
+      : path.resolve(parsed.dest) !== path.resolve(HfCache.repoDir(repo), "snapshots", definition.revision))
+  ) {
+    throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded revision does not match the requested artifact`)
+  }
   const complete = HfCache.isInside(parsed.dest)
     ? await HfCache.isCompleteSnapshot(parsed.dest)
     : await hasManifest(parsed.dest)
   if (!complete) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded model path is incomplete`)
   }
+  await assertArtifactFiles(parsed.dest, modelID)
   // `download-mtp` promises a packaged assistant/sidecar. Direct fallback is
   // valid for existing base weights, but must not hide a broken MTP download.
   if (!(await hasPackageMarker(parsed.dest, modelID, quantization))) {
@@ -762,7 +828,7 @@ export async function downloadModel(input: {
     modelID,
     modelPath: parsed.dest,
     quantization,
-    revision: parsed.revision,
+    revision: definition.revision ?? parsed.revision,
   }).catch((error: unknown) => {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ${toErrorMessage(error)}`)
   })
@@ -789,7 +855,9 @@ export async function reclaimManagedCopy(
   if (!(await exists(managedPath))) return undefined
 
   const repo = hfRepoFor(modelID, quantization)
-  const snapshotPath = repo ? await HfCache.completeSnapshotDir(repo) : undefined
+  const snapshotPath = repo
+    ? await HfCache.completeSnapshotDir(repo, undefined, undefined, axEngineHubReference(modelID)?.revision)
+    : undefined
   // Refuse to delete the managed copy unless an equivalent, complete snapshot
   // exists in the HF cache — otherwise we would destroy the only copy. MTP
   // models additionally require the family-specific sidecar package contract;
