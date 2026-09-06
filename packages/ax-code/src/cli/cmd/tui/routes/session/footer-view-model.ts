@@ -38,6 +38,24 @@ export type FooterSessionStatusView = {
   tone: FooterSessionStatusTone
 }
 
+type FooterMessage = {
+  id: string
+  role: string
+  parentID?: string
+  time: { created: number }
+}
+
+function requestStartedAt(messages: readonly FooterMessage[] | undefined) {
+  if (!messages) return
+  const index = messages.findLastIndex((message) => message.role === "user")
+  const user = messages[index]
+  if (!user || !Number.isFinite(user.time.created) || user.time.created < 0) return
+  for (let i = index + 1; i < messages.length; i++) {
+    const message = messages[i]
+    if (message.role === "assistant" && message.parentID === user.id) return user.time.created
+  }
+}
+
 const SESSION_STATUS_STALE_AFTER_MS = 60_000
 const SESSION_STATUS_TOOL_STALE_AFTER_MS = 90_000
 const MS_PER_SECOND = 1_000
@@ -249,6 +267,7 @@ function footerTaskLabel(tool?: string) {
 
 export function footerSessionStatusView(input: {
   status?: FooterSessionStatus
+  messages?: readonly FooterMessage[]
   now?: number
   stalledAfterMs?: number
 }): FooterSessionStatusView {
@@ -267,8 +286,11 @@ export function footerSessionStatusView(input: {
     }
   }
 
+  // The backend timestamp is for the current model round. Use the linked
+  // request for elapsed time while keeping activity and token-rate clocks intact.
+  const startedAt = requestStartedAt(input.messages) ?? status.startedAt
   const elapsedSeconds =
-    status.startedAt !== undefined ? Math.max(1, Math.floor((now - status.startedAt) / MS_PER_SECOND)) : undefined
+    startedAt !== undefined ? Math.max(1, Math.floor((now - startedAt) / MS_PER_SECOND)) : undefined
   const elapsed = elapsedSeconds !== undefined ? formatDuration(elapsedSeconds) : ""
 
   let label = "Thinking"

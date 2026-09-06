@@ -1028,6 +1028,7 @@ export function Prompt(props: PromptProps) {
     if (current.type !== "busy") return subagentStatus()
     return footerSessionStatusView({
       status: current,
+      messages: props.sessionID ? sync.data.message[props.sessionID] : undefined,
       now: Date.now(),
     })
   })

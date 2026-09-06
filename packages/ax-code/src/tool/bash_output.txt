@@ -5,4 +5,6 @@ Retrieves output from a shell started with bash run_in_background.
 - Use the optional filter parameter (a JavaScript regular expression) to return only matching lines — helpful when tailing verbose logs for errors or specific markers.
 - A finished shell is forgotten once its remaining output has been read.
 - By default this call waits up to 30s for new output or exit. Do not poll it in a tight loop. Pass timeout_ms=0 only when you need a non-blocking status check.
+- timeout_ms accepts 0 through 120000 (at most 2 minutes per call). A command can take longer than one wait; another waited call uses the same range.
+- The elapsed time is measured from command start, not from the latest poll; it stops increasing once the command finishes. Elapsed time and the wait limit are not estimates of remaining work.
 - Prefer a single waited bash_output over many empty polls. Empty running results mean "still working" — do other work or stop; do not burn the turn budget polling.

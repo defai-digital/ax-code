@@ -5,6 +5,63 @@ const DEFAULT_LLM_STALE_AFTER_MS = 60_000
 const DEFAULT_TOOL_STALE_AFTER_MS = 90_000
 
 describe("footerSessionStatusView", () => {
+  test("keeps request elapsed time across model rounds without changing inactivity detection", () => {
+    const messages = [
+      { id: "u1", role: "user", time: { created: 100_000 } },
+      { id: "a1", role: "assistant", parentID: "u1", time: { created: 101_000 } },
+      { id: "a2", role: "assistant", parentID: "u1", time: { created: 220_000 } },
+    ]
+    const view = footerSessionStatusView({
+      now: 280_000,
+      messages,
+      status: {
+        type: "busy",
+        startedAt: 220_000,
+        lastActivityAt: 279_000,
+        waitState: "tool",
+        activeTool: "bash",
+        step: 13,
+        maxSteps: 100,
+      },
+    })
+
+    expect(view.label).toBe("Running command · 3m")
+    expect(view.stale).toBe(false)
+    expect(view.label).not.toMatch(/remaining|ETA|%/)
+  })
+
+  test("starts a new request timer without including the previous request", () => {
+    const view = footerSessionStatusView({
+      now: 280_000,
+      messages: [
+        { id: "u1", role: "user", time: { created: 100_000 } },
+        { id: "a1", role: "assistant", parentID: "u1", time: { created: 101_000 } },
+        { id: "u2", role: "user", time: { created: 250_000 } },
+        { id: "a2", role: "assistant", parentID: "u2", time: { created: 251_000 } },
+      ],
+      status: { type: "busy", startedAt: 270_000, waitState: "llm" },
+    })
+    expect(view.label).toBe("Thinking · 30s")
+  })
+
+  test.each([
+    { messages: [] },
+    { messages: [{ id: "a1", role: "assistant", parentID: "missing", time: { created: 100_000 } }] },
+    {
+      messages: [
+        { id: "a1", role: "assistant", parentID: "u1", time: { created: 100_000 } },
+        { id: "u2", role: "user", time: { created: 250_000 } },
+      ],
+    },
+  ])("falls back to the operation timer without a linked current request (%#)", ({ messages }) => {
+    const view = footerSessionStatusView({
+      now: 280_000,
+      messages,
+      status: { type: "busy", startedAt: 270_000, waitState: "llm" },
+    })
+    expect(view.label).toBe("Thinking · 10s")
+  })
+
   test("labels recent llm work without marking it stale", () => {
     const now = 1_000_000
     const view = footerSessionStatusView({

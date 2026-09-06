@@ -3,6 +3,7 @@ import { Tool } from "./tool"
 import DESCRIPTION from "./bash_output.txt"
 import { BackgroundShell } from "./bash-background"
 import { ToolNumber } from "./schema"
+import { formatDuration } from "../util/format"
 
 function formatStatus(info: BackgroundShell.Info) {
   const exit = info.exitCode === null ? "" : ` (exit ${info.exitCode})`
@@ -23,7 +24,7 @@ export const BashOutputTool = Tool.define("bash_output", {
       )
       .optional(),
     timeout_ms: ToolNumber(z.number().int().min(0).max(120_000))
-      .describe("How long to wait for new output or exit before returning. Default 30000.")
+      .describe("How long to wait for new output or exit before returning, from 0 to 120000 ms. Default 30000.")
       .optional(),
   }),
   async execute(params, ctx) {
@@ -31,6 +32,7 @@ export const BashOutputTool = Tool.define("bash_output", {
       shells?: BackgroundShell.Info[]
       shell?: BackgroundShell.Info
       dropped?: boolean
+      elapsedMs?: number
     }
     if (params.shell_id === undefined) {
       const shells = BackgroundShell.list(ctx.sessionID)
@@ -77,20 +79,22 @@ export const BashOutputTool = Tool.define("bash_output", {
     }
 
     const stillIdle = result.info.status === "running" && result.output.length === 0
+    const elapsedMs = Math.max(0, (result.info.endedAt ?? Date.now()) - result.info.startedAt)
     const header = [
       `<status>${formatStatus(result.info)}</status>`,
+      `<elapsed>${formatDuration(Math.floor(elapsedMs / 1_000)) || "0s"}</elapsed>`,
       result.dropped ? "<notice>oldest unread output was dropped (buffer limit)</notice>" : "",
       filterInvalid !== undefined
         ? `<notice>invalid filter regex ${JSON.stringify(filterInvalid)}; returning unfiltered output</notice>`
         : "",
       stillIdle
-        ? `<notice>still running after waiting ${timeoutMs}ms with no new output. Do not poll again immediately — continue other work, wait longer with timeout_ms, or kill_shell if the job is stuck.</notice>`
+        ? `<notice>still running after waiting ${timeoutMs}ms with no new output. Silence does not indicate how much work remains. Continue other work or wait again with timeout_ms up to 120000; avoid repeated non-blocking polls.</notice>`
         : "",
     ]
       .filter(Boolean)
       .join("\n")
 
-    const metadata: Metadata = { shell: result.info, dropped: result.dropped }
+    const metadata: Metadata = { shell: result.info, dropped: result.dropped, elapsedMs }
     return {
       title: result.info.description,
       metadata,
