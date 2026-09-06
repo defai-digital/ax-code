@@ -67,6 +67,16 @@ export function rewriteToActiveAxEngineServer(
   return input instanceof Request ? new Request(rewritten, input) : rewritten
 }
 
+function assertAxEngineRequestTarget(input: string | URL | Request, endpoint: string) {
+  const target = new URL(input instanceof Request ? input.url : input.toString())
+  const allowed = new URL(endpoint)
+  const basePath = allowed.pathname.replace(/\/+$/, "")
+  const insidePath = target.pathname === basePath || target.pathname.startsWith(`${basePath}/`)
+  if (target.origin !== allowed.origin || target.username || target.password || !insidePath) {
+    throw new Error("AX Engine request escaped its configured endpoint")
+  }
+}
+
 function configuredBaseURL(provider: Provider.Info) {
   if (resolveAxEngineConnectMode(provider.options) !== "attach") return
   return resolveAxEngineAttachBaseURL(provider.options)
@@ -292,6 +302,8 @@ export function axEngineLoader(): CustomLoader {
         // which broke context telemetry and usage-driven compaction.
         includeUsage: true,
         fetch: async (input: string | Request | URL, init?: RequestInit) => {
+          const target = configuredExternalBaseURL ? input : rewriteToActiveAxEngineServer(input, baseURL)
+          assertAxEngineRequestTarget(target, configuredExternalBaseURL ?? activeServerBaseURL ?? baseURL)
           const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
           if (!headers.has("authorization")) {
             headers.set(
@@ -303,7 +315,6 @@ export function axEngineLoader(): CustomLoader {
           // fallback port (or another attached provider) must never redirect
           // their prompts or credentials. Keep redirects inside the same
           // trust boundary as the model discovery probe.
-          const target = configuredExternalBaseURL ? input : rewriteToActiveAxEngineServer(input, baseURL)
           return fetch(target, { ...init, headers, redirect: "error" })
         },
       },

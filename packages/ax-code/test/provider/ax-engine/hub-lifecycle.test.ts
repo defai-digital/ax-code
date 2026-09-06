@@ -130,6 +130,39 @@ describe("pinned Hub artifact lifecycle", () => {
     },
   )
 
+  test("rejects a matching revision reported from an unexpected destination", async () => {
+    if (process.platform === "win32") return
+    await using tmp = await tmpdir()
+    process.env.HF_HUB_CACHE = path.join(tmp.path, "hub")
+    const destination = path.join(tmp.path, "outside")
+    await fs.mkdir(destination, { recursive: true })
+    for (const file of model.siblings.filter(
+      (entry) =>
+        entry.rfilename.endsWith(".safetensors") ||
+        ["config.json", "tokenizer.json", "tokenizer_config.json"].includes(entry.rfilename),
+    )) {
+      await fs.writeFile(path.join(destination, file.rfilename), "fixture artifact")
+    }
+    await Filesystem.writeJson(path.join(destination, "model-manifest.json"), {})
+    const binaryPath = path.join(tmp.path, "fake-engine")
+    await fs.writeFile(
+      binaryPath,
+      `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: destination, revision: model.sha }))})\n`,
+    )
+    await fs.chmod(binaryPath, 0o755)
+    const original = Process.text
+    vi.spyOn(Process, "text").mockImplementation((cmd, options) => {
+      if (cmd[0] !== "df") return original(cmd, options)
+      const text = "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/test 900000000 1 800000000 1% /\n"
+      return Promise.resolve({ code: 0, stdout: Buffer.from(text), stderr: Buffer.alloc(0), text })
+    })
+
+    await expect(downloadModel({ modelID: id, binaryPath, binaryVersion: "7.2.1" })).rejects.toThrow(
+      "revision does not match",
+    )
+    expect(await Filesystem.exists(AxEnginePaths.prepareState)).toBe(false)
+  })
+
   test("does not fall back to another revision for incomplete-snapshot deletion", async () => {
     await using tmp = await tmpdir()
     process.env.HF_HUB_CACHE = tmp.path

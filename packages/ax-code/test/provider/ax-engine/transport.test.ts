@@ -114,6 +114,20 @@ describe("ax-engine transport isolation", () => {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
     }
   })
+
+  test("rejects requests outside the configured endpoint before adding credentials", async () => {
+    const fetchSpy = vi.fn(async () => modelResponse())
+    vi.stubGlobal("fetch", fetchSpy)
+    const loader = await axEngineLoader()(provider("http://127.0.0.1:31421/v1"))
+
+    await expect(loader.options!.fetch("http://127.0.0.1:31422/v1/chat/completions")).rejects.toThrow(
+      "escaped its configured endpoint",
+    )
+    await expect(loader.options!.fetch("http://127.0.0.1:31421/private")).rejects.toThrow(
+      "escaped its configured endpoint",
+    )
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
 })
 
 describe("ax-engine probe contracts", () => {

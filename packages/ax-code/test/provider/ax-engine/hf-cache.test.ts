@@ -61,6 +61,15 @@ describe("HfCache.root precedence", () => {
     )
   })
 
+  test("repoDir rejects path-like repository IDs", () => {
+    expect(() => HfCache.repoDir("../outside", { HF_HUB_CACHE: "/hub" }, home)).toThrow(
+      "Invalid Hugging Face repository ID",
+    )
+    expect(() => HfCache.repoDir("owner\\outside", { HF_HUB_CACHE: "/hub" }, home)).toThrow(
+      "Invalid Hugging Face repository ID",
+    )
+  })
+
   test("isInside detects cache membership", () => {
     const env = { HF_HUB_CACHE: "/hub" }
     expect(HfCache.isInside("/hub/models--x/snapshots/abc", env, home)).toBe(true)
@@ -102,6 +111,16 @@ describe("HfCache.snapshotDir / isCompleteSnapshot", () => {
     await using dir = await tmpdir()
     expect(await HfCache.snapshotDir(AXQ27.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
     expect(await HfCache.completeSnapshotDir(AXQ27.repo, { HF_HUB_CACHE: path.join(dir.path, "hub") })).toBeUndefined()
+  })
+
+  test("ignores an invalid refs/main value instead of resolving outside snapshots", async () => {
+    await using dir = await tmpdir()
+    const hfRoot = path.join(dir.path, "hub")
+    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
+    const ref = path.join(hfRoot, `models--${AXQ27.repo.replace(/\//g, "--")}`, "refs", "main")
+    await fs.writeFile(ref, "../../outside")
+
+    expect(await HfCache.snapshotDir(AXQ27.repo, { HF_HUB_CACHE: hfRoot })).toBe(snapshot)
   })
 
   test("rejects a snapshot with a dangling weight symlink", async () => {

@@ -10,6 +10,9 @@ import { parseJsonStrict } from "@/util/json-value"
 // downloaded — and the weights stay in one shared, standard location instead of
 // a duplicate copy under ax-code's own (auto-wiped) cache.
 export namespace HfCache {
+  const REPO_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,95}$/
+  const REVISION = /^[a-f0-9]{40}$/
+
   export function root(env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string {
     if (env.HF_HUB_CACHE && env.HF_HUB_CACHE.trim()) return env.HF_HUB_CACHE.trim()
     if (env.HF_HOME && env.HF_HOME.trim()) return path.join(env.HF_HOME.trim(), "hub")
@@ -20,6 +23,7 @@ export namespace HfCache {
 
   // "mlx-community/Qwen3.6-27B-6bit" -> "models--mlx-community--Qwen3.6-27B-6bit"
   export function repoDir(repo: string, env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string {
+    if (!REPO_ID.test(repo)) throw new TypeError("Invalid Hugging Face repository ID")
     return path.join(root(env, home), `models--${repo.replace(/\//g, "--")}`)
   }
 
@@ -58,7 +62,7 @@ export namespace HfCache {
     const base = repoDir(repo, env, home)
     const snapshots = path.join(base, "snapshots")
     if (revision !== undefined) {
-      if (!/^[a-f0-9]{40}$/.test(revision)) throw new TypeError("Invalid pinned Hugging Face revision")
+      if (!REVISION.test(revision)) throw new TypeError("Invalid pinned Hugging Face revision")
       const pinned = path.join(snapshots, revision)
       return (await isDir(pinned)) ? [pinned] : []
     }
@@ -69,7 +73,7 @@ export namespace HfCache {
       .readFile(path.join(base, "refs", "main"), "utf8")
       .then((s) => s.trim())
       .catch(() => undefined)
-    if (ref) {
+    if (ref && REVISION.test(ref)) {
       const pinned = path.join(snapshots, ref)
       if (await isDir(pinned)) {
         ordered.push(pinned)

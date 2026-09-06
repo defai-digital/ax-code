@@ -801,13 +801,14 @@ export async function downloadModel(input: {
   if (!parsed.dest) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: ax-engine download did not return a destination`)
   }
-  if (
-    definition.revision &&
-    (parsed.revision !== undefined
-      ? parsed.revision !== definition.revision
-      : path.resolve(parsed.dest) !== path.resolve(HfCache.repoDir(repo), "snapshots", definition.revision))
-  ) {
-    throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded revision does not match the requested artifact`)
+  if (definition.revision) {
+    const expectedDestination = path.resolve(HfCache.repoDir(repo), "snapshots", definition.revision)
+    if (
+      (parsed.revision !== undefined && parsed.revision !== definition.revision) ||
+      path.resolve(parsed.dest) !== expectedDestination
+    ) {
+      throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: downloaded revision does not match the requested artifact`)
+    }
   }
   const complete = HfCache.isInside(parsed.dest)
     ? await HfCache.isCompleteSnapshot(parsed.dest)
