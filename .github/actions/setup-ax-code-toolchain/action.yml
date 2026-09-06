@@ -59,4 +59,11 @@ runs:
         node-version: ${{ inputs.node-version }}
         registry-url: ${{ inputs.registry-url }}
         cache: pnpm
-        cache-dependency-path: pnpm-lock.yaml
+        cache-dependency-path: |
+          pnpm-lock.yaml
+          .tmp/ax-tui-src/pnpm-lock.yaml
+
+    - name: Install ax-tui dependencies
+      shell: bash
+      working-directory: ${{ github.workspace }}/.tmp/ax-tui-src
+      run: pnpm install --frozen-lockfile

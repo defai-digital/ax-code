@@ -35,13 +35,16 @@ describe("CI workflow speed policy", () => {
     expect(toolchain).toMatch(/pnpm\/action-setup@[a-f0-9]{40} # v4/)
     expect(toolchain).toContain("run_install: false")
     expect(toolchain).toMatch(/cache:\s*pnpm/)
-    expect(toolchain).toContain("cache-dependency-path: pnpm-lock.yaml")
+    expect(toolchain).toMatch(/cache-dependency-path:[\s\S]*pnpm-lock\.yaml/)
   })
 
   test("the shared JS toolchain checks out the ax-tui sibling for the link: dependency", () => {
     expect(toolchain).toContain("repository: defai-digital/ax-tui")
     expect(toolchain).toContain("path: .tmp/ax-tui-src")
     expect(toolchain).toContain('ln -sfn "$GITHUB_WORKSPACE/.tmp/ax-tui-src"')
+    expect(toolchain).toContain(".tmp/ax-tui-src/pnpm-lock.yaml")
+    expect(toolchain).toContain("working-directory: ${{ github.workspace }}/.tmp/ax-tui-src")
+    expect(toolchain).toContain("pnpm install --frozen-lockfile")
   })
 
   test("GitHub automation remains Node and pnpm only", () => {
