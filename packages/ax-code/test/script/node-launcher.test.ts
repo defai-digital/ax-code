@@ -48,4 +48,11 @@ describe("Unix node launcher", () => {
     expect(argumentsText).not.toContain(path.join(root, ".rbenv", "lib"))
     expect(argumentsText).toContain("--version")
   })
+
+  test("brands the Node binary as AX-Code before exec", () => {
+    const script = unixNodeLauncherScript()
+    expect(script).toContain("brand_and_exec_node")
+    expect(script).toContain('branded="$real_dir/AX-Code"')
+    expect(script).not.toMatch(/^exec node /m)
+  })
 })

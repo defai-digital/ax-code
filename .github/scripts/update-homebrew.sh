@@ -186,7 +186,14 @@ class AxCode < Formula
     libexec.install Dir["*"]
     (bin/"ax-code").write <<~SH
       #!/bin/sh
-      exec "#{formula_opt_bin("node")}/node" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
+      NODE_BIN="#{formula_opt_bin("node")}/node"
+      CACHE="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec"
+      mkdir -p "\$CACHE"
+      ln -f "\$NODE_BIN" "\$CACHE/AX-Code" 2>/dev/null || cp "\$NODE_BIN" "\$CACHE/AX-Code" 2>/dev/null || true
+      if [ -x "\$CACHE/AX-Code" ]; then
+        exec "\$CACHE/AX-Code" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
+      fi
+      exec "\$NODE_BIN" --experimental-ffi --disable-warning=ExperimentalWarning "#{libexec}/lib/index-node-tui.js" "\$@"
     SH
     chmod 0755, bin/"ax-code"
 

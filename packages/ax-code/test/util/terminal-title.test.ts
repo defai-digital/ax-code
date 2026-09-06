@@ -77,10 +77,15 @@ describe("terminal title", () => {
 
     expect(tuiEntry).toContain("shouldClaimAxCodeTerminalTitleAtEntry")
     expect(tuiEntry).toContain("claimAxCodeTerminalTitle()")
+    expect(tuiEntry).toContain("claimAxCodeForegroundTtyJob()")
     expect(tuiEntry.indexOf("claimAxCodeTerminalTitle()")).toBeLessThan(tuiEntry.indexOf('await import("./cli/boot")'))
+    expect(tuiEntry.indexOf("claimAxCodeForegroundTtyJob()")).toBeLessThan(
+      tuiEntry.indexOf('await import("./cli/boot")'),
+    )
 
     expect(compiledEntry).toContain("shouldClaimAxCodeTerminalTitleAtEntry")
     expect(compiledEntry).toContain("claimAxCodeTerminalTitle()")
+    expect(compiledEntry).toContain("claimAxCodeForegroundTtyJob()")
     expect(compiledEntry.indexOf("claimAxCodeTerminalTitle()")).toBeLessThan(compiledEntry.indexOf("hooks()"))
 
     expect(runner).toContain("axCodeJobTitleOsc")
