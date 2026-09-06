@@ -12,13 +12,27 @@ import { toErrorMessage } from "./error-message"
 // events and resolving on end/close/error returns the full output without the
 // spurious rejection.
 function drain(stream: Readable): Promise<Buffer> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
+    let settled = false
+
     stream.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
-    const finish = () => resolve(Buffer.concat(chunks))
+
+    const finish = () => {
+      if (settled) return
+      settled = true
+      resolve(Buffer.concat(chunks))
+    }
+
+    const fail = (error: Error) => {
+      if (settled) return
+      settled = true
+      reject(error)
+    }
+
     stream.once("end", finish)
     stream.once("close", finish)
-    stream.once("error", finish)
+    stream.once("error", fail)
   })
 }
 
