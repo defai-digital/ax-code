@@ -10,6 +10,7 @@ import { uniqueItems, uniqueSortedStrings, uniqueStrings } from "@/util/string-l
 import { voidSafe } from "@/util/void-safe"
 import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
+import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
 import { PromptIsolationPolicy, type PromptIsolationPolicy as PromptIsolationPolicyType } from "./prompt-runtime-policy"
 import { TaskQueue } from "./task-queue"
@@ -29,6 +30,9 @@ const log = Log.create({ service: "session.task-queue-executor" })
 const QueuePromptBody = lazy(() => SessionPrompt.PromptInput.omit({ sessionID: true }))
 const QueueCommandBody = lazy(() => SessionPrompt.CommandInput.omit({ sessionID: true }))
 const QueueShellBody = lazy(() => SessionPrompt.ShellInput.omit({ sessionID: true }))
+const QueueAssistantResult = lazy(() =>
+  MessageV2.Assistant.pick({ id: true, sessionID: true, role: true, error: true }),
+)
 
 type WorkflowRunApi = typeof import("../workflow/run").WorkflowRun
 
@@ -162,7 +166,7 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
     let result: unknown
     try {
       result = await runWithExecutionWatchdog(item, execution)
-      const failure = replayFailureForQueueExecution(item, result)
+      const failure = failureForQueueExecution(item, result)
       if (failure) throw new Error(failure)
       succeeded = true
     } catch (error) {
@@ -456,12 +460,28 @@ function isActiveQueueStatus(status: TaskQueue.Status) {
   return activeStatuses.includes(status as (typeof activeStatuses)[number])
 }
 
-function replayFailureForQueueExecution(item: TaskQueue.Info, result: unknown): string | undefined {
+function failureForQueueExecution(item: TaskQueue.Info, result: unknown): string | undefined {
   if (!item.sessionID) return undefined
+  // Prompt failures are returned as assistant messages, not necessarily thrown
+  // or recorded as replay errors (for example, a blocked completion gate).
+  const info = result && typeof result === "object" ? (result as { info?: unknown }).info : undefined
+  const assistant = QueueAssistantResult().safeParse(info)
+  if (assistant.success && assistant.data.sessionID === item.sessionID && assistant.data.error) {
+    const error = assistant.data.error
+    if ("message" in error.data && typeof error.data.message === "string" && error.data.message.trim()) {
+      return error.data.message.trim()
+    }
+    return error.name
+  }
+
   const startedAt = item.time.started ?? item.time.created
-  const events = EventQuery.bySessionLog(item.sessionID).filter((event) => event.time_created >= startedAt)
+  // Read the tail: bySessionLog caps the oldest records and can omit the
+  // terminal outcome entirely once a long-running session exceeds that cap.
+  const events = EventQuery.recentBySessionWithTimestamp(item.sessionID, EventQuery.BY_SESSION_LIMIT).filter(
+    (event) => event.time_created >= startedAt,
+  )
   const latestEnd = events.findLast((event) => event.event_data.type === "session.end")?.event_data
-  if (latestEnd?.type !== "session.end" || latestEnd.reason !== "error") return undefined
+  if (latestEnd?.type !== "session.end" || latestEnd.reason === "completed") return undefined
 
   const messageID = resultMessageID(result)
   const latestError = events.findLast((event) => {
@@ -473,7 +493,16 @@ function replayFailureForQueueExecution(item: TaskQueue.Info, result: unknown): 
   if (latestError?.type === "error" && latestError.message.trim()) {
     return latestError.message.trim()
   }
-  return "Session ended with an error"
+  switch (latestEnd.reason) {
+    case "error":
+      return "Session ended with an error"
+    case "stalled":
+      return "Session stalled before completing the task"
+    case "step_limit":
+      return "Session reached its step limit before completing the task"
+    case "aborted":
+      return "Session was aborted before completing the task"
+  }
 }
 
 function resultMessageID(result: unknown): string | undefined {
