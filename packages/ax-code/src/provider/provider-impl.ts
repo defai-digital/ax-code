@@ -45,6 +45,7 @@ import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform"
+import { resolveAxEngineConnectMode } from "./ax-engine/connection"
 import { isRetiredProviderID } from "./retired-providers"
 import { isGenericCliFallbackModel } from "./cli/ids"
 import { latestAnthropicFamilyModels } from "./anthropic-families"
@@ -95,11 +96,12 @@ export namespace Provider {
     disabled: Set<string>
     enabled?: Set<string> | null
     axEngineSupported?: boolean
+    axEngineAttached?: boolean
   }) {
     if (isRetiredProviderID(input.providerID)) return false
     if (input.enabled && !input.enabled.has(input.providerID)) return false
     if (input.disabled.has(input.providerID)) return false
-    if (input.providerID === AX_ENGINE_PROVIDER_ID && !input.axEngineSupported) return false
+    if (input.providerID === AX_ENGINE_PROVIDER_ID && !input.axEngineSupported && !input.axEngineAttached) return false
     return true
   }
 
@@ -293,9 +295,10 @@ export namespace Provider {
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null
     const axEngineSupported = await isAxEngineSupportedHost().catch(() => false)
+    const axEngineAttached = resolveAxEngineConnectMode(config.provider?.[AX_ENGINE_PROVIDER_ID]?.options) === "attach"
 
     function isProviderAllowed(providerID: ProviderID): boolean {
-      return shouldAllowProviderInCore({ providerID, disabled, enabled, axEngineSupported })
+      return shouldAllowProviderInCore({ providerID, disabled, enabled, axEngineSupported, axEngineAttached })
     }
 
     const providers: Record<ProviderID, Info> = {} as Record<ProviderID, Info>

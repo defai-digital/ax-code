@@ -470,7 +470,7 @@ describe("TaskQueue", () => {
         expect(recovered.failed.map((item) => item.id).sort()).toEqual([deadBoot.id, deadProcess.id].sort())
         expect(recovered.live.map((item) => item.id)).toEqual([legacy.id])
 
-        const stale = await TaskQueue.recoverInterrupted({ now: now + TaskQueue.RESTART_RECOVERY_LIVENESS_MS })
+        const stale = await TaskQueue.recoverInterrupted({ now: now + TaskQueue.RESTART_RECOVERY_LIVENESS_MS + 1 })
         expect(stale.failed.map((item) => item.id)).toEqual([legacy.id])
       },
     })

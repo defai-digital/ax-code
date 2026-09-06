@@ -1920,7 +1920,7 @@ describe("ax-engine provider integration", () => {
     ).toBe(true)
   })
 
-  test("core provider list also gates ax-engine even when explicitly enabled", () => {
+  test("core provider list gates managed ax-engine but allows an explicit attached endpoint", () => {
     expect(
       Provider.shouldAllowProviderInCore({
         providerID: AX_ENGINE_PROVIDER_ID,
@@ -1936,6 +1936,16 @@ describe("ax-engine provider integration", () => {
         disabled: new Set(),
         enabled: new Set([AX_ENGINE_PROVIDER_ID]),
         axEngineSupported: true,
+      }),
+    ).toBe(true)
+
+    expect(
+      Provider.shouldAllowProviderInCore({
+        providerID: AX_ENGINE_PROVIDER_ID,
+        disabled: new Set(),
+        enabled: new Set([AX_ENGINE_PROVIDER_ID]),
+        axEngineSupported: false,
+        axEngineAttached: true,
       }),
     ).toBe(true)
 
