@@ -50,6 +50,12 @@ const rebind = new Map([
   ["drizzle-orm/bun-sqlite", "drizzle-orm/node-sqlite"],
   ["drizzle-orm/bun-sqlite/migrator", "drizzle-orm/node-sqlite/migrator"],
 ])
+// Extensions that Bun code imports as raw text and this Node loader must emulate.
+// - txt: plain-text fixtures and prompts
+// - md: markdown docs/templates consumed at runtime
+// - scm: scheme/source snippets loaded as text
+const TEXT_ASSET_EXTENSIONS = ["txt", "md", "scm"]
+const TEXT_ASSET_REGEX = new RegExp(`\\.(${TEXT_ASSET_EXTENSIONS.join("|")})(\\?|$)`)
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -69,7 +75,7 @@ registerHooks({
   },
   load(url, context, nextLoad) {
     // Text-asset imports (Bun's `import x from "./f.txt"`) → string default.
-    if (url.startsWith("file:") && /\.(txt|md|scm)(\?|$)/.test(url)) {
+    if (url.startsWith("file:") && TEXT_ASSET_REGEX.test(url)) {
       const file = fileURLToPath(url.replace(/\?.*$/, ""))
       const text = readFileSync(file, "utf8")
       return { format: "module", source: `export default ${JSON.stringify(text)}`, shortCircuit: true }

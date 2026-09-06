@@ -47,4 +47,9 @@ describe("isSDKVersionCompatible", () => {
     expect(isSDKVersionCompatible("garbage")).toBe(false)
     expect(isSDKVersionCompatible("")).toBe(false)
   })
+
+  test("prerelease suffixes are stripped so major.minor.patch still matches", () => {
+    expect(isSDKVersionCompatible(`${current}-rc.1`)).toBe(true)
+    expect(isSDKVersionCompatible(`^${major}.0.0-beta.1`)).toBe(true)
+  })
 })

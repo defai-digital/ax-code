@@ -272,6 +272,10 @@ function documentSdkMethods(source: string, contract: Contract): string {
         const docLines = [`${summary ? `${summary}.` : "Generated API method."}`.replace(/^./, (c) => c.toUpperCase())]
         docLines.push("", `Calls ${operationLabel(operation)}.`)
         out.push(...blockComment(docLines, indent))
+      } else {
+        const methodName = line.match(/^\s*public ([A-Za-z0-9_]+)/)?.[1]
+        const fallback = methodName ? `Generated API method \`${methodName}\`.` : "Generated API method."
+        out.push(...blockComment([fallback], indent))
       }
     }
     out.push(line)
