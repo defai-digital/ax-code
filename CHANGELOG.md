@@ -8,9 +8,22 @@ changes belong to AX Coder.
 
 ## [7.13.0] - 2026-09-06
 
+### Added
+
+- Add an opt-in WebMCP bridge with explicit approval for every browser-initiated tool call.
+
 ### Changed
 
 - Add a typed dependency seam for session processor stream, retry, and delay effects.
+- Load the extracted `ax-tui` framework from JSR and keep CI automation independent of Bun.
+- Stabilize provider catalog regeneration so upstream object-key ordering does not create snapshot churn.
+
+### Fixed
+
+- Keep AX Engine bearer credentials inside the configured endpoint and reject escaped request targets.
+- Validate Hugging Face repository IDs, revisions, and resolved snapshot destinations before AX Engine uses cached models.
+- Allow explicitly attached AX Engine endpoints on hosts that cannot run AX Code's managed engine lifecycle.
+- Remove release-validation races around task-queue restart recovery.
 
 ## [7.12.2] - 2026-09-05
 
