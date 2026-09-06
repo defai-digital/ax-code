@@ -3179,7 +3179,7 @@ export type ProviderConfig = {
       }
     }
   }
-  management?: "custom-api"
+  management?: "custom-api" | "ax-trust"
   whitelist?: Array<string>
   blacklist?: Array<string>
 }
@@ -14141,6 +14141,7 @@ export type ProviderCustomListResponses = {
    * Managed custom API providers
    */
   200: Array<{
+    management?: "custom-api" | "ax-trust"
     providerID: string
     name: string
     protocol: "openai-compatible" | "anthropic-compatible"
@@ -14199,6 +14200,7 @@ export type ProviderCustomDeleteResponse = ProviderCustomDeleteResponses[keyof P
 /** Request payload shape for `PUT /provider/custom/{providerID}` — Create or update a managed custom API provider */
 export type ProviderCustomUpdateData = {
   body?: {
+    management?: "custom-api" | "ax-trust"
     name: string
     protocol: "openai-compatible" | "anthropic-compatible"
     baseURL: string
@@ -14242,6 +14244,7 @@ export type ProviderCustomUpdateResponses = {
    * Saved custom API provider
    */
   200: {
+    management?: "custom-api" | "ax-trust"
     providerID: string
     name: string
     protocol: "openai-compatible" | "anthropic-compatible"

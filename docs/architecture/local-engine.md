@@ -2,67 +2,43 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-26
+Last reviewed: 2026-09-06
 Owner: ax-code runtime
 Related: [ax-engine LOCAL-ENGINE-CLIENTS](https://github.com/defai-digital/ax-engine/blob/main/docs/LOCAL-ENGINE-CLIENTS.md)
 
-## Decision
+## Local runtime setup
 
-AX Code uses the **sidecar HTTP** backend for AX Engine. Two operator modes share
-the same OpenAI-compatible `/v1` chat wire:
+Select **AX-Engine runtime** in `/connect`, then **Select a model**. AX Code
+configures the local runtime and starts it when the selected model is needed.
+There is no endpoint URL or API-key form. **View status**, **Stop local runtime**
+(when running), and **Disable** manage the local process.
 
-| Mode                  | When                       | How                                                     |
-| --------------------- | -------------------------- | ------------------------------------------------------- |
-| **Managed** (default) | AX Code owns lifecycle     | prepare model → spawn `ax-engine serve` → health → chat |
-| **Attach**            | You already run the server | set `baseURL` + `apiKey` only; no spawn                 |
+AX Code uses the **sidecar HTTP** backend for AX Engine. It starts
+`ax-engine serve`, tracks the owned process, and resolves the loopback address
+and port automatically. The user selects a model; AX Code handles transport
+configuration.
 
 ```text
 AX Code (TypeScript)
-  → Managed: ensure/prepare → spawn ax-engine serve → /v1
-  → Attach:  provider.options.baseURL (+ apiKey) → /v1
-  → @ai-sdk/openai-compatible language model
+  -> select local model -> ensure/prepare -> spawn ax-engine serve
+  -> managed loopback /v1 -> @ai-sdk/openai-compatible language model
 ```
 
-The TUI and Desktop **AX Engine** settings offer _Managed local server_ or
-_Attach existing server_ (endpoint + API key). Both surfaces validate an attach
-before saving it. They never start, reload, or stop a server in attach mode.
+Selecting a model explicitly saves managed lifecycle and clears legacy attach
+endpoint/key settings. This also overrides a lingering `AX_ENGINE_HOST` value.
+Older SDK clients retain the legacy loopback-only attach API and its credential
+validation. That compatibility path is not part of the provider menu.
 
-### Attach configuration
+AX Code does not link the AX Engine SDK in-process. AX Engine owns model
+execution, and AX Code owns the client-side process lifecycle. Host eligibility,
+model preparation, and live tool-calling checks still apply.
 
-Trusted global config records the non-secret connection choice:
-
-```json
-{
-  "provider": {
-    "ax-engine": {
-      "options": {
-        "connectionMode": "attach",
-        "baseURL": "http://127.0.0.1:31418/v1"
-      }
-    }
-  }
-}
-```
-
-The UI stores the bearer token in AX Code's encrypted auth store, never in
-`ax-code.json`. Project-controlled provider URLs are intentionally ignored by
-the untrusted-config policy. Environment variables remain an advanced,
-backward-compatible attach path:
-
-| Variable            | Role                                                          |
-| ------------------- | ------------------------------------------------------------- |
-| `AX_ENGINE_HOST`    | Base URL (with or without `/v1`); local host only             |
-| `AX_ENGINE_API_KEY` | Bearer token (must match server `--api-key` / env if enabled) |
-
-Default managed key is `local` when unset. Attach accepts only HTTP(S) loopback
-hosts, rejects URL-embedded credentials/query strings, validates `/v1/models`
-and structured tool calling, and refuses to attach to a process AX Code owns.
-Set `connectionMode` to `managed` to override even a lingering
-`AX_ENGINE_HOST`.
-
-AX Code does **not** link `ax-engine-sdk` in-process. AX Code and the current
-AX Studio Electron app both use the `/v1` sidecar contract and share lifecycle
-**phase names**. gRPC and in-process SDK are non-goals for AX Code chat.
+Cold startup has a 240-second readiness limit. Loading large model weights
+from a network-mounted Hugging Face cache can approach or exceed this limit.
+Use a local SSD cache when cold-load latency is a problem. For an existing
+engine, AX Code makes up to three health probes, each limited to two seconds
+and separated by 250 milliseconds, before restarting an unresponsive process.
+Cancelling the request preserves the existing process.
 
 ## Why sidecar
 
@@ -96,8 +72,8 @@ Severity order matches ax-engine `docs/LOCAL-ENGINE-CLIENTS.md`.
 | ---------------------------------- | ----------------------------------------------------------------------- |
 | Server spawn / health              | `packages/ax-code/src/provider/ax-engine/server.ts`                     |
 | Provider loader (managed + attach) | `packages/ax-code/src/provider/ax-engine/provider-loader.ts`            |
-| TUI managed / attach               | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider.tsx`        |
-| Connect-mode helpers               | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider-options.ts` |
+| TUI local runtime                  | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider.tsx`        |
+| Local action helpers               | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider-options.ts` |
 | Aggregate status                   | `packages/ax-code/src/provider/ax-engine/status.ts`                     |
 | Phase mapping                      | `packages/ax-code/src/provider/ax-engine/lifecycle.ts`                  |
 | Model policy                       | [AX Engine Model Selection](../providers/ax-engine-model-selection.md)  |

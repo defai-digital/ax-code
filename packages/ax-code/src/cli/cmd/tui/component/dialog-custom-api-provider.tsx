@@ -14,6 +14,7 @@ import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { focusRenderable } from "@tui/util/renderable-safety"
 import { isRecord } from "@/util/record"
 import { CustomApiProvider } from "@/provider/custom-api-provider"
+import { isAxTrustProviderID } from "@/mode/provider-category"
 
 const Protocol = z.enum(["openai-compatible", "anthropic-compatible"])
 export type CustomApiProviderProtocol = z.infer<typeof Protocol>
@@ -31,6 +32,7 @@ const Model = z.object({
 export type CustomApiProviderModel = z.infer<typeof Model>
 
 const View = z.object({
+  management: CustomApiProvider.Management.optional(),
   providerID: z.string(),
   name: z.string(),
   protocol: Protocol,
@@ -87,7 +89,7 @@ export async function deleteCustomApiProvider(sdk: SDK, providerID: string): Pro
 export function isManagedCustomApiProviderConfig(config: unknown, providerID: string): boolean {
   if (!isRecord(config) || !isRecord(config.provider)) return false
   const provider = config.provider[providerID]
-  return isRecord(provider) && provider.management === "custom-api"
+  return isRecord(provider) && CustomApiProvider.isManaged(provider)
 }
 
 export function parseCustomApiProviderModelIDs(
@@ -154,6 +156,7 @@ type CustomApiConnectFields = {
 }
 
 function DialogCustomApiConnect(props: {
+  management?: CustomApiProvider.Management
   existing?: CustomApiProviderView
   registered?: readonly CustomApiProviderView[]
   onConfirm: (fields: CustomApiConnectFields) => void
@@ -231,7 +234,11 @@ function DialogCustomApiConnect(props: {
     <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          {props.existing ? `Update ${props.existing.name}` : "Custom API provider"}
+          {props.existing
+            ? `Update ${props.existing.name}`
+            : props.management === "ax-trust"
+              ? "Connect AX Trust"
+              : "Custom API provider"}
         </text>
         <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
           esc
@@ -239,8 +246,10 @@ function DialogCustomApiConnect(props: {
       </box>
       <box gap={1}>
         <text fg={theme.textMuted}>
-          OpenAI-compatible base URL and bearer token. Models load from GET /models. Leave the token blank to keep a
-          saved key when this URL is already registered.
+          {props.management === "ax-trust"
+            ? "AX Trust gateway base URL (including /v1) and client API key. Models load from the gateway."
+            : "OpenAI-compatible base URL and bearer token. Models load from GET /models."}{" "}
+          Leave the token blank to keep a saved key when this URL is already registered.
         </text>
         {fieldLabel("baseURL", "1. Base URL")}
         <textarea
@@ -248,7 +257,7 @@ function DialogCustomApiConnect(props: {
           keyBindings={[{ name: "return", action: "submit" }]}
           ref={(val: TextareaRenderable) => (baseURLInput = val)}
           initialValue={props.existing?.baseURL ?? ""}
-          placeholder="https://api.example.com/v1"
+          placeholder={props.management === "ax-trust" ? "https://ax-trust.example/v1" : "https://api.example.com/v1"}
           textColor={theme.text}
           focusedTextColor={theme.text}
           cursorColor={theme.text}
@@ -323,11 +332,30 @@ async function allocateProviderID(sdk: SDK, base: string): Promise<string> {
   throw new Error("Could not allocate a provider ID")
 }
 
+export function resolveCustomApiProviderSetup(input: {
+  baseURL: string
+  existing?: CustomApiProviderView
+  registered?: readonly CustomApiProviderView[]
+  management?: CustomApiProvider.Management
+}) {
+  const existing = input.existing ?? findCustomApiProviderByBaseURL(input.registered ?? [], input.baseURL)
+  const identity = existing
+    ? { name: existing.name, providerID: existing.providerID }
+    : CustomApiProvider.identityFromBaseURL(input.baseURL)
+  return {
+    existing,
+    identity,
+    management:
+      input.management ?? existing?.management ?? (isAxTrustProviderID(identity.providerID) ? "ax-trust" : undefined),
+  }
+}
+
 export async function configureCustomApiProvider(input: {
   dialog: DialogContext
   sdk: SDK
   theme: Theme
   existing?: CustomApiProviderView
+  management?: CustomApiProvider.Management
 }): Promise<CustomApiProviderView | null> {
   // Load the managed list before the form so add-mode can keep a saved token
   // when the typed URL already belongs to a provider (Desktop already does this).
@@ -336,6 +364,7 @@ export async function configureCustomApiProvider(input: {
     input.dialog.replace(
       () => (
         <DialogCustomApiConnect
+          management={input.management ?? input.existing?.management}
           existing={input.existing}
           registered={registered}
           onConfirm={(value) => resolve(value)}
@@ -351,12 +380,15 @@ export async function configureCustomApiProvider(input: {
   // Connecting an endpoint that is already registered updates that provider
   // in place. Minting a second ID (`127-0-0-1` next to `127.0.0.1`) would
   // orphan every pin, recent entry, and small_model that names the first.
-  const existing = input.existing ?? findCustomApiProviderByBaseURL(registered, fields.baseURL)
-  const identity = existing
-    ? { name: existing.name, providerID: existing.providerID }
-    : CustomApiProvider.identityFromBaseURL(fields.baseURL)
+  const { existing, identity, management } = resolveCustomApiProviderSetup({
+    baseURL: fields.baseURL,
+    existing: input.existing,
+    registered,
+    management: input.management,
+  })
   const providerID = existing ? identity.providerID : await allocateProviderID(input.sdk, identity.providerID)
   const body: Record<string, unknown> = {
+    ...(management ? { management } : {}),
     name: identity.name,
     protocol: existing?.protocol ?? "openai-compatible",
     baseURL: fields.baseURL,
@@ -428,7 +460,7 @@ export function customApiProviderManagementMenu(input: {
     input.dialog.replace(
       () => (
         <DialogSelect
-          title={`${input.provider.name} — custom API`}
+          title={`${input.provider.name} — ${input.provider.management === "ax-trust" || isAxTrustProviderID(input.provider.providerID) ? "AX Trust" : "custom API"}`}
           options={[
             { title: "Select a model", value: "use" as const },
             { title: "Update provider", value: "update" as const, description: input.provider.baseURL },

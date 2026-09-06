@@ -5538,6 +5538,7 @@ export class Custom extends HeyApiClient {
     parameters: {
       providerID: string
       directory?: string
+      management?: "custom-api" | "ax-trust"
       name: string
       protocol: "openai-compatible" | "anthropic-compatible"
       baseURL: string
@@ -5564,6 +5565,7 @@ export class Custom extends HeyApiClient {
           args: [
             { in: "path", key: "providerID" },
             { in: "query", key: "directory" },
+            { in: "body", key: "management" },
             { in: "body", key: "name" },
             { in: "body", key: "protocol" },
             { in: "body", key: "baseURL" },

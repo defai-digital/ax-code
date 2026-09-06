@@ -125,12 +125,24 @@ describe("provider routes", () => {
     expect(ids).toContain("modelarts")
     expect(ids).toContain("tencent-ti")
     expect(ids).toContain("sagemaker")
+    expect(ids).toContain("custom-private-gpu")
     expect(ids).toContain("grok-build-cli")
+    expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "ax-studio", "local-llm"]))
     expect(ids).not.toContain("qoder-cli")
     expect(ids).not.toContain("gemini-cli")
     expect(ids).not.toContain("antigravity-cli")
     expect(ids).toContain("kimi-cli")
   })
+
+  test.each(["ollama", "lmstudio", "ax-studio", "local-llm", "custom-private-gpu"])(
+    "keeps %s setup choices subject to explicit enablement and disablement",
+    (key) => {
+      expect(shouldShowProviderInList({ key, disabled: new Set() })).toBe(true)
+      expect(shouldShowProviderInList({ key, disabled: new Set([key]) })).toBe(false)
+      expect(shouldShowProviderInList({ key, disabled: new Set(), enabled: new Set(["groq"]) })).toBe(false)
+      expect(shouldShowProviderInList({ key, disabled: new Set(), enabled: new Set([key]) })).toBe(true)
+    },
+  )
 
   test("waits for provider discovery when a headless client requests a complete list", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -450,6 +462,11 @@ describe("provider routes", () => {
       })
       expect(managed.status).toBe(200)
       expect(await managed.json()).toMatchObject({ mode: "managed" })
+      expect((await Config.getGlobal()).provider?.["ax-engine"]?.options).toMatchObject({
+        connectionMode: "managed",
+        baseURL: "",
+        apiKey: "",
+      })
       expect(await Auth.get("ax-engine")).toBeUndefined()
     } finally {
       globalThis.fetch = originalFetch

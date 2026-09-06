@@ -11,6 +11,13 @@ import { isRecord } from "@/util/record"
 import { Ssrf } from "@/util/ssrf"
 
 export namespace CustomApiProvider {
+  export const Management = z.enum(["custom-api", "ax-trust"])
+  export type Management = z.infer<typeof Management>
+
+  export function isManaged(provider: { management?: unknown } | undefined) {
+    return provider?.management === "custom-api" || provider?.management === "ax-trust"
+  }
+
   export const Protocol = z.enum(["openai-compatible", "anthropic-compatible"])
   export type Protocol = z.infer<typeof Protocol>
 
@@ -73,6 +80,7 @@ export namespace CustomApiProvider {
 
   export const Upsert = z
     .object({
+      management: Management.optional(),
       name: z.string().trim().min(1, "Provider name is required").max(120),
       protocol: Protocol,
       baseURL: BaseURL,
@@ -107,6 +115,7 @@ export namespace CustomApiProvider {
 
   export const View = z
     .object({
+      management: Management.optional(),
       providerID: ProviderID,
       name: z.string(),
       protocol: Protocol,
@@ -376,7 +385,7 @@ export namespace CustomApiProvider {
 
   function providerConfig(input: Upsert & { models: Model[] }): Config.Provider {
     return {
-      management: "custom-api",
+      management: input.management ?? "custom-api",
       name: input.name,
       env: [],
       npm: npmForProtocol(input.protocol),
@@ -420,6 +429,7 @@ export namespace CustomApiProvider {
       temperature: model.temperature ?? false,
     }))
     const parsed = View.safeParse({
+      ...(provider.management === "ax-trust" ? { management: provider.management } : {}),
       providerID,
       name: provider.name ?? providerID,
       protocol,
@@ -440,7 +450,7 @@ export namespace CustomApiProvider {
   async function assertAvailableProviderID(providerID: string, existingGlobal?: Config.Provider) {
     if (isRetiredProviderID(providerID))
       throw new Error({ message: `Provider ID '${providerID}' is retired and cannot be reused` })
-    if (existingGlobal?.management === "custom-api") return
+    if (isManaged(existingGlobal)) return
     if (existingGlobal)
       throw new Error({ message: `Provider ID '${providerID}' is already managed by global configuration` })
     const [catalog, effective] = await Promise.all([ModelsDev.get(), Config.get()])
@@ -455,7 +465,7 @@ export namespace CustomApiProvider {
   export async function list(): Promise<View[]> {
     const [globalConfig, auth] = await Promise.all([Config.getGlobal(), Auth.all()])
     return Object.entries(globalConfig.provider ?? {})
-      .filter(([, provider]) => provider.management === "custom-api")
+      .filter(([, provider]) => isManaged(provider))
       .map(([providerID, provider]) => viewFromProvider(providerID, provider, auth[providerID]?.type === "api"))
       .sort((left, right) => left.name.localeCompare(right.name) || left.providerID.localeCompare(right.providerID))
   }
@@ -470,7 +480,11 @@ export namespace CustomApiProvider {
     const models = await resolveModels(input, previousProvider, previousAuth)
     const credentialChanged = input.apiKey !== undefined
     if (credentialChanged) await Auth.set(providerID, { type: "api", key: input.apiKey! })
-    const nextProvider = providerConfig({ ...input, models })
+    const nextProvider = providerConfig({
+      ...input,
+      management: input.management ?? previousProvider?.management,
+      models,
+    })
     try {
       await Config.setGlobalProvider(providerID, nextProvider)
     } catch (cause) {
@@ -486,7 +500,7 @@ export namespace CustomApiProvider {
     previousAuth: Auth.Info | undefined,
   ): Promise<Model[]> {
     if (input.models && input.models.length > 0) return input.models
-    if (!input.refreshModels && previousProvider?.management === "custom-api") {
+    if (!input.refreshModels && previousProvider && isManaged(previousProvider)) {
       const previous = viewFromProvider("previous", previousProvider, false)
       const previousURL = previous.baseURL
       if (previousURL === input.baseURL && previous.models.length > 0) return previous.models
@@ -501,7 +515,7 @@ export namespace CustomApiProvider {
     const globalConfig = await Config.getGlobal()
     const previousProvider = globalConfig.provider?.[providerID]
     if (!previousProvider) return false
-    if (previousProvider.management !== "custom-api")
+    if (!isManaged(previousProvider))
       throw new Error({ message: `Provider ID '${providerID}' is not managed by the custom API provider editor` })
     const previousAuth = await Auth.get(providerID)
     const removed = await Config.removeGlobalProvider(providerID)

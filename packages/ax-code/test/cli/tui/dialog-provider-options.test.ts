@@ -1,25 +1,18 @@
 import { describe, expect, test } from "vitest"
 import {
-  AX_ENGINE_DEFAULT_ATTACH_API_KEY,
+  AX_TRUST_PROVIDER_OPTION_ID,
   CLI_BINARIES,
+  axEngineRuntimeDialogActions,
   CLI_PROVIDERS,
   DEDICATED_PRIVATE_GPU_PROVIDERS,
   PRIVATE_GPU_PROVIDERS,
-  axEngineAttachApiKeyPreset,
-  axEngineAttachBaseURLPreset,
-  axEngineAttachProviderConfig,
-  axEngineConnectModeFromConfig,
-  axEngineConnectedDialogActions,
-  axEngineEndpointsMayAlias,
-  axEngineManagedProviderConfig,
-  axEngineSetupDialogActions,
   configUpdateParams,
   CUSTOM_API_PROVIDER_OPTION_ID,
-  normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
   PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
   providerDialogCategory,
+  providerDialogCategoryOverrides,
   providerDialogConnected,
   providerDialogOptionsForType,
   providerDialogProviders,
@@ -28,6 +21,7 @@ import {
   providerModelSelectable,
   selectableProviderDefaultModelID,
   withCustomApiProviderDialogEntry,
+  withAxTrustProviderDialogEntry,
 } from "../../../src/cli/cmd/tui/component/dialog-provider-options"
 
 function provider(id: string, name = id) {
@@ -41,6 +35,43 @@ describe("provider dialog options", () => {
     expect(
       withCustomApiProviderDialogEntry(result).filter((item) => item.id === CUSTOM_API_PROVIDER_OPTION_ID),
     ).toHaveLength(1)
+  })
+
+  test("keeps AX Trust setup last and saved gateways in that category without changing IDs", () => {
+    const categoryOverrides = providerDialogCategoryOverrides({
+      provider: { "company-gateway": { management: "ax-trust" }, openai: { management: "custom-api" } },
+    })
+    const result = withAxTrustProviderDialogEntry(
+      providerDialogProviders({
+        available: [provider("company-gateway"), provider("runpod"), provider("openai")],
+        configured: [],
+        categoryOverrides,
+      }),
+      categoryOverrides,
+    )
+    expect(
+      providerDialogTypeOptions(
+        result.map((item) => item.id),
+        categoryOverrides,
+      ).map((item) => item.value),
+    ).toEqual(["api", "private-gpu", "ax-trust"])
+    expect(
+      withAxTrustProviderDialogEntry(result, categoryOverrides).filter(
+        (item) => item.id === AX_TRUST_PROVIDER_OPTION_ID,
+      ),
+    ).toHaveLength(1)
+    const options = result.map((item) => ({ title: item.name, value: item.id }))
+    expect(providerDialogOptionsForType(options, "ax-trust", categoryOverrides).map((item) => item.value)).toEqual([
+      AX_TRUST_PROVIDER_OPTION_ID,
+      "company-gateway",
+      PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
+    ])
+    expect(providerDialogOptionsForType(options, "api", categoryOverrides).map((item) => item.value)).toEqual([
+      "openai",
+      PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
+    ])
+    expect(providerDialogCategory("company-gateway", categoryOverrides)).toBe("AX Trust")
+    expect(providerDialogCategoryOverrides(null)).toEqual({})
   })
 
   test("uses available providers when the provider list bootstrap succeeds", () => {
@@ -178,33 +209,40 @@ describe("provider dialog options", () => {
   })
 
   test("separates API, CLI, local, and private GPU provider categories", () => {
-    expect(providerDialogCategory("groq")).toBe("API plan")
-    expect(providerDialogCategory("grok-build-cli")).toBe("CLI plan")
-    expect(providerDialogCategory("qoder-cli")).not.toBe("CLI plan")
-    expect(providerDialogCategory("kimi-cli")).toBe("CLI plan")
-    expect(providerDialogCategory("ollama")).toBe("Local runtime")
+    expect(providerDialogCategory("groq")).toBe("API Cloud Provider")
+    expect(providerDialogCategory("grok-build-cli")).toBe("CLI Provider")
+    expect(providerDialogCategory("qoder-cli")).not.toBe("CLI Provider")
+    expect(providerDialogCategory("kimi-cli")).toBe("CLI Provider")
+    expect(providerDialogCategory("ax-engine")).toBe("AX-Engine runtime")
+    expect(providerDialogCategory("ollama")).toBe("Local LLM runtime")
+    expect(providerDialogCategory("lmstudio")).toBe("Local LLM runtime")
+    expect(providerDialogCategory("local-llm")).toBe("Local LLM runtime")
     expect(providerDialogCategory("alibaba-pai")).toBe("Private GPU cloud")
+    expect(providerDialogCategory("custom-private-gpu")).toBe("Private GPU cloud")
     expect(providerDialogCategory("runpod")).toBe("Private GPU cloud")
     expect(providerDialogCategory("nebius")).toBe("Private GPU cloud")
     expect(providerDialogCategory("fireworks-ai")).toBe("Private GPU cloud")
     expect(providerDialogCategory("togetherai")).toBe("Private GPU cloud")
-    expect(providerDialogCategory("huggingface")).toBe("API plan")
+    expect(providerDialogCategory("huggingface")).toBe("API Cloud Provider")
     expect(providerDialogCategory("huggingface-endpoints")).toBe("Private GPU cloud")
     expect(PRIVATE_GPU_PROVIDERS.has("alibaba-pai")).toBe(true)
     expect(PRIVATE_GPU_PROVIDERS.has("nebius")).toBe(true)
     expect(PRIVATE_GPU_PROVIDERS.has("huggingface")).toBe(false)
     expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("runpod")).toBe(true)
+    expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("custom-private-gpu")).toBe(true)
     expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("nebius")).toBe(false)
     expect(DEDICATED_PRIVATE_GPU_PROVIDERS.has("huggingface")).toBe(false)
   })
 
   test("builds type-first connect options and filters the provider list", () => {
     expect(
-      providerDialogTypeOptions(["ax-engine", "openai", "grok-build-cli", "nebius"]).map((item) => item.value),
-    ).toEqual(["local", "private-gpu", "cli", "api"])
+      providerDialogTypeOptions(["ax-engine", "ollama", "openai", "grok-build-cli", "nebius"]).map(
+        (item) => item.value,
+      ),
+    ).toEqual(["api", "cli", "ax-engine", "local", "private-gpu"])
     expect(providerDialogTypeOptions(["openai", "groq"])).toEqual([
       {
-        title: "API plan",
+        title: "API Cloud Provider",
         value: "api",
         description: "2 providers",
         hint: "Hosted API key",
@@ -218,15 +256,49 @@ describe("provider dialog options", () => {
     expect(
       providerDialogOptionsForType(
         [
-          { title: "OpenAI", value: "openai", category: "API plan" },
-          { title: "Ollama", value: "ollama", category: "Local runtime" },
+          { title: "OpenAI", value: "openai", category: "API Cloud Provider" },
+          { title: "Ollama", value: "ollama", category: "Local LLM runtime" },
         ],
         "local",
       ).map((item) => item.value),
     ).toEqual(["ollama", PROVIDER_DIALOG_CHANGE_TYPE_VALUE])
   })
 
-  test("sorts private GPU cloud after local runtime and before CLI/API plans", () => {
+  test("separates AX Engine and orders all four external local runtime choices", () => {
+    const choices = providerDialogProviders({
+      available: [
+        provider("local-llm", "Other local LLM"),
+        provider("ax-studio", "AX Studio"),
+        provider("lmstudio", "LM Studio"),
+        provider("ollama", "Ollama"),
+        provider("ax-engine", "AX Engine (Local)"),
+      ],
+      configured: [],
+    })
+    expect(choices.map((item) => item.id)).toEqual(["ax-engine", "ollama", "lmstudio", "ax-studio", "local-llm"])
+    expect(providerDialogTypeOptions(choices.map((item) => item.id))).toEqual([
+      {
+        title: "AX-Engine runtime",
+        value: "ax-engine",
+        description: "1 provider",
+        hint: "Run models on this machine",
+      },
+      {
+        title: "Local LLM runtime",
+        value: "local",
+        description: "4 providers",
+        hint: "Ollama, LMStudio, AX-Studio, Others",
+      },
+    ])
+    expect(
+      providerDialogOptionsForType(
+        choices.map((item) => ({ title: item.name, value: item.id })),
+        "local",
+      ).map((item) => item.value),
+    ).toEqual(["ollama", "lmstudio", "ax-studio", "local-llm", PROVIDER_DIALOG_CHANGE_TYPE_VALUE])
+  })
+
+  test("sorts API, CLI, AX Engine, local LLM, and private GPU providers in menu order", () => {
     expect(
       providerDialogProviders({
         available: [
@@ -234,10 +306,11 @@ describe("provider dialog options", () => {
           provider("alibaba-pai", "Alibaba PAI-EAS"),
           provider("grok-build-cli", "Grok Build CLI"),
           provider("ax-engine", "AX Engine (Local)"),
+          provider("ollama", "Ollama"),
         ],
         configured: [],
       }).map((item) => item.id),
-    ).toEqual(["ax-engine", "alibaba-pai", "grok-build-cli", "groq"])
+    ).toEqual(["groq", "grok-build-cli", "ax-engine", "ollama", "alibaba-pai"])
   })
 
   test("requires normal tool-call capability for local runtime models", () => {
@@ -293,130 +366,34 @@ describe("provider dialog options", () => {
     ).toBeUndefined()
   })
 
-  test("offers disable on the ax-engine setup and connected menus", () => {
-    expect(axEngineSetupDialogActions().map((item) => item.value)).toEqual(["managed", "attach", "disable"])
-    expect(
-      axEngineConnectedDialogActions({
-        connectMode: "managed",
-        serverRunning: false,
-      }).map((item) => item.value),
-    ).toEqual(["use", "status", "attach", "disable"])
-    expect(
-      axEngineConnectedDialogActions({
-        connectMode: "managed",
-        serverRunning: true,
-        serverBaseURL: "http://127.0.0.1:31418/v1",
-      }).map((item) => item.value),
-    ).toEqual(["use", "status", "attach", "stop", "disable"])
-    expect(
-      axEngineConnectedDialogActions({
-        connectMode: "attach",
-        attachBaseURL: "http://127.0.0.1:31418/v1",
-      }).map((item) => item.value),
-    ).toEqual(["use", "status", "endpoint", "managed", "disable"])
+  test("offers only local runtime actions before AX Engine setup", () => {
+    expect(axEngineRuntimeDialogActions().map((item) => item.value)).toEqual(["use", "status", "disable"])
   })
 
-  test("normalizes ax-engine attach endpoints and rejects non-local hosts", () => {
-    expect(normalizeAxEngineEndpointBaseURL("127.0.0.1:31418")).toBe("http://127.0.0.1:31418/v1")
-    expect(normalizeAxEngineEndpointBaseURL("http://localhost:31418/v1")).toBe("http://localhost:31418/v1")
-    expect(() => normalizeAxEngineEndpointBaseURL("https://api.example.com/v1")).toThrow(/local host/i)
-    expect(() => normalizeAxEngineEndpointBaseURL("http://0.0.0.0:31418")).toThrow(/local host/i)
-    expect(() => normalizeAxEngineEndpointBaseURL("ftp://localhost/model")).toThrow(/http/i)
-    expect(() => normalizeAxEngineEndpointBaseURL("http://user:secret@localhost:31418")).toThrow(/credentials/i)
-    expect(() => normalizeAxEngineEndpointBaseURL("")).toThrow(/required/i)
+  test("offers stop only when the local AX Engine process is running", () => {
+    expect(axEngineRuntimeDialogActions({ serverRunning: false }).map((item) => item.value)).toEqual([
+      "use",
+      "status",
+      "disable",
+    ])
+    expect(axEngineRuntimeDialogActions({ serverRunning: true }).map((item) => item.value)).toEqual([
+      "use",
+      "status",
+      "stop",
+      "disable",
+    ])
   })
 
-  test("detects ax-engine managed vs attach from config and env", () => {
-    const previousHost = process.env.AX_ENGINE_HOST
-    delete process.env.AX_ENGINE_HOST
-    try {
-      expect(axEngineConnectModeFromConfig({})).toBe("managed")
-      expect(
-        axEngineConnectModeFromConfig({
-          provider: { "ax-engine": { options: { baseURL: "http://127.0.0.1:31418/v1" } } },
-        }),
-      ).toBe("attach")
-      process.env.AX_ENGINE_HOST = "http://127.0.0.1:31419"
-      expect(axEngineConnectModeFromConfig({})).toBe("attach")
-      expect(
-        axEngineConnectModeFromConfig({
-          provider: {
-            "ax-engine": {
-              options: {
-                connectionMode: "managed",
-                baseURL: "http://127.0.0.1:31418/v1",
-              },
-            },
-          },
-        }),
-      ).toBe("managed")
-    } finally {
-      if (previousHost === undefined) delete process.env.AX_ENGINE_HOST
-      else process.env.AX_ENGINE_HOST = previousHost
-    }
-  })
-
-  test("detects common loopback aliases for the same managed endpoint", () => {
-    expect(axEngineEndpointsMayAlias("http://127.0.0.1:31418/v1", "http://localhost:31418")).toBe(true)
-    expect(axEngineEndpointsMayAlias("http://127.0.0.2:31418/v1", "http://localhost:31418/v1")).toBe(false)
-    expect(axEngineEndpointsMayAlias("http://localhost:31418/v1", "http://localhost:31419/v1")).toBe(false)
-  })
-
-  test("builds managed and attach ax-engine provider config patches", () => {
-    expect(axEngineManagedProviderConfig("AX Engine (Local)")).toEqual({
-      "ax-engine": {
-        name: "AX Engine (Local)",
-        options: { connectionMode: "managed", baseURL: "", apiKey: "" },
-      },
+  test("shows local readiness and setup blockers without an endpoint", () => {
+    expect(axEngineRuntimeDialogActions({ serverReady: true }).find((item) => item.value === "status")).toMatchObject({
+      description: "Local runtime is ready",
     })
     expect(
-      axEngineAttachProviderConfig({
-        providerName: "AX Engine (Local)",
-        baseURL: "http://127.0.0.1:31418",
-        apiKey: "secret",
-      }),
-    ).toEqual({
-      "ax-engine": {
-        name: "AX Engine (Local)",
-        options: {
-          connectionMode: "attach",
-          baseURL: "http://127.0.0.1:31418/v1",
-          apiKey: "",
-        },
-      },
+      axEngineRuntimeDialogActions({ statusBlocker: "Install AX Engine first" }).find(
+        (item) => item.value === "status",
+      ),
+    ).toMatchObject({
+      description: "Install AX Engine first",
     })
-    expect(
-      axEngineAttachProviderConfig({
-        providerName: "AX Engine (Local)",
-        baseURL: "http://127.0.0.1:31418/v1",
-        apiKey: "  ",
-      })["ax-engine"].options.apiKey,
-    ).toBe("")
-  })
-
-  test("presets attach baseURL and api key from config", () => {
-    const previousHost = process.env.AX_ENGINE_HOST
-    const previousKey = process.env.AX_ENGINE_API_KEY
-    delete process.env.AX_ENGINE_HOST
-    delete process.env.AX_ENGINE_API_KEY
-    try {
-      expect(axEngineAttachBaseURLPreset({})).toBe("http://127.0.0.1:31418/v1")
-      expect(axEngineAttachApiKeyPreset({})).toBe(AX_ENGINE_DEFAULT_ATTACH_API_KEY)
-      expect(
-        axEngineAttachBaseURLPreset({
-          provider: { "ax-engine": { options: { baseURL: "http://127.0.0.1:9/v1", apiKey: "k" } } },
-        }),
-      ).toBe("http://127.0.0.1:9/v1")
-      expect(
-        axEngineAttachApiKeyPreset({
-          provider: { "ax-engine": { options: { apiKey: "k" } } },
-        }),
-      ).toBe("k")
-    } finally {
-      if (previousHost === undefined) delete process.env.AX_ENGINE_HOST
-      else process.env.AX_ENGINE_HOST = previousHost
-      if (previousKey === undefined) delete process.env.AX_ENGINE_API_KEY
-      else process.env.AX_ENGINE_API_KEY = previousKey
-    }
   })
 })

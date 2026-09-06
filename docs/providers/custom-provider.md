@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-06-09
+Last reviewed: 2026-09-06
 Owner: ax-code runtime
 
 AX Code talks to models through standard provider protocols. Any endpoint that speaks an **OpenAI-compatible** (`/v1/chat/completions`) or **Anthropic-compatible** (`/v1/messages`) API can be added as a custom provider by pointing `baseURL` at it — no code changes and no waiting for a built-in preset.
@@ -10,6 +10,17 @@ AX Code talks to models through standard provider protocols. Any endpoint that s
 This covers self-hosted aggregators and relay gateways such as LiteLLM, one-api, new-api, and the Vercel AI Gateway, as well as private corporate proxies and any other compatible service. AX Code treats these uniformly: it speaks the wire protocol, you supply the URL and key.
 
 > **Responsibility note.** A gateway sits between AX Code and the upstream model, so your prompts, code, and credentials pass through it. When you point AX Code at a third-party or account-pooling relay, you are responsible for trusting that operator with your data and for staying within the terms of service of every upstream provider it routes to. Built-in gateway presets such as OpenRouter use the same standard protocol path; custom gateway configuration does not imply endorsement of any relay operator.
+
+## Interactive setup
+
+Use `/connect` -> **API Cloud Provider** -> **Custom API provider** for a
+compatible gateway, or `/connect` -> **AX Trust** -> **Connect AX Trust** for
+an AX Trust gateway. Enter its base URL (including `/v1` for AX Trust) and client
+API key. The editor discovers model IDs and metadata and stores credentials in
+encrypted auth storage. It can also accept explicit model IDs if discovery
+is unavailable. Reconnecting a saved URL retains its provider ID and key when
+the token is left blank. AX Trust connections keep their category after edits
+and model refreshes.
 
 ## How a provider is resolved
 
@@ -19,9 +30,10 @@ For each request AX Code needs three things from a provider entry:
 - **`options.baseURL`** — the gateway URL. Falls back to the provider `api` field, then to the model's own `api.url`. Supports `${ENV_VAR}` substitution.
 - **A credential** — resolved in order from `options.apiKey`, then the persisted auth store, then the provider's `env` variables.
 
-Custom providers also need an explicit **`models`** map: unlike the built-in registry, AX Code does not know which models a private endpoint exposes, so you declare them.
+Manual configuration also needs an explicit **`models`** map. The interactive
+editor populates this map from the endpoint or from model IDs you provide.
 
-Dedicated private GPU clouds are an exception: they are first-class providers under `/connect` → **Private GPU cloud**. Paste the OpenAI-compatible URL and token (`alibaba-pai`, `runpod`, `huggingface-endpoints`, `sagemaker`, `volcengine-ark`, `modelarts`, `tencent-ti`); AX Code calls `GET …/models` and uses the deployed model IDs automatically.
+Dedicated private GPU clouds are first-class providers under `/connect` → **Private GPU cloud**. Paste the OpenAI-compatible URL and token (`alibaba-pai`, `runpod`, `huggingface-endpoints`, `sagemaker`, `volcengine-ark`, `modelarts`, `tencent-ti`, or `custom-private-gpu`); AX Code calls `GET …/models` and uses the deployed model IDs automatically.
 
 Hosted GPU catalogs (`nebius`, `fireworks-ai`, `togetherai`, `baseten`, `nvidia`, `deepinfra`) use an API key and the bundled model snapshot, the same pattern OpenCode uses.
 

@@ -41,6 +41,7 @@ import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
 import { isNonChatModelID, modelSelectableForProvider, sameSkuOnConnectedProvider } from "./model-selectability"
 import { CUSTOM_LOADERS, type CustomModelLoader, type CustomVarsLoader, type CustomDiscoverModels } from "./loaders"
+import { LOCAL_LLM_PROVIDER_IDS } from "@/mode/provider-category"
 import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
@@ -461,7 +462,7 @@ export namespace Provider {
               input: model.limit?.input ?? existingModel?.limit?.input,
               output: model.limit?.output ?? existingModel?.limit?.output ?? 0,
             }
-            if (provider.management !== "custom-api") return stored
+            if (!CustomApiProvider.isManaged(provider)) return stored
             const inherited = CustomApiProvider.inheritCustomApiModelLimit({
               modelID: nextID,
               limit: stored,
@@ -545,9 +546,9 @@ export namespace Provider {
     }
 
     // Providers that require explicit opt-in via enabled_providers or config.provider.
-    // Local inference endpoints (ollama, ax-studio) are excluded from auto-discovery
+    // External local inference endpoints are excluded from auto-discovery
     // because their models have inconsistent tool-calling and structured output support.
-    const OPT_IN_PROVIDERS = new Set(["ollama", "ax-studio"])
+    const OPT_IN_PROVIDERS = new Set<string>(LOCAL_LLM_PROVIDER_IDS)
 
     await Promise.all(
       Object.entries(CUSTOM_LOADERS).map(async ([id, fn]) => {
@@ -555,6 +556,12 @@ export namespace Provider {
           const providerID = ProviderID.make(id)
           if (disabled.has(providerID)) return
           const configured = Object.prototype.hasOwnProperty.call(config.provider ?? {}, providerID)
+          const explicitlyEnabled = enabled?.has(providerID) ?? false
+          if (OPT_IN_PROVIDERS.has(providerID)) {
+            if (!isProviderAllowed(providerID)) return
+            // Showing a setup choice must not probe or activate a local server.
+            if (!configured && !providers[providerID] && !explicitlyEnabled) return
+          }
           const data = database[providerID] ?? {
             id: ProviderID.make(id),
             name: id,
@@ -565,16 +572,11 @@ export namespace Provider {
           }
           if (!database[providerID]) database[providerID] = data
           const result = await withTimeout(fn(data), 15_000, `custom loader '${id}' timed out`)
-          // Opt-in providers skip autoload — they only activate when explicitly
-          // configured in ax-code.json (enabled_providers or provider.<id>).
-          const explicitlyEnabled = enabled?.has(providerID) ?? false
-          const optInGated =
-            OPT_IN_PROVIDERS.has(providerID) && !configured && !providers[providerID] && !explicitlyEnabled
           // Always register getModel/vars/discover even when the provider is not
           // yet active (no env key / not configured). Otherwise a later login
           // that merges credentials into `providers` would miss Responses-API
           // routing for meta/Muse Spark until a full process restart.
-          if (result && !optInGated) {
+          if (result) {
             if (result.getModel) modelLoaders[providerID] = result.getModel
             if (result.vars) varsLoaders[providerID] = result.vars
             if (result.discoverModels) discoveryLoaders[providerID] = result.discoverModels

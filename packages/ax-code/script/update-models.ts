@@ -201,7 +201,7 @@ for (const id of [
   "azure",
   "azure-cognitive-services",
   "openrouter",
-  "lmstudio",
+  "lmstudio", // Runtime-owned endpoint preset; models are discovered from the local server.
   "ax-serving",
   "moonshotai",
   "moonshotai-cn",

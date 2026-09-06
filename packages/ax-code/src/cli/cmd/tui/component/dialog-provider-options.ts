@@ -1,11 +1,14 @@
 import { filter, pipe, sortBy } from "remeda"
 import {
+  AX_TRUST_PROVIDER_OPTION_ID,
   CLI_PLAN_PROVIDER_IDS,
   CUSTOM_API_PROVIDER_OPTION_ID,
   DEDICATED_PRIVATE_GPU_PROVIDER_IDS,
+  LOCAL_LLM_PROVIDER_IDS,
   LOCAL_RUNTIME_PROVIDER_IDS,
   PRIVATE_GPU_CLOUD_PROVIDER_IDS,
   type ProviderConnectCategory,
+  type ProviderConnectCategoryOverrides,
   providerConnectCategoriesPresent,
   providerConnectCategory,
   providerConnectCategoryHint,
@@ -15,30 +18,12 @@ import {
   providerConnectTypeOptionDescription,
   providersInConnectCategory,
 } from "@/mode/provider-category"
-export { CUSTOM_API_PROVIDER_OPTION_ID } from "@/mode/provider-category"
-import {
-  AX_ENGINE_CONNECTION_MODES,
-  axEngineAttachProviderConfig as buildAxEngineAttachProviderConfig,
-  axEngineEndpointsMayAlias,
-  axEngineManagedProviderConfig,
-  normalizeAxEngineEndpointBaseURL,
-  resolveAxEngineAttachBaseURL,
-  resolveAxEngineConnectMode,
-  type AxEngineConnectMode,
-} from "@/provider/ax-engine/connection"
+export { AX_TRUST_PROVIDER_OPTION_ID, CUSTOM_API_PROVIDER_OPTION_ID } from "@/mode/provider-category"
 import { modelSelectableForProvider, providerModelSelectable } from "@/provider/model-selectability"
 import { isRecord } from "@/util/record"
 import type { ProviderListResponse } from "@ax-code/sdk/v2"
 
 export { providerModelSelectable }
-export {
-  AX_ENGINE_CONNECTION_MODES,
-  axEngineEndpointsMayAlias,
-  axEngineManagedProviderConfig,
-  normalizeAxEngineEndpointBaseURL,
-  type AxEngineConnectMode,
-}
-
 export type ProviderDialogProvider = {
   id: string
   name: string
@@ -94,46 +79,82 @@ export const CLI_PROVIDERS = new Set<string>(CLI_PLAN_PROVIDER_IDS)
 export const PROVIDER_DIALOG_CHANGE_TYPE_VALUE = "__change_type__"
 
 const CUSTOM_API_PROVIDER_DIALOG_ENTRY = { id: CUSTOM_API_PROVIDER_OPTION_ID, name: "Custom API provider" }
+const AX_TRUST_PROVIDER_DIALOG_ENTRY = { id: AX_TRUST_PROVIDER_OPTION_ID, name: "Connect AX Trust" }
+
+export function providerDialogCategoryOverrides(config: unknown): ProviderConnectCategoryOverrides {
+  if (!isRecord(config) || !isRecord(config.provider)) return {}
+  return Object.fromEntries(
+    Object.entries(config.provider)
+      .filter(([, provider]) => isRecord(provider) && provider.management === "ax-trust")
+      .map(([id]) => [id, "ax-trust"]),
+  )
+}
 
 const HIDDEN_PROVIDERS = new Set(["google", "github-copilot"])
 
 function providerDialogSortKey(providerID: string) {
-  return providerConnectCategorySortKey(providerID)
+  return LOCAL_LLM_PROVIDER_IDS.findIndex((id) => id === providerID)
 }
 
 export function providerDialogProviders(input: {
   available: ProviderDialogProvider[]
   configured: ProviderDialogProvider[]
+  categoryOverrides?: ProviderConnectCategoryOverrides
 }) {
   const providers = input.available.length > 0 ? input.available : input.configured
   return pipe(
     providers,
     filter((provider) => !HIDDEN_PROVIDERS.has(provider.id)),
     sortBy(
+      (provider) => providerConnectCategorySortKey(provider.id, input.categoryOverrides),
       (provider) => providerDialogSortKey(provider.id),
       (provider) => provider.name,
     ),
   )
 }
 
-export function withCustomApiProviderDialogEntry<T extends ProviderDialogProvider>(providers: readonly T[]) {
-  if (providers.some((provider) => provider.id === CUSTOM_API_PROVIDER_OPTION_ID)) return [...providers]
+function withProviderDialogEntry<T extends ProviderDialogProvider>(
+  providers: readonly T[],
+  entry: ProviderDialogProvider,
+  categoryOverrides?: ProviderConnectCategoryOverrides,
+) {
+  if (providers.some((provider) => provider.id === entry.id)) return [...providers]
   return pipe(
-    [...providers, CUSTOM_API_PROVIDER_DIALOG_ENTRY as T],
+    [...providers, entry as T],
     sortBy(
+      (provider) => providerConnectCategorySortKey(provider.id, categoryOverrides),
       (provider) => providerDialogSortKey(provider.id),
       (provider) => provider.name,
     ),
   )
 }
 
-export function providerDialogCategory(providerID: string) {
-  return providerConnectCategoryLabel(providerID)
+export function withCustomApiProviderDialogEntry<T extends ProviderDialogProvider>(
+  providers: readonly T[],
+  categoryOverrides?: ProviderConnectCategoryOverrides,
+) {
+  return withProviderDialogEntry(providers, CUSTOM_API_PROVIDER_DIALOG_ENTRY, categoryOverrides)
 }
 
-export function providerDialogTypeOptions(providerIDs: readonly string[]) {
-  return providerConnectCategoriesPresent(providerIDs).map((id) => {
-    const count = providerIDs.filter((providerID) => providerConnectCategory(providerID) === id).length
+export function withAxTrustProviderDialogEntry<T extends ProviderDialogProvider>(
+  providers: readonly T[],
+  categoryOverrides?: ProviderConnectCategoryOverrides,
+) {
+  return withProviderDialogEntry(providers, AX_TRUST_PROVIDER_DIALOG_ENTRY, categoryOverrides)
+}
+
+export function providerDialogCategory(providerID: string, categoryOverrides?: ProviderConnectCategoryOverrides) {
+  return providerConnectCategoryLabel(providerID, categoryOverrides)
+}
+
+export function providerDialogTypeOptions(
+  providerIDs: readonly string[],
+  categoryOverrides?: ProviderConnectCategoryOverrides,
+) {
+  return providerConnectCategoriesPresent(providerIDs, categoryOverrides).map((id) => {
+    const count = providerIDs.filter(
+      (providerID) => providerConnectCategory(providerID, categoryOverrides) === id,
+    ).length
     return {
       title: providerConnectCategoryMeta(id).label,
       value: id,
@@ -146,15 +167,16 @@ export function providerDialogTypeOptions(providerIDs: readonly string[]) {
 export function providerDialogProvidersForType<T extends { id: string }>(
   providers: readonly T[],
   category: ProviderConnectCategory,
+  categoryOverrides?: ProviderConnectCategoryOverrides,
 ) {
-  return providersInConnectCategory(providers, category)
+  return providersInConnectCategory(providers, category, categoryOverrides)
 }
 
 export function providerDialogChangeTypeOption() {
   return {
     title: "Change type",
     value: PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
-    description: "Back to Local runtime, Private GPU, CLI, API",
+    description: "Back to runtime and provider types",
   }
 }
 
@@ -162,10 +184,11 @@ export function providerDialogChangeTypeOption() {
 export function providerDialogOptionsForType<T extends { value: string; category?: string }>(
   providers: readonly T[],
   category: ProviderConnectCategory,
+  categoryOverrides?: ProviderConnectCategoryOverrides,
 ) {
   return [
     ...providers
-      .filter((provider) => providerConnectCategory(provider.value) === category)
+      .filter((provider) => providerConnectCategory(provider.value, categoryOverrides) === category)
       .map((provider) => ({ ...provider, category: undefined })),
     providerDialogChangeTypeOption(),
   ]
@@ -175,85 +198,39 @@ export function configUpdateParams<T extends Record<string, unknown>>(config: T)
   return { config }
 }
 
-export type AxEngineSetupAction = "managed" | "attach" | "disable"
-export type AxEngineConnectedAction = "use" | "status" | "stop" | "attach" | "managed" | "endpoint" | "disable"
+export type AxEngineRuntimeAction = "use" | "status" | "stop" | "disable"
 
-const AX_ENGINE_DISABLE_OPTION = {
-  title: "Disable",
-  value: "disable" as const,
-  description: "Turn off temporarily — keeps configuration",
-}
-
-export function axEngineSetupDialogActions() {
-  return [
-    {
-      title: "Managed local server",
-      value: "managed" as const,
-      description: "AX Code prepares models and starts ax-engine serve",
-    },
-    {
-      title: "Attach existing server",
-      value: "attach" as const,
-      description: "Use base URL + API key for a server you already run",
-    },
-    AX_ENGINE_DISABLE_OPTION,
-  ]
-}
-
-export function axEngineConnectedDialogActions(input: {
-  connectMode: AxEngineConnectMode
-  attachBaseURL?: string
-  serverRunning?: boolean
-  serverReady?: boolean
-  serverBaseURL?: string
-  statusBlocker?: string
-}): Array<{ title: string; value: AxEngineConnectedAction; description?: string }> {
-  const actions: Array<{ title: string; value: AxEngineConnectedAction; description?: string }> = [
+export function axEngineRuntimeDialogActions(
+  input: {
+    serverRunning?: boolean
+    serverReady?: boolean
+    statusBlocker?: string
+  } = {},
+): Array<{ title: string; value: AxEngineRuntimeAction; description?: string }> {
+  const actions: Array<{ title: string; value: AxEngineRuntimeAction; description?: string }> = [
     {
       title: "Select a model",
       value: "use",
-      description:
-        input.connectMode === "attach"
-          ? "Use models advertised by the attached server"
-          : "Choose a local AX Engine model (starts server on demand)",
+      description: "Choose a local model; AX Code starts the runtime when needed",
     },
     {
       title: "View status",
       value: "status",
-      description:
-        input.connectMode === "attach"
-          ? input.attachBaseURL
-          : input.serverReady
-            ? input.serverBaseURL
-            : input.statusBlocker,
+      description: input.serverReady ? "Local runtime is ready" : input.statusBlocker,
     },
   ]
-  if (input.connectMode === "attach") {
+  if (input.serverRunning) {
     actions.push({
-      title: "Change endpoint / API key",
-      value: "endpoint",
-      description: input.attachBaseURL,
+      title: "Stop local runtime",
+      value: "stop",
+      description: "Stop the AX Engine process started by AX Code",
     })
-    actions.push({
-      title: "Switch to managed",
-      value: "managed",
-      description: "Let AX Code start and stop ax-engine serve",
-    })
-  } else {
-    actions.push({
-      title: "Attach existing server",
-      value: "attach",
-      description: "Point at URL + API key instead of starting locally",
-    })
-    if (input.serverRunning) {
-      actions.push({
-        title: "Stop local server",
-        value: "stop",
-        description: input.serverBaseURL,
-      })
-    }
   }
-  actions.push(AX_ENGINE_DISABLE_OPTION)
+  actions.push({
+    title: "Disable",
+    value: "disable",
+    description: "Turn off temporarily - keeps configuration",
+  })
   return actions
 }
 
@@ -283,47 +260,4 @@ export function selectableProviderDefaultModelID(input: {
   const defaultInfo = input.defaultModel ? input.models[input.defaultModel] : undefined
   if (input.defaultModel && modelSelectableForProvider(input.providerID, defaultInfo)) return input.defaultModel
   return Object.values(input.models).find((model) => modelSelectableForProvider(input.providerID, model))?.id
-}
-
-export const AX_ENGINE_DEFAULT_ATTACH_HOST = "http://127.0.0.1:31418"
-export const AX_ENGINE_DEFAULT_ATTACH_API_KEY = "local"
-
-type AxEngineProviderOptions = {
-  connectionMode?: AxEngineConnectMode
-  baseURL?: string
-  apiKey?: string
-}
-
-function axEngineProviderOptions(config: unknown): AxEngineProviderOptions | undefined {
-  if (!isRecord(config) || !isRecord(config.provider)) return undefined
-  const entry = config.provider["ax-engine"]
-  if (!isRecord(entry) || !isRecord(entry.options)) return undefined
-  const options = entry.options as Record<string, unknown>
-  return {
-    connectionMode: AX_ENGINE_CONNECTION_MODES.includes(options.connectionMode as AxEngineConnectMode)
-      ? (options.connectionMode as AxEngineConnectMode)
-      : undefined,
-    baseURL: typeof options.baseURL === "string" ? options.baseURL : undefined,
-    apiKey: typeof options.apiKey === "string" ? options.apiKey : undefined,
-  }
-}
-
-/** Explicit mode wins; legacy config/env URLs continue to select attach mode. */
-export function axEngineConnectModeFromConfig(config: unknown): AxEngineConnectMode {
-  return resolveAxEngineConnectMode(axEngineProviderOptions(config))
-}
-
-export function axEngineAttachBaseURLPreset(config: unknown): string {
-  return resolveAxEngineAttachBaseURL(axEngineProviderOptions(config))
-}
-
-export function axEngineAttachApiKeyPreset(config: unknown): string {
-  const options = axEngineProviderOptions(config)
-  if (options?.apiKey?.trim()) return options.apiKey.trim()
-  return process.env.AX_ENGINE_API_KEY?.trim() || AX_ENGINE_DEFAULT_ATTACH_API_KEY
-}
-
-/** Provider config patch for attach mode. API keys are stored via auth.json. */
-export function axEngineAttachProviderConfig(input: { providerName: string; baseURL: string; apiKey?: string }) {
-  return buildAxEngineAttachProviderConfig(input)
 }

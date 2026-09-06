@@ -35,6 +35,7 @@ export const DEFAULT_SETUP_PROVIDER_IDS = [
   "volcengine-ark",
   "modelarts",
   "tencent-ti",
+  "custom-private-gpu",
   "github-copilot",
   "zai",
   "zai-coding-plan",

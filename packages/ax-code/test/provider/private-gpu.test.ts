@@ -3,6 +3,8 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
+import { Provider } from "../../src/provider/provider"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import {
   connectPrivateGpu,
   disconnectPrivateGpu,
@@ -17,8 +19,9 @@ import { DEFAULT_SETUP_PROVIDER_IDS } from "../../src/provider/default-setup-pro
 
 const originalFetch = globalThis.fetch
 
-afterEach(() => {
+afterEach(async () => {
   globalThis.fetch = originalFetch
+  await Instance.disposeAll()
 })
 
 describe("private-gpu catalog", () => {
@@ -73,41 +76,59 @@ describe("private-gpu output reservation", () => {
 })
 
 describe("private-gpu connect and disconnect", () => {
-  test("persists then removes auth and the global baseURL", async () => {
-    globalThis.fetch = (async (input: string | URL | Request) => {
-      if (String(input) === "http://127.0.0.1:18110/v1/models") {
-        return new Response(JSON.stringify({ data: [{ id: "kimi-k3" }] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        })
-      }
-      return originalFetch(input)
-    }) as typeof fetch
+  test.each(["alibaba-pai", "custom-private-gpu"])(
+    "connects %s and removes its saved connection",
+    async (providerID) => {
+      const requests: RequestInit[] = []
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input) === "http://127.0.0.1:18110/v1/models") {
+          requests.push(init ?? {})
+          return new Response(JSON.stringify({ data: [{ id: "kimi-k3" }] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        }
+        return originalFetch(input, init)
+      }) as typeof fetch
 
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const result = await connectPrivateGpu({
-          providerID: "alibaba-pai",
-          baseURL: "http://127.0.0.1:18110",
-          apiKey: "eas-token",
-        })
-        expect(result).toEqual({
-          providerID: "alibaba-pai",
-          baseURL: "http://127.0.0.1:18110/v1",
-          models: ["kimi-k3"],
-        })
-        expect(await Auth.get("alibaba-pai")).toEqual({ type: "api", key: "eas-token" })
-        const saved = (await Config.getGlobal()).provider?.["alibaba-pai"]
-        expect(saved?.options?.baseURL).toBe("http://127.0.0.1:18110/v1")
-        expect(saved?.models?.["kimi-k3"]?.id).toBe("kimi-k3")
-        expect(saved?.models?.["kimi-k3"]?.tool_call).toBe(true)
+      await using tmp = await tmpdir({ config: { enabled_providers: [providerID] } })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          try {
+            const result = await connectPrivateGpu({
+              providerID,
+              baseURL: "http://127.0.0.1:18110",
+              apiKey: "endpoint-token",
+            })
+            expect(result).toEqual({
+              providerID,
+              baseURL: "http://127.0.0.1:18110/v1",
+              models: ["kimi-k3"],
+            })
+            expect(await Auth.get(providerID)).toEqual({ type: "api", key: "endpoint-token" })
+            const saved = (await Config.getGlobal()).provider?.[providerID]
+            expect(saved?.options?.baseURL).toBe("http://127.0.0.1:18110/v1")
+            expect(saved?.options).not.toHaveProperty("apiKey")
+            expect(saved?.models?.["kimi-k3"]?.id).toBe("kimi-k3")
+            expect(saved?.models?.["kimi-k3"]?.tool_call).toBe(true)
 
-        await disconnectPrivateGpu("alibaba-pai")
-        expect(await Auth.get("alibaba-pai")).toBeUndefined()
-        expect((await Config.getGlobal()).provider?.["alibaba-pai"]).toBeUndefined()
-      },
-    })
-  })
+            await Provider.ready()
+            const loaded = (await Provider.list())[ProviderID.make(providerID)]
+            expect(loaded.models[ModelID.make("kimi-k3")].api.url).toBe("http://127.0.0.1:18110/v1")
+            expect(requests.length).toBeGreaterThan(0)
+            expect(
+              requests.every(
+                (request) => new Headers(request.headers).get("authorization") === "Bearer endpoint-token",
+              ),
+            ).toBe(true)
+          } finally {
+            await disconnectPrivateGpu(providerID)
+          }
+          expect(await Auth.get(providerID)).toBeUndefined()
+          expect((await Config.getGlobal()).provider?.[providerID]).toBeUndefined()
+        },
+      })
+    },
+  )
 })

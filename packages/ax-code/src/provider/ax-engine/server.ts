@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { Socket } from "node:net"
+import { setTimeout as delay } from "node:timers/promises"
 import semver from "semver"
 import z from "zod"
 import { FileLock } from "@/util/filelock"
@@ -313,6 +314,23 @@ export async function isServerReady(baseURL: string, signal?: AbortSignal, apiKe
     .catch(() => false)
 }
 
+async function existingServerReady(state: AxEngineServerState, signal?: AbortSignal, apiKey?: string) {
+  // A single slow /models request does not establish that a live engine is
+  // wedged. Restarting immediately discards its warm model and prefix cache;
+  // reloading weights from a network volume can then take several minutes.
+  // Keep the existing 2s probe deadline and bound retries before recovery.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    signal?.throwIfAborted()
+    if (!pidLive(state.pid)) return false
+    if (await isServerReady(state.baseURL, signal, apiKey)) return true
+    signal?.throwIfAborted()
+    if (attempt === 3) return false
+    log.warn("retrying ax-engine server health check", { pid: state.pid, attempt })
+    await delay(250, undefined, { signal })
+  }
+  return false
+}
+
 function processHasExited(proc: SpawnedServerProcess | undefined) {
   if (!proc) return false
   if (proc.exitCode !== null && proc.exitCode !== undefined) return true
@@ -557,9 +575,9 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
 }
 
 async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEngineServerState> {
-  // Held across the entire cold start: process spawn + up to 240s readiness wait
-  // (see waitForReady), or up to 120s model reload. Wait well past that worst
-  // case so a genuine cross-process start (e.g. the desktop server alongside a
+  // Held across the entire cold start: health retries and process recovery,
+  // then spawn + up to 240s readiness wait, or up to 120s model reload.
+  // Wait well past that worst case so a cross-process start (e.g. the desktop server alongside a
   // CLI) queues instead of failing while the first holder is still legitimately
   // loading the model; a dead holder is still reclaimed immediately via the
   // staleMs / pid-liveness checks inside FileLock. Previously this was 180_000,
@@ -567,7 +585,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   // slow cold load would hit "timed out waiting for file lock" well before the
   // first start ever finished, surfacing as "start never works".
   using _ = await FileLock.acquire(AxEnginePaths.serverLock, {
-    timeoutMs: 260_000,
+    timeoutMs: 280_000,
     staleMs: 5 * 60_000,
     signal: options.signal,
   })
@@ -606,7 +624,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const mtpModeMatches = existing?.mtpMode === mtpMode
   if (existing) {
     const alive = await serverProcessAlive(existing)
-    const ready = alive && (await isServerReady(existing.baseURL, options.signal, options.apiKey))
+    const ready = alive && (await existingServerReady(existing, options.signal, options.apiKey))
     options.signal?.throwIfAborted()
     if (ready) {
       if (

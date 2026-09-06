@@ -21,6 +21,7 @@ import { DEDICATED_PRIVATE_GPU_VENDORS } from "./private-gpu/presets"
 import type { AxEngineBuiltinModelID } from "./ax-engine/constants"
 import fs from "fs/promises"
 import { isRetiredProviderID } from "./retired-providers"
+import { LOCAL_LLM_RUNTIMES } from "./local-runtime"
 
 export namespace ModelsDev {
   const log = Log.create({ service: "models" })
@@ -151,6 +152,17 @@ export namespace ModelsDev {
   function withBuiltIns(input: Record<string, Provider>) {
     const next = { ...input }
     if (!next[AX_ENGINE_PROVIDER_ID]) next[AX_ENGINE_PROVIDER_ID] = BUILTIN_AX_ENGINE_PROVIDER
+    for (const [id, runtime] of Object.entries(LOCAL_LLM_RUNTIMES)) {
+      if (!next[id])
+        next[id] = {
+          id,
+          name: runtime.name,
+          env: [runtime.envVar],
+          npm: "@ai-sdk/openai-compatible",
+          ...(runtime.defaultHost ? { api: `${runtime.defaultHost}/v1` } : {}),
+          models: {},
+        }
+    }
     for (const vendor of DEDICATED_PRIVATE_GPU_VENDORS) {
       if (!next[vendor.id]) next[vendor.id] = builtinDedicatedPrivateGpuProvider(vendor)
     }

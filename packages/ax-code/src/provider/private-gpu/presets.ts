@@ -33,6 +33,20 @@ export type PrivateGpuVendor = {
  */
 export const PRIVATE_GPU_VENDORS: readonly PrivateGpuVendor[] = [
   {
+    id: "custom-private-gpu",
+    name: "Custom provider",
+    mode: "dedicated",
+    envKey: "CUSTOM_PRIVATE_GPU_API_KEY",
+    envBaseURL: "CUSTOM_PRIVATE_GPU_BASE_URL",
+    npm: PRIVATE_GPU_NPM,
+    pathStyle: "openai-v1",
+    tokenLabel: "API key",
+    urlLabel: "Endpoint URL",
+    urlPlaceholder: "https://gpu.example.com/v1",
+    tokenPlaceholder: "Bearer token",
+    hint: "Connect your own OpenAI-compatible GPU endpoint. Models are loaded from the endpoint.",
+  },
+  {
     id: "alibaba-pai",
     name: "Alibaba PAI-EAS",
     mode: "dedicated",

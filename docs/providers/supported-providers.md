@@ -2,12 +2,13 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-28
+Last reviewed: 2026-09-06
 Owner: ax-code runtime
 
 This page lists the provider presets AX Code exposes in the default setup flows. The source of truth is the runtime provider allowlist in
 `packages/ax-code/src/provider/default-setup-providers.ts`, the bundled model snapshot in
-`packages/ax-code/src/provider/models-snapshot.json`, and the AX Engine definitions in
+`packages/ax-code/src/provider/models-snapshot.json`, local runtime presets in
+`packages/ax-code/src/provider/local-runtime.ts`, and the AX Engine definitions in
 `packages/ax-code/src/provider/ax-engine/constants.ts`.
 
 Use `/connect` in the terminal UI or `ax-code providers login <provider-id>` for interactive setup. Headless and CI environments can also provide the listed environment variables.
@@ -24,6 +25,31 @@ Hosted model catalogs are bundled with each AX Code release and filtered for usa
 `ax-code models <provider-id>` for the authoritative model IDs in your installed release; the raw registry and copied
 web lists can contain models AX Code hides because they lack text output or tool calling. A provider preset does not
 imply that every model is free or available on every account.
+
+## Runtime choices
+
+The choices in `/connect` are ordered **API Cloud Provider**, **CLI Provider**,
+**AX-Engine runtime**, **Local LLM runtime**, **Private GPU cloud**, and **AX Trust**.
+AX-Engine runtime opens local model selection and runtime management directly.
+Local LLM runtime lists these choices in order:
+
+| Menu option | Provider id | Default endpoint                      | Host environment variable |
+| ----------- | ----------- | ------------------------------------- | ------------------------- |
+| Ollama      | `ollama`    | `http://localhost:11434/v1`           | `OLLAMA_HOST`             |
+| LMStudio    | `lmstudio`  | `http://localhost:1234/v1`            | `LMSTUDIO_HOST`           |
+| AX-Studio   | `ax-studio` | `http://localhost:18080/v1`           | `AX_STUDIO_HOST`          |
+| Others      | `local-llm` | Enter your OpenAI-compatible endpoint | `LOCAL_LLM_HOST`          |
+
+Start your local server, select its menu entry, and confirm or edit the endpoint.
+AX Code adds `/v1` if omitted. Others saves one configurable endpoint under
+`local-llm`; select it again to change the endpoint. LMStudio and Others use the
+existing local setup flow without an API-token prompt. LM Studio documents its
+[model-list endpoint](https://lmstudio.ai/docs/developer/openai-compat/models).
+
+Setup choices respect `enabled_providers` and `disabled_providers`. Merely opening
+the picker does not activate or probe these local servers. Discovered external
+local models retain conservative capability defaults; models must support tool
+calling to be selectable for coding-agent workflows.
 
 ## Cloud API Providers
 
@@ -69,7 +95,13 @@ OpenAI-compatible and Anthropic-compatible gateways are also supported through c
 
 ## Private GPU cloud
 
-These providers appear in `/connect` under **Private GPU cloud**, after Local runtime.
+These providers appear in `/connect` under **Private GPU cloud**, after Local LLM runtime.
+
+Choose **Custom provider** to connect your own OpenAI-compatible GPU endpoint.
+Enter its URL and API key; AX Code discovers models from `/v1/models` and stores
+the key in encrypted auth storage. The saved connection stays in Private GPU
+cloud. Select it again to choose a model, replace the endpoint, or disconnect.
+This entry stores one configurable endpoint under `custom-private-gpu`.
 
 ### Catalog (API key)
 
@@ -90,17 +122,31 @@ The hosted Hugging Face router (`huggingface` / `HF_TOKEN`) stays in Cloud API P
 
 PAI-style dedicated GPU endpoints. Paste the OpenAI-compatible URL and token; AX Code calls `GET …/models` and uses the deployed model IDs. These are not Alibaba Coding Plan / Token Plan (DashScope) providers.
 
-| Provider id             | Display name           | Credential environment variables              |
-| ----------------------- | ---------------------- | --------------------------------------------- |
-| `alibaba-pai`           | Alibaba PAI-EAS        | `ALIBABA_PAI_API_KEY`, `ALIBABA_PAI_BASE_URL` |
-| `runpod`                | RunPod                 | `RUNPOD_API_KEY`, `RUNPOD_BASE_URL`           |
-| `huggingface-endpoints` | Hugging Face Endpoints | `HF_ENDPOINTS_TOKEN`, `HF_ENDPOINTS_BASE_URL` |
-| `sagemaker`             | Amazon SageMaker       | `SAGEMAKER_API_KEY`, `SAGEMAKER_BASE_URL`     |
-| `volcengine-ark`        | Volcengine Ark         | `ARK_API_KEY`, `ARK_BASE_URL`                 |
-| `modelarts`             | Huawei ModelArts       | `MODELARTS_API_KEY`, `MODELARTS_BASE_URL`     |
-| `tencent-ti`            | Tencent TI             | `TENCENT_TI_API_KEY`, `TENCENT_TI_BASE_URL`   |
+| Provider id             | Display name           | Credential environment variables                            |
+| ----------------------- | ---------------------- | ----------------------------------------------------------- |
+| `alibaba-pai`           | Alibaba PAI-EAS        | `ALIBABA_PAI_API_KEY`, `ALIBABA_PAI_BASE_URL`               |
+| `runpod`                | RunPod                 | `RUNPOD_API_KEY`, `RUNPOD_BASE_URL`                         |
+| `huggingface-endpoints` | Hugging Face Endpoints | `HF_ENDPOINTS_TOKEN`, `HF_ENDPOINTS_BASE_URL`               |
+| `sagemaker`             | Amazon SageMaker       | `SAGEMAKER_API_KEY`, `SAGEMAKER_BASE_URL`                   |
+| `volcengine-ark`        | Volcengine Ark         | `ARK_API_KEY`, `ARK_BASE_URL`                               |
+| `modelarts`             | Huawei ModelArts       | `MODELARTS_API_KEY`, `MODELARTS_BASE_URL`                   |
+| `tencent-ti`            | Tencent TI             | `TENCENT_TI_API_KEY`, `TENCENT_TI_BASE_URL`                 |
+| `custom-private-gpu`    | Custom provider        | `CUSTOM_PRIVATE_GPU_API_KEY`, `CUSTOM_PRIVATE_GPU_BASE_URL` |
 
 `sagemaker` is for an OpenAI-compatible URL in front of SageMaker (vLLM / TGI / API Gateway). It does not sign AWS SigV4.
+
+## AX Trust
+
+AX Trust is the last category in `/connect`, after Private GPU cloud. Choose
+**Connect AX Trust**, enter the gateway base URL including `/v1`, and supply
+the client API key. AX Code discovers the gateway's models and stores the key
+in encrypted auth storage. Saved connections offer model selection, endpoint
+updates, model refresh, and deletion.
+
+Reconnecting an existing URL preserves its provider ID, models, and saved key
+when the token is left blank. The provider remains in AX Trust even with a
+custom name. Legacy `ax-trust` and `ax-trust-*` IDs also appear in this category.
+AX Trust continues to own gateway policy, approvals, and audit.
 
 ## CLI Providers
 
@@ -155,18 +201,10 @@ The built-in managed downloader is disabled because the current raw release arch
 
 Installing the engine does not download a model. Pick and download a model afterward from the Desktop **Models** page or with `ax-code providers ax-engine prepare`. A complete compatible base snapshot already in the Hugging Face cache is accepted for direct decode; `prepare --download` uses the catalog's preferred MTP package when available.
 
-To use an already-running local server instead of AX Code-owned lifecycle, configure:
-
-```json
-{
-  "provider": {
-    "ax-engine": {
-      "options": {
-        "baseURL": "http://127.0.0.1:31418/v1"
-      }
-    }
-  }
-}
-```
+Use `/connect` -> **AX-Engine runtime** -> **Select a model**. AX Code configures
+and starts the local runtime automatically when the selected model is needed;
+no URL or API key is required. **View status**, **Stop local runtime**, and
+**Disable** manage the local runtime. Selecting a model also replaces legacy
+manual attachment settings with managed local setup.
 
 The engine ships for Apple Silicon macOS only. On other hosts, use a hosted provider or an OpenAI-compatible provider gateway; AX Code servers are local-only.

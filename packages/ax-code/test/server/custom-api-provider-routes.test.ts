@@ -38,73 +38,105 @@ function providerBody(input?: Partial<Record<string, unknown>>) {
 }
 
 describe("managed custom API provider routes", () => {
-  test("creates, lists, replaces, and deletes provider metadata without returning the token", async () => {
+  test.each(["custom-api", "ax-trust"])(
+    "creates, lists, replaces, and deletes %s metadata without returning the token",
+    async (management) => {
+      await using tmp = await tmpdir({ git: true })
+      const query = `directory=${encodeURIComponent(tmp.path)}`
+      const app = Server.Default()
+
+      const create = await app.request(`/provider/custom/company-gateway?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(providerBody(management === "ax-trust" ? { management } : undefined)),
+      })
+      expect(create.status).toBe(200)
+      const created = (await create.json()) as Record<string, unknown>
+      expect(created).toMatchObject({
+        providerID: "company-gateway",
+        name: "Company Gateway",
+        protocol: "openai-compatible",
+        baseURL: "https://api.example.com/v1",
+        hasApiKey: true,
+      })
+      expect(created).not.toHaveProperty("apiKey")
+      if (management === "ax-trust") expect(created.management).toBe("ax-trust")
+      else expect(created).not.toHaveProperty("management")
+      expect(await Auth.get("company-gateway")).toEqual({ type: "api", key: "test-token" })
+
+      const saved = (await Config.getGlobal()).provider?.["company-gateway"]
+      expect(saved).toMatchObject({
+        management,
+        npm: "@ai-sdk/openai-compatible",
+        options: { baseURL: "https://api.example.com/v1" },
+      })
+      expect(saved?.options).not.toHaveProperty("apiKey")
+
+      const update = await app.request(`/provider/custom/company-gateway?${query}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          providerBody({
+            protocol: "anthropic-compatible",
+            baseURL: "https://anthropic.example.com",
+            apiKey: undefined,
+            models: [
+              {
+                id: "replacement-model",
+                contextWindow: 200_000,
+                outputLimit: 32_000,
+                toolCall: true,
+                reasoning: true,
+                attachment: false,
+                temperature: false,
+              },
+            ],
+          }),
+        ),
+      })
+      expect(update.status).toBe(200)
+      expect(await Auth.get("company-gateway")).toEqual({ type: "api", key: "test-token" })
+      const updated = (await Config.getGlobal()).provider?.["company-gateway"]
+      expect(updated?.management).toBe(management)
+      expect(updated?.npm).toBe("@ai-sdk/anthropic")
+      expect(Object.keys(updated?.models ?? {})).toEqual(["replacement-model"])
+
+      const list = await app.request(`/provider/custom?${query}`)
+      expect(list.status).toBe(200)
+      expect(await list.json()).toEqual([expect.objectContaining({ providerID: "company-gateway", hasApiKey: true })])
+
+      const remove = await app.request(`/provider/custom/company-gateway?${query}`, { method: "DELETE" })
+      expect(remove.status).toBe(200)
+      expect(await remove.json()).toBe(true)
+      expect((await Config.getGlobal()).provider?.["company-gateway"]).toBeUndefined()
+      expect(await Auth.get("company-gateway")).toBeUndefined()
+    },
+  )
+
+  test("moves an existing custom gateway to AX Trust without changing its ID, key, or models", async () => {
     await using tmp = await tmpdir({ git: true })
     const query = `directory=${encodeURIComponent(tmp.path)}`
     const app = Server.Default()
-
-    const create = await app.request(`/provider/custom/company-gateway?${query}`, {
+    const created = await app.request(`/provider/custom/company-gateway?${query}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(providerBody()),
     })
-    expect(create.status).toBe(200)
-    const created = (await create.json()) as Record<string, unknown>
-    expect(created).toMatchObject({
-      providerID: "company-gateway",
-      name: "Company Gateway",
-      protocol: "openai-compatible",
-      baseURL: "https://api.example.com/v1",
-      hasApiKey: true,
-    })
-    expect(created).not.toHaveProperty("apiKey")
-    expect(await Auth.get("company-gateway")).toEqual({ type: "api", key: "test-token" })
-
-    const saved = (await Config.getGlobal()).provider?.["company-gateway"]
-    expect(saved).toMatchObject({
-      management: "custom-api",
-      npm: "@ai-sdk/openai-compatible",
-      options: { baseURL: "https://api.example.com/v1" },
-    })
-    expect(saved?.options).not.toHaveProperty("apiKey")
-
-    const update = await app.request(`/provider/custom/company-gateway?${query}`, {
+    expect(created.status).toBe(200)
+    const updated = await app.request(`/provider/custom/company-gateway?${query}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        providerBody({
-          protocol: "anthropic-compatible",
-          baseURL: "https://anthropic.example.com",
-          apiKey: undefined,
-          models: [
-            {
-              id: "replacement-model",
-              contextWindow: 200_000,
-              outputLimit: 32_000,
-              toolCall: true,
-              reasoning: true,
-              attachment: false,
-              temperature: false,
-            },
-          ],
-        }),
-      ),
+      body: JSON.stringify(providerBody({ management: "ax-trust", apiKey: undefined, models: undefined })),
     })
-    expect(update.status).toBe(200)
+    expect(updated.status).toBe(200)
+    expect(await updated.json()).toMatchObject({
+      providerID: "company-gateway",
+      management: "ax-trust",
+      hasApiKey: true,
+      models: [expect.objectContaining({ id: "company-model" })],
+    })
+    expect((await Config.getGlobal()).provider?.["company-gateway"]?.management).toBe("ax-trust")
     expect(await Auth.get("company-gateway")).toEqual({ type: "api", key: "test-token" })
-    const updated = (await Config.getGlobal()).provider?.["company-gateway"]
-    expect(updated?.npm).toBe("@ai-sdk/anthropic")
-    expect(Object.keys(updated?.models ?? {})).toEqual(["replacement-model"])
-
-    const list = await app.request(`/provider/custom?${query}`)
-    expect(list.status).toBe(200)
-    expect(await list.json()).toEqual([expect.objectContaining({ providerID: "company-gateway", hasApiKey: true })])
-
-    const remove = await app.request(`/provider/custom/company-gateway?${query}`, { method: "DELETE" })
-    expect(remove.status).toBe(200)
-    expect(await remove.json()).toBe(true)
-    expect((await Config.getGlobal()).provider?.["company-gateway"]).toBeUndefined()
-    expect(await Auth.get("company-gateway")).toBeUndefined()
   })
 
   test("requires acknowledgement for remote HTTP while allowing loopback HTTP", async () => {

@@ -30876,6 +30876,13 @@
                   "items": {
                     "type": "object",
                     "properties": {
+                      "management": {
+                        "type": "string",
+                        "enum": [
+                          "custom-api",
+                          "ax-trust"
+                        ]
+                      },
                       "providerID": {
                         "type": "string",
                         "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$"
@@ -31003,6 +31010,13 @@
                 "schema": {
                   "type": "object",
                   "properties": {
+                    "management": {
+                      "type": "string",
+                      "enum": [
+                        "custom-api",
+                        "ax-trust"
+                      ]
+                    },
                     "providerID": {
                       "type": "string",
                       "pattern": "^[a-z0-9][a-z0-9._-]{0,62}$"
@@ -31106,6 +31120,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "management": {
+                    "type": "string",
+                    "enum": [
+                      "custom-api",
+                      "ax-trust"
+                    ]
+                  },
                   "name": {
                     "type": "string",
                     "minLength": 1,
@@ -44961,7 +44982,10 @@
           },
           "management": {
             "type": "string",
-            "const": "custom-api"
+            "enum": [
+              "custom-api",
+              "ax-trust"
+            ]
           },
           "whitelist": {
             "type": "array",

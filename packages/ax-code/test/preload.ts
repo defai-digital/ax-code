@@ -40,6 +40,12 @@ process.env["XDG_CONFIG_HOME"] = path.join(dir, "config")
 process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 process.env["AX_CODE_MODELS_PATH"] = path.join(import.meta.dirname, "tool", "fixtures", "models-api.json")
 
+// Hub cache overrides take precedence over XDG_CACHE_HOME. Never let catalog
+// tests inspect the developer's real model weights, including network mounts.
+process.env["HF_HOME"] = path.join(dir, "cache", "huggingface")
+process.env["HF_HUB_CACHE"] = path.join(dir, "cache", "huggingface", "hub")
+process.env["HUGGINGFACE_HUB_CACHE"] = process.env["HF_HUB_CACHE"]
+
 // Set test home directory to isolate tests from user's actual home directory
 // This prevents tests from picking up real user configs/skills from ~/.claude/skills
 const testHome = path.join(dir, "home")

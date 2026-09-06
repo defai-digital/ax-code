@@ -20,29 +20,27 @@ import { useToast } from "../ui/toast"
 import { which } from "@/util/which"
 import { Log } from "@/util/log"
 import {
+  AX_TRUST_PROVIDER_OPTION_ID,
   CLI_BINARIES,
+  axEngineRuntimeDialogActions,
+  type AxEngineRuntimeAction,
   CLI_PROVIDERS,
   DEDICATED_PRIVATE_GPU_PROVIDERS,
   OFFLINE_PROVIDERS,
-  axEngineAttachBaseURLPreset,
-  axEngineConnectModeFromConfig,
-  axEngineConnectedDialogActions,
-  axEngineSetupDialogActions,
   configUpdateParams,
   CUSTOM_API_PROVIDER_OPTION_ID,
-  normalizeAxEngineEndpointBaseURL,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
   PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
   providerDialogCategory,
+  providerDialogCategoryOverrides,
   providerDialogConnected,
   providerDialogOptionsForType,
   providerDialogProviders,
   providerDialogTypeOptions,
   selectableProviderDefaultModelID,
   withCustomApiProviderDialogEntry,
-  type AxEngineConnectedAction,
-  type AxEngineSetupAction,
+  withAxTrustProviderDialogEntry,
 } from "./dialog-provider-options"
 import {
   configureCustomApiProvider,
@@ -57,29 +55,19 @@ import { providerConnectCategoryMeta } from "@/mode/provider-category"
 import { requireDedicatedPrivateGpuVendor } from "@/provider/private-gpu/presets"
 import { disableProviderPatch, enableProviderPatch } from "@/provider/enablement"
 import { isRetiredProviderID } from "@/provider/retired-providers"
-
-const OFFLINE_PROVIDER_HOSTS: Record<string, { envVar: string; defaultHost: string }> = {
-  "ax-studio": { envVar: "AX_STUDIO_HOST", defaultHost: "http://localhost:18080" },
-  ollama: { envVar: "OLLAMA_HOST", defaultHost: "http://localhost:11434" },
-}
+import {
+  localLlmRuntimePreset,
+  localRuntimeEndpointPreset,
+  normalizeLocalRuntimeBaseURL,
+} from "@/provider/local-runtime"
 
 type AxEngineTuiStatus = {
   eligibility?: { supported?: boolean; blockers?: string[]; warnings?: string[] }
   dependency?: { available?: boolean; binaryPath?: string; blockers?: string[] }
   disk?: { ok?: boolean; blockers?: string[]; freeBytes?: number }
   model?: { present?: boolean; modelID?: string; path?: string; blockers?: string[] }
-  server?: { running?: boolean; ready?: boolean; state?: { baseURL?: string }; blockers?: string[] }
+  server?: { running?: boolean; ready?: boolean; blockers?: string[] }
   capability?: { toolcall?: boolean; reason?: string }
-}
-
-type AxEngineConnectionView = {
-  mode: "managed" | "attach"
-  baseURL: string
-  ready: boolean
-  models: string[]
-  toolcall: boolean
-  hasApiKey: boolean
-  error?: string
 }
 
 function offlineProviderHint() {
@@ -97,23 +85,6 @@ function sdkErrorMessage(error: unknown, fallback: string) {
 }
 
 const log = Log.create({ service: "tui.dialog-provider" })
-
-function normalizeOfflineProviderBaseURL(input: string) {
-  const trimmed = input.trim()
-  if (!trimmed) throw new Error("Endpoint URL is required")
-  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
-  const url = new URL(withProtocol)
-  const normalized = url.toString().replace(/\/+$/, "")
-  return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`
-}
-
-function offlineProviderPreset(id: string, config: unknown) {
-  const cfg = OFFLINE_PROVIDER_HOSTS[id]
-  if (!cfg) return ""
-  const providerConfig = (config as { provider?: Record<string, { options?: { baseURL?: string } }> } | undefined)
-    ?.provider?.[id]
-  return providerConfig?.options?.baseURL ?? process.env[cfg.envVar] ?? cfg.defaultHost
-}
 
 function runProviderDialogAction(input: {
   providerID: string
@@ -195,23 +166,19 @@ function privateGpuBaseURLPreset(providerID: string, config: unknown) {
   return providerConfig?.options?.baseURL ?? fromEnv ?? vendor.defaultApi ?? ""
 }
 
-async function axEngineConnectionRequest(
-  sdk: ReturnType<typeof useSDK>,
-  body?: { mode: "managed" } | { mode: "attach"; baseURL: string; apiKey?: string },
-): Promise<AxEngineConnectionView> {
+export async function configureAxEngineLocalRuntime(
+  sdk: Pick<ReturnType<typeof useSDK>, "url" | "directory" | "fetch">,
+): Promise<void> {
   const response = await sdk.fetch(urlAllowlistServerRoute(sdk.url, "/provider/ax-engine/connection"), {
-    method: body ? "PUT" : "GET",
-    headers: directoryRequestHeaders({
-      directory: sdk.directory,
-      contentType: body ? "application/json" : undefined,
-    }),
-    body: body ? JSON.stringify(body) : undefined,
+    method: "PUT",
+    headers: directoryRequestHeaders({ directory: sdk.directory, contentType: "application/json" }),
+    body: JSON.stringify({ mode: "managed" }),
   })
   if (!response.ok) {
-    const payload = (await response.json().catch(() => undefined)) as { message?: string } | undefined
-    throw new Error(payload?.message ?? `AX Engine connection failed with HTTP ${response.status}`)
+    const payload: unknown = await response.json().catch(() => undefined)
+    throw new Error(sdkErrorMessage(payload, `AX Engine setup failed with HTTP ${response.status}`))
   }
-  return (await response.json()) as AxEngineConnectionView
+  await response.body?.cancel()
 }
 
 function renderAxEngineStatusText(status: AxEngineTuiStatus) {
@@ -225,9 +192,7 @@ function renderAxEngineStatusText(status: AxEngineTuiStatus) {
     ...(status.disk?.blockers ?? []),
     `Model: ${status.model?.present ? `${status.model.modelID ?? "unknown"} at ${status.model.path}` : "not prepared"}`,
     ...(status.model?.blockers ?? []),
-    `Server: ${
-      status.server?.ready ? status.server.state?.baseURL : status.server?.running ? "running but not ready" : "stopped"
-    }`,
+    `Local runtime: ${status.server?.ready ? "ready" : status.server?.running ? "running but not ready" : "stopped"}`,
     ...(status.server?.blockers ?? []),
     status.capability?.toolcall === false ? status.capability.reason : undefined,
   ]
@@ -253,38 +218,6 @@ function showAxEngineStatusDialog(input: {
       <box gap={1}>
         {lines.map((line) => (
           <text fg={line.includes("AX_ENGINE_") ? input.theme.warning : input.theme.textMuted}>{line}</text>
-        ))}
-      </box>
-    </box>
-  ))
-}
-
-function showAxEngineAttachedStatusDialog(input: {
-  dialog: ReturnType<typeof useDialog>
-  theme: ReturnType<typeof useTheme>["theme"]
-  connection: AxEngineConnectionView
-}) {
-  const lines = [
-    `Mode: attached`,
-    `Endpoint: ${input.connection.baseURL}`,
-    `Health: ${input.connection.ready ? "ready" : "unavailable"}`,
-    `Models: ${input.connection.models.length > 0 ? input.connection.models.join(", ") : "none"}`,
-    `Tool calling: ${input.connection.toolcall ? "supported" : "not verified"}`,
-    input.connection.error,
-  ].filter((line): line is string => !!line)
-  input.dialog.replace(() => (
-    <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
-      <box flexDirection="row" justifyContent="space-between">
-        <text attributes={TextAttributes.BOLD} fg={input.theme.text}>
-          AX Engine status
-        </text>
-        <text fg={input.theme.textMuted} onMouseUp={() => input.dialog.clear()}>
-          esc
-        </text>
-      </box>
-      <box gap={1}>
-        {lines.map((line) => (
-          <text fg={line === input.connection.error ? input.theme.warning : input.theme.textMuted}>{line}</text>
         ))}
       </box>
     </box>
@@ -340,7 +273,8 @@ export function createDialogProviderOptions() {
   }
 
   async function updateConfig(config: Record<string, unknown>) {
-    await sdk.client.config.update(configUpdateParams(config) as any, { throwOnError: true })
+    // Provider endpoints are trusted user settings. Project config strips them.
+    await sdk.client.global.config.update(configUpdateParams(config) as any, { throwOnError: true })
   }
 
   function promptPrivateGpu(providerID: string, providerName: string) {
@@ -372,81 +306,11 @@ export function createDialogProviderOptions() {
     ))
   }
 
-  function promptAxEngineAttach(providerName: string) {
-    dialog.replace(() => (
-      <DialogPrompt
-        title="AX Engine endpoint"
-        value={axEngineAttachBaseURLPreset(sync.data.config)}
-        placeholder="http://127.0.0.1:31418/v1"
-        description={() => (
-          <box gap={1}>
-            <text fg={theme.textMuted}>Attach to a server you already started (ax-engine serve).</text>
-            <text fg={theme.textMuted}>Local hosts only. /v1 is added if omitted.</text>
-          </box>
-        )}
-        onConfirm={(endpointValue) => {
-          if (!endpointValue) return
-          let baseURL: string
-          try {
-            baseURL = normalizeAxEngineEndpointBaseURL(endpointValue)
-          } catch (error) {
-            toast.show({
-              message: error instanceof Error ? error.message : "Invalid endpoint",
-              variant: "error",
-            })
-            return
-          }
-          dialog.replace(() => (
-            <DialogPrompt
-              title="AX Engine API key"
-              value=""
-              placeholder="local"
-              description={() => (
-                <box gap={1}>
-                  <text fg={theme.textMuted}>Bearer token for Authorization. Default for local serve is "local".</text>
-                  <text fg={theme.textMuted}>Must match AX_ENGINE_API_KEY / --api-key on the server if set.</text>
-                  <text fg={theme.textMuted}>Leave blank to keep the saved key (or use "local" on first connect).</text>
-                </box>
-              )}
-              onConfirm={(apiKeyValue) => {
-                return runProviderDialogAction({
-                  providerID: "ax-engine",
-                  action: "ax-engine-attach-confirm",
-                  fallbackMessage: "Failed to attach AX Engine server",
-                  toast,
-                  run: async () => {
-                    const connection = await axEngineConnectionRequest(sdk, {
-                      mode: "attach",
-                      baseURL,
-                      ...(apiKeyValue?.trim() ? { apiKey: apiKeyValue.trim() } : {}),
-                    })
-                    await sdk.client.instance.dispose()
-                    await sync.bootstrap()
-                    toast.show({
-                      variant: "success",
-                      message: `Attached AX Engine at ${connection.baseURL} (${connection.models.length} model${
-                        connection.models.length === 1 ? "" : "s"
-                      })`,
-                    })
-                    await openModelDialogForProvider("ax-engine", providerName)
-                  },
-                })
-              }}
-            />
-          ))
-        }}
-      />
-    ))
-  }
-
   async function openModelDialogForProvider(providerID: string, providerName: string) {
     await refreshConfiguredProviders()
     let provider = sync.data.provider.find((item) => item.id === providerID)
     if (providerID === "ax-engine" && (!provider || Object.keys(provider.models).length === 0)) {
-      if (axEngineConnectModeFromConfig(sync.data.config) === "attach") {
-        throw new Error("Attached AX Engine returned no selectable tool-capable models")
-      }
-      await axEngineConnectionRequest(sdk, { mode: "managed" })
+      await configureAxEngineLocalRuntime(sdk)
       await sdk.client.instance.dispose()
       await sync.bootstrap()
       await refreshConfiguredProviders()
@@ -514,12 +378,15 @@ export function createDialogProviderOptions() {
   }
 
   const options = createMemo(() => {
+    const categoryOverrides = providerDialogCategoryOverrides(sync.data.config)
     return pipe(
       providerDialogProviders({
         available: sync.data.provider_next.all,
         configured: sync.data.provider,
+        categoryOverrides,
       }),
-      withCustomApiProviderDialogEntry,
+      (providers) => withCustomApiProviderDialogEntry(providers, categoryOverrides),
+      (providers) => withAxTrustProviderDialogEntry(providers, categoryOverrides),
       map((provider) => {
         const isConnected = providerDialogConnected({
           providerID: provider.id,
@@ -528,11 +395,11 @@ export function createDialogProviderOptions() {
         })
         const isOfflineKind = OFFLINE_PROVIDERS.has(provider.id)
         return {
-          title: provider.name,
+          title: localLlmRuntimePreset(provider.id)?.label ?? provider.name,
           value: provider.id,
           description: isConnected ? "Connected" : isOfflineKind ? offlineProviderHint() : undefined,
           descriptionFg: isConnected ? theme.warning : isOfflineKind ? theme.textMuted : undefined,
-          category: providerDialogCategory(provider.id),
+          category: providerDialogCategory(provider.id, categoryOverrides),
           onSelect() {
             return runProviderDialogAction({
               providerID: provider.id,
@@ -540,8 +407,13 @@ export function createDialogProviderOptions() {
               fallbackMessage: `Failed to update ${provider.name}`,
               toast,
               run: async () => {
-                if (provider.id === CUSTOM_API_PROVIDER_OPTION_ID) {
-                  const saved = await configureCustomApiProvider({ dialog, sdk, theme })
+                if (provider.id === CUSTOM_API_PROVIDER_OPTION_ID || provider.id === AX_TRUST_PROVIDER_OPTION_ID) {
+                  const saved = await configureCustomApiProvider({
+                    dialog,
+                    sdk,
+                    theme,
+                    management: provider.id === AX_TRUST_PROVIDER_OPTION_ID ? "ax-trust" : undefined,
+                  })
                   if (!saved) return
                   await sync.bootstrap()
                   toast.show({ variant: "success", message: `Saved ${saved.name}` })
@@ -647,69 +519,14 @@ export function createDialogProviderOptions() {
 
                 if (provider.id === "ax-engine") {
                   const status = await axEngineRequest<AxEngineTuiStatus>(sdk, "status")
-                  const connectMode = axEngineConnectModeFromConfig(sync.data.config)
-
-                  // Not connected → choose Managed (spawn serve), Attach (URL + key), or Disable.
-                  if (!isConnected) {
-                    const setup = await new Promise<AxEngineSetupAction | null>((resolve) => {
-                      dialog.replace(
-                        () => (
-                          <DialogSelect
-                            title="AX Engine"
-                            options={axEngineSetupDialogActions()}
-                            onSelect={(option) => resolve(option.value)}
-                          />
-                        ),
-                        () => resolve(null),
-                      )
-                    })
-                    if (setup === null) return
-                    if (setup === "disable") {
-                      await setProviderDisabled({
-                        sdk,
-                        sync,
-                        toast,
-                        dialog,
-                        providerID: provider.id,
-                        providerName: provider.name,
-                        disabled: true,
-                      })
-                      return
-                    }
-                    if (setup === "attach") {
-                      promptAxEngineAttach(provider.name)
-                      return
-                    }
-                    if (!status.eligibility?.supported) {
-                      throw new Error(
-                        status.eligibility?.blockers?.[0] ??
-                          status.dependency?.blockers?.[0] ??
-                          "AX Engine is not supported on this host",
-                      )
-                    }
-                    await axEngineConnectionRequest(sdk, { mode: "managed" })
-                    await sdk.client.instance.dispose()
-                    await sync.bootstrap()
-                    toast.show({
-                      variant: "success",
-                      message: `Connected ${provider.name} (managed)`,
-                    })
-                    await openModelDialogForProvider(provider.id, provider.name)
-                    return
-                  }
-
-                  // Connected → model selection plus mode-specific actions.
-                  const action = await new Promise<AxEngineConnectedAction | null>((resolve) => {
+                  const action = await new Promise<AxEngineRuntimeAction | null>((resolve) => {
                     dialog.replace(
                       () => (
                         <DialogSelect
-                          title={connectMode === "attach" ? "AX Engine — attached" : "AX Engine — managed"}
-                          options={axEngineConnectedDialogActions({
-                            connectMode,
-                            attachBaseURL: axEngineAttachBaseURLPreset(sync.data.config),
+                          title="AX Engine"
+                          options={axEngineRuntimeDialogActions({
                             serverRunning: status.server?.running,
                             serverReady: status.server?.ready,
-                            serverBaseURL: status.server?.state?.baseURL,
                             statusBlocker: status.model?.blockers?.[0] ?? status.dependency?.blockers?.[0],
                           })}
                           onSelect={(option) => resolve(option.value)}
@@ -720,7 +537,7 @@ export function createDialogProviderOptions() {
                   })
                   if (action === null) return
                   if (action === "disable") {
-                    if (connectMode !== "attach" && status.server?.running) {
+                    if (status.server?.running) {
                       try {
                         await axEngineRequest(sdk, "stop")
                       } catch (error) {
@@ -739,11 +556,6 @@ export function createDialogProviderOptions() {
                     return
                   }
                   if (action === "status") {
-                    if (connectMode === "attach") {
-                      const connection = await axEngineConnectionRequest(sdk)
-                      showAxEngineAttachedStatusDialog({ dialog, theme, connection })
-                      return
-                    }
                     showAxEngineStatusDialog({ dialog, theme, status })
                     return
                   }
@@ -751,36 +563,28 @@ export function createDialogProviderOptions() {
                     await axEngineRequest(sdk, "stop")
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
-                    toast.show({ variant: "success", message: "AX Engine server stopped" })
+                    toast.show({ variant: "success", message: "AX Engine local runtime stopped" })
                     dialog.clear()
                     return
                   }
-                  if (action === "attach" || action === "endpoint") {
-                    promptAxEngineAttach(provider.name)
-                    return
+                  if (!status.eligibility?.supported) {
+                    throw new Error(
+                      status.eligibility?.blockers?.[0] ??
+                        status.dependency?.blockers?.[0] ??
+                        "AX Engine is not supported on this host",
+                    )
                   }
-                  if (action === "managed") {
-                    if (!status.eligibility?.supported) {
-                      throw new Error(
-                        status.eligibility?.blockers?.[0] ??
-                          status.dependency?.blockers?.[0] ??
-                          "AX Engine is not supported on this host",
-                      )
-                    }
-                    await axEngineConnectionRequest(sdk, { mode: "managed" })
-                    await sdk.client.instance.dispose()
-                    await sync.bootstrap()
-                    toast.show({ variant: "success", message: "Switched AX Engine to managed mode" })
-                    await openModelDialogForProvider(provider.id, provider.name)
-                    return
-                  }
+                  // Explicit local setup also clears legacy attach settings and
+                  // overrides AX_ENGINE_HOST on the server without asking for a URL.
+                  await configureAxEngineLocalRuntime(sdk)
+                  await sync.bootstrap()
                   await openModelDialogForProvider(provider.id, provider.name)
                   return
                 }
 
                 if (isOfflineKind) {
                   const saveEndpoint = async (value: string) => {
-                    const baseURL = normalizeOfflineProviderBaseURL(value)
+                    const baseURL = normalizeLocalRuntimeBaseURL(value)
                     await updateConfig({
                       provider: {
                         [provider.id]: {
@@ -790,7 +594,6 @@ export function createDialogProviderOptions() {
                         },
                       },
                     })
-                    await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: `Updated ${provider.name} endpoint` })
                     if (
@@ -810,11 +613,15 @@ export function createDialogProviderOptions() {
                     dialog.replace(() => (
                       <DialogPrompt
                         title={`${provider.name} endpoint`}
-                        value={offlineProviderPreset(provider.id, sync.data.config)}
-                        placeholder="http://localhost:1234"
+                        value={localRuntimeEndpointPreset(provider.id, sync.data.config)}
+                        placeholder={provider.id === "local-llm" ? "http://localhost:8080" : "http://localhost:1234"}
                         description={() => (
                           <box gap={1}>
-                            <text fg={theme.textMuted}>Press enter to use the preset, or edit the host and port.</text>
+                            <text fg={theme.textMuted}>
+                              {provider.id === "local-llm"
+                                ? "Enter the base URL of your OpenAI-compatible server."
+                                : "Press enter to use the preset, or edit the host and port."}
+                            </text>
                             <text fg={theme.textMuted}>You can include /v1, but ax-code will add it if omitted.</text>
                           </box>
                         )}
@@ -846,7 +653,7 @@ export function createDialogProviderOptions() {
                               {
                                 title: "Change endpoint",
                                 value: "endpoint" as const,
-                                description: offlineProviderPreset(provider.id, sync.data.config),
+                                description: localRuntimeEndpointPreset(provider.id, sync.data.config),
                               },
                               {
                                 title: "Disable",
@@ -1156,12 +963,21 @@ export function DialogProvider() {
   )
 
   const typeOptions = createMemo(() => {
+    const categoryOverrides = providerDialogCategoryOverrides(sync.data.config)
     // Widened from the providerDialogTypeOptions return type so the synthetic
     // "Disabled" entry (not a real connect category) can be appended.
     const types: { title: string; value: string; description?: string; hint?: string; onSelect(): void }[] =
-      providerDialogTypeOptions(options().map((option) => option.value)).map((type) => ({
+      providerDialogTypeOptions(
+        options().map((option) => option.value),
+        categoryOverrides,
+      ).map((type) => ({
         ...type,
         onSelect() {
+          if (type.value === "ax-engine") {
+            return options()
+              .find((option) => option.value === "ax-engine")
+              ?.onSelect()
+          }
           // Replace the dialog instead of swapping DialogSelect in place. An
           // in-place remount kept the residual Enter from this confirm and
           // immediately activated the first filtered row (previously Change
@@ -1169,7 +985,7 @@ export function DialogProvider() {
           dialog.replace(() => (
             <DialogSelect
               title={providerConnectCategoryMeta(type.value).label}
-              options={providerDialogOptionsForType(options(), type.value).map((option) =>
+              options={providerDialogOptionsForType(options(), type.value, categoryOverrides).map((option) =>
                 option.value === PROVIDER_DIALOG_CHANGE_TYPE_VALUE
                   ? {
                       ...option,

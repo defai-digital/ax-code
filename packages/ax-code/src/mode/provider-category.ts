@@ -1,10 +1,13 @@
 /** Compatibility re-exports. The public SDK owns the provider-connect taxonomy. */
 export {
+  AX_TRUST_PROVIDER_OPTION_ID,
   CATALOG_PRIVATE_GPU_PROVIDER_IDS,
   CLI_PLAN_PROVIDER_IDS,
   CUSTOM_API_PROVIDER_OPTION_ID,
   DEDICATED_PRIVATE_GPU_PROVIDER_IDS,
   defaultProviderConnectCategory,
+  isAxTrustProviderID,
+  LOCAL_LLM_PROVIDER_IDS,
   LOCAL_RUNTIME_PROVIDER_IDS,
   PRIVATE_GPU_CLOUD_PROVIDER_IDS,
   PROVIDER_CONNECT_CATEGORIES,
@@ -17,4 +20,6 @@ export {
   providersInConnectCategory,
   providerConnectTypeOptionDescription,
   type ProviderConnectCategory,
+  type ProviderConnectCategoryOverrides,
+  type LocalLlmProviderID,
 } from "@ax-code/sdk/provider-connect"

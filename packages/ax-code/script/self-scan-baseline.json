@@ -26,8 +26,8 @@
         {
           "fingerprint": "49cf239d908d2e0b51d0366e5950eba42705206cb278f7c16cb0e1a0e34d141c",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 548,
-          "endLine": 555,
+          "line": 566,
+          "endLine": 573,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -35,8 +35,8 @@
         {
           "fingerprint": "9006ba2cc657da9d057d776ba1689d1af78e015984d4b2fc15816fc1aaeaafd1",
           "file": "src/provider/provider-impl.ts",
-          "line": 1177,
-          "endLine": 1199,
+          "line": 1182,
+          "endLine": 1204,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -44,8 +44,8 @@
         {
           "fingerprint": "9006ba2cc657da9d057d776ba1689d1af78e015984d4b2fc15816fc1aaeaafd1",
           "file": "src/provider/provider-impl.ts",
-          "line": 1177,
-          "endLine": 1209,
+          "line": 1182,
+          "endLine": 1214,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -53,8 +53,8 @@
         {
           "fingerprint": "ebdb937221c5606fbb186bfe077c4934aef737b8aff521521808bb557fd2ba3a",
           "file": "src/provider/provider-impl.ts",
-          "line": 1185,
-          "endLine": 1223,
+          "line": 1190,
+          "endLine": 1228,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -62,8 +62,8 @@
         {
           "fingerprint": "ebdb937221c5606fbb186bfe077c4934aef737b8aff521521808bb557fd2ba3a",
           "file": "src/provider/provider-impl.ts",
-          "line": 1185,
-          "endLine": 1231,
+          "line": 1190,
+          "endLine": 1236,
           "severity": "high",
           "kind": "toctou",
           "summary": "toctou"
@@ -629,7 +629,7 @@
         {
           "fingerprint": "44b61f10a2521187003a63055086e8e8d97444de7f45362d37f855573db0421f",
           "file": "src/cli/cmd/tui/terminal-cleanup.ts",
-          "line": 208,
+          "line": 210,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -661,7 +661,7 @@
         {
           "fingerprint": "eb9262e63234254c65022b56f40eb4bd20816c31faaa928f64564ec930cc65a0",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 258,
+          "line": 259,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -669,7 +669,7 @@
         {
           "fingerprint": "d59deefdfb2a0775af8aa7e7fbc8e74e490a80b77680ad2a113b24afbffbf8a7",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 425,
+          "line": 443,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -677,7 +677,7 @@
         {
           "fingerprint": "205ae80d3cc4e55b0beadb36e9dcbe9cf42c44a6063964169019dfc79874e990",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 725,
+          "line": 743,
           "severity": "high",
           "kind": "child_process:no_cleanup",
           "summary": "child_process:no_cleanup"
@@ -733,7 +733,7 @@
         {
           "fingerprint": "b88b1158c751b385ae4de2d17ace5645e562db422a5645470718b0839f6f4ca5",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 308,
+          "line": 312,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -741,7 +741,7 @@
         {
           "fingerprint": "14e895f5b71e65cc9ff5579cf6db87c8318784489d6f563b1e2e9513b9f4a35d",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 311,
+          "line": 315,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -749,7 +749,7 @@
         {
           "fingerprint": "545668efcf2713957893c05507526c15a8680d75d4cdeb4d88909cbc440deaf6",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 407,
+          "line": 411,
           "severity": "high",
           "kind": "timer:no_cleanup",
           "summary": "timer:no_cleanup"
@@ -1117,7 +1117,7 @@
         {
           "fingerprint": "b97b9f29e6d33df6fd0e3d7a43cd436a57cf23f8943829889c47971ebe233e53",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 336,
+          "line": 269,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1125,7 +1125,7 @@
         {
           "fingerprint": "667fad48cc4105ec032b7cda3fb201a7fbcec719103d829340198565b18106c1",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 513,
+          "line": 377,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1133,7 +1133,7 @@
         {
           "fingerprint": "b8a37765a5b970d69b4ed20bcb8f2dd37aa52e0d70b5dcab07390c9c9bb310cc",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 962,
+          "line": 769,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1565,7 +1565,7 @@
         {
           "fingerprint": "4c29ce91f7286aafd67c68bb387b6bbc2bd074bdc25fe9550f9c396396aaaa2f",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 426,
+          "line": 444,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1573,7 +1573,7 @@
         {
           "fingerprint": "7ada331ee17778c0dab3645d5874ede6160825e83f85f9fca4689093097c4f48",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 430,
+          "line": 448,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1581,7 +1581,7 @@
         {
           "fingerprint": "c55c1157f2035311ffa452b6a22cd25297aed2f60dd5f2884f0520dcc9fe4cbe",
           "file": "src/provider/ax-engine/server.ts",
-          "line": 433,
+          "line": 451,
           "severity": "medium",
           "kind": "event_listener:no_cleanup",
           "summary": "event_listener:no_cleanup"
@@ -1797,7 +1797,7 @@
         {
           "fingerprint": "6053307853041c16c2d09e923b896b28a90b197be35b7d37054232480e76749b",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 492,
+          "line": 521,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -1805,7 +1805,7 @@
         {
           "fingerprint": "038d0d7e9a699f43c2b228dceb5364980f65bf3354d6fe67f0335b8189c65174",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 495,
+          "line": 524,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -1813,7 +1813,7 @@
         {
           "fingerprint": "6789e29a245be213b5b4ef0de1072ac34a0931dd1d0b68c0d26d58d3ce417084",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 501,
+          "line": 530,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -1821,7 +1821,7 @@
         {
           "fingerprint": "fcd8b7fd39d01c285429586467224e44d6332718b82c90541c2ecf895204d6bb",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 504,
+          "line": 533,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -1829,7 +1829,7 @@
         {
           "fingerprint": "3b7d25bdd85a5952a2d17cf551c2d9294236632a24da07cb3dc12611ac235822",
           "file": "src/session/task-queue-executor-impl.ts",
-          "line": 507,
+          "line": 536,
           "severity": "medium",
           "kind": "subscription:no_cleanup",
           "summary": "subscription:no_cleanup"
@@ -4506,7 +4506,7 @@
         {
           "fingerprint": "223365279e83a902538947928eec5ddd0915449f7c696a0c92d5197fae70b4cc",
           "file": "src/provider/provider-impl.ts",
-          "line": 1492,
+          "line": 1497,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5746,7 +5746,7 @@
       ]
     },
     "hardcode_scan": {
-      "count": 71,
+      "count": 72,
       "findings": [
         {
           "fingerprint": "4861c2ada1bec8806b34824653397deec03b2a3f32166e39ce4e882718311901",
@@ -5813,9 +5813,17 @@
           "summary": "inline_url"
         },
         {
-          "fingerprint": "335222892a3cfb8e07f06b2d9530ea4f92a231a85814a2d54e808c03a5d6e980",
+          "fingerprint": "4184b572ef65a6b095d85036bee8a72b8c48942fde4434c88a290d1450e038e8",
           "file": "src/cli/cmd/tui/component/dialog-custom-api-provider.tsx",
-          "line": 251,
+          "line": 260,
+          "severity": "medium",
+          "kind": "inline_url",
+          "summary": "inline_url"
+        },
+        {
+          "fingerprint": "f8c5d1f530f78d662684ff78aadd22a212ca1bf66b5ecb79439874059a9448c9",
+          "file": "src/cli/cmd/tui/component/dialog-custom-api-provider.tsx",
+          "line": 260,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6039,7 +6047,7 @@
         {
           "fingerprint": "4b26d5a4c8feb35b90725e40f0f2fbff5265b4f1638c1b9fed4a29a5049c70ec",
           "file": "src/provider/loaders.ts",
-          "line": 725,
+          "line": 726,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6047,7 +6055,7 @@
         {
           "fingerprint": "a88295f54dbb62b570e88e93dff372aec5ad95d95a868ba4949813298df23904",
           "file": "src/provider/loaders.ts",
-          "line": 742,
+          "line": 743,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6055,7 +6063,7 @@
         {
           "fingerprint": "b1e8ede9322a93c799f667e2b88ccdaa361d78bb623c83b4c4e86a1141098a74",
           "file": "src/provider/models.ts",
-          "line": 176,
+          "line": 188,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6063,13 +6071,13 @@
         {
           "fingerprint": "2cd1fe473e03f818b36d4dc8c9c668a7a9446fc0adb351b22ea10d33ee237db2",
           "file": "src/provider/models.ts",
-          "line": 190,
+          "line": 202,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
         },
         {
-          "fingerprint": "19bc1aeb49eff70e1292420db9ac0675b2ac7254cc07426f0057cf65ffcaa11f",
+          "fingerprint": "e91f3e27b6db858b84c24f5e2a95721931f8c82f6a70fea677cc096056a74e6e",
           "file": "src/provider/private-gpu/presets.ts",
           "line": 45,
           "severity": "medium",
@@ -6077,7 +6085,7 @@
           "summary": "inline_url"
         },
         {
-          "fingerprint": "e5954fe74d5ae67d70e7e9ba079646eb6345385a358701190e3be9167436e35c",
+          "fingerprint": "19bc1aeb49eff70e1292420db9ac0675b2ac7254cc07426f0057cf65ffcaa11f",
           "file": "src/provider/private-gpu/presets.ts",
           "line": 59,
           "severity": "medium",
@@ -6085,7 +6093,7 @@
           "summary": "inline_url"
         },
         {
-          "fingerprint": "ce40544abdcf7a3fe7eb31de20fc66957cd2c5ce26ee5a2dff6bdff3b2bdc5c1",
+          "fingerprint": "e5954fe74d5ae67d70e7e9ba079646eb6345385a358701190e3be9167436e35c",
           "file": "src/provider/private-gpu/presets.ts",
           "line": 73,
           "severity": "medium",
@@ -6093,7 +6101,7 @@
           "summary": "inline_url"
         },
         {
-          "fingerprint": "5210ecbeca0b03decd64d7ef7f8e7562fda816aaa6e0fda23606120b099642dd",
+          "fingerprint": "ce40544abdcf7a3fe7eb31de20fc66957cd2c5ce26ee5a2dff6bdff3b2bdc5c1",
           "file": "src/provider/private-gpu/presets.ts",
           "line": 87,
           "severity": "medium",
@@ -6101,9 +6109,17 @@
           "summary": "inline_url"
         },
         {
+          "fingerprint": "5210ecbeca0b03decd64d7ef7f8e7562fda816aaa6e0fda23606120b099642dd",
+          "file": "src/provider/private-gpu/presets.ts",
+          "line": 101,
+          "severity": "medium",
+          "kind": "inline_url",
+          "summary": "inline_url"
+        },
+        {
           "fingerprint": "b674af8194106f027335f5124a5545e737c19fce47f61fa39023692e9f5c15d6",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 98,
+          "line": 112,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6111,7 +6127,7 @@
         {
           "fingerprint": "4364385a57a87a21e07707bb384a360f9efb6e373773a9702e5051b88b4d5aea",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 102,
+          "line": 116,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6119,7 +6135,7 @@
         {
           "fingerprint": "d8d26c5931143f3929e15c3810534613c01125882ef0928d3850aaf7e4e1fb8e",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 116,
+          "line": 130,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6127,7 +6143,7 @@
         {
           "fingerprint": "9dbc2373c6fb37c6f48885ca9c2dbe24b6333bef8dea02ed19e10ac6a21feb2b",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 127,
+          "line": 141,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6135,7 +6151,7 @@
         {
           "fingerprint": "928549e3b2b02f348e82b5c77a4a1875acf2e32cfe113b3b66dd608ed5e08ff9",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 131,
+          "line": 145,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6143,7 +6159,7 @@
         {
           "fingerprint": "239d067d2d13edfda48bf06724f050c78e2bf1ae7413ae306bd1198e2c15a643",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 141,
+          "line": 155,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6151,7 +6167,7 @@
         {
           "fingerprint": "c7656f8f5964b704157a424db770a9ce42a2d6e5a0def422975f75c2df02ec2a",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 145,
+          "line": 159,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6159,7 +6175,7 @@
         {
           "fingerprint": "168a407e9410976df2008592666d79dd98a62b7226107788a71b4c827f39683a",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 155,
+          "line": 169,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6167,7 +6183,7 @@
         {
           "fingerprint": "49c68395bfb3fe50f8f703c407755109c43f13e5ba90da719036cb886c3b5b85",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 159,
+          "line": 173,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6175,7 +6191,7 @@
         {
           "fingerprint": "47a46e62cdc8070db15140ddabff6ec972ca0ebd54a35c351365e32690965fad",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 182,
+          "line": 196,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6183,7 +6199,7 @@
         {
           "fingerprint": "b4e20380a3bfc833422504b8e555384f82eae9517eabd3f6027ea79cf35cf7db",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 186,
+          "line": 200,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6191,7 +6207,7 @@
         {
           "fingerprint": "1d50aa94de554582f76f539b817416177e31df2d722d2f32ad5299452ec368a8",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 196,
+          "line": 210,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6199,7 +6215,7 @@
         {
           "fingerprint": "a3eb2e723787d268690ac9254fb2a60ad1e2d3dc393cd7b53ca9dee2227b86db",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 200,
+          "line": 214,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6207,7 +6223,7 @@
         {
           "fingerprint": "1f67c834ab44b03733eb8367e98462999da6166b22cb224917f46f1cedf5be2f",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 210,
+          "line": 224,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6215,7 +6231,7 @@
         {
           "fingerprint": "af53e56fb39967303d2ca05b64bfc9a7175fe5fd296c3b1391059b98c5f98c2e",
           "file": "src/provider/private-gpu/presets.ts",
-          "line": 214,
+          "line": 228,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6245,33 +6261,17 @@
           "summary": "inline_path"
         },
         {
-          "fingerprint": "55545e1db1319289400cfccebb76e265f1284f4100753c3fcc307fdd97985d4d",
+          "fingerprint": "4344e717808b87899ae58e15ecc576450ee8d903c9762978dde5eec92239d821",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 62,
+          "line": 617,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
         },
         {
-          "fingerprint": "c6cd457032177da8bc60b58a53d7e200580a96ef745c2dc2c373f35182ccca44",
+          "fingerprint": "5a2a6ed3d6683e1e82304c8f79e26475bb3609fb4ef81015692cbee7a3d3fc4b",
           "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 63,
-          "severity": "low",
-          "kind": "inline_url",
-          "summary": "inline_url"
-        },
-        {
-          "fingerprint": "219c4942259907e3b73838c128fe05371eb3e6888e5fec648ea2a8b86878583f",
-          "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 380,
-          "severity": "low",
-          "kind": "inline_url",
-          "summary": "inline_url"
-        },
-        {
-          "fingerprint": "c5bdaee3490d4731b799f797c3e1130fafd2a82656ae7dc482a32a2aac498735",
-          "file": "src/cli/cmd/tui/component/dialog-provider.tsx",
-          "line": 814,
+          "line": 617,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -6285,17 +6285,25 @@
           "summary": "inline_url"
         },
         {
-          "fingerprint": "3592e6ec9410825af0200371e65ff921f21bad09f54715b644e58b606aafe4ae",
-          "file": "src/provider/loaders.ts",
-          "line": 745,
+          "fingerprint": "ca91a979f52f230a24ce7aee3255a3c6ee8423977f9240ecb9c7c93d6d3fbd2a",
+          "file": "src/provider/local-runtime.ts",
+          "line": 9,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
         },
         {
-          "fingerprint": "d64fae5af46a4572823fc276e159e6c40592bfc84c9086c1719cc92ed0d166f5",
-          "file": "src/provider/loaders.ts",
-          "line": 746,
+          "fingerprint": "b380c2a30ec00f42a0415e16a12c595c2f970c816d214050b8fb4754ff0eff70",
+          "file": "src/provider/local-runtime.ts",
+          "line": 16,
+          "severity": "low",
+          "kind": "inline_url",
+          "summary": "inline_url"
+        },
+        {
+          "fingerprint": "da423a4f9bf7e47043954d2b4d23422b0fcd1fe4f5221b85c4dd5318ba01f4af",
+          "file": "src/provider/local-runtime.ts",
+          "line": 23,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"

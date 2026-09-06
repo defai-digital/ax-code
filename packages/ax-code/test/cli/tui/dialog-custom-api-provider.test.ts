@@ -6,6 +6,7 @@ import {
   isManagedCustomApiProviderConfig,
   parseCustomApiProviderModelIDs,
   sameCustomApiBaseURL,
+  resolveCustomApiProviderSetup,
 } from "../../../src/cli/cmd/tui/component/dialog-custom-api-provider"
 
 describe("custom API provider TUI helpers", () => {
@@ -60,6 +61,9 @@ describe("custom API provider TUI helpers", () => {
         "manual",
       ),
     ).toBe(false)
+    expect(isManagedCustomApiProviderConfig({ provider: { gateway: { management: "ax-trust" } } }, "gateway")).toBe(
+      true,
+    )
   })
 })
 
@@ -85,6 +89,30 @@ describe("custom API connect token reuse", () => {
   test("finds the managed provider that already serves the typed URL", () => {
     expect(findCustomApiProviderByBaseURL([registered], "http://127.0.0.1:38080/v1/")).toBe(registered)
     expect(findCustomApiProviderByBaseURL([registered], "")).toBeUndefined()
+  })
+
+  test("AX Trust setup reuses an existing gateway identity and saved token", () => {
+    const resolved = resolveCustomApiProviderSetup({
+      baseURL: `${registered.baseURL}/`,
+      registered: [registered],
+      management: "ax-trust",
+    })
+    expect(resolved.existing).toBe(registered)
+    expect(resolved.identity).toEqual({ providerID: registered.providerID, name: registered.name })
+    expect(resolved.management).toBe("ax-trust")
+    expect(customApiConnectKeepsSavedToken({ baseURL: registered.baseURL, registered: [registered] })).toBe(true)
+    expect(
+      resolveCustomApiProviderSetup({ baseURL: "https://trust.example/v1", management: "ax-trust" }),
+    ).toMatchObject({
+      identity: { providerID: "trust-example" },
+      management: "ax-trust",
+    })
+    expect(
+      resolveCustomApiProviderSetup({
+        baseURL: registered.baseURL,
+        existing: { ...registered, management: "ax-trust" },
+      }).management,
+    ).toBe("ax-trust")
   })
 
   test("allows a blank token when add-mode reconnects an endpoint that already has a key", () => {

@@ -20,6 +20,7 @@ import { claudeDisplayName, claudeFamilyId, latestAnthropicFamilyModels } from "
 import { grokDisplayName, grokFallbackLatest, grokFamilyId, latestGrokFamilyModels } from "./grok-families"
 import { kimiDisplayName, kimiFallbackModels, kimiFamilyId, latestKimiFamilyModels } from "./kimi-families"
 import { codexDisplayName, codexFallbackModels, codexFamilyId, latestCodexFamilyModels } from "./codex-families"
+import { LOCAL_LLM_RUNTIMES, normalizeLocalRuntimeBaseURL } from "./local-runtime"
 
 const log = Log.create({ service: "provider.loaders" })
 
@@ -152,8 +153,7 @@ type LocalProviderEndpoint = {
 }
 
 function normalizeLocalProviderURL(input: string) {
-  const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(input) ? input : `http://${input}`
-  return new URL(withProtocol)
+  return new URL(normalizeLocalRuntimeBaseURL(input))
 }
 
 function trimTrailingSlash(input: string) {
@@ -284,6 +284,7 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
 
 function openAICompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
   return async (provider) => {
+    if (!provider.options?.baseURL && !process.env[envKey] && !defaultHost) return { autoload: false }
     const initialEndpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
     const initialFetcher = initialEndpoint.local ? fetch : Ssrf.pinnedFetch
     const initial = await fetchOpenAICompatibleModels(initialFetcher, initialEndpoint)
@@ -302,7 +303,7 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
           if (typeof item.id !== "string" || !item.id.trim()) continue
           const id = ModelID.make(item.id)
           const caps = openAICompatibleCapabilities(item)
-          // Local inference endpoints (ax-studio) serve models with inconsistent
+          // External local inference endpoints serve models with inconsistent
           // tool-calling support. Override to false so discovered models don't
           // silently get selected for agent workflows that need tools.
           caps.toolcall = false
@@ -742,8 +743,14 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
       baseURL: "https://api.meta.ai/v1",
     },
   }),
-  ollama: ollamaCompatibleLoader("ollama", "OLLAMA_HOST", "http://localhost:11434"),
-  "ax-studio": openAICompatibleLoader("ax-studio", "AX_STUDIO_HOST", "http://localhost:18080"),
+  ...Object.fromEntries(
+    Object.entries(LOCAL_LLM_RUNTIMES).map(([id, runtime]) => [
+      id,
+      runtime.discovery === "ollama"
+        ? ollamaCompatibleLoader(id, runtime.envVar, runtime.defaultHost)
+        : openAICompatibleLoader(id, runtime.envVar, runtime.defaultHost),
+    ]),
+  ),
   "ax-engine": axEngineLoader(),
   ...PRIVATE_GPU_LOADERS,
   "claude-code": cliLoader({

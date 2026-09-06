@@ -9,6 +9,8 @@ import { Env } from "../../src/env"
 import { which } from "../../src/util/which"
 import { selectPreferredCodexBinary } from "../../src/provider/cli/binary"
 import { resolveCliBinary } from "../../src/provider/loaders"
+import { Config } from "../../src/config/config"
+import { Global } from "../../src/global"
 
 const originalFetch = globalThis.fetch
 
@@ -290,12 +292,18 @@ describe("offline provider loaders", () => {
     })
   })
 
-  test("ax-studio uses OpenAI-compatible /v1/models discovery", async () => {
-    process.env.AX_STUDIO_HOST = "http://localhost:18080"
+  test.each([
+    { providerID: "ax-studio", baseURL: "http://localhost:18080" },
+    { providerID: "lmstudio", baseURL: "http://localhost:1234" },
+    { providerID: "local-llm", baseURL: "http://localhost:18081/v1/" },
+  ])("$providerID uses the configured OpenAI-compatible endpoint for discovery", async ({ providerID, baseURL }) => {
+    const inferenceBaseURL = `${baseURL.replace(/\/+$/, "").replace(/\/v1$/, "")}/v1`
     let modelFetches = 0
+    const requests: string[] = []
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)
-      if (url === "http://localhost:18080/v1/models") {
+      requests.push(url)
+      if (url === `${inferenceBaseURL}/models`) {
         modelFetches += 1
         const id = modelFetches === 1 ? "initial" : "default"
         return new Response(
@@ -315,32 +323,62 @@ describe("offline provider loaders", () => {
           },
         )
       }
-      if (url === "http://localhost:18080/api/tags") {
-        return new Response("not found", { status: 404 })
-      }
       throw new Error(`unexpected fetch: ${url}`)
     }) as typeof fetch
 
-    await using tmp = await tmpdir({
-      init: async (dir) => {
-        await writeFile(path.join(dir, "ax-code.json"), JSON.stringify({ enabled_providers: ["ax-studio"] }))
-      },
-    })
+    await using globalTmp = await tmpdir()
+    await using tmp = await tmpdir({ config: { enabled_providers: [providerID] } })
+    const previousConfigDirectory = Global.Path.config
+    ;(Global.Path as { config: string }).config = globalTmp.path
+    Config.global.reset()
+    try {
+      await Config.updateGlobal({ provider: { [providerID]: { options: { baseURL } } } })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          expect((await Config.get()).provider?.[providerID]?.options?.baseURL).toBe(baseURL)
+          await Provider.ready()
+          const providers = await Provider.list()
+          const runtime = providers[ProviderID.make(providerID)]
+          expect(requests.filter((url) => url.includes("localhost"))).toEqual([
+            `${inferenceBaseURL}/models`,
+            `${inferenceBaseURL}/models`,
+          ])
+          expect(modelFetches).toBe(2)
+          expect(runtime).toBeDefined()
+          const model = runtime.models[ModelID.make("default")]
+          expect(Object.keys(runtime.models)).toContain("default")
+          expect(model.api.url).toBe(inferenceBaseURL)
+          expect(model.capabilities.toolcall).toBe(false)
+          expect(model.capabilities.input.image).toBe(true)
+          expect(model.limit).toEqual({ context: 8192, output: 2048 })
+          expect(Object.keys(runtime.models)).not.toContain("initial")
+        },
+      })
+    } finally {
+      await Instance.disposeAll()
+      ;(Global.Path as { config: string }).config = previousConfigDirectory
+      Config.global.reset()
+    }
+  })
 
+  test("does not probe or activate external local runtimes before explicit setup", async () => {
+    const localRequests: string[] = []
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = String(input)
+      if (/localhost:(11434|1234|18080)/.test(url)) localRequests.push(url)
+      throw new Error(`unexpected fetch: ${url}`)
+    }) as typeof fetch
+    await using tmp = await tmpdir({ config: { provider: {} } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         await Provider.ready()
         const providers = await Provider.list()
-        const axStudio = providers[ProviderID.make("ax-studio")]
-        const model = axStudio.models[ModelID.make("default")]
-        expect(axStudio).toBeDefined()
-        expect(Object.keys(axStudio.models)).toContain("default")
-        expect(axStudio.options?.baseURL).toBe("http://localhost:18080/v1")
-        expect(model.capabilities.input.image).toBe(true)
-        expect(model.limit).toEqual({ context: 8192, output: 2048 })
-        expect(modelFetches).toBe(2)
-        expect(Object.keys(axStudio.models)).not.toContain("initial")
+        expect(localRequests).toEqual([])
+        for (const id of ["ollama", "lmstudio", "ax-studio", "local-llm"]) {
+          expect(providers[ProviderID.make(id)]).toBeUndefined()
+        }
       },
     })
   })

@@ -46,15 +46,15 @@ import { connectPrivateGpu } from "@/provider/private-gpu/connect"
 import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
 import { isRetiredProviderID } from "@/provider/retired-providers"
 import { CustomApiProvider } from "@/provider/custom-api-provider"
+import { LOCAL_LLM_PROVIDER_IDS } from "@/mode/provider-category"
 
 const log = Log.create({ service: "server" })
 
 // Natively supported providers — shown by default when enabled_providers is not configured.
 // Users can expand this list via enabled_providers in ax-code.json.
-// Note: ollama and ax-studio are intentionally excluded — they are opt-in only
-// because local inference models have inconsistent tool-calling and structured
-// output support. Users must add them to enabled_providers in ax-code.json.
-const NATIVE_PROVIDERS = new Set(["ax-engine", ...DEFAULT_SETUP_PROVIDER_IDS])
+// Local LLM presets are visible for setup; provider initialization still requires
+// explicit configuration before probing or activating these runtimes.
+const NATIVE_PROVIDERS = new Set(["ax-engine", ...LOCAL_LLM_PROVIDER_IDS, ...DEFAULT_SETUP_PROVIDER_IDS])
 
 export function shouldShowProviderInList(input: {
   key: string

@@ -85,12 +85,10 @@ describe("tui dialog action dispatch", () => {
     expect(dialogSelect).toContain("optionIndex() === store.selected")
   })
 
-  test("ax-engine connect menus include disable and run it through setProviderDisabled", async () => {
+  test("ax-engine local runtime menu includes disable and runs it through setProviderDisabled", async () => {
     const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
 
-    expect(dialogProvider).toContain("axEngineSetupDialogActions()")
-    expect(dialogProvider).toContain("axEngineConnectedDialogActions({")
-    expect(dialogProvider).toContain('if (setup === "disable")')
+    expect(dialogProvider).toContain("axEngineRuntimeDialogActions({")
     expect(dialogProvider).toContain('if (action === "disable")')
     expect(dialogProvider).toContain("setProviderDisabled({")
     expect(dialogProvider).toContain("failed to stop ax-engine while disabling")

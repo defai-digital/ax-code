@@ -151,6 +151,102 @@ test("a cancelled startup stops waiting for a lifecycle lock without touching it
   expect(outcome).toBe(reason)
 })
 
+test("transient health failures do not restart an already running engine", async () => {
+  await using tmp = await tmpdir()
+  const state = {
+    ...(await isolate(tmp.path)),
+    maxOutputTokens: 8_192,
+    speculationProfile: "agentic",
+    mtpMode: "pure",
+    lastHealthAt: Date.now(),
+  }
+  const saved = JSON.stringify(state)
+  await fs.writeFile(AxEnginePaths.serverState, saved)
+  // The second process inspection belongs to termination in the old path.
+  // Never allow a regression to signal the test runner's own PID.
+  vi.spyOn(Process, "text")
+    .mockResolvedValueOnce(processResult("ax-engine serve /models/old"))
+    .mockResolvedValue(processResult("unrelated-process"))
+  const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => {
+    throw new Error("The running engine must not be restarted")
+  })
+  const probe = vi
+    .fn()
+    .mockRejectedValueOnce(new DOMException("Health probe timed out", "TimeoutError"))
+    .mockResolvedValueOnce(new Response(null, { status: 503 }))
+    .mockResolvedValue(Response.json({ data: [] }))
+  vi.stubGlobal("fetch", probe)
+
+  await expect(
+    ensureServer({
+      binaryPath: state.binaryPath,
+      modelID: state.modelID,
+      apiModelID: state.modelID,
+      modelPath: state.modelPath,
+    }),
+  ).resolves.toMatchObject({ pid: state.pid })
+  expect(probe).toHaveBeenCalledTimes(3)
+  expect(spawn).not.toHaveBeenCalled()
+  expect(await fs.readFile(AxEnginePaths.serverState, "utf8")).toBe(saved)
+})
+
+test("persistent health failures exhaust a bounded retry before restarting", async () => {
+  await using tmp = await tmpdir()
+  const state = await isolate(tmp.path)
+  vi.spyOn(Process, "text")
+    .mockResolvedValueOnce(processResult("ax-engine serve /models/old"))
+    .mockResolvedValue(processResult("unrelated-process"))
+  const restart = new Error("Replacement startup reached")
+  const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => {
+    throw restart
+  })
+  const probe = vi.fn(async () => new Response(null, { status: 503 }))
+  vi.stubGlobal("fetch", probe)
+
+  await expect(
+    ensureServer({
+      binaryPath: state.binaryPath,
+      modelID: state.modelID,
+      apiModelID: state.modelID,
+      modelPath: state.modelPath,
+    }),
+  ).rejects.toBe(restart)
+  expect(probe).toHaveBeenCalledTimes(3)
+  expect(spawn).toHaveBeenCalledOnce()
+})
+
+test("cancelling the health retry delay preserves the running engine", async () => {
+  await using tmp = await tmpdir()
+  const state = await isolate(tmp.path)
+  const saved = await fs.readFile(AxEnginePaths.serverState, "utf8")
+  vi.spyOn(Process, "text")
+    .mockResolvedValueOnce(processResult("ax-engine serve /models/old"))
+    .mockResolvedValue(processResult("unrelated-process"))
+  const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => {
+    throw new Error("Cancellation must not restart the engine")
+  })
+  const controller = new AbortController()
+  const reason = new Error("User cancelled health retry")
+  const probe = vi.fn(async () => {
+    setTimeout(() => controller.abort(reason), 10)
+    return new Response(null, { status: 503 })
+  })
+  vi.stubGlobal("fetch", probe)
+
+  await expect(
+    ensureServer({
+      binaryPath: state.binaryPath,
+      modelID: state.modelID,
+      apiModelID: state.modelID,
+      modelPath: state.modelPath,
+      signal: controller.signal,
+    }),
+  ).rejects.toMatchObject({ name: "AbortError", cause: reason })
+  expect(probe).toHaveBeenCalledOnce()
+  expect(spawn).not.toHaveBeenCalled()
+  expect(await fs.readFile(AxEnginePaths.serverState, "utf8")).toBe(saved)
+})
+
 test.each(["revision", "api model"])("reloads a changed %s even when the catalog id and path match", async (change) => {
   await using tmp = await tmpdir()
   const state = {
