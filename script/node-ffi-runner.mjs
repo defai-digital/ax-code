@@ -8,6 +8,21 @@ try {
   process.title = "ax-code"
 } catch {}
 
+// Claim the tab title before the child Node process even starts. Source-mode
+// argv is a long `node --experimental-ffi --import …` string; without this
+// write the tab shows "node" or that argv until the TUI module graph loads.
+function terminalTitleDisabled() {
+  const value = String(process.env.AX_CODE_DISABLE_TERMINAL_TITLE ?? "")
+    .trim()
+    .toLowerCase()
+  return value === "1" || value === "true" || value === "yes" || value === "on"
+}
+if (process.stdout.isTTY && !terminalTitleDisabled()) {
+  try {
+    process.stdout.write("\x1b]0;AX-Code\x07")
+  } catch {}
+}
+
 const nodeName = process.platform === "win32" ? "node.exe" : "node"
 const ffiArgs = ["--experimental-ffi", "--disable-warning=ExperimentalWarning"]
 

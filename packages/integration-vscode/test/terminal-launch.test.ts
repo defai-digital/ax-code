@@ -90,5 +90,5 @@ describe("devLauncherArgs / terminalLaunchEnv", () => {
 })
 
 test("terminal name matches the TUI's OSC title branding", () => {
-  expect(TERMINAL_NAME).toBe("AX Code")
+  expect(TERMINAL_NAME).toBe("AX-Code")
 })

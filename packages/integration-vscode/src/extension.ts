@@ -141,9 +141,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("ax-code.openTerminal", async () => {
       // Also adopt terminals created by older versions, which used the
-      // lowercase "ax-code" or hyphenated "AX-Code" names.
+      // lowercase "ax-code" or spaced "AX Code" names.
       const existingTerminal = vscode.window.terminals.find(
-        (t) => t.name === TERMINAL_NAME || t.name === "ax-code" || t.name === "AX-Code",
+        (t) => t.name === TERMINAL_NAME || t.name === "ax-code" || t.name === "AX Code",
       )
       if (existingTerminal) {
         existingTerminal.show()

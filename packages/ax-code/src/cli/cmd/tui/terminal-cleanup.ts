@@ -31,8 +31,8 @@ export const TUI_KITTY_KEYBOARD_POP_SEQUENCE = "\x1b[<u"
 // reset can emit it without a terminal-cleanup -> renderer import cycle.
 export const TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE = "\x1b]9;4;3\x07"
 export const TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE = "\x1b]9;4;0\x07"
-// OSC 0 with an empty title. A crashed TUI must not leave a stale "AX Code | ..."
-// tab title (possibly with a frozen spinner frame) on a dead terminal.
+// OSC 0 with an empty title. A crashed TUI must not leave a stale "AX-Code"
+// tab title on a dead terminal.
 export const TUI_TERMINAL_TITLE_CLEAR_SEQUENCE = "\x1b]0;\x07"
 
 export function createTuiTerminalCrashResetSequence(input: { kittyKeyboard?: boolean } = {}) {

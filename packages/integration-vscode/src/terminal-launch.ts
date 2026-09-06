@@ -13,10 +13,10 @@ import { pathToFileURL } from "node:url"
 
 /**
  * Terminal tab title. Matches the TUI's own OSC 0 title write
- * (packages/ax-code/src/cli/cmd/tui/app.tsx) so the tab never falls back to
+ * (packages/ax-code/src/util/terminal-title.ts) so the tab never falls back to
  * the launcher's process name ("node").
  */
-export const TERMINAL_NAME = "AX Code"
+export const TERMINAL_NAME = "AX-Code"
 
 export type AxCodeTarget =
   // Explicit axCode.binaryPath override — an installed binary to exec directly.

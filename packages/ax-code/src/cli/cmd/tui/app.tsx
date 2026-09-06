@@ -56,6 +56,7 @@ import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
 import { GITHUB_NEW_ISSUE_URL } from "@/constants/project"
+import { AX_CODE_TERMINAL_TITLE } from "@/util/terminal-title"
 import {
   clearTuiTerminalTitle,
   destroyTuiRenderer,
@@ -63,7 +64,6 @@ import {
   renderTui,
   setTuiTerminalProgress,
   setTuiTerminalTitle,
-  shouldAnimateTuiTitleSpinner,
   supportsTuiTerminalProgress,
 } from "./renderer"
 import type { EventSource } from "./context/sdk"
@@ -105,11 +105,10 @@ export function tui(input: TuiInput) {
       try {
         const renderProfile = getTuiRenderProfile()
         // Claim the terminal tab title before the renderer mounts (kimi-code
-        // style: one fire-and-forget OSC 0 write at startup). The route effect
-        // below takes over once the app is up, but without this the tab keeps
-        // showing the launcher's process name ("node") until first mount —
-        // and forever if mount crashes.
-        setTuiTerminalTitle("AX Code", renderProfile)
+        // style: one fire-and-forget OSC 0 write at startup). Entry already
+        // wrote this for the default TUI path; repeating it here covers attach
+        // / late mount and keeps the tab at "AX-Code" if mount crashes.
+        setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)
         beginTuiStartup({
           continue: !!input.args.continue,
           fork: !!input.args.fork,
@@ -331,11 +330,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     return status?.type === "busy" || status?.type === "retry"
   }
 
-  // While a session is working, show a busy indicator in the terminal tab.
-  // Preferred: the terminal-native OSC 9;4 progress indicator (Windows
-  // Terminal / ConEmu / Ghostty / WezTerm), like kimi-code. Fallback: an
-  // animated braille spinner in the title text (like codex) for terminals
-  // without 9;4 support (iTerm2, Terminal.app, ...).
+  // While a session is working, show a busy indicator in the terminal tab
+  // via OSC 9;4 (Windows Terminal / ConEmu / Ghostty / WezTerm), like
+  // kimi-code. The tab text stays the static "AX-Code" product token.
   const terminalProgressSupported = supportsTuiTerminalProgress()
 
   createEffect(() => {
@@ -348,55 +345,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // second on a crashed session until the user force-exits.
   onCleanup(() => setTuiTerminalProgress(false, renderProfile))
 
-  const TITLE_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-  const [titleSpinnerFrame, setTitleSpinnerFrame] = createSignal(0)
-
-  // Advance the spinner only while a session is working on a terminal without
-  // native progress support; the interval is disposed as soon as the session
-  // goes idle or the route changes.
-  createEffect(() => {
-    if (
-      !shouldAnimateTuiTitleSpinner({
-        profile: renderProfile,
-        terminalTitleEnabled: terminalTitleEnabled(),
-        terminalProgressSupported,
-        sessionWorking: sessionWorking(),
-      })
-    )
-      return
-    const timer = setInterval(() => setTitleSpinnerFrame((frame) => frame + 1), 120)
-    onCleanup(() => clearInterval(timer))
-  })
-
-  // Update terminal window title based on current route and session
+  // Keep the tab at the short product token. Session names live in the TUI
+  // header; busy tabs use OSC 9;4 progress (when the terminal supports it)
+  // instead of rewriting the title with a spinner or session suffix.
   createEffect(() => {
     if (!terminalTitleEnabled()) {
       clearTuiTerminalTitle(renderProfile)
       return
     }
-    if (!renderProfile.allowTerminalTitle) return
-
-    const spinner =
-      !terminalProgressSupported && sessionWorking()
-        ? `${TITLE_SPINNER_FRAMES[titleSpinnerFrame() % TITLE_SPINNER_FRAMES.length]} `
-        : ""
-
-    if (route.data.type === "home") {
-      setTuiTerminalTitle(`${spinner}AX Code`, renderProfile)
-      return
-    }
-
-    if (route.data.type === "session") {
-      const session = sync.session.get(route.data.sessionID)
-      if (!session || SessionApi.isDefaultTitle(session.title)) {
-        setTuiTerminalTitle(`${spinner}AX Code`, renderProfile)
-        return
-      }
-
-      // Truncate title to 40 chars max
-      const title = session.title.length > 40 ? session.title.slice(0, 37) + "..." : session.title
-      setTuiTerminalTitle(`${spinner}AX Code | ${title}`, renderProfile)
-    }
+    setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)
   })
 
   // Terminal-native notifications (OSC 9 / BEL fallback, ported from

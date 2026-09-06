@@ -240,22 +240,21 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("setTuiTerminalTitle")
     expect(app).toContain("clearTuiTerminalTitle")
     expect(app).toContain("setTuiTerminalProgress")
-    // The braille spinner animates the title on terminals without OSC 9;4
-    // progress support.
-    expect(app).toContain("TITLE_SPINNER_FRAMES")
-    expect(app).toContain("setTitleSpinnerFrame")
+    expect(app).toContain("AX_CODE_TERMINAL_TITLE")
+    // Title text stays the static product token; busy state uses OSC 9;4
+    // progress instead of a braille spinner or session-title suffix.
+    expect(app).not.toContain("TITLE_SPINNER_FRAMES")
+    expect(app).not.toContain("setTitleSpinnerFrame")
+    expect(app).not.toContain("AX Code | ")
     // The progress keepalive interval is module state in renderer.ts, outside
     // Solid's cleanup tracking — App must stop it on unmount (the error
     // boundary replaces the app without otherwise clearing progress).
     expect(app).toContain("onCleanup(() => setTuiTerminalProgress(false, renderProfile))")
     // The tab title is claimed at TUI boot (before the renderer mounts,
-    // kimi-code style) so the tab shows "AX Code" instead of the launcher's
-    // process name ("node") even if mount is slow or crashes; runtime titles
-    // keep the user-facing "AX Code" casing (lowercase "ax-code" is the
-    // machine process title, see util/process-title.ts).
-    expect(app).toContain('setTuiTerminalTitle("AX Code", renderProfile)')
-    expect(app).toContain("${spinner}AX Code")
-    expect(app).toContain("${spinner}AX Code | ${title}")
+    // kimi-code style) so the tab shows "AX-Code" instead of the launcher's
+    // process name ("node") even if mount is slow or crashes. Lowercase
+    // "ax-code" remains the machine process title (util/process-title.ts).
+    expect(app).toContain("setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)")
     expect(exitContext).toContain("await destroyTuiRenderer(renderer)")
   })
 

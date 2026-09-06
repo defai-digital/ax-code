@@ -6,7 +6,6 @@ import {
   resolveTuiRenderProfile,
   setTuiTerminalProgress,
   setTuiTerminalTitle,
-  shouldAnimateTuiTitleSpinner,
   supportsTuiTerminalProgress,
   TUI_TERMINAL_PROGRESS_KEEPALIVE_MS,
 } from "../../../src/cli/cmd/tui/renderer"
@@ -96,17 +95,17 @@ describe("tui renderer profile", () => {
       terminalTitleDisabled: false,
     })
     const { writes, stream } = captureStream()
-    expect(setTuiTerminalTitle("ax-code", compatible, stream)).toBe(true)
+    expect(setTuiTerminalTitle("AX-Code", compatible, stream)).toBe(true)
     expect(clearTuiTerminalTitle(compatible, stream)).toBe(true)
-    expect(writes).toEqual(["\x1b]0;ax-code\x07", TITLE_CLEAR_SEQUENCE])
+    expect(writes).toEqual(["\x1b]0;AX-Code\x07", TITLE_CLEAR_SEQUENCE])
 
     const advanced = resolveTuiRenderProfile({
       advancedTerminal: true,
       terminalTitleDisabled: false,
     })
     const second = captureStream()
-    expect(setTuiTerminalTitle("ax-code", advanced, second.stream)).toBe(true)
-    expect(second.writes).toEqual(["\x1b]0;ax-code\x07"])
+    expect(setTuiTerminalTitle("AX-Code", advanced, second.stream)).toBe(true)
+    expect(second.writes).toEqual(["\x1b]0;AX-Code\x07"])
 
     for (const advancedTerminal of [false, true]) {
       const disabled = resolveTuiRenderProfile({
@@ -178,26 +177,6 @@ describe("tui renderer profile", () => {
     expect(supportsTuiTerminalProgress({ TERM_PROGRAM: "iTerm.app", TERM: "xterm-256color" })).toBe(false)
     expect(supportsTuiTerminalProgress({ TERM_PROGRAM: "Apple_Terminal" })).toBe(false)
     expect(supportsTuiTerminalProgress({})).toBe(false)
-  })
-
-  test("only animates the fallback title spinner when title output is active", () => {
-    const profile = resolveTuiRenderProfile({ advancedTerminal: false, terminalTitleDisabled: false })
-    const enabled = {
-      profile,
-      terminalTitleEnabled: true,
-      terminalProgressSupported: false,
-      sessionWorking: true,
-    }
-    expect(shouldAnimateTuiTitleSpinner(enabled)).toBe(true)
-    expect(shouldAnimateTuiTitleSpinner({ ...enabled, terminalTitleEnabled: false })).toBe(false)
-    expect(shouldAnimateTuiTitleSpinner({ ...enabled, terminalProgressSupported: true })).toBe(false)
-    expect(shouldAnimateTuiTitleSpinner({ ...enabled, sessionWorking: false })).toBe(false)
-    expect(
-      shouldAnimateTuiTitleSpinner({
-        ...enabled,
-        profile: resolveTuiRenderProfile({ advancedTerminal: false, terminalTitleDisabled: true }),
-      }),
-    ).toBe(false)
   })
 
   describe("terminal progress", () => {
@@ -371,8 +350,7 @@ describe("tui renderer profile", () => {
     expect(writes).toEqual([TUI_TERMINAL_CRASH_RESET_SEQUENCE])
     // A lingering OSC 9;4 indicator would keep animating on a dead tab.
     expect(TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain(TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE)
-    // A stale OSC 0 title ("AX Code | ...", possibly with a frozen spinner
-    // frame) must not outlive a crashed TUI either.
+    // A stale OSC 0 title ("AX-Code") must not outlive a crashed TUI either.
     expect(TUI_TERMINAL_CRASH_RESET_SEQUENCE).toContain("\x1b]0;\x07")
   })
 

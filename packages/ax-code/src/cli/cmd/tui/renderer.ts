@@ -4,6 +4,7 @@ import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { toErrorMessage } from "@/util/error-message"
+import { axCodeTerminalTitleSequence } from "@/util/terminal-title"
 import {
   clearTuiMainScreen,
   disableTuiMouseTracking,
@@ -142,12 +143,6 @@ function writeTuiSequence(stream: TuiSequenceStream, sequence: string) {
   }
 }
 
-// Control chars (BEL terminates the OSC sequence, ESC would break out of it)
-// must never reach the terminal from a session title.
-function sanitizeTuiTerminalTitle(title: string) {
-  return title.replace(/[\x00-\x1f\x7f-\x9f]/g, " ")
-}
-
 // The title is written directly to stdout as an OSC 0 escape instead of
 // routing through AX Code TUI's native setTerminalTitle — the native write proved
 // flaky in the compatible profile (same approach as kimi-code).
@@ -157,7 +152,7 @@ export function setTuiTerminalTitle(
   stream: TuiSequenceStream = process.stdout,
 ) {
   if (!profile.allowTerminalTitle) return false
-  return writeTuiSequence(stream, `\x1b]0;${sanitizeTuiTerminalTitle(title)}\x07`)
+  return writeTuiSequence(stream, axCodeTerminalTitleSequence(title))
 }
 
 export function clearTuiTerminalTitle(
@@ -169,8 +164,7 @@ export function clearTuiTerminalTitle(
 
 // OSC 9;4 tab progress indicator (Windows Terminal / ConEmu / Ghostty /
 // WezTerm). Shown while the agent is working so busy sessions stand out in
-// the tab bar; terminals without support get the braille title spinner
-// fallback in app.tsx instead.
+// the tab bar. The tab text itself stays the static "AX-Code" product token.
 export const TUI_TERMINAL_PROGRESS_KEEPALIVE_MS = 1_000
 
 export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env) {
@@ -180,20 +174,6 @@ export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env
   if (termProgram === "ghostty" || termProgram === "WezTerm") return true
   if ((env["TERM"] ?? "") === "xterm-ghostty") return true
   return false
-}
-
-export function shouldAnimateTuiTitleSpinner(input: {
-  profile: TuiRenderProfile
-  terminalTitleEnabled: boolean
-  terminalProgressSupported: boolean
-  sessionWorking: boolean
-}) {
-  return (
-    input.profile.allowTerminalTitle &&
-    input.terminalTitleEnabled &&
-    !input.terminalProgressSupported &&
-    input.sessionWorking
-  )
 }
 
 let terminalProgressActive = false
