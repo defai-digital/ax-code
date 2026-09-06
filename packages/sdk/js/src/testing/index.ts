@@ -21,6 +21,8 @@
  *   expect(result.toolCalls).toHaveLength(1)
  * })
  * ```
+ *
+ * @module
  */
 
 import type {
@@ -34,6 +36,7 @@ import type {
   ToolCallInfo,
 } from "../programmatic/types.js"
 
+/** Configuration for {@link createMockAgent}: canned replies and tool-call stubs. */
 export interface MockAgentOptions {
   /** Pre-configured text replies. Each `run()` / `stream()` call pops
    *  the next reply. Wraps around if calls exceed the array length. */

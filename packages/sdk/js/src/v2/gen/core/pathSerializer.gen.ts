@@ -7,6 +7,7 @@ interface SerializePrimitiveOptions {
   name: string
 }
 
+/** Configuration for array/object parameter serialization styles. */
 export interface SerializerOptions<T> {
   /**
    * @default true
@@ -15,9 +16,12 @@ export interface SerializerOptions<T> {
   style: T
 }
 
+/** AX Code API schema `ArrayStyle` (auto-generated from the OpenAPI contract). */
 export type ArrayStyle = "form" | "spaceDelimited" | "pipeDelimited"
+/** AX Code API schema `ArraySeparatorStyle` (auto-generated from the OpenAPI contract). */
 export type ArraySeparatorStyle = ArrayStyle | MatrixStyle
 type MatrixStyle = "label" | "matrix" | "simple"
+/** AX Code API schema `ObjectStyle` (auto-generated from the OpenAPI contract). */
 export type ObjectStyle = "form" | "deepObject"
 type ObjectSeparatorStyle = ObjectStyle | MatrixStyle
 
@@ -25,6 +29,7 @@ interface SerializePrimitiveParam extends SerializePrimitiveOptions {
   value: string
 }
 
+/** Separator used for exploded array serialization (`?tag=a&tag=b`). */
 export const separatorArrayExplode = (style: ArraySeparatorStyle) => {
   switch (style) {
     case "label":
@@ -38,6 +43,7 @@ export const separatorArrayExplode = (style: ArraySeparatorStyle) => {
   }
 }
 
+/** Separator used for non-exploded array serialization (`?tag=a,b`). */
 export const separatorArrayNoExplode = (style: ArraySeparatorStyle) => {
   switch (style) {
     case "form":
@@ -51,6 +57,7 @@ export const separatorArrayNoExplode = (style: ArraySeparatorStyle) => {
   }
 }
 
+/** Separator used for exploded object serialization (`?key=value`). */
 export const separatorObjectExplode = (style: ObjectSeparatorStyle) => {
   switch (style) {
     case "label":
@@ -64,6 +71,7 @@ export const separatorObjectExplode = (style: ObjectSeparatorStyle) => {
   }
 }
 
+/** Serialize an array parameter using the given style and separator. */
 export const serializeArrayParam = ({
   allowReserved,
   explode,
@@ -106,6 +114,7 @@ export const serializeArrayParam = ({
   return style === "label" || style === "matrix" ? separator + joinedValues : joinedValues
 }
 
+/** Serialize a primitive parameter (string, number, boolean). */
 export const serializePrimitiveParam = ({ allowReserved, name, value }: SerializePrimitiveParam) => {
   if (value === undefined || value === null) {
     return ""
@@ -120,6 +129,7 @@ export const serializePrimitiveParam = ({ allowReserved, name, value }: Serializ
   return `${name}=${allowReserved ? value : encodeURIComponent(value)}`
 }
 
+/** Serialize an object parameter using the given style and separator. */
 export const serializeObjectParam = ({
   allowReserved,
   explode,

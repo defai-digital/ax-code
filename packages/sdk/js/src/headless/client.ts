@@ -1,3 +1,15 @@
+/**
+ * Headless HTTP client for AX Code — an app-oriented wrapper over the
+ * generated v2 API client exposing typed session, event, permission,
+ * question, workflow, and task-queue operations plus typed event
+ * subscription.
+ *
+ * Start from `createHeadlessClient` with the URL and headers of a running
+ * backend (see `@defai-digital/ax-code-sdk/headless` for lifecycle helpers).
+ *
+ * @module
+ */
+
 import { createAxCodeClient } from "../v2/client.js"
 import type {
   Event,

@@ -2,8 +2,10 @@
 
 import type { ArrayStyle, ObjectStyle, SerializerOptions } from "./pathSerializer.gen.js"
 
+/** Function that serializes the whole query object into a query string. */
 export type QuerySerializer = (query: Record<string, unknown>) => string
 
+/** Function that serializes a request body for a given content type. */
 export type BodySerializer = (body: unknown) => unknown
 
 type QuerySerializerOptionsObject = {
@@ -12,6 +14,7 @@ type QuerySerializerOptionsObject = {
   object?: Partial<SerializerOptions<ObjectStyle>>
 }
 
+/** Style and explode options controlling how query values are serialized. */
 export type QuerySerializerOptions = QuerySerializerOptionsObject & {
   /**
    * Per-parameter serialization overrides. When provided, these settings
@@ -38,6 +41,7 @@ const serializeUrlSearchParamsPair = (data: URLSearchParams, key: string, value:
   }
 }
 
+/** Body serializer for `multipart/form-data` requests. */
 export const formDataBodySerializer = {
   bodySerializer: (body: unknown): FormData => {
     const data = new FormData()
@@ -57,11 +61,13 @@ export const formDataBodySerializer = {
   },
 }
 
+/** Body serializer for `application/json` requests (the default). */
 export const jsonBodySerializer = {
   bodySerializer: (body: unknown): string =>
     JSON.stringify(body, (_key, value) => (typeof value === "bigint" ? value.toString() : value)),
 }
 
+/** Body serializer for `application/x-www-form-urlencoded` requests. */
 export const urlSearchParamsBodySerializer = {
   bodySerializer: (body: unknown): string => {
     const data = new URLSearchParams()

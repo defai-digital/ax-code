@@ -1,3 +1,12 @@
+/**
+ * State projections for the headless AX Code SDK: fold typed runtime events
+ * (`applyHeadlessProjectionEvent`) into a projection of sessions, messages,
+ * permissions, and questions (`createHeadlessProjectionState`), with helpers
+ * for pending interactive prompts and autonomous-mode effects.
+ *
+ * @module
+ */
+
 import type { PermissionRequest, QuestionRequest } from "../v2/index.js"
 import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event.js"
 

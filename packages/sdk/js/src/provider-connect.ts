@@ -1,3 +1,11 @@
+/**
+ * Provider taxonomy for AX Code clients and provider pickers: connect
+ * categories, bundled CLI provider ids, custom API provider plumbing, and
+ * helpers describing how a provider connects.
+ *
+ * @module
+ */
+
 /** Provider taxonomy shared by AX Code clients and provider pickers. */
 export type ProviderConnectCategory = "local" | "private-gpu" | "cli" | "api"
 

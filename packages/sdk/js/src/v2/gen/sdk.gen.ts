@@ -368,6 +368,7 @@ import type {
   WorktreeResetResponses,
 } from "./types.gen.js"
 
+/** Per-call options bag for generated API methods: path/query/header parameters, request body, abort signal, and response parsing. */
 export type Options<
   TData extends TDataShape = TDataShape,
   ThrowOnError extends boolean = boolean,
@@ -412,6 +413,7 @@ class HeyApiRegistry<T> {
   }
 }
 
+/** Runtime configuration of a generated client instance: baseUrl, headers, fetch, and parsers. */
 export class Config extends HeyApiClient {
   /**
    * Get global configuration
@@ -450,6 +452,7 @@ export class Config extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Global` (auto-generated from the OpenAPI contract). */
 export class Global extends HeyApiClient {
   /**
    * Get health
@@ -529,6 +532,7 @@ export class Global extends HeyApiClient {
   }
 }
 
+/** Auth token state consumed by the generated client's auth layer. */
 export class Auth extends HeyApiClient {
   /**
    * Remove auth credentials
@@ -585,6 +589,7 @@ export class Auth extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Project` (auto-generated from the OpenAPI contract). */
 export class Project extends HeyApiClient {
   /**
    * List all projects
@@ -694,6 +699,7 @@ export class Project extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Pty` (auto-generated from the OpenAPI contract). */
 export class Pty extends HeyApiClient {
   /**
    * List PTY sessions
@@ -892,6 +898,7 @@ export class Pty extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Config2` (auto-generated from the OpenAPI contract). */
 export class Config2 extends HeyApiClient {
   /**
    * Get configuration
@@ -967,6 +974,7 @@ export class Config2 extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Isolation` (auto-generated from the OpenAPI contract). */
 export class Isolation extends HeyApiClient {
   /**
    * Get resolved isolation state
@@ -1025,6 +1033,7 @@ export class Isolation extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Autonomous` (auto-generated from the OpenAPI contract). */
 export class Autonomous extends HeyApiClient {
   /**
    * Get autonomous mode state
@@ -1081,6 +1090,7 @@ export class Autonomous extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `SmartLlm` (auto-generated from the OpenAPI contract). */
 export class SmartLlm extends HeyApiClient {
   /**
    * Get smart LLM routing state
@@ -1137,6 +1147,7 @@ export class SmartLlm extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `SuperLong` (auto-generated from the OpenAPI contract). */
 export class SuperLong extends HeyApiClient {
   /**
    * Get Super-Long mode state
@@ -1225,6 +1236,7 @@ export class SuperLong extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `PromptHistory` (auto-generated from the OpenAPI contract). */
 export class PromptHistory extends HeyApiClient {
   /**
    * List prompt history
@@ -1304,6 +1316,7 @@ export class PromptHistory extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `TaskQueue` (auto-generated from the OpenAPI contract). */
 export class TaskQueue extends HeyApiClient {
   /**
    * List task queue items
@@ -1752,6 +1765,7 @@ export class TaskQueue extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `ScheduledTask` (auto-generated from the OpenAPI contract). */
 export class ScheduledTask extends HeyApiClient {
   /**
    * List scheduled tasks
@@ -2174,6 +2188,7 @@ export class ScheduledTask extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `WorkflowRun` (auto-generated from the OpenAPI contract). */
 export class WorkflowRun extends HeyApiClient {
   /**
    * List workflow runs
@@ -2881,6 +2896,7 @@ export class WorkflowRun extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `WorkflowTemplate` (auto-generated from the OpenAPI contract). */
 export class WorkflowTemplate extends HeyApiClient {
   /**
    * List workflow templates
@@ -3167,6 +3183,7 @@ export class WorkflowTemplate extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `WorkflowRoutine` (auto-generated from the OpenAPI contract). */
 export class WorkflowRoutine extends HeyApiClient {
   /**
    * List workflow routines
@@ -3310,6 +3327,7 @@ export class WorkflowRoutine extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Tool` (auto-generated from the OpenAPI contract). */
 export class Tool extends HeyApiClient {
   /**
    * List tool IDs
@@ -3363,6 +3381,7 @@ export class Tool extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Worktree` (auto-generated from the OpenAPI contract). */
 export class Worktree extends HeyApiClient {
   /**
    * Remove worktree
@@ -3489,6 +3508,7 @@ export class Worktree extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Session` (auto-generated from the OpenAPI contract). */
 export class Session extends HeyApiClient {
   /**
    * List sessions
@@ -3533,6 +3553,7 @@ export class Session extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Resource` (auto-generated from the OpenAPI contract). */
 export class Resource extends HeyApiClient {
   /**
    * Get MCP resources
@@ -3554,6 +3575,7 @@ export class Resource extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Experimental` (auto-generated from the OpenAPI contract). */
 export class Experimental extends HeyApiClient {
   private _session?: Session
   get session(): Session {
@@ -3566,6 +3588,7 @@ export class Experimental extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Session2` (auto-generated from the OpenAPI contract). */
 export class Session2 extends HeyApiClient {
   /**
    * List sessions
@@ -5018,6 +5041,7 @@ export class Session2 extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Part` (auto-generated from the OpenAPI contract). */
 export class Part extends HeyApiClient {
   /**
    * Delete a part from a message
@@ -5091,6 +5115,7 @@ export class Part extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Permission` (auto-generated from the OpenAPI contract). */
 export class Permission extends HeyApiClient {
   /**
    * Respond to permission
@@ -5192,6 +5217,7 @@ export class Permission extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Audit` (auto-generated from the OpenAPI contract). */
 export class Audit extends HeyApiClient {
   /**
    * Export audit events
@@ -5294,6 +5320,7 @@ export class Audit extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Graph` (auto-generated from the OpenAPI contract). */
 export class Graph extends HeyApiClient {
   /**
    * Get execution graph topology
@@ -5358,6 +5385,7 @@ export class Graph extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Question` (auto-generated from the OpenAPI contract). */
 export class Question extends HeyApiClient {
   /**
    * List pending questions
@@ -5446,6 +5474,7 @@ export class Question extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Custom` (auto-generated from the OpenAPI contract). */
 export class Custom extends HeyApiClient {
   /**
    * List managed custom API providers
@@ -5563,6 +5592,7 @@ export class Custom extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `PrivateGpu` (auto-generated from the OpenAPI contract). */
 export class PrivateGpu extends HeyApiClient {
   /**
    * Connect a dedicated private GPU endpoint
@@ -5608,6 +5638,7 @@ export class PrivateGpu extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `AlibabaPai` (auto-generated from the OpenAPI contract). */
 export class AlibabaPai extends HeyApiClient {
   /**
    * Connect Alibaba PAI-EAS
@@ -5651,6 +5682,7 @@ export class AlibabaPai extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Model` (auto-generated from the OpenAPI contract). */
 export class Model extends HeyApiClient {
   /**
    * Download ax-engine local model
@@ -5735,6 +5767,7 @@ export class Model extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Download` (auto-generated from the OpenAPI contract). */
 export class Download extends HeyApiClient {
   /**
    * Cancel ax-engine model download job
@@ -5769,6 +5802,7 @@ export class Download extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `AxEngine` (auto-generated from the OpenAPI contract). */
 export class AxEngine extends HeyApiClient {
   /**
    * Get AX Engine connection
@@ -6038,6 +6072,7 @@ export class AxEngine extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Oauth` (auto-generated from the OpenAPI contract). */
 export class Oauth extends HeyApiClient {
   /**
    * OAuth authorize
@@ -6128,6 +6163,7 @@ export class Oauth extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Provider` (auto-generated from the OpenAPI contract). */
 export class Provider extends HeyApiClient {
   /**
    * List providers
@@ -6193,6 +6229,7 @@ export class Provider extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Find` (auto-generated from the OpenAPI contract). */
 export class Find extends HeyApiClient {
   /**
    * Find text
@@ -6291,6 +6328,7 @@ export class Find extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `File_` (auto-generated from the OpenAPI contract). */
 export class File_ extends HeyApiClient {
   /**
    * List files
@@ -6372,6 +6410,7 @@ export class File_ extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Event_` (auto-generated from the OpenAPI contract). */
 export class Event_ extends HeyApiClient {
   /**
    * Subscribe to events
@@ -6393,6 +6432,7 @@ export class Event_ extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Resources` (auto-generated from the OpenAPI contract). */
 export class Resources extends HeyApiClient {
   /**
    * List MCP resources
@@ -6414,6 +6454,7 @@ export class Resources extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Resource2` (auto-generated from the OpenAPI contract). */
 export class Resource2 extends HeyApiClient {
   /**
    * Read MCP resource
@@ -6448,6 +6489,7 @@ export class Resource2 extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Auth2` (auto-generated from the OpenAPI contract). */
 export class Auth2 extends HeyApiClient {
   /**
    * Remove MCP OAuth
@@ -6579,6 +6621,7 @@ export class Auth2 extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Mcp` (auto-generated from the OpenAPI contract). */
 export class Mcp extends HeyApiClient {
   /**
    * Get MCP status
@@ -6708,6 +6751,7 @@ export class Mcp extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Tui` (auto-generated from the OpenAPI contract). */
 export class Tui extends HeyApiClient {
   /**
    * Append TUI prompt
@@ -7005,6 +7049,7 @@ export class Tui extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Instance` (auto-generated from the OpenAPI contract). */
 export class Instance extends HeyApiClient {
   /**
    * Dispose instance
@@ -7045,6 +7090,7 @@ export class Instance extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Path` (auto-generated from the OpenAPI contract). */
 export class Path extends HeyApiClient {
   /**
    * Get paths
@@ -7066,6 +7112,7 @@ export class Path extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Vcs` (auto-generated from the OpenAPI contract). */
 export class Vcs extends HeyApiClient {
   /**
    * Get VCS info
@@ -7087,6 +7134,7 @@ export class Vcs extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Command` (auto-generated from the OpenAPI contract). */
 export class Command extends HeyApiClient {
   /**
    * List commands
@@ -7108,6 +7156,7 @@ export class Command extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Capability` (auto-generated from the OpenAPI contract). */
 export class Capability extends HeyApiClient {
   /**
    * List capabilities
@@ -7129,6 +7178,7 @@ export class Capability extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `App` (auto-generated from the OpenAPI contract). */
 export class App extends HeyApiClient {
   /**
    * Write log
@@ -7304,6 +7354,7 @@ export class App extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Skill` (auto-generated from the OpenAPI contract). */
 export class Skill extends HeyApiClient {
   /**
    * Create skill
@@ -7418,6 +7469,7 @@ export class Skill extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Lsp` (auto-generated from the OpenAPI contract). */
 export class Lsp extends HeyApiClient {
   /**
    * Get LSP status
@@ -7439,6 +7491,7 @@ export class Lsp extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `DebugEngine` (auto-generated from the OpenAPI contract). */
 export class DebugEngine extends HeyApiClient {
   /**
    * DRE status and pending refactor plans
@@ -7479,6 +7532,7 @@ export class DebugEngine extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Formatter` (auto-generated from the OpenAPI contract). */
 export class Formatter extends HeyApiClient {
   /**
    * Get formatter status
@@ -7500,6 +7554,7 @@ export class Formatter extends HeyApiClient {
   }
 }
 
+/** Flat typed facade over every AX Code HTTP API operation, generated from the OpenAPI contract. Method names come from the operationId suffix, so similarly named operations on different resources share a method slot here; prefer the per-tag service classes (for example `Session`, `App`, `Provider`) for unambiguous namespacing, or use `createAxCodeClient` from `@defai-digital/ax-code-sdk/v2`. */
 export class AxCodeClient extends HeyApiClient {
   public static readonly __registry = new HeyApiRegistry<AxCodeClient>()
 
@@ -7508,6 +7563,11 @@ export class AxCodeClient extends HeyApiClient {
     AxCodeClient.__registry.set(this, args?.key)
   }
 
+  /**
+   * Generated API method.
+   * 
+   * Calls `GET /dre-graph/session/{sessionID}`.
+   */
   public getDreGraphSessionSessionId<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
@@ -7535,6 +7595,11 @@ export class AxCodeClient extends HeyApiClient {
     })
   }
 
+  /**
+   * Generated API method.
+   * 
+   * Calls `GET /dre-graph/session/{sessionID}/fingerprint`.
+   */
   public getDreGraphSessionSessionIdFingerprint<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string

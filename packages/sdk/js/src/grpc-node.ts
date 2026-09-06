@@ -1,3 +1,13 @@
+/**
+ * Node.js http2 bindings for the AX Code gRPC transport: bind a native
+ * bridge to an `http2` server, start a ready-to-use server, and encode/decode
+ * gRPC message framing and the protobuf wire format.
+ *
+ * Import from `@defai-digital/ax-code-sdk/grpc/node`.
+ *
+ * @module
+ */
+
 import type * as Http2 from "node:http2"
 import { errorMessage } from "./internal/error.js"
 import { formatHostnameForUrl, isLoopbackHostname, normalizeLoopbackHostname } from "./internal/server-shared.js"

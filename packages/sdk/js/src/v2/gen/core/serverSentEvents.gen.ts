@@ -2,6 +2,7 @@
 
 import type { Config } from "./types.gen.js"
 
+/** Options for consuming a server-sent-events stream (retry behavior, idle timeout, handlers). */
 export type ServerSentEventsOptions<TData = unknown> = Omit<RequestInit, "method"> &
   Pick<Config, "method" | "responseTransformer" | "responseValidator"> & {
     /**
@@ -71,6 +72,7 @@ export type ServerSentEventsOptions<TData = unknown> = Omit<RequestInit, "method
     url: string
   }
 
+/** AX Code API schema `StreamEvent` (auto-generated from the OpenAPI contract). */
 export interface StreamEvent<TData = unknown> {
   data: TData
   event?: string
@@ -78,10 +80,12 @@ export interface StreamEvent<TData = unknown> {
   retry?: number
 }
 
+/** Handler callbacks invoked while consuming a server-sent-events stream. */
 export type ServerSentEventsResult<TData = unknown, TReturn = void, TNext = unknown> = {
   stream: AsyncGenerator<TData extends Record<string, unknown> ? TData[keyof TData] : TData, TReturn, TNext>
 }
 
+/** Create a server-sent-events consumer used by streaming endpoints. */
 export function createSseClient<TData = unknown>({
   onRequest,
   onSseError,

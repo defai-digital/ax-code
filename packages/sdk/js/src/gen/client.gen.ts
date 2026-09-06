@@ -15,4 +15,5 @@ export type CreateClientConfig<T extends ClientOptions = ClientOptions2> = (
   override?: Config<ClientOptions & T>,
 ) => Config<Required<ClientOptions> & T>
 
+/** Shared default client instance used by generated services when a call omits `options.client`. */
 export const client = createClient(createConfig<ClientOptions2>({ baseUrl: "http://localhost:4096" }))

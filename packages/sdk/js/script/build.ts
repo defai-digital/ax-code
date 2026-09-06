@@ -6,6 +6,7 @@ import fs from "fs/promises"
 import path from "path"
 import { setTimeout as sleep } from "timers/promises"
 import { createClient } from "@hey-api/openapi-ts"
+import { documentGeneratedSources } from "./document-generated.ts"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
@@ -380,6 +381,10 @@ try {
 
   await run(process.execPath, [packageBin("prettier"), "--write", "src/gen"])
   await run(process.execPath, [packageBin("prettier"), "--write", "src/v2"])
+  // Inject JSDoc after Prettier so the line-based matcher sees the stable
+  // formatted shape; comments are left untouched by Prettier, so the injected
+  // docs survive verbatim. Runs while openapi.json is still on disk.
+  await documentGeneratedSources(dir)
   await fs.rm(path.join(dir, "dist"), { recursive: true, force: true })
   await run(process.execPath, [packageBin("typescript", "tsc"), "--build", "--force"])
   await fs.cp(path.resolve(dir, "../proto"), path.join(dir, "dist", "proto"), { recursive: true })

@@ -1,6 +1,10 @@
+/** Header carrying the workspace directory on every scoped request. */
 export const AX_CODE_DIRECTORY_HEADER = "x-ax-code-directory"
+/** Header carrying the workspace id on every scoped request. */
 export const AX_CODE_WORKSPACE_HEADER = "x-ax-code-workspace"
+/** Legacy directory header still emitted for older runtimes. */
 export const LEGACY_OPENCODE_DIRECTORY_HEADER = "x-opencode-directory"
+/** Legacy workspace header still emitted for older runtimes. */
 export const LEGACY_OPENCODE_WORKSPACE_HEADER = "x-opencode-workspace"
 
 const isIpv4Loopback = (hostname: string) => {
@@ -9,6 +13,11 @@ const isIpv4Loopback = (hostname: string) => {
   return parts.every((part) => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
 }
 
+/**
+ * Enforce the local-only client policy: the base URL must be a loopback
+ * HTTP(S) URL (or a same-origin path for browser clients). Remote hosts are
+ * rejected.
+ */
 export function assertLocalAxCodeBaseUrl(raw: string) {
   const value = typeof raw === "string" ? raw.trim() : ""
   if (!value) {
@@ -41,6 +50,7 @@ export function assertLocalAxCodeBaseUrl(raw: string) {
   }
 }
 
+/** Normalize `Headers`/array/record header forms into a plain record. */
 export function headersToRecord(headers: RequestInit["headers"] | undefined): Record<string, string> {
   if (!headers) return {}
   if (headers instanceof Headers) return Object.fromEntries(headers.entries())
@@ -48,10 +58,12 @@ export function headersToRecord(headers: RequestInit["headers"] | undefined): Re
   return { ...headers }
 }
 
+/** Percent-encode a directory value when it contains non-ASCII characters. */
 export function encodeDirectoryHeader(directory: string) {
   return /[^\x00-\x7F]/.test(directory) ? encodeURIComponent(directory) : directory
 }
 
+/** Add the directory scoping headers (current + legacy) to a header set. */
 export function withDirectoryHeaders(headers: Record<string, string> | undefined, directory: string) {
   const encodedDirectory = encodeDirectoryHeader(directory)
   return {
@@ -61,6 +73,7 @@ export function withDirectoryHeaders(headers: Record<string, string> | undefined
   }
 }
 
+/** Add the workspace scoping headers (current + legacy) to a header set. */
 export function withWorkspaceHeaders(headers: Record<string, string> | undefined, workspaceID: string) {
   return {
     ...headers,

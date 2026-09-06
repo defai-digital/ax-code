@@ -36,6 +36,8 @@
  * // Cleanup
  * await agent.dispose()
  * ```
+ *
+ * @module
  */
 
 export { createAgent } from "./agent.js"

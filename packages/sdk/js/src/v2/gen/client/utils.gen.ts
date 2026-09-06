@@ -7,6 +7,7 @@ import { serializeArrayParam, serializeObjectParam, serializePrimitiveParam } fr
 import { getUrl } from "../core/utils.gen.js"
 import type { Client, ClientOptions, Config, RequestOptions } from "./types.gen.js"
 
+/** Build a query-string serializer from `QuerySerializerOptions` or a custom function. */
 export const createQuerySerializer = <T = unknown>({ parameters = {}, ...args }: QuerySerializerOptions = {}) => {
   const querySerializer = (queryParams: T) => {
     const search: string[] = []
@@ -141,6 +142,7 @@ export async function setAuthParams(
   }
 }
 
+/** Expand path parameters and append the serialized query string to a URL template. */
 export const buildUrl: Client["buildUrl"] = (options) =>
   getUrl({
     baseUrl: options.baseUrl as string,
@@ -153,6 +155,7 @@ export const buildUrl: Client["buildUrl"] = (options) =>
     url: options.url,
   })
 
+/** Deep-merge two client configs; the second config wins for scalar fields. */
 export const mergeConfigs = (a: Config, b: Config): Config => {
   const config = { ...a, ...b }
   if (config.baseUrl?.endsWith("/")) {
@@ -170,6 +173,7 @@ const headersEntries = (headers: Headers): Array<[string, string]> => {
   return entries
 }
 
+/** Merge header sets into a single record; later entries win. */
 export const mergeHeaders = (...headers: Array<Required<Config>["headers"] | undefined>): Headers => {
   const mergedHeaders = new Headers()
   for (const header of headers) {
@@ -250,12 +254,14 @@ class Interceptors<Interceptor> {
   }
 }
 
+/** Interceptor hook that can observe or rewrite requests and responses. */
 export interface Middleware<Req, Res, Err, Options> {
   error: Interceptors<ErrInterceptor<Err, Res, Req, Options>>
   request: Interceptors<ReqInterceptor<Req, Options>>
   response: Interceptors<ResInterceptor<Res, Req, Options>>
 }
 
+/** Create the request/response/error interceptor registry for a client. */
 export const createInterceptors = <Req, Res, Err, Options>(): Middleware<Req, Res, Err, Options> => ({
   error: new Interceptors<ErrInterceptor<Err, Res, Req, Options>>(),
   request: new Interceptors<ReqInterceptor<Req, Options>>(),
@@ -278,6 +284,7 @@ const defaultHeaders = {
   "Content-Type": "application/json",
 }
 
+/** Normalize and validate user input into a full client `Config`. */
 export const createConfig = <T extends ClientOptions = ClientOptions>(
   override: Config<Omit<ClientOptions, keyof T> & T> = {},
 ): Config<Omit<ClientOptions, keyof T> & T> => ({

@@ -1,3 +1,12 @@
+/**
+ * IPC transport for headless AX Code backends: length-prefixed message
+ * framing for the headless IPC protocol (`encodeIpcMessage`,
+ * `decodeIpcFrames`, `readIpcMessages`, `writeIpcMessage`) and the
+ * `createIpcTransport` adapter satisfying the headless transport contract.
+ *
+ * @module
+ */
+
 export { createIpcTransport, type IpcTransportOptions, IpcTransportError } from "./headless/ipc-transport.js"
 export {
   encodeIpcMessage,

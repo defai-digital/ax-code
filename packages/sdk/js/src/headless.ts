@@ -23,6 +23,8 @@
  *   await backend.close()
  * }
  * ```
+ *
+ * @module
  */
 
 export { HeadlessBackendStartupError, startHeadlessBackend } from "./headless/lifecycle.js"

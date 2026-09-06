@@ -8,13 +8,16 @@ import {
   serializePrimitiveParam,
 } from "./pathSerializer.gen.js"
 
+/** AX Code API schema `PathSerializer` (auto-generated from the OpenAPI contract). */
 export interface PathSerializer {
   path: Record<string, unknown>
   url: string
 }
 
+/** Regular expression matching `{param}` placeholders in URL templates. */
 export const PATH_PARAM_RE = /\{[^{}]+\}/g
 
+/** Default path-parameter serializer: percent-encodes plain string values. */
 export const defaultPathSerializer = ({ path, url: _url }: PathSerializer) => {
   let url = _url
   const matches = _url.match(PATH_PARAM_RE)
@@ -80,6 +83,7 @@ export const defaultPathSerializer = ({ path, url: _url }: PathSerializer) => {
   return url
 }
 
+/** Compose the final request URL from the configured baseUrl and the request path. */
 export const getUrl = ({
   baseUrl,
   path,
@@ -108,6 +112,7 @@ export const getUrl = ({
   return url
 }
 
+/** Return the request body to send, honoring the configured body serializer. */
 export function getValidRequestBody(options: {
   body?: unknown
   bodySerializer?: BodySerializer | null

@@ -5,8 +5,10 @@ import type { ServerSentEventsOptions, ServerSentEventsResult } from "../core/se
 import type { Client as CoreClient, Config as CoreConfig } from "../core/types.gen.js"
 import type { Middleware } from "./utils.gen.js"
 
+/** Whether generated methods throw on API errors (`'throw'`) or return a `RequestResult` (`'results'`). */
 export type ResponseStyle = "data" | "fields"
 
+/** Runtime configuration of a generated client instance: baseUrl, headers, fetch, and parsers. */
 export interface Config<T extends ClientOptions = ClientOptions>
   extends Omit<RequestInit, "body" | "headers" | "method">,
     CoreConfig {
@@ -51,6 +53,7 @@ export interface Config<T extends ClientOptions = ClientOptions>
   throwOnError?: T["throwOnError"]
 }
 
+/** Request execution options such as `throwOnError`, `responseStyle`, and `parseAs`. */
 export interface RequestOptions<
   TData = unknown,
   TResponseStyle extends ResponseStyle = "fields",
@@ -79,6 +82,7 @@ export interface RequestOptions<
   url: Url
 }
 
+/** Per-call `Options` after client-level defaults have been merged in. */
 export interface ResolvedRequestOptions<
   TResponseStyle extends ResponseStyle = "fields",
   ThrowOnError extends boolean = boolean,
@@ -88,6 +92,7 @@ export interface ResolvedRequestOptions<
   serializedBody?: string
 }
 
+/** Result object used by `responseStyle: 'results'` calls, carrying `data`, `error`, and the raw `response`. */
 export type RequestResult<
   TData = unknown,
   TError = unknown,
@@ -125,6 +130,7 @@ export type RequestResult<
           }
     >
 
+/** Options accepted by `createClient` (base URL, fetch implementation, middleware, ...). */
 export interface ClientOptions {
   baseUrl?: string
   responseStyle?: ResponseStyle
@@ -171,6 +177,7 @@ type BuildUrlFn = <
   options: TData & Options<TData>,
 ) => string
 
+/** Low-level HTTP transport used by the generated AX Code API services. */
 export type Client = CoreClient<RequestFn, Config, MethodFn, BuildUrlFn, SseFn> & {
   interceptors: Middleware<Request, Response, unknown, ResolvedRequestOptions>
 }
@@ -187,6 +194,7 @@ export type CreateClientConfig<T extends ClientOptions = ClientOptions> = (
   override?: Config<ClientOptions & T>,
 ) => Config<Required<ClientOptions> & T>
 
+/** Describes the body/path/query/url shape of one generated API request. */
 export interface TDataShape {
   body?: unknown
   headers?: unknown
@@ -197,6 +205,7 @@ export interface TDataShape {
 
 type OmitKeys<T, K> = Pick<T, Exclude<keyof T, K>>
 
+/** Per-call options bag for generated API methods: path/query/header parameters, request body, abort signal, and response parsing. */
 export type Options<
   TData extends TDataShape = TDataShape,
   ThrowOnError extends boolean = boolean,

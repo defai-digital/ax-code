@@ -1,3 +1,11 @@
+/**
+ * Local AX Code server lifecycle for the v2 SDK: spawn the runtime HTTP
+ * server as a child process (`createAxCodeServer`) and the shared helpers
+ * that resolve server defaults, build CLI arguments, and build auth headers.
+ *
+ * @module
+ */
+
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
 import { type Config } from "./gen/types.gen.js"
@@ -11,6 +19,7 @@ import {
   resolveSpawnCommand,
 } from "../internal/server-shared.js"
 
+/** Options for `createAxCodeServer` (bind address, auth, config, abort signal). */
 export type ServerOptions = {
   hostname?: string
   port?: number
@@ -27,6 +36,7 @@ export type ServerOptions = {
   }
 }
 
+/** Options for `createAxCodeTui` (project/model/session/agent passthrough). */
 export type TuiOptions = {
   project?: string
   model?: string
@@ -36,6 +46,11 @@ export type TuiOptions = {
   config?: Config
 }
 
+/**
+ * Spawn a local AX Code HTTP server as a child process and wait until it is
+ * ready. Resolves with the server URL and the basic-auth headers required for
+ * every request; call `close()` on the result to shut the server down.
+ */
 export async function createAxCodeServer(options?: ServerOptions) {
   const resolved = resolveServerDefaults(options)
   const args = buildServerArgs(resolved.hostname, resolved.port, options?.config?.logLevel)
@@ -66,8 +81,13 @@ export async function createAxCodeServer(options?: ServerOptions) {
   }
 }
 
+/** Legacy alias for {@link createAxCodeServer}. */
 export const createOpencodeServer = createAxCodeServer
 
+/**
+ * Launch the interactive AX Code terminal UI as a child process with
+ * inherited stdio; call `close()` on the result to terminate it.
+ */
 export function createAxCodeTui(options?: TuiOptions) {
   const args: string[] = []
 
@@ -102,4 +122,5 @@ export function createAxCodeTui(options?: TuiOptions) {
   }
 }
 
+/** Legacy alias for {@link createAxCodeTui}. */
 export const createOpencodeTui = createAxCodeTui

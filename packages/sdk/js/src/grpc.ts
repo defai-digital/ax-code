@@ -1,3 +1,20 @@
+/**
+ * gRPC transport surface for @defai-digital/ax-code-sdk.
+ *
+ * Defines the `axcode.v1.AxCodeHeadless` gRPC contract: the method table
+ * (`AX_CODE_GRPC_METHOD`), frozen method descriptors, request/response
+ * payloads, transport adapters for native and IPC bridges, and the
+ * `createAxCodeGrpcClient` entry points that expose headless client
+ * operations over gRPC.
+ *
+ * @example
+ * ```ts
+ * import { createAxCodeGrpcClient } from "@defai-digital/ax-code-sdk/grpc"
+ * ```
+ *
+ * @module
+ */
+
 import { createHeadlessClient } from "./headless/client.js"
 import type {
   HeadlessClientOptions,

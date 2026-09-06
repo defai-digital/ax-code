@@ -19,6 +19,7 @@ type ReqInit = Omit<RequestInit, "body" | "headers"> & {
   headers: ReturnType<typeof mergeHeaders>
 }
 
+/** Create a raw HTTP client for the AX Code server from a `Config`. */
 export const createClient = (config: Config = {}): Client => {
   let _config = mergeConfigs(createConfig(), config)
 

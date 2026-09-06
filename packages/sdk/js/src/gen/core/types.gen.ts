@@ -3,8 +3,10 @@
 import type { Auth, AuthToken } from "./auth.gen.js"
 import type { BodySerializer, QuerySerializer, QuerySerializerOptions } from "./bodySerializer.gen.js"
 
+/** HTTP methods supported by the generated transport. */
 export type HttpMethod = "connect" | "delete" | "get" | "head" | "options" | "patch" | "post" | "put" | "trace"
 
+/** Low-level HTTP transport used by the generated AX Code API services. */
 export type Client<RequestFn = never, Config = unknown, MethodFn = never, BuildUrlFn = never, SseFn = never> = {
   /**
    * Returns the final request URL.
@@ -17,6 +19,7 @@ export type Client<RequestFn = never, Config = unknown, MethodFn = never, BuildU
   [K in HttpMethod]: MethodFn
 } & ([SseFn] extends [never] ? { sse?: never } : { sse: { [K in HttpMethod]: SseFn } })
 
+/** Runtime configuration of a generated client instance: baseUrl, headers, fetch, and parsers. */
 export interface Config {
   /**
    * Auth token or a function returning auth token. The resolved value will be
@@ -81,6 +84,7 @@ type IsExactlyNeverOrNeverUndefined<T> = [T] extends [never]
       : true
     : false
 
+/** Type-level helper that drops keys whose type resolves to `never`. */
 export type OmitNever<T extends Record<string, unknown>> = {
   [K in keyof T as IsExactlyNeverOrNeverUndefined<T[K]> extends true ? never : K]: T[K]
 }

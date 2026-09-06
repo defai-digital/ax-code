@@ -2,6 +2,7 @@
 
 type Slot = "body" | "headers" | "path" | "query"
 
+/** AX Code API schema `Field` (auto-generated from the OpenAPI contract). */
 export type Field =
   | {
       in: Exclude<Slot, "body">
@@ -35,11 +36,13 @@ export type Field =
       map: Slot
     }
 
+/** AX Code API schema `Fields` (auto-generated from the OpenAPI contract). */
 export interface Fields {
   allowExtra?: Partial<Record<Slot, boolean>>
   args?: ReadonlyArray<Field>
 }
 
+/** AX Code API schema `FieldsConfig` (auto-generated from the OpenAPI contract). */
 export type FieldsConfig = ReadonlyArray<Field | Fields>
 
 const extraPrefixesMap: Record<string, Slot> = {
@@ -116,6 +119,7 @@ const setParamValue = (target: Record<string, unknown>, key: string, value: unkn
   })
 }
 
+/** Flatten the generated `{ body, path, query, header }` request shape into client options. */
 export const buildClientParams = (args: ReadonlyArray<unknown>, fields: FieldsConfig) => {
   const params: Params = {
     body: Object.create(null),

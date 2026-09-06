@@ -1,3 +1,12 @@
+/**
+ * Typed runtime events for the headless AX Code SDK: message and part
+ * lifecycle events, permission and question prompts, status and probe
+ * events, and the `HEADLESS_RUNTIME_SCHEMA_VERSION` contract version shared
+ * by producers and consumers.
+ *
+ * @module
+ */
+
 import type { PermissionRequest, QuestionRequest } from "../v2/index.js"
 
 export const HEADLESS_RUNTIME_SCHEMA_VERSION = 1
