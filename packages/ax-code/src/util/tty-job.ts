@@ -75,5 +75,7 @@ let sigTtouIgnored = false
 function ignoreSigTtou() {
   if (sigTtouIgnored) return
   sigTtouIgnored = true
-  process.on("SIGTTOU", () => {})
+  // Process-lifetime signal disposition: restoring SIGTTOU after moving this
+  // process into the foreground would reintroduce the job-control race.
+  process.on("SIGTTOU", () => {}) // @scan-suppress lifecycle_scan
 }

@@ -26,7 +26,8 @@ export const CHECKOUT_LAUNCHER_BASENAME = "ax-code-src"
 
 type WhichFn = (command: string) => string | null | undefined
 type WhichAllFn = (command: string) => string[]
-type LstatFn = (target: string) => { isSymbolicLink(): boolean }
+type LstatFn = (target: string) => { isSymbolicLink(): boolean; nlink?: number }
+type StatFn = (target: string) => { dev: number | bigint; ino: number | bigint }
 type UnlinkFn = (target: string) => void
 
 type SetupCliOptions = {
@@ -43,6 +44,7 @@ type SetupCliOptions = {
   readFileSync?: (p: string) => string
   writeFileSync?: typeof fs.writeFileSync
   lstatSync?: LstatFn
+  statSync?: StatFn
   unlinkSync?: UnlinkFn
   spawnSync?: typeof childProcess.spawnSync
   log?: (msg: string) => void
@@ -194,14 +196,61 @@ export function removeExistingLauncherSymlink(
   lstatSync: LstatFn = (target) => fs.lstatSync(target),
   unlinkSync: UnlinkFn = (target) => fs.unlinkSync(target),
 ): boolean {
+  let info: ReturnType<LstatFn>
   try {
-    if (!lstatSync(launcherPath).isSymbolicLink()) return false
+    info = lstatSync(launcherPath)
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return false
     throw err
   }
+  // Older terminal-branding launchers could accidentally create `ax-code` as
+  // a hardlink to the active Node executable. Writing a shell script through
+  // that path would overwrite the shared inode and destroy Node itself. Break
+  // symlinks and multiply-linked regular files before replacing the launcher.
+  if (!info.isSymbolicLink() && (info.nlink ?? 1) <= 1) return false
   unlinkSync(launcherPath)
   return true
+}
+
+export function removeLegacyNodeBrandAliases(input: {
+  nodePath?: string | null
+  axCodePath?: string | null
+  platform?: NodeJS.Platform
+  statSync?: StatFn
+  unlinkSync?: UnlinkFn
+  log?: (message: string) => void
+}): string[] {
+  if (!input.nodePath) return []
+  const nodeBasename = path.basename(input.nodePath).toLowerCase()
+  if (nodeBasename !== "node" && nodeBasename !== "node.exe") return []
+  const statSync = input.statSync ?? ((target: string) => fs.statSync(target))
+  const unlinkSync = input.unlinkSync ?? ((target: string) => fs.unlinkSync(target))
+  const log = input.log ?? console.log
+  let node: ReturnType<StatFn>
+  try {
+    node = statSync(input.nodePath)
+  } catch {
+    return []
+  }
+  const brandedName = input.platform === "win32" ? "AX-Code.exe" : "AX-Code"
+  const candidates = new Set(
+    [input.axCodePath, path.join(path.dirname(input.nodePath), brandedName)].filter(
+      (candidate): candidate is string => !!candidate && candidate !== input.nodePath,
+    ),
+  )
+  const removed: string[] = []
+  for (const candidate of candidates) {
+    try {
+      const item = statSync(candidate)
+      if (item.dev !== node.dev || item.ino !== node.ino) continue
+      unlinkSync(candidate)
+      removed.push(candidate)
+      log(`Removed legacy Node hardlink created by terminal branding: ${candidate}`)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+    }
+  }
+  return removed
 }
 
 export function setupCliPathNotes(input: {
@@ -332,6 +381,7 @@ export function setupCli(input: SetupCliOptions = {}) {
   const readFileSync = input.readFileSync ?? ((p: string) => fs.readFileSync(p, "utf8"))
   const writeFileSync = input.writeFileSync ?? fs.writeFileSync
   const lstatSync = input.lstatSync ?? ((target: string) => fs.lstatSync(target))
+  const statSync = input.statSync ?? ((target: string) => fs.statSync(target))
   const unlinkSync = input.unlinkSync ?? ((target: string) => fs.unlinkSync(target))
   const spawnSync = input.spawnSync ?? childProcess.spawnSync
   const log = input.log ?? console.log
@@ -346,6 +396,14 @@ export function setupCli(input: SetupCliOptions = {}) {
       : whichAllSync)
   const realpathSync = input.realpathSync ?? ((p: string) => fs.realpathSync(p))
   const windows = platform === "win32"
+  removeLegacyNodeBrandAliases({
+    nodePath: which("node"),
+    axCodePath: which("ax-code"),
+    platform,
+    statSync,
+    unlinkSync,
+    log,
+  })
   const binDir = getInstallBinDir(env, which, platform, realpathSync)
   const allOnPath = whichAll("ax-code")
   const homebrewOnPath = allOnPath.some((p) => isHomebrewManagedBinary(p, realpathSync))

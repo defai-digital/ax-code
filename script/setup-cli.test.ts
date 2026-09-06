@@ -13,6 +13,7 @@ import {
   PACKAGED_LAUNCHER_BASENAME,
   preferredBundledTarget,
   removeExistingLauncherSymlink,
+  removeLegacyNodeBrandAliases,
   removeShadowingCheckoutLauncher,
   resolveLauncherBasename,
   setupCli,
@@ -80,7 +81,7 @@ describe("setup-cli helpers", () => {
     )
   })
 
-  test("removes only an existing launcher symlink before replacement", () => {
+  test("removes an existing launcher symlink before replacement", () => {
     const operations: string[] = []
     const lstat = (target: string) => {
       operations.push(`lstat:${target}`)
@@ -92,13 +93,74 @@ describe("setup-cli helpers", () => {
     expect(operations).toEqual(["lstat:/home/user/.local/bin/ax-code", "unlink:/home/user/.local/bin/ax-code"])
   })
 
+  test("unlinks a multiply-linked launcher before writing so Node is not overwritten", () => {
+    const unlinks: string[] = []
+    expect(
+      removeExistingLauncherSymlink(
+        "/nvm/bin/ax-code",
+        () => ({ isSymbolicLink: () => false, nlink: 4 }),
+        (target) => unlinks.push(target),
+      ),
+    ).toBe(true)
+    expect(unlinks).toEqual(["/nvm/bin/ax-code"])
+  })
+
+  test("removes only legacy AX Code aliases that share the Node inode", () => {
+    const unlinks: string[] = []
+    const logs: string[] = []
+    const identities: Record<string, { dev: number; ino: number }> = {
+      "/nvm/bin/node": { dev: 1, ino: 42 },
+      "/nvm/bin/ax-code": { dev: 1, ino: 42 },
+      "/nvm/bin/AX-Code": { dev: 1, ino: 42 },
+    }
+    expect(
+      removeLegacyNodeBrandAliases({
+        nodePath: "/nvm/bin/node",
+        axCodePath: "/nvm/bin/ax-code",
+        platform: "darwin",
+        statSync: (target) => {
+          const identity = identities[target]
+          if (!identity) throw Object.assign(new Error("missing"), { code: "ENOENT" })
+          return identity
+        },
+        unlinkSync: (target) => unlinks.push(target),
+        log: (message) => logs.push(message),
+      }),
+    ).toEqual(["/nvm/bin/ax-code", "/nvm/bin/AX-Code"])
+    expect(unlinks).toEqual(["/nvm/bin/ax-code", "/nvm/bin/AX-Code"])
+    expect(logs).toHaveLength(2)
+  })
+
+  test("preserves an independent AX Code executable", () => {
+    const unlinks: string[] = []
+    const identities: Record<string, { dev: number; ino: number }> = {
+      "/usr/bin/node": { dev: 1, ino: 42 },
+      "/usr/local/bin/ax-code": { dev: 1, ino: 99 },
+    }
+    expect(
+      removeLegacyNodeBrandAliases({
+        nodePath: "/usr/bin/node",
+        axCodePath: "/usr/local/bin/ax-code",
+        platform: "linux",
+        statSync: (target) => {
+          const identity = identities[target]
+          if (!identity) throw Object.assign(new Error("missing"), { code: "ENOENT" })
+          return identity
+        },
+        unlinkSync: (target) => unlinks.push(target),
+        log: () => undefined,
+      }),
+    ).toEqual([])
+    expect(unlinks).toEqual([])
+  })
+
   test("leaves regular and missing launcher paths untouched", () => {
     const unlinks: string[] = []
     const unlink = (target: string) => unlinks.push(target)
 
-    expect(removeExistingLauncherSymlink("/regular/ax-code", () => ({ isSymbolicLink: () => false }), unlink)).toBe(
-      false,
-    )
+    expect(
+      removeExistingLauncherSymlink("/regular/ax-code", () => ({ isSymbolicLink: () => false, nlink: 1 }), unlink),
+    ).toBe(false)
     expect(
       removeExistingLauncherSymlink(
         "/missing/ax-code",
