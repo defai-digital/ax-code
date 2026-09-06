@@ -54,7 +54,7 @@ export function isSDKVersionCompatible(required: string): boolean {
 }
 
 function parseVersion(v: string): { major: number; minor: number; patch: number } | undefined {
-  const match = v.match(/^(\d+)\.(\d+)\.(\d+)(?:-[\w.]+)?$/)
+  const match = v.match(/^(\d+)\.(\d+)\.(\d+)$/)
   if (!match) return undefined
   return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) }
 }
