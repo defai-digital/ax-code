@@ -8,6 +8,7 @@ describe("installation.runtime-mode", () => {
         execPath: "/usr/local/bin/ax-code",
         versionDefined: true,
         channel: "latest",
+        hasBun: true,
       }),
     ).toBe("compiled")
   })
@@ -18,6 +19,7 @@ describe("installation.runtime-mode", () => {
         execPath: "C:\\Program Files\\ax-code\\ax-code.exe",
         versionDefined: true,
         channel: "latest",
+        hasBun: true,
       }),
     ).toBe("compiled")
   })
@@ -32,11 +34,23 @@ describe("installation.runtime-mode", () => {
     ).toBe("node-bundled")
   })
 
+  test("Node bundled release runtime with a branded executable name", () => {
+    expect(
+      detectRuntimeMode({
+        execPath: "/tmp/ax-code/libexec/runtime/bin/AX-Code",
+        versionDefined: true,
+        channel: "latest",
+        hasBun: false,
+      }),
+    ).toBe("node-bundled")
+  })
+
   test("source/dev: bun execPath, no version global", () => {
     expect(
       detectRuntimeMode({
         execPath: "/usr/local/bin/bun",
         versionDefined: false,
+        hasBun: true,
       }),
     ).toBe("source")
   })
@@ -47,6 +61,7 @@ describe("installation.runtime-mode", () => {
         execPath: "/Users/me/.bun/bin/bun",
         versionDefined: true,
         channel: "local",
+        hasBun: true,
       }),
     ).toBe("source")
   })
@@ -57,6 +72,7 @@ describe("installation.runtime-mode", () => {
         execPath: "/usr/local/bin/bun",
         versionDefined: true,
         channel: "latest",
+        hasBun: true,
       }),
     ).toBe("bun-bundled")
   })
@@ -67,6 +83,7 @@ describe("installation.runtime-mode", () => {
         execPath: "C:\\Program Files\\bun\\bun.exe",
         versionDefined: true,
         channel: "latest",
+        hasBun: true,
       }),
     ).toBe("bun-bundled")
   })
@@ -76,6 +93,7 @@ describe("installation.runtime-mode", () => {
       detectRuntimeMode({
         execPath: "/some/wrapper/script",
         versionDefined: false,
+        hasBun: true,
       }),
     ).toBe("unknown")
   })
@@ -86,6 +104,7 @@ describe("installation.runtime-mode", () => {
         execPath: "C:\\Program Files\\Bun\\BUN.EXE",
         versionDefined: true,
         channel: "latest",
+        hasBun: true,
       }),
     ).toBe("bun-bundled")
   })

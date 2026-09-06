@@ -17,6 +17,7 @@ export type DetectInput = {
   execPath?: string
   channel?: string
   versionDefined?: boolean
+  hasBun?: boolean
 }
 
 /**
@@ -38,8 +39,13 @@ export function detectRuntimeMode(input: DetectInput = {}): RuntimeMode {
   const isNodeRuntime = base === "node" || base === "node.exe"
   const channel = input.channel ?? (typeof AX_CODE_CHANNEL === "string" ? AX_CODE_CHANNEL : undefined)
   const versionDefined = input.versionDefined ?? typeof AX_CODE_VERSION === "string"
+  const hasBun = input.hasBun ?? Boolean(process.versions.bun)
 
-  if (isNodeRuntime) return versionDefined ? "node-bundled" : "node-source"
+  // A Node executable may be copied or hard-linked under a product-specific
+  // name so terminal job labels show AX-Code. The runtime engine is still
+  // authoritative; relying only on execPath misclassifies that packaged Node
+  // as a compiled Bun executable.
+  if (!hasBun || isNodeRuntime) return versionDefined ? "node-bundled" : "node-source"
   if (!isBunRuntime) {
     return versionDefined ? "compiled" : "unknown"
   }
