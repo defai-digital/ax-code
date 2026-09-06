@@ -20,6 +20,7 @@ catalog:
   "@types/semver": "7.7.1"
   "@typescript/native-preview": "7.0.0-dev.20251207.1"
   "ai": "6.0.146"
+  "ax-tui": "jsr:@defai-digital/ax-tui@0.1.1"
   "diff": "8.0.3"
   "fast-glob": "3.3.3"
   "drizzle-kit": "1.0.0-rc.3"

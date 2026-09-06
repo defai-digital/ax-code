@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest"
 import { readFile, realpath } from "fs/promises"
-import { existsSync } from "fs"
 import path from "path"
 
 function extractWorkspaceGlobs(pnpmWorkspaceYaml: string) {
@@ -37,13 +36,12 @@ describe("script.workspace-metadata", () => {
     const dependencies = packageJson.dependencies ?? {}
     const devDependencies = packageJson.devDependencies ?? {}
 
-    // Transitional (ADR-074): the framework is consumed from the sibling
-    // standalone checkout until a JSR release passes consumer qualification.
-    const axTuiDep = dependencies["ax-tui"]
-    expect(typeof axTuiDep).toBe("string")
-    expect(axTuiDep).toMatch(/^link:/)
-    const linkTarget = path.resolve(repoRoot, "packages/ax-code", axTuiDep.slice("link:".length))
-    expect(existsSync(path.join(linkTarget, "package.json"))).toBe(true)
+    // Framework edits belong in ax-tui; consumers pin an actual JSR artifact.
+    const workspace = await readFile(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8")
+    const lockfile = await readFile(path.join(repoRoot, "pnpm-lock.yaml"), "utf8")
+    expect(dependencies["ax-tui"]).toBe("catalog:")
+    expect(workspace).toMatch(/^  "ax-tui": "jsr:@defai-digital\/ax-tui@\d+\.\d+\.\d+"$/m)
+    expect(lockfile).not.toMatch(/link:[^\n]*ax-tui/)
     expect(dependencies["ax-tui/solid"]).toBeUndefined()
     expect(dependencies["@ax-code/opentui-keymap"]).toBeUndefined()
     expect(dependencies["ax-tui/spinner"]).toBeUndefined()
@@ -76,14 +74,15 @@ describe("script.workspace-metadata", () => {
 
   test("AX Code TUI transform is a stable exported build API", async () => {
     const repoRoot = path.resolve(import.meta.dirname, "../../../../")
-    // The framework package is consumed through the link: dependency
-    // (ADR-074); resolve through node_modules to test the real artifact.
+    // Resolve through node_modules so a local sibling cannot hide registry defects.
     const tuiDir = await realpath(path.join(repoRoot, "packages/ax-code/node_modules/ax-tui"))
     const tuiPackage = JSON.parse(await readFile(path.join(tuiDir, "package.json"), "utf8"))
+    expect(tuiPackage.name).toBe("@jsr/defai-digital__ax-tui")
+    expect(tuiPackage.dependencies?.["ax-tui"]).toBeUndefined()
 
     expect(tuiPackage.exports["./solid/transform"]).toMatchObject({
       types: "./solid/scripts/solid-transform.d.ts",
-      import: "./solid/scripts/solid-transform.js",
+      default: "./solid/scripts/solid-transform.js",
     })
     // The native Zig libraries are vendored under vendor/, not resolved from
     // upstream @opentui/core-<platform> optional dependencies.

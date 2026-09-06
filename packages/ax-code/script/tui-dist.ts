@@ -26,18 +26,10 @@ export function copyTuiDistPackage(packageRoot: string, nodeModulesDir: string) 
   return target
 }
 
-const DENY_PREFIXES = [
-  "tests",
-  "patches",
-  "assets/zig",
-  "lib/tree-sitter/assets",
-  "solid/patches",
-  "spinner/src",
-  "chart/src",
-] as const
+const DENY_PREFIXES = ["tests", "patches", "assets/zig", "lib/tree-sitter/assets", "solid/patches"] as const
 
-// A linked standalone checkout also contains its own tooling, tests, and
-// configuration. Only runtime directories and entry files belong in the CLI.
+// Only runtime directories and entry files belong in the CLI. The registry
+// artifact may also contain source, declarations, and maintenance documentation.
 const RUNTIME_DIRECTORIES = new Set([
   "animation",
   "assets",
@@ -178,6 +170,9 @@ export function shouldCopyTuiDistPath(src: string, packageRoot: string) {
     (parts[0] === "spinner" || parts[0] === "chart") &&
     parts.length > 1 &&
     parts[1] !== "dist" &&
+    // JSR emits TypeScript entrypoints as JavaScript at the same src/ path.
+    // Keep that runtime closure, not the original TypeScript or source maps.
+    !(parts[1] === "src" && (parts.length === 2 || (parts.length === 3 && rel.endsWith(".js")))) &&
     !(parts.length === 2 && parts[1] === "LICENSE")
   ) {
     return false

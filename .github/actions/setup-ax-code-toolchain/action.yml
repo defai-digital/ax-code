@@ -28,25 +28,6 @@ runs:
       if: ${{ inputs.checkout == 'true' }}
       uses: actions/checkout@v7
 
-    # ADR-074 interim: ax-code depends on `link:../../../ax-tui`. GitHub
-    # Actions cannot resolve that without the sibling checkout; TUI typecheck
-    # and tests then fail with TS2307. Clone under `.tmp/` (an allowed root)
-    # and symlink beside this repo so `check:structure` does not see a new
-    # top-level folder.
-    - name: Checkout ax-tui sibling
-      uses: actions/checkout@v7
-      with:
-        repository: defai-digital/ax-tui
-        path: .tmp/ax-tui-src
-        persist-credentials: false
-
-    - name: Link ax-tui beside the workspace
-      shell: bash
-      run: |
-        set -euo pipefail
-        ln -sfn "$GITHUB_WORKSPACE/.tmp/ax-tui-src" "$(dirname "$GITHUB_WORKSPACE")/ax-tui"
-        test -f "$(dirname "$GITHUB_WORKSPACE")/ax-tui/package.json"
-
     - name: Setup pnpm
       uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       with:
@@ -59,11 +40,4 @@ runs:
         node-version: ${{ inputs.node-version }}
         registry-url: ${{ inputs.registry-url }}
         cache: pnpm
-        cache-dependency-path: |
-          pnpm-lock.yaml
-          .tmp/ax-tui-src/pnpm-lock.yaml
-
-    - name: Install ax-tui dependencies
-      shell: bash
-      working-directory: ${{ github.workspace }}/.tmp/ax-tui-src
-      run: pnpm install --frozen-lockfile
+        cache-dependency-path: pnpm-lock.yaml

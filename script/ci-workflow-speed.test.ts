@@ -38,13 +38,20 @@ describe("CI workflow speed policy", () => {
     expect(toolchain).toMatch(/cache-dependency-path:[\s\S]*pnpm-lock\.yaml/)
   })
 
-  test("the shared JS toolchain checks out the ax-tui sibling for the link: dependency", () => {
-    expect(toolchain).toContain("repository: defai-digital/ax-tui")
-    expect(toolchain).toContain("path: .tmp/ax-tui-src")
-    expect(toolchain).toContain('ln -sfn "$GITHUB_WORKSPACE/.tmp/ax-tui-src"')
-    expect(toolchain).toContain(".tmp/ax-tui-src/pnpm-lock.yaml")
-    expect(toolchain).toContain("working-directory: ${{ github.workspace }}/.tmp/ax-tui-src")
-    expect(toolchain).toContain("pnpm install --frozen-lockfile")
+  test("the shared JS toolchain does not prepare a local ax-tui checkout", () => {
+    expect(toolchain).not.toContain("repository: defai-digital/ax-tui")
+    expect(toolchain).not.toContain("ax-tui-src")
+    expect(toolchain).not.toContain("ln -sfn")
+    expect(toolchain).toContain("cache-dependency-path: pnpm-lock.yaml")
+  })
+
+  test("the registry-backed Node 26 TUI startup lane is enabled by default", () => {
+    const lane = ci.match(/^  tui-node26-smoke:\n[\s\S]*?(?=^  \w[\w-]*:|$(?![\s\S]))/m)?.[0]
+    expect(lane).toBeDefined()
+    expect(lane).not.toContain("AX_CODE_TUI_NODE26_SMOKE")
+    expect(lane).toContain('node-version: "26"')
+    expect(lane).toContain("pnpm install --frozen-lockfile")
+    expect(lane).toContain("tui:startup-smoke")
   })
 
   test("GitHub automation remains Node and pnpm only", () => {

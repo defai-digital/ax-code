@@ -18,8 +18,12 @@ const developmentFiles = [
   "tests/yoga/fixture.js",
   "patches/native.md",
   "spinner/src/index.ts",
+  "spinner/src/index.d.ts",
+  "spinner/src/index.js.map",
   "spinner/tsconfig.build.json",
   "chart/src/index.ts",
+  "chart/src/index.d.ts",
+  "_dist/spinner/src/index.d.ts",
   "chart/tsconfig.json",
   ".internal/reports/notes.md",
   "node_modules/solid-js/package.json",
@@ -40,8 +44,14 @@ const runtimeFiles = [
   "solid/jsx-runtime.js",
   "solid/LICENSE",
   "spinner/dist/index.js",
+  "spinner/src/index.js",
+  "spinner/src/solid.js",
+  "spinner/src/presets.js",
+  "spinner/src/utils.js",
   "spinner/LICENSE",
   "chart/dist/index.js",
+  "chart/src/index.js",
+  "chart/src/renderables.js",
   "vendor/manifest.json",
   "vendor/darwin-arm64/libopentui.dylib",
   "vendor/darwin-arm64/LICENSE",
@@ -56,6 +66,7 @@ describe("script.tui-dist", () => {
       await using tmp = await tmpdir()
       const source = path.join(tmp.path, "installed")
       const distribution = path.join(tmp.path, "dist")
+      const spinnerEntry = packageName.startsWith("@jsr/") ? "spinner/src/index.js" : "spinner/dist/index.js"
       const manifest = {
         name: packageName,
         version: "0.1.0",
@@ -66,7 +77,7 @@ describe("script.tui-dist", () => {
         exports: {
           ".": { types: "./index.d.ts", default: "./index.js" },
           "./solid": { default: "./solid/index.js" },
-          "./spinner": { default: "./spinner/dist/index.js" },
+          "./spinner": { types: "./_dist/spinner/src/index.d.ts", default: `./${spinnerEntry}` },
           "./solid/transform": { default: "./solid/scripts/solid-transform.js" },
         },
       }
@@ -80,7 +91,7 @@ describe("script.tui-dist", () => {
       const fromBundle = createRequire(path.join(distribution, "lib/index-node-tui.js"))
       expect(fromBundle.resolve("ax-tui")).toBe(path.join(target, "index.js"))
       expect(fromBundle.resolve("ax-tui/solid")).toBe(path.join(target, "solid/index.js"))
-      expect(fromBundle.resolve("ax-tui/spinner")).toBe(path.join(target, "spinner/dist/index.js"))
+      expect(fromBundle.resolve("ax-tui/spinner")).toBe(path.join(target, spinnerEntry))
       expect(existsSync(path.join(distribution, "node_modules/@ax-code/tui"))).toBe(false)
 
       for (const file of runtimeFiles) {
@@ -98,7 +109,7 @@ describe("script.tui-dist", () => {
       expect(result.exports).toEqual({
         ".": { default: "./index.js" },
         "./solid": { default: "./solid/index.js" },
-        "./spinner": { default: "./spinner/dist/index.js" },
+        "./spinner": { default: `./${spinnerEntry}` },
       })
       expect(result.dependencies).toEqual({ entities: "7.0.1" })
       expect(result).not.toHaveProperty("scripts")
