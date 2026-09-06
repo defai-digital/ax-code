@@ -40,8 +40,8 @@ describe("CI workflow speed policy", () => {
 
   test("the shared JS toolchain checks out the ax-tui sibling for the link: dependency", () => {
     expect(toolchain).toContain("repository: defai-digital/ax-tui")
-    expect(toolchain).toContain("path: .ax-tui-src")
-    expect(toolchain).toContain('ln -sfn "$GITHUB_WORKSPACE/.ax-tui-src"')
+    expect(toolchain).toContain("path: .tmp/ax-tui-src")
+    expect(toolchain).toContain('ln -sfn "$GITHUB_WORKSPACE/.tmp/ax-tui-src"')
   })
 
   test("GitHub automation remains Node and pnpm only", () => {

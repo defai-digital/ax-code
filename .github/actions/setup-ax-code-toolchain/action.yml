@@ -30,20 +30,21 @@ runs:
 
     # ADR-074 interim: ax-code depends on `link:../../../ax-tui`. GitHub
     # Actions cannot resolve that without the sibling checkout; TUI typecheck
-    # and tests then fail with TS2307. Clone into the workspace (checkout
-    # cannot write outside GITHUB_WORKSPACE) and symlink beside this repo.
+    # and tests then fail with TS2307. Clone under `.tmp/` (an allowed root)
+    # and symlink beside this repo so `check:structure` does not see a new
+    # top-level folder.
     - name: Checkout ax-tui sibling
       uses: actions/checkout@v7
       with:
         repository: defai-digital/ax-tui
-        path: .ax-tui-src
+        path: .tmp/ax-tui-src
         persist-credentials: false
 
     - name: Link ax-tui beside the workspace
       shell: bash
       run: |
         set -euo pipefail
-        ln -sfn "$GITHUB_WORKSPACE/.ax-tui-src" "$(dirname "$GITHUB_WORKSPACE")/ax-tui"
+        ln -sfn "$GITHUB_WORKSPACE/.tmp/ax-tui-src" "$(dirname "$GITHUB_WORKSPACE")/ax-tui"
         test -f "$(dirname "$GITHUB_WORKSPACE")/ax-tui/package.json"
 
     - name: Setup pnpm
