@@ -1,6 +1,9 @@
 .DS_Store
 node_modules
 .worktrees
+# CI-only clone of defai-digital/ax-tui, symlinked to ../ax-tui for the
+# packages/ax-code `link:../../../ax-tui` dependency (ADR-074 interim).
+.ax-tui-src
 .sst
 .env
 .idea

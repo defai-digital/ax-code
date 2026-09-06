@@ -28,6 +28,24 @@ runs:
       if: ${{ inputs.checkout == 'true' }}
       uses: actions/checkout@v7
 
+    # ADR-074 interim: ax-code depends on `link:../../../ax-tui`. GitHub
+    # Actions cannot resolve that without the sibling checkout; TUI typecheck
+    # and tests then fail with TS2307. Clone into the workspace (checkout
+    # cannot write outside GITHUB_WORKSPACE) and symlink beside this repo.
+    - name: Checkout ax-tui sibling
+      uses: actions/checkout@v7
+      with:
+        repository: defai-digital/ax-tui
+        path: .ax-tui-src
+        persist-credentials: false
+
+    - name: Link ax-tui beside the workspace
+      shell: bash
+      run: |
+        set -euo pipefail
+        ln -sfn "$GITHUB_WORKSPACE/.ax-tui-src" "$(dirname "$GITHUB_WORKSPACE")/ax-tui"
+        test -f "$(dirname "$GITHUB_WORKSPACE")/ax-tui/package.json"
+
     - name: Setup pnpm
       uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       with:

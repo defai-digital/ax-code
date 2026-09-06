@@ -38,6 +38,12 @@ describe("CI workflow speed policy", () => {
     expect(toolchain).toContain("cache-dependency-path: pnpm-lock.yaml")
   })
 
+  test("the shared JS toolchain checks out the ax-tui sibling for the link: dependency", () => {
+    expect(toolchain).toContain("repository: defai-digital/ax-tui")
+    expect(toolchain).toContain("path: .ax-tui-src")
+    expect(toolchain).toContain('ln -sfn "$GITHUB_WORKSPACE/.ax-tui-src"')
+  })
+
   test("GitHub automation remains Node and pnpm only", () => {
     const automation = githubAutomationSources().join("\n")
     expect(automation).not.toMatch(/oven-sh\/setup-bun|\bbunx\b|\bbun-version\b/i)
