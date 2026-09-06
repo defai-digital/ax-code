@@ -16,7 +16,7 @@ export const JSR_DESCRIPTION = "TypeScript SDK for the AX Code coding-agent runt
 export const JSR_README_SOURCE = "readme" as const
 export const JSR_RUNTIME_COMPAT = {
   node: true,
-  deno: true,
+  deno: false,
   bun: null,
   browser: false,
   workerd: false,
@@ -86,7 +86,6 @@ export function assertJsrScoreMetadata(score: PackageScore): void {
   const missing: string[] = []
   if (!score.hasDescription) missing.push("description")
   if (!score.atLeastOneRuntimeCompatible) missing.push("at least one compatible runtime")
-  if (!score.multipleRuntimesCompatible) missing.push("at least two compatible runtimes")
   if (missing.length > 0) {
     throw new Error(
       `JSR package settings are incomplete (${missing.join(", ")}). ` +

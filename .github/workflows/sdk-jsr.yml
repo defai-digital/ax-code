@@ -63,8 +63,11 @@ jobs:
       - name: Verify JSR package
         run: pnpm --dir packages/sdk/js run check:jsr
 
-      - name: Publish JSR package with provenance
-        run: pnpm --dir packages/sdk/js run publish:jsr
-
+      # Package-level score settings require member authentication and cannot be
+      # repaired by this workflow's publish-only OIDC token. Fail before the
+      # irreversible version publish when a maintainer must fix them.
       - name: Verify JSR score metadata
         run: pnpm --dir packages/sdk/js run check:jsr-score
+
+      - name: Publish JSR package with provenance
+        run: pnpm --dir packages/sdk/js run publish:jsr

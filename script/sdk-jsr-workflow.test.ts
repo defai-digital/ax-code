@@ -22,6 +22,7 @@ describe("SDK JSR release workflow", () => {
     expect(workflow).toContain("run test")
     expect(workflow).toContain("run check:jsr")
     expect(workflow).toContain("run check:jsr-score")
+    expect(workflow.indexOf("run check:jsr-score")).toBeLessThan(workflow.indexOf("run publish:jsr"))
   })
 
   test("does not configure registry tokens or npm publication", () => {

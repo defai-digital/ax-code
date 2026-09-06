@@ -73,14 +73,15 @@ describe("JSR package contract", () => {
     expect(existsSync(resolve(packageRoot, "script/publish.ts"))).toBe(false)
   })
 
-  test("declares the JSR package settings the score tab requires", () => {
+  test("declares only the SDK runtime compatibility the package supports", () => {
     expect(JSR_DESCRIPTION.length).toBeGreaterThan(0)
     expect(JSR_DESCRIPTION.length).toBeLessThanOrEqual(250)
     expect(JSR_README_SOURCE).toBe("readme")
     const supported = Object.values(JSR_RUNTIME_COMPAT).filter((value) => value === true)
-    expect(supported.length).toBeGreaterThanOrEqual(2)
+    expect(supported).toHaveLength(1)
     expect(JSR_RUNTIME_COMPAT.node).toBe(true)
-    expect(JSR_RUNTIME_COMPAT.deno).toBe(true)
+    expect(JSR_RUNTIME_COMPAT.deno).toBe(false)
+    expect(JSR_RUNTIME_COMPAT.bun).toBeNull()
     expect(() =>
       assertJsrScoreMetadata({
         hasDescription: false,
@@ -89,5 +90,13 @@ describe("JSR package contract", () => {
         total: 16,
       }),
     ).toThrow(/description/)
+    expect(() =>
+      assertJsrScoreMetadata({
+        hasDescription: true,
+        atLeastOneRuntimeCompatible: true,
+        multipleRuntimesCompatible: false,
+        total: 17,
+      }),
+    ).not.toThrow()
   })
 })

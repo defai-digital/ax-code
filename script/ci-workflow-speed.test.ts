@@ -32,7 +32,7 @@ describe("CI workflow speed policy", () => {
   })
 
   test("the shared JS toolchain caches the pnpm store", () => {
-    expect(toolchain).toMatch(/pnpm\/action-setup@[a-f0-9]{40} # v4/)
+    expect(toolchain).toMatch(/pnpm\/action-setup@[a-f0-9]{40} # v6/)
     expect(toolchain).toContain("run_install: false")
     expect(toolchain).toMatch(/cache:\s*pnpm/)
     expect(toolchain).toMatch(/cache-dependency-path:[\s\S]*pnpm-lock\.yaml/)
