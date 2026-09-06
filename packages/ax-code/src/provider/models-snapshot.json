@@ -73019,7 +73019,7 @@
           "output": ["text"]
         },
         "limit": {
-          "context": 262144,
+          "context": 256000,
           "output": 16384
         }
       },
@@ -75893,8 +75893,8 @@
           "output": ["text"]
         },
         "limit": {
-          "context": 32768,
-          "output": 26214
+          "context": 1024000,
+          "output": 819200
         }
       },
       "thedrummer/cydonia-24b-v4.1": {
@@ -111215,6 +111215,24 @@
           "context": 128000,
           "output": 32768
         }
+      },
+      "databricks/databricks-inkling": {
+        "attachment": true,
+        "family": "ling",
+        "id": "databricks/databricks-inkling",
+        "limit": {
+          "context": 1000000,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": ["text", "image"],
+          "output": ["text"]
+        },
+        "name": "Inkling",
+        "reasoning": true,
+        "release_date": "2026-07-15",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },

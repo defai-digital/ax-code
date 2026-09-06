@@ -1434,6 +1434,6 @@ if (checkMode) {
 if (!modelsSnapshotChanged(existing, fetched)) {
   console.log("models-snapshot.json is already up to date")
 } else {
-  await writeText(snapshotPath, formatModelsSnapshot(fetched))
+  await writeText(snapshotPath, formatModelsSnapshot(fetched, existing))
   console.log("Updated models-snapshot.json")
 }

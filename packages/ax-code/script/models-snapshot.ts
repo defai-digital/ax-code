@@ -68,10 +68,6 @@ export function preserveLocalProviders(fetched: ModelsSnapshot, existing: Models
   return next
 }
 
-export function formatModelsSnapshot(snapshot: ModelsSnapshot) {
-  return JSON.stringify(snapshot, null, 2) + "\n"
-}
-
 function canonicalizeJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalizeJson)
   if (!value || typeof value !== "object") return value
@@ -80,6 +76,26 @@ function canonicalizeJson(value: unknown): unknown {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entry]) => [key, canonicalizeJson(entry)]),
   )
+}
+
+function orderJsonLike(value: unknown, existing: unknown): unknown {
+  if (Array.isArray(value))
+    return value.map((entry, index) => orderJsonLike(entry, Array.isArray(existing) ? existing[index] : undefined))
+  if (!value || typeof value !== "object") return value
+  const next = value as Record<string, unknown>
+  const previous =
+    existing && typeof existing === "object" && !Array.isArray(existing) ? (existing as Record<string, unknown>) : {}
+  const keys = [
+    ...Object.keys(previous).filter((key) => key in next),
+    ...Object.keys(next)
+      .filter((key) => !(key in previous))
+      .sort((left, right) => left.localeCompare(right)),
+  ]
+  return Object.fromEntries(keys.map((key) => [key, orderJsonLike(next[key], previous[key])]))
+}
+
+export function formatModelsSnapshot(snapshot: ModelsSnapshot, existing: ModelsSnapshot = {}) {
+  return JSON.stringify(orderJsonLike(snapshot, existing), null, 2) + "\n"
 }
 
 function modelsSnapshotKey(snapshot: ModelsSnapshot) {
