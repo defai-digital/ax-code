@@ -191,7 +191,7 @@ function genericDoc(name: string): string {
   return `AX Code API schema \`${name}\` (auto-generated from the OpenAPI contract).`
 }
 
-function typeSuffixDoc(name: string, contract: Contract): string[] | undefined {
+export function typeSuffixDoc(name: string, contract: Contract): string[] | undefined {
   for (const suffix of TYPE_SUFFIXES) {
     if (!name.endsWith(suffix)) continue
     const operation = contract.byPascalBase.get(name.slice(0, -suffix.length))
@@ -208,7 +208,7 @@ function typeSuffixDoc(name: string, contract: Contract): string[] | undefined {
   return undefined
 }
 
-function eventLiteralDoc(lines: string[], startIndex: number, name: string): string[] | undefined {
+export function eventLiteralDoc(lines: string[], startIndex: number, name: string): string[] | undefined {
   if (!name.startsWith("Event")) return undefined
   for (let j = startIndex; j < Math.min(startIndex + 40, lines.length); j++) {
     const match = lines[j].match(/^\s+type: "([^"]+)"/)
@@ -251,7 +251,7 @@ const URL_TEMPLATE_RE = /url: "([^"]+)"/
 const PUBLIC_METHOD_RE = /^\s*public [A-Za-z0-9_]+\s*[<(]/
 
 /** Attach operation docs to generated service methods, matched by verb + URL. */
-function documentSdkMethods(source: string, contract: Contract): string {
+export function documentSdkMethods(source: string, contract: Contract): string {
   const lines = source.split("\n")
   const out: string[] = []
   for (let i = 0; i < lines.length; i++) {
