@@ -108,13 +108,15 @@ export function verifyBrandedNodeRuns(branded, options = {}) {
 }
 
 /**
- * Path whose basename is AX-Code and that actually runs the given Node.
- * Preference: sibling hardlink (same directory, rpath intact) then
- * cache/runtime/bin/AX-Code with libnode symlinks, then the original path.
+ * Path whose basename is AX-Code and that actually runs the given Node on
+ * macOS, where Terminal and iTerm derive the visible job name from the
+ * executable basename. Other platforms keep the original runtime; process
+ * title and terminal OSC sequences provide branding without relocating Node.
  */
 export function resolveBrandedNodePath(nodePath, options = {}) {
   const fsMod = options.fs ?? fs
   const platform = options.platform ?? process.platform
+  if (platform !== "darwin") return nodePath
   const cacheDir = options.cacheDir ?? brandedNodeCacheDir(options.env, options.homedir)
   const name = brandedNodeName(platform)
   const real = fsMod.realpathSync(nodePath)

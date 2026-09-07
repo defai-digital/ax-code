@@ -53,6 +53,27 @@ describe("node FFI runner process branding", () => {
     }
   })
 
+  test("does not relocate Node on platforms whose terminals do not use the executable basename", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "ax-code-brand-skip-"))
+    try {
+      const nodePath = path.join(root, "node")
+      writeFileSync(nodePath, "#!/bin/sh\n")
+      chmodSync(nodePath, 0o755)
+      const cacheDir = path.join(root, "cache")
+
+      expect(
+        resolveBrandedNodePath(nodePath, {
+          cacheDir,
+          platform: "linux",
+          verify: false,
+        }),
+      ).toBe(nodePath)
+      expect(() => statSync(cacheDir)).toThrow()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   test("source runner spawns the TUI child under the AX-Code basename", () => {
     const runner = readFileSync(path.join(import.meta.dirname, "node-ffi-runner.mjs"), "utf8")
     expect(runner).toContain("resolveBrandedNodePath(runtime.path)")
