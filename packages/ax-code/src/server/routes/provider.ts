@@ -8,7 +8,7 @@ import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
 import { ProviderAuth } from "../../provider/auth"
 import { mapValues } from "remeda"
-import { errors, invalidRequest } from "../error"
+import { errors, invalidRequest, serviceUnavailable } from "../error"
 import { lazy } from "../../util/lazy"
 import { PROVIDER_ID_PARAM, withProviderID } from "./route-params"
 import { redactProviderInfo } from "./config"
@@ -49,6 +49,10 @@ import { CustomApiProvider } from "@/provider/custom-api-provider"
 import { LOCAL_LLM_PROVIDER_IDS } from "@/mode/provider-category"
 
 const log = Log.create({ service: "server" })
+
+// Auth and connection settings are global across project instances. Protect
+// the whole update, including rollback, before reading either snapshot.
+let axEngineConnectionInFlight = false
 
 // Natively supported providers — shown by default when enabled_providers is not configured.
 // Users can expand this list via enabled_providers in ax-code.json.
@@ -432,7 +436,7 @@ export const ProviderRoutes = lazy(() =>
       describeRoute({
         summary: "Configure AX Engine connection",
         description:
-          "Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage.",
+          "Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage. Concurrent connection updates in this server return a retryable 409 conflict.",
         operationId: "provider.axEngine.connectionUpdate",
         responses: {
           200: {
@@ -443,80 +447,92 @@ export const ProviderRoutes = lazy(() =>
               },
             },
           },
-          ...errors(400),
+          ...errors(400, 409),
         },
       }),
       validator("json", AxEngineConnectionBody),
       async (c) => {
         const body = c.req.valid("json")
-        const config = await Config.get()
-        const providerName = config.provider?.[AX_ENGINE_PROVIDER_ID]?.name ?? "AX Engine (Local)"
-        const previousAuth = await Auth.get(AX_ENGINE_PROVIDER_ID)
+        if (axEngineConnectionInFlight) {
+          return serviceUnavailable(c, {
+            message: "AX Engine connection update is already in progress",
+            details: { resource: "axEngineConnection", providerID: AX_ENGINE_PROVIDER_ID },
+          })
+        }
+        axEngineConnectionInFlight = true
 
         try {
-          if (body.mode === "managed") {
-            await Auth.remove(AX_ENGINE_PROVIDER_ID)
+          const config = await Config.get()
+          const providerName = config.provider?.[AX_ENGINE_PROVIDER_ID]?.name ?? "AX Engine (Local)"
+          const previousAuth = await Auth.get(AX_ENGINE_PROVIDER_ID)
+
+          try {
+            if (body.mode === "managed") {
+              await Auth.remove(AX_ENGINE_PROVIDER_ID)
+              try {
+                await Config.updateGlobal({
+                  provider: axEngineManagedProviderConfig(providerName),
+                })
+              } catch (error) {
+                await restoreAxEngineAuth(previousAuth)
+                throw error
+              }
+              return c.json(await axEngineConnectionView())
+            }
+
+            const options = config.provider?.[AX_ENGINE_PROVIDER_ID]?.options ?? {}
+            const managedServerStatus =
+              resolveAxEngineConnectMode(options) === "managed"
+                ? await getServerStatus(
+                    axEngineConnectionApiKey({
+                      saved: previousAuth?.type === "api" ? previousAuth.key : undefined,
+                      options,
+                    }),
+                  )
+                : undefined
+            const requestedBaseURL = resolveAxEngineAttachBaseURL({ baseURL: body.baseURL })
+            if (
+              managedServerStatus?.state &&
+              axEngineEndpointsMayAlias(managedServerStatus.state.baseURL, requestedBaseURL)
+            ) {
+              throw new Error(
+                "AX Code currently owns the server at this endpoint. Keep Managed mode or attach to a different AX Engine server.",
+              )
+            }
+            const apiKey = axEngineConnectionApiKey({
+              requested: body.apiKey,
+              saved: previousAuth?.type === "api" ? previousAuth.key : undefined,
+              options,
+            })
+            const probe = await probeAxEngineConnection({
+              baseURL: requestedBaseURL,
+              apiKey,
+            })
+
+            await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: apiKey })
             try {
               await Config.updateGlobal({
-                provider: axEngineManagedProviderConfig(providerName),
+                provider: axEngineAttachProviderConfig({
+                  providerName,
+                  baseURL: probe.baseURL,
+                }),
               })
             } catch (error) {
               await restoreAxEngineAuth(previousAuth)
               throw error
             }
+
+            // Attach mode never owns the external process. Release any managed
+            // process AX Code started earlier so it does not keep model memory.
+            if (managedServerStatus?.state) {
+              await stopServer().catch((error) => log.warn("failed to stop managed ax-engine after attach", { error }))
+            }
             return c.json(await axEngineConnectionView())
-          }
-
-          const options = config.provider?.[AX_ENGINE_PROVIDER_ID]?.options ?? {}
-          const managedServerStatus =
-            resolveAxEngineConnectMode(options) === "managed"
-              ? await getServerStatus(
-                  axEngineConnectionApiKey({
-                    saved: previousAuth?.type === "api" ? previousAuth.key : undefined,
-                    options,
-                  }),
-                )
-              : undefined
-          const requestedBaseURL = resolveAxEngineAttachBaseURL({ baseURL: body.baseURL })
-          if (
-            managedServerStatus?.state &&
-            axEngineEndpointsMayAlias(managedServerStatus.state.baseURL, requestedBaseURL)
-          ) {
-            throw new Error(
-              "AX Code currently owns the server at this endpoint. Keep Managed mode or attach to a different AX Engine server.",
-            )
-          }
-          const apiKey = axEngineConnectionApiKey({
-            requested: body.apiKey,
-            saved: previousAuth?.type === "api" ? previousAuth.key : undefined,
-            options,
-          })
-          const probe = await probeAxEngineConnection({
-            baseURL: requestedBaseURL,
-            apiKey,
-          })
-
-          await Auth.set(AX_ENGINE_PROVIDER_ID, { type: "api", key: apiKey })
-          try {
-            await Config.updateGlobal({
-              provider: axEngineAttachProviderConfig({
-                providerName,
-                baseURL: probe.baseURL,
-              }),
-            })
           } catch (error) {
-            await restoreAxEngineAuth(previousAuth)
-            throw error
+            return invalidRequest(c, { message: toErrorMessage(error), details: { resource: "axEngineConnection" } })
           }
-
-          // Attach mode never owns the external process. Release any managed
-          // process AX Code started earlier so it does not keep model memory.
-          if (managedServerStatus?.state) {
-            await stopServer().catch((error) => log.warn("failed to stop managed ax-engine after attach", { error }))
-          }
-          return c.json(await axEngineConnectionView())
-        } catch (error) {
-          return invalidRequest(c, { message: toErrorMessage(error), details: { resource: "axEngineConnection" } })
+        } finally {
+          axEngineConnectionInFlight = false
         }
       },
     )

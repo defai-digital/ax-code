@@ -5828,7 +5828,7 @@ export class AxEngine extends HeyApiClient {
   /**
    * Configure AX Engine connection
    *
-   * Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage.
+   * Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage. Concurrent connection updates in this server return a retryable 409 conflict.
    */
   public connectionUpdate<ThrowOnError extends boolean = false>(
     parameters?: {

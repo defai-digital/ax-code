@@ -14402,6 +14402,10 @@ export type ProviderAxEngineConnectionUpdateErrors = {
    * Bad request
    */
   400: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 /** Error response payload for `PUT /provider/ax-engine/connection` — Configure AX Engine connection */

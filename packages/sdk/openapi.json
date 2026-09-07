@@ -31536,7 +31536,7 @@
           }
         ],
         "summary": "Configure AX Engine connection",
-        "description": "Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage.",
+        "description": "Select managed lifecycle or validate and attach to an existing local AX Engine. Attach credentials are stored in encrypted auth storage. Concurrent connection updates in this server return a retryable 409 conflict.",
         "responses": {
           "200": {
             "description": "Updated AX Engine connection",
@@ -31588,6 +31588,16 @@
           },
           "400": {
             "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
             "content": {
               "application/json": {
                 "schema": {
