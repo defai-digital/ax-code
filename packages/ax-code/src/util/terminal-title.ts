@@ -13,12 +13,33 @@
 
 export const AX_CODE_TERMINAL_TITLE = "AX-Code"
 
-// Busy-tab activity glyph: a 3-column by 4-row dot matrix (two 8-dot
-// braille cells; the second cell uses only its left column). Codex prefixes
-// a single-cell 2x3 spinner (`⠋⠙⠹⠸…`); this stays in front of "AX-Code"
-// but reads as a wider point-matrix, not that hollow 2x3 cycle.
-export const AX_CODE_TITLE_SPINNER_FRAMES = ["⠉⠁", "⠈⠃", "⠀⠇", "⠀⡆", "⢀⡄", "⣀⡀", "⣄⠀", "⡆⠀", "⠇⠀", "⠋⠀"] as const
-export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 120
+// Busy-tab activity glyph: a 4-column by 4-row dot matrix (two full 8-dot
+// braille cells). The pattern morphs the letter "A" into the letter "X"
+// (and back), one dot flip per frame, so a busy session quietly spells
+// out the AX-Code initial in the tab. Unlike Codex's perimeter 2x3 spinner.
+export const AX_CODE_TITLE_SPINNER_FRAMES = [
+  "⡮⢵", // A
+  "⡯⢵", //
+  "⡧⢵", //
+  "⡧⢽", //
+  "⡧⢼", //
+  "⡷⢼", //
+  "⡵⢼", //
+  "⡵⢾", //
+  "⡵⢮", //
+  "⡱⢮", //
+  "⡱⢎", // X
+  "⡱⢮", //
+  "⡵⢮", //
+  "⡵⢾", //
+  "⡵⢼", //
+  "⡷⢼", //
+  "⡧⢼", //
+  "⡧⢽", //
+  "⡧⢵", //
+  "⡯⢵", //
+] as const
+export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 140
 
 export function composeAxCodeTerminalTitle(input: { working: boolean; frame?: number }) {
   if (!input.working) return AX_CODE_TERMINAL_TITLE

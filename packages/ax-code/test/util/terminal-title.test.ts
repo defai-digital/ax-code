@@ -37,17 +37,15 @@ describe("terminal title", () => {
     expect(axCodeTerminalTitleSequence()).not.toContain("]0;")
   })
 
-  test("busy titles prefix a 3x4 dot-matrix glyph before AX-Code", () => {
+  test("busy titles prefix a 4x4 A-to-X dot-matrix morph before AX-Code", () => {
     expect(composeAxCodeTerminalTitle({ working: false })).toBe("AX-Code")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("⠉⠁ AX-Code")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 5 })).toBe("⣀⡀ AX-Code")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 10 })).toBe("⠉⠁ AX-Code")
-    expect(AX_CODE_TITLE_SPINNER_FRAMES).toHaveLength(10)
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("⡮⢵ AX-Code") // A
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 10 })).toBe("⡱⢎ AX-Code") // X
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 20 })).toBe("⡮⢵ AX-Code") // wraps to A
+    expect(AX_CODE_TITLE_SPINNER_FRAMES).toHaveLength(20)
     for (const frame of AX_CODE_TITLE_SPINNER_FRAMES) {
       expect([...frame]).toHaveLength(2)
     }
-    // Distinct from Codex's single-cell 2x3 spinner (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`).
-    expect([...AX_CODE_TITLE_SPINNER_FRAMES]).not.toEqual(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
   })
 
   test("sanitizes control characters out of OSC payloads", () => {

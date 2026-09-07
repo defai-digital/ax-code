@@ -165,8 +165,8 @@ export function clearTuiTerminalTitle(
 
 // OSC 9;4 tab progress indicator (Windows Terminal / ConEmu / Ghostty /
 // WezTerm). Shown while the agent is working so busy sessions stand out in
-// the tab bar. The tab text stays "AX-Code", with a leading 3x4
-// dot-matrix glyph while a session is busy.
+// the tab bar. The tab text stays "AX-Code", with a leading 4x4
+// A-to-X dot-matrix morph while a session is busy.
 export const TUI_TERMINAL_PROGRESS_KEEPALIVE_MS = 1_000
 
 export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env) {
