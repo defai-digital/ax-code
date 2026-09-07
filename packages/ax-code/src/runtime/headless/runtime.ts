@@ -8,6 +8,10 @@ export type HeadlessAgentRuntimeInput = {
   directory?: string
   fetch?: typeof fetch
   headers?: RequestInit["headers"]
+  /** Optional caller abort signal, combined with any commandTimeoutMs. */
+  signal?: AbortSignal
+  /** Optional per-command timeout. Opt-in (no default): sync prompts can legitimately run for a long time. */
+  commandTimeoutMs?: number
 }
 
 export type HeadlessAgentRuntime = ReturnType<typeof createHeadlessAgentRuntime>
@@ -37,6 +41,8 @@ export function createHeadlessAgentRuntime(input: HeadlessAgentRuntimeInput) {
         headers: input.headers,
         directory: input.directory,
         client,
+        signal: input.signal,
+        commandTimeoutMs: input.commandTimeoutMs,
       })
     },
     async subscribe(input: { signal: AbortSignal; onEvent: (event: Event) => void | Promise<void> }) {
@@ -55,6 +61,8 @@ async function sendHeadlessRuntimeCommand(input: {
   headers?: RequestInit["headers"]
   directory?: string
   client: ReturnType<typeof createAxCodeClient>
+  signal?: AbortSignal
+  commandTimeoutMs?: number
 }): Promise<HeadlessRuntimeCommandResult> {
   switch (input.command.type) {
     case "session.prompt":
@@ -100,6 +108,14 @@ function postSessionCommand(
   return postJson(input, `/session/${encodeURIComponent(command.sessionID)}/${command.route}`, command.body)
 }
 
+function commandSignal(input: { signal?: AbortSignal; commandTimeoutMs?: number }): AbortSignal | undefined {
+  if (input.signal && input.commandTimeoutMs !== undefined) {
+    return AbortSignal.any([input.signal, AbortSignal.timeout(input.commandTimeoutMs)])
+  }
+  if (input.commandTimeoutMs !== undefined) return AbortSignal.timeout(input.commandTimeoutMs)
+  return input.signal
+}
+
 async function postJson(
   input: Parameters<typeof sendHeadlessRuntimeCommand>[0],
   path: string,
@@ -112,6 +128,7 @@ async function postJson(
       ...(body ? { "Content-Type": "application/json" } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
+    signal: commandSignal(input),
   })
   if (!response.ok) {
     const text = await response.text().catch(() => "")
