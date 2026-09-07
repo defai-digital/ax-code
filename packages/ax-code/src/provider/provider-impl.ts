@@ -95,12 +95,26 @@ export namespace Provider {
   // was itself re-initialized.
   const modelCacheGenerations = new Map<string, number>()
   const MODEL_CACHE_INVALIDATION_RETRY_LIMIT = 8
+  const MODEL_LANGUAGE_CACHE_MAX_ENTRIES = 512
 
   function currentModelCacheGeneration(): number {
     try {
       return modelCacheGenerations.get(Instance.directory) ?? 0
     } catch {
       return 0
+    }
+  }
+
+  function cacheLanguage(cache: Map<string, Lang>, key: string, language: Lang) {
+    // Move refreshed entries to the end and evict least-recently-cached models.
+    // Custom providers can expose an unbounded model catalog, so this process-wide
+    // cache must not retain every model ever selected.
+    cache.delete(key)
+    cache.set(key, language)
+    while (cache.size > MODEL_LANGUAGE_CACHE_MAX_ENTRIES) {
+      const oldest = cache.keys().next().value
+      if (oldest === undefined) break
+      cache.delete(oldest)
     }
   }
 
@@ -1243,7 +1257,7 @@ export namespace Provider {
           ...provider.options,
           ...model.options,
         })
-        if (s.generation === currentModelCacheGeneration()) s.models.set(key, language as Lang)
+        if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)
         return language as Lang
       }
 
@@ -1253,7 +1267,7 @@ export namespace Provider {
         const language = s.modelLoaders[model.providerID]
           ? await s.modelLoaders[model.providerID](sdk, model.api.id, { ...provider.options, ...model.options })
           : sdk.languageModel(model.api.id)
-        if (s.generation === currentModelCacheGeneration()) s.models.set(key, language as Lang)
+        if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)
         return language as Lang
       } catch (e) {
         if (e instanceof NoSuchModelError)

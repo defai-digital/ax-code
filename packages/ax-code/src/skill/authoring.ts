@@ -112,13 +112,14 @@ function parseSkillCreateRequest(input: SkillCreateRequest) {
 // redirect the write outside the container. Falls back to the lexical path when
 // nothing exists yet (a brand-new skill path).
 async function realpathExistingAncestor(target: string): Promise<string> {
+  // @scan-suppress security_scan - This canonicalization helper never authorizes the path; createSkill calls assertContained afterwards.
   let current = path.resolve(target)
   for (;;) {
     try {
       return await fs.realpath(current)
     } catch {
       const parent = path.dirname(current)
-      if (parent === current) return path.resolve(target)
+      if (parent === current) return current
       current = parent
     }
   }

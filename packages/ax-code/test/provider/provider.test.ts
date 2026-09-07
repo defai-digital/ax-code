@@ -344,6 +344,20 @@ test("getLanguage registers pending model loads before awaiting them", async () 
   expect(pendingSet).toBeLessThan(promiseAwait)
 })
 
+test("getLanguage bounds the persistent language cache", async () => {
+  const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
+  const start = src.indexOf("function cacheLanguage(")
+  const end = src.indexOf("export function warmup(", start)
+  expect(start).toBeGreaterThan(-1)
+  expect(end).toBeGreaterThan(start)
+  const body = src.slice(start, end).replace(/\/\/[^\n]*/g, "")
+
+  expect(body).toContain("MODEL_LANGUAGE_CACHE_MAX_ENTRIES")
+  expect(body).toContain("cache.delete(key)")
+  expect(body).toContain("while (cache.size > MODEL_LANGUAGE_CACHE_MAX_ENTRIES)")
+  expect(body).toContain("cache.delete(oldest)")
+})
+
 test("concurrent getLanguage calls share one model loader invocation", async () => {
   const providerID = ProviderID.make("single-flight-provider")
   const originalLoader = CUSTOM_LOADERS[providerID]

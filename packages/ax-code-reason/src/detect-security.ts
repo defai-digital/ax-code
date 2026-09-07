@@ -62,7 +62,8 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
   // Match path.join or path.resolve with a variable (not a string literal)
   const pathJoinRe = /path\.(?:join|resolve)\s*\((.+)/
   // Containment checks we look for nearby
-  const containmentRe = /(?:contains|containsPath|isSubpath|startsWith|Filesystem\.contains|within|inside)\s*\(/
+  const containmentRe =
+    /(?:contains|containsPath|isSubpath|startsWith|Filesystem\.contains|within|inside|assertContained)\s*\(/
 
   for (let i = 0; i < lines.length; i++) {
     if (findings.length >= max) break

@@ -109,22 +109,22 @@ export function recapContextText(turn: MessageV2.WithParts[]): string {
 
   const marker = "\n\n[Recap context truncated]"
   let remaining = RECAP_CONTEXT_MAX_CHARS - marker.length
-  const selected = new Map<number, string>()
+  const selected: Array<[number, string]> = []
   // Reserve the latest request before filling from the newest outcomes backward.
   const userIndex = chunks.findLastIndex((chunk) => chunk.role === "User")
   if (userIndex >= 0) {
     const text = shorten(render(chunks[userIndex]), Math.floor(remaining / 3))
-    selected.set(userIndex, text)
+    selected.push([userIndex, text])
     remaining -= text.length + 2
   }
   for (let i = chunks.length - 1; i >= 0 && remaining >= 64; i--) {
     if (i === userIndex) continue
     const text = shorten(render(chunks[i]), remaining)
-    selected.set(i, text)
+    selected.push([i, text])
     remaining -= text.length + 2
   }
   return (
-    [...selected]
+    selected
       .sort(([a], [b]) => a - b)
       .map(([, text]) => text)
       .join("\n\n") + marker
