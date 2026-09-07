@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { constants as fsConstants } from "node:fs"
-import { open, readFile, readdir } from "node:fs/promises"
+import { open, readdir } from "node:fs/promises"
 import path from "node:path"
 import { promisify } from "node:util"
 import { matchesAny } from "./glob.js"
@@ -197,6 +197,24 @@ function decodeUtf8BytePrefix(buffer: Buffer, maxBytes: number): { content: stri
   return { content, truncated: buffer.length > limit }
 }
 
+async function readSourceBytesNoFollow(absolute: string): Promise<Buffer> {
+  let fh
+  try {
+    // O_NOFOLLOW mirrors readHashedSource: a source swapped for a symlink
+    // between hashing and evidence read must not escape the repository root.
+    fh = await open(absolute, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+  } catch {
+    return Buffer.alloc(0)
+  }
+  try {
+    return await fh.readFile()
+  } catch {
+    return Buffer.alloc(0)
+  } finally {
+    await fh.close().catch(() => {})
+  }
+}
+
 export async function readSourceEvidence(input: {
   root: string
   sources: WikiSource[]
@@ -207,7 +225,7 @@ export async function readSourceEvidence(input: {
   for (const source of input.sources) {
     if (remaining <= 0) break
     const perFile = Math.min(remaining, 32_000)
-    const raw = await readFile(resolveInside(input.root, source.path)).catch(() => Buffer.alloc(0))
+    const raw = await readSourceBytesNoFollow(resolveInside(input.root, source.path))
     const { content, truncated } = decodeUtf8BytePrefix(raw, perFile)
     output.push({ ...source, content, truncated })
     remaining -= Buffer.byteLength(content)

@@ -165,4 +165,13 @@ describe("AX Wiki build lifecycle", () => {
       "Invalid AX Wiki config",
     )
   })
+
+  test("rejects a corrupt manifest instead of silently rebuilding over manual edits", async () => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    await writeFile(path.join(root, "ax-wiki/.manifest.json"), "{corrupt-json")
+    await expect(buildAxWiki({ root, action: "update", generator: generator() })).rejects.toThrow(
+      "manifest is not valid JSON",
+    )
+  })
 })

@@ -43,7 +43,15 @@ export async function loadWikiPages(input: { root: string; wikiDir?: string }): 
   const files = await listMarkdownFiles(absolute)
   const pages: WikiPage[] = []
   for (const file of files) {
-    const content = await readFile(file, "utf8")
+    let content: string
+    try {
+      content = await readFile(file, "utf8")
+    } catch (error) {
+      // A page removed between readdir and readFile (a concurrent build writing
+      // while status/cards/lint read) should be skipped, not crash the command.
+      if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") continue
+      throw error
+    }
     const meta = parseFrontmatter(content)
     const relativePath = normalizePath(path.relative(absolute, file))
     const heading = meta.body.match(/^#\s+(.+)$/m)?.[1]?.trim()
@@ -182,7 +190,7 @@ export async function getWikiStatus(input: {
       })()
     : undefined
   const pages = directory ? await listMarkdownFiles(absolute) : []
-  const manifest = await loadWikiManifest(root, wikiDir)
+  const manifest = await loadWikiManifest(root, wikiDir).catch(() => undefined)
   const stale = Boolean(
     input.repositoryHead && manifest?.repositoryHead && input.repositoryHead !== manifest.repositoryHead,
   )
@@ -222,9 +230,22 @@ export async function lintWiki(input: {
   const config = { ...diskConfig, ...explicitConfig }
   const sources = await discoverSources({ root, wikiDir, config })
   const plan = createWikiPlan(sources, config)
-  const manifest = await loadWikiManifest(root, wikiDir)
+  let manifest: WikiManifest | undefined
+  let manifestCorrupt = false
+  try {
+    manifest = await loadWikiManifest(root, wikiDir)
+  } catch {
+    manifestCorrupt = true
+  }
   const pages = new Map((await loadWikiPages({ root, wikiDir })).map((page) => [page.relativePath, page.content]))
   const report = validateWikiCandidate({ plan, pages, sources, manifest })
+  if (manifestCorrupt) {
+    report.issues.push({
+      level: "error",
+      code: "wiki.manifest_invalid",
+      message: "AX Wiki manifest is corrupt; delete or repair .manifest.json and regenerate",
+    })
+  }
   const staleByHead = Boolean(
     input.repositoryHead && manifest?.repositoryHead && input.repositoryHead !== manifest.repositoryHead,
   )

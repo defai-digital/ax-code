@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
+import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { discoverSources, readSourceEvidence } from "./discovery.js"
 import {
@@ -15,11 +15,19 @@ import { AX_WIKI_GENERATOR } from "./types.js"
 import { assertWikiDirectorySafe } from "./safety.js"
 import { buildPure } from "./build-pure.js"
 
+function isEnoent(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT")
+}
+
 async function readJson<T>(file: string): Promise<T | undefined> {
   try {
     return JSON.parse(await readFile(file, "utf8")) as T
-  } catch {
-    return undefined
+  } catch (error) {
+    // A missing manifest is "no previous build". A corrupt one is a real error:
+    // silently treating it as absent would disable the conflict guard and let a
+    // full rebuild overwrite manually-edited pages.
+    if (isEnoent(error)) return undefined
+    throw new Error(`AX Wiki manifest is not valid JSON: ${file}`, { cause: error })
   }
 }
 
@@ -50,11 +58,35 @@ export async function atomicWrite(file: string, content: string): Promise<void> 
   await mkdir(path.dirname(file), { recursive: true })
   const temporary = `${file}.tmp-${randomUUID()}`
   try {
-    await writeFile(temporary, content, "utf8")
+    const handle = await open(temporary, "w")
+    try {
+      await handle.writeFile(content, "utf8")
+      // fsync the temp before rename so a power loss immediately after the
+      // rename cannot leave an empty or torn file in place.
+      await handle.sync()
+    } finally {
+      await handle.close().catch(() => {})
+    }
     await rename(temporary, file)
+    await syncDirectory(path.dirname(file))
   } catch (error) {
     await rm(temporary, { force: true }).catch(() => {})
     throw error
+  }
+}
+
+async function syncDirectory(directory: string): Promise<void> {
+  // Best-effort: opening a directory for fsync is unsupported on some platforms
+  // (notably Windows), so a failure here must not fail the write.
+  try {
+    const handle = await open(directory, "r")
+    try {
+      await handle.sync()
+    } finally {
+      await handle.close().catch(() => {})
+    }
+  } catch {
+    // ignore
   }
 }
 
@@ -128,17 +160,31 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
         `${JSON.stringify(pure.manifest, null, 2)}\n`,
       )
     } catch (error) {
+      const rollbackFailures: string[] = []
       for (const pagePath of writtenPages.reverse()) {
         const output = resolveInside(root, path.posix.join(wikiDir, pagePath))
         const oldContent = existing.get(pagePath)
-        if (oldContent === undefined) await rm(output, { force: true }).catch(() => {})
-        else await atomicWrite(output, oldContent).catch(() => {})
+        try {
+          if (oldContent === undefined) await rm(output, { force: true })
+          else await atomicWrite(output, oldContent)
+        } catch {
+          rollbackFailures.push(pagePath)
+        }
       }
       for (const pagePath of deletedPages) {
         const oldContent = existing.get(pagePath)
-        if (oldContent !== undefined) {
-          await atomicWrite(resolveInside(root, path.posix.join(wikiDir, pagePath)), oldContent).catch(() => {})
+        if (oldContent === undefined) continue
+        try {
+          await atomicWrite(resolveInside(root, path.posix.join(wikiDir, pagePath)), oldContent)
+        } catch {
+          rollbackFailures.push(pagePath)
         }
+      }
+      if (rollbackFailures.length > 0) {
+        throw new Error(
+          `AX Wiki build failed and rollback could not restore ${rollbackFailures.length} page(s): ${rollbackFailures.join(", ")}`,
+          { cause: error },
+        )
       }
       throw error
     }
