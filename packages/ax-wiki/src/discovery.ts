@@ -5,6 +5,7 @@ import path from "node:path"
 import { promisify } from "node:util"
 import { matchesAny } from "./glob.js"
 import { sha256 } from "./hash.js"
+import { DISCOVERY_READ_CONCURRENCY, mapWithBoundedConcurrency } from "./discovery-concurrency.js"
 import { AX_WIKI_CONFIG, AX_WIKI_INSTRUCTIONS, normalizePath, resolveInside } from "./paths.js"
 import type { AxWikiConfig, WikiSource } from "./types.js"
 
@@ -137,6 +138,40 @@ function shouldInclude(file: string, wikiDir: string, config: AxWikiConfig): boo
   return true
 }
 
+async function readHashedSource(input: {
+  root: string
+  relative: string
+  maxSourceBytes: number
+}): Promise<WikiSource | undefined> {
+  const absolute = resolveInside(input.root, input.relative)
+  let fh
+  try {
+    // O_NOFOLLOW refuses out-of-tree symlink escapes without a separate
+    // lstat/open race. In-tree symlink sources are skipped.
+    fh = await open(absolute, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+  } catch {
+    return undefined
+  }
+  try {
+    const info = await fh.stat()
+    if (!info.isFile() || info.size > input.maxSourceBytes) return undefined
+    const content = await fh.readFile()
+    if (content.includes(0)) return undefined
+    const extension = path.posix.extname(input.relative).toLowerCase()
+    return {
+      path: input.relative,
+      hash: sha256(content),
+      bytes: content.byteLength,
+      category: categoryFor(input.relative),
+      language: LANGUAGE_BY_EXTENSION[extension],
+    }
+  } catch {
+    return undefined
+  } finally {
+    await fh.close()
+  }
+}
+
 export async function discoverSources(input: {
   root: string
   wikiDir: string
@@ -146,40 +181,11 @@ export async function discoverSources(input: {
   const config = input.config ?? {}
   const candidates = (await gitFiles(root)) ?? (await walkFiles(root))
   const unique = [...new Set(candidates.map(normalizePath))].sort()
-  const sources: WikiSource[] = []
-
-  for (const relative of unique) {
-    if (!shouldInclude(relative, input.wikiDir, config)) continue
-    const absolute = resolveInside(root, relative)
-    let fh
-    try {
-      // O_NOFOLLOW refuses out-of-tree symlink escapes without a separate
-      // lstat/open race. In-tree symlink sources are skipped.
-      fh = await open(absolute, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
-    } catch {
-      continue
-    }
-    let content: Buffer
-    try {
-      const info = await fh.stat()
-      if (!info.isFile() || info.size > (config.maxSourceBytes ?? 512_000)) continue
-      content = await fh.readFile()
-    } catch {
-      continue
-    } finally {
-      await fh.close()
-    }
-    if (content.includes(0)) continue
-    const extension = path.posix.extname(relative).toLowerCase()
-    sources.push({
-      path: relative,
-      hash: sha256(content),
-      bytes: content.byteLength,
-      category: categoryFor(relative),
-      language: LANGUAGE_BY_EXTENSION[extension],
-    })
-  }
-  return sources
+  const eligible = unique.filter((relative) => shouldInclude(relative, input.wikiDir, config))
+  const hashed = await mapWithBoundedConcurrency(eligible, DISCOVERY_READ_CONCURRENCY, (relative) =>
+    readHashedSource({ root, relative, maxSourceBytes: config.maxSourceBytes ?? 512_000 }),
+  )
+  return hashed.filter((source): source is WikiSource => source !== undefined)
 }
 
 function decodeUtf8BytePrefix(buffer: Buffer, maxBytes: number): { content: string; truncated: boolean } {

@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
-import { readSourceEvidence } from "../src/discovery.js"
+import { DISCOVERY_READ_CONCURRENCY, mapWithBoundedConcurrency } from "../src/discovery-concurrency.js"
+import { discoverSources, readSourceEvidence } from "../src/discovery.js"
 import { sha256 } from "../src/hash.js"
 import type { WikiSource } from "../src/types.js"
 
@@ -70,4 +71,155 @@ describe("readSourceEvidence", () => {
     expect(evidence?.content).toBe("你好")
     expect(evidence?.truncated).toBe(false)
   })
+})
+
+function createGate() {
+  let release!: () => void
+  const wait = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return {
+    wait,
+    release() {
+      release()
+    },
+  }
+}
+
+describe("mapWithBoundedConcurrency", () => {
+  test("returns results in input order when later items finish first", async () => {
+    const start = [createGate(), createGate(), createGate(), createGate()]
+    const cont = [createGate(), createGate(), createGate(), createGate()]
+    const finished: number[] = []
+
+    const pending = mapWithBoundedConcurrency(["w", "x", "y", "z"], 2, async (item, index) => {
+      start[index]!.release()
+      await cont[index]!.wait
+      finished.push(index)
+      return item.toUpperCase()
+    })
+
+    await Promise.all([start[0]!.wait, start[1]!.wait])
+    cont[1]!.release()
+    await start[2]!.wait
+    cont[2]!.release()
+    await start[3]!.wait
+    cont[3]!.release()
+    cont[0]!.release()
+
+    expect(await pending).toEqual(["W", "X", "Y", "Z"])
+    expect(finished).toEqual([1, 2, 3, 0])
+  })
+
+  test("never runs more than `concurrency` mappers at once", async () => {
+    const items = [0, 1, 2, 3, 4]
+    const start = items.map(() => createGate())
+    const cont = items.map(() => createGate())
+    let inFlight = 0
+    let peak = 0
+
+    const pending = mapWithBoundedConcurrency(items, 2, async (item, index) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      start[index]!.release()
+      await cont[index]!.wait
+      inFlight -= 1
+      return item
+    })
+
+    await Promise.all([start[0]!.wait, start[1]!.wait])
+    expect(inFlight).toBe(2)
+    expect(peak).toBe(2)
+
+    cont[0]!.release()
+    await start[2]!.wait
+    expect(inFlight).toBe(2)
+    expect(peak).toBe(2)
+
+    for (const gate of cont) gate.release()
+    expect(await pending).toEqual(items)
+    expect(peak).toBeLessThanOrEqual(2)
+    expect(inFlight).toBe(0)
+  })
+
+  test("returns an empty array for empty input", async () => {
+    expect(await mapWithBoundedConcurrency([], DISCOVERY_READ_CONCURRENCY, async (item) => item)).toEqual([])
+  })
+})
+
+describe("discoverSources", () => {
+  test("returns eligible sources in sorted path order", async () => {
+    const root = await fixture()
+    const names = Array.from({ length: 20 }, (_, index) => `file-${String(index).padStart(2, "0")}.md`)
+    await Promise.all([...names].reverse().map((name) => writeFile(path.join(root, name), `${name} body\n`)))
+    const sources = await discoverSources({ root, wikiDir: "ax-wiki" })
+    expect(sources.map((source) => source.path)).toEqual(names)
+    expect(sources[0]).toMatchObject({
+      path: "file-00.md",
+      hash: sha256(Buffer.from("file-00.md body\n")),
+      bytes: Buffer.byteLength("file-00.md body\n"),
+      category: "documentation",
+    })
+    expect(sources[19]).toMatchObject({
+      path: "file-19.md",
+      language: undefined,
+    })
+  })
+
+  test("keeps readable sources when oversized and binary inputs are skipped", async () => {
+    const root = await fixture()
+    const keepA = Buffer.from("alpha\n", "utf8")
+    const keepZ = Buffer.from("export const z = 1\n", "utf8")
+    await writeFile(path.join(root, "a.md"), keepA)
+    await writeFile(path.join(root, "z.ts"), keepZ)
+    await writeFile(path.join(root, "binary.md"), Buffer.from("hello\0world"))
+    await writeFile(path.join(root, "huge.md"), Buffer.alloc(64, 97))
+    await mkdir(path.join(root, "ax-wiki"), { recursive: true })
+    await writeFile(path.join(root, "ax-wiki", "page.md"), "# generated\n")
+
+    const sources = await discoverSources({
+      root,
+      wikiDir: "ax-wiki",
+      config: { maxSourceBytes: 32 },
+    })
+    expect(sources.map((source) => source.path)).toEqual(["a.md", "z.ts"])
+    expect(sources[0]).toMatchObject({
+      path: "a.md",
+      hash: sha256(keepA),
+      bytes: keepA.byteLength,
+      category: "documentation",
+    })
+    expect(sources[1]).toMatchObject({
+      path: "z.ts",
+      hash: sha256(keepZ),
+      bytes: keepZ.byteLength,
+      category: "code",
+      language: "TypeScript",
+    })
+  })
+
+  test.runIf(process.platform !== "win32")(
+    "isolates skipped unreadable, oversized, binary, and symlink inputs",
+    async () => {
+      const root = await fixture()
+      const keepA = Buffer.from("alpha\n", "utf8")
+      const keepZ = Buffer.from("zeta\n", "utf8")
+      await writeFile(path.join(root, "a.md"), keepA)
+      await writeFile(path.join(root, "z.md"), keepZ)
+      await writeFile(path.join(root, "binary.md"), Buffer.from("hello\0world"))
+      await writeFile(path.join(root, "huge.md"), Buffer.alloc(64, 97))
+      await writeFile(path.join(root, "unreadable.md"), "secret\n")
+      await chmod(path.join(root, "unreadable.md"), 0o000)
+      await symlink("a.md", path.join(root, "link.md"))
+
+      const sources = await discoverSources({
+        root,
+        wikiDir: "ax-wiki",
+        config: { maxSourceBytes: 32 },
+      })
+      expect(sources.map((source) => source.path)).toEqual(["a.md", "z.md"])
+      expect(sources[0]).toMatchObject({ path: "a.md", hash: sha256(keepA), bytes: keepA.byteLength })
+      expect(sources[1]).toMatchObject({ path: "z.md", hash: sha256(keepZ), bytes: keepZ.byteLength })
+    },
+  )
 })
