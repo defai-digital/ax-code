@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.13.3] - 2026-09-07
+
+### Fixed
+
+- Preserve the branded Node runtime during cache-version cleanup so TUI backend processes can start reliably.
+- Report accurate provider counts in TUI connection categories.
+
+### Changed
+
+- Reduce snapshot overhead and add opt-in coding performance controls, request timing diagnostics, and tool profiles.
+
 ## [7.13.2] - 2026-09-06
 
 ### Changed
