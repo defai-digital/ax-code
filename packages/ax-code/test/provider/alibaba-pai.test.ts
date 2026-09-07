@@ -69,13 +69,26 @@ describe("alibaba-pai discovery", () => {
       fetcher,
     })
     expect(discovered.baseURL).toBe(`${EAS_URL}/v1`)
-    expect(discovered.models).toEqual([{ id: "GLM-5.2-FP8", name: "GLM-5.2-FP8", context: 1048576, output: 32_000 }])
+    expect(discovered.models).toEqual([
+      {
+        id: "GLM-5.2-FP8",
+        name: "GLM-5.2-FP8",
+        context: 1048576,
+        output: 32_000,
+        toolCall: false,
+        reasoning: false,
+        attachment: false,
+        temperature: false,
+      },
+    ])
     expect(calls).toEqual([{ url: `${EAS_URL}/v1/models`, authorization: "Bearer eas-token" }])
 
     const records = alibabaPaiModelRecords(discovered.models, discovered.baseURL)
     const model = records[ModelID.make("GLM-5.2-FP8")]
-    expect(model.capabilities.toolcall).toBe(true)
-    expect(model.capabilities.reasoning).toBe(true)
+    // Discovery is conservative: a standard /models response does not prove
+    // tool/reasoning support, so the defaults stay false unless advertised.
+    expect(model.capabilities.toolcall).toBe(false)
+    expect(model.capabilities.reasoning).toBe(false)
     expect(model.api.npm).toBe("@ai-sdk/openai-compatible")
     expect(model.limit).toEqual({ context: 1048576, input: 1048576 - 32_000, output: 32_000 })
   })
@@ -162,7 +175,7 @@ describe("alibaba-pai provider surface", () => {
         const global = await Config.getGlobal()
         expect(global.provider?.[ALIBABA_PAI_PROVIDER_ID]?.options?.baseURL).toBe("http://127.0.0.1:18100/v1")
         expect(global.provider?.[ALIBABA_PAI_PROVIDER_ID]?.models?.["GLM-5.2-FP8"]?.id).toBe("GLM-5.2-FP8")
-        expect(global.provider?.[ALIBABA_PAI_PROVIDER_ID]?.models?.["GLM-5.2-FP8"]?.tool_call).toBe(true)
+        expect(global.provider?.[ALIBABA_PAI_PROVIDER_ID]?.models?.["GLM-5.2-FP8"]?.tool_call).toBe(false)
       },
     })
   })

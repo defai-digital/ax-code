@@ -233,10 +233,11 @@ test("Provider.invalidate drops cached state and bumps the cache generation", as
   const body = src.slice(start, end)
 
   // invalidate() must NOT await state() (that would re-run the full provider
-  // init pipeline just to discard it). It bumps the generation (invalidating
-  // the language-model cache via getLanguage's generation check) and drops the
-  // cached state entry (so the next state() re-inits fresh SDK/pending maps).
-  expect(body).toContain("modelCacheGeneration++")
+  // init pipeline just to discard it). It bumps the per-directory generation
+  // (invalidating the language-model cache via getLanguage's generation check)
+  // and drops the cached state entry (so the next state() re-inits fresh
+  // SDK/pending maps).
+  expect(body).toContain("bumpModelCacheGeneration(Instance.directory)")
   expect(body).toContain("await state.invalidate()")
   expect(body).not.toContain("const currentState = await state()")
 })

@@ -89,8 +89,24 @@ export namespace Provider {
     Updated: BusEvent.define("provider.updated", z.object({})),
   }
   const supported = isModelSupportedForProvider
-  let modelCacheGeneration = 0
+  // Per-directory cache generation. A single global counter made one directory's
+  // invalidate() bump every peer's generation, so every peer's getLanguage()
+  // cache-missed and re-ran its loader (re-spawning CLI auth probes) until it
+  // was itself re-initialized.
+  const modelCacheGenerations = new Map<string, number>()
   const MODEL_CACHE_INVALIDATION_RETRY_LIMIT = 8
+
+  function currentModelCacheGeneration(): number {
+    try {
+      return modelCacheGenerations.get(Instance.directory) ?? 0
+    } catch {
+      return 0
+    }
+  }
+
+  function bumpModelCacheGeneration(directory: string) {
+    modelCacheGenerations.set(directory, (modelCacheGenerations.get(directory) ?? 0) + 1)
+  }
 
   export function shouldAllowProviderInCore(input: {
     providerID: string
@@ -277,11 +293,11 @@ export namespace Provider {
   const state = Instance.state(async () => {
     using _ = log.time("state")
     // Capture the cache generation at init START, not completion. An init that
-    // begins before invalidateAll() bumps modelCacheGeneration must keep its
-    // original (now-stale) label so getLanguage() retries against the freshly
+    // begins before invalidateAll() bumps the generation must keep its original
+    // (now-stale) label so getLanguage() retries against the freshly
     // re-initialized state instead of returning models built with credentials
     // read before the auth/config change.
-    const generation = modelCacheGeneration
+    const generation = currentModelCacheGeneration()
     // Ensure shell env is loaded before reading API keys from process.env
     const { ensureShellEnv } = await import("@/runtime/shell-env")
     await ensureShellEnv()
@@ -752,11 +768,11 @@ export namespace Provider {
   // per-directory. Prefer `invalidateAll()` after Auth.set/remove so every
   // open project picks up the new credentials without reconnecting.
   export async function invalidate() {
-    // Bump the generation and drop the cached state entry only. Awaiting state()
-    // first would re-run the full provider init pipeline (network, loaders) just
-    // to clear maps the generation check already invalidates — the same trap
-    // invalidateAll() documents and avoids.
-    modelCacheGeneration++
+    // Bump this directory's generation and drop the cached state entry only.
+    // Awaiting state() first would re-run the full provider init pipeline
+    // (network, loaders) just to clear maps the generation check already
+    // invalidates — the same trap invalidateAll() documents and avoids.
+    bumpModelCacheGeneration(Instance.directory)
     await state.invalidate()
   }
 
@@ -770,7 +786,6 @@ export namespace Provider {
    * again awaits the in-flight boot promise → deadlock.
    */
   export async function invalidateAll() {
-    modelCacheGeneration++
     let currentDirectory: string | undefined
     try {
       currentDirectory = Instance.directory
@@ -778,7 +793,8 @@ export namespace Provider {
       currentDirectory = undefined
     }
 
-    // Drop the active ALS provider cache without nested provide.
+    // Bump the generation for the active directory, then drop its cache.
+    if (currentDirectory) bumpModelCacheGeneration(currentDirectory)
     try {
       await state.invalidate()
     } catch {
@@ -791,8 +807,10 @@ export namespace Provider {
         Instance.provide({
           directory,
           fn: async () => {
-            // Drop the directory entry only. Do not await state() first — that
-            // would re-run the full provider init pipeline just to discard it.
+            // Bump the generation and drop the directory entry only. Do not
+            // await state() first — that would re-run the full provider init
+            // pipeline just to discard it.
+            bumpModelCacheGeneration(directory)
             await state.invalidate()
           },
         }),
@@ -1206,14 +1224,15 @@ export namespace Provider {
     // A managed AX Engine server can switch models, and an attached server can
     // change its capabilities independently of the provider catalog generation.
     // Re-enter its loader to check readiness and the live coding contract.
-    if (cached && s.generation === modelCacheGeneration && model.providerID !== AX_ENGINE_PROVIDER_ID) return cached
+    if (cached && s.generation === currentModelCacheGeneration() && model.providerID !== AX_ENGINE_PROVIDER_ID)
+      return cached
     // In-flight dedup: the pending check below and the modelPending registration
     // after the loader promise is created run with no await in between, so concurrent
     // callers cannot both miss the pending entry and start duplicate loads.
     const pending = s.modelPending.get(key)
     if (pending) {
       const language = await pending
-      if (s.generation === modelCacheGeneration) return language
+      if (s.generation === currentModelCacheGeneration()) return language
       return retryAfterInvalidation()
     }
 
@@ -1224,7 +1243,7 @@ export namespace Provider {
           ...provider.options,
           ...model.options,
         })
-        if (s.generation === modelCacheGeneration) s.models.set(key, language as Lang)
+        if (s.generation === currentModelCacheGeneration()) s.models.set(key, language as Lang)
         return language as Lang
       }
 
@@ -1234,7 +1253,7 @@ export namespace Provider {
         const language = s.modelLoaders[model.providerID]
           ? await s.modelLoaders[model.providerID](sdk, model.api.id, { ...provider.options, ...model.options })
           : sdk.languageModel(model.api.id)
-        if (s.generation === modelCacheGeneration) s.models.set(key, language as Lang)
+        if (s.generation === currentModelCacheGeneration()) s.models.set(key, language as Lang)
         return language as Lang
       } catch (e) {
         if (e instanceof NoSuchModelError)
@@ -1252,7 +1271,7 @@ export namespace Provider {
 
     try {
       const language = await promise
-      if (s.generation === modelCacheGeneration) return language
+      if (s.generation === currentModelCacheGeneration()) return language
       return retryAfterInvalidation()
     } finally {
       if (s.modelPending.get(key) === promise) {
