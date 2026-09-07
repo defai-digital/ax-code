@@ -10,6 +10,7 @@ import {
   CUSTOM_API_PROVIDER_OPTION_ID,
   normalizeConfiguredProvidersPayload,
   normalizeProviderListPayload,
+  OFFLINE_PROVIDERS,
   PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
   providerDialogCategory,
   providerDialogCategoryOverrides,
@@ -263,6 +264,88 @@ describe("provider dialog options", () => {
       ).map((item) => item.value),
     ).toEqual(["ollama", PROVIDER_DIALOG_CHANGE_TYPE_VALUE])
   })
+
+  test.each([
+    { providerID: "openai", category: "api" },
+    { providerID: "ax-trust-defai-digital", category: "ax-trust" },
+  ])("excludes setup actions from $category provider counts", ({ providerID, category }) => {
+    const choices = withAxTrustProviderDialogEntry(withCustomApiProviderDialogEntry([provider(providerID)]))
+    expect(
+      providerDialogTypeOptions(choices.map((item) => item.id)).find((item) => item.value === category),
+    ).toMatchObject({
+      description: "1 provider",
+    })
+  })
+
+  test("keeps setup-only categories reachable without counting their actions as providers", () => {
+    const providers = providerDialogProviders({ available: [], configured: [] })
+    const choices = withAxTrustProviderDialogEntry(withCustomApiProviderDialogEntry(providers))
+    expect(
+      providerDialogTypeOptions(choices.map((item) => item.id)).map(({ value, description }) => ({
+        value,
+        description,
+      })),
+    ).toEqual([
+      { value: "api", description: "0 providers" },
+      { value: "ax-trust", description: "0 providers" },
+    ])
+    const options = choices.map((item) => ({ title: item.name, value: item.id }))
+    expect(providerDialogOptionsForType(options, "api").map((item) => item.value)).toEqual([
+      CUSTOM_API_PROVIDER_OPTION_ID,
+      PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
+    ])
+    expect(providerDialogOptionsForType(options, "ax-trust").map((item) => item.value)).toEqual([
+      AX_TRUST_PROVIDER_OPTION_ID,
+      PROVIDER_DIALOG_CHANGE_TYPE_VALUE,
+    ])
+  })
+
+  test.each(["available", "configured"] as const)(
+    "counts real providers in every category from the %s list",
+    (source) => {
+      const categoryOverrides = providerDialogCategoryOverrides({
+        provider: { "company-gateway": { management: "ax-trust" } },
+      })
+      const providers = [
+        "openai",
+        "groq",
+        "google",
+        "github-copilot",
+        ...CLI_PROVIDERS,
+        ...OFFLINE_PROVIDERS,
+        ...PRIVATE_GPU_PROVIDERS,
+        "ax-trust-defai-digital",
+        "company-gateway",
+      ].map((id) => provider(id))
+      const choices = withAxTrustProviderDialogEntry(
+        withCustomApiProviderDialogEntry(
+          providerDialogProviders({
+            available: source === "available" ? providers : [],
+            configured: source === "configured" ? providers : [],
+            categoryOverrides,
+          }),
+          categoryOverrides,
+        ),
+        categoryOverrides,
+      )
+      expect(
+        providerDialogTypeOptions(
+          choices.map((item) => item.id),
+          categoryOverrides,
+        ).map(({ value, description }) => ({
+          value,
+          description,
+        })),
+      ).toEqual([
+        { value: "api", description: "2 providers" },
+        { value: "cli", description: "4 providers" },
+        { value: "ax-engine", description: "1 provider" },
+        { value: "local", description: "4 providers" },
+        { value: "private-gpu", description: "14 providers" },
+        { value: "ax-trust", description: "2 providers" },
+      ])
+    },
+  )
 
   test("separates AX Engine and orders all four external local runtime choices", () => {
     const choices = providerDialogProviders({

@@ -152,8 +152,12 @@ export function providerDialogTypeOptions(
   categoryOverrides?: ProviderConnectCategoryOverrides,
 ) {
   return providerConnectCategoriesPresent(providerIDs, categoryOverrides).map((id) => {
+    // Setup actions keep empty categories reachable but are not providers.
     const count = providerIDs.filter(
-      (providerID) => providerConnectCategory(providerID, categoryOverrides) === id,
+      (providerID) =>
+        providerID !== CUSTOM_API_PROVIDER_OPTION_ID &&
+        providerID !== AX_TRUST_PROVIDER_OPTION_ID &&
+        providerConnectCategory(providerID, categoryOverrides) === id,
     ).length
     return {
       title: providerConnectCategoryMeta(id).label,
