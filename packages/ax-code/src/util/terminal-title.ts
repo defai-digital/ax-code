@@ -13,17 +13,18 @@
 
 export const AX_CODE_TERMINAL_TITLE = "AX-Code"
 
-// Busy-tab activity glyph. Codex prefixes a hollow 2x3 braille spinner
-// (`⠋⠙⠹⠸…`) at 100ms. AX Code keeps "AX-Code" first and uses a denser
-// 2x4 dot-matrix cycle so the tab still reads as the product name.
-export const AX_CODE_TITLE_SPINNER_FRAMES = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"] as const
-export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 160
+// Busy-tab activity glyph: a 3-column by 4-row dot matrix (two 8-dot
+// braille cells; the second cell uses only its left column). Codex prefixes
+// a single-cell 2x3 spinner (`⠋⠙⠹⠸…`); this stays in front of "AX-Code"
+// but reads as a wider point-matrix, not that hollow 2x3 cycle.
+export const AX_CODE_TITLE_SPINNER_FRAMES = ["⠉⠁", "⠈⠃", "⠀⠇", "⠀⡆", "⢀⡄", "⣀⡀", "⣄⠀", "⡆⠀", "⠇⠀", "⠋⠀"] as const
+export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 120
 
 export function composeAxCodeTerminalTitle(input: { working: boolean; frame?: number }) {
   if (!input.working) return AX_CODE_TERMINAL_TITLE
   const frames = AX_CODE_TITLE_SPINNER_FRAMES
   const glyph = frames[(input.frame ?? 0) % frames.length]
-  return `${AX_CODE_TERMINAL_TITLE} ${glyph}`
+  return `${glyph} ${AX_CODE_TERMINAL_TITLE}`
 }
 
 const HELP_OR_VERSION = new Set(["-h", "--help", "-v", "--version"])

@@ -335,8 +335,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   // While a session is working, show a busy indicator in the terminal tab
   // via OSC 9;4 (Windows Terminal / ConEmu / Ghostty / WezTerm). The tab
-  // text stays "AX-Code", with a trailing 2x4 dot-matrix glyph while the
-  // agent works (unlike Codex, which prefixes a hollow 2x3 spinner).
+  // text stays "AX-Code", with a leading 3x4 dot-matrix glyph while the
+  // agent works (two braille cells, unlike Codex's single 2x3 spinner).
   const [titleSpinnerFrame, setTitleSpinnerFrame] = createSignal(0)
 
   createEffect(() => {

@@ -37,14 +37,17 @@ describe("terminal title", () => {
     expect(axCodeTerminalTitleSequence()).not.toContain("]0;")
   })
 
-  test("busy titles keep AX-Code first and use a 2x4 dot-matrix glyph, not Codex braille", () => {
+  test("busy titles prefix a 3x4 dot-matrix glyph before AX-Code", () => {
     expect(composeAxCodeTerminalTitle({ working: false })).toBe("AX-Code")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("AX-Code ⣾")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 1 })).toBe("AX-Code ⣽")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 7 })).toBe("AX-Code ⣷")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 8 })).toBe("AX-Code ⣾")
-    expect(AX_CODE_TITLE_SPINNER_FRAMES.join("")).not.toContain("⠋")
-    expect(AX_CODE_TITLE_SPINNER_FRAMES).toHaveLength(8)
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("⠉⠁ AX-Code")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 5 })).toBe("⣀⡀ AX-Code")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 10 })).toBe("⠉⠁ AX-Code")
+    expect(AX_CODE_TITLE_SPINNER_FRAMES).toHaveLength(10)
+    for (const frame of AX_CODE_TITLE_SPINNER_FRAMES) {
+      expect([...frame]).toHaveLength(2)
+    }
+    // Distinct from Codex's single-cell 2x3 spinner (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`).
+    expect([...AX_CODE_TITLE_SPINNER_FRAMES]).not.toEqual(["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
   })
 
   test("sanitizes control characters out of OSC payloads", () => {
