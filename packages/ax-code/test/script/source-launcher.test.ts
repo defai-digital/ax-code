@@ -2,16 +2,17 @@ import { describe, expect, test } from "vitest"
 import { sourceLauncherScript } from "../../script/source-launcher"
 
 describe("script.source-launcher", () => {
-  test("unix launcher captures original cwd and execs node against the source tree", () => {
+  test("unix launcher delegates verified process branding to the Node FFI runner", () => {
     const out = sourceLauncherScript({ root: "/repo", windows: false })
     expect(out).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
     expect(out).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index-node-tui.ts"')
     expect(out).toContain('AX_CODE_SOURCE_NODE_FFI_RUNNER="/repo/script/node-ffi-runner.mjs"')
     expect(out).toContain('export AX_CODE_ORIGINAL_CWD="$(pwd)"')
-    expect(out).toContain('AX_CODE_BRANDED_NODE="$AX_CODE_CACHE/bin/AX-Code"')
-    expect(out).toContain('exec "$AX_CODE_BRANDED_NODE" "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(out).toContain('exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(out).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')
+    expect(out).not.toContain("AX_CODE_BRANDED_NODE")
+    expect(out).not.toContain("ln -f")
+    expect(out).not.toContain("libnode")
   })
 
   test("windows launcher uses the .cmd shape and captures CD", () => {

@@ -179,10 +179,9 @@ describe("setup-cli helpers", () => {
     expect(unix).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
     expect(unix).toContain('AX_CODE_SOURCE_ENTRY="/repo/packages/ax-code/src/index-node-tui.ts"')
     expect(unix).toContain('AX_CODE_SOURCE_NODE_FFI_RUNNER="/repo/script/node-ffi-runner.mjs"')
-    expect(unix).toContain('AX_CODE_BRANDED_NODE="$AX_CODE_CACHE/bin/AX-Code"')
-    expect(unix).toContain('exec "$AX_CODE_BRANDED_NODE" "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(unix).toContain('exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
     expect(unix).toContain('--conditions=node "$AX_CODE_SOURCE_ENTRY"')
+    expect(unix).not.toContain("AX_CODE_BRANDED_NODE")
     expect(windows).toContain('set "AX_CODE_SOURCE_CWD=\\repo\\packages\\ax-code"')
     expect(windows).toContain('set "AX_CODE_SOURCE_ENTRY=\\repo\\packages\\ax-code\\src\\index-node-tui.ts"')
     expect(windows).toContain('set "AX_CODE_SOURCE_NODE_FFI_RUNNER=\\repo\\script\\node-ffi-runner.mjs"')
@@ -304,7 +303,8 @@ describe("setup-cli helpers", () => {
     expect(writes).toHaveLength(1)
     expect(writes[0][0]).toBe("/tmp/ax-code-test-source/bin/ax-code")
     expect(writes[0][1]).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
-    expect(writes[0][1]).toContain('exec "$AX_CODE_BRANDED_NODE" "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
+    expect(writes[0][1]).toContain('exec node "$AX_CODE_SOURCE_NODE_FFI_RUNNER"')
+    expect(writes[0][1]).not.toContain("AX_CODE_BRANDED_NODE")
   })
 
   test("setupCli installs the bundled launcher when --bundled is explicit and reuses an existing binary", () => {
