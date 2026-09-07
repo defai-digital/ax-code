@@ -78,6 +78,11 @@ void Promise.allSettled([
 
 const CACHE_VERSION = "21"
 const TRASH_PREFIX = ".trash-"
+const PERSISTENT_CACHE_ENTRIES = new Set(["ax-engine", "libexec"])
+
+export function staleCacheEntries(contents: readonly string[]) {
+  return contents.filter((item) => !item.startsWith(TRASH_PREFIX) && !PERSISTENT_CACHE_ENTRIES.has(item))
+}
 
 // Wrapped in an async IIFE (not module-level await) to keep this module
 // TLA-free for bundlers. The cache wipe is best-effort background cleanup.
@@ -102,11 +107,12 @@ void (async () => {
       const contents = await fs.readdir(Global.Path.cache)
       // Never wipe `ax-engine/`: it can hold (or, for legacy layouts, still
       // hold) many-GiB local MLX model weights that are NOT regenerable cache.
-      // Deleting them on a cache-version bump would silently force a full
-      // re-download. Model storage now lives in the shared Hugging Face Hub
-      // cache, but keep this guard so any remaining managed copy survives.
-      const stale = contents.filter((item) => !item.startsWith(TRASH_PREFIX) && item !== "ax-engine")
+      // Never wipe `libexec/` either: the current process can be executing a
+      // branded Node binary from that directory and needs the same path to
+      // launch its TUI backend. Both locations manage their own freshness.
+      const stale = staleCacheEntries(contents)
       if (stale.length > 0) {
+        // @scan-suppress security_scan — trusted cache root plus a constant prefix and numeric timestamp
         const trash = path.join(Global.Path.cache, `${TRASH_PREFIX}${Date.now()}`)
         await fs.mkdir(trash, { recursive: true })
         await Promise.all(

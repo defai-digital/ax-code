@@ -1,6 +1,7 @@
 import { expect, test } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
+import { staleCacheEntries } from "../../src/global"
 
 test("cache version cleanup creates the cache directory before reading it", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/global/index.ts"), "utf-8")
@@ -10,4 +11,8 @@ test("cache version cleanup creates the cache directory before reading it", asyn
   expect(cleanup.indexOf("await fs.mkdir(Global.Path.cache, { recursive: true })")).toBeLessThan(
     cleanup.indexOf("await fs.readdir(Global.Path.cache)"),
   )
+})
+
+test("cache version cleanup preserves managed runtimes", () => {
+  expect(staleCacheEntries(["version", "skills", "ax-engine", "libexec", ".trash-123"])).toEqual(["version", "skills"])
 })
