@@ -27601,6 +27601,177 @@
         ]
       }
     },
+    "/session/{sessionID}/steering": {
+      "get": {
+        "operationId": "session.steering",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses_.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Get active generation and steering receipts",
+        "description": "Receipts are process-local and bounded. Applied means durably admitted at a loop boundary, not guaranteed provider completion.",
+        "tags": [
+          "Session"
+        ],
+        "responses": {
+          "200": {
+            "description": "Steering state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SteeringState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.steering({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "session.steer",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses_.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Steer a specific active generation",
+        "description": "Accept a bounded correction for the next loop boundary. Stale generations and hook vetoes return rejected receipts; reused client IDs with different content conflict.",
+        "tags": [
+          "Session"
+        ],
+        "responses": {
+          "200": {
+            "description": "Steering receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SteeringReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedGeneration": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "clientID": {
+                    "type": "string",
+                    "pattern": "^[a-zA-Z0-9_-]{1,100}$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16000
+                  }
+                },
+                "required": [
+                  "expectedGeneration",
+                  "clientID",
+                  "text"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.session.steer({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/session/{sessionID}/abort": {
       "post": {
         "operationId": "session.abort",
@@ -37281,6 +37452,22 @@
               },
               "batch_tool": {
                 "description": "Enable the batch tool",
+                "type": "boolean"
+              },
+              "context_recovery": {
+                "description": "Enable bounded current-session evidence recovery after compaction",
+                "type": "boolean"
+              },
+              "mcp_tool_discovery": {
+                "description": "Discover MCP tool schemas on demand while keeping built-in tools eager",
+                "type": "boolean"
+              },
+              "tail_reminders": {
+                "description": "Project changing task reminders after stable request history for cache experiments",
+                "type": "boolean"
+              },
+              "read_only_recipes": {
+                "description": "Enable bounded declarative read-only tool recipes",
                 "type": "boolean"
               },
               "context_tools": {
@@ -48933,6 +49120,76 @@
           "snapshot"
         ]
       },
+      "SteeringReceipt": {
+        "type": "object",
+        "properties": {
+          "sessionID": {
+            "type": "string",
+            "pattern": "^ses_.*"
+          },
+          "generation": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "clientID": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "applied",
+              "rejected"
+            ]
+          },
+          "messageID": {
+            "type": "string",
+            "pattern": "^msg_.*"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionID",
+          "generation",
+          "clientID",
+          "status"
+        ]
+      },
+      "SteeringState": {
+        "type": "object",
+        "properties": {
+          "generation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SteeringReceipt"
+            }
+          },
+          "retention": {
+            "type": "string",
+            "const": "process-local; at most 256 receipts per session"
+          }
+        },
+        "required": [
+          "generation",
+          "receipts",
+          "retention"
+        ]
+      },
       "StepFinishPart": {
         "type": "object",
         "properties": {
@@ -49503,6 +49760,9 @@
             "const": "tool"
           },
           "callID": {
+            "type": "string"
+          },
+          "parentCallID": {
             "type": "string"
           },
           "tool": {

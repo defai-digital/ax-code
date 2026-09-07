@@ -13,6 +13,8 @@ import { GrepTool } from "./grep"
 import { ListTool } from "./ls"
 import { BatchTool } from "./batch"
 import { ContextStatusTool } from "./context_status"
+import { ReadRecipeTool } from "./read_recipe"
+import { ContextRecoverTool } from "./context_recover"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TaskParallelTool } from "./task_parallel"
@@ -264,6 +266,8 @@ export namespace ToolRegistry {
         WriteTool,
         SkillTool,
         SubmitGoalPlanTool,
+        ...(cfg.experimental?.context_recovery === true ? [ContextRecoverTool] : []),
+        ...(cfg.experimental?.read_only_recipes === true ? [ReadRecipeTool] : []),
       ]
     }
     // Keep local ax-engine tool schemas focused; debug-engine tools are large,
@@ -329,6 +333,8 @@ export namespace ToolRegistry {
       ...(debugEngineEnabled ? [...DEBUG_ENGINE_TOOLS] : []),
       ...(cfg.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(cfg.experimental?.context_tools === true ? [ContextStatusTool] : []),
+      ...(cfg.experimental?.context_recovery === true ? [ContextRecoverTool] : []),
+      ...(cfg.experimental?.read_only_recipes === true ? [ReadRecipeTool] : []),
       // computer-use tools require an explicit backend configuration
       ...(cfg.computer?.provider
         ? [ComputerSnapshotTool, ComputerActionTool, ComputerWatchTool, ComputerPlanTool]

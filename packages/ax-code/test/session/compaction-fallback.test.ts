@@ -1,3 +1,4 @@
+import { Config } from "../../src/config/config"
 import { describe, expect, test, vi } from "vitest"
 import { NamedError } from "@ax-code/util/error"
 import { SessionCompaction } from "../../src/session/compaction"
@@ -456,5 +457,47 @@ describe("session.compaction-fallback classifier", () => {
     const overflow = new MessageV2.ContextOverflowError({ message: "prompt is too long" }).toObject()
     CompactionFallback.annotate(overflow, { retryAttempt: 1, failureClass: "context_window_exceeded" })
     expect("metadata" in overflow.data).toBe(false)
+  })
+})
+
+test("successful opt-in compaction records a recoverable canonical source pointer", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      const configSpy = vi
+        .spyOn(Config, "get")
+        .mockResolvedValue({ ...config, experimental: { ...config.experimental, context_recovery: true } })
+      const { session, user } = await seedSession()
+      const model = createModel({ providerID: "test", modelID: "test-model" })
+      const providers = mockProviders({ "test/test-model": model })
+      const processor = mockProcessor([{ type: "succeed" }])
+      try {
+        expect(
+          await SessionCompaction.process({
+            parentID: user.id,
+            messages: await Session.messages({ sessionID: session.id }),
+            sessionID: session.id,
+            abort: new AbortController().signal,
+            auto: false,
+          }),
+        ).toBe("continue")
+        const messages = await Session.messages({ sessionID: session.id })
+        const text = messages
+          .filter((message) => message.info.role === "assistant")
+          .flatMap((message) => message.parts)
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
+        expect(text).toContain("context_recover")
+        expect(text).toContain(user.id)
+        expect(messages.some((message) => message.info.id === user.id)).toBe(true)
+      } finally {
+        configSpy.mockRestore()
+        providers.getModel.mockRestore()
+        processor.spy.mockRestore()
+      }
+    },
   })
 })

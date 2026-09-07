@@ -8,6 +8,8 @@ import type { MediaProjection } from "./media-projection"
 import { remindQueuedMessages } from "./prompt-loop-messages"
 import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import type { SessionID } from "./schema"
+import { Config } from "@/config/config"
+import { projectTailReminders } from "./reminder-projection"
 
 export type PromptRequestCache = Parameters<typeof getSystemPrompt>[0]["cache"]
 
@@ -55,13 +57,18 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // Build system prompt and convert messages to model format in parallel.
   // Both walk the same messages/model independently with no side effects.
   const format = input.lastUser.format ?? { type: "text" }
+  const projection =
+    (await Config.get()).experimental?.tail_reminders === true
+      ? projectTailReminders(requestMessagesSource)
+      : { messages: requestMessagesSource, reminder: undefined }
   const convertMessages = async (mediaProjection: MediaProjection.Mode) => {
-    const modelMessages = await MessageV2.toModelMessages(requestMessagesSource, input.model, {
+    const modelMessages = await MessageV2.toModelMessages(projection.messages, input.model, {
       cache: !hasTransformPlugin,
       mediaProjection,
     })
     return [
       ...modelMessages,
+      ...(projection.reminder ? [{ role: "user" as const, content: projection.reminder }] : []),
       ...(input.isLastStep
         ? [
             {

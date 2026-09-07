@@ -1,3 +1,4 @@
+import { SessionSteering } from "@/session/steering"
 import { Hono, type Context } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
@@ -919,6 +920,53 @@ export const SessionRoutes = lazy(() =>
         const body = c.req.valid("json")
         const result = await Session.fork({ ...body, sessionID })
         return c.json(result)
+      },
+    )
+    .get(
+      "/:sessionID/steering",
+      describeRoute({
+        summary: "Get active generation and steering receipts",
+        description:
+          "Receipts are process-local and bounded. Applied means durably admitted at a loop boundary, not guaranteed provider completion.",
+        tags: ["Session"],
+        operationId: "session.steering",
+        responses: {
+          200: {
+            description: "Steering state",
+            content: { "application/json": { schema: resolver(SessionSteering.View) } },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      async (c) => c.json(SessionPrompt.steeringState(await parseCurrentProjectSessionID(c))),
+    )
+    .post(
+      "/:sessionID/steering",
+      describeRoute({
+        summary: "Steer a specific active generation",
+        description:
+          "Accept a bounded correction for the next loop boundary. Stale generations and hook vetoes return rejected receipts; reused client IDs with different content conflict.",
+        tags: ["Session"],
+        operationId: "session.steer",
+        responses: {
+          200: {
+            description: "Steering receipt",
+            content: { "application/json": { schema: resolver(SessionSteering.Receipt) } },
+          },
+          ...errors(400, 404, 409),
+        },
+      }),
+      validator("param", SESSION_ID_PARAM),
+      validator("json", SessionSteering.Input),
+      async (c) => {
+        const sessionID = await parseCurrentProjectSessionID(c)
+        try {
+          return c.json(await SessionPrompt.steer(sessionID, c.req.valid("json")))
+        } catch (error) {
+          if (SessionSteering.Conflict.isInstance(error)) throw new HTTPException(409, { message: error.data.message })
+          throw error
+        }
       },
     )
     .post(

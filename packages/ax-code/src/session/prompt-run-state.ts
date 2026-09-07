@@ -2,6 +2,7 @@ import { Instance } from "../project/instance"
 import { Session } from "."
 import { MessageV2 } from "./message-v2"
 import type { SessionID } from "./schema"
+import { SessionSteering } from "./steering"
 import { SessionStatus } from "./status"
 
 type PromptRunCallback = {
@@ -27,7 +28,8 @@ export function createPromptRunState() {
       return data
     },
     async (current) => {
-      for (const item of Object.values(current)) {
+      for (const [sessionID, item] of Object.entries(current)) {
+        SessionSteering.finish(sessionID as SessionID)
         item.abort.abort()
       }
     },
@@ -49,6 +51,7 @@ export function createPromptRunState() {
         running: true,
         callbacks: existing?.callbacks ?? [],
       }
+      SessionSteering.begin(sessionID, controller.signal)
       return controller.signal
     },
 
@@ -81,6 +84,7 @@ export function createPromptRunState() {
 
     markIdle(sessionID: SessionID) {
       const entry = state()[sessionID]
+      SessionSteering.finish(sessionID)
       if (entry) entry.running = false
     },
 
@@ -89,6 +93,7 @@ export function createPromptRunState() {
     },
 
     async cancel(sessionID: SessionID) {
+      SessionSteering.finish(sessionID)
       const s = state()
       const match = s[sessionID]
       if (!match) {

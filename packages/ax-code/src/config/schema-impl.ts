@@ -1038,6 +1038,19 @@ export const Info = z
       .object({
         disable_paste_summary: z.boolean().optional(),
         batch_tool: z.boolean().optional().describe("Enable the batch tool"),
+        context_recovery: z
+          .boolean()
+          .optional()
+          .describe("Enable bounded current-session evidence recovery after compaction"),
+        mcp_tool_discovery: z
+          .boolean()
+          .optional()
+          .describe("Discover MCP tool schemas on demand while keeping built-in tools eager"),
+        tail_reminders: z
+          .boolean()
+          .optional()
+          .describe("Project changing task reminders after stable request history for cache experiments"),
+        read_only_recipes: z.boolean().optional().describe("Enable bounded declarative read-only tool recipes"),
         context_tools: z
           .boolean()
           .optional()

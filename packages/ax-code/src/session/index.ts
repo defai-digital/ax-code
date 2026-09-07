@@ -1179,16 +1179,22 @@ export namespace Session {
     return parts
   }
 
-  export async function updateMessageWithParts(info: MessageV2.Info, parts: MessageV2.Part[]) {
+  export async function updateMessageWithParts(
+    info: MessageV2.Info,
+    parts: MessageV2.Part[],
+    admission?: { beforeCommit(): void; afterCommit(): void },
+  ) {
     validatePartScope(parts, info.sessionID, info.id)
     const messageTimeUpdated = Date.now()
     const partTime = Date.now()
     const store = SessionShard.storeFor(info.sessionID, { write: true })
     store.transaction((db) => {
+      admission?.beforeCommit()
       MessageWrite.message(db, info, messageTimeUpdated)
       MessageWrite.parts(db, parts, partTime)
     })
 
+    admission?.afterCommit()
     await Bus.publish(MessageV2.Event.Updated, { info })
     for (const part of parts) {
       await Bus.publish(MessageV2.Event.PartUpdated, { part })

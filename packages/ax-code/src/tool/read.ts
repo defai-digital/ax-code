@@ -18,6 +18,7 @@ import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
 import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath, withFilePathAliases } from "./file-path"
 import { isBinaryFile } from "./file-content"
 import { ToolNumber } from "./schema"
+import { CanonicalOutput } from "./canonical-output"
 
 const log = Log.create({ service: "tool.read" })
 
@@ -83,6 +84,7 @@ export const ReadTool = Tool.define("read", {
     }),
   ),
   concurrencySafe: () => true,
+  outputSchema: CanonicalOutput.Read,
   async execute(params, ctx) {
     if (params.filePath.includes("\x00")) throw readError("ReadInvalidPathError", NULL_BYTE_PATH_ERROR)
     if (params.offset !== undefined && params.offset < 1) {
@@ -188,6 +190,7 @@ export const ReadTool = Tool.define("read", {
         return {
           title,
           output,
+          data: { kind: "directory", text: output, truncated },
           metadata: {
             preview: sliced.slice(0, 20).join("\n"),
             truncated,
@@ -214,6 +217,7 @@ export const ReadTool = Tool.define("read", {
         return {
           title,
           output: msg,
+          data: { kind: "media", text: msg, truncated: false },
           metadata: {
             preview: msg,
             truncated: false,
@@ -320,6 +324,7 @@ export const ReadTool = Tool.define("read", {
       return {
         title,
         output,
+        data: { kind: "text", text: output, truncated },
         metadata: {
           preview,
           truncated,

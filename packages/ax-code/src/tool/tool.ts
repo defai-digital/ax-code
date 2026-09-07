@@ -53,6 +53,7 @@ export namespace Tool {
     title: string
     metadata: M
     output: string
+    data?: unknown
     attachments?: MessageV2.FilePart[]
   }
 
@@ -79,6 +80,7 @@ export namespace Tool {
     init: (ctx?: InitContext) => Promise<{
       description: string
       parameters: Parameters
+      outputSchema?: z.ZodType
       /**
        * Optional per-call concurrency classification (D7). Returning true
        * declares that executing with these args cannot conflict with other
@@ -93,6 +95,7 @@ export namespace Tool {
         title: string
         metadata: M
         output: string
+        data?: unknown
         attachments?: Omit<MessageV2.FilePart, "id" | "sessionID" | "messageID">[]
       }>
       formatValidationError?(error: z.ZodError): string
@@ -132,6 +135,7 @@ export namespace Tool {
           let result: Awaited<ReturnType<typeof execute>>
           try {
             result = await execute(validated, ctx)
+            if (toolInfo.outputSchema) result.data = toolInfo.outputSchema.parse(result.data)
           } catch (err) {
             const durationMs = Date.now() - toolStart
             log.error("tool failed", {

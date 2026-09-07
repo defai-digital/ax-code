@@ -95,32 +95,34 @@ export async function insertReminders(input: InsertRemindersInput) {
   // Shallow-copy to avoid mutating cached message parts
   const userMessage = { ...userMsg, parts: [...userMsg.parts] }
   const messages = input.messages.map((m) => (m === userMsg ? userMessage : m))
-  const appendSyntheticReminder = (text: string) => {
-    userMessage.parts.push(
-      syntheticTextPart({
+  const appendSyntheticReminder = (text: string, dynamic = false) => {
+    userMessage.parts.push({
+      ...syntheticTextPart({
         messageID: userMessage.info.id,
         sessionID: userMessage.info.sessionID,
         text,
       }),
-    )
+      ...(dynamic ? { metadata: { axDynamicReminder: true } } : {}),
+    })
   }
   const autonomousDecisionLedger = ScopedFlag.autonomous()
     ? autonomousDecisionLedgerReminder(input.messages)
     : undefined
   if (autonomousDecisionLedger) {
-    appendSyntheticReminder(autonomousDecisionLedger)
+    appendSyntheticReminder(autonomousDecisionLedger, true)
   }
 
   // Per-turn dynamic state (session goal, pending todos, decision hints,
   // intelligence nudge) rides the reminder channel — request-only via the
   // in-memory append, never persisted — so the system prompt prefix stays
-  // byte-stable for the provider prompt cache. insertReminders runs on every
+  // byte-stable. The opt-in tail projection also protects the subsequent
+  // assistant/tool history prefix. insertReminders runs on every
   // loop step before MessageV2.toModelMessages, and loopMessages reloads
   // durable messages each step, so the part is rebuilt fresh per step and
   // never accumulates.
   const turnContext = await buildTurnContext({ messages: input.messages, sessionID: input.session.id })
   if (turnContext) {
-    appendSyntheticReminder(turnContext)
+    appendSyntheticReminder(turnContext, true)
   }
 
   if (!Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE) {

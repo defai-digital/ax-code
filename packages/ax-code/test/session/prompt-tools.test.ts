@@ -1,3 +1,4 @@
+import { Config } from "../../src/config/config"
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import z from "zod"
 import { Agent } from "../../src/agent/agent"
@@ -390,6 +391,49 @@ describe("session.prompt-tools", () => {
       }),
     ])
     expect(afterPayload).toMatchObject({ attachments: result.attachments })
+  })
+
+  test("MCP discovery defers schemas, selects on the next request, and drops revoked tools", async () => {
+    await using tmp = await tmpdir()
+    const execute = vi.fn(async () => ({ content: [{ type: "text", text: "source" }] }))
+    vi.spyOn(Config, "get").mockResolvedValue({ experimental: { mcp_tool_discovery: true } } as any)
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue({
+      remote_search: { description: "Search source", inputSchema: z.object({ query: z.string() }), execute },
+    } as any)
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+    const ask = vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const input = {
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] },
+          session: { id: "ses_discovery", permission: [] },
+          model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } },
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_discovery" }, partFromToolCall: () => undefined },
+        } as any
+        const first = await resolveTools(input)
+        expect(Object.keys(first)).toEqual(["tool_search"])
+        await (first.tool_search.execute as any)(
+          { query: "source" },
+          { toolCallId: "discover", abortSignal: new AbortController().signal },
+        )
+        expect(execute).not.toHaveBeenCalled()
+        expect(ask).toHaveBeenCalledWith(expect.objectContaining({ permission: "tool_search" }), expect.anything())
+        expect(Object.keys(await resolveTools(input))).toEqual(["remote_search", "tool_search"])
+        input.tools = { remote_search: false }
+        expect(Object.keys(await resolveTools(input))).not.toContain("remote_search")
+        input.tools = {}
+        // The empty admitted catalog also revokes cached selections.
+        expect(Object.keys(await resolveTools(input))).toEqual(["tool_search"])
+      },
+    })
   })
 
   test("applies canonical lifecycle hooks to MCP execution", async () => {

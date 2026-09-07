@@ -49,6 +49,8 @@ export namespace ToolProfile {
     "lsp",
     "batch",
     "context_status",
+    "context_recover",
+    "read_recipe",
     "plan_exit",
   ])
 

@@ -11,6 +11,7 @@ import { NativeAddon } from "../native/addon"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import { parseNativeJsonArray } from "../util/native-json"
 import { errorCode } from "@/util/error-message"
+import { CanonicalOutput } from "./canonical-output"
 
 const NativeGlobEntry = z.object({
   path: z.string(),
@@ -39,6 +40,7 @@ export const GlobTool = Tool.define("glob", {
       ),
   }),
   concurrencySafe: () => true,
+  outputSchema: CanonicalOutput.Glob,
   async execute(params, ctx) {
     if (params.path !== undefined) resolveToolFilePath(params.path, Instance.directory)
     if (params.pattern.includes("\x00")) throw new Error("Glob pattern contains null byte")
@@ -85,6 +87,7 @@ export const GlobTool = Tool.define("glob", {
 
         return {
           title,
+          data: { paths: visible.map((entry) => entry.path), truncated },
           metadata: {
             count: visible.length,
             truncated,
@@ -132,6 +135,7 @@ export const GlobTool = Tool.define("glob", {
 
     return {
       title,
+      data: { paths: files.map((file) => file.path), truncated },
       metadata: {
         count: files.length,
         truncated,

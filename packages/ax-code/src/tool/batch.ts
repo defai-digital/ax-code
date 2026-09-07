@@ -4,7 +4,7 @@ import DESCRIPTION from "./batch.txt"
 import { toError, toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 
-const DISALLOWED = new Set(["batch", "task"])
+const DISALLOWED = new Set(["batch", "task", "read_recipe"])
 const FILTERED_FROM_SUGGESTIONS = new Set(["invalid", "patch", ...DISALLOWED])
 const log = Log.create({ service: "tool.batch" })
 const TOOL_TIMEOUT = 60_000

@@ -372,6 +372,7 @@ export namespace MessageV2 {
   export const ToolPart = PartBase.extend({
     type: z.literal("tool"),
     callID: z.string(),
+    parentCallID: z.string().optional(),
     tool: z.string(),
     state: ToolState,
     metadata: z.record(z.string(), z.any()).optional(),
@@ -910,6 +911,20 @@ export namespace MessageV2 {
               type: "step-start",
             })
           if (part.type === "tool") {
+            // Only a completed recipe may replace its own child outputs. An
+            // interrupted or missing parent retains normal recoverable output.
+            if (
+              part.parentCallID &&
+              msg.parts.some(
+                (parent) =>
+                  parent.type === "tool" &&
+                  parent.tool === "read_recipe" &&
+                  parent.callID === part.parentCallID &&
+                  parent.state.status === "completed" &&
+                  parent.state.metadata.recipeProjection === true,
+              )
+            )
+              continue
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
               const sourceAttachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])

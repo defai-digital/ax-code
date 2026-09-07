@@ -1,3 +1,4 @@
+import { SkillCandidateCommand } from "./skill-candidate"
 import { EOL } from "os"
 import path from "path"
 import type { Argv } from "yargs"
@@ -215,6 +216,7 @@ export const SkillCommand = cmd({
   builder: (yargs: Argv) =>
     yargs
       .command(SkillListCommand)
+      .command(SkillCandidateCommand)
       .command(SkillCreateCommand)
       .command(SkillValidateCommand)
       .command(SkillDoctorCommand)
