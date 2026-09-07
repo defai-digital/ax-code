@@ -1,6 +1,25 @@
 import { describe, expect, test } from "vitest"
 import { sleep, withTimeout } from "../../src/util/timeout"
 
+function captureTimerRef(fn: () => void) {
+  const original = globalThis.setTimeout
+  let hadRef: boolean | undefined
+  globalThis.setTimeout = ((handler: TimerHandler, ms?: number, ...rest: unknown[]) => {
+    const timer = original(handler as never, ms, ...(rest as never[]))
+    const target = timer as unknown as { hasRef?: () => boolean }
+    queueMicrotask(() => {
+      if (hadRef === undefined) hadRef = target.hasRef?.() ?? true
+    })
+    return timer
+  }) as unknown as typeof globalThis.setTimeout
+  try {
+    fn()
+  } finally {
+    globalThis.setTimeout = original
+  }
+  return () => hadRef
+}
+
 describe("util.timeout", () => {
   test("should resolve when promise completes before timeout", async () => {
     const fastPromise = new Promise<string>((resolve) => {
@@ -29,6 +48,15 @@ describe("util.timeout", () => {
     rejectLate(new Error("late failure"))
     await new Promise((r) => setTimeout(r, 30))
   })
+
+  test("keeps its timer ref'd so a hung operation still reaches the timeout", async () => {
+    let pending!: Promise<never>
+    const read = captureTimerRef(() => {
+      pending = withTimeout(new Promise<never>(() => {}), 20)
+    })
+    await expect(pending).rejects.toThrow(/timed out/)
+    expect(read()).toBe(true)
+  })
 })
 
 describe("util.timeout.sleep", () => {
@@ -37,25 +65,6 @@ describe("util.timeout.sleep", () => {
   // exit, leaving the awaiting promise unsettled — in a CLI process that is an
   // immediate exit 13 (ERR_UNSETTLED_TOP_LEVEL_AWAIT) with no output. It broke
   // `ax-code risk` whenever FileLock.acquire had to poll for a contended key.
-  function captureTimerRef(fn: () => void) {
-    const original = globalThis.setTimeout
-    let hadRef: boolean | undefined
-    globalThis.setTimeout = ((handler: TimerHandler, ms?: number, ...rest: unknown[]) => {
-      const timer = original(handler as never, ms, ...(rest as never[]))
-      const target = timer as unknown as { hasRef?: () => boolean }
-      queueMicrotask(() => {
-        if (hadRef === undefined) hadRef = target.hasRef?.() ?? true
-      })
-      return timer
-    }) as unknown as typeof globalThis.setTimeout
-    try {
-      fn()
-    } finally {
-      globalThis.setTimeout = original
-    }
-    return () => hadRef
-  }
-
   test("keeps the timer ref'd by default so an awaited sleep holds the loop open", async () => {
     const read = captureTimerRef(() => void sleep(1))
     await sleep(5)

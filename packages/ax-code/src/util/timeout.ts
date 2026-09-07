@@ -28,8 +28,11 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, message?: string
   // `unhandledRejection` warning or crash with
   // `--unhandled-rejections=throw`.
   //
-  // The timer is unref'd so a pending timeout never alone keeps the process
-  // alive during shutdown (same pattern as sleep()).
+  // Keep the timer ref'd: callers await the timeout as a correctness boundary,
+  // so it must remain capable of settling even when the wrapped promise owns no
+  // event-loop handles. Unref'ing here makes a short-lived CLI exit with an
+  // unsettled await instead of reporting the timeout (the same failure mode
+  // documented for sleep() above).
   let settled = false
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -37,7 +40,6 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, message?: string
       settled = true
       reject(new Error(message ?? `Operation timed out after ${ms}ms`))
     }, ms)
-    timer.unref?.()
     promise.then(
       (value) => {
         if (settled) return
