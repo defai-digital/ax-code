@@ -1,9 +1,14 @@
 #!/usr/bin/env node
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { prepareNodeArgs } from "./node-ffi-runner-args.mjs"
-import { axCodeJobTitleOsc, brandedSpawnOptions, resolveBrandedNodePath } from "./node-ffi-runner-brand.mjs"
+import {
+  AX_CODE_SPAWN_ARGV0,
+  axCodeJobTitleOsc,
+  brandedSpawnOptions,
+  resolveBrandedNodePath,
+} from "./node-ffi-runner-brand.mjs"
 
 try {
   process.title = "ax-code"
@@ -114,9 +119,31 @@ try {
 const tuiArgs = [...ffiArgs, ...prepareNodeArgs(process.argv.slice(2))]
 const brandedPath = resolveBrandedNodePath(runtime.path)
 const spawnOptions = brandedSpawnOptions(process.env)
-let result = spawnSync(brandedPath, tuiArgs, spawnOptions)
+
+// POSIX TUIs must remain the PTY's foreground process-group leader. Replace
+// this selector process in place instead of leaving a Node parent between the
+// terminal and the actual TUI. Windows has no process.execve implementation,
+// so it retains the asynchronous child-process fallback below.
+if (typeof process.execve === "function") {
+  try {
+    process.execve(brandedPath, [AX_CODE_SPAWN_ARGV0, ...tuiArgs], process.env)
+  } catch (error) {
+    if (brandedPath === runtime.path) throw error
+    process.execve(runtime.path, [AX_CODE_SPAWN_ARGV0, ...tuiArgs], process.env)
+  }
+}
+
+function runNode(candidate) {
+  return new Promise((resolve) => {
+    const child = spawn(candidate, tuiArgs, spawnOptions)
+    child.once("error", (error) => resolve({ error }))
+    child.once("exit", (status, signal) => resolve({ status, signal }))
+  })
+}
+
+let result = await runNode(brandedPath)
 if (result.error && brandedPath !== runtime.path) {
-  result = spawnSync(runtime.path, tuiArgs, spawnOptions)
+  result = await runNode(runtime.path)
 }
 
 if (result.error) {

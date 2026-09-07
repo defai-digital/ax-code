@@ -79,14 +79,16 @@ describe("node FFI runner process branding", () => {
     expect(runner).toContain("resolveBrandedNodePath(runtime.path)")
     expect(runner).toContain("brandedSpawnOptions(process.env)")
     expect(runner).toContain("axCodeJobTitleOsc()")
+    expect(runner).toContain('typeof process.execve === "function"')
+    expect(runner).toContain("process.execve(brandedPath, [AX_CODE_SPAWN_ARGV0, ...tuiArgs], process.env)")
   })
 
-  test("branded Homebrew-style Node actually runs and is named AX-Code", () => {
+  test("macOS-branded Homebrew-style Node actually runs and is named AX-Code", () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "ax-code-brand-run-"))
     try {
       const branded = resolveBrandedNodePath(process.execPath, {
         cacheDir: path.join(root, "libexec"),
-        platform: process.platform,
+        platform: "darwin",
       })
       expect(path.basename(branded)).toBe(brandedNodeName())
       expect(verifyBrandedNodeRuns(branded)).toBe(true)
