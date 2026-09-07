@@ -20,7 +20,8 @@ export function brandedNodeCacheDir(env = process.env, homedir = os.homedir()) {
 }
 
 export function axCodeJobTitleOsc(title = AX_CODE_SPAWN_ARGV0) {
-  return `\x1b]1;${title}\x07\x1b]2;${title}\x07`
+  // Match util/terminal-title.ts: claim the tab after the window refresh.
+  return `\x1b]2;${title}\x07\x1b]1;${title}\x07`
 }
 
 function isSameFile(left, right, fsMod) {

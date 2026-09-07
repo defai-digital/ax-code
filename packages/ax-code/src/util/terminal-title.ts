@@ -1,5 +1,5 @@
 /**
- * User-facing terminal tab/window title (OSC 0).
+ * User-facing terminal window/tab title (OSC 2 followed by OSC 1).
  *
  * Distinct from the machine process title in process-title.ts ("ax-code"):
  * that string is for ps/pgrep/tmux automatic-rename and Windows SetConsoleTitle.
@@ -97,7 +97,9 @@ export function axCodeTerminalTitleSequence(title: string = AX_CODE_TERMINAL_TIT
   // OSC 1 = icon/tab, OSC 2 = window. Do not use OSC 0: Apple Terminal.app
   // treats OSC 0 as "set window title and clear tab title", after which the
   // tab falls back to the job name ("node" for source-mode launches).
-  return `\x1b]1;${sanitized}\x07\x1b]2;${sanitized}\x07`
+  // Finish every window-title update with an explicit tab title, including
+  // the idle/clear frame, so the final request always names the tab itself.
+  return `\x1b]2;${sanitized}\x07\x1b]1;${sanitized}\x07`
 }
 
 export function axCodeTerminalTitleClearSequence() {

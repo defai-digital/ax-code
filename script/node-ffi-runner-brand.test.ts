@@ -16,7 +16,7 @@ import {
 describe("node FFI runner process branding", () => {
   test("job-title OSC sets icon and window titles, not OSC 0", () => {
     expect(AX_CODE_SPAWN_ARGV0).toBe("AX-Code")
-    expect(axCodeJobTitleOsc()).toBe("\x1b]1;AX-Code\x07\x1b]2;AX-Code\x07")
+    expect(axCodeJobTitleOsc()).toBe("\x1b]2;AX-Code\x07\x1b]1;AX-Code\x07")
     expect(axCodeJobTitleOsc()).not.toContain("]0;")
   })
 

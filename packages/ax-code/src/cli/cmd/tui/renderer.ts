@@ -144,7 +144,7 @@ function writeTuiSequence(stream: TuiSequenceStream, sequence: string) {
   }
 }
 
-// The title is written directly to stdout as an OSC 0 escape instead of
+// The window/tab titles are written directly to stdout as OSC 2/1 escapes instead of
 // routing through AX Code TUI's native setTerminalTitle — the native write proved
 // flaky in the compatible profile (same approach as kimi-code).
 export function setTuiTerminalTitle(

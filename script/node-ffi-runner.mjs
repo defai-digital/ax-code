@@ -10,9 +10,14 @@ import {
   resolveBrandedNodePath,
 } from "./node-ffi-runner-brand.mjs"
 
-try {
-  process.title = "ax-code"
-} catch {}
+// Keep macOS argv intact: process.title clears argument storage while the
+// kernel retains argc, so terminal job-title readers can mistake environment
+// entries for arguments. The branded executable and OSC titles name the TUI.
+if (process.platform !== "darwin") {
+  try {
+    process.title = "ax-code"
+  } catch {}
+}
 
 // Claim the tab/window title before the child Node process even starts.
 function terminalTitleDisabled() {
