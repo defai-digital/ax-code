@@ -56,7 +56,11 @@ import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
 import { GITHUB_NEW_ISSUE_URL } from "@/constants/project"
-import { AX_CODE_TERMINAL_TITLE } from "@/util/terminal-title"
+import {
+  AX_CODE_TERMINAL_TITLE,
+  AX_CODE_TITLE_SPINNER_INTERVAL_MS,
+  composeAxCodeTerminalTitle,
+} from "@/util/terminal-title"
 import {
   clearTuiTerminalTitle,
   destroyTuiRenderer,
@@ -64,7 +68,6 @@ import {
   renderTui,
   setTuiTerminalProgress,
   setTuiTerminalTitle,
-  supportsTuiTerminalProgress,
 } from "./renderer"
 import type { EventSource } from "./context/sdk"
 import { Installation } from "@/installation"
@@ -331,9 +334,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   }
 
   // While a session is working, show a busy indicator in the terminal tab
-  // via OSC 9;4 (Windows Terminal / ConEmu / Ghostty / WezTerm), like
-  // kimi-code. The tab text stays the static "AX-Code" product token.
-  const terminalProgressSupported = supportsTuiTerminalProgress()
+  // via OSC 9;4 (Windows Terminal / ConEmu / Ghostty / WezTerm). The tab
+  // text stays "AX-Code", with a trailing orbit glyph while the agent works
+  // (unlike Codex, which prefixes a braille spinner and appends thread/project).
+  const [titleSpinnerFrame, setTitleSpinnerFrame] = createSignal(0)
 
   createEffect(() => {
     setTuiTerminalProgress(terminalTitleEnabled() && sessionWorking(), renderProfile)
@@ -345,15 +349,24 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // second on a crashed session until the user force-exits.
   onCleanup(() => setTuiTerminalProgress(false, renderProfile))
 
-  // Keep the tab at the short product token. Session names live in the TUI
-  // header; busy tabs use OSC 9;4 progress (when the terminal supports it)
-  // instead of rewriting the title with a spinner or session suffix.
+  createEffect(() => {
+    if (!terminalTitleEnabled() || !renderProfile.allowTerminalTitle || !sessionWorking()) {
+      setTitleSpinnerFrame(0)
+      return
+    }
+    const timer = setInterval(() => setTitleSpinnerFrame((frame) => frame + 1), AX_CODE_TITLE_SPINNER_INTERVAL_MS)
+    onCleanup(() => clearInterval(timer))
+  })
+
   createEffect(() => {
     if (!terminalTitleEnabled()) {
       clearTuiTerminalTitle(renderProfile)
       return
     }
-    setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)
+    setTuiTerminalTitle(
+      composeAxCodeTerminalTitle({ working: sessionWorking(), frame: titleSpinnerFrame() }),
+      renderProfile,
+    )
   })
 
   // Terminal-native notifications (OSC 9 / BEL fallback, ported from

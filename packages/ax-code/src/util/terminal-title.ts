@@ -13,6 +13,19 @@
 
 export const AX_CODE_TERMINAL_TITLE = "AX-Code"
 
+// Busy-tab activity glyph. Codex prefixes a 10-frame braille spinner
+// (`⠋⠙⠹⠸…`) at 100ms; AX Code keeps the product name first and uses a
+// slower 4-frame orbit so truncated tabs still read "AX-Code".
+export const AX_CODE_TITLE_SPINNER_FRAMES = ["◜", "◝", "◞", "◟"] as const
+export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 180
+
+export function composeAxCodeTerminalTitle(input: { working: boolean; frame?: number }) {
+  if (!input.working) return AX_CODE_TERMINAL_TITLE
+  const frames = AX_CODE_TITLE_SPINNER_FRAMES
+  const glyph = frames[(input.frame ?? 0) % frames.length]
+  return `${AX_CODE_TERMINAL_TITLE} ${glyph}`
+}
+
 const HELP_OR_VERSION = new Set(["-h", "--help", "-v", "--version"])
 
 function isTerminalTitleDisabled(env: NodeJS.ProcessEnv = process.env) {

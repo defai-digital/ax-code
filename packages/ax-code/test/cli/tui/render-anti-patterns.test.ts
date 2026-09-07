@@ -241,10 +241,11 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("clearTuiTerminalTitle")
     expect(app).toContain("setTuiTerminalProgress")
     expect(app).toContain("AX_CODE_TERMINAL_TITLE")
-    // Title text stays the static product token; busy state uses OSC 9;4
-    // progress instead of a braille spinner or session-title suffix.
+    expect(app).toContain("composeAxCodeTerminalTitle")
+    expect(app).toContain("setTitleSpinnerFrame")
+    // Busy tabs keep the product token first; do not resurrect Codex-style
+    // braille prefixes or the old session-title suffix.
     expect(app).not.toContain("TITLE_SPINNER_FRAMES")
-    expect(app).not.toContain("setTitleSpinnerFrame")
     expect(app).not.toContain("AX Code | ")
     // The progress keepalive interval is module state in renderer.ts, outside
     // Solid's cleanup tracking — App must stop it on unmount (the error

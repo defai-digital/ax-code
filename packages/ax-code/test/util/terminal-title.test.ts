@@ -4,8 +4,10 @@ import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 import {
   AX_CODE_TERMINAL_TITLE,
+  AX_CODE_TITLE_SPINNER_FRAMES,
   axCodeTerminalTitleSequence,
   claimAxCodeTerminalTitle,
+  composeAxCodeTerminalTitle,
   sanitizeAxCodeTerminalTitle,
   shouldClaimAxCodeTerminalTitleAtEntry,
 } from "../../src/util/terminal-title"
@@ -33,6 +35,16 @@ describe("terminal title", () => {
     expect(axCodeTerminalTitleSequence("AX-Code")).toBe(TITLE_SEQUENCE)
     // Apple Terminal.app clears the tab on OSC 0 and then shows the job name.
     expect(axCodeTerminalTitleSequence()).not.toContain("]0;")
+  })
+
+  test("busy titles keep AX-Code first and use an orbit glyph, not Codex braille", () => {
+    expect(composeAxCodeTerminalTitle({ working: false })).toBe("AX-Code")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("AX-Code ◜")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 1 })).toBe("AX-Code ◝")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 2 })).toBe("AX-Code ◞")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 3 })).toBe("AX-Code ◟")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 4 })).toBe("AX-Code ◜")
+    expect(AX_CODE_TITLE_SPINNER_FRAMES.join("")).not.toContain("⠋")
   })
 
   test("sanitizes control characters out of OSC payloads", () => {
