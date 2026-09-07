@@ -100,7 +100,9 @@ ${body}
     expect(result.error).toBeUndefined()
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
   } finally {
-    await rm(root, { recursive: true, force: true })
+    // Windows can retain a short-lived execution or antivirus lock on the
+    // fixture's copied node.exe after PowerShell has observed its exit.
+    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 }
 
