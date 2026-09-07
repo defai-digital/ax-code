@@ -3,6 +3,7 @@ import z from "zod"
 import { AgentControl } from "@/control-plane/agent-control"
 import { SafetyPolicy } from "@/control-plane/safety-policy"
 import { SessionStop } from "@/session/schema"
+import { RequestTiming } from "@/session/request-timing"
 
 const Base = z.object({
   sessionID: z.string(),
@@ -74,6 +75,7 @@ export const LLMResponseEvent = Base.extend({
     cache: z.object({ read: z.number(), write: z.number() }).optional(),
   }),
   latencyMs: z.number(),
+  timing: RequestTiming.Info.optional(),
 })
 
 const LLMOutputPart = z.discriminatedUnion("type", [

@@ -45,6 +45,8 @@ import { isRetiredProviderID } from "@/provider/retired-providers"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 import { RequestProvenance } from "./request-provenance"
+import { RequestTiming } from "./request-timing"
+import { NativePerf } from "@/perf/native"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -98,6 +100,7 @@ export namespace LLM {
   export type StreamOutput = StreamTextResult<ToolSet, any>
 
   const STREAM_ERROR = Symbol("ax-code.llm.streamError")
+  const STREAM_TIMING = Symbol("ax-code.llm.streamTiming")
   const DEFAULT_SETUP_TIMEOUT_MS = 90_000
   const LOCAL_ENGINE_SETUP_TIMEOUT_MS = 300_000
 
@@ -108,6 +111,10 @@ export namespace LLM {
   // the turn came back empty instead of reporting a bare, unattributable stall.
   export function lastStreamError(output: StreamOutput): unknown {
     return (output as { [STREAM_ERROR]?: unknown })[STREAM_ERROR]
+  }
+
+  export function timing(output: StreamOutput): RequestTiming.Info | undefined {
+    return (output as { [STREAM_TIMING]?: RequestTiming.Info })[STREAM_TIMING]
   }
 
   export function repairedToolName(toolName: string, tools: Record<string, unknown>): string | undefined {
@@ -123,6 +130,7 @@ export namespace LLM {
   }
 
   export async function stream(input: StreamInput) {
+    const timing = NativePerf.enabled() ? RequestTiming.create() : undefined
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -560,6 +568,7 @@ export namespace LLM {
                 return args.params
               },
             },
+            ...(timing ? [timing.middleware] : []),
           ],
         }),
         experimental_telemetry: {
@@ -582,6 +591,7 @@ export namespace LLM {
       enumerable: false,
       configurable: true,
     })
+    if (timing) Object.defineProperty(output, STREAM_TIMING, { get: timing.snapshot })
     // Watchdog goes inside the pacing wrapper so a pre-first-chunk stall still
     // releases the pacing reservation through the pacing iterator's catch path.
     const guarded = attachStreamIdleWatchdog(output, {

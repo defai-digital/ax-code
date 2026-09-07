@@ -1,3 +1,4 @@
+import { NativePerf } from "@/perf/native"
 import { SessionID, type MessageID, type PartID, type SessionStop } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Log } from "../util/log"
@@ -1024,11 +1025,13 @@ export namespace SessionPrompt {
       const pendingInstructionForRequest =
         lastUser.format?.type === "json_schema" ? undefined : pendingAxEngineTurnInstruction
 
-      msgs = await insertReminders({
-        messages: msgs,
-        agent,
-        session,
-      })
+      msgs = await NativePerf.runAsync("session.insertReminders", undefined, () =>
+        insertReminders({
+          messages: msgs,
+          agent,
+          session,
+        }),
+      )
 
       if (step === 1 && continuations === 0) {
         scheduleFirstTurnSummary({ sessionID, messageID: lastUser.id, messages: msgs })
@@ -1057,24 +1060,26 @@ export namespace SessionPrompt {
       // still counted), not "zero tools".
       const omitToolSchemas =
         Boolean(responseOnlyProfile) || ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
-      const preflightCompaction = await maybeSchedulePreflightCompaction({
-        sessionID,
-        agent: lastUser.agent,
-        agentInfo: agent,
-        userModel: lastUser.model,
-        model,
-        userParts: lastUserParts ?? [],
-        system: SystemPrompt.request({
-          agent,
+      const preflightCompaction = await NativePerf.runAsync("session.preflight", undefined, () =>
+        maybeSchedulePreflightCompaction({
+          sessionID,
+          agent: lastUser.agent,
+          agentInfo: agent,
+          userModel: lastUser.model,
           model,
-          system: request.system,
-          userSystem: lastUser.system,
+          userParts: lastUserParts ?? [],
+          system: SystemPrompt.request({
+            agent,
+            model,
+            system: request.system,
+            userSystem: lastUser.system,
+          }),
+          requestMessages: request.requestMessages,
+          tools: lastUser.tools,
+          omitToolSchemas,
+          sessionPermission: session.permission,
         }),
-        requestMessages: request.requestMessages,
-        tools: lastUser.tools,
-        omitToolSchemas,
-        sessionPermission: session.permission,
-      })
+      )
       if (preflightCompaction.action === "compact") {
         cachedMsgs = undefined
         continue
@@ -1166,21 +1171,23 @@ export namespace SessionPrompt {
       // tools while toolChoice is otherwise "none".
       const needsTools = toolChoice !== "none" || structuredOutput.toolChoice === "required"
       const tools = needsTools
-        ? await resolveTools({
-            agent,
-            session,
-            model,
-            tools: lastUser.tools,
-            processor,
-            bypassAgentCheck: shouldBypassAgentCheck(lastUserParts),
-            messages: msgs,
-            isolation: resolvePromptIsolationPolicy({
-              config: cfg.isolation,
-              policy: lastUser.isolation,
-              directory: Instance.directory,
-              worktree: Instance.worktree,
+        ? await NativePerf.runAsync("session.resolveTools", undefined, () =>
+            resolveTools({
+              agent,
+              session,
+              model,
+              tools: lastUser.tools,
+              processor,
+              bypassAgentCheck: shouldBypassAgentCheck(lastUserParts),
+              messages: msgs,
+              isolation: resolvePromptIsolationPolicy({
+                config: cfg.isolation,
+                policy: lastUser.isolation,
+                directory: Instance.directory,
+                worktree: Instance.worktree,
+              }),
             }),
-          })
+          )
         : {}
       if (needsTools) structuredOutput.attachTool(tools)
 

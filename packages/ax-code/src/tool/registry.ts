@@ -28,6 +28,7 @@ import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import type { Agent } from "../agent/agent"
 import { Tool } from "./tool"
+import { ToolProfile } from "./profile"
 import { Config } from "../config/config"
 import path from "path"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@ax-code/plugin"
@@ -226,7 +227,7 @@ export namespace ToolRegistry {
           Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
           Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE,
           Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT,
-          input.cfg.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.toolProfile ?? "core",
+          ToolProfile.resolve(input.cfg, input.model.providerID),
           // computer tools are config-gated; a config change must not reuse a
           // cached definition list from before the change
           input.cfg.computer ?? null,
@@ -241,8 +242,8 @@ export namespace ToolRegistry {
   async function all(custom: Tool.Info[], cfg?: ToolConfig, providerID?: ProviderID): Promise<Tool.Info[]> {
     cfg ??= await Config.get()
     const question = Flag.AX_CODE_CLIENT === "cli" || Flag.AX_CODE_ENABLE_QUESTION_TOOL
-    const axEngineToolProfile = cfg.provider?.[AX_ENGINE_PROVIDER_ID]?.options?.toolProfile ?? "core"
-    if (providerID === AX_ENGINE_PROVIDER_ID && axEngineToolProfile !== "full") {
+    const profile = ToolProfile.resolve(cfg, providerID)
+    if (providerID === AX_ENGINE_PROVIDER_ID && profile === "core") {
       // Local coding models have materially smaller context budgets than the
       // hosted models the full registry was designed for. Keep the first-turn
       // schema focused on tools needed to inspect, edit, and verify code. The
@@ -269,7 +270,7 @@ export namespace ToolRegistry {
     // experimental, and unnecessary for the normal local-model path.
     const debugEngineEnabled = Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE && providerID !== AX_ENGINE_PROVIDER_ID
 
-    return [
+    const builtins = [
       InvalidTool,
       ...(question ? [QuestionTool] : []),
       BashTool,
@@ -347,6 +348,9 @@ export namespace ToolRegistry {
             VisualSnapshotTool,
           ]
         : []),
+    ]
+    return [
+      ...(profile === "coding" ? builtins.filter((tool) => ToolProfile.includesCodingTool(tool.id)) : builtins),
       ...custom,
     ]
   }

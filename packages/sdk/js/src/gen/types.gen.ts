@@ -3120,9 +3120,9 @@ export type ProviderConfig = {
      */
     chunkTimeout?: number
     /**
-     * Tool surface for constrained local providers such as AX Engine. "core" keeps coding/file tools only; "full" exposes every enabled tool.
+     * Tool surface: "coding" focuses on coding, delegation and verification; "full" exposes every enabled tool (cloud default). AX Engine defaults to the smaller "core" profile.
      */
-    toolProfile?: "core" | "full"
+    toolProfile?: "core" | "coding" | "full"
     [key: string]: unknown
   }
   models?: {

@@ -1,3 +1,4 @@
+import { NativePerf } from "@/perf/native"
 import { MessageV2 } from "./message-v2"
 import path from "path"
 import { Log } from "@/util/log"
@@ -432,7 +433,7 @@ export namespace SessionProcessor {
         // this, computeDiff never finds a `from` snapshot and always
         // returns [], causing /diff to show "No file changes" even when
         // files were modified.  See GitHub issue #301.
-        snapshot = await Snapshot.track()
+        snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
         while (true) {
           blocked = false
           let currentText: MessageV2.TextPart | undefined
@@ -1200,7 +1201,8 @@ export namespace SessionProcessor {
                   // successful tool turn look unchanged, so revert has no
                   // file ledger to restore.
                   const stepBaseline = snapshot
-                  if (usedTools) snapshot = await Snapshot.track()
+                  if (usedTools)
+                    snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
                   // Save the post-tool snapshot for step-finish and carry it
                   // forward as the next step-start baseline. This preserves
                   // computeDiff's from/to pair while patchData retains the
@@ -1209,7 +1211,9 @@ export namespace SessionProcessor {
                   let patchData: { hash: string; files: string[] } | undefined
                   if (stepBaseline) {
                     try {
-                      const patch = await Snapshot.patch(stepBaseline)
+                      const patch = await NativePerf.runAsync("session.snapshot.patch", undefined, () =>
+                        Snapshot.patch(stepBaseline),
+                      )
                       if (patch.files.length) patchData = patch
                     } catch (err) {
                       log.warn("snapshot patch failed", { error: err })
@@ -1258,6 +1262,7 @@ export namespace SessionProcessor {
                       cache: usage.tokens.cache,
                     },
                   })
+                  const requestTiming = LLM.timing(stream)
                   Recorder.emit({
                     type: "llm.response",
                     sessionID: input.sessionID,
@@ -1270,6 +1275,7 @@ export namespace SessionProcessor {
                       cache: usage.tokens.cache,
                     },
                     latencyMs: Date.now() - stepStartTime,
+                    ...(requestTiming ? { timing: requestTiming } : {}),
                     stepIndex: attempt,
                   })
                   if (stepParts.length > 0) {
@@ -1589,8 +1595,11 @@ export namespace SessionProcessor {
           // Resolve async snapshot before batching final DB writes
           let finalPatch: { hash: string; files: string[] } | undefined
           if (snapshot) {
+            const finalSnapshot = snapshot
             try {
-              const patch = await Snapshot.patch(snapshot)
+              const patch = await NativePerf.runAsync("session.snapshot.patch", undefined, () =>
+                Snapshot.patch(finalSnapshot),
+              )
               if (patch.files.length) finalPatch = patch
             } catch (err) {
               log.warn("snapshot patch failed", { error: err })

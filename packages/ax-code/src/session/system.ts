@@ -34,6 +34,7 @@ import { ModeProtocol } from "../mode/protocol"
 import { Config } from "../config/config"
 import type { ModePolicy } from "../mode/policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { ToolProfile } from "@/tool/profile"
 import { maybeRenderAxWikiProtocol } from "@ax-code/ax-wiki"
 
 export namespace SystemPrompt {
@@ -122,6 +123,8 @@ export namespace SystemPrompt {
 
   export async function environment(model: Provider.Model) {
     const project = Instance.project
+    const cfg = await Config.get()
+    const codingProfile = ToolProfile.resolve(cfg, model.providerID) === "coding"
     // Server-side search hint. ax-code's default system prompt frames
     // the assistant as a software-engineering tool, which leads some models
     // to refuse real-world current-state questions outright. Tell Alibaba
@@ -158,7 +161,11 @@ export namespace SystemPrompt {
           `  Prefer industry/common best practices and avoid over-engineering: choose the simplest change that solves the task, avoid new abstractions without 3+ concrete use cases, and verify before expanding scope.`,
           `  Sandwich non-trivial work: plan → implement → verify (tests/build/verify_project) before claiming done.`,
           `  For independent research digs (not multi-provider ensemble), prefer task_parallel with explore or scout agents; do not run concurrent writers.`,
-          `  If the user asks for council or arena multi-provider review, call council/arena within 1–2 tool rounds — do not start with task_parallel monorepo digs.`,
+          ...(codingProfile
+            ? []
+            : [
+                `  If the user asks for council or arena multi-provider review, call council/arena within 1–2 tool rounds — do not start with task_parallel monorepo digs.`,
+              ]),
           `  When autonomous mode makes choices for the user, record those choices in the final response.`,
           `  Before ending your turn, mark every todo as completed or cancelled — never leave todos in pending or in_progress state.`,
           `</autonomous_workflow>`,
@@ -202,28 +209,35 @@ export namespace SystemPrompt {
         ]
       : []
 
-    const debugEngineWorkflow = Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE
-      ? [
-          `<debug_engine_workflow>`,
-          `  Debugging & Refactoring Engine tools are enabled in this session.`,
-          `  Prefer debug_analyze, impact_analyze, verify_project, and debug_apply_verification when they match the task and are available in the tool list.`,
-          `</debug_engine_workflow>`,
-        ]
-      : []
+    const debugEngineWorkflow =
+      Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE && !codingProfile
+        ? [
+            `<debug_engine_workflow>`,
+            `  Debugging & Refactoring Engine tools are enabled in this session.`,
+            `  Prefer debug_analyze, impact_analyze, verify_project, and debug_apply_verification when they match the task and are available in the tool list.`,
+            `</debug_engine_workflow>`,
+          ]
+        : []
 
     let executionModesProtocol: string[] = []
     let wikiProtocol: string[] = []
     try {
-      const cfg = await Config.get()
       const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
       const localProvider = modes?.hybrid?.localProviderID ?? AX_ENGINE_PROVIDER_ID
       executionModesProtocol = [
-        ModeProtocol.renderExecutionModes({
-          defaultMode: modes?.default,
-          councilEnabled: modes?.council?.enabled !== false,
-          arenaEnabled: modes?.arena?.enabled === true,
-          localAvailable: model.providerID === localProvider,
-        }),
+        codingProfile
+          ? [
+              `<execution_modes>`,
+              `  The coding tool profile is selected. Use the available coding, delegation and verification tools.`,
+              `  Council and arena tools require the full tool profile.`,
+              `</execution_modes>`,
+            ].join("\n")
+          : ModeProtocol.renderExecutionModes({
+              defaultMode: modes?.default,
+              councilEnabled: modes?.council?.enabled !== false,
+              arenaEnabled: modes?.arena?.enabled === true,
+              localAvailable: model.providerID === localProvider,
+            }),
       ]
       const wikiCfg = (
         cfg as {
@@ -238,7 +252,7 @@ export namespace SystemPrompt {
       if (wikiBlock) wikiProtocol = [wikiBlock]
     } catch (error) {
       log.warn("execution modes protocol resolve failed", { error })
-      executionModesProtocol = [ModeProtocol.renderExecutionModes()]
+      if (executionModesProtocol.length === 0) executionModesProtocol = [ModeProtocol.renderExecutionModes()]
       try {
         const wikiBlock = await maybeRenderAxWikiProtocol(Instance.directory)
         if (wikiBlock) wikiProtocol = [wikiBlock]

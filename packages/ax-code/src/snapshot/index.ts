@@ -257,8 +257,8 @@ export namespace Snapshot {
     await Filesystem.write(target, await read(file))
   }
 
-  async function add(current: State) {
-    await syncExclude(current)
+  async function add(current: State, options?: { excludesSynced: boolean }) {
+    if (!options?.excludesSynced) await syncExclude(current)
     // Stage the whole worktree, not just `current.directory` — a session's
     // working directory can be a subdirectory of the git worktree (e.g. a
     // monorepo package), and edits outside it are explicitly permitted (see
@@ -364,22 +364,44 @@ export namespace Snapshot {
       await ensureRepo(current)
 
       if (current.prevHash) {
-        const status = await runGit([...cfg, ...args(current, ["status", "--porcelain"])], { cwd: current.directory })
-        if (status.code !== 0) {
-          log.error("failed to inspect snapshot status", {
-            cwd: current.directory,
-            exitCode: status.code,
-            stderr: status.stderr,
+        // HEAD stays unborn in this tree-only repository. Compare against the
+        // recorded tree, including work outside a session's subdirectory and
+        // files newly admitted by ignore rules. patch/restore may change the
+        // index independently of prevHash, so index cleanliness is insufficient.
+        await syncExclude(current)
+        const diff = await runGit(
+          [...cfg, ...args(current, ["diff", "--no-ext-diff", "--quiet", current.prevHash, "--", "."])],
+          { cwd: current.worktree },
+        )
+        if (diff.code !== 0 && diff.code !== 1) {
+          log.error("failed to inspect snapshot diff", {
+            cwd: current.worktree,
+            exitCode: diff.code,
+            stderr: diff.stderr,
           })
-          throw new Error(`Snapshot status failed: git status exited with code ${status.code}`)
+          throw new Error(`Snapshot diff failed: git diff exited with code ${diff.code}`)
         }
-        if (status.text.trim() === "") {
-          log.info("tracking (unchanged)", { hash: current.prevHash })
-          return current.prevHash
+        if (diff.code === 0) {
+          const untracked = await runGit(
+            [...cfg, ...args(current, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."])],
+            { cwd: current.worktree },
+          )
+          if (untracked.code !== 0) {
+            log.error("failed to inspect snapshot untracked files", {
+              cwd: current.worktree,
+              exitCode: untracked.code,
+              stderr: untracked.stderr,
+            })
+            throw new Error(`Snapshot untracked check failed: git ls-files exited with code ${untracked.code}`)
+          }
+          if (untracked.text.length === 0) {
+            log.info("tracking (unchanged)", { hash: current.prevHash })
+            return current.prevHash
+          }
         }
       }
 
-      await add(current)
+      await add(current, { excludesSynced: Boolean(current.prevHash) })
       const result = await runGit(args(current, ["write-tree"]), { cwd: current.directory })
       if (result.code !== 0) {
         log.error("failed to write snapshot tree", {

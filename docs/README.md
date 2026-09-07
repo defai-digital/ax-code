@@ -63,6 +63,7 @@ pages are the ones linked here.
   work without silently weakening correctness-sensitive tasks.
 - [Auto-Route](guides/auto-route.md) — specialist routing and optional complexity routing.
 - [Model Effort](guides/effort.md) — thinking levels and provider-specific behavior.
+- [Performance](guides/performance.md) — coding tool profiles and local request-timing diagnostics.
 - [Lifecycle Hooks](guides/hooks.md) — hook events and bundled policy packs.
 - [Web Dashboard](guides/dashboard.md) — workspace usage, activity, model/tool breakdowns, and per-session reports.
 
