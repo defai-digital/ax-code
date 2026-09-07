@@ -18,6 +18,10 @@ export const THINK_TAG_PAIRS: readonly ThinkTagPair[] = [
   { open: "<think>", close: "</think>", name: "think" },
 ]
 
+// Precomputed open-tag list so the per-drain `THINK_TAG_PAIRS.map(...)`
+// allocation is hoisted out of the hot path.
+const THINK_TAG_OPENS: readonly string[] = THINK_TAG_PAIRS.map((pair) => pair.open)
+
 export type ThinkTagChunk = {
   type: "text" | "reasoning"
   text: string
@@ -38,7 +42,12 @@ function findOpenTag(buffer: string): { index: number; pair: ThinkTagPair } | un
 
 function longestTagPrefix(buffer: string, candidates: readonly string[]): number {
   let keep = 0
-  for (let i = 1; i <= buffer.length; i++) {
+  // A suffix longer than the longest candidate can never satisfy
+  // candidate.startsWith(suffix), so bound the loop instead of slicing the
+  // whole buffer — O(n²) for a single large text delta.
+  const maxCandidateLength = candidates.reduce((max, candidate) => Math.max(max, candidate.length), 0)
+  const limit = Math.min(buffer.length, maxCandidateLength)
+  for (let i = 1; i <= limit; i++) {
     const suffix = buffer.slice(buffer.length - i)
     if (candidates.some((candidate) => candidate.startsWith(suffix))) keep = i
   }
@@ -93,10 +102,7 @@ export class ThinkTagParser {
         const hit = findOpenTag(this.buffer)
         if (!hit) {
           if (!flush) {
-            const keep = longestTagPrefix(
-              this.buffer,
-              THINK_TAG_PAIRS.map((pair) => pair.open),
-            )
+            const keep = longestTagPrefix(this.buffer, THINK_TAG_OPENS)
             const emit = this.buffer.slice(0, this.buffer.length - keep)
             this.buffer = this.buffer.slice(this.buffer.length - keep)
             if (emit) out.push({ type: "text", text: emit })

@@ -621,7 +621,20 @@ export namespace LLM {
 
   // Sessions whose pacing grace window has already elapsed — checked once,
   // then latched so the durable-store read isn't repeated on every request.
+  // LRU-capped so a long-lived server does not grow one entry per session
+  // forever; eviction only costs one extra durable peek until re-latch.
   const superLongGraceElapsed = new Set<string>()
+  const SUPER_LONG_GRACE_MAX_ENTRIES = 256
+
+  function markSuperLongGraceElapsed(sessionID: string) {
+    superLongGraceElapsed.delete(sessionID)
+    superLongGraceElapsed.add(sessionID)
+    while (superLongGraceElapsed.size > SUPER_LONG_GRACE_MAX_ENTRIES) {
+      const oldest = superLongGraceElapsed.keys().next().value
+      if (oldest === undefined) break
+      superLongGraceElapsed.delete(oldest)
+    }
+  }
 
   async function applySuperLongPacing(input: {
     enabled: boolean
@@ -654,7 +667,7 @@ export namespace LLM {
       if (startedAt === undefined || now - startedAt < input.pacingGraceMs) {
         return
       }
-      superLongGraceElapsed.add(input.sessionID)
+      markSuperLongGraceElapsed(input.sessionID)
     }
     const durablePacingDisabled = isSuperLongDurablePacingDisabled()
     const inMemoryOnly =
@@ -1103,6 +1116,10 @@ export namespace LLM {
     cfg: Awaited<ReturnType<typeof Config.get>>,
   ) {
     const tools = { ...input.tools }
+    // Empty tool set: every downstream delete/filter (permission disable,
+    // isolation read-only/network stripping) is a no-op, so skip the
+    // Permission.merge + ruleset serialization + isolation resolution.
+    if (Object.keys(tools).length === 0) return tools
     const ruleset = Permission.merge(
       input.agent.permission,
       input.permission ?? [],
