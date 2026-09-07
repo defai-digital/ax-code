@@ -2,20 +2,35 @@ import { execFile } from "node:child_process"
 import path from "node:path"
 import { promisify } from "node:util"
 import {
+  AX_WIKI_EVIDENCE_SCHEMA_VERSION,
+  AX_WIKI_GENERATOR,
   buildAxWiki,
   createWikiPlan,
   discoverSources,
+  emptyEvidenceBundle,
   loadAxWikiConfig,
+  renderEvidenceBundle,
+  type Completeness,
+  type EvidenceBundle,
+  type EvidenceMethod,
+  type Provenance,
+  type RelationshipKind,
+  type RelationshipRecord,
+  type SourceRecord,
+  type SymbolKind,
+  type SymbolRecord,
   type WikiAction,
   type WikiBuildProgress,
   type WikiBuildResult,
   type WikiPageGenerationRequest,
   type WikiPageGenerationResult,
   type WikiPlan,
+  type WikiSource,
 } from "@ax-code/ax-wiki"
 import { generateObject } from "ai"
 import z from "zod"
 import { GraphContext } from "../code-intelligence/graph-context"
+import { Installation } from "../installation"
 import { Instance } from "../project/instance"
 import { Provider } from "../provider/provider"
 import { Log } from "../util/log"
@@ -45,6 +60,9 @@ Rules:
 - Record important exact symbols in the symbols array; do not add guessed symbols.
 - If evidence is incomplete, say what is uncertain and how to verify it.
 - Do not include a Sources section; AX Wiki adds the authoritative source list.`
+
+const WIKI_PROMPT_VERSION = "native-page-v1"
+const EVIDENCE_PRODUCER = "ax-code-code-intelligence"
 
 function sourceEvidence(request: WikiPageGenerationRequest): string {
   return request.sources
@@ -83,7 +101,7 @@ Maintainer instructions:
 ${request.instructions || "No additional instructions."}
 
 Structural graph context:
-${request.graphContext || "No graph context is available; rely on the source evidence."}
+${renderTypedEvidence(request) || "No graph context is available; rely on the source evidence."}
 ${previous}
 Repository evidence:
 ${sourceEvidence(request)}`
@@ -117,11 +135,181 @@ export async function gitHeadCommit(root: string): Promise<string | undefined> {
   }
 }
 
-async function graphContext(request: { page: { title: string; purpose: string }; sources: Array<{ path: string }> }) {
+function renderTypedEvidence(request: WikiPageGenerationRequest): string | undefined {
+  if (request.evidence) return renderEvidenceBundle(request.evidence)
+  return request.graphContext
+}
+
+function repoRelative(file: string): string {
+  const relative = path.relative(Instance.directory, file)
+  if (!relative || relative.startsWith("..")) return file.split(Instance.directory).join(".")
+  return relative.split(path.sep).join("/")
+}
+
+function toSourceRecords(sources: WikiSource[]): SourceRecord[] {
+  return sources.map((source) => ({
+    path: source.path,
+    sha256: source.hash,
+    bytes: source.bytes,
+    language: source.language,
+    category: source.category,
+  }))
+}
+
+function toSymbolKind(kind: GraphContext.Pack["symbols"][number]["kind"]): SymbolKind {
+  switch (kind) {
+    case "function":
+    case "method":
+    case "class":
+    case "interface":
+    case "type":
+    case "variable":
+    case "constant":
+    case "module":
+    case "parameter":
+    case "enum":
+      return kind
+  }
+}
+
+function toSymbolRecord(symbol: GraphContext.Pack["symbols"][number], provenance: Provenance): SymbolRecord {
+  return {
+    id: symbol.id,
+    kind: toSymbolKind(symbol.kind),
+    name: symbol.name,
+    qualifiedName: symbol.qualifiedName,
+    file: repoRelative(symbol.file),
+    range: {
+      startLine: symbol.range.start.line,
+      startChar: symbol.range.start.character,
+      endLine: symbol.range.end.line,
+      endChar: symbol.range.end.character,
+    },
+    signature: symbol.signature,
+    visibility: symbol.visibility,
+    provenance: {
+      ...provenance,
+      method: symbol.explain.completeness === "partial" ? "tree-sitter" : "lsp",
+      queryId: symbol.explain.queryId,
+    },
+  }
+}
+
+function toRelationshipKind(kind: GraphContext.Pack["relationships"][number]["kind"]): RelationshipKind {
+  return kind === "reference" ? "references" : "calls"
+}
+
+function toRelationshipMethod(
+  source: GraphContext.Pack["relationships"][number]["provenance"]["source"],
+): EvidenceMethod {
+  if (source === "lsp") return "lsp"
+  if (source === "static") return "tree-sitter"
+  return "injected"
+}
+
+function toRelationshipRecord(
+  relationship: GraphContext.Pack["relationships"][number],
+  provenance: Provenance,
+): RelationshipRecord {
+  const method = toRelationshipMethod(relationship.provenance.source)
+  const file = relationship.file ? repoRelative(relationship.file) : undefined
+  if (relationship.kind === "reference") {
+    return {
+      kind: toRelationshipKind(relationship.kind),
+      from: file ? { file } : {},
+      to: relationship.to ? { symbolId: relationship.to.id } : {},
+      file,
+      provenance: { ...provenance, method },
+    }
+  }
+  return {
+    kind: toRelationshipKind(relationship.kind),
+    from: relationship.from ? { symbolId: relationship.from.id } : {},
+    to: relationship.to ? { symbolId: relationship.to.id } : {},
+    file,
+    provenance: { ...provenance, method },
+  }
+}
+
+function bundleCompleteness(pack: GraphContext.Pack): Completeness {
+  if (pack.symbols.length === 0) return "queried-zero-results"
+  if (pack.envelope.degraded) return "partial"
+  if (pack.symbols.every((symbol) => symbol.explain.completeness === "lsp-only")) return "lsp-only"
+  if (pack.symbols.some((symbol) => symbol.explain.completeness === "partial") || pack.omitted.symbols > 0) {
+    return "partial"
+  }
+  return "complete"
+}
+
+type EvidenceSnapshot = EvidenceBundle["snapshot"]
+
+function toEvidenceBundle(
+  input: { root: string; sources: WikiSource[]; snapshot: EvidenceSnapshot },
+  pack: GraphContext.Pack,
+): EvidenceBundle {
+  const method: EvidenceMethod =
+    pack.symbols.length > 0 && pack.symbols.every((symbol) => symbol.explain.completeness === "partial")
+      ? "tree-sitter"
+      : "lsp"
+  const provenance: Provenance = {
+    producer: EVIDENCE_PRODUCER,
+    producerVersion: Installation.VERSION,
+    method,
+  }
+  const completeness = bundleCompleteness(pack)
+  if (completeness === "queried-zero-results") {
+    return {
+      ...emptyEvidenceBundle({ root: input.root, completeness, provenance }),
+      snapshot: input.snapshot,
+      sources: toSourceRecords(input.sources),
+      capability: { semantic: false, syntactic: false, diagnostics: false, graph: true },
+      freshness: {
+        indexedAt: new Date(pack.envelope.timestamp).toISOString(),
+        degraded: pack.envelope.degraded === true,
+      },
+    }
+  }
+  const symbols = pack.symbols.map((symbol) => toSymbolRecord(symbol, provenance))
+  const relationships = pack.relationships.map((relationship) => toRelationshipRecord(relationship, provenance))
+  return {
+    schemaVersion: AX_WIKI_EVIDENCE_SCHEMA_VERSION,
+    snapshot: input.snapshot,
+    sources: toSourceRecords(input.sources),
+    symbols,
+    relationships,
+    diagnostics: [],
+    capability: {
+      semantic: pack.symbols.some((symbol) => symbol.explain.completeness !== "partial"),
+      syntactic: symbols.length > 0,
+      diagnostics: false,
+      graph: true,
+    },
+    completeness,
+    provenance,
+    freshness: {
+      indexedAt: new Date(pack.envelope.timestamp).toISOString(),
+      degraded: pack.envelope.degraded === true,
+    },
+  }
+}
+
+async function evidenceProvider(
+  input: {
+    root: string
+    page: { title: string; purpose: string }
+    sources: WikiSource[]
+  },
+  snapshot: EvidenceSnapshot,
+) {
+  const provenance: Provenance = {
+    producer: EVIDENCE_PRODUCER,
+    producerVersion: Installation.VERSION,
+    method: "lsp",
+  }
   try {
     const pack = await GraphContext.build(Instance.project.id, {
-      query: `${request.page.title}. ${request.page.purpose}`,
-      seeds: request.sources
+      query: `${input.page.title}. ${input.page.purpose}`,
+      seeds: input.sources
         .slice(0, 16)
         .map((source) => ({ kind: "file" as const, value: path.join(Instance.directory, source.path) })),
       maxSymbols: 12,
@@ -131,9 +319,32 @@ async function graphContext(request: { page: { title: string; purpose: string };
       freshness: "allowStaleWithWarning",
       scope: "worktree",
     })
-    return pack.symbols.length ? pack.output.split(Instance.directory).join(".") : undefined
+    return toEvidenceBundle({ root: input.root, sources: input.sources, snapshot }, pack)
   } catch {
-    return undefined
+    return {
+      ...emptyEvidenceBundle({
+        root: input.root,
+        completeness: "failed",
+        provenance: { ...provenance, method: "none" },
+      }),
+      snapshot,
+      sources: toSourceRecords(input.sources),
+    }
+  }
+}
+
+async function gitWorktreeDirty(root: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync("git", ["status", "--porcelain", "--untracked-files=normal"], {
+      cwd: root,
+      timeout: 10_000,
+      windowsHide: true,
+    })
+    return stdout.length > 0
+  } catch {
+    // The evidence contract has no unknown state. Conservatively mark an
+    // unavailable worktree probe dirty instead of claiming a clean snapshot.
+    return true
   }
 }
 
@@ -159,6 +370,15 @@ export async function runNativeWiki(input: {
   const config = await resolveWikiRuntimeConfig({ dir: input.dir, model: input.model })
   if (!config.enabled) throw new Error("AX Wiki is disabled by wiki.enabled=false")
   const model = await resolveModel(config.model)
+  const repositoryHead = await gitHeadCommit(input.root)
+  const snapshot: EvidenceSnapshot = {
+    root: input.root,
+    revision: {
+      head: repositoryHead,
+      dirty: await gitWorktreeDirty(input.root),
+    },
+    capturedAt: new Date().toISOString(),
+  }
   const generator = async (request: WikiPageGenerationRequest): Promise<WikiPageGenerationResult> => {
     const abort = new AbortController()
     const timer = setTimeout(() => abort.abort(), 180_000)
@@ -182,11 +402,17 @@ export async function runNativeWiki(input: {
     wikiDir: config.dir,
     action: input.action,
     generator,
-    graphContext,
+    evidenceProvider: { provide: (request) => evidenceProvider(request, snapshot) },
     config: engineConfig(config),
     model: model.label,
-    repositoryHead: await gitHeadCommit(input.root),
+    repositoryHead,
     force: input.force,
     onProgress: input.onProgress,
+    generatorIdentity: {
+      name: AX_WIKI_GENERATOR,
+      version: Installation.VERSION,
+      promptVersion: WIKI_PROMPT_VERSION,
+      model: model.label,
+    },
   })
 }

@@ -10,6 +10,8 @@
 // additive; consumers should ignore unknown fields and treat a newer schemaVersion
 // as readable-but-possibly-richer.
 
+import { sha256, stableJson } from "./hash.js"
+
 export const AX_WIKI_EVIDENCE_SCHEMA_VERSION = 1 as const
 
 // ─── Enumerations ────────────────────────────────────────────────────────────
@@ -194,6 +196,131 @@ export function emptyEvidenceBundle(input: {
     completeness: input.completeness,
     provenance: input.provenance,
     freshness: {},
+  }
+}
+
+/**
+ * Content-derived fingerprint of a page's typed evidence. Excludes volatile
+ * timestamps (`capturedAt`, `indexedAt`, `queryId`) so reindexes and repeated
+ * queries with the same semantic payload do not over-trigger regeneration.
+ */
+export function fingerprintEvidenceBundle(bundle: EvidenceBundle): string {
+  return sha256(stableJson(stableEvidencePayload(bundle)))
+}
+
+/**
+ * Deterministic text view for legacy generators. The typed bundle remains the
+ * canonical input; this rendering exists only while `graphContext` is supported.
+ */
+export function renderEvidenceBundle(bundle: EvidenceBundle): string {
+  const lines = [
+    "# Semantic Evidence",
+    "",
+    `schemaVersion: ${bundle.schemaVersion}`,
+    `completeness: ${bundle.completeness}`,
+    `capability: semantic=${bundle.capability.semantic} syntactic=${bundle.capability.syntactic} diagnostics=${bundle.capability.diagnostics} graph=${bundle.capability.graph}`,
+    `producer: ${bundle.provenance.producer} version=${bundle.provenance.producerVersion} method=${bundle.provenance.method}`,
+    `freshness: stale=${bundle.freshness.stale === true ? "true" : "false"} degraded=${bundle.freshness.degraded === true ? "true" : "false"}`,
+    "",
+    "## Symbols",
+  ]
+  if (bundle.symbols.length === 0) {
+    lines.push("No indexed symbols matched the query.")
+  } else {
+    for (const symbol of bundle.symbols) {
+      lines.push(`- [${symbol.kind}] ${symbol.qualifiedName} (${symbol.file}:${symbol.range.startLine + 1})`)
+    }
+  }
+  lines.push("")
+  if (bundle.relationships.length > 0) {
+    lines.push("## Relationships")
+    for (const relationship of bundle.relationships) {
+      const from = relationship.from.symbolId ?? relationship.from.file ?? "(unknown)"
+      const to = relationship.to.symbolId ?? relationship.to.file ?? "(unknown)"
+      const file = relationship.file ? ` (${relationship.file})` : ""
+      lines.push(`- ${relationship.kind}: ${from} -> ${to}${file}`)
+    }
+    lines.push("")
+  }
+  if (bundle.diagnostics.length > 0) {
+    lines.push("## Diagnostics")
+    for (const diagnostic of bundle.diagnostics) {
+      lines.push(
+        `- [${diagnostic.severity}] ${diagnostic.file}:${diagnostic.range.startLine + 1}: ${diagnostic.message}`,
+      )
+    }
+    lines.push("")
+  }
+  return lines.join("\n")
+}
+
+function stableProvenance(provenance: Provenance): {
+  producer: string
+  producerVersion: string
+  method: EvidenceMethod
+} {
+  return {
+    producer: provenance.producer,
+    producerVersion: provenance.producerVersion,
+    method: provenance.method,
+  }
+}
+
+function compareStable(left: unknown, right: unknown): number {
+  return stableJson(left).localeCompare(stableJson(right))
+}
+
+function stableEvidencePayload(bundle: EvidenceBundle): unknown {
+  const sources = bundle.sources.map((source) => ({
+    path: source.path,
+    sha256: source.sha256,
+    bytes: source.bytes,
+    language: source.language ?? null,
+    category: source.category,
+    truncated: source.truncated ?? false,
+  }))
+  const symbols = bundle.symbols.map((symbol) => ({
+    id: symbol.id,
+    kind: symbol.kind,
+    name: symbol.name,
+    qualifiedName: symbol.qualifiedName,
+    file: symbol.file,
+    range: symbol.range,
+    signature: symbol.signature ?? null,
+    visibility: symbol.visibility ?? null,
+    provenance: stableProvenance(symbol.provenance),
+  }))
+  const relationships = bundle.relationships.map((relationship) => ({
+    kind: relationship.kind,
+    from: relationship.from,
+    to: relationship.to,
+    file: relationship.file ?? null,
+    range: relationship.range ?? null,
+    byteStart: relationship.byteStart ?? null,
+    byteEnd: relationship.byteEnd ?? null,
+    provenance: stableProvenance(relationship.provenance),
+  }))
+  const diagnostics = bundle.diagnostics.map((diagnostic) => ({
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    file: diagnostic.file,
+    range: diagnostic.range,
+    source: diagnostic.source ?? null,
+    code: diagnostic.code ?? null,
+  }))
+  return {
+    schemaVersion: bundle.schemaVersion,
+    completeness: bundle.completeness,
+    capability: bundle.capability,
+    provenance: stableProvenance(bundle.provenance),
+    freshness: {
+      stale: bundle.freshness.stale ?? false,
+      degraded: bundle.freshness.degraded ?? false,
+    },
+    sources: [...sources].sort(compareStable),
+    symbols: [...symbols].sort(compareStable),
+    relationships: [...relationships].sort(compareStable),
+    diagnostics: [...diagnostics].sort(compareStable),
   }
 }
 

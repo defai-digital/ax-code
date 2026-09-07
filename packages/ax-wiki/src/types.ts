@@ -1,3 +1,6 @@
+import type { EvidenceBundle } from "./contracts.js"
+import type { EvidenceProvider } from "./ports.js"
+
 export const AX_WIKI_SCHEMA_VERSION = 1 as const
 export const AX_WIKI_GENERATOR = "ax-wiki" as const
 
@@ -47,7 +50,10 @@ export type WikiPageGenerationRequest = {
   plan: WikiPlan
   sources: Array<WikiSource & { content: string; truncated: boolean }>
   sourceInventory: WikiSource[]
+  /** Legacy opaque graph payload. Prefer `evidence` when a typed bundle is available. */
   graphContext?: string
+  /** Canonical typed evidence for this page. Takes precedence over `graphContext`. */
+  evidence?: EvidenceBundle
   instructions?: string
   previousContent?: string
 }
@@ -153,6 +159,11 @@ export type WikiBuildInput = {
   action: WikiAction
   generator: WikiPageGenerator
   graphContext?: WikiGraphContextProvider
+  /**
+   * Typed semantic evidence for each planned page. When set, this is the
+   * canonical evidence source and takes precedence over `graphContext`.
+   */
+  evidenceProvider?: EvidenceProvider
   config?: AxWikiConfig
   model?: string
   repositoryHead?: string

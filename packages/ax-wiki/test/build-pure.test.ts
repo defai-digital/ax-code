@@ -2,11 +2,15 @@ import { describe, expect, test, vi } from "vitest"
 import {
   buildPure,
   emptyEvidenceBundle,
+  fingerprintEvidenceBundle,
   utf8ByteLength,
   utf8ByteSpan,
   type Completeness,
+  type EvidenceBundle,
+  type EvidenceProvider,
+  type Provenance,
   type WikiEvidenceReader,
-  type WikiPageGenerator,
+  type WikiPageGenerationRequest,
   type WikiSource,
 } from "../src"
 
@@ -36,12 +40,26 @@ function inMemorySources(): WikiSource[] {
 const evidenceReader: WikiEvidenceReader = async ({ sources }) =>
   sources.map((source) => ({ ...source, content: CONTENTS[source.path] ?? "", truncated: false }))
 
-function generator(): WikiPageGenerator {
-  return vi.fn(async (request) => ({
+function generator() {
+  return vi.fn(async (request: WikiPageGenerationRequest) => ({
     summary: `Source-backed guide for ${request.page.title} and its repository responsibilities.`,
     body: `## Purpose\n\nThis page explains ${request.page.purpose} The claims are grounded in the selected repository files and should be verified against code before structural changes.\n\n## Change guidance\n\nStart with the cited source files, run the repository tests, and use code intelligence for exact callers and references.`,
     symbols: request.page.kind === "module" ? [`${request.page.title.replace(/ Module$/, "")}Value`] : [],
   }))
+}
+
+function baseInput() {
+  return {
+    root: "/virtual/root",
+    wikiDir: "ax-wiki",
+    action: "generate" as const,
+    sources: inMemorySources(),
+    config: {},
+    generator: generator(),
+    evidenceReader,
+    readExistingPage: async () => undefined,
+    now: () => new Date("2026-01-01T00:00:00Z"),
+  }
 }
 
 describe("buildPure (in-memory, no filesystem)", () => {
@@ -144,18 +162,6 @@ describe("UTF-8 byte budgeting and spans (gate C6)", () => {
 })
 
 describe("per-page fingerprint (gate C5)", () => {
-  const baseInput = () => ({
-    root: "/virtual/root",
-    wikiDir: "ax-wiki",
-    action: "generate" as const,
-    sources: inMemorySources(),
-    config: {},
-    generator: generator(),
-    evidenceReader,
-    readExistingPage: async () => undefined,
-    now: () => new Date("2026-01-01T00:00:00Z"),
-  })
-
   test("is present on every page and stable for identical inputs", async () => {
     const a = await buildPure(baseInput())
     const b = await buildPure(baseInput())
@@ -216,5 +222,278 @@ describe("per-page fingerprint (gate C5)", () => {
       generatorIdentity: { name: "ax-wiki", version: "2.0.0", promptVersion: "p2" },
     })
     expect(new Set(upgraded.generatedPages)).toEqual(new Set(first.plan.pages.map((page) => page.path)))
+  })
+})
+
+const provenance: Provenance = { producer: "test", producerVersion: "1.0.0", method: "injected" }
+
+function baseBundle(overrides: Partial<EvidenceBundle> = {}): EvidenceBundle {
+  return {
+    ...emptyEvidenceBundle({ root: "/virtual/root", completeness: "complete", provenance }),
+    capability: { semantic: true, syntactic: false, diagnostics: false, graph: true },
+    freshness: { stale: false, degraded: false },
+    ...overrides,
+  }
+}
+
+describe("typed evidence provider", () => {
+  test("takes precedence over the legacy graphContext callback", async () => {
+    const graphContext = vi.fn(async () => "legacy-graph-context")
+    const provide = vi.fn(async ({ root }: { root: string }) =>
+      emptyEvidenceBundle({ root, completeness: "partial", provenance }),
+    )
+    const generate = generator()
+    const result = await buildPure({
+      ...baseInput(),
+      generator: generate,
+      graphContext,
+      evidenceProvider: { provide },
+    })
+    expect(graphContext).not.toHaveBeenCalled()
+    expect(provide).toHaveBeenCalledTimes(result.plan.pages.length)
+    for (const call of generate.mock.calls) {
+      const request = call[0]
+      expect(request.graphContext).toContain("# Semantic Evidence")
+      expect(request.evidence?.completeness).toBe("partial")
+    }
+  })
+
+  test("calls the provider once per planned page and reuses the cached bundle", async () => {
+    let calls = 0
+    const provide: EvidenceProvider["provide"] = async ({ root, page }) => {
+      calls += 1
+      return emptyEvidenceBundle({
+        root,
+        completeness: "complete",
+        provenance: { ...provenance, queryId: `${page.path}:${calls}` },
+      })
+    }
+    const generate = generator()
+    const result = await buildPure({
+      ...baseInput(),
+      generator: generate,
+      evidenceProvider: { provide },
+    })
+    expect(calls).toBe(result.plan.pages.length)
+    const queryIds = generate.mock.calls.map((call) => call[0].evidence?.provenance.queryId)
+    expect(queryIds).toEqual(result.plan.pages.map((page, index) => `${page.path}:${index + 1}`))
+  })
+
+  test("writes the same cached fingerprint used for the skip decision", async () => {
+    const provide = vi.fn(async ({ root }: { root: string }) =>
+      emptyEvidenceBundle({ root, completeness: "complete", provenance }),
+    )
+    const first = await buildPure({
+      ...baseInput(),
+      evidenceProvider: { provide },
+    })
+    const page = first.plan.pages[0]!.path
+    const fingerprint = first.manifest.pages[page]!.fingerprint
+    expect(fingerprint).toBeDefined()
+
+    const second = await buildPure({
+      ...baseInput(),
+      action: "update",
+      previous: first.manifest,
+      readExistingPage: async (pagePath) => first.candidate.get(pagePath),
+      evidenceProvider: { provide },
+    })
+    expect(second.generatedPages).toEqual([])
+    expect(second.manifest.pages[page]!.fingerprint).toBe(fingerprint)
+    expect(provide).toHaveBeenCalledTimes(first.plan.pages.length * 2)
+  })
+
+  test("ignores volatile timestamps when fingerprinting page evidence", async () => {
+    const generate = (capturedAt: string, indexedAt: string, queryId: string) =>
+      buildPure({
+        ...baseInput(),
+        evidenceProvider: {
+          provide: async ({ root }) =>
+            baseBundle({
+              snapshot: {
+                root,
+                revision: { dirty: false },
+                capturedAt,
+              },
+              provenance: { ...provenance, queryId },
+              freshness: { indexedAt, stale: false, degraded: false },
+            }),
+        },
+      })
+    const a = await generate("2020-01-01T00:00:00.000Z", "2020-02-01T00:00:00.000Z", "q-1")
+    const b = await generate("2024-12-31T23:59:59.000Z", "2025-01-01T00:00:00.000Z", "q-2")
+    const page = a.plan.pages[0]!.path
+    expect(a.manifest.pages[page]!.fingerprint).toBe(b.manifest.pages[page]!.fingerprint)
+  })
+
+  test("regenerates on update when stable evidence fields change", async () => {
+    const first = await buildPure({
+      ...baseInput(),
+      evidenceProvider: {
+        provide: async ({ root }) => emptyEvidenceBundle({ root, completeness: "complete", provenance }),
+      },
+    })
+    const upgraded = await buildPure({
+      ...baseInput(),
+      action: "update",
+      previous: first.manifest,
+      readExistingPage: async (pagePath) => first.candidate.get(pagePath),
+      evidenceProvider: {
+        provide: async ({ root }) => emptyEvidenceBundle({ root, completeness: "partial", provenance }),
+      },
+    })
+    expect(new Set(upgraded.generatedPages)).toEqual(new Set(first.plan.pages.map((page) => page.path)))
+  })
+
+  test("regenerates only the page whose typed evidence changed", async () => {
+    const first = await buildPure({
+      ...baseInput(),
+      evidenceProvider: {
+        provide: async ({ root, page }) =>
+          baseBundle({
+            snapshot: { root, revision: { dirty: false }, capturedAt: "2026-01-01T00:00:00.000Z" },
+            provenance: { ...provenance, queryId: page.path },
+          }),
+      },
+    })
+    const changedPage = first.plan.pages[0]!.path
+    const upgraded = await buildPure({
+      ...baseInput(),
+      action: "update",
+      previous: first.manifest,
+      readExistingPage: async (pagePath) => first.candidate.get(pagePath),
+      evidenceProvider: {
+        provide: async ({ root, page }) =>
+          baseBundle({
+            snapshot: { root, revision: { dirty: false }, capturedAt: "2026-01-02T00:00:00.000Z" },
+            provenance: { ...provenance, queryId: page.path },
+            completeness: page.path === changedPage ? "partial" : "complete",
+          }),
+      },
+    })
+
+    expect(upgraded.generatedPages).toEqual([changedPage])
+    expect(new Set(upgraded.unchangedPages)).toEqual(
+      new Set(first.plan.pages.map((page) => page.path).filter((pagePath) => pagePath !== changedPage)),
+    )
+  })
+
+  test("legacy graphContext still reaches the generator when no evidenceProvider is set", async () => {
+    const generate = generator()
+    await buildPure({
+      ...baseInput(),
+      generator: generate,
+      graphContext: async () => "legacy-graph-context",
+    })
+    expect(generate.mock.calls[0]![0].graphContext).toBe("legacy-graph-context")
+    expect(generate.mock.calls[0]![0].evidence).toBeUndefined()
+  })
+})
+
+describe("evidence fingerprint contents", () => {
+  const range = { startLine: 1, startChar: 0, endLine: 1, endChar: 4 }
+
+  test("is stable across volatile timestamps and record order", () => {
+    const left = baseBundle({
+      snapshot: { root: "/virtual/root", revision: { dirty: false }, capturedAt: "2020-01-01T00:00:00.000Z" },
+      provenance: { ...provenance, queryId: "q-left" },
+      freshness: { indexedAt: "2020-01-02T00:00:00.000Z", stale: false, degraded: true },
+      symbols: [
+        {
+          id: "b",
+          kind: "function",
+          name: "b",
+          qualifiedName: "mod.b",
+          file: "b.ts",
+          range,
+          provenance: { ...provenance, queryId: "s-b" },
+        },
+        {
+          id: "a",
+          kind: "function",
+          name: "a",
+          qualifiedName: "mod.a",
+          file: "a.ts",
+          range,
+          provenance: { ...provenance, queryId: "s-a" },
+        },
+      ],
+    })
+    const right = baseBundle({
+      snapshot: { root: "/virtual/root", revision: { dirty: false }, capturedAt: "2026-01-01T00:00:00.000Z" },
+      provenance: { ...provenance, queryId: "q-right" },
+      freshness: { indexedAt: "2026-01-02T00:00:00.000Z", stale: false, degraded: true },
+      symbols: [...left.symbols].reverse().map((symbol, index) => ({
+        ...symbol,
+        provenance: { ...symbol.provenance, queryId: `other-${index}` },
+      })),
+    })
+    expect(fingerprintEvidenceBundle(left)).toBe(fingerprintEvidenceBundle(right))
+  })
+
+  test("changes when schema, completeness, capability, producer, freshness flags, or records change", () => {
+    const base = baseBundle({
+      symbols: [
+        {
+          id: "a",
+          kind: "function",
+          name: "a",
+          qualifiedName: "mod.a",
+          file: "a.ts",
+          range,
+          provenance,
+        },
+      ],
+    })
+    const variants: EvidenceBundle[] = [
+      { ...base, completeness: "partial" },
+      { ...base, capability: { ...base.capability, diagnostics: true } },
+      { ...base, provenance: { ...base.provenance, producer: "other" } },
+      { ...base, provenance: { ...base.provenance, producerVersion: "9.9.9" } },
+      { ...base, provenance: { ...base.provenance, method: "lsp" } },
+      { ...base, freshness: { stale: true, degraded: false } },
+      { ...base, freshness: { stale: false, degraded: true } },
+      {
+        ...base,
+        sources: [
+          {
+            path: "a.ts",
+            sha256: "abc123",
+            bytes: 42,
+            language: "typescript",
+            category: "code",
+          },
+        ],
+      },
+      {
+        ...base,
+        symbols: [{ ...base.symbols[0]!, name: "renamed", qualifiedName: "mod.renamed" }],
+      },
+      {
+        ...base,
+        relationships: [
+          {
+            kind: "calls",
+            from: { symbolId: "a" },
+            to: { symbolId: "b" },
+            provenance,
+          },
+        ],
+      },
+      {
+        ...base,
+        diagnostics: [
+          {
+            severity: "error",
+            message: "broken",
+            file: "a.ts",
+            range,
+          },
+        ],
+      },
+    ]
+    const seen = new Set(variants.map((bundle) => fingerprintEvidenceBundle(bundle)))
+    expect(seen.size).toBe(variants.length)
+    expect(seen.has(fingerprintEvidenceBundle(base))).toBe(false)
   })
 })

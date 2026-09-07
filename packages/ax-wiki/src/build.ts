@@ -94,6 +94,7 @@ export async function buildAxWiki(input: WikiBuildInput): Promise<WikiBuildResul
       readSourceEvidence({ root, sources: selected, maxTotalBytes }),
     readExistingPage,
     graphContext: input.graphContext,
+    evidenceProvider: input.evidenceProvider,
     model: input.model,
     repositoryHead: input.repositoryHead,
     force: input.force,

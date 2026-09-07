@@ -6,9 +6,11 @@ import {
   AX_WIKI_PROTECTED_END,
   AX_WIKI_PROTECTED_START,
   buildAxWiki,
+  emptyEvidenceBundle,
   lintWiki,
   loadWikiManifest,
   mergeProtectedSections,
+  type WikiPageGenerationRequest,
   type WikiPageGenerator,
 } from "../src"
 
@@ -30,8 +32,8 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-function generator(): WikiPageGenerator {
-  return vi.fn(async (request) => ({
+function generator() {
+  return vi.fn(async (request: WikiPageGenerationRequest) => ({
     summary: `Source-backed guide for ${request.page.title} and its repository responsibilities.`,
     body: `## Purpose\n\nThis page explains ${request.page.purpose} The claims are grounded in the selected repository files and should be verified against code before structural changes.\n\n## Change guidance\n\nStart with the cited source files, run the repository tests, and use code intelligence for exact callers and references.`,
     symbols: request.page.kind === "module" ? [`${request.page.title.replace(/ Module$/, "")}Value`] : [],
@@ -129,6 +131,31 @@ describe("AX Wiki build lifecycle", () => {
       "symlinked output paths",
     )
     await expect(readFile(path.join(outside, ".manifest.json"), "utf8")).rejects.toThrow()
+  })
+
+  test("forwards typed evidence to the generator and prefers it over graphContext", async () => {
+    const root = await fixture()
+    const generate = generator()
+    const graphContext = vi.fn(async () => "legacy-graph-context")
+    const provide = vi.fn(async ({ root: evidenceRoot }: { root: string }) =>
+      emptyEvidenceBundle({
+        root: evidenceRoot,
+        completeness: "queried-zero-results",
+        provenance: { producer: "test", producerVersion: "0.0.0", method: "injected" },
+      }),
+    )
+    const result = await buildAxWiki({
+      root,
+      action: "generate",
+      generator: generate,
+      graphContext,
+      evidenceProvider: { provide },
+      now: () => new Date("2026-01-01T00:00:00Z"),
+    })
+    expect(graphContext).not.toHaveBeenCalled()
+    expect(provide).toHaveBeenCalledTimes(result.plan.pages.length)
+    expect(generate.mock.calls[0]![0].evidence?.completeness).toBe("queried-zero-results")
+    expect(generate.mock.calls[0]![0].graphContext).toContain("# Semantic Evidence")
   })
 
   test("reports invalid core configuration instead of silently ignoring it", async () => {

@@ -11,8 +11,10 @@
 // Behavior is byte-for-byte the same as the previous inline implementation in
 // `build.ts`; only the effect boundaries moved.
 
+import { fingerprintEvidenceBundle, renderEvidenceBundle, type EvidenceBundle } from "./contracts.js"
 import { parseFrontmatter, renderWikiPage } from "./frontmatter.js"
 import { sha256, stableJson } from "./hash.js"
+import type { EvidenceProvider } from "./ports.js"
 import { createWikiPlan, selectPageSources, sourceMatchesPage } from "./plan.js"
 import { extractProtectedSections, managedContentHash, mergeProtectedSections } from "./protected.js"
 import type {
@@ -53,6 +55,12 @@ export type WikiBuildPureInput = {
   evidenceReader: WikiEvidenceReader
   readExistingPage: (pagePath: string) => Promise<string | undefined>
   graphContext?: WikiGraphContextProvider
+  /**
+   * Canonical typed evidence. When set, each planned page is resolved once and
+   * the cached bundle is reused for fingerprinting and generation. Takes
+   * precedence over `graphContext`.
+   */
+  evidenceProvider?: EvidenceProvider
   model?: string
   repositoryHead?: string
   force?: boolean
@@ -95,6 +103,7 @@ function pageFingerprint(input: {
   generatorIdentity?: GeneratorIdentity
   model?: string
   semanticRevision?: string
+  evidenceFingerprint?: string
 }): string {
   return sha256(
     stableJson({
@@ -103,8 +112,14 @@ function pageFingerprint(input: {
       generatorIdentity: input.generatorIdentity ?? null,
       model: input.model ?? null,
       semanticRevision: input.semanticRevision ?? null,
+      ...(input.evidenceFingerprint !== undefined ? { evidence: input.evidenceFingerprint } : {}),
     }),
   )
+}
+
+type CachedPageEvidence = {
+  selected: WikiSource[]
+  bundle?: EvidenceBundle
 }
 
 function pageNeedsGeneration(input: {
@@ -149,9 +164,14 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
     if (content !== undefined) existing.set(page, content)
   }
 
+  const pageCache = new Map<string, CachedPageEvidence>()
   const prospectiveFingerprints = new Map<string, string>()
   for (const page of plan.pages) {
     const selected = selectPageSources(sources, page, config.maxSourcesPerPage ?? 80)
+    const bundle = input.evidenceProvider
+      ? await input.evidenceProvider.provide({ root: input.root, page, sources: selected })
+      : undefined
+    pageCache.set(page.path, { selected, bundle })
     prospectiveFingerprints.set(
       page.path,
       pageFingerprint({
@@ -160,6 +180,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
         generatorIdentity: input.generatorIdentity,
         model: input.model,
         semanticRevision: input.semanticRevision,
+        evidenceFingerprint: bundle ? fingerprintEvidenceBundle(bundle) : undefined,
       }),
     )
   }
@@ -208,12 +229,16 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
   for (let index = 0; index < targets.length; index++) {
     const page = targets[index]!
     onProgress?.({ type: "page_start", path: page.path, index: index + 1, total: targets.length })
-    const selected = selectPageSources(sources, page, config.maxSourcesPerPage ?? 80)
+    const cached = pageCache.get(page.path)
+    const selected = cached?.selected ?? selectPageSources(sources, page, config.maxSourcesPerPage ?? 80)
     const evidence = await input.evidenceReader({
       sources: selected,
       maxTotalBytes: config.maxPageSourceBytes ?? 160_000,
     })
-    const graphContext = await input.graphContext?.({ page, sources: selected })
+    const typedEvidence = cached?.bundle
+    const graphContext = typedEvidence
+      ? renderEvidenceBundle(typedEvidence)
+      : await input.graphContext?.({ page, sources: selected })
     const result = await input.generator({
       action,
       root: input.root,
@@ -223,6 +248,7 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
       sources: evidence,
       sourceInventory: sources,
       graphContext,
+      evidence: typedEvidence,
       instructions: config.instructions,
       previousContent: existing.get(page.path),
     })
@@ -263,17 +289,9 @@ export async function buildPure(input: WikiBuildPureInput): Promise<WikiBuildPur
       contentHash: sha256(content),
       managedHash: managedContentHash(content),
       generatedAt: fresh ? now : (previous?.pages[page.path]?.generatedAt ?? now),
-      // Gate C5: content-derived fingerprint. Deliberately excludes wall-clock and
-      // any moving cursor so unchanged inputs never over-trigger regeneration.
-      fingerprint: sha256(
-        stableJson({
-          config,
-          sourceHashes: pageSourceHashes,
-          generatorIdentity: input.generatorIdentity ?? null,
-          model: input.model ?? null,
-          semanticRevision: input.semanticRevision ?? null,
-        }),
-      ),
+      // Gate C5: same cached per-page fingerprint used for the skip decision.
+      // Deliberately excludes wall-clock and any moving cursor.
+      fingerprint: prospectiveFingerprints.get(page.path),
     }
   }
   const manifest: WikiManifest = {
