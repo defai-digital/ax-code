@@ -728,7 +728,12 @@ export namespace MessageV2 {
   export async function toModelMessages(
     input: WithParts[],
     model: Provider.Model,
-    options?: { stripMedia?: boolean; cache?: boolean; mediaProjection?: MediaProjection.Mode },
+    options?: {
+      stripMedia?: boolean
+      cache?: boolean
+      mediaProjection?: MediaProjection.Mode
+      preserveUserMedia?: MessageID
+    },
   ): Promise<ModelMessage[]> {
     // Track media from tool results that need to be injected as user messages
     // for providers that don't support media in tool results.
@@ -777,7 +782,9 @@ export namespace MessageV2 {
   async function convertMessage(
     msg: WithParts,
     model: Provider.Model,
-    options: { stripMedia?: boolean; cache?: boolean; mediaProjection?: MediaProjection.Mode } | undefined,
+    options:
+      | { stripMedia?: boolean; cache?: boolean; mediaProjection?: MediaProjection.Mode; preserveUserMedia?: MessageID }
+      | undefined,
     supportsMediaInToolResults: boolean,
     mediaSelector: MediaProjection.Selector,
   ): Promise<ModelMessage[]> {
@@ -853,7 +860,12 @@ export namespace MessageV2 {
             })
           // text/plain and directory files are converted into text parts, ignore them
           if (part.type === "file" && part.mime !== "text/plain" && part.mime !== "application/x-directory") {
-            if (isMedia(part.mime) && !mediaSelector.keep()) {
+            // Advance the selector even for protected files so historical and
+            // tool attachments retain their original ordering. Explicit summary
+            // stripping remains separate from automatic request-size recovery.
+            const omitted = isMedia(part.mime) && !mediaSelector.keep()
+            const protectedMedia = !options?.stripMedia && msg.info.id === options?.preserveUserMedia
+            if (omitted && !protectedMedia) {
               userMessage.parts.push({
                 type: "text",
                 text: options?.stripMedia

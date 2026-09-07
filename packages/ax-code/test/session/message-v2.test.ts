@@ -217,6 +217,54 @@ describe("session.message-v2.toModelMessage", () => {
     expect(input.map((message) => (message.parts[0] as MessageV2.FilePart).url)).toEqual(durableUrls)
   })
 
+  test.each(["degraded", "stripped"] as const)(
+    "%s recovery preserves every current user attachment, including PDFs",
+    async (mode) => {
+      const oldID = "m-old-media"
+      const activeID = "m-active-media"
+      const input: MessageV2.WithParts[] = [
+        {
+          info: userInfo(oldID),
+          parts: [
+            {
+              ...basePart(oldID, "p-old"),
+              type: "file",
+              mime: "image/png",
+              url: "data:image/png;base64,b2xk",
+              filename: "old.png",
+            },
+          ],
+        },
+        {
+          info: userInfo(activeID),
+          parts: ["image/png", "image/png", "image/png", "application/pdf"].map((mime, index) => ({
+            ...basePart(activeID, `p-current-${index}`),
+            type: "file" as const,
+            mime,
+            url: `data:${mime};base64,${Buffer.from(`current media ${index}`).toString("base64")}`,
+            filename: `current-${index}`,
+          })),
+        },
+      ]
+      const original = JSON.stringify(input)
+      const converted = await MessageV2.toModelMessages(input, model, {
+        mediaProjection: mode,
+        preserveUserMedia: MessageID.make(activeID),
+      })
+      const wire = JSON.stringify(converted)
+      expect(wire).not.toContain("data:image/png;base64,b2xk")
+      for (const part of input[1].parts) {
+        if (part.type === "file") expect(wire).toContain(part.url)
+      }
+      expect(JSON.stringify(input)).toBe(original)
+      const summary = await MessageV2.toModelMessages(input, model, {
+        stripMedia: true,
+        preserveUserMedia: MessageID.make(activeID),
+      })
+      expect(JSON.stringify(summary)).not.toContain("base64,")
+    },
+  )
+
   test("stripped media projection replaces every file with deterministic text", async () => {
     const id = "m-media-stripped"
     const input: MessageV2.WithParts[] = [

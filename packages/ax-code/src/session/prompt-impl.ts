@@ -1218,6 +1218,7 @@ export namespace SessionPrompt {
           mediaRecovery: {
             projection: mediaProjection,
             mediaCount: request.mediaCount,
+            protectedMediaCount: request.protectedMediaCount,
             project: request.projectMessages,
             onProjection: (projection) => {
               mediaProjection = projection

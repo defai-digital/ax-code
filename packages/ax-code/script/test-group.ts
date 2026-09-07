@@ -61,6 +61,9 @@ const e2e = new Set([
 ])
 
 const runtimeContract = new Set([
+  "test/session/processor.test.ts",
+  "test/session/message-v2.test.ts",
+  "test/session/media-projection.test.ts",
   "test/plugin/data.test.ts",
   "test/plugin/lifetime.test.ts",
   "test/plugin/lifecycle.test.ts",

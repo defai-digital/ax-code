@@ -13,9 +13,11 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-errors"
 import { providerFallbackSwitchState } from "../../src/session/prompt-helpers"
 import { SessionRetry } from "../../src/session/retry"
-import { MessageID, SessionID } from "../../src/session/schema"
+import { MessageID, SessionID, PartID } from "../../src/session/schema"
 import { TaskQueue } from "../../src/session/task-queue"
 import { tmpdir } from "../fixture/fixture"
+import * as ImageResize from "../../src/session/image-resize"
+import { preparePromptRequest } from "../../src/session/prompt-request-build"
 
 const model: Provider.Model = {
   id: "test-model" as any,
@@ -46,11 +48,14 @@ const model: Provider.Model = {
   release_date: "2026-01-01",
 }
 
+let imageResizeSpy: MockInstance | undefined
 let streamSpy: MockInstance | undefined
 let sleepSpy: MockInstance | undefined
 let lastStreamErrorSpy: MockInstance | undefined
 
 afterEach(() => {
+  imageResizeSpy?.mockRestore()
+  imageResizeSpy = undefined
   streamSpy?.mockRestore()
   streamSpy = undefined
   sleepSpy?.mockRestore()
@@ -68,7 +73,7 @@ function processorDependencies(overrides: Partial<SessionProcessor.Dependencies>
   }
 }
 
-async function createProcessorFixture(root: string, deps?: SessionProcessor.Dependencies) {
+async function createProcessorFixture(root: string, deps?: SessionProcessor.Dependencies, abort = AbortSignal.any([])) {
   const session = await Session.create({})
   const user = await Session.updateMessage({
     id: MessageID.ascending(),
@@ -103,14 +108,14 @@ async function createProcessorFixture(root: string, deps?: SessionProcessor.Depe
       assistantMessage: assistant as MessageV2.Assistant,
       sessionID: session.id,
       model,
-      abort: AbortSignal.any([]),
+      abort,
     },
     deps,
   )
   const streamInput: LLM.StreamInput = {
     user: user as MessageV2.User,
     agent: await Agent.get("build"),
-    abort: AbortSignal.any([]),
+    abort,
     sessionID: session.id,
     system: [],
     messages: [{ role: "user", content: "normal" }],
@@ -139,6 +144,217 @@ function successfulTextStream(text = "done") {
 }
 
 describe("session.processor", () => {
+  test.each(["image/png", "application/pdf"])(
+    "keeps current user media and stops instead of answering after silently stripping it: %s",
+    async (mime) => {
+      await using tmp = await tmpdir({ git: true, config: { attachment: { image: { auto_resize: false } } } })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const { processor, streamInput } = await createProcessorFixture(tmp.path)
+          const parts: MessageV2.FilePart[] = Array.from({ length: 2 }, (_, index) => ({
+            id: PartID.ascending(),
+            messageID: streamInput.user.id,
+            sessionID: streamInput.sessionID,
+            type: "file",
+            mime,
+            filename: `comparison-${index}`,
+            url: `data:${mime};base64,${Buffer.alloc(600_000, index).toString("base64")}`,
+          }))
+          await Session.updateParts(parts)
+          const messages = [{ info: streamInput.user, parts }]
+          const original = JSON.stringify(messages)
+          imageResizeSpy = vi.spyOn(ImageResize, "maybeResizeImage")
+          const request = await preparePromptRequest({
+            sessionID: streamInput.sessionID,
+            messages,
+            lastUser: streamInput.user,
+            step: 1,
+            isLastStep: false,
+            agent: streamInput.agent,
+            model,
+            cache: {},
+            structuredPrompt: "",
+            systemOverride: [],
+          })
+          streamSpy = vi
+            .spyOn(LLM, "stream")
+            .mockRejectedValueOnce(new MessageV2.RequestTooLargeError({ message: "request too large" }))
+            .mockRejectedValueOnce(new MessageV2.RequestTooLargeError({ message: "request too large" }))
+            .mockResolvedValueOnce(successfulTextStream("I cannot see the images"))
+          const result = await processor.process(
+            { ...streamInput, messages: request.requestMessages },
+            {
+              mediaRecovery: {
+                projection: "normal",
+                mediaCount: request.mediaCount,
+                protectedMediaCount: request.protectedMediaCount,
+                project: request.projectMessages,
+              },
+            },
+          )
+          expect(result).toBe("stop")
+          expect(imageResizeSpy).not.toHaveBeenCalled()
+          expect(streamSpy).toHaveBeenCalledTimes(1)
+          expect(processor.message.error?.name).toBe("RequestTooLargeError")
+          expect(processor.message.error?.data.message).toContain("preserved")
+          expect(JSON.stringify(messages)).toBe(original)
+          expect(
+            (await MessageV2.get({ sessionID: streamInput.sessionID, messageID: streamInput.user.id })).parts,
+          ).toEqual(parts)
+          expect((await Session.messages({ sessionID: streamInput.sessionID })).at(-1)?.info).toMatchObject({
+            error: { name: "RequestTooLargeError" },
+          })
+        },
+      })
+    },
+  )
+
+  test("skips unchanged media projections instead of resending an identical oversized request", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const messages = [{ role: "user" as const, content: "historical media ".repeat(100) }]
+        streamSpy = vi
+          .spyOn(LLM, "stream")
+          .mockRejectedValueOnce(new MessageV2.RequestTooLargeError({ message: "request too large" }))
+          .mockResolvedValueOnce(successfulTextStream())
+        const project = vi.fn(async (mode: "normal" | "degraded" | "stripped") =>
+          mode === "degraded" ? structuredClone(messages) : [{ role: "user" as const, content: "smaller" }],
+        )
+        const result = await processor.process(
+          { ...streamInput, messages },
+          {
+            mediaRecovery: { projection: "normal", mediaCount: 2, project },
+          },
+        )
+        expect(result).toBe("continue")
+        expect(streamSpy).toHaveBeenCalledTimes(2)
+        expect(streamSpy.mock.calls[1][0].messages).toEqual([{ role: "user", content: "smaller" }])
+        expect(project.mock.calls.map(([mode]) => mode)).toEqual(["degraded", "stripped"])
+      },
+    })
+  })
+
+  test("recovers a rejected two-image request by reducing bytes while retaining both original inputs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { PhotonImage } = await import("@silvia-odwyer/photon-node")
+        const width = 900,
+          height = 600
+        const pixels = new Uint8Array(width * height * 4)
+        let seed = 1234567
+        for (let i = 0; i < pixels.length; i++) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+          pixels[i] = i % 4 === 3 ? 255 : seed >>> 24
+        }
+        const image = new PhotonImage(pixels, width, height)
+        let url: string
+        try {
+          url = `data:image/png;base64,${Buffer.from(image.get_bytes()).toString("base64")}`
+        } finally {
+          image.free()
+        }
+        const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        const parts: MessageV2.FilePart[] = Array.from({ length: 2 }, (_, index) => ({
+          id: PartID.ascending(),
+          messageID: streamInput.user.id,
+          sessionID: streamInput.sessionID,
+          type: "file",
+          mime: "image/png",
+          filename: `comparison-${index}.png`,
+          url,
+        }))
+        await Session.updateParts(parts)
+        const messages = [{ info: streamInput.user, parts }]
+        const request = await preparePromptRequest({
+          sessionID: streamInput.sessionID,
+          messages,
+          lastUser: streamInput.user,
+          step: 1,
+          isLastStep: false,
+          agent: streamInput.agent,
+          model,
+          cache: {},
+          structuredPrompt: "",
+          systemOverride: [],
+        })
+        const requestBytes: number[] = []
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input: LLM.StreamInput) => {
+          const wire = JSON.stringify(input.messages)
+          requestBytes.push(Buffer.byteLength(wire))
+          if (Buffer.byteLength(wire) > 1200 * 1024)
+            throw Object.assign(new Error("request too large"), { statusCode: 413 })
+          const images = [...wire.matchAll(/data:image\/(?:png|jpeg);base64,([A-Za-z0-9+/=]+)/g)]
+          expect(images).toHaveLength(2)
+          for (const match of images) {
+            const decoded = PhotonImage.new_from_byteslice(Buffer.from(match[1], "base64"))
+            try {
+              expect([decoded.get_width(), decoded.get_height()]).toEqual([width, height])
+            } finally {
+              decoded.free()
+            }
+          }
+          return successfulTextStream("Both images are available for comparison")
+        })
+        const result = await processor.process(
+          { ...streamInput, messages: request.requestMessages },
+          {
+            mediaRecovery: {
+              projection: "normal",
+              mediaCount: request.mediaCount,
+              protectedMediaCount: request.protectedMediaCount,
+              project: request.projectMessages,
+            },
+          },
+        )
+        expect(result).toBe("continue")
+        expect(requestBytes).toHaveLength(2)
+        expect(requestBytes[0]).toBeGreaterThan(1200 * 1024)
+        expect(requestBytes[1]).toBeLessThan(1200 * 1024)
+        expect(processor.message.error).toBeUndefined()
+        expect(parts.every((part) => part.url === url && part.mime === "image/png")).toBe(true)
+        expect(
+          (await MessageV2.get({ sessionID: streamInput.sessionID, messageID: streamInput.user.id })).parts,
+        ).toEqual(parts)
+      },
+    })
+  })
+
+  test("cancellation during media projection does not send another request or start compaction", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const controller = new AbortController()
+        const { processor, streamInput } = await createProcessorFixture(tmp.path, undefined, controller.signal)
+        streamSpy = vi
+          .spyOn(LLM, "stream")
+          .mockRejectedValue(new MessageV2.RequestTooLargeError({ message: "request too large" }))
+        const project = vi.fn(async () => {
+          controller.abort()
+          return [{ role: "user" as const, content: "smaller" }]
+        })
+        const result = await processor.process(streamInput, {
+          mediaRecovery: {
+            projection: "normal",
+            mediaCount: 2,
+            protectedMediaCount: 2,
+            project,
+          },
+        })
+        expect(result).toBe("stop")
+        expect(streamSpy).toHaveBeenCalledTimes(1)
+        expect(project).toHaveBeenCalledTimes(1)
+        expect(processor.message.error?.name).toBe("MessageAbortedError")
+      },
+    })
+  })
+
   test("recovers request-too-large failures through the bounded media projection ladder", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -146,6 +362,7 @@ describe("session.processor", () => {
       directory: tmp.path,
       fn: async () => {
         const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        streamInput.messages = [{ role: "user", content: "normal".repeat(20) }]
         const requestTooLarge = () =>
           new MessageV2.RequestTooLargeError({ message: "request entity too large" }).toObject()
         streamSpy = vi
@@ -154,7 +371,7 @@ describe("session.processor", () => {
           .mockRejectedValueOnce(requestTooLarge())
           .mockResolvedValueOnce(successfulTextStream())
         const project = vi.fn(async (projection: "normal" | "degraded" | "stripped") => [
-          { role: "user" as const, content: projection },
+          { role: "user" as const, content: projection.repeat(projection === "degraded" ? 2 : 1) },
         ])
         const projections: string[] = []
 
@@ -170,8 +387,8 @@ describe("session.processor", () => {
         expect(result).toBe("continue")
         expect(streamSpy).toHaveBeenCalledTimes(3)
         expect(streamSpy.mock.calls.map((call) => call[0].messages)).toEqual([
-          [{ role: "user", content: "normal" }],
-          [{ role: "user", content: "degraded" }],
+          [{ role: "user", content: "normal".repeat(20) }],
+          [{ role: "user", content: "degraded".repeat(2) }],
           [{ role: "user", content: "stripped" }],
         ])
         expect(project.mock.calls.map((call) => call[0])).toEqual(["degraded", "stripped"])
@@ -188,6 +405,7 @@ describe("session.processor", () => {
       directory: tmp.path,
       fn: async () => {
         const { processor, streamInput } = await createProcessorFixture(tmp.path)
+        streamInput.messages = [{ role: "user", content: "normal".repeat(20) }]
         const requestTooLarge = Object.assign(new Error("413 status code (no body)"), { statusCode: 413 })
         streamSpy = vi
           .spyOn(LLM, "stream")
@@ -202,7 +420,7 @@ describe("session.processor", () => {
           .mockRejectedValue(requestTooLarge)
         lastStreamErrorSpy = vi.spyOn(LLM, "lastStreamError").mockReturnValue(requestTooLarge)
         const project = vi.fn(async (projection: "normal" | "degraded" | "stripped") => [
-          { role: "user" as const, content: projection },
+          { role: "user" as const, content: projection.repeat(projection === "degraded" ? 2 : 1) },
         ])
 
         const result = await processor.process(streamInput, {

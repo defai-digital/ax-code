@@ -96,6 +96,7 @@ export namespace SessionProcessor {
   export type MediaRecovery = {
     projection: MediaProjection.Mode
     mediaCount: number
+    protectedMediaCount?: number
     project: (projection: MediaProjection.Mode) => Promise<LLM.StreamInput["messages"]>
     onProjection?: (projection: MediaProjection.Mode) => void
   }
@@ -1511,14 +1512,32 @@ export namespace SessionProcessor {
             }
             if (MessageV2.RequestTooLargeError.isInstance(error)) {
               const recovery = options?.mediaRecovery
-              const nextProjection = recovery?.mediaCount ? MediaProjection.next(activeMediaProjection) : undefined
-              if (recovery && nextProjection) {
-                activeStreamInput = {
-                  ...activeStreamInput,
-                  messages: await recovery.project(nextProjection),
+              let retryMedia = false
+              if (recovery?.mediaCount) {
+                const currentBytes = Buffer.byteLength(JSON.stringify(activeStreamInput.messages))
+                let nextProjection = MediaProjection.next(activeMediaProjection)
+                while (nextProjection && !input.abort.aborted) {
+                  let messages: LLM.StreamInput["messages"]
+                  try {
+                    messages = await recovery.project(nextProjection)
+                  } catch (projectionError) {
+                    log.warn("media recovery projection failed", { error: projectionError })
+                    break
+                  }
+                  if (input.abort.aborted) break
+                  if (Buffer.byteLength(JSON.stringify(messages)) < currentBytes) {
+                    activeStreamInput = { ...activeStreamInput, messages }
+                    activeMediaProjection = nextProjection
+                    recovery.onProjection?.(nextProjection)
+                    retryMedia = true
+                    break
+                  }
+                  // With one or two images the old degraded projection could
+                  // resend exactly the same rejected body. Skip no-op recovery.
+                  nextProjection = MediaProjection.next(nextProjection)
                 }
-                activeMediaProjection = nextProjection
-                recovery.onProjection?.(nextProjection)
+              }
+              if (retryMedia && recovery) {
                 attempt++
                 log.warn("provider request too large; retrying with reduced media", {
                   command: "session.process.media-recovery",
@@ -1527,17 +1546,28 @@ export namespace SessionProcessor {
                   providerID: input.model.providerID,
                   modelID: input.model.id,
                   mediaCount: recovery.mediaCount,
-                  projection: nextProjection,
+                  projection: activeMediaProjection,
                   attempt,
                 })
                 continue
               }
-              requestTooLargeCompaction = true
-              needsCompaction = true
-              Session.publishError({
-                sessionID: input.assistantMessage.sessionID,
-                error,
-              })
+              if (input.abort.aborted) {
+                input.assistantMessage.error = new MessageV2.AbortedError({
+                  message: "This operation was aborted",
+                }).toObject()
+              } else if (recovery?.protectedMediaCount) {
+                // Compaction's request-size replay strips media. It cannot
+                // complete a task whose current user input is still required.
+                input.assistantMessage.error = new MessageV2.RequestTooLargeError({
+                  ...error.data,
+                  message:
+                    "The provider rejected the request size. Current user attachments were preserved; automatic image reduction could not fit this request. Send smaller or fewer attachments, or use an endpoint with a larger request limit.",
+                }).toObject()
+              } else {
+                requestTooLargeCompaction = true
+                needsCompaction = true
+                Session.publishError({ sessionID: input.assistantMessage.sessionID, error })
+              }
             } else if (MessageV2.ContextOverflowError.isInstance(error)) {
               needsCompaction = true
               Session.publishError({

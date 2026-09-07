@@ -8,6 +8,8 @@ import type { MediaProjection } from "./media-projection"
 import { remindQueuedMessages } from "./prompt-loop-messages"
 import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import type { SessionID } from "./schema"
+import { Config } from "@/config/config"
+import { recoverUserImages } from "./media-recovery"
 
 export type PromptRequestCache = Parameters<typeof getSystemPrompt>[0]["cache"]
 
@@ -56,9 +58,19 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // Both walk the same messages/model independently with no side effects.
   const format = input.lastUser.format ?? { type: "text" }
   const convertMessages = async (mediaProjection: MediaProjection.Mode) => {
-    const modelMessages = await MessageV2.toModelMessages(requestMessagesSource, input.model, {
+    const source =
+      mediaProjection === "normal"
+        ? requestMessagesSource
+        : await recoverUserImages({
+            messages: requestMessagesSource,
+            userID: input.lastUser.id,
+            mode: mediaProjection,
+            config: (await Config.get()).attachment?.image,
+          })
+    const modelMessages = await MessageV2.toModelMessages(source, input.model, {
       cache: !hasTransformPlugin,
       mediaProjection,
+      preserveUserMedia: input.lastUser.id,
     })
     return [
       ...modelMessages,
@@ -95,6 +107,9 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
     system,
     requestMessages,
     mediaCount: MessageV2.requestMediaCount(requestMessagesSource),
+    protectedMediaCount: MessageV2.requestMediaCount(
+      requestMessagesSource.filter((message) => message.info.id === input.lastUser.id),
+    ),
     projectMessages: convertMessages,
   }
 }
