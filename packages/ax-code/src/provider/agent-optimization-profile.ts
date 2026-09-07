@@ -1,4 +1,4 @@
-import { getModelCapabilities, supportsLongAgent } from "./model-capabilities"
+import { getModelCapabilities, supportsLongAgent, type ObservedModelCapabilities } from "./model-capabilities"
 
 export type TaskRouteClass = "cheap" | "premium" | "premiumCrossCheck"
 
@@ -48,10 +48,14 @@ export function classifyTaskForModelRoute(input: {
  * @param providerId - Optional provider ID for provider-specific capabilities
  * @returns Long-agent profile optimized for the model
  */
-export function longAgentProfileForModel(modelId: string, providerId?: string): LongAgentProfile {
-  const caps = getModelCapabilities(modelId, providerId)
+export function longAgentProfileForModel(
+  modelId: string,
+  providerId?: string,
+  observed?: ObservedModelCapabilities,
+): LongAgentProfile {
+  const caps = getModelCapabilities(modelId, providerId, observed)
 
-  if (supportsLongAgent(modelId, providerId)) {
+  if (supportsLongAgent(modelId, providerId, observed)) {
     return {
       contextPackingBudget: "wide",
       contextPackTokenBudget: caps.contextWindow >= 128_000 ? 128_000 : 64_000,

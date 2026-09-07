@@ -8,9 +8,11 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import {
   connectPrivateGpu,
   disconnectPrivateGpu,
+  discoverPrivateGpuModels,
   isDedicatedPrivateGpuProviderID,
   isPrivateGpuProviderID,
   normalizePrivateGpuBaseURL,
+  privateGpuModelRecords,
   privateGpuVendor,
   reservedOutputTokens,
   requireDedicatedPrivateGpuVendor,
@@ -75,6 +77,59 @@ describe("private-gpu output reservation", () => {
   })
 })
 
+describe("private-gpu model discovery", () => {
+  test("keeps only chat models and preserves explicitly advertised capabilities", async () => {
+    const vendor = requireDedicatedPrivateGpuVendor("custom-private-gpu")
+    const discovered = await discoverPrivateGpuModels({
+      vendor,
+      baseURL: "http://127.0.0.1:18110",
+      apiKey: "endpoint-token",
+      fetcher: async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              { id: "text-embedding-3-small" },
+              {
+                id: "glm-5.3",
+                context_length: 64_000,
+                max_output_tokens: 8_192,
+                capabilities: { toolcall: true, reasoning: true, temperature: true, attachment: false },
+              },
+              { id: "glm-5.3" },
+              { id: "unqualified-chat" },
+            ],
+          }),
+        ),
+    })
+
+    expect(discovered.models).toEqual([
+      expect.objectContaining({
+        id: "glm-5.3",
+        context: 64_000,
+        output: 8_192,
+        toolCall: true,
+        reasoning: true,
+        temperature: true,
+        attachment: false,
+      }),
+      expect.objectContaining({
+        id: "unqualified-chat",
+        toolCall: false,
+        reasoning: false,
+        temperature: false,
+        attachment: false,
+      }),
+    ])
+
+    const records = privateGpuModelRecords(discovered.models, discovered.baseURL, vendor)
+    expect(records[ModelID.make("unqualified-chat")]?.capabilities).toMatchObject({
+      toolcall: false,
+      reasoning: false,
+      interleaved: false,
+    })
+  })
+})
+
 describe("private-gpu connect and disconnect", () => {
   test.each(["alibaba-pai", "custom-private-gpu"])(
     "connects %s and removes its saved connection",
@@ -83,10 +138,15 @@ describe("private-gpu connect and disconnect", () => {
       globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
         if (String(input) === "http://127.0.0.1:18110/v1/models") {
           requests.push(init ?? {})
-          return new Response(JSON.stringify({ data: [{ id: "kimi-k3" }] }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          })
+          return new Response(
+            JSON.stringify({
+              data: [{ id: "kimi-k3", capabilities: { toolcall: true, reasoning: true, temperature: true } }],
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          )
         }
         return originalFetch(input, init)
       }) as typeof fetch
@@ -112,6 +172,7 @@ describe("private-gpu connect and disconnect", () => {
             expect(saved?.options).not.toHaveProperty("apiKey")
             expect(saved?.models?.["kimi-k3"]?.id).toBe("kimi-k3")
             expect(saved?.models?.["kimi-k3"]?.tool_call).toBe(true)
+            expect(saved?.models?.["kimi-k3"]?.reasoning).toBe(true)
 
             await Provider.ready()
             const loaded = (await Provider.list())[ProviderID.make(providerID)]

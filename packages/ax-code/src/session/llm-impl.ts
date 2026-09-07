@@ -231,7 +231,12 @@ export namespace LLM {
       cacheBlocks.push({ kind: "dynamic", label: "transient", content: reasoningPolicyReminder })
     }
 
-    const longAgentProfile = longAgentProfileForModel(input.model.id, input.model.providerID)
+    const observedModelCapabilities = {
+      contextWindow: input.model.limit.context,
+      thinking: input.model.capabilities.reasoning,
+      toolCalling: input.model.capabilities.toolcall,
+    }
+    const longAgentProfile = longAgentProfileForModel(input.model.id, input.model.providerID, observedModelCapabilities)
     const autonomousEnabled = ScopedFlag.autonomous()
     const SUPER_LONG_REMINDER =
       "You are operating in Super-Long mode. Before declaring any task complete: run available tests or verification commands, confirm the build is clean, and surface any repeated failure patterns explicitly rather than retrying silently."
@@ -246,6 +251,7 @@ export namespace LLM {
         // run the prompt loop's deadline enforcement (which passes providerID)
         // never treats as Super-Long — or vice versa.
         providerID: input.model.providerID,
+        observed: observedModelCapabilities,
         config: SuperLongPolicy.fromConfig(cfg.super_long),
         scoped: ScopedFlag.superLong(),
       }).enabled

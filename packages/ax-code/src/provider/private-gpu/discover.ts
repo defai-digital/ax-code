@@ -1,6 +1,7 @@
 import { isLocalHostname } from "@/util/local-host"
 import { Ssrf } from "@/util/ssrf"
 import { isRecord } from "@/util/record"
+import { isNonChatModelID } from "@/provider/model-selectability"
 import type { Provider } from "../provider"
 import { ModelID, ProviderID } from "../schema"
 import { PRIVATE_GPU_DISCOVERY_TIMEOUT_MS, type PrivateGpuVendor } from "./presets"
@@ -11,6 +12,10 @@ export type PrivateGpuDiscoveredModel = {
   name: string
   context: number
   output: number
+  toolCall: boolean
+  reasoning: boolean
+  attachment: boolean
+  temperature: boolean
 }
 
 type ModelListItem = {
@@ -20,6 +25,11 @@ type ModelListItem = {
   max_context_length?: unknown
   max_output_tokens?: unknown
   limit?: unknown
+  capabilities?: unknown
+  tool_call?: unknown
+  reasoning?: unknown
+  attachment?: unknown
+  temperature?: unknown
 }
 
 function numberValue(value: unknown, fallback: number) {
@@ -47,6 +57,21 @@ function advertisedOutput(item: ModelListItem) {
   return explicit > 0 ? explicit : undefined
 }
 
+function advertisedCapabilities(item: ModelListItem) {
+  const capabilities = isRecord(item.capabilities) ? item.capabilities : {}
+  const bool = (key: "toolcall" | "reasoning" | "attachment" | "temperature", fallback: unknown) =>
+    typeof capabilities[key] === "boolean" ? capabilities[key] : typeof fallback === "boolean" ? fallback : false
+  // A standard OpenAI /models response does not prove that a model accepts
+  // tools or exposes reasoning. Keep discovery conservative until the endpoint
+  // explicitly advertises those features (or a later runtime qualification does).
+  return {
+    toolCall: bool("toolcall", item.tool_call),
+    reasoning: bool("reasoning", item.reasoning),
+    attachment: bool("attachment", item.attachment),
+    temperature: bool("temperature", item.temperature),
+  }
+}
+
 /** Prefer advertised output, else 32k or 25% of context. Never reserve more than half the window. */
 export function reservedOutputTokens(context: number, advertised?: number) {
   const fallback = Math.min(32_000, Math.max(1_024, Math.floor(context / 4)))
@@ -58,9 +83,12 @@ export function reservedOutputTokens(context: number, advertised?: number) {
 function parseModelList(input: unknown): PrivateGpuDiscoveredModel[] {
   if (!isRecord(input) || !Array.isArray(input.data)) return []
   const models: PrivateGpuDiscoveredModel[] = []
+  const seen = new Set<string>()
   for (const raw of input.data) {
     if (!isRecord(raw) || typeof raw.id !== "string" || !raw.id.trim()) continue
     const id = raw.id.trim()
+    if (seen.has(id) || isNonChatModelID(id)) continue
+    seen.add(id)
     const context = contextLimit(raw)
     const output = reservedOutputTokens(context, advertisedOutput(raw))
     models.push({
@@ -68,6 +96,7 @@ function parseModelList(input: unknown): PrivateGpuDiscoveredModel[] {
       name: id,
       context,
       output,
+      ...advertisedCapabilities(raw),
     })
   }
   return models
@@ -88,13 +117,13 @@ export function privateGpuModelRecords(
       name: item.name,
       api: { id: item.id, url: inferenceBaseURL, npm: vendor.npm },
       capabilities: {
-        temperature: true,
-        reasoning: true,
-        attachment: false,
-        toolcall: true,
+        temperature: item.temperature,
+        reasoning: item.reasoning,
+        attachment: item.attachment,
+        toolcall: item.toolCall,
         input: { text: true, audio: false, image: false, video: false, pdf: false },
         output: { text: true, audio: false, image: false, video: false, pdf: false },
-        interleaved: { field: "reasoning_content" },
+        interleaved: item.reasoning ? { field: "reasoning_content" } : false,
       },
       limit: {
         context: item.context,

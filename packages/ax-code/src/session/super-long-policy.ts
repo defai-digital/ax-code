@@ -1,4 +1,4 @@
-import { getModelCapabilities, supportsLongAgent } from "@/provider/model-capabilities"
+import { getModelCapabilities, supportsLongAgent, type ObservedModelCapabilities } from "@/provider/model-capabilities"
 import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
 import { Env } from "@/util/env"
 import { isLocalHostname } from "@/util/local-host"
@@ -163,6 +163,7 @@ export namespace SuperLongPolicy {
   export function state(input: {
     modelID: string
     providerID?: string
+    observed?: ObservedModelCapabilities
     config?: RuntimeConfig
     sessionOverride?: boolean
   }): StateDecision {
@@ -173,12 +174,13 @@ export namespace SuperLongPolicy {
       return { enabled: input.config.enabled, source: "config" }
     }
     // Use capability-based check instead of model-specific check
-    return { enabled: supportsLongAgent(input.modelID, input.providerID), source: "model-default" }
+    return { enabled: supportsLongAgent(input.modelID, input.providerID, input.observed), source: "model-default" }
   }
 
   export function runtimeState(input: {
     modelID: string
     providerID?: string
+    observed?: ObservedModelCapabilities
     config?: RuntimeConfig
     env?: Record<string, string | undefined>
     /**
@@ -204,6 +206,7 @@ export namespace SuperLongPolicy {
     return state({
       modelID: input.modelID,
       providerID: input.providerID,
+      observed: input.observed,
       config: input.config,
     })
   }

@@ -21,7 +21,6 @@ import {
   qwen37MaxReadiness,
   qwen37PlusReadiness,
 } from "./qwen37-readiness"
-import { DEDICATED_PRIVATE_GPU_PROVIDER_IDS } from "./private-gpu/presets"
 
 /**
  * Rate limit tier for pacing policy selection.
@@ -93,6 +92,18 @@ export interface ModelCapabilities {
    * Determines request throttling behavior.
    */
   rateLimitTier: RateLimitTier
+}
+
+/**
+ * Capability evidence reported by the connected endpoint for one concrete
+ * model. It takes precedence over family heuristics when a live model record
+ * is available; model names alone cannot establish a deployment's context or
+ * tool/reasoning support.
+ */
+export type ObservedModelCapabilities = {
+  contextWindow?: number
+  thinking?: boolean
+  toolCalling?: boolean
 }
 
 /**
@@ -541,26 +552,6 @@ const MODEL_REGISTRY: ModelRegistration[] = [
     },
   },
 
-  // Dedicated private GPU endpoints (vLLM / SGLang / TGI). Discovered
-  // max_model_len can be 1M+; treat the whole family as large-context and
-  // unpaced so unknown model IDs do not collapse to DEFAULT_CAPABILITIES.
-  // The provider list is owned by private-gpu/presets.ts so this entry and
-  // transform.ts's private-GPU shaping cannot drift apart.
-  {
-    pattern: /.*/,
-    providerIds: [...DEDICATED_PRIVATE_GPU_PROVIDER_IDS],
-    capabilities: {
-      contextWindow: 1_048_576,
-      thinking: "supported",
-      preserveThinking: "supported",
-      promptCache: "supported",
-      toolCalling: "supported",
-      structuredOutput: "supported",
-      webOrBuiltInTools: "blocked",
-      rateLimitTier: "unlimited",
-    },
-  },
-
   // Ollama models (local inference)
   {
     pattern: /.*/,
@@ -754,8 +745,17 @@ export function findRegisteredModelCapabilities(modelId: string, providerId?: st
   }
 }
 
-export function getModelCapabilities(modelId: string, providerId?: string): ModelCapabilities {
-  return findRegisteredModelCapabilities(modelId, providerId) ?? { ...DEFAULT_CAPABILITIES }
+export function getModelCapabilities(
+  modelId: string,
+  providerId?: string,
+  observed?: ObservedModelCapabilities,
+): ModelCapabilities {
+  const capabilities = findRegisteredModelCapabilities(modelId, providerId) ?? { ...DEFAULT_CAPABILITIES }
+  const contextWindow = observed?.contextWindow
+  if (typeof contextWindow === "number" && Number.isSafeInteger(contextWindow) && contextWindow > 0) {
+    capabilities.contextWindow = contextWindow
+  }
+  return capabilities
 }
 
 /**
@@ -777,10 +777,12 @@ export function getModelCapabilities(modelId: string, providerId?: string): Mode
  * }
  * ```
  */
-export function supportsLongAgent(modelId: string, providerId?: string): boolean {
-  const caps = getModelCapabilities(modelId, providerId)
+export function supportsLongAgent(modelId: string, providerId?: string, observed?: ObservedModelCapabilities): boolean {
+  const caps = getModelCapabilities(modelId, providerId, observed)
   return (
     caps.contextWindow >= 64_000 &&
+    observed?.thinking !== false &&
+    observed?.toolCalling !== false &&
     (caps.thinking === "supported" || caps.thinking === "experimental") &&
     (caps.promptCache === "supported" || caps.promptCache === "experimental")
   )
@@ -798,8 +800,12 @@ export function supportsLongAgent(modelId: string, providerId?: string): boolean
  * @param providerId - Optional provider ID
  * @returns Recommended context packing budget in tokens
  */
-export function getContextPackBudget(modelId: string, providerId?: string): number {
-  const caps = getModelCapabilities(modelId, providerId)
+export function getContextPackBudget(
+  modelId: string,
+  providerId?: string,
+  observed?: ObservedModelCapabilities,
+): number {
+  const caps = getModelCapabilities(modelId, providerId, observed)
   if (caps.contextWindow >= 128_000) {
     return 128_000
   }

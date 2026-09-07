@@ -223,10 +223,10 @@ describe("Model Capability Registry", () => {
       expect(caps.thinking).toBe("blocked")
     })
 
-    it("keeps the dedicated private-GPU catch-all authoritative for MiniMax on alibaba-pai", () => {
+    it("uses MiniMax family capabilities rather than inventing a dedicated-GPU 1M context", () => {
       const caps = getModelCapabilities("MiniMax-M3", "alibaba-pai")
-      expect(caps.contextWindow).toBe(1_048_576)
-      expect(caps.rateLimitTier).toBe("unlimited")
+      expect(caps.contextWindow).toBe(1_000_000)
+      expect(caps.rateLimitTier).toBe("standard")
     })
 
     it("keeps the Ollama catch-all authoritative for MiniMax on ollama", () => {
@@ -277,10 +277,10 @@ describe("Model Capability Registry", () => {
       expect(getModelCapabilities("deepseek-ai/DeepSeek-V3-0324", "deepinfra").contextWindow).toBe(32_000)
     })
 
-    it("keeps the dedicated private-GPU catch-all authoritative over gateway fallbacks", () => {
+    it("uses the Kimi family fallback on dedicated private GPUs", () => {
       const caps = getModelCapabilities("moonshotai/Kimi-K2.7-Code", "alibaba-pai")
-      expect(caps.contextWindow).toBe(1_048_576)
-      expect(caps.rateLimitTier).toBe("unlimited")
+      expect(caps.contextWindow).toBe(262_144)
+      expect(caps.rateLimitTier).toBe("standard")
     })
 
     it("still defaults older Kimi generations (k2.5)", () => {
@@ -289,6 +289,23 @@ describe("Model Capability Registry", () => {
   })
 
   describe("supportsLongAgent", () => {
+    it("uses endpoint evidence to reject a smaller or unqualified private-GPU deployment", () => {
+      expect(
+        supportsLongAgent("MiniMax-M3", "custom-private-gpu", {
+          contextWindow: 32_000,
+          thinking: true,
+          toolCalling: true,
+        }),
+      ).toBe(false)
+      expect(
+        supportsLongAgent("MiniMax-M3", "custom-private-gpu", {
+          contextWindow: 1_000_000,
+          thinking: false,
+          toolCalling: false,
+        }),
+      ).toBe(false)
+    })
+
     it("should return true for Qwen 3.7 Max on Alibaba", () => {
       expect(supportsLongAgent("qwen-3-7-max", "alibaba-coding-plan")).toBe(true)
     })
@@ -396,11 +413,18 @@ describe("Model Capability Registry", () => {
       expect(getContextPackBudget("gpt-5", "openai")).toBe(128_000)
     })
 
-    it("should return 128k for dedicated Alibaba PAI-EAS models", () => {
+    it("uses known model families but keeps unknown private-GPU deployments conservative", () => {
       expect(getContextPackBudget("GLM-5.2-FP8", "alibaba-pai")).toBe(128_000)
       expect(getContextPackBudget("MiniMax-M3-MXFP8", "alibaba-pai")).toBe(128_000)
-      expect(getContextPackBudget("custom-deploy", "runpod")).toBe(128_000)
-      expect(getContextPackBudget("custom-deploy", "huggingface-endpoints")).toBe(128_000)
+      expect(getContextPackBudget("custom-deploy", "runpod")).toBe(8_000)
+      expect(getContextPackBudget("custom-deploy", "huggingface-endpoints")).toBe(8_000)
+      expect(
+        getContextPackBudget("custom-deploy", "runpod", {
+          contextWindow: 128_000,
+          thinking: true,
+          toolCalling: true,
+        }),
+      ).toBe(128_000)
     })
 
     it("should return 8k for unknown models", () => {
