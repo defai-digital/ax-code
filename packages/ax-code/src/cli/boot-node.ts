@@ -7,6 +7,7 @@ import { GenerateCommand } from "./cmd/generate"
 import { fatal } from "./bootstrap/fatal"
 import { init } from "./bootstrap/env"
 import { migrate } from "./bootstrap/migrate"
+import { cancelShellEnvLoad } from "../runtime/shell-env"
 import { FormatError } from "./error"
 import { UI } from "./ui"
 import { Installation } from "../installation"
@@ -16,6 +17,10 @@ import { DiagnosticLog } from "../debug/diagnostic-log"
 import { isHarmlessInterrupt } from "../util/harmless-interrupt"
 
 const cmds = [DoctorCommand, GenerateCommand]
+
+// The lifecycle machinery below (forced-exit timer, process error hooks,
+// scheduleForcedExit/clearForcedExitTimer) is duplicated from boot.ts. Keep the
+// two in sync; boot.ts is the source of truth for the full CLI.
 
 let forcedExitTimer: ReturnType<typeof setTimeout> | undefined
 let hooksInstalled = false
@@ -150,6 +155,9 @@ export async function run() {
     })
     process.exitCode = 1
   } finally {
+    // Stop the background shell-env child so a finished one-shot command can
+    // exit immediately instead of waiting for the login shell to finish.
+    await cancelShellEnvLoad()
     scheduleForcedExit()
   }
 }

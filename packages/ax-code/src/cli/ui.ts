@@ -54,21 +54,6 @@ export namespace UI {
       .trimEnd()
   }
 
-  export async function input(prompt: string): Promise<string> {
-    const readline = require("readline")
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    })
-
-    return new Promise((resolve) => {
-      rl.question(prompt, (answer: string) => {
-        rl.close()
-        resolve(answer.trim())
-      })
-    })
-  }
-
   export function error(message: string) {
     if (message.startsWith("Error: ")) {
       message = message.slice("Error: ".length)

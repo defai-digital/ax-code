@@ -4,6 +4,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { text } from "node:stream/consumers"
 
 let shellEnvReady: Promise<void> | undefined
+let shellEnvProc: Process.Child | undefined
 
 type ShellEnvProcess = Pick<Process.Child, "exited" | "stdout" | "stderr" | "unref">
 
@@ -56,6 +57,18 @@ export function startShellEnvLoad(env: Record<string, string | undefined>) {
   return shellEnvReady
 }
 
+/**
+ * Stop the in-flight shell-env child (if any). Called from the CLI teardown so
+ * a one-shot command that finished before its login shell can exit immediately
+ * instead of waiting for the shell to load the user's profile (the child's
+ * ref'd stdout/stderr pipes otherwise hold the event loop open).
+ */
+export async function cancelShellEnvLoad() {
+  const proc = shellEnvProc
+  shellEnvProc = undefined
+  if (proc) await stopShellEnvProcess(proc)
+}
+
 async function stopShellEnvProcess(proc: Process.Child | undefined) {
   if (!proc) return
   await Process.stop(proc).catch((err) => {
@@ -76,6 +89,7 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
       env: { ...env, TERM: "dumb", NO_COLOR: "1" },
       timeout: shellTimeoutMs,
     })
+    shellEnvProc = proc
     const result = await waitForShellEnvCapture(proc, shellTimeoutMs, () => {
       Log.Default.debug("shell env load timed out; continuing without shell environment")
       void stopShellEnvProcess(proc)
@@ -102,5 +116,7 @@ async function loadShellEnv(env: Record<string, string | undefined>) {
     await stopShellEnvProcess(proc)
     Log.Default.debug("shell env load setup failed", { error: toErrorMessage(err) })
     // Shell env loading is best-effort; don't fail startup.
+  } finally {
+    if (shellEnvProc === proc) shellEnvProc = undefined
   }
 }

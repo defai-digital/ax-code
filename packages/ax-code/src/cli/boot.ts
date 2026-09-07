@@ -54,6 +54,7 @@ import { setKnownCommands } from "./cmd/tui/project-arg"
 import { init } from "./bootstrap/env"
 import { ensureWindowsUtf8Console } from "./bootstrap/windows-console"
 import { migrate } from "./bootstrap/migrate"
+import { cancelShellEnvLoad } from "../runtime/shell-env"
 import { FormatError } from "./error"
 import { UI } from "./ui"
 import { Installation } from "../installation"
@@ -176,13 +177,6 @@ export function hooks() {
   process.on("uncaughtException", onUncaughtException)
 }
 
-export function removeHooks() {
-  if (!hooksInstalled) return
-  hooksInstalled = false
-  process.off("unhandledRejection", onUnhandledRejection)
-  process.off("uncaughtException", onUncaughtException)
-}
-
 export function cli(argv = hideBin(process.argv)) {
   const rawArgv = argv.slice()
   let cli = yargs(argv)
@@ -263,7 +257,9 @@ export async function run() {
   // pages (#307, #315, #338).
   ensureWindowsUtf8Console()
   const argv = hideBin(process.argv)
-  if (argv.includes("--uninstall") || argv.includes("-uninstall")) {
+  // Match only the command position, not any token anywhere: `ax-code run -- --uninstall`
+  // must not be hijacked into running the (destructive) uninstall flow.
+  if (argv[0] === "--uninstall" || argv[0] === "-uninstall") {
     const cmd = cli(["uninstall"])
     try {
       await cmd.parse()
@@ -290,6 +286,9 @@ export async function run() {
     })
     process.exitCode = 1
   } finally {
+    // Stop the background shell-env child so a finished one-shot command can
+    // exit immediately instead of waiting for the login shell to finish.
+    await cancelShellEnvLoad()
     // Some subprocesses don't react properly to SIGTERM and similar signals.
     // Most notably, some docker-container-based MCP servers don't handle such signals unless
     // run using `docker run --init`.
