@@ -212,10 +212,6 @@ done
 
 INSTALL_DIR=$HOME/.ax-code/bin
 INSTALL_ROOT=$(dirname "$INSTALL_DIR")
-INSTALL_LIB_DIR="$INSTALL_ROOT/lib"
-INSTALL_NODE_DIR="$INSTALL_ROOT/node"
-INSTALL_NODE_MODULES_DIR="$INSTALL_ROOT/node_modules"
-INSTALL_PACKAGE_JSON="$INSTALL_ROOT/package.json"
 mkdir -p "$INSTALL_DIR"
 
 # If --binary is provided, skip all download/detection logic
@@ -649,7 +645,25 @@ exec node --experimental-ffi --disable-warning=ExperimentalWarning "$dir/../lib/
 EOF
 }
 
-install_node_bundle_tree() {
+assert_node_bundle_runtime() {
+    local runtime_root="$1"
+    local output=""
+    if ! output=$(NODE_OPTIONS='' "$runtime_root/node/bin/node" --experimental-ffi --disable-warning=ExperimentalWarning "$runtime_root/lib/index-node-tui.js" --version 2>&1); then
+        print_message error "Node-bundled distribution did not run cleanly at $runtime_root. $output"
+        return 1
+    fi
+    if [ -z "$output" ]; then
+        print_message error "Node-bundled distribution at $runtime_root did not report a version."
+        return 1
+    fi
+    if [ "$specific_version" != "local" ] && [ "$output" != "$specific_version" ] && [ "$output" != "v$specific_version" ]; then
+        print_message error "Node-bundled distribution reported '$output', expected '$specific_version'."
+        return 1
+    fi
+}
+
+# Scope transaction state and traps to this invocation, including self-upgrades.
+install_node_bundle_tree() (
     local bundle_root=$1
     local launcher="$bundle_root/bin/ax-code"
     local lib_dir="$bundle_root/lib"
@@ -675,29 +689,117 @@ install_node_bundle_tree() {
         exit 1
     fi
 
-    rm -f "${INSTALL_DIR}/ax-code"
-    rm -rf "$INSTALL_LIB_DIR" "$INSTALL_NODE_DIR" "$INSTALL_NODE_MODULES_DIR"
-    rm -f "$INSTALL_PACKAGE_JSON"
-
-    write_node_bundle_launcher "${INSTALL_DIR}/ax-code"
-    chmod 755 "${INSTALL_DIR}/ax-code"
-    cp -R "$lib_dir" "$INSTALL_LIB_DIR"
-    cp -R "$node_dir" "$INSTALL_NODE_DIR"
-    chmod 755 "$INSTALL_NODE_DIR/bin/node" 2>/dev/null || true
-    cp -R "$node_modules_dir" "$INSTALL_NODE_MODULES_DIR"
-    if [ -f "$package_json" ]; then
-        cp "$package_json" "$INSTALL_PACKAGE_JSON"
+    if [ ! -f "$package_json" ]; then
+        print_message error "Node-bundled distribution did not contain package.json"
+        exit 1
     fi
-}
+
+    # A sibling staging tree cannot resolve missing dependencies through the
+    # previous installation's node_modules. Keep it on the same filesystem.
+    local staging_root
+    staging_root=$(mktemp -d "$(dirname "$INSTALL_ROOT")/.ax-code-install.XXXXXX") || exit 1
+    local backup_root="$staging_root/previous"
+    local committed=false preserve_backup=false
+    local backed_up_count=0 installed_count=0
+    local -a backed_up installed
+
+    finish_node_bundle_install() {
+        local status=$?
+        local i relative destination staged backup
+        trap - EXIT INT TERM
+        if [ "$committed" != true ]; then
+            for ((i = installed_count - 1; i >= 0; i--)); do
+                relative="${installed[$i]}"
+                destination="$INSTALL_ROOT/$relative"
+                staged="$staging_root/$relative"
+                if [ ! -e "$staged" ] && [ ! -L "$staged" ] && { [ -e "$destination" ] || [ -L "$destination" ]; }; then
+                    mv "$destination" "$staged" || preserve_backup=true
+                fi
+            done
+            for ((i = backed_up_count - 1; i >= 0; i--)); do
+                relative="${backed_up[$i]}"
+                destination="$INSTALL_ROOT/$relative"
+                backup="$backup_root/$relative"
+                if [ -e "$backup" ] || [ -L "$backup" ]; then
+                    if [ -e "$destination" ] || [ -L "$destination" ]; then
+                        preserve_backup=true
+                    else
+                        mv "$backup" "$destination" || preserve_backup=true
+                    fi
+                fi
+            done
+            if [ "$preserve_backup" = true ]; then
+                print_message error "Could not fully restore the previous runtime. Recovery files remain at $staging_root."
+                status=1
+            elif [ "$backed_up_count" -gt 0 ] || [ "$installed_count" -gt 0 ]; then
+                print_message error "AX Code installation failed; previous installation state restored."
+            fi
+        fi
+        if [ "$preserve_backup" != true ]; then
+            if ! rm -rf "$staging_root"; then
+                print_message warning "Temporary runtime files remain at $staging_root. Remove that directory when it is no longer in use."
+            fi
+        fi
+        exit "$status"
+    }
+    trap finish_node_bundle_install EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
+    mkdir -p "$staging_root/bin" "$backup_root/bin" || exit 1
+    write_node_bundle_launcher "$staging_root/bin/ax-code" || exit 1
+    chmod 755 "$staging_root/bin/ax-code" || exit 1
+    cp -R "$lib_dir" "$staging_root/lib" || exit 1
+    cp -R "$node_dir" "$staging_root/node" || exit 1
+    chmod 755 "$staging_root/node/bin/node" || exit 1
+    cp -R "$node_modules_dir" "$staging_root/node_modules" || exit 1
+    cp "$package_json" "$staging_root/package.json" || exit 1
+    assert_node_bundle_runtime "$staging_root" || exit 1
+
+    local relative destination
+    local -a paths=(lib node node_modules package.json bin/ax-code)
+    for relative in "${paths[@]}"; do
+        destination="$INSTALL_ROOT/$relative"
+        if [ -e "$destination" ] || [ -L "$destination" ]; then
+            # Record intent before moving so an interrupt immediately after a
+            # successful rename still restores the complete previous tree.
+            backed_up[$backed_up_count]="$relative"
+            backed_up_count=$((backed_up_count + 1))
+            mv "$destination" "$backup_root/$relative" || exit 1
+        fi
+    done
+    for relative in "${paths[@]}"; do
+        destination="$INSTALL_ROOT/$relative"
+        if [ -e "$destination" ] || [ -L "$destination" ]; then
+            print_message error "Installation destination unexpectedly exists: $destination"
+            exit 1
+        fi
+        installed[$installed_count]="$relative"
+        installed_count=$((installed_count + 1))
+        mv "$staging_root/$relative" "$destination" || exit 1
+    done
+    verify_installed_binary || exit 1
+    committed=true
+)
 
 verify_installed_binary() {
     local direct_version=""
-    if [ -x "${INSTALL_DIR}/ax-code" ]; then
-        direct_version=$("${INSTALL_DIR}/ax-code" --version 2>/dev/null || true)
+    if [ ! -x "${INSTALL_DIR}/ax-code" ]; then
+        print_message error "Installed ax-code launcher was not found at $INSTALL_DIR."
+        return 1
+    fi
+    if ! direct_version=$("${INSTALL_DIR}/ax-code" --version 2>&1); then
+        print_message error "Installed ax-code launcher in $INSTALL_DIR did not run cleanly. $direct_version"
+        return 1
+    fi
+    if [ -z "$direct_version" ]; then
+        print_message error "Installed ax-code launcher in $INSTALL_DIR did not report a version."
+        return 1
     fi
 
-    if [ "$specific_version" != "local" ] && [ -n "$specific_version" ] && [ "$direct_version" != "$specific_version" ]; then
-        print_message warning "${ORANGE}Warning:${NC} installed binary at ${INSTALL_DIR}/ax-code reported '${direct_version:-unknown}', expected '$specific_version'."
+    if [ "$specific_version" != "local" ] && [ -n "$specific_version" ] && [ "$direct_version" != "$specific_version" ] && [ "$direct_version" != "v$specific_version" ]; then
+        print_message error "Installed binary at ${INSTALL_DIR}/ax-code reported '$direct_version', expected '$specific_version'."
+        return 1
     fi
 }
 

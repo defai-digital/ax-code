@@ -305,6 +305,26 @@ function Verify-DownloadedArchive {
   }
 }
 
+function Assert-NodeBundleRuntime([string]$Root) {
+  $nodeExe = Join-Path $Root "node\bin\node.exe"
+  $entry = Join-Path $Root "lib\index-node-tui.js"
+  $previousNodeOptions = $env:NODE_OPTIONS
+  $previousErrorAction = $ErrorActionPreference
+  try {
+    $env:NODE_OPTIONS = ""
+    $ErrorActionPreference = "Continue"
+    $output = & $nodeExe --experimental-ffi --disable-warning=ExperimentalWarning $entry --version 2>&1
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $env:NODE_OPTIONS = $previousNodeOptions
+    $ErrorActionPreference = $previousErrorAction
+  }
+  $details = ($output | Out-String).Trim()
+  if ($exitCode -ne 0 -or -not $details) {
+    throw "Node-bundled distribution did not run cleanly at $Root. $details"
+  }
+}
+
 function Install-NodeBundleTree([string]$Root) {
   $launcher = Join-Path $Root "bin\ax-code.cmd"
   $lib = Join-Path $Root "lib"
@@ -327,19 +347,78 @@ function Install-NodeBundleTree([string]$Root) {
     throw "Node-bundled distribution did not contain node\bin\node.exe"
   }
 
+  if (-not (Test-Path -LiteralPath $packageJson -PathType Leaf)) {
+    throw "Node-bundled distribution did not contain package.json"
+  }
+
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-  Remove-Item -LiteralPath $InstallPath -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath $InstallCmdPath -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath $InstallLibDir -Recurse -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath $InstallNodeDir -Recurse -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath $InstallNodeModulesDir -Recurse -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath $InstallPackageJson -Force -ErrorAction SilentlyContinue
-  Copy-Item -LiteralPath $launcher -Destination $InstallCmdPath -Force
-  Copy-Item -LiteralPath $lib -Destination $InstallLibDir -Recurse -Force
-  Copy-Item -LiteralPath $nodeDir -Destination $InstallNodeDir -Recurse -Force
-  Copy-Item -LiteralPath $nodeModules -Destination $InstallNodeModulesDir -Recurse -Force
-  if (Test-Path -LiteralPath $packageJson -PathType Leaf) {
-    Copy-Item -LiteralPath $packageJson -Destination $InstallPackageJson -Force
+  # A sibling staging tree cannot resolve missing packages from the current
+  # install's node_modules through Node's ancestor-directory lookup.
+  $stagingRoot = Join-Path (Split-Path -Parent $InstallRoot) (".ax-code-install-" + [System.Guid]::NewGuid().ToString("N"))
+  New-Item -ItemType Directory -Path $stagingRoot | Out-Null
+  $backupRoot = Join-Path $stagingRoot "previous"
+  $preserveBackup = $false
+  try {
+    # Copy into absent destinations. Copy-Item nests a directory when its
+    # destination survives a failed removal, leaving node_modules/node_modules.
+    $stagingBin = Join-Path $stagingRoot "bin"
+    New-Item -ItemType Directory -Path $stagingBin | Out-Null
+    Copy-Item -LiteralPath $launcher -Destination (Join-Path $stagingBin "ax-code.cmd") -Force
+    Copy-Item -LiteralPath $lib -Destination (Join-Path $stagingRoot "lib") -Recurse -Force
+    Copy-Item -LiteralPath $nodeDir -Destination (Join-Path $stagingRoot "node") -Recurse -Force
+    Copy-Item -LiteralPath $nodeModules -Destination (Join-Path $stagingRoot "node_modules") -Recurse -Force
+    Copy-Item -LiteralPath $packageJson -Destination (Join-Path $stagingRoot "package.json") -Force
+    Assert-NodeBundleRuntime $stagingRoot
+
+    # Move complete old trees aside before replacement. Windows can retain
+    # loaded native files; never partially delete the active runtime or ignore
+    # a failed move. User configuration and other install-root files stay put.
+    $paths = @("lib", "node", "node_modules", "package.json", "bin\ax-code.cmd", "bin\ax-code.exe")
+    $backedUp = @()
+    $installed = @()
+    try {
+      foreach ($relative in $paths) {
+        $destination = Join-Path $InstallRoot $relative
+        if (Test-Path -LiteralPath $destination) {
+          $backup = Join-Path $backupRoot $relative
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $backup) | Out-Null
+          Move-Item -LiteralPath $destination -Destination $backup -ErrorAction Stop
+          $backedUp += $relative
+        }
+      }
+      foreach ($relative in $paths) {
+        $staged = Join-Path $stagingRoot $relative
+        if (Test-Path -LiteralPath $staged) {
+          Move-Item -LiteralPath $staged -Destination (Join-Path $InstallRoot $relative) -ErrorAction Stop
+          $installed += $relative
+        }
+      }
+      Assert-NodeBundleRuntime $InstallRoot
+    } catch {
+      $failure = $_
+      $preserveBackup = $true
+      try {
+        for ($i = $installed.Count - 1; $i -ge 0; $i--) {
+          $relative = $installed[$i]
+          Move-Item -LiteralPath (Join-Path $InstallRoot $relative) -Destination (Join-Path $stagingRoot $relative) -ErrorAction Stop
+        }
+        for ($i = $backedUp.Count - 1; $i -ge 0; $i--) {
+          $relative = $backedUp[$i]
+          Move-Item -LiteralPath (Join-Path $backupRoot $relative) -Destination (Join-Path $InstallRoot $relative) -ErrorAction Stop
+        }
+        $preserveBackup = $false
+      } catch {
+        throw "AX Code installation failed: $failure. Could not fully restore the previous runtime: $_. Recovery files remain at $stagingRoot. Close all AX Code sessions before retrying."
+      }
+      throw "AX Code installation failed; previous runtime restored. Close all AX Code sessions and retry. $failure"
+    }
+  } finally {
+    if (-not $preserveBackup) {
+      Remove-Item -LiteralPath $stagingRoot -Recurse -Force -ErrorAction SilentlyContinue
+      if (Test-Path -LiteralPath $stagingRoot) {
+        Write-Warn "Temporary runtime files remain at $stagingRoot because they are in use. Remove that directory after closing all AX Code sessions."
+      }
+    }
   }
 }
 
@@ -430,12 +509,11 @@ function Verify-InstalledRuntime([string]$ExpectedVersion) {
 
   $directVersion = Get-InstalledVersion
   if (-not $directVersion) {
-    Write-Warn "Installed ax-code launcher in $InstallDir did not run cleanly."
-    return
+    throw "Installed ax-code launcher in $InstallDir did not run cleanly. Close all AX Code sessions and rerun the installer."
   }
   if ($ExpectedVersion -and $ExpectedVersion -ne "local") {
     if ($directVersion -ne $ExpectedVersion -and $directVersion -ne "v$ExpectedVersion") {
-      Write-Warn "Installed ax-code launcher in $InstallDir reported '$directVersion', expected '$ExpectedVersion'."
+      throw "Installed ax-code launcher in $InstallDir reported '$directVersion', expected '$ExpectedVersion'."
     }
   }
 }

@@ -38,18 +38,15 @@ describe("install script", () => {
   test("installs the complete Unix node-bundled runtime tree", async () => {
     const text = await readFile(installScript, "utf-8")
     expect(text).toContain('INSTALL_ROOT=$(dirname "$INSTALL_DIR")')
-    expect(text).toContain('INSTALL_LIB_DIR="$INSTALL_ROOT/lib"')
-    expect(text).toContain('INSTALL_NODE_DIR="$INSTALL_ROOT/node"')
-    expect(text).toContain('INSTALL_NODE_MODULES_DIR="$INSTALL_ROOT/node_modules"')
     expect(text).toContain("install_node_bundle_tree")
     expect(text).toContain("lib/index-node-tui.js")
     expect(text).toContain("node/bin/node")
     expect(text).toContain("node_modules")
-    expect(text).toContain('cp -R "$lib_dir" "$INSTALL_LIB_DIR"')
-    expect(text).toContain('cp -R "$node_dir" "$INSTALL_NODE_DIR"')
-    expect(text).toContain('cp -R "$node_modules_dir" "$INSTALL_NODE_MODULES_DIR"')
+    expect(text).toContain('cp -R "$lib_dir" "$staging_root/lib"')
+    expect(text).toContain('cp -R "$node_dir" "$staging_root/node"')
+    expect(text).toContain('cp -R "$node_modules_dir" "$staging_root/node_modules"')
     expect(text).toContain('install_node_bundle_tree "$bundle_root"')
-    expect(text).toContain('write_node_bundle_launcher "${INSTALL_DIR}/ax-code"')
+    expect(text).toContain('write_node_bundle_launcher "$staging_root/bin/ax-code"')
     expect(text).toContain('while [ -L "$script" ]; do')
     // Linux archives are tar.gz; macOS remains zip.
     expect(text).toContain('archive_ext=".tar.gz"')
@@ -135,7 +132,7 @@ describe("install script", () => {
     const installDir = path.join(home, ".ax-code", "bin")
     const exportLine = `export PATH=${installDir}:$PATH`
 
-    await writeFile(fakeBinary, "#!/bin/sh\nexit 0\n")
+    await writeFile(fakeBinary, "#!/bin/sh\necho 1.0.0\n")
     await chmod(fakeBinary, 0o755)
     for (const file of existingLoginFiles) await writeFile(path.join(home, file), "# existing\n")
     if (hasBashrc) await writeFile(bashrc, "# existing\n")

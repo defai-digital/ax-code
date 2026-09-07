@@ -218,6 +218,9 @@ jobs:
       # by optional native postinstall fallout under new Node/toolchain pairs.
       - run: pnpm install --frozen-lockfile --ignore-scripts
 
+      - name: Test installer replacement and rollback
+        run: pnpm exec vitest run script/install-unix.test.ts script/install-powershell.test.ts
+
       - name: Install Linux native build tools
         if: ${{ runner.os == 'Linux' }}
         run: |
