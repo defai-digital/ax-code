@@ -350,8 +350,11 @@ async function prepareChildRuntimeTarget(
   }
 }
 
-async function stopIfWallTimeExceeded(runID: WorkflowRunID, inputDetail?: WorkflowRunDetail) {
-  const detail = inputDetail ?? (await WorkflowRun.getDetail(runID))
+async function stopIfWallTimeExceeded(runID: WorkflowRunID, inputDetail?: WorkflowRun.Info) {
+  // Only `time.started`, `budget`, and `budgetUsage` are read here, and all
+  // three live on the run row itself — `getDetail` would run 5 SELECTs plus a
+  // full zod parse just to reconstruct phases/children/artifacts we ignore.
+  const detail = inputDetail ?? (await WorkflowRun.get(runID))
   if (detail.time.started === undefined) return undefined
   const elapsedMs = Date.now() - detail.time.started
   const evaluation = evaluateWorkflowBudget({

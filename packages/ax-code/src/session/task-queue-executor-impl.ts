@@ -305,7 +305,7 @@ async function finishIfRunning(
 ) {
   const current = await TaskQueue.get(item.id)
   if (!isActiveQueueStatus(current.status)) return current
-  return TaskQueue.setStatus({ id: item.id, status: input.status, error: input.error })
+  return TaskQueue.setStatus({ id: item.id, status: input.status, error: input.error, onlyFromActive: true })
 }
 
 function startDetachedQueueTask(task: () => Promise<void>) {
@@ -348,9 +348,12 @@ async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
   // Include waiting_for_idle items: a task that was blocked on idle when
   // start() ran stays in waiting_for_idle, invisible to a queued-only query.
   // When a phase slot opens it would never be retried otherwise.
+  // The 500 cap matches workflowPacingWaitMs: a 100 cap would leave a phase's
+  // children invisible to drain whenever another workflow floods the global
+  // queue, stalling the phase until its first 100 children settle.
   const [queued, waitingForIdle] = await Promise.all([
-    TaskQueue.list({ status: "queued", limit: 100 }),
-    TaskQueue.list({ status: "waiting_for_idle", limit: 100 }),
+    TaskQueue.list({ status: "queued", limit: 500 }),
+    TaskQueue.list({ status: "waiting_for_idle", limit: 500 }),
   ])
   const next = [...queued, ...waitingForIdle]
     .filter((candidate) => sameWorkflowPhase(candidate, workflow))
@@ -430,8 +433,10 @@ function scheduleWorkflowPacingRetry(item: TaskQueue.Info, waitMs: number) {
 }
 
 async function activeWorkflowPhaseItems(workflow: WorkflowQueuePayload, currentTaskID?: TaskQueueID) {
-  const items = await Promise.all(activeStatuses.map((status) => TaskQueue.list({ status, limit: 100 })))
-  return items.flat().filter((candidate) => candidate.id !== currentTaskID && sameWorkflowPhase(candidate, workflow))
+  // One inArray query instead of one list() per active status (3 SELECTs + 3
+  // per-row Info parses). The 300 cap preserves the previous 3x100 capacity.
+  const items = await TaskQueue.list({ statuses: [...activeStatuses], limit: 300 })
+  return items.filter((candidate) => candidate.id !== currentTaskID && sameWorkflowPhase(candidate, workflow))
 }
 
 function sessionPromptBusy(sessionID: SessionID) {
@@ -444,16 +449,13 @@ function sessionPromptBusy(sessionID: SessionID) {
 }
 
 async function pendingSessionItems(sessionID: SessionID) {
-  const [queued, waiting] = await Promise.all([
-    TaskQueue.list({ sessionID, status: "queued", limit: 100 }),
-    TaskQueue.list({ sessionID, status: "waiting_for_idle", limit: 100 }),
-  ])
-  return [...queued, ...waiting].sort(compareQueueItems)
+  // list() orders by position asc, then time/id desc — the same total order the
+  // previous queued+waiting merge produced via compareQueueItems.
+  return TaskQueue.list({ sessionID, statuses: ["queued", "waiting_for_idle"], limit: 200 })
 }
 
 async function activeSessionItems(sessionID: SessionID) {
-  const items = await Promise.all(activeStatuses.map((status) => TaskQueue.list({ sessionID, status, limit: 100 })))
-  return items.flat()
+  return TaskQueue.list({ sessionID, statuses: [...activeStatuses], limit: 300 })
 }
 
 function isActiveQueueStatus(status: TaskQueue.Status) {
@@ -544,8 +546,12 @@ function ensureSessionBlockObservers() {
 
 async function refreshSessionBlockStatus(sessionID: SessionID) {
   try {
-    const target = await sessionBlockStatus(sessionID)
+    // Fetch active items first: most permission/question events fire on sessions
+    // with no active queue items, and this skips the two global
+    // Permission.list()/Question.list() scans when there is nothing to update.
     const active = await activeSessionItems(sessionID)
+    if (active.length === 0) return
+    const target = await sessionBlockStatus(sessionID)
     await Promise.all(
       active.map(async (item) => {
         // Re-read the live status before writing: the item may have completed,

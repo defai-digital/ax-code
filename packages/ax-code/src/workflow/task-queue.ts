@@ -49,7 +49,8 @@ export namespace WorkflowTaskQueue {
     if (child.taskQueueID && child.taskQueueID !== item.id) return detail
 
     const childStatus = childStatusFromQueueStatus(item.status)
-    if (child.status !== childStatus || child.error !== item.error) {
+    const childChanged = child.status !== childStatus || child.error !== item.error
+    if (childChanged) {
       await WorkflowRun.setChildStatus({
         id: child.id,
         status: childStatus,
@@ -57,7 +58,10 @@ export namespace WorkflowTaskQueue {
       })
     }
 
-    const refreshed = await WorkflowRun.getDetail(payload.workflow.runID)
+    // The child write above is the only mutation so far. A no-op sync (status
+    // unchanged) can keep reusing `detail` instead of rebuilding it with 5
+    // more SELECTs + a full zod parse.
+    const refreshed = childChanged ? await WorkflowRun.getDetail(payload.workflow.runID) : detail
     const phase = refreshed.phases.find((candidate) => candidate.id === payload.workflow.phaseID)
     const phaseChildren = refreshed.children.filter((candidate) => candidate.phaseID === payload.workflow.phaseID)
     const phaseStatus = aggregatePhaseStatus(phaseChildren, phase ? mergeStrategyForPhase(refreshed, phase) : "all")
@@ -67,7 +71,8 @@ export namespace WorkflowTaskQueue {
 
     const afterMerge = phaseStatus === "completed" ? await WorkflowRun.getDetail(payload.workflow.runID) : refreshed
     const latestPhase = afterMerge.phases.find((candidate) => candidate.id === payload.workflow.phaseID)
-    if (latestPhase && latestPhase.status !== phaseStatus) {
+    const phaseChanged = latestPhase !== undefined && latestPhase.status !== phaseStatus
+    if (phaseChanged) {
       await WorkflowRun.setPhaseStatus({
         id: latestPhase.id,
         status: phaseStatus,
@@ -75,7 +80,9 @@ export namespace WorkflowTaskQueue {
       })
     }
 
-    const latest = await WorkflowRun.getDetail(payload.workflow.runID)
+    // The phase write (when it happened) is the only mutation since `afterMerge`
+    // was read; a no-op sync keeps using `afterMerge` instead of rebuilding it.
+    const latest = phaseChanged ? await WorkflowRun.getDetail(payload.workflow.runID) : afterMerge
     const runStatus = aggregateRunStatus(latest.phases)
     const run =
       latest.status === runStatus

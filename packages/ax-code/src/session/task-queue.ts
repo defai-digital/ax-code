@@ -96,6 +96,7 @@ export namespace TaskQueue {
   export const ListInput = z.object({
     sessionID: SessionID.zod.optional(),
     status: Status.optional(),
+    statuses: z.array(Status).optional(),
     limit: z.number().int().positive().max(500).optional(),
   })
   export type ListInput = z.infer<typeof ListInput>
@@ -300,6 +301,7 @@ export namespace TaskQueue {
     const conditions = [eq(TaskQueueTable.project_id, Instance.project.id)]
     if (parsed.sessionID) conditions.push(eq(TaskQueueTable.session_id, parsed.sessionID))
     if (parsed.status) conditions.push(eq(TaskQueueTable.status, parsed.status))
+    if (parsed.statuses && parsed.statuses.length > 0) conditions.push(inArray(TaskQueueTable.status, parsed.statuses))
     return SessionShard.storeForProject(Instance.project.id).use((db) => {
       let query = db
         .select()
@@ -447,7 +449,19 @@ export namespace TaskQueue {
     return item
   }
 
-  export async function setStatus(input: { id: TaskQueueID; status: Status; error?: string }): Promise<Info> {
+  export async function setStatus(input: {
+    id: TaskQueueID
+    status: Status
+    error?: string
+    /**
+     * When true, apply the non-terminal guard even to terminal targets: the
+     * write is a no-op (and re-reads the current row) if a concurrent writer has
+     * already settled the row to a terminal status. Used by `finishIfRunning` so
+     * a "completed" write cannot clobber a concurrent "cancelled" from
+     * cancelSupersededPhaseChildren.
+     */
+    onlyFromActive?: boolean
+  }): Promise<Info> {
     const current = await get(input.id)
     const now = Date.now()
     const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
@@ -474,7 +488,9 @@ export namespace TaskQueue {
       // recovery sweep. Terminal writes are the authoritative outcome and skip
       // the guard; a guarded no-op re-reads and returns the current row.
       const conditions = [eq(TaskQueueTable.id, input.id)]
-      if (!isTerminalTarget) conditions.push(notInArray(TaskQueueTable.status, terminalStatuses))
+      if (!isTerminalTarget || input.onlyFromActive) {
+        conditions.push(notInArray(TaskQueueTable.status, terminalStatuses))
+      }
       const row = db
         .update(TaskQueueTable)
         .set(updates)
@@ -1194,9 +1210,13 @@ export namespace TaskQueue {
           row.session_id === null &&
           typeof row.payload["scheduledTaskID"] === "string" &&
           !row.payload["workflowTemplateID"]
+        // Workflow children blocked on permission/question hold their pending
+        // request only in memory, so a restart leaves them unresolvable. Requeue
+        // them (like running children) rather than preserving a permanent wedge.
         if (
           row.status === "waiting_for_idle" ||
-          (workflowItem && row.status === "running") ||
+          (workflowItem &&
+            (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question")) ||
           scheduledBeforePrompt ||
           (liveTaskSubagent &&
             (row.status === "running" || row.status === "blocked_permission" || row.status === "blocked_question"))
@@ -1407,6 +1427,14 @@ export namespace TaskQueue {
   async function syncWorkflowStatusIfNeeded(item: Info) {
     const workflow = item.payload["workflow"]
     if (!workflow || typeof workflow !== "object") return
-    await import("../workflow/task-queue").then((mod) => mod.WorkflowTaskQueue.syncItem(item)).catch(() => undefined)
+    await import("../workflow/task-queue")
+      .then((mod) => mod.WorkflowTaskQueue.syncItem(item))
+      .catch((error) => {
+        log.warn("failed to sync workflow status from task queue item", {
+          taskID: item.id,
+          sessionID: item.sessionID,
+          error,
+        })
+      })
   }
 }
