@@ -90,8 +90,27 @@ export namespace Discovery {
 
   async function fetchArrayBuffer(url: string, init?: RequestInit) {
     try {
-      const res = await Ssrf.pinnedFetch(url, { ...init, label: "skill-discovery" })
-      if (!res.ok) throw asDiscoveryError(`skill-discovery: fetch failed for ${url}: HTTP ${res.status}`)
+      const res = await Ssrf.pinnedFetch(url, {
+        ...init,
+        // A hung skill URL must not hang the whole (Instance-cached) skill state
+        // forever — every other fetch path (models, instructions, providers)
+        // passes its own signal; this is the one without.
+        signal: init?.signal ?? AbortSignal.timeout(30_000),
+        label: "skill-discovery",
+      })
+      if (!res.ok) {
+        // Drain the body so a non-2xx response does not leave an unconsumed
+        // socket/fd held open until GC.
+        await res.body?.cancel().catch(() => {})
+        throw asDiscoveryError(`skill-discovery: fetch failed for ${url}: HTTP ${res.status}`)
+      }
+      // Reject oversized responses before buffering them: the 1MB cap in
+      // verifyFile is otherwise enforced only after the full body is in memory.
+      const contentLength = Number(res.headers.get("content-length"))
+      if (Number.isFinite(contentLength) && contentLength > MAX_SKILL_FILE_BYTES) {
+        await res.body?.cancel().catch(() => {})
+        throw asDiscoveryError(`skill-discovery: ${url} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
+      }
       return res.arrayBuffer()
     } catch (err) {
       if (err instanceof DiscoveryError) throw err

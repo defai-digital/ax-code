@@ -320,7 +320,7 @@ export namespace Skill {
 
     const configDirs = await Config.directories()
     for (const dir of configDirs) {
-      await scanDir(s, dir, AX_CODE_SKILL_PATTERN, { sourceTool: "ax-code", skillScope: "config" })
+      await scanDir(s, dir, AX_CODE_SKILL_PATTERN, { sourceTool: "ax-code", skillScope: "config", scope: "config" })
     }
 
     const cfg = await Config.get()
@@ -341,14 +341,14 @@ export namespace Skill {
         log.warn("skill path not found", { path: resolved })
         continue
       }
-      await scanDir(s, resolved, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
+      await scanDir(s, resolved, SKILL_PATTERN, { sourceTool: "config", skillScope: "config", scope: "path" })
     }
 
     for (const url of cfg.skills?.urls ?? []) {
       const dirs = await Discovery.pull(url)
       for (const dir of dirs) {
         s.dirs.add(dir)
-        await scanDir(s, dir, SKILL_PATTERN, { sourceTool: "config", skillScope: "config" })
+        await scanDir(s, dir, SKILL_PATTERN, { sourceTool: "config", skillScope: "config", scope: "url" })
       }
     }
 

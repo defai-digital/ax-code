@@ -1,4 +1,5 @@
 import { existsSync } from "fs"
+import fs from "fs/promises"
 import os, { EOL } from "os"
 import path from "path"
 import matter from "gray-matter"
@@ -107,13 +108,30 @@ function parseSkillCreateRequest(input: SkillCreateRequest) {
   throw new SkillInputError(message || "Invalid skill create request")
 }
 
+// Realpath the deepest existing ancestor so a symlinked parent directory cannot
+// redirect the write outside the container. Falls back to the lexical path when
+// nothing exists yet (a brand-new skill path).
+async function realpathExistingAncestor(target: string): Promise<string> {
+  let current = path.resolve(target)
+  for (;;) {
+    try {
+      return await fs.realpath(current)
+    } catch {
+      const parent = path.dirname(current)
+      if (parent === current) return path.resolve(target)
+      current = parent
+    }
+  }
+}
+
 // Mirror the skill discovery containment policy (src/skill/index.ts): a skill may
 // only live inside the worktree or the user's home directory. `path.resolve`
-// normalizes `..` segments so a relative base path can't escape via traversal.
-function assertContained(target: string) {
-  const resolved = path.resolve(target)
-  const worktree = path.resolve(Instance.worktree)
-  const home = os.homedir()
+// normalizes `..` segments, and realpath-ing the deepest existing ancestor
+// closes the symlink-escape gap the lexical-only check left open.
+async function assertContained(target: string) {
+  const resolved = await realpathExistingAncestor(target)
+  const worktree = await fs.realpath(path.resolve(Instance.worktree)).catch(() => path.resolve(Instance.worktree))
+  const home = await fs.realpath(os.homedir()).catch(() => os.homedir())
   const within = (root: string) => resolved === root || resolved.startsWith(root + path.sep)
   if (!within(worktree) && !within(home)) throw new SkillPathError(resolved)
 }
@@ -193,7 +211,7 @@ export async function createSkill(input: SkillCreateRequest): Promise<SkillCreat
   const request = parseSkillCreateRequest(input)
   const basePath = request.path ? path.resolve(request.path) : path.join(Instance.worktree, ".ax-code", "skill")
   const filePath = skillCreatePath({ basePath, name: request.name })
-  assertContained(filePath)
+  await assertContained(filePath)
   if (await Filesystem.exists(filePath)) throw new SkillExistsError(filePath)
   await Filesystem.write(filePath, skillCreateContent({ name: request.name, description: request.description }))
   return { path: filePath }
