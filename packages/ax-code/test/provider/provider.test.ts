@@ -224,7 +224,7 @@ test("OpenRouter provider preserves OpenAI-compatible options and curated tool m
   })
 })
 
-test("Provider.invalidate clears SDK cache as well as pending loads", async () => {
+test("Provider.invalidate drops cached state and bumps the cache generation", async () => {
   const src = await fs.readFile(path.join(import.meta.dirname, "../../src/provider/provider-impl.ts"), "utf-8")
   const start = src.indexOf("export async function invalidate()")
   const end = src.indexOf("async function getSDK", start)
@@ -232,10 +232,13 @@ test("Provider.invalidate clears SDK cache as well as pending loads", async () =
   expect(end).toBeGreaterThan(start)
   const body = src.slice(start, end)
 
-  expect(body).toContain("currentState.models.clear()")
-  expect(body).toContain("currentState.modelPending.clear()")
-  expect(body).toContain("currentState.sdkPending.clear()")
-  expect(body).toContain("currentState.sdk.clear()")
+  // invalidate() must NOT await state() (that would re-run the full provider
+  // init pipeline just to discard it). It bumps the generation (invalidating
+  // the language-model cache via getLanguage's generation check) and drops the
+  // cached state entry (so the next state() re-inits fresh SDK/pending maps).
+  expect(body).toContain("modelCacheGeneration++")
+  expect(body).toContain("await state.invalidate()")
+  expect(body).not.toContain("const currentState = await state()")
 })
 
 test("Auth.set invalidates provider cache after key replacement", async () => {

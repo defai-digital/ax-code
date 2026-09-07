@@ -220,6 +220,9 @@ export namespace Provider {
             abortReader(err)
             reject(err)
           }, ms)
+          // The timer's job is to fail a stalled stream, not keep the event loop
+          // alive; an unref'd watchdog cannot hold a shut-down process open.
+          ;(id as { unref?: () => void }).unref?.()
 
           reader.read().then(
             (part) => {
@@ -749,12 +752,11 @@ export namespace Provider {
   // per-directory. Prefer `invalidateAll()` after Auth.set/remove so every
   // open project picks up the new credentials without reconnecting.
   export async function invalidate() {
-    const currentState = await state()
+    // Bump the generation and drop the cached state entry only. Awaiting state()
+    // first would re-run the full provider init pipeline (network, loaders) just
+    // to clear maps the generation check already invalidates — the same trap
+    // invalidateAll() documents and avoids.
     modelCacheGeneration++
-    currentState.models.clear()
-    currentState.modelPending.clear()
-    currentState.sdkPending.clear()
-    currentState.sdk.clear()
     await state.invalidate()
   }
 
@@ -805,6 +807,7 @@ export namespace Provider {
   const PROVIDER_INSTALL_NEGATIVE_CACHE_MS = 5_000
   const PROVIDER_INSTALL_NEGATIVE_CACHE_MAX = 128
   const PROVIDER_INSTALL_TIMEOUT_MS = 60_000
+  const FIRST_BYTE_TIMEOUT_MS = 300_000
   const providerInstallFailures = new Map<string, { at: number; error: unknown }>()
 
   async function getSDK(model: Model) {
@@ -952,10 +955,30 @@ export namespace Provider {
           if (chunkAbortCtl) signals.push(chunkAbortCtl.signal)
           if (providerTimeout > 0) signals.push(AbortSignal.timeout(providerTimeout))
 
+          // First-byte watchdog: a whole-request timeout would cut legitimate
+          // long SSE streams, but a server that never sends response headers
+          // must not hang the call forever. It clears the moment headers arrive,
+          // so it is safe to default on; an explicit provider timeout or the
+          // `timeout: 0`/`false` opt-out skips it.
+          const firstByteWatchdog =
+            providerTimeout > 0 || rawProviderTimeout === 0 || rawProviderTimeout === false
+              ? undefined
+              : new AbortController()
+          let firstByteTimer: ReturnType<typeof setTimeout> | undefined
+          if (firstByteWatchdog) {
+            signals.push(firstByteWatchdog.signal)
+            firstByteTimer = setTimeout(
+              () => firstByteWatchdog.abort(new Error("provider response headers timed out")),
+              FIRST_BYTE_TIMEOUT_MS,
+            )
+            firstByteTimer.unref?.()
+          }
+
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined
 
           const res = await fetchFn(input, opts)
+          if (firstByteTimer) clearTimeout(firstByteTimer)
 
           if (!chunkAbortCtl) return res
           return wrapSSE(res, chunkTimeout, chunkAbortCtl, (opts.signal as AbortSignal) ?? undefined)

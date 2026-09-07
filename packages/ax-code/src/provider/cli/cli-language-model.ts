@@ -15,6 +15,7 @@ import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { ScopedFlag } from "@/flag/scoped"
 import { Token } from "@/util/token"
+import { withTimeout } from "@/util/timeout"
 import { markEstimatedUsage } from "../usage"
 import { parseJsonResult } from "../../util/json-value"
 import { Shell } from "@/shell/shell"
@@ -345,7 +346,10 @@ export class CliLanguageModel implements LanguageModelV3 {
       // without an explicit kill here the process was left running with no
       // one attached to its stdout/stderr or awaiting its exit, orphaning it.
       try {
-        await writeCliPrompt(proc.stdin, text)
+        // Bound the stdin drain: a child that never reads stdin and never exits
+        // would otherwise leave this await unsettled forever (the overall CLI
+        // timeout is armed only after the write completes).
+        await withTimeout(writeCliPrompt(proc.stdin, text), CLI_TIMEOUT_MS, "CLI provider stdin write timed out")
       } catch (error) {
         await abort.kill()
         throw error
@@ -472,7 +476,10 @@ export class CliLanguageModel implements LanguageModelV3 {
       // without an explicit kill here the process was left running with no
       // one attached to its stdout/stderr or awaiting its exit, orphaning it.
       try {
-        await writeCliPrompt(proc.stdin, text)
+        // Bound the stdin drain: a child that never reads stdin and never exits
+        // would otherwise leave this await unsettled forever (the overall CLI
+        // timeout is armed only after the write completes).
+        await withTimeout(writeCliPrompt(proc.stdin, text), CLI_TIMEOUT_MS, "CLI provider stdin write timed out")
       } catch (error) {
         await abort.kill()
         throw error
@@ -503,11 +510,13 @@ export class CliLanguageModel implements LanguageModelV3 {
             if (onStdoutData) proc.stdout.off("data", onStdoutData)
             if (onStdoutError) proc.stdout.off("error", onStdoutError)
             if (onStdoutEnd) proc.stdout.off("end", onStdoutEnd)
+            if (onStdoutEnd) proc.stdout.off("close", onStdoutEnd)
           }
           if (proc.stderr) {
             if (onStderrData) proc.stderr.off("data", onStderrData)
             if (onStderrError) proc.stderr.off("error", onStderrError)
             if (onStderrEnd) proc.stderr.off("end", onStderrEnd)
+            if (onStderrEnd) proc.stderr.off("close", onStderrEnd)
           }
         }
         const safeClose = () => {
@@ -687,7 +696,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           fail(abort.isAborted ? abort.abortError : err)
         }
         onStderrEnd = () => {
-          if (closed()) return
+          if (closed() || stderrEnded) return
           stderrEnded = true
           finishSuccess()
           finishFailure()
@@ -698,7 +707,7 @@ export class CliLanguageModel implements LanguageModelV3 {
           processStdoutText(stdoutDecoder.write(chunk))
         }
         onStdoutEnd = () => {
-          if (closed()) return
+          if (closed() || stdoutEnded) return
           stdoutEnded = true
           try {
             flushOutput()
@@ -718,9 +727,15 @@ export class CliLanguageModel implements LanguageModelV3 {
 
         stderr.on("data", onStderrData)
         stderr.on("error", onStderrError)
+        // process.ts destroys the pipe after exit (for grandchild-held FDs),
+        // which emits 'close' but not 'end'. Treat both as end so a successfully
+        // finished CLI that spawned a background child is not reported as a
+        // fake timeout once the destroy fires.
         stderr.on("end", onStderrEnd)
+        stderr.on("close", onStderrEnd)
         stdout.on("data", onStdoutData)
         stdout.on("end", onStdoutEnd)
+        stdout.on("close", onStdoutEnd)
         stdout.on("error", onStdoutError)
 
         cancelStreaming = safeAbort
