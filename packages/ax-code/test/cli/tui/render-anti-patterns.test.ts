@@ -244,7 +244,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("composeAxCodeTerminalTitle")
     expect(app).toContain("setTitleSpinnerFrame")
     // Busy tabs keep the product token first; do not resurrect Codex-style
-    // braille prefixes or the old session-title suffix.
+    // leading hollow-spinner prefixes or the old session-title suffix.
     expect(app).not.toContain("TITLE_SPINNER_FRAMES")
     expect(app).not.toContain("AX Code | ")
     // The progress keepalive interval is module state in renderer.ts, outside

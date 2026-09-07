@@ -37,14 +37,14 @@ describe("terminal title", () => {
     expect(axCodeTerminalTitleSequence()).not.toContain("]0;")
   })
 
-  test("busy titles keep AX-Code first and use an orbit glyph, not Codex braille", () => {
+  test("busy titles keep AX-Code first and use a 2x4 dot-matrix glyph, not Codex braille", () => {
     expect(composeAxCodeTerminalTitle({ working: false })).toBe("AX-Code")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("AX-Code ◜")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 1 })).toBe("AX-Code ◝")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 2 })).toBe("AX-Code ◞")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 3 })).toBe("AX-Code ◟")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 4 })).toBe("AX-Code ◜")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("AX-Code ⣾")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 1 })).toBe("AX-Code ⣽")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 7 })).toBe("AX-Code ⣷")
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 8 })).toBe("AX-Code ⣾")
     expect(AX_CODE_TITLE_SPINNER_FRAMES.join("")).not.toContain("⠋")
+    expect(AX_CODE_TITLE_SPINNER_FRAMES).toHaveLength(8)
   })
 
   test("sanitizes control characters out of OSC payloads", () => {
