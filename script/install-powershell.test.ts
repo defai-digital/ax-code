@@ -8,7 +8,9 @@ const installer = path.resolve(import.meta.dirname, "../install.ps1")
 const powershell = process.env.AX_TEST_POWERSHELL ?? (process.platform === "win32" ? "powershell.exe" : "pwsh")
 const available =
   spawnSync(powershell, ["-NoProfile", "-NonInteractive", "-Command", "exit 0"], {
-    timeout: 10_000,
+    // Windows on Arm may cold-start the emulated Windows PowerShell host
+    // slowly enough to exceed the default command-probe budget.
+    timeout: 30_000,
   }).status === 0
 
 if (process.platform === "win32" && !available) {
