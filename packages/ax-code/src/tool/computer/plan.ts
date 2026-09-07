@@ -20,6 +20,7 @@ import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
 import { FanOut } from "@/util/fan-out"
 import { parseJsonResult } from "@/util/json-value"
+import { withTimeout } from "@/util/timeout"
 
 export const CandidateSchema = z.object({
   title: z.string(),
@@ -237,11 +238,18 @@ export async function planWithJudge(input: PlanInput, deps?: PlanJudgeDeps): Pro
   }
 
   try {
-    const verdict = await judge({
-      system: JUDGE_SYSTEM,
-      user: judgeUser(input, candidates),
-      abortSignal: input.abort,
-    })
+    // The judge is a single injectable LLM call with no timer of its own; a
+    // hung judge must not park the agent indefinitely. Bound it like the
+    // candidate fan-out so the try/catch falls back to candidate 0 on timeout.
+    const verdict = await withTimeout(
+      judge({
+        system: JUDGE_SYSTEM,
+        user: judgeUser(input, candidates),
+        abortSignal: input.abort,
+      }),
+      CANDIDATE_TIMEOUT_MS,
+      "plan judge timed out",
+    )
     // clamp: a judge index outside the presented range falls back to candidate 0
     const winnerIndex = verdict.winner < candidates.length ? verdict.winner : 0
     return {

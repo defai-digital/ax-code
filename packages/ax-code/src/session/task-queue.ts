@@ -5,7 +5,7 @@ import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
-import { NotFoundError, and, asc, desc, eq, inArray, sql } from "@/storage/db"
+import { NotFoundError, and, asc, desc, eq, inArray, notInArray, sql } from "@/storage/db"
 import type { Database } from "@/storage/db"
 import { Log } from "@/util/log"
 import { JsonNumber } from "@/util/schema"
@@ -463,9 +463,29 @@ export namespace TaskQueue {
       const payload = withExecutorOwner(current.payload, now)
       if (payload) updates.payload = payload
     }
+    const terminalStatuses: Status[] = ["completed", "failed", "cancelled"]
+    const isTerminalTarget = terminalStatuses.includes(input.status)
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, input.id)).returning().get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      // A non-terminal write must never resurrect a row a concurrent executor
+      // already settled to a terminal status. The get() above and this write
+      // are separated by an await boundary, so a stale block-status refresh can
+      // read "running" and then write "running"/"blocked_*" over an already
+      // "completed"/"failed" row, wedging the item until the next restart
+      // recovery sweep. Terminal writes are the authoritative outcome and skip
+      // the guard; a guarded no-op re-reads and returns the current row.
+      const conditions = [eq(TaskQueueTable.id, input.id)]
+      if (!isTerminalTarget) conditions.push(notInArray(TaskQueueTable.status, terminalStatuses))
+      const row = db
+        .update(TaskQueueTable)
+        .set(updates)
+        .where(and(...conditions))
+        .returning()
+        .get()
+      if (!row) {
+        const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+        if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+        return fromRow(fresh)
+      }
       return fromRow(row)
     })
     assertProjectItem(item)
@@ -1330,7 +1350,16 @@ export namespace TaskQueue {
       const shifted = db
         .update(TaskQueueTable)
         .set({ position: sql`${TaskQueueTable.position} + 1`, time_updated: now })
-        .where(and(eq(TaskQueueTable.project_id, current.projectID), sql`${TaskQueueTable.id} != ${id}`))
+        .where(
+          and(
+            eq(TaskQueueTable.project_id, current.projectID),
+            sql`${TaskQueueTable.id} != ${id}`,
+            // Only the active queue participates in ordering. Terminal history
+            // rows would otherwise be renumbered and re-published (an SSE event
+            // storm on large projects) without affecting the schedule.
+            inArray(TaskQueueTable.status, ["queued", "waiting_for_idle", "paused"]),
+          ),
+        )
         .returning()
         .all()
         .map(fromRow)

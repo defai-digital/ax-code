@@ -540,7 +540,10 @@ export namespace SessionPrompt {
       fallbackNoticeOrigin = undefined
       fallbackNoticePart = undefined
       failedFallbackProviderIDs.clear()
-      cachedMsgs = undefined
+      // PERF-01: keep cachedMsgs across continuations. loopMessages() already
+      // appends the just-created continuation message incrementally via
+      // MessageV2.after(sessionID, lastID); clearing it here forced a full
+      // Session.messages() reload of the entire history on every continuation.
       cachedAgent = undefined
       cachedModel = undefined
       completionGateRetries = 0
@@ -590,7 +593,10 @@ export namespace SessionPrompt {
 
       // Goal continuation is autonomous continuation. The goal stays active
       // when autonomous mode is off, but the next turn must be user-driven.
-      const activeGoal = await SessionGoal.get(sessionID)
+      // A transient read failure must degrade to "no goal this step" (the loop
+      // re-reads next iteration) rather than abort the whole long run, matching
+      // the seeded reads below.
+      const activeGoal = await SessionGoal.get(sessionID).catch(() => undefined)
       // Re-read the flag every iteration: Super-Long state is already
       // observed live (the routes flip env-backed state mid-run), so
       // autonomous must be too — otherwise a mid-run "Manual" toggle has no

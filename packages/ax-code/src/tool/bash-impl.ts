@@ -1182,7 +1182,13 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // (the first MAX_METADATA_LENGTH bytes never change once we've seen
         // them). Skip those duplicate publishes to avoid flooding the bus
         // and the TUI on high-volume streams (e.g. `find /`).
+        // Coalesce live progress publishes so a high-volume stream (e.g.
+        // `find /`) does not issue one DB write + bus broadcast per stdout
+        // chunk. The final output is returned by the tool result (never via
+        // publishMetadata), so a throttled snapshot is never lost.
+        const METADATA_PUBLISH_INTERVAL_MS = 100
         let lastPublishedBytes = -1
+        let lastPublishedAt = 0
 
         const append = (chunk: Buffer) => {
           const priorOutputBytes = outputBytes
@@ -1202,8 +1208,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           const outputMetadataBytes = Buffer.byteLength(output, "utf8")
           const isPastCap = outputMetadataBytes > MAX_METADATA_LENGTH
           if (isPastCap && lastPublishedBytes > MAX_METADATA_LENGTH) return
+          const now = Date.now()
+          if (now - lastPublishedAt < METADATA_PUBLISH_INTERVAL_MS) return
           publishMetadata(isPastCap ? truncateBashMetadata(output, MAX_METADATA_LENGTH) : output)
           lastPublishedBytes = outputMetadataBytes
+          lastPublishedAt = now
         }
 
         proc.stdout?.on("data", append)

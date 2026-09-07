@@ -308,4 +308,18 @@ describe("EventStream", () => {
     expect(warn).toHaveBeenCalledWith("event unsubscribe failed", { stream: "test", error })
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  test("closes the connection when a write stalls beyond the deadline", async () => {
+    // beforeEach fakes only setInterval/clearInterval, so setTimeout here is
+    // real: a tiny deadline makes the stall resolve in wall-clock time.
+    const never = new Promise<never>(() => {})
+    const f = fixture(() => never)
+    const warn = vi.spyOn(Log.create({ service: "server.event-stream" }), "warn")
+    const running = f.run({ writeDeadlineMs: 20 })
+    await f.written(1)
+    await running
+    expect(f.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith("event write stalled; closing connection", { stream: "test" })
+    expect(vi.getTimerCount()).toBe(0)
+  })
 })

@@ -231,8 +231,13 @@ async function runMember(input: {
   // member timeout can scale for reasoning models. Lookup failures become
   // member errors, same as failures inside execute would.
   let model: Provider.Model
+  let language: Awaited<ReturnType<typeof Provider.getLanguage>>
   try {
     model = await Provider.getModel(member.providerID, member.modelID)
+    // Resolve the language model up front too (same rationale as getModel
+    // above): a cold SDK load/install must not count against the member's
+    // reasoning timeout. A load failure becomes a member error, as before.
+    language = await Provider.getLanguage(model)
   } catch (error) {
     return {
       memberId: member.memberId,
@@ -267,7 +272,6 @@ async function runMember(input: {
         })
       },
       execute: async (_m, signal) => {
-        const language = await Provider.getLanguage(model)
         const userParts = [
           `Kind: ${kind}`,
           `Question: ${question}`,
@@ -427,19 +431,18 @@ export const CouncilTool = Tool.define("council", async () => {
       // Re-read project config so mid-session ax-code.json edits apply.
       const cfg = await Config.getFresh()
       const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
-      const providerSnap = await EnsembleShared.snapshotSelectableProviders()
       if (modes?.council?.enabled === false) {
-        const metadata: CouncilMetadata = {
-          status: "disabled",
-          providerCount: providerSnap.count,
-          providerIDs: providerSnap.ids,
-        }
+        // Short-circuit before provider discovery: the disabled path neither
+        // needs nor uses the provider snapshot, so don't pay for Provider.ready()
+        // + auth decryption just to print the disabled message.
+        const metadata: CouncilMetadata = { status: "disabled" }
         return {
           title: "Council disabled",
           output: EnsemblePreflight.councilDisabledMessage(),
           metadata,
         }
       }
+      const providerSnap = await EnsembleShared.snapshotSelectableProviders()
 
       const timeoutMs = modes?.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
       const reasoningScale = modes?.council?.reasoningTimeoutScale

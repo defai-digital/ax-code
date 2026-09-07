@@ -24,7 +24,12 @@ export function createPartWriteBatcher<TPart extends { id: string }>(input: {
   onError?: (error: unknown, partID: string) => void
   schedule?: (fn: () => void, ms: number) => { clear: () => void }
 }): PartWriteBatcher<TPart> {
-  const windowMs = input.windowMs ?? 16
+  // Coalesce progress snapshots over a longer window: each flush writes the
+  // full accumulated text/reasoning payload, so flushing every 16ms turned a
+  // long stream into ~60 SQLite upserts/sec of a growing blob (O(n^2) write
+  // volume). 250ms keeps progress durable ~4x/sec; state transitions still use
+  // forceImmediate so the final value is always persisted eagerly.
+  const windowMs = input.windowMs ?? 250
   const pending = new Map<string, TPart>()
   let timer: { clear: () => void } | undefined
   let chain: Promise<void> = Promise.resolve()

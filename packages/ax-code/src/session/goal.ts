@@ -61,15 +61,32 @@ export namespace SessionGoal {
     })
   }
 
+  // Plan files are immutable for a given (sessionID, created): once a goal plan
+  // exists it is only removed by `clear`/replacement, which produces a fresh
+  // `created` (and thus a fresh key). Cache positive hits so the hot per-publish
+  // `toPublic` path stops re-reading the plan file on every turn. Negative
+  // results are NOT cached so a plan written later is still detected.
+  const planPathCache = new Map<string, string>()
+
+  function planPathFor(sessionID: SessionID, created: number): string | undefined {
+    const key = `${sessionID}:${created}`
+    const cached = planPathCache.get(key)
+    if (cached) return cached
+    try {
+      const file = GoalPlan.pathFor(sessionID, created)
+      if (GoalPlan.readCapped(file)?.trim()) {
+        planPathCache.set(key, file)
+        return file
+      }
+    } catch {
+      // fall through to undefined
+    }
+    return undefined
+  }
+
   function toPublic(goal: Info | undefined): PublicInfo | undefined {
     if (!goal) return undefined
-    let planPath: string | undefined
-    try {
-      const file = GoalPlan.pathFor(goal.sessionID, goal.time.created)
-      if (GoalPlan.readCapped(file)?.trim()) planPath = file
-    } catch {
-      planPath = undefined
-    }
+    const planPath = planPathFor(goal.sessionID, goal.time.created)
     return PublicInfo.parse({
       sessionID: goal.sessionID,
       objective: goal.objective,
@@ -221,11 +238,19 @@ export namespace SessionGoal {
   }
 
   export async function clear(sessionID: SessionID) {
-    const existing = await get(sessionID)
-    SessionShard.storeFor(sessionID, { write: true }).use((db) => {
+    // Read + delete atomically so a concurrent create between the read and the
+    // unlink cannot orphan a fresh goal's plan/digest files or emit a spurious
+    // goal:null event for a goal that was just created. Capture the removed
+    // row's creation time inside the transaction for the file removal.
+    const store = SessionShard.storeFor(sessionID, { write: true })
+    const removedCreated = store.transaction((db) => {
+      const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).get()
+      if (!row) return undefined
       db.delete(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).run()
+      return row.time_created
     })
-    if (existing) await GoalPlan.remove(sessionID, existing.time.created).catch(() => undefined)
+    if (removedCreated === undefined) return
+    await GoalPlan.remove(sessionID, removedCreated).catch(() => undefined)
     publish(undefined, sessionID)
   }
 
@@ -304,8 +329,23 @@ export namespace SessionGoal {
     const shouldUpdate = tokenDelta > 0 || input.message.time.completed !== undefined
     const now = Date.now()
 
+    // Cheap pre-check against a read store before opening a write transaction:
+    // the common cases — no goal row, a paused/terminal goal, or a turn with
+    // zero token/time accrual — must not pay for a BEGIN IMMEDIATE write lock
+    // (plus the sharding lookup) just to discover they are a no-op.
+    const readStore = SessionShard.storeFor(input.sessionID)
+    const existing = readStore.use((db) =>
+      db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get(),
+    )
+    if (!existing) return undefined
+    if (existing.status !== "active" && existing.status !== "budget_limited") return fromRow(existing)
+    if (!shouldUpdate || (tokenDelta === 0 && elapsedSeconds === 0)) return fromRow(existing)
+
     const store = SessionShard.storeFor(input.sessionID, { write: true })
     const updated = store.transaction((db) => {
+      // Re-read inside the write transaction: the pre-check above is only an
+      // optimization, so a concurrent status change still takes effect here
+      // and the UPDATE below always reflects the latest committed row.
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) return undefined
       // Only goals doing work accrue usage: active goals and the single
@@ -316,10 +356,7 @@ export namespace SessionGoal {
       // ever-growing final usage.
       if (row.status !== "active" && row.status !== "budget_limited") return fromRow(row)
       // A turn with no measurable token accrual and sub-second duration has
-      // nothing to persist. Skip the write (and the write transaction) for
-      // token-less tool-call/error turns instead of issuing a no-op UPDATE that
-      // only touches time_updated — the status CASE cannot transition when
-      // tokens_used is unchanged.
+      // nothing to persist.
       if (!shouldUpdate || (tokenDelta === 0 && elapsedSeconds === 0)) return fromRow(row)
 
       // Fold the re-read into the UPDATE via RETURNING so a single statement
@@ -342,8 +379,6 @@ export namespace SessionGoal {
         .where(eq(SessionGoalTable.session_id, input.sessionID))
         .returning()
         .get()
-      // The row was read above inside this same BEGIN IMMEDIATE transaction,
-      // so the UPDATE is guaranteed to return the (now updated) row.
       return fromRow(next!)
     })
     publish(updated)

@@ -6,6 +6,11 @@ import { encodeSsePayload, SSE_HARD_MAX, SSE_WARN_THRESHOLD } from "@/util/sse-q
 export namespace EventStream {
   const log = Log.create({ service: "server.event-stream" })
   const HEARTBEAT_INTERVAL_MS = 10_000
+  // A single frame write that stalls beyond this long means the client has
+  // silently died (sleep/wake, proxy drop without RST). Without a deadline the
+  // writer loop parks forever and the connection becomes a zombie that still
+  // receives every Bus.publish fan-out. Close it instead.
+  const WRITE_DEADLINE_MS = 30_000
 
   export type Frame = { data: string; id?: string }
   export type Writer = {
@@ -33,6 +38,36 @@ export namespace EventStream {
     maxQueueSize?: number
     warnThreshold?: number
     heartbeatQueueLimit?: number
+    writeDeadlineMs?: number
+  }
+
+  // Write one frame with a deadline. Resolves "stalled" when the writer hangs
+  // past `ms` (the client silently died); re-throws genuine write failures so
+  // callers keep the original error-propagation contract.
+  async function writeWithDeadline(writer: Writer, frame: Frame, ms: number): Promise<"ok" | "stalled"> {
+    let settled = false
+    return new Promise<"ok" | "stalled">((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (settled) return
+        settled = true
+        resolve("stalled")
+      }, ms)
+      timer.unref?.()
+      writer.writeSSE(frame).then(
+        () => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          resolve("ok")
+        },
+        (error) => {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          reject(error)
+        },
+      )
+    })
   }
 
   /** Own connection resources; adapters own authorization, scope, and wire envelopes. */
@@ -146,9 +181,17 @@ export namespace EventStream {
         heartbeat.unref?.()
       }
 
+      const writeDeadlineMs = options.writeDeadlineMs ?? WRITE_DEADLINE_MS
       for await (const frame of queue) {
         if (stream.aborted) break
-        await stream.writeSSE(frame)
+        if ((await writeWithDeadline(stream, frame, writeDeadlineMs)) === "stalled") {
+          log.warn("event write stalled; closing connection", { stream: options.label })
+          // Close the queue before leaving the loop: the iterator parks on an
+          // awaited next() that `break` cannot interrupt, so stop() releases the
+          // pending read (CLOSED) and lets the for-await terminate cleanly.
+          stop()
+          break
+        }
       }
     } finally {
       stop()

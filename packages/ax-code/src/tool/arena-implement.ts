@@ -341,6 +341,9 @@ async function runVerification(
         ?.replace(/[\r\0]/g, " ")
         .slice(0, 300)
       details.push(`${ok ? "pass" : "fail"}: ${cmd} (exit ${code})${diagnostic ? ` — ${diagnostic}` : ""}`)
+      // A single failing command already determines the outcome ("fail"); stop
+      // burning the remaining per-command windows (up to VERIFY_TIMEOUT_MS each).
+      if (!ok) break
     }
     throwIfAborted(abort)
     if (anyPass && !anyFail) return { verification: "pass", detail: details.join("; ") }
@@ -651,7 +654,13 @@ export async function runImplementArena(input: {
   const fanOutResults = await FanOut.run({
     members: input.members,
     concurrency: 2,
-    timeoutMs: (input.timeoutMs ?? IMPLEMENT_TIMEOUT_MS) + 60_000,
+    // The member lifecycle is prompt (≤ timeoutMs) + snapshot + verify (up to
+    // VERIFY_TIMEOUT_MS per command × 3 commands). A timeout that only covers
+    // prompt + 60s would abort a contestant mid-verify and, via the abort
+    // cleanup path, delete the already-committed snapshot — losing finished
+    // work. Budget the full lifecycle so the outer timer never fires during
+    // verification.
+    timeoutMs: (input.timeoutMs ?? IMPLEMENT_TIMEOUT_MS) + VERIFY_TIMEOUT_MS * 3 + 60_000,
     abort: input.abort,
     execute: async (member, signal) => {
       return runImplementContestant({

@@ -25,6 +25,7 @@ import { Log } from "../util/log"
 import { FanOut } from "../util/fan-out"
 import { Tool } from "./tool"
 import { inspectImplementArenaBase, runImplementArena } from "./arena-implement"
+import { resolveMemberTimeoutMs } from "./council"
 import DESCRIPTION from "./arena.txt"
 
 const log = Log.create({ service: "tool.arena" })
@@ -127,10 +128,32 @@ async function runProposal(input: {
   const started = Date.now()
   const retryOnce = input.retryOnce ?? true
 
+  // Resolve the model + language up front (before the fan-out timer starts):
+  // a cold SDK load/install must not count against the member timeout, and the
+  // effective timeout scales for reasoning models. Failures become member
+  // errors, as they would inside execute.
+  let model: Provider.Model
+  let language: Awaited<ReturnType<typeof Provider.getLanguage>>
+  try {
+    model = await Provider.getModel(input.member.providerID, input.member.modelID)
+    language = await Provider.getLanguage(model)
+  } catch (error) {
+    return {
+      member: input.member,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
+  const memberTimeoutMs = resolveMemberTimeoutMs({
+    providerID: String(input.member.providerID),
+    modelID: String(input.member.modelID),
+    reasoning: model.capabilities?.reasoning,
+    baseTimeoutMs: input.timeoutMs,
+  })
+
   const attemptProposal = async (): Promise<FanOut.MemberResult<z.infer<typeof ProposalSchema>>> => {
     const [result] = await FanOut.run({
       members: [input.member],
-      timeoutMs: input.timeoutMs,
+      timeoutMs: memberTimeoutMs,
       abort: input.abort,
       onMemberComplete: (completed, total, m) => {
         log.info("arena fan-out member done", {
@@ -141,8 +164,6 @@ async function runProposal(input: {
         })
       },
       execute: async (_m, signal) => {
-        const model = await Provider.getModel(input.member.providerID, input.member.modelID)
-        const language = await Provider.getLanguage(model)
         return generateObject({
           model: language,
           maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
