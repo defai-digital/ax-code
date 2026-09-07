@@ -180,7 +180,18 @@ export namespace Filesystem {
    * The global CLI wrapper sets AX_CODE_ORIGINAL_CWD before --cwd takes effect.
    */
   export function callerCwd(): string {
-    return Flag.AX_CODE_ORIGINAL_CWD || process.env.PWD || process.cwd()
+    if (Flag.AX_CODE_ORIGINAL_CWD) return Flag.AX_CODE_ORIGINAL_CWD
+    const current = process.cwd()
+    const logical = process.env.PWD
+    if (!logical || !isAbsolute(logical)) return current
+    // Subprocess cwd does not update inherited PWD. Only preserve a logical
+    // symlink spelling when it identifies the actual working directory.
+    try {
+      if (realpathSync(logical) === realpathSync(current)) return logical
+    } catch {
+      // PWD is an optional shell hint; unavailable paths cannot select a project.
+    }
+    return current
   }
 
   export function windowsPath(p: string): string {
