@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.14.0] - 2026-09-07
+
+### Changed
+
+- Feed AX Wiki with typed graph evidence and page-scoped semantic fingerprints so updates regenerate only pages whose stable evidence changed.
+- Read and hash AX Wiki repository sources through a bounded, deterministic worker pool.
+
+### Fixed
+
+- Preserve legacy AX Wiki generator compatibility while reporting truthful LSP, tree-sitter, empty, and failed evidence states.
+- Restore Linux Node 26 source-mode TUI startup by delegating branded-runtime verification and fallback to the shared Node FFI runner.
+
 ## [7.13.3] - 2026-09-07
 
 ### Fixed
