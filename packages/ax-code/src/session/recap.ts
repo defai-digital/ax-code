@@ -1,6 +1,5 @@
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { stripThinkTags } from "@/provider/think-tags"
-import { Token } from "@/util/token"
 import { Agent } from "../agent/agent"
 import { AX_ENGINE_PROVIDER_ID } from "../provider/ax-engine"
 import { Provider } from "../provider/provider"
@@ -37,7 +36,38 @@ export function turnEndedWithAssistantError(turn: MessageV2.WithParts[]): boolea
 }
 
 function isRealUserMessage(message: MessageV2.WithParts) {
-  return message.info.role === "user" && !message.parts.every((p) => "synthetic" in p && p.synthetic)
+  return (
+    message.info.role === "user" &&
+    message.parts.some((part) =>
+      part.type === "text" ? !part.synthetic && !part.ignored && !!part.text.trim() : part.type === "file",
+    )
+  )
+}
+
+/** Presentation history only: never recap work hidden by a pending rollback. */
+export function recapMessages(
+  messages: MessageV2.WithParts[],
+  scope: "turn" | "conversation",
+  revert?: Session.Info["revert"],
+) {
+  const boundary = revert ? messages.findIndex((message) => message.info.id === revert.messageID) : -1
+  let visible = messages
+  if (boundary >= 0) {
+    visible = messages.slice(0, boundary)
+    if (revert?.partID) {
+      const target = messages[boundary]
+      const partIndex = target.parts.findIndex((part) => part.id === revert.partID)
+      if (partIndex >= 0) visible.push({ ...target, parts: target.parts.slice(0, partIndex) })
+    }
+  }
+  let remaining = scope === "conversation" ? 8 : 1
+  let start = -1
+  for (let i = visible.length - 1; i >= 0; i--) {
+    if (!isRealUserMessage(visible[i])) continue
+    start = i
+    if (--remaining === 0) break
+  }
+  return start < 0 ? [] : visible.slice(start)
 }
 
 /** Messages belonging to the most recent turn: from the last real
@@ -49,27 +79,56 @@ export function lastTurnMessages(messages: MessageV2.WithParts[]): MessageV2.Wit
   return undefined
 }
 
-function truncateRecapContext(text: string) {
-  if (Token.estimate(text) <= RECAP_CONTEXT_MAX_TOKENS) return text
-  return `${text.slice(0, RECAP_CONTEXT_MAX_CHARS)}\n\n[Recap context truncated]`
+function shorten(text: string, budget: number) {
+  if (text.length <= budget) return text
+  const marker = " [...] "
+  const head = Math.floor((budget - marker.length) / 2)
+  const tail = budget - marker.length - head
+  return (
+    text.slice(0, head).replace(/[\uD800-\uDBFF]$/, "") + marker + text.slice(-tail).replace(/^[\uDC00-\uDFFF]/, "")
+  )
 }
 
 /** Plain-text rendering of a turn for the recap model: user and assistant
  *  text parts only, truncated to the context budget. */
 export function recapContextText(turn: MessageV2.WithParts[]): string {
-  const chunks: string[] = []
+  const chunks: { role: string; text: string }[] = []
   for (const message of turn) {
+    if (message.info.role === "assistant" && message.info.summary) continue
+    const texts: string[] = []
     for (const part of message.parts) {
-      if (part.type !== "text" || part.synthetic) continue
-      if (message.info.role === "user") {
-        if (part.ignored) continue
-        if (part.text.trim()) chunks.push(`User: ${part.text}`)
-        continue
-      }
-      if (message.info.role === "assistant" && part.text.trim()) chunks.push(`Assistant: ${part.text}`)
+      if (part.type !== "text" || part.synthetic || part.ignored || !part.text.trim()) continue
+      texts.push(part.text)
     }
+    const role = message.info.role === "user" ? "User" : "Assistant"
+    if (texts.length) chunks.push({ role, text: texts.join(`\n\n${role}: `) })
   }
-  return truncateRecapContext(chunks.join("\n\n").trim())
+  const render = (chunk: (typeof chunks)[number]) => `${chunk.role}: ${chunk.text}`
+  const full = chunks.map(render).join("\n\n").trim()
+  if (full.length <= RECAP_CONTEXT_MAX_CHARS) return full
+
+  const marker = "\n\n[Recap context truncated]"
+  let remaining = RECAP_CONTEXT_MAX_CHARS - marker.length
+  const selected = new Map<number, string>()
+  // Reserve the latest request before filling from the newest outcomes backward.
+  const userIndex = chunks.findLastIndex((chunk) => chunk.role === "User")
+  if (userIndex >= 0) {
+    const text = shorten(render(chunks[userIndex]), Math.floor(remaining / 3))
+    selected.set(userIndex, text)
+    remaining -= text.length + 2
+  }
+  for (let i = chunks.length - 1; i >= 0 && remaining >= 64; i--) {
+    if (i === userIndex) continue
+    const text = shorten(render(chunks[i]), remaining)
+    selected.set(i, text)
+    remaining -= text.length + 2
+  }
+  return (
+    [...selected]
+      .sort(([a], [b]) => a - b)
+      .map(([, text]) => text)
+      .join("\n\n") + marker
+  )
 }
 
 /** Normalize model output into a short plain-text recap, or undefined if unusable. */
@@ -86,16 +145,23 @@ export function cleanGeneratedRecap(text: string): string | undefined {
 }
 
 export namespace SessionRecap {
-  export async function generate(input: { sessionID: SessionID }): Promise<{ text: string } | undefined> {
+  export async function generate(input: {
+    sessionID: SessionID
+    scope?: "turn" | "conversation"
+  }): Promise<{ text: string } | undefined> {
     try {
       const history = await Session.messages({ sessionID: input.sessionID })
-      const turn = lastTurnMessages(history)
+      const session = await Session.get(input.sessionID)
+      const selected = recapMessages(history, input.scope ?? "turn", session.revert)
+      const turn = lastTurnMessages(selected)
       if (!turn) return undefined
       const lastUser = turn[0].info as MessageV2.User
       if (shouldSkipAutomaticRecap({ providerID: lastUser.model.providerID })) return undefined
       if (turnEndedWithAssistantError(turn)) return undefined
+      const lastAssistant = turn.findLast((message) => message.info.role === "assistant" && !message.info.summary)?.info
+      if (lastAssistant?.role !== "assistant" || !lastAssistant.time.completed) return undefined
 
-      const content = recapContextText(turn)
+      const content = recapContextText(selected)
       if (!content) return undefined
 
       const agent = await Agent.get("recap")
@@ -134,7 +200,7 @@ export namespace SessionRecap {
         messages: [
           {
             role: "user",
-            content: `Recap what was accomplished in this turn:\n\n${content}`,
+            content: `Recap the objective, confirmed progress, verification, and next step or blocker in this conversation excerpt:\n\n${content}`,
           },
         ],
       })
@@ -143,7 +209,6 @@ export namespace SessionRecap {
       if (text && !cleaned) {
         log.warn("recap model returned no usable text", {
           sessionID: input.sessionID,
-          preview: text.slice(0, 120),
         })
       }
       if (!cleaned) return undefined

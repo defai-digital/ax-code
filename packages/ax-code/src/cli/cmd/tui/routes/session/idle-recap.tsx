@@ -1,156 +1,87 @@
-import { createEffect, createMemo, createSignal, on, onCleanup, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import { SplitBorder } from "@tui/component/border"
+import { useCommandDialog } from "@tui/component/dialog-command"
 import { usePromptRef } from "@tui/context/prompt"
 import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { useTuiConfig } from "@tui/context/tui-config"
+import { useToast } from "@tui/ui/toast"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
+import { createRecapController } from "./recap-controller"
 
-const DISMISS_POLL_MS = 250
-const DEFAULT_DELAY_MS = 5_000
-const MIN_DELAY_MS = 1_000
-
-/**
- * Idle recap: after an assistant turn completes and the user stays idle for
- * the configured delay, ask the server for a short recap of the turn and show
- * it as a banner above the prompt. Best-effort only — it never blocks input,
- * never mutates the transcript, and silently no-ops on any failure. The
- * banner auto-dismisses as soon as the user starts typing, a new turn starts,
- * or the route changes.
- */
+/** Read-only catch-up, available manually on resumed sessions and automatically after a turn. */
 export function IdleRecap(props: { sessionID: string }) {
   const sync = useSync()
   const sdk = useSDK()
   const promptRef = usePromptRef()
   const tuiConfig = useTuiConfig()
+  const command = useCommandDialog()
+  const toast = useToast()
   const { theme } = useTheme()
-
-  const config = createMemo(() => {
-    const raw = tuiConfig?.idle_recap
-    return {
-      enabled: raw?.enabled ?? true,
-      delayMs: Math.max(MIN_DELAY_MS, raw?.delay_ms ?? DEFAULT_DELAY_MS),
-    }
-  })
-
   const [recap, setRecap] = createSignal<string>()
-  let cancelPending: (() => void) | undefined
-  // One recap per turn: remembers which user message the recap was scheduled for.
-  let lastRecapTurn: string | undefined
+  const [loading, setLoading] = createSignal(false)
 
-  function promptInput() {
-    return promptRef.current?.current.input ?? ""
-  }
-
-  function cancelScheduled() {
-    cancelPending?.()
-    cancelPending = undefined
-  }
-
-  function dismiss() {
-    setRecap(undefined)
-  }
-
-  function reset() {
-    cancelScheduled()
-    dismiss()
-    lastRecapTurn = undefined
-  }
-
-  onCleanup(reset)
-
-  // Session switch / route change: drop any banner or pending request.
-  createEffect(on(() => props.sessionID, reset))
-
-  const status = createMemo(() => footerSessionStatusOrIdle(sync.data.session_status?.[props.sessionID]).type)
-  const lastTurnID = createMemo(() => {
-    const msgs = sync.data.message[props.sessionID] ?? []
-    return msgs.findLast((message) => message.role === "user")?.id
-  })
-  const hasAssistant = createMemo(() =>
-    (sync.data.message[props.sessionID] ?? []).some((message) => message.role === "assistant"),
-  )
-
-  createEffect(
-    on(
-      status,
-      (current, previous) => {
-        if (current !== "idle") {
-          // A new turn (or retry) started — drop any banner immediately.
-          cancelScheduled()
-          dismiss()
-          return
-        }
-        // Fire only on a busy/retry -> idle transition; the deferred effect
-        // means the initial mount state never counts as a transition.
-        if (previous === "idle") return
-        schedule()
-      },
-      { defer: true },
-    ),
-  )
-
-  function schedule() {
-    cancelScheduled()
-    if (!config().enabled) return
-    if (!hasAssistant()) return
-    const turnID = lastTurnID()
-    if (!turnID || turnID === lastRecapTurn) return
-    lastRecapTurn = turnID
-    cancelPending = scheduleTuiTimeout(
-      () => {
-        cancelPending = undefined
-        return requestRecap(turnID)
-      },
-      {
-        name: "idle-recap",
-        delayMs: config().delayMs,
-        unref: true,
-      },
+  const snapshot = createMemo(() => {
+    const session = sync.session.get(props.sessionID)
+    const messages = (sync.data.message[props.sessionID] ?? []).filter(
+      (message) =>
+        !session?.revert ||
+        message.id < session.revert.messageID ||
+        (message.id === session.revert.messageID && !!session.revert.partID),
     )
-  }
-
-  async function requestRecap(turnID: string) {
-    // The user started typing during the delay — stay silent.
-    if (promptInput() !== "") return
-    if (!config().enabled) return
-    try {
-      const result = await sdk.client.session.recap({ sessionID: props.sessionID })
-      // The v2 SDK client resolves { error } instead of rejecting, so HTTP
-      // errors must be checked here — the catch below never fires for them.
-      if (result?.error) return
-      const text = result.data?.text
-      if (!text) return
-      // The turn restarted or the user typed while the request was in flight.
-      if (status() !== "idle" || promptInput() !== "") return
-      if (lastTurnID() !== turnID) return
-      setRecap(text)
-    } catch {
-      // Best-effort only — never surface errors to the user.
+    const last = messages.at(-1)
+    return {
+      sessionID: props.sessionID,
+      revision: `${messages.length}:${last?.id}:${last?.role === "assistant" ? last.time.completed : ""}:${session?.revert?.messageID}:${session?.revert?.partID}`,
+      status: footerSessionStatusOrIdle(sync.data.session_status?.[props.sessionID]).type,
+      hasMessages: messages.some((message) => message.role === "user"),
+      enabled: tuiConfig?.idle_recap?.enabled ?? true,
+      delayMs: Math.max(1_000, tuiConfig?.idle_recap?.delay_ms ?? 5_000),
     }
-  }
-
-  // While the banner is visible, poll the (imperative, non-reactive) prompt
-  // input and dismiss as soon as the user starts typing.
-  createEffect(() => {
-    if (!recap()) return
-    const cancel = scheduleTuiInterval(
-      () => {
-        if (promptInput() !== "") dismiss()
-      },
-      {
-        name: "idle-recap-dismiss",
-        delayMs: DISMISS_POLL_MS,
-        unref: true,
-      },
-    )
-    onCleanup(cancel)
   })
+
+  const controller = createRecapController({
+    snapshot: () => ({ ...snapshot(), input: promptRef.current?.current.input ?? "" }),
+    request: ({ sessionID, scope, signal }) => sdk.client.session.recap({ sessionID, scope }, { signal }),
+    schedule: (task, delayMs) => scheduleTuiTimeout(task, { name: "idle-recap", delayMs, unref: true }),
+    show: (view) => {
+      setRecap(view.text)
+      setLoading(view.loading ?? false)
+    },
+    notify: (message) => toast.show({ message, variant: "info", duration: 5_000 }),
+  })
+  createEffect(() => {
+    snapshot()
+    controller.update()
+  })
+  // Prompt input is imperative; observe edits even while a request is in flight.
+  const cancelPoll = scheduleTuiInterval(() => controller.update(), {
+    name: "idle-recap-input",
+    delayMs: 250,
+    unref: true,
+  })
+  onCleanup(() => {
+    cancelPoll()
+    controller.dispose()
+  })
+
+  command.register(() => [
+    {
+      title: "Show conversation recap",
+      value: "session.recap",
+      category: "Session",
+      slash: { name: "recap" },
+      onSelect: (dialog) => {
+        dialog.clear()
+        return controller.manual()
+      },
+    },
+  ])
 
   return (
-    <Show when={recap()}>
+    <Show when={recap() || (loading() ? "Generating conversation recap..." : undefined)}>
       {(text) => (
         <box
           marginTop={1}
@@ -161,7 +92,7 @@ export function IdleRecap(props: { sessionID: string }) {
         >
           <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
             <text fg={theme.textMuted} wrapMode="word">
-              <span style={{ fg: theme.text, bold: true }}>Recap</span>
+              <span style={{ fg: theme.text, bold: true }}>Conversation recap</span>
               {" · "}
               {text()}
             </text>

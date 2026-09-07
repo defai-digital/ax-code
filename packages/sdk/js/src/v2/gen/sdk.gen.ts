@@ -4449,14 +4449,15 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
-   * Recap last turn
+   * Recap conversation
    *
-   * Generate a short plain-text recap of the most recent turn using the provider's small model. Read-only and best-effort: returns null when no recap is available.
+   * Generate a short plain-text recap using the provider's small model. Defaults to the most recent turn; scope=conversation includes up to eight recent turns. Read-only and best-effort: returns null when no recap is available.
    */
   public recap<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
+      scope?: "turn" | "conversation"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -4467,6 +4468,7 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "scope" },
           ],
         },
       ],

@@ -27824,13 +27824,24 @@
               "pattern": "^ses_.*"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "turn",
+                "conversation"
+              ]
+            }
           }
         ],
-        "summary": "Recap last turn",
-        "description": "Generate a short plain-text recap of the most recent turn using the provider's small model. Read-only and best-effort: returns null when no recap is available.",
+        "summary": "Recap conversation",
+        "description": "Generate a short plain-text recap using the provider's small model. Defaults to the most recent turn; scope=conversation includes up to eight recent turns. Read-only and best-effort: returns null when no recap is available.",
         "responses": {
           "200": {
-            "description": "Recap of the last turn, or null when unavailable",
+            "description": "Recap of the requested scope, or null when unavailable",
             "content": {
               "application/json": {
                 "schema": {

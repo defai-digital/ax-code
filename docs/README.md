@@ -49,6 +49,7 @@ pages are the ones linked here.
 
 ## Runtime guides
 
+- [Conversation Recap](guides/conversation-recap.md) — catch up on recent work with `/recap` and configure idle banners.
 - [Execution Evidence](guides/execution-evidence.md) — graph, compare, replay, risk, rollback, branch, trace, and
   audit export.
 - [Verified Multi-Model Changes](guides/verified-multi-model-change.md) — the council and arena workflow end to end.

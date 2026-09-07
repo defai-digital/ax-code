@@ -1039,13 +1039,13 @@ export const SessionRoutes = lazy(() =>
     .post(
       "/:sessionID/recap",
       describeRoute({
-        summary: "Recap last turn",
+        summary: "Recap conversation",
         description:
-          "Generate a short plain-text recap of the most recent turn using the provider's small model. Read-only and best-effort: returns null when no recap is available.",
+          "Generate a short plain-text recap using the provider's small model. Defaults to the most recent turn; scope=conversation includes up to eight recent turns. Read-only and best-effort: returns null when no recap is available.",
         operationId: "session.recap",
         responses: {
           200: {
-            description: "Recap of the last turn, or null when unavailable",
+            description: "Recap of the requested scope, or null when unavailable",
             content: {
               "application/json": {
                 schema: resolver(z.object({ text: z.string().nullable() })),
@@ -1056,10 +1056,11 @@ export const SessionRoutes = lazy(() =>
         },
       }),
       validator("param", SESSION_ID_PARAM),
+      validator("query", z.object({ scope: z.enum(["turn", "conversation"]).optional() })),
       async (c) => {
         const sessionID = await parseCurrentProjectSessionID(c)
         SessionPrompt.assertNotBusy(sessionID)
-        const recap = await SessionRecap.generate({ sessionID })
+        const recap = await SessionRecap.generate({ sessionID, scope: c.req.valid("query").scope })
         return c.json({ text: recap?.text ?? null })
       },
     )

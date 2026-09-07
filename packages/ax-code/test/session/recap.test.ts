@@ -1,4 +1,8 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
+import { Agent } from "../../src/agent/agent"
+import { Provider } from "../../src/provider/provider"
+import { Session } from "../../src/session"
+import { LLM } from "../../src/session/llm"
 
 import { AX_ENGINE_PROVIDER_ID } from "../../src/provider/ax-engine"
 import { ProviderID } from "../../src/provider/schema"
@@ -7,10 +11,14 @@ import {
   cleanGeneratedRecap,
   lastTurnMessages,
   recapContextText,
+  recapMessages,
+  SessionRecap,
   shouldSkipAutomaticRecap,
   turnEndedWithAssistantError,
 } from "../../src/session/recap"
-import { MessageID, SessionID } from "../../src/session/schema"
+import { MessageID, PartID, SessionID } from "../../src/session/schema"
+
+afterEach(() => vi.restoreAllMocks())
 
 const sessionID = SessionID.make("ses_recap_test")
 let counter = 0
@@ -87,6 +95,31 @@ describe("session recap", () => {
     expect(lastTurnMessages([])).toBeUndefined()
     expect(lastTurnMessages([assistantMessage([text("only assistant")])])).toBeUndefined()
     expect(lastTurnMessages([userMessage([text("synthetic", { synthetic: true })])])).toBeUndefined()
+    expect(lastTurnMessages([userMessage([text("ignored", { ignored: true })])])).toBeUndefined()
+    expect(lastTurnMessages([userMessage([{ type: "compaction", auto: true }])])).toBeUndefined()
+  })
+
+  test("conversation scope keeps eight recent real turns and default scope keeps one", () => {
+    const turns = Array.from({ length: 10 }, (_, i) => [
+      userMessage([text(`request ${i}`)]),
+      assistantMessage([text(`result ${i}`)]),
+    ])
+    const history = turns.flat()
+    expect(recapMessages(history, "turn")).toEqual(turns[9])
+    expect(recapMessages(history, "conversation")).toEqual(turns.slice(2).flat())
+    expect(recapMessages([], "conversation")).toEqual([])
+  })
+
+  test("does not recap reverted messages or parts and does not mutate history", () => {
+    const request = userMessage([text("Fix login")])
+    const boundary = PartID.make("prt_recap_boundary")
+    const response = assistantMessage([text("Implemented"), text("Tests passed", { id: boundary })])
+    const history = [request, response, userMessage([text("Push it")])]
+    expect(recapMessages(history, "conversation", { messageID: response.info.id })).toEqual([request])
+    const partial = recapMessages(history, "conversation", { messageID: response.info.id, partID: boundary })
+    expect(recapContextText(partial)).toBe("User: Fix login\n\nAssistant: Implemented")
+    expect(response.parts).toHaveLength(2)
+    expect(history).toHaveLength(3)
   })
 
   test("recapContextText renders user and assistant text with role prefixes", () => {
@@ -114,6 +147,27 @@ describe("session recap", () => {
     expect(result.length).toBeLessThan(20_000)
   })
 
+  test("retains the latest request and final outcome within the full context budget", () => {
+    const result = recapContextText([
+      userMessage([text("Fix login. " + "request details ".repeat(1500))]),
+      assistantMessage([text("Investigating. " + "progress ".repeat(3000) + "Tests failed; commit is blocked.")]),
+    ])
+    expect(result).toContain("User: Fix login.")
+    expect(result).toContain("Tests failed; commit is blocked.")
+    expect(result.length).toBeLessThanOrEqual(12_000)
+  })
+
+  test("excludes ignored assistant text and compaction summaries", () => {
+    expect(
+      recapContextText([
+        userMessage([text("Fix login")]),
+        assistantMessage([text("Tests passed", { ignored: true })]),
+        assistantMessage([text("Old compressed state")], undefined, { summary: true }),
+        assistantMessage([text("Tests failed")]),
+      ]),
+    ).toBe("User: Fix login\n\nAssistant: Tests failed")
+  })
+
   test("cleanGeneratedRecap strips think tags, code fences and prefixes", () => {
     expect(cleanGeneratedRecap("<think>pondering</think>\nFixed the login bug.")).toBe("Fixed the login bug.")
     expect(cleanGeneratedRecap("```\nsome code\n```\nUpdated the parser.")).toBe("Updated the parser.")
@@ -131,4 +185,62 @@ describe("session recap", () => {
     expect(cleaned!.length).toBe(400)
     expect(cleanGeneratedRecap("a".repeat(400))).toBe("a".repeat(400))
   })
+})
+
+describe("recap generation boundary", () => {
+  function setup(history: MessageV2.WithParts[]) {
+    vi.spyOn(Session, "messages").mockResolvedValue(history)
+    vi.spyOn(Session, "get").mockResolvedValue({ id: sessionID } as Session.Info)
+    const agent = vi.spyOn(Agent, "get").mockResolvedValue({ name: "recap" } as Agent.Info)
+    vi.spyOn(Provider, "resolveRequestedModel").mockImplementation(async (model) => model)
+    const model = { id: "small", providerID: "openai" } as Provider.Model
+    vi.spyOn(Provider, "getSmallModel").mockResolvedValue(model)
+    const stream = vi
+      .spyOn(LLM, "stream")
+      .mockResolvedValue({ text: Promise.resolve("Fixed login; tests passed.") } as unknown as Awaited<
+        ReturnType<typeof LLM.stream>
+      >)
+    return { agent, model, stream }
+  }
+
+  test("conversation generation is bounded, tool-free, and outside the transcript", async () => {
+    const history = [
+      userMessage([text("Fix the login bug")]),
+      assistantMessage([text("Updated auth.ts")]),
+      userMessage([text("Run tests")]),
+      assistantMessage([text("Tests passed")], undefined, { time: { created: 1, completed: 2 } }),
+    ]
+    const { model, stream } = setup(history)
+    const write = vi.spyOn(Session, "updateMessage")
+    expect(await SessionRecap.generate({ sessionID, scope: "conversation" })).toEqual({
+      text: "Fixed login; tests passed.",
+    })
+    expect(stream).toHaveBeenCalledWith(
+      expect.objectContaining({ model, tools: {}, retries: 0, small: true, abort: expect.any(AbortSignal) }),
+    )
+    const content = stream.mock.calls[0][0].messages[0].content
+    expect(content).toContain("Fix the login bug")
+    expect(content).toContain("Tests passed")
+    expect(write).not.toHaveBeenCalled()
+    stream.mockClear()
+    await SessionRecap.generate({ sessionID })
+    expect(stream.mock.calls[0][0].messages[0].content).not.toContain("Fix the login bug")
+  })
+
+  test.each(["empty", "user-only", "incomplete", "failed", "engine"])(
+    "skips model calls for %s history",
+    async (kind) => {
+      const user = userMessage([text("Fix login")])
+      if (kind === "engine" && user.info.role === "user")
+        user.info.model.providerID = ProviderID.make(AX_ENGINE_PROVIDER_ID)
+      const assistant = assistantMessage([text("Working")], undefined, {
+        time: { created: 1, completed: kind === "incomplete" ? undefined : 2 },
+        ...(kind === "failed" ? { error: { name: "UnknownError", data: { message: "failed" } } } : {}),
+      })
+      const { agent, stream } = setup(kind === "empty" ? [] : kind === "user-only" ? [user] : [user, assistant])
+      expect(await SessionRecap.generate({ sessionID })).toBeUndefined()
+      expect(agent).not.toHaveBeenCalled()
+      expect(stream).not.toHaveBeenCalled()
+    },
+  )
 })

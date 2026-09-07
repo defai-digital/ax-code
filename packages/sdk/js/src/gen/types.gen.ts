@@ -12840,7 +12840,7 @@ export type SessionSummarizeResponses = {
 /** Successful response payload for `POST /session/{sessionID}/summarize` — Summarize session */
 export type SessionSummarizeResponse = SessionSummarizeResponses[keyof SessionSummarizeResponses]
 
-/** Request payload shape for `POST /session/{sessionID}/recap` — Recap last turn */
+/** Request payload shape for `POST /session/{sessionID}/recap` — Recap conversation */
 export type SessionRecapData = {
   body?: never
   path: {
@@ -12848,11 +12848,12 @@ export type SessionRecapData = {
   }
   query?: {
     directory?: string
+    scope?: "turn" | "conversation"
   }
   url: "/session/{sessionID}/recap"
 }
 
-/** Error response payloads for `POST /session/{sessionID}/recap` — Recap last turn */
+/** Error response payloads for `POST /session/{sessionID}/recap` — Recap conversation */
 export type SessionRecapErrors = {
   /**
    * Bad request
@@ -12864,20 +12865,20 @@ export type SessionRecapErrors = {
   404: AppErrorEnvelope
 }
 
-/** Error response payload for `POST /session/{sessionID}/recap` — Recap last turn */
+/** Error response payload for `POST /session/{sessionID}/recap` — Recap conversation */
 export type SessionRecapError = SessionRecapErrors[keyof SessionRecapErrors]
 
-/** Success response payloads for `POST /session/{sessionID}/recap` — Recap last turn */
+/** Success response payloads for `POST /session/{sessionID}/recap` — Recap conversation */
 export type SessionRecapResponses = {
   /**
-   * Recap of the last turn, or null when unavailable
+   * Recap of the requested scope, or null when unavailable
    */
   200: {
     text: string | null
   }
 }
 
-/** Successful response payload for `POST /session/{sessionID}/recap` — Recap last turn */
+/** Successful response payload for `POST /session/{sessionID}/recap` — Recap conversation */
 export type SessionRecapResponse = SessionRecapResponses[keyof SessionRecapResponses]
 
 /** Request payload shape for `GET /session/{sessionID}/message` — Get session messages */
