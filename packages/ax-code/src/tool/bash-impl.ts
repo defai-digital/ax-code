@@ -34,6 +34,7 @@ import { OsSandbox } from "@/isolation/os-sandbox"
 import { BlastRadius } from "@/session/blast-radius"
 import { assertSymlinkInsideProject } from "./external-directory"
 import { classifyDestructiveCommand, findWrappedCommand, gitSubcommand } from "./bash-destructive"
+import { BashNetworkHeuristics } from "./bash-network-heuristics"
 import { denyDestructiveInOpsStrict } from "./bash-strict"
 import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
@@ -392,6 +393,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // interactive-only bash_destructive ask below.
       const destructiveCommands = new Map<string, string>()
       let dynamicPathAccess = false
+      // Set when any scanned command wraps network-capable interpreted code
+      // (python -c 'urllib…') or enters another network namespace (docker
+      // run / nsenter): the per-command-name network check cannot see those,
+      // so assertBashNetwork gets an explicit suspect flag instead.
+      let networkWrapperSuspect = false
       let foundCommands = false
 
       const recordResolvedPath = async (raw: string) => {
@@ -422,6 +428,13 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         if (!name) return
         commandNames.add(name)
         const args = parts.slice(1)
+
+        // Wrapper/network heuristics: busybox dispatches to a named applet
+        // (`busybox wget …` must be judged as `wget`), interpreter one-liners
+        // and container/namespace invocations are network-suspect.
+        const heuristics = BashNetworkHeuristics.inspect(name, args)
+        if (heuristics.applet) commandNames.add(heuristics.applet)
+        if (heuristics.inlineCodeNetworkSuspect || heuristics.sandboxEscapeSuspect) networkWrapperSuspect = true
 
         // cp/mv/install write to the LAST positional argument; tee writes to
         // every positional operand. Track those as write targets so the
@@ -893,7 +906,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       }
 
       Isolation.assertBash(ctx.extra?.isolation, cwd, Instance.directory, Instance.worktree, [...resolvedPaths])
-      Isolation.assertBashNetwork(ctx.extra?.isolation, commandNames)
+      Isolation.assertBashNetwork(ctx.extra?.isolation, commandNames, { wrapperSuspect: networkWrapperSuspect })
 
       // OS sandbox wrap for bash (Seatbelt / bubblewrap). App-layer checks
       // above always run; the default `auto` backend adds kernel enforcement

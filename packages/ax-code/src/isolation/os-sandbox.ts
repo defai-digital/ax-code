@@ -67,16 +67,32 @@ export namespace OsSandbox {
     return "auto"
   }
 
+  // Well-known absolute locations preferred over PATH resolution: the OS
+  // sandbox binary is a load-bearing security boundary, and a writable PATH
+  // entry could shadow it with a trojaned binary that silently disables
+  // kernel enforcement. PATH remains the fallback for non-standard installs.
+  const SANDBOX_BINARY_CANDIDATES: Partial<Record<NodeJS.Platform, string[]>> = {
+    darwin: ["/usr/bin/sandbox-exec"],
+    linux: ["/usr/bin/bwrap", "/usr/local/bin/bwrap"],
+  }
+
+  function resolveSandboxBinary(platform: NodeJS.Platform, bin: string): string | undefined {
+    for (const candidate of SANDBOX_BINARY_CANDIDATES[platform] ?? []) {
+      if (fs.existsSync(candidate)) return candidate
+    }
+    return which(bin)
+  }
+
   export function probeAvailability(platform: NodeJS.Platform = process.platform): Availability {
     if (platform === "darwin") {
-      const sandboxExec = which("sandbox-exec")
+      const sandboxExec = resolveSandboxBinary(platform, "sandbox-exec")
       if (!sandboxExec) {
         return { available: false, platform, reason: "sandbox-exec not found on PATH" }
       }
       return { available: true, platform: "darwin", mechanism: "seatbelt" }
     }
     if (platform === "linux") {
-      const bwrap = which("bwrap")
+      const bwrap = resolveSandboxBinary(platform, "bwrap")
       if (!bwrap) {
         return {
           available: false,
@@ -261,7 +277,7 @@ ${networkRule}
         log.warn("failed to write seatbelt profile", { error })
         return { active: false, reason: "failed to write seatbelt profile" }
       }
-      const sandboxExec = which("sandbox-exec") ?? "sandbox-exec"
+      const sandboxExec = resolveSandboxBinary("darwin", "sandbox-exec") ?? "sandbox-exec"
       // sandbox-exec -f profile.sh shell -c command
       return {
         active: true,
@@ -274,7 +290,7 @@ ${networkRule}
     }
 
     // bubblewrap: unshare net when network disabled; bind workspace RW, rest RO
-    const bwrap = which("bwrap") ?? "bwrap"
+    const bwrap = resolveSandboxBinary("linux", "bwrap") ?? "bwrap"
     const roots = uniqueRoots(
       [input.workspaceRoot, input.worktree, input.cwd].filter(Boolean).map((p) => canonicalPath(p as string)),
     )

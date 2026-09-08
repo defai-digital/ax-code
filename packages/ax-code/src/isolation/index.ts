@@ -237,10 +237,24 @@ export namespace Isolation {
   // making the `network: false` policy meaningless. Thrown as a "network"
   // DeniedError so the same escalation prompt used by the network tools
   // lets the user approve a single invocation.
-  export function assertBashNetwork(state: State | undefined, commandNames: Iterable<string>) {
+  export function assertBashNetwork(
+    state: State | undefined,
+    commandNames: Iterable<string>,
+    opts: { wrapperSuspect?: boolean } = {},
+  ) {
     if (!state) return
     if (state.mode === "full-access") return
     if (state.network) return
+    if (opts.wrapperSuspect) {
+      // busybox applets are unfolded into commandNames by the caller; what
+      // remains here are interpreter one-liners (`python -c 'urllib…'`) and
+      // container/namespace invocations (`docker run`, `nsenter`) whose
+      // network reach cannot be judged per command name.
+      throw new DeniedError(
+        "network",
+        `Network access is disabled by isolation policy (mode: ${state.mode}). The command wraps interpreted code or a container/namespace tool that per-command network checks cannot see. Set isolation.network to true or use full-access mode.`,
+      )
+    }
     for (const name of commandNames) {
       if (!name) continue
       const base = name.split(/[\\/]/).pop() ?? name
