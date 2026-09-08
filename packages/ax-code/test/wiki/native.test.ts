@@ -1,7 +1,21 @@
 import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
 
-vi.mock("ai", () => ({ generateObject: vi.fn() }))
+const { generateObject } = vi.hoisted(() => ({ generateObject: vi.fn() }))
+vi.mock("ai", () => ({
+  streamObject: (request: unknown) => {
+    let result: any
+    return {
+      fullStream: (async function* () {
+        result = await generateObject(request)
+        if (result.streamError) yield { type: "error", error: result.streamError }
+      })(),
+      get object() {
+        return Promise.resolve(result.object)
+      },
+    }
+  },
+}))
 
 vi.mock("@ax-code/ax-wiki", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@ax-code/ax-wiki")>()
@@ -17,7 +31,6 @@ vi.mock("../../src/code-intelligence/graph-context", () => ({
   },
 }))
 
-import { generateObject } from "ai"
 import { buildAxWiki, type EvidenceBundle, type WikiPageGenerationRequest, type WikiSource } from "@ax-code/ax-wiki"
 import { GraphContext, type GraphContextPack } from "../../src/code-intelligence/graph-context"
 import { CodeNodeID } from "../../src/code-intelligence/id"
@@ -77,7 +90,7 @@ function generatedPage() {
       body: "A long enough generated wiki page body so the schema minimum length is satisfied.",
       symbols: [],
     },
-  } as never
+  }
 }
 
 function wikiResult(root: string, request: WikiPageGenerationRequest) {
@@ -95,8 +108,12 @@ function wikiResult(root: string, request: WikiPageGenerationRequest) {
   }
 }
 
-async function runNative(tmpPath: string, invokeEvidence = false): Promise<{ evidence?: EvidenceBundle }> {
-  vi.mocked(generateObject).mockResolvedValue(generatedPage())
+async function runNative(
+  tmpPath: string,
+  invokeEvidence = false,
+  streamError?: Error,
+): Promise<{ evidence?: EvidenceBundle }> {
+  vi.mocked(generateObject).mockResolvedValue({ ...generatedPage(), streamError })
   let evidence: EvidenceBundle | undefined
   vi.mocked(buildAxWiki).mockImplementation(async (input) => {
     const request: WikiPageGenerationRequest = {
@@ -134,6 +151,11 @@ async function runNative(tmpPath: string, invokeEvidence = false): Promise<{ evi
 }
 
 describe("wiki native generator", () => {
+  test("rejects stream errors instead of publishing a partial wiki page", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await expect(runNative(tmp.path, false, new Error("stream disconnected"))).rejects.toThrow("stream disconnected")
+  })
+
   test("sends a bounded output limit on every page generateObject call", async () => {
     await using tmp = await tmpdir({ git: true })
     await runNative(tmp.path)
@@ -142,6 +164,7 @@ describe("wiki native generator", () => {
     const request = vi.mocked(generateObject).mock.calls[0]?.[0] as { maxOutputTokens?: number }
     expect(request.maxOutputTokens).toEqual(expect.any(Number))
     expect(request.maxOutputTokens).toBeGreaterThan(0)
+    expect(generateObject.mock.calls[0][0].messages[0].content).toContain("json object with summary")
   })
 
   test("passes typed evidenceProvider and a stable generator identity", async () => {
@@ -153,7 +176,7 @@ describe("wiki native generator", () => {
     expect(input?.generatorIdentity).toEqual({
       name: "ax-wiki",
       version: Installation.VERSION,
-      promptVersion: "native-page-v1",
+      promptVersion: "native-page-v2",
       model: input?.model,
     })
   })

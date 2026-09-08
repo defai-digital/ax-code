@@ -53,7 +53,8 @@ Classify the requested action as allow, deny, or ask.
 - deny: data exfiltration, credential probing, destructive or irreversible changes, or privilege escalation.
 - allow: clearly safe, reversible, and within the stated task's scope.
 - ask: anything uncertain, unusual, or outside the stated task.
-Be conservative: when uncertain, choose ask.`
+Be conservative: when uncertain, choose ask.
+Return a json object with action ("allow", "deny", or "ask") and reason (a nonempty string of at most 200 characters).`
 
   // Initial attempt plus a single retry for transient errors (Codex
   // should_retry_guardian_review equivalent).
@@ -247,6 +248,7 @@ Be conservative: when uncertain, choose ask.`
         model: model.language,
         maxOutputTokens: model.maxOutputTokens,
         schema: GUARDIAN_OUTPUT,
+        maxRetries: 0,
         abortSignal: abort.signal,
         messages: [
           { role: "system", content: SYSTEM },

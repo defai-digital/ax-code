@@ -47,11 +47,11 @@ describe("council tool contract", () => {
       init.parameters.parse({
         question: "Review auth",
         providers: [
-          { providerID: "google", modelID: "gemini-flash" },
-          { providerID: "google", modelID: "gemini-pro" },
+          { providerID: "ax-trust-defai-digital", modelID: "deepseek-v4-pro" },
+          { providerID: "ax-trust-defai-digital", modelID: "qwen3.8-max" },
         ],
       }),
-    ).toThrow()
+    ).not.toThrow()
   })
 })
 

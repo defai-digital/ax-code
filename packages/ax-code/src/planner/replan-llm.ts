@@ -157,7 +157,10 @@ export function providerReplanGenerator(opts: ProviderReplanOptions = {}): Repla
         schema: REPLAN_SCHEMA,
         abortSignal: abort.signal,
         messages: [
-          { role: "system", content: REPLAN_SYSTEM },
+          {
+            role: "system",
+            content: `${REPLAN_SYSTEM}\nReturn a json object matching this schema: ${JSON.stringify(z.toJSONSchema(REPLAN_SCHEMA))}`,
+          },
           { role: "user", content: userPrompt },
         ],
       }).then((r: { object: z.infer<typeof REPLAN_SCHEMA> }) => r.object)

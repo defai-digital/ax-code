@@ -12,7 +12,9 @@ Prefer when:
 - “Good vs worse” quality findings with calibrated confidence
 
 Avoid when:
-- Only one provider is connected (report incomplete)
+- Only one model is available (report incomplete)
 - Privacy-sensitive code must stay local-only
 - Latency-sensitive trivial questions
 - You only need parallel *file* digs without multi-provider ensemble → use task_parallel with explore instead (different tool)
+
+Explicit members may use different models on the same gateway provider (for example DeepSeek and Qwen on AX Trust). Use connected provider IDs; duplicate provider/model pairs are not separate votes. Auto-selection still prefers diverse providers.

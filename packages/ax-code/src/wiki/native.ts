@@ -27,7 +27,7 @@ import {
   type WikiPlan,
   type WikiSource,
 } from "@ax-code/ax-wiki"
-import { generateObject } from "ai"
+import { streamObject } from "ai"
 import z from "zod"
 import { GraphContext } from "../code-intelligence/graph-context"
 import { Installation } from "../installation"
@@ -59,9 +59,10 @@ Rules:
 - Link to other planned pages with relative Markdown links when genuinely useful.
 - Record important exact symbols in the symbols array; do not add guessed symbols.
 - If evidence is incomplete, say what is uncertain and how to verify it.
-- Do not include a Sources section; AX Wiki adds the authoritative source list.`
+- Do not include a Sources section; AX Wiki adds the authoritative source list.
+Return a json object with summary (20-600 characters), body (at least 80 characters of Markdown), and symbols (an array of at most 80 exact symbol strings).`
 
-const WIKI_PROMPT_VERSION = "native-page-v1"
+const WIKI_PROMPT_VERSION = "native-page-v2"
 const EVIDENCE_PRODUCER = "ax-code-code-intelligence"
 
 function sourceEvidence(request: WikiPageGenerationRequest): string {
@@ -383,7 +384,7 @@ export async function runNativeWiki(input: {
     const abort = new AbortController()
     const timer = setTimeout(() => abort.abort(), 180_000)
     try {
-      return await generateObject({
+      const result = streamObject({
         model: model.language,
         maxOutputTokens: model.maxOutputTokens,
         schema: PAGE_SCHEMA,
@@ -392,7 +393,11 @@ export async function runNativeWiki(input: {
           { role: "system", content: PAGE_SYSTEM },
           { role: "user", content: pagePrompt(request) },
         ],
-      }).then((result) => result.object)
+      })
+      for await (const part of result.fullStream) {
+        if (part.type === "error") throw part.error
+      }
+      return await result.object
     } finally {
       clearTimeout(timer)
     }

@@ -127,6 +127,10 @@ test("review retries a transient error exactly once, then fails closed to ask", 
   const verdict = await reviewInInstance({ permission: "bash", patterns: ["rm -rf /"] })
 
   expect(generateObject).toHaveBeenCalledTimes(2)
+  for (const [request] of vi.mocked(generateObject).mock.calls) {
+    expect(request.maxRetries).toBe(0)
+    expect(request.messages?.[0]?.content).toContain("json object")
+  }
   expect(verdict.action).toBe("ask")
   expect(verdict.reason).toBe("guardian unavailable")
 })

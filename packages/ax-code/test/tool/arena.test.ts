@@ -60,7 +60,7 @@ describe("arena tool contract", () => {
           { providerID: "google", modelID: "gemini-pro" },
         ],
       }),
-    ).toThrow()
+    ).not.toThrow()
   })
 })
 

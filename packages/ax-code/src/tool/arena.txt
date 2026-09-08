@@ -4,7 +4,7 @@ Modes:
 - plan (default): fan out structured approach proposals; rank by diversity and self-assessed risk (advisory, no file writes).
 - implement: require a clean git worktree with a base commit, create an isolated worktree per contestant from that exact commit, snapshot each non-empty patch to its branch, run project verification, and rank verify-first. Main workspace is not modified by contestants. Winner is not auto-merged.
 
-Requires modes.arena.enabled=true and at least two distinct connected providers. Prefer verify_first strategy for implement.
+Requires modes.arena.enabled=true and at least two distinct models on connected providers. Prefer verify_first strategy for implement.
 If disabled, pass enableIfDisabled=true to opt in and continue in the same session (config is re-read each call).
 
 For code quality *findings* / security ratings prefer the council tool instead of plan arena.

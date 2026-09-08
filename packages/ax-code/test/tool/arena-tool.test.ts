@@ -1,6 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
-vi.mock("ai", () => ({ generateObject: vi.fn() }))
+const { generateObject } = vi.hoisted(() => ({ generateObject: vi.fn() }))
+vi.mock("ai", () => ({
+  streamObject: (request: unknown) => {
+    let result: any
+    return {
+      fullStream: (async function* () {
+        result = await generateObject(request)
+        if (result.streamError) yield { type: "error", error: result.streamError }
+      })(),
+      get object() {
+        return Promise.resolve(result.object)
+      },
+    }
+  },
+}))
 
 vi.mock("@/config/config", () => ({
   Config: { getFresh: vi.fn(), update: vi.fn(async () => ({})) },
@@ -55,7 +69,6 @@ vi.mock("@/project/instance", () => {
 })
 
 import { ArenaTool } from "../../src/tool/arena"
-import { generateObject } from "ai"
 import { Config } from "../../src/config/config"
 import { EnsembleShared } from "../../src/mode/ensemble-shared"
 import { ProviderID, ModelID } from "../../src/provider/schema"
@@ -89,6 +102,35 @@ afterEach(() => vi.restoreAllMocks())
 beforeEach(() => vi.clearAllMocks())
 
 describe("arena execute()", () => {
+  test("runs two distinct models through one gateway with bounded streamed requests", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { arena: { enabled: true } } } as any)
+    const members = ["deepseek-v4-pro", "qwen3.8-max"].map((id) => ({
+      providerID: ProviderID.make("ax-trust-defai-digital"),
+      modelID: ModelID.make(id),
+      memberId: `ax-trust-defai-digital/${id}`,
+    }))
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members, rejected: [] })
+    generateObject.mockResolvedValue({ object: mkProposal(3) })
+    const tool = await ArenaTool.init()
+    const result = await tool.execute(tool.parameters.parse({ task: "Review auth", providers: members }), ctx)
+    expect(result.metadata.rankedIds).toHaveLength(2)
+    for (const [request] of generateObject.mock.calls) {
+      expect(request.maxRetries).toBe(0)
+      expect(request.messages[0].content).toContain('"approach"')
+    }
+  })
+
+  test("stream errors never rank partially generated proposals", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { arena: { enabled: true } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+    generateObject.mockResolvedValue({ object: mkProposal(3), streamError: new Error("stream disconnected") })
+    const result = await (await ArenaTool.init()).execute({ task: "Review auth" }, ctx)
+    expect(result.metadata.errorCount).toBe(2)
+    expect(result.output).not.toContain("Approach risk-3")
+    expect(generateObject).toHaveBeenCalledTimes(4)
+    expect(result.output).toContain("stream disconnected")
+  })
+
   test("plan with 3 members all succeed → ranked output", async () => {
     vi.mocked(Config.getFresh).mockResolvedValue({
       modes: { arena: { enabled: true, maxContestants: 3 } },

@@ -426,7 +426,7 @@ export namespace EnsembleShared {
 
   /**
    * Resolve explicit member selections or auto-select diverse members.
-   * Shared between council (requireDistinctProviders: true) and arena (false).
+   * Shared between council and arena; explicit gateway models may share a provider.
    */
   export async function resolveMembers(
     config: ResolveConfig,

@@ -47,7 +47,7 @@ export namespace EnsemblePreflight {
       "",
       input.providers ? formatProviderLine(input.providers) : "",
       input.providers.count < 2
-        ? "Arena needs **≥2** connected providers with selectable models. Use `/connect` or `ax-code providers login`."
+        ? "Arena needs **≥2** distinct selectable models. Choose two models on one connected gateway, or use `/connect` or `ax-code providers login`."
         : "Provider count looks sufficient for a multi-model run once enabled.",
       "",
       "**Task fit:**",
@@ -65,12 +65,12 @@ export namespace EnsemblePreflight {
   export function arenaInsufficientProvidersMessage(providers: ProviderSnapshot): string {
     const exclusions = formatProviderExclusions(providers)
     return [
-      "# Arena: need ≥2 providers",
+      "# Arena: need ≥2 models",
       "",
       formatProviderLine(providers),
       exclusions ? `\n${exclusions}\n` : "",
-      "Arena requires at least **two** eligible coding providers with selectable models.",
-      "Connect another eligible provider via `/connect` or `ax-code providers login`, then re-run arena.",
+      "Arena requires at least **two** distinct selectable coding models.",
+      "Select two different models on a connected gateway, or connect another eligible provider via `/connect` or `ax-code providers login`.",
       "Examples: hosted API + CLI provider, or two API providers.",
       "",
       "Pass `providers: [{ providerID, modelID? }, ...]` to pick specific contestants once connected.",

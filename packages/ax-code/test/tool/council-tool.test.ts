@@ -1,6 +1,31 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 
-vi.mock("ai", () => ({ generateObject: vi.fn(), generateText: vi.fn() }))
+const { generateObject, generateText } = vi.hoisted(() => ({ generateObject: vi.fn(), generateText: vi.fn() }))
+vi.mock("ai", () => ({
+  streamObject: (request: unknown) => {
+    let result: any
+    return {
+      fullStream: (async function* () {
+        result = await generateObject(request)
+        if (result.streamError) yield { type: "error", error: result.streamError }
+      })(),
+      get object() {
+        return Promise.resolve(result.object)
+      },
+    }
+  },
+  streamText: (request: unknown) => {
+    let result: any
+    return {
+      fullStream: (async function* () {
+        result = await generateText(request)
+      })(),
+      get text() {
+        return Promise.resolve(result.text)
+      },
+    }
+  },
+}))
 
 vi.mock("@/config/config", () => ({
   Config: { getFresh: vi.fn() },
@@ -34,7 +59,6 @@ vi.mock("@/mode/memory", () => ({
 }))
 
 import { CouncilTool, DEFAULT_REASONING_TIMEOUT_SCALE, DEFAULT_TIMEOUT_MS } from "../../src/tool/council"
-import { generateObject, generateText } from "ai"
 import { Config } from "../../src/config/config"
 import { EnsembleShared } from "../../src/mode/ensemble-shared"
 import { Provider } from "../../src/provider/provider"
@@ -61,6 +85,30 @@ afterEach(() => vi.restoreAllMocks())
 beforeEach(() => vi.clearAllMocks())
 
 describe("council execute()", () => {
+  test("runs distinct DeepSeek and Qwen models on the same connected gateway", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { council: { maxMembers: 3 } } } as any)
+    const providers = ["deepseek-v4-pro", "qwen3.8-max"].map((modelID) => ({
+      providerID: ProviderID.make("ax-trust-defai-digital"),
+      modelID: ModelID.make(modelID),
+    }))
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({
+      members: providers.map((member) => ({ ...member, memberId: `${member.providerID}/${member.modelID}` })),
+      rejected: [],
+    })
+    vi.mocked(generateObject).mockResolvedValue({ object: { overall: "ok", issues: [] } } as any)
+    const tool = await CouncilTool.init()
+    const result = await tool.execute(tool.parameters.parse({ question: "Review auth", providers }), ctx)
+    expect(EnsembleShared.resolveMembers).toHaveBeenCalledWith(
+      expect.objectContaining({ requireDistinctProviders: false }),
+      providers,
+      2,
+      "Review auth",
+    )
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    expect(generateObject.mock.calls[0][0].messages[0].content).toContain('"overall"')
+    expect(result.metadata.successfulMembers).toBe(2)
+  })
+
   test("3 members all succeed → consensus tier for shared issues", async () => {
     vi.mocked(Config.getFresh).mockResolvedValue({
       modes: { council: { enabled: true, maxMembers: 3, debateRounds: 0 } },
@@ -170,6 +218,21 @@ describe("council member robustness", () => {
     // Severity normalization still applies to the fallback path.
     expect(result.output).toContain("[high]")
     expect(result.output).toContain("Missing rate limit")
+  })
+
+  test("stream error events cannot become successful member results", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig())
+    oneMember()
+    generateObject.mockResolvedValue({
+      object: { overall: "partial", issues: [] },
+      streamError: Object.assign(new Error(""), { name: "AI_APICallError", statusCode: 504 }),
+    })
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+    expect(result.metadata.successfulMembers).toBe(0)
+    expect(result.output).toContain("HTTP 504")
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    expect(generateText).not.toHaveBeenCalled()
   })
 
   test("member fails when the generateText fallback is also unparseable", async () => {
@@ -286,6 +349,7 @@ describe("council request shaping", () => {
     for (const [request] of vi.mocked(generateObject).mock.calls) {
       expect(request.maxOutputTokens).toEqual(expect.any(Number))
       expect(request.maxOutputTokens).toBeGreaterThan(0)
+      expect(request.maxRetries).toBe(0)
     }
   })
 })

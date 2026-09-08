@@ -3,7 +3,7 @@
  * Fans out structured reviews; aggregates via pure Council module.
  */
 
-import { generateObject, generateText } from "ai"
+import { streamObject, streamText } from "ai"
 import z from "zod"
 import { Config } from "../config/config"
 import { Budget } from "../mode/budget"
@@ -113,21 +113,12 @@ function validateMemberSelections(
   ctx: z.RefinementCtx,
 ): void {
   const seen = new Set<string>()
-  const seenProviders = new Set<string>()
   selections.forEach((selection, index) => {
     const key = `${selection.providerID}\u0000${selection.modelID ?? ""}`
     if (seen.has(key)) {
       ctx.addIssue({ code: "custom", message: "Duplicate provider/model selection", path: [index] })
     }
     seen.add(key)
-    if (seenProviders.has(selection.providerID)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Council members must use distinct providers",
-        path: [index, "providerID"],
-      })
-    }
-    seenProviders.add(selection.providerID)
   })
 }
 
@@ -165,16 +156,18 @@ Return structured issues with severity, category, optional location (file:line),
 Be concrete. Prefer fewer high-signal issues. Do not claim other models' opinions.`)
 }
 
-// Appended to the user message for the generateText fallback so the model
-// knows exactly what shape to emit when structured output failed. Contains the
+// Include the output shape in both requests: JSON-only gateways may omit the
+// SDK schema from the model prompt. The text fallback repeats it. Contains the
 // literal word "json" (required by some providers in json mode).
-const JSON_FALLBACK_INSTRUCTION = `Your previous response could not be parsed as structured output.
-Respond with ONLY one json object, no markdown fences or extra text, matching this shape:
+const JSON_OUTPUT_INSTRUCTION = `Respond with ONLY one json object, no markdown fences or extra text, matching this shape:
 {"overall": string, "issues": [{"severity": "high"|"medium"|"low", "category": string, "location": string (optional), "summary": string, "suggestedFix": string (optional)}]}`
 
+// Use streaming for both paths: buffered reasoning responses can exceed gateway
+// response deadlines even while the upstream model is healthy. Consume the full
+// stream and propagate error events before accepting the validated final object.
 // AI SDK throws NoObjectGeneratedError ("No object generated: could not parse
 // the response." / "No object generated: response did not match schema.") when
-// generateObject output fails schema conformance. Detect by message/name so the
+// streamObject output fails schema conformance. Detect by message/name so the
 // check survives error wrapping and test mocks of the "ai" module.
 function isSchemaConformanceError(error: unknown): boolean {
   const name = (error as { name?: string } | null)?.name
@@ -244,7 +237,7 @@ async function runMember(input: {
       providerID: String(member.providerID),
       modelID: String(member.modelID),
       issues: [],
-      error: error instanceof Error ? error.message : String(error),
+      error: FanOut.describeError(error),
     }
   }
   const memberTimeoutMs = resolveMemberTimeoutMs({
@@ -280,13 +273,14 @@ async function runMember(input: {
         ]
           .filter(Boolean)
           .join("\n")
-        const system = systemPrompt(kind)
+        const system = `${systemPrompt(kind)}\n\n${JSON_OUTPUT_INSTRUCTION}`
 
         try {
-          const r = await generateObject({
+          const r = streamObject({
             model: language,
             maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
             schema: MemberOutputSchema,
+            maxRetries: 0,
             abortSignal: signal,
             temperature: 0.2,
             messages: [
@@ -294,7 +288,10 @@ async function runMember(input: {
               { role: "user", content: userParts },
             ],
           })
-          return r.object
+          for await (const part of r.fullStream) {
+            if (part.type === "error") throw part.error
+          }
+          return await r.object
         } catch (error) {
           if (isUnsupportedSpecVersionError(error)) {
             const detail = error instanceof Error ? error.message : String(error)
@@ -304,26 +301,30 @@ async function runMember(input: {
             )
           }
           if (signal.aborted || !isSchemaConformanceError(error)) throw error
-          // generateText fallback: some models return review JSON that
-          // generateObject's strict structured-output path rejects
+          // streamText fallback: some models return review JSON that
+          // streamObject's strict structured-output path rejects
           // ("No object generated"). Retry in plain json mode and validate
           // the parsed text ourselves before declaring the member failed.
-          log.info("council member generateObject failed schema, falling back to generateText", {
+          log.info("council member streamObject failed schema, falling back to streamText", {
             toolName: "council",
             memberId: member.memberId,
-            error: error instanceof Error ? error.message : String(error),
+            error: FanOut.describeError(error),
           })
-          const fallback = await generateText({
+          const fallback = streamText({
             model: language,
+            maxRetries: 0,
             maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
             abortSignal: signal,
             temperature: 0.2,
             messages: [
               { role: "system", content: system },
-              { role: "user", content: `${userParts}\n\n${JSON_FALLBACK_INSTRUCTION}` },
+              { role: "user", content: `${userParts}\n\n${JSON_OUTPUT_INSTRUCTION}` },
             ],
           })
-          const validated = MemberOutputSchema.safeParse(parseJsonFromText(fallback.text ?? ""))
+          for await (const part of fallback.fullStream) {
+            if (part.type === "error") throw part.error
+          }
+          const validated = MemberOutputSchema.safeParse(parseJsonFromText(await fallback.text))
           if (!validated.success) throw error
           return validated.data
         }
@@ -473,7 +474,7 @@ export const CouncilTool = Tool.define("council", async () => {
       }
 
       const resolution = await EnsembleShared.resolveMembers(
-        { minMembers: 1, maxMembers: budgetCheck.allowedMembers, requireDistinctProviders: true },
+        { minMembers: 1, maxMembers: budgetCheck.allowedMembers, requireDistinctProviders: false },
         args.providers,
         budgetCheck.allowedMembers,
         args.question,

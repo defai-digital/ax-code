@@ -4,7 +4,7 @@
  * Does not write files — advisory best-of-N for plans.
  */
 
-import { generateObject } from "ai"
+import { streamObject } from "ai"
 import { createHash } from "crypto"
 import z from "zod"
 import path from "path"
@@ -84,9 +84,6 @@ function validateMemberSelections(
     }
     seen.add(key)
   })
-  if (new Set(selections.map((s) => s.providerID)).size < 2) {
-    ctx.addIssue({ code: "custom", message: "Arena requires at least two distinct providers", path: [] })
-  }
 }
 
 const parameters = z.object({
@@ -140,7 +137,7 @@ async function runProposal(input: {
   } catch (error) {
     return {
       member: input.member,
-      error: error instanceof Error ? error.message : String(error),
+      error: FanOut.describeError(error),
     }
   }
   const memberTimeoutMs = resolveMemberTimeoutMs({
@@ -164,10 +161,11 @@ async function runProposal(input: {
         })
       },
       execute: async (_m, signal) => {
-        return generateObject({
+        const result = streamObject({
           model: language,
           maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
           schema: ProposalSchema,
+          maxRetries: 0,
           abortSignal: signal,
           temperature: 0.3,
           messages: [
@@ -178,7 +176,8 @@ async function runProposal(input: {
               content: ensureJsonModeInstruction(`You are one independent contestant in a coding-agent arena.
 Propose a concrete implementation approach for the task. Do not write full source files.
 Focus on approach, ordered steps, and risks. Be specific to the context.
-Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not lower it by omitting risks.`),
+Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not lower it by omitting risks.
+Return a json object with this shape: {"approach": string, "steps": string[], "risks": string[], "riskScore": number, "confidence": number (optional)}.`),
             },
             {
               role: "user",
@@ -187,7 +186,11 @@ Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not 
                 .join("\n"),
             },
           ],
-        }).then((r) => r.object)
+        })
+        for await (const part of result.fullStream) {
+          if (part.type === "error") throw part.error
+        }
+        return await result.object
       },
     })
     return result!
@@ -415,7 +418,7 @@ export const ArenaTool = Tool.define("arena", async () => {
           selectionErrors: resolution.rejected,
         }
         return {
-          title: "Arena: need ≥2 providers",
+          title: "Arena: need ≥2 models",
           output:
             EnsemblePreflight.arenaInsufficientProvidersMessage(providerSnap) +
             (resolution.rejected.length

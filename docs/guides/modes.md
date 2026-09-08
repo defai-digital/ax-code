@@ -155,7 +155,7 @@ If the user asked for council/arena, `task_parallel` is rejected until the ensem
 
 **Tool:** `arena`  
 **Slash:** `/arena <task>`  
-**Requires:** `modes.arena.enabled: true` and ≥2 connected providers
+**Requires:** `modes.arena.enabled: true` and ≥2 distinct selectable models on connected providers (including a shared gateway)
 
 ### `mode: "plan"` (default)
 

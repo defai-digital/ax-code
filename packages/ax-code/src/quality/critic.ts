@@ -103,7 +103,10 @@ INFO = stylistic. Do not flag style-only issues unless they affect correctness.`
         schema: CRITIC_OUTPUT,
         abortSignal: abort.signal,
         messages: [
-          { role: "system", content: SYSTEM },
+          {
+            role: "system",
+            content: `${SYSTEM}\nReturn a json object matching this schema: ${JSON.stringify(z.toJSONSchema(CRITIC_OUTPUT))}`,
+          },
           {
             role: "user",
             content: [

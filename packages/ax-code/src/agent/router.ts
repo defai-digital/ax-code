@@ -293,7 +293,7 @@ Levels:
 - medium: Moderate reasoning, multi-file analysis, or standard debugging
 - high: Complex architecture decisions, deep investigation, or large-scale changes
 
-Respond with the complexity level only.`
+Respond with a json object: {"complexity": "low" | "medium" | "high"}.`
 
 const complexitySchema = z.object({
   complexity: z.enum(["low", "medium", "high"]),

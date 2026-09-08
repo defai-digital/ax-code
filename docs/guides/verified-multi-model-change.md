@@ -32,7 +32,7 @@ Use `arena` to decide **which implementation** to keep.
 
 Implement mode requires a Git project with at least one commit and a **clean primary worktree**. Contestant worktrees are created from an exact base commit and cannot inherit uncommitted changes, so commit or stash first.
 
-You also need at least two distinct connected providers, and `modes.arena.enabled: true`.
+You also need at least two distinct selectable models on connected providers (a shared gateway is supported), and `modes.arena.enabled: true`.
 
 ### 2. Run
 
@@ -78,7 +78,7 @@ It also does not extend to ordinary interactive editing. Arena candidates and ga
 
 - **Cost scales with contestants.** Each runs a full implement agent.
 - **A dirty worktree stops the run** before anything else happens, by design.
-- **Fewer than two providers** makes the comparison meaningless, and the tool reports rather than inventing a ranking.
+- **Fewer than two distinct models** makes the comparison meaningless, and the tool reports rather than inventing a ranking.
 - **All candidates can fail verification.** That is a useful result: it usually means the task was underspecified or the repository's checks are stricter than the agents assumed.
 
 ## Related
