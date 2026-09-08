@@ -45,6 +45,40 @@ describe("quality.dre-graph-assets", () => {
     expect(html).toContain(`try { data = JSON.parse(event.data) } catch { return }`)
   })
 
+  test("sync() keeps an in-flight guard and aborts the previous fetch on supersede (R4-1)", () => {
+    const html = live({ sessionID: "session-1", directory: "src" })
+    expect(html).toContain(`let _polling = false`)
+    expect(html).toContain(`let _pollAbort = null`)
+    expect(html).toContain(`if (_polling) return`)
+    expect(html).toContain(`if (_pollAbort) _pollAbort.abort()`)
+    expect(html).toContain(`const ac = new AbortController()`)
+    expect(html).toContain(`signal: ac.signal`)
+    // The fetch must clear the in-flight flag and the abort controller on
+    // completion so the next interval can start a fresh fetch.
+    expect(html).toContain(`_polling = false`)
+    expect(html).toContain(`if (_pollAbort === ac) _pollAbort = null`)
+    // AbortError must be swallowed so aborts do not surface as unhandled
+    // rejections.
+    expect(html).toContain(`if (err && err.name === "AbortError") return`)
+  })
+
+  test("sync() flips the live badge on repeated non-OK responses (R4-2)", () => {
+    const html = live({ sessionID: "session-1", directory: "src" })
+    // 4xx is terminal — one strike trips the badge to "poll error".
+    expect(html).toContain(`res.status < 500`)
+    expect(html).toContain(`set("poll error", "off")`)
+    // 5xx is transient — only 3 in a row trips the badge.
+    expect(html).toContain(`_pollFails = res.status >= 500 ? _pollFails + 1 : _pollFails + 10`)
+    expect(html).toContain(`if (_pollFails >= 3) set("poll error", "off")`)
+  })
+
+  test("page hide aborts the in-flight fetch and clears the poll interval", () => {
+    const html = live({ sessionID: "session-1", directory: "src" })
+    expect(html).toContain(`_pollAbort?.abort()`)
+    expect(html).toContain(`window.clearInterval(_poll)`)
+    expect(html).toContain(`_liveSrc?.close()`)
+  })
+
   test("renders execution summary loader with script-safe session id", () => {
     const html = executionSummaryScript("<session>&\u2028")
 
