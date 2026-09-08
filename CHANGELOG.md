@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.14.9] - 2026-09-08
+
+### Fixed
+
+- Keep automatic compaction on compatible models when using Codex with a ChatGPT account, and fall back to the session model after an explicit model-compatibility rejection.
+- Reset connection-failure tracking after a successful provider step so recovered sessions do not stop prematurely.
+- Bound snapshot Git commands and reduce repeated diff work when generating session summaries.
+- Restrict Markdown frontmatter to data-only parsing and reject executable language tags.
+- Isolate cached skills by source and manifest revision, limit streamed downloads, and prevent remote paths or duplicate destinations from escaping skill boundaries.
+- Download skill files containing literal percent signs or fragment characters from the correct URL.
+
+### Changed
+
+- Honor skill invocation policies consistently across model discovery, direct loading, and explicit user commands; expose the optional policy fields through SDK 2.5.9.
+- Remove rotating footer tips from the terminal prompt.
+- Improve release notes with clearer descriptions of user-facing changes.
+
 ## [7.14.8] - 2026-09-08
 
 ### Fixed
