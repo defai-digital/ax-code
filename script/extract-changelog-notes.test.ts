@@ -77,7 +77,7 @@ describe("release note formatting", () => {
       previousTag: "v7.6.4",
     })
     expect(notes).toContain("# AX Code CLI v7.7.0")
-    expect(notes).toContain("Terminal CLI and TUI archives.")
+    expect(notes).toContain("This release ships the AX Code CLI and TUI terminal archives.")
     expect(notes).toContain("desktop-v7.7.0")
     expect(notes).toContain("Add scout subagent.")
     expect(notes).toContain("compare/v7.6.4...v7.7.0")

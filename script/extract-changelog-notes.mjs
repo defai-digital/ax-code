@@ -110,10 +110,15 @@ export function shouldReplaceWithChangelog(body, channel, version) {
 
 function productBlurb(channel, version, siblingTag) {
   const product =
-    channel === "desktop" ? "Desktop app installers for macOS, Windows, and Linux." : "Terminal CLI and TUI archives."
+    channel === "desktop"
+      ? "This release ships the AX Code Desktop installers for macOS, Windows, and Linux."
+      : "This release ships the AX Code CLI and TUI terminal archives."
   if (!siblingTag) return product
-  const label = channel === "desktop" ? "CLI archives" : "Desktop installers"
-  return `${product} ${label} are on [${siblingTag}](${REPO_RELEASES}/${siblingTag}).`
+  const siblingLink = `[\`${siblingTag}\`](${REPO_RELEASES}/${siblingTag})`
+  if (channel === "desktop") {
+    return `${product}\n\nFor the CLI and TUI archives, use ${siblingLink}.`
+  }
+  return `${product}\n\nFor Desktop installers, use ${siblingLink}.`
 }
 
 function stripExistingTitle(body, version) {
@@ -126,7 +131,9 @@ function stripExistingTitle(body, version) {
 export function formatReleaseNotes({ channel, version, section, siblingTag, previousTag }) {
   const title = releaseTitle(channel, version)
   const compareTag = channel === "desktop" ? `desktop-v${version}` : `v${version}`
-  const compare = previousTag ? `\n\n---\n\n**Full changelog**: ${REPO_COMPARE}/${previousTag}...${compareTag}` : ""
+  const compare = previousTag
+    ? `\n\n---\n\n[Full changelog comparison: ${previousTag}...${compareTag}](${REPO_COMPARE}/${previousTag}...${compareTag})`
+    : ""
   return `# ${title}\n\n${productBlurb(channel, version, siblingTag)}\n\n${section.trim()}${compare}\n`
 }
 

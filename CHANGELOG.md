@@ -8,10 +8,6 @@ changes belong to AX Coder.
 
 ## [7.14.8] - 2026-09-08
 
-### Changed
-
-- Prepare AX Code 7.14.8 and SDK 2.5.8.
-
 ### Fixed
 
 - Bound consecutive failing tool turns with recovery checkpoints and an explicit stop.
@@ -23,43 +19,104 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Prepare AX Code 7.14.7 and SDK 2.5.7.
+- Require executed evidence for goal acceptance checks.
+
+### Fixed
+
+- Fix source scope verification and update vulnerable provider utilities.
 
 ## [7.14.6] - 2026-09-08
 
 ### Changed
 
-- Prepare AX Code 7.14.6 and SDK 2.5.6.
+- Support explicitly trusted loopback HTTP MCP servers.
+- Expose session creation lock contention through the HTTP contract.
+- Centralize Figma MCP endpoint constants for repository self-scan.
+- Explain AX Trust upstream permission denials with request context.
+- Hide the footer gauge during auto-compaction and use ASCII glyphs.
+
+### Fixed
+
+- Fix release scan and Homebrew token fallback.
+- Fix oversized prompts in CLI providers.
+- Confine loopback MCP OAuth browser redirects to the configured origin.
+- Retry session creation through SQLite writer contention.
 
 ## [7.14.5] - 2026-09-08
 
 ### Changed
 
-- Prepare AX Code 7.14.5 and SDK 2.5.5.
+- Harden auto-compaction continue marker, decision, and tier reason.
+- Harden the DRE graph widget, SSE, and directory validation.
+- Harden OAuth pending flows and server error classification.
+- Serialize permission rejects and classify all tool permission names.
+
+### Fixed
+
+- Fix DRE graph polling and SDK contract drift.
+- Guard the DRE graph poll loop and surface non-OK responses.
+- Preserve non-media file parts during compaction overflow replay.
+- Fix session durability: shard-route compaction, stamp part updates, and honor terminal retry classification.
+- Close bash network-policy bypasses and pin sandbox binary resolution.
 
 ## [7.14.4] - 2026-09-08
 
 ### Changed
 
-- Prepare AX Code 7.14.4 and SDK 2.5.4.
+- Update the provider model catalog snapshot.
+
+### Fixed
+
+- Preserve user images during oversized request recovery.
 
 ## [7.14.3] - 2026-09-07
 
+### Added
+
+- Add an optional timeout and abort signal to the headless runtime.
+
 ### Changed
 
-- Prepare AX Code 7.14.3 and SDK 2.5.3.
+- Bound runtime caches and scanner findings.
+- Improve conversation recap quality and the request lifecycle.
+- Scope provider cache generation per directory.
+- Bound LLM think-tag parsing and cap pacing cache growth.
+- Harden skill discovery fetches and authoring containment.
+- Harden provider fetch and CLI subprocess handling.
+- Harden ax-wiki manifest, lock, and atomic-write handling.
+- Reduce workflow queue queries and harden status recovery.
+
+### Fixed
+
+- Fix macOS terminal title handling.
+- Fix private GPU capability discovery.
+- Cancel the shell-env child on CLI teardown and drop dead code.
+- Guard concurrent AX Engine connection updates.
 
 ## [7.14.2] - 2026-09-07
 
 ### Changed
 
-- Prepare AX Code 7.14.2 and SDK 2.5.2.
+- Upgrade ax-tui to 0.1.3.
+- Improve runtime stability and speed across subsystems.
+
+### Fixed
+
+- Fix incomplete runtime installations on Unix and Windows.
+- Allow slow Windows PowerShell cold starts.
+- Keep awaited timeout boundaries alive.
+- Retry Windows installer fixture cleanup.
 
 ## [7.14.1] - 2026-09-07
 
 ### Changed
 
-- Prepare AX Code 7.14.1 and SDK 2.5.1.
+- Rework the busy terminal-tab indicator (title glyph and animation).
+- Skip Node runtime relocation on non-macOS platforms.
+
+### Fixed
+
+- Preserve source TUI PTY ownership.
 
 ## [7.14.0] - 2026-09-07
 
@@ -88,13 +145,26 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Add a typed dependency seam for session processor stream, retry, and delay effects.
+- Refine provider connection setup.
+
+### Fixed
+
+- Fix branded Node runtime detection.
+- Repair legacy Node launcher hardlinks.
+- Fix AX-Code branding for Homebrew rpath Node.
+- Fix terminal tab titles showing `node` and use a static AX-Code label.
+- Fix the npm-run-dev terminal job name.
 
 ## [7.13.1] - 2026-09-06
 
 ### Changed
 
-- Add a typed dependency seam for session processor stream, retry, and delay effects.
+- Harden release workflow prerequisites.
+- Improve autonomous task scope and timing feedback.
+
+### Fixed
+
+- Fix task queue outcomes for stopped sessions.
 
 ## [7.13.0] - 2026-09-06
 
@@ -104,7 +174,6 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Add a typed dependency seam for session processor stream, retry, and delay effects.
 - Load the extracted `ax-tui` framework from JSR and keep CI automation independent of Bun.
 - Stabilize provider catalog regeneration so upstream object-key ordering does not create snapshot churn.
 
@@ -119,13 +188,28 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Add a typed dependency seam for session processor stream, retry, and delay effects.
+- Refactor session writes and reuse batch statements.
+- Centralize event streams and optimize queue storage.
+
+### Fixed
+
+- Prevent session write ownership reassignment.
 
 ## [7.12.1] - 2026-09-05
 
 ### Changed
 
-- Add a typed dependency seam for session processor stream, retry, and delay effects.
+- Align bus and plugin callback deadlines.
+- Type TUI prompt submission controller boundaries.
+- Bound plugin lifetimes and harden runtime validation.
+- Speed up read-only CLI commands with a slim bootstrap.
+
+### Fixed
+
+- Clear TUI picker search before dismissing dialogs.
+- Preserve generated TUI artifacts during formatting.
+- Clarify provider fallback output and that `run --format json` emits NDJSON.
+- Fix unknown subcommands being treated as a TUI directory argument and add a `--fork` exit-code regression test.
 
 ## [7.12.0] - 2026-09-05
 
