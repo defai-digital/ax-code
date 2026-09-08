@@ -35,6 +35,21 @@ export function usageSection(input: { usage: SessionUsage.Info; duration?: numbe
       kind: usage.cacheShare !== undefined && usage.cacheShare >= 0.5 ? "low" : "neutral",
       icon: "▣",
     }),
+    stat({
+      label: "Est. cost",
+      value:
+        usage.cost.coverage === undefined
+          ? "—"
+          : `$${usage.cost.totalUsd.toFixed(2)}${usage.cost.coverage < 1 ? "*" : ""}`,
+      title:
+        usage.cost.coverage === undefined
+          ? "No priced models in this window"
+          : usage.cost.coverage < 1
+            ? `Estimated from local pricing data; covers ${Math.round(usage.cost.coverage * 100)}% of messages (unpriced models excluded)`
+            : "Estimated from local pricing data",
+      kind: "neutral",
+      icon: "$",
+    }),
     stat({ label: "Duration", value: time(input.duration), icon: "⏱" }),
     `</div>`,
     `<p class="muted" style="font-size:12px;margin-top:10px">${num(usage.tokens.input)} in · ${num(

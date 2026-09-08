@@ -50,6 +50,7 @@ function emptyUsage(days?: number): SessionUsage.Info {
     perDay: [],
     perSession: {},
     activeDays: 0,
+    cost: { totalUsd: 0, coverage: undefined },
   }
 }
 

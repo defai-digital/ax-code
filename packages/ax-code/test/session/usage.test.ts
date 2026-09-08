@@ -90,8 +90,11 @@ describe("SessionUsage.load", () => {
         })
         expect(usage.totalTokens).toBe(1000)
         expect(usage.cacheShare).toBeCloseTo(500 / 800)
-        expect(usage.models["anthropic/claude-sonnet-4"]).toEqual({ messages: 1, tokens: 700 })
-        expect(usage.models["openai/gpt-5"]).toEqual({ messages: 1, tokens: 300 })
+        // costUsd is the ADR-084 estimate; priced models carry it, so the
+        // entries no longer strict-equal the bare {messages, tokens} shape.
+        expect(usage.models["anthropic/claude-sonnet-4"]).toMatchObject({ messages: 1, tokens: 700 })
+        expect(usage.models["anthropic/claude-sonnet-4"]?.costUsd).toBeDefined()
+        expect(usage.models["openai/gpt-5"]).toMatchObject({ messages: 1, tokens: 300 })
         expect(usage.tools).toEqual({ bash: 2, edit: 1 })
         expect(usage.perSession[a.id]).toBe(700)
         expect(usage.perSession[b.id]).toBe(300)

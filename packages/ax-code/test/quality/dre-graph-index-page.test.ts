@@ -42,6 +42,7 @@ function usage(): SessionUsage.Info {
     perDay: [{ day: "2026-08-18", sessions: 2, tokens: 365_000 }],
     perSession: { "session-1": 300_000, "session-2": 65_000 },
     activeDays: 1,
+    cost: { totalUsd: 1.62, coverage: 1 },
   }
 }
 

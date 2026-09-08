@@ -4,9 +4,9 @@ export function chip(input: { label: string; kind?: string }) {
   return `<span class="chip ${esc(input.kind ?? "neutral")}">${esc(input.label)}</span>`
 }
 
-export function stat(input: { label: string; value: string; kind?: string; icon?: string }) {
+export function stat(input: { label: string; value: string; kind?: string; icon?: string; title?: string }) {
   return [
-    `<div class="stat ${esc(input.kind ?? "neutral")}">`,
+    `<div class="stat ${esc(input.kind ?? "neutral")}"${input.title ? ` title="${esc(input.title)}"` : ""}>`,
     input.icon ? `<span class="stat-icon">${input.icon}</span>` : "",
     `<span class="stat-label">${esc(input.label)}</span>`,
     `<strong class="stat-value">${esc(input.value)}</strong>`,
