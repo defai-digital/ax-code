@@ -61,16 +61,27 @@ jobs:
             const repository = `https://github.com/${context.repo.owner}/${context.repo.repo}`
             const predicate = {
               buildDefinition: {
-                buildType: 'https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1',
+                buildType: 'https://actions.github.io/buildtypes/workflow/v1',
                 externalParameters: {
                   workflow: { ref: context.ref, repository, path: '.github/workflows/sdk-jsr-provenance.yml' },
                   tag: process.env.SDK_TAG
                 },
-                internalParameters: { verifiedFiles: files.size },
-                resolvedDependencies: [{ uri: `git+${repository}@refs/tags/${process.env.SDK_TAG}`, digest: { gitCommit: commit } }]
+                internalParameters: {
+                  github: {
+                    event_name: context.eventName,
+                    repository_id: process.env.GITHUB_REPOSITORY_ID,
+                    repository_owner_id: process.env.GITHUB_REPOSITORY_OWNER_ID,
+                    runner_environment: process.env.RUNNER_ENVIRONMENT
+                  },
+                  verifiedFiles: files.size
+                },
+                resolvedDependencies: [
+                  { uri: `git+${repository}@${context.ref}`, digest: { gitCommit: context.sha } },
+                  { uri: `git+${repository}@refs/tags/${process.env.SDK_TAG}`, digest: { gitCommit: commit } }
+                ]
               },
               runDetails: {
-                builder: { id: 'https://github.com/actions/runner/github-hosted' },
+                builder: { id: `https://github.com/${process.env.GITHUB_WORKFLOW_REF}` },
                 metadata: { invocationId: `${repository}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}` }
               }
             }
