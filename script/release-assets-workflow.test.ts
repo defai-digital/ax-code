@@ -42,6 +42,17 @@ describe("release asset workflow", () => {
     expect(security).not.toMatch(/continue-on-error:|if:|--experimental-offline|--no-fail/)
   })
 
+  test("requires registry verification after a possibly partial SDK publication", () => {
+    const sdk = readFileSync(".github/workflows/sdk-jsr.yml", "utf8")
+    const publish = sdk.indexOf("- name: Publish JSR package with provenance")
+    const verify = sdk.indexOf("- name: Verify published SDK and provenance")
+    expect(publish).toBeGreaterThan(-1)
+    expect(verify).toBeGreaterThan(publish)
+    expect(sdk.slice(publish, verify)).toContain("continue-on-error: true")
+    expect(sdk.slice(verify)).toContain("uses: ./.github/actions/sdk-publication")
+    expect(sdk.slice(verify)).not.toMatch(/continue-on-error:|if:/)
+  })
+
   test("requires every supported archive and detached signature before publication", () => {
     const uploadStart = workflow.indexOf("- name: Upload release assets")
     const verifyStart = workflow.indexOf("- name: Verify uploaded release signatures")

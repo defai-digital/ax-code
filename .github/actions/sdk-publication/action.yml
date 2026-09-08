@@ -1,0 +1,109 @@
+name: Verify SDK publication
+description: Verify published SDK files and register missing provenance within the JSR publication window
+inputs:
+  tag:
+    description: Immutable SDK release tag
+    required: true
+  source:
+    description: Checked-out release source with a built SDK
+    default: .
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Verify every published SDK file against the release source
+      id: verify
+      env:
+        SDK_TAG: ${{ inputs.tag }}
+        SDK_SOURCE: ${{ inputs.source }}
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+      with:
+        script: |
+          const { pathToFileURL } = require('node:url')
+          const recovery = await import(pathToFileURL(`${process.cwd()}/.github/scripts/jsr-provenance-recovery.mjs`))
+          const version = recovery.versionFromTag(process.env.SDK_TAG)
+          const response = await fetch(`https://jsr.io/@defai-digital/ax-code-sdk/${version}_meta.json`, { signal: AbortSignal.timeout(30000) })
+          if (!response.ok) throw new Error(`JSR manifest request failed: ${response.status}`)
+          const audience = JSON.stringify({ permissions: [{ permission: 'package/publish', scope: 'defai-digital', package: 'ax-code-sdk' }] })
+          const token = await core.getIDToken(audience)
+          const info = await fetch(`https://jsr.io/api/scopes/defai-digital/packages/ax-code-sdk/versions/${version}`, { headers: { authorization: `githuboidc ${token}` }, signal: AbortSignal.timeout(30000) })
+          if (!info.ok) throw new Error(`JSR version lookup failed: ${info.status}`)
+          const needsAttestation = recovery.needsAttestation(await info.json(), version)
+          core.setOutput('needs-attestation', String(needsAttestation))
+          const files = await recovery.expectedFiles(process.env.SDK_SOURCE, process.env.SDK_TAG)
+          const hash = await recovery.verifyManifest(Buffer.from(await response.arrayBuffer()), files)
+          const { stdout } = await exec.getExecOutput('git', ['-C', process.env.SDK_SOURCE, 'rev-parse', 'HEAD'])
+          const commit = stdout.trim()
+          const repository = `https://github.com/${context.repo.owner}/${context.repo.repo}`
+          const predicate = {
+            buildDefinition: {
+              buildType: 'https://actions.github.io/buildtypes/workflow/v1',
+              externalParameters: {
+                workflow: { ref: context.ref, repository, path: '.github/workflows/sdk-jsr.yml' },
+                tag: process.env.SDK_TAG
+              },
+              internalParameters: {
+                github: {
+                  event_name: context.eventName,
+                  repository_id: process.env.GITHUB_REPOSITORY_ID,
+                  repository_owner_id: process.env.GITHUB_REPOSITORY_OWNER_ID,
+                  runner_environment: process.env.RUNNER_ENVIRONMENT
+                },
+                verifiedFiles: files.size
+              },
+              resolvedDependencies: [
+                { uri: `git+${repository}@${context.ref}`, digest: { gitCommit: context.sha } },
+                { uri: `git+${repository}@refs/tags/${process.env.SDK_TAG}`, digest: { gitCommit: commit } }
+              ]
+            },
+            runDetails: {
+              builder: { id: `https://github.com/${process.env.GITHUB_WORKFLOW_REF}` },
+              metadata: { invocationId: `${repository}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT}` }
+            }
+          }
+          core.setOutput('version', version)
+          core.setOutput('digest', hash)
+          core.setOutput('predicate', JSON.stringify(predicate))
+          core.info(`Verified ${files.size} published files against ${commit}`)
+
+    - name: Attest the verified published manifest
+      if: steps.verify.outputs.needs-attestation == 'true'
+      id: attest
+      uses: actions/attest@f057fd524d485ac48d9b534c235aad15b5bb303f # v3
+      with:
+        subject-name: pkg:jsr/@defai-digital/ax-code-sdk@${{ steps.verify.outputs.version }}
+        subject-digest: sha256:${{ steps.verify.outputs.digest }}
+        predicate-type: https://slsa.dev/provenance/v1
+        predicate: ${{ steps.verify.outputs.predicate }}
+
+    - name: Attach and verify JSR provenance
+      if: steps.verify.outputs.needs-attestation == 'true'
+      uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+      env:
+        BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        SDK_VERSION: ${{ steps.verify.outputs.version }}
+        MANIFEST_DIGEST: ${{ steps.verify.outputs.digest }}
+      with:
+        script: |
+          const fs = require('node:fs/promises')
+          const { pathToFileURL } = require('node:url')
+          const recovery = await import(pathToFileURL(`${process.cwd()}/.github/scripts/jsr-provenance-recovery.mjs`))
+          const raw = await new Response(await fs.readFile(process.env.BUNDLE_PATH)).json()
+          const bundle = await recovery.toJsrBundle(raw, process.env.SDK_VERSION, process.env.MANIFEST_DIGEST)
+          const audience = JSON.stringify({ permissions: [{ permission: 'package/publish', scope: 'defai-digital', package: 'ax-code-sdk' }] })
+          const token = await core.getIDToken(audience)
+          core.setSecret(token)
+          const endpoint = `https://jsr.io/api/scopes/defai-digital/packages/ax-code-sdk/versions/${process.env.SDK_VERSION}`
+          const response = await fetch(`${endpoint}/provenance`, {
+            method: 'POST',
+            headers: { authorization: `githuboidc ${token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ bundle }),
+            signal: AbortSignal.timeout(30000)
+          })
+          if (response.status !== 204) throw new Error(`JSR provenance upload failed: ${response.status}`)
+          const check = await fetch(endpoint, { headers: { authorization: `githuboidc ${token}` }, signal: AbortSignal.timeout(30000) })
+          if (!check.ok) throw new Error(`JSR provenance verification failed: ${check.status}`)
+          const metadata = await check.json()
+          const expected = String(bundle.verificationMaterial.tlogEntries[0].logIndex)
+          if (String(metadata.rekorLogId) !== expected) throw new Error('JSR has not confirmed the uploaded provenance')
+          core.info(`Verified JSR provenance at Rekor log index ${expected}`)

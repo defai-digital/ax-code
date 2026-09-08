@@ -13,6 +13,20 @@ export function versionFromTag(tag) {
   return tag.slice(5)
 }
 
+export function needsAttestation(metadata, version, now = Date.now()) {
+  assert.equal(metadata?.scope, "defai-digital")
+  assert.equal(metadata.package, "ax-code-sdk")
+  assert.equal(metadata.version, version)
+  assert.equal(metadata.yanked, false)
+  if (typeof metadata.rekorLogId === "string" && /^\d+$/.test(metadata.rekorLogId)) return false
+  assert.equal(metadata.rekorLogId, null, "Invalid provenance metadata")
+  const age = now - Date.parse(metadata.createdAt)
+  // JSR only updates provenance within two minutes of publication. Reserve
+  // thirty seconds for signing and attachment, then fail instead of a no-op.
+  assert(Number.isFinite(age) && age >= -5000 && age < 90000, "JSR provenance attachment window expired")
+  return true
+}
+
 export async function expectedFiles(root, tag) {
   const sdk = path.join(root, "packages/sdk/js")
   const source = await readJson(path.join(sdk, "package.json"))

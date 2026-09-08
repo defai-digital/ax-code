@@ -7,6 +7,7 @@ import { rootCertificates } from "node:tls"
 import {
   digest,
   expectedFiles,
+  needsAttestation,
   toJsrBundle,
   verifyManifest,
   versionFromTag,
@@ -18,6 +19,29 @@ const metadata = () => ({ manifest: { "/dist/index.js": { size: bytes.length, ch
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value))
 
 describe("SDK provenance recovery", () => {
+  test("requires confirmed provenance or a fresh, matching publication", () => {
+    const now = Date.parse("2026-09-08T23:00:00Z")
+    const info = {
+      scope: "defai-digital",
+      package: "ax-code-sdk",
+      version: "2.5.11",
+      yanked: false,
+      rekorLogId: null,
+      createdAt: new Date(now - 1000).toISOString(),
+    }
+    expect(needsAttestation(info, "2.5.11", now)).toBe(true)
+    expect(needsAttestation({ ...info, rekorLogId: "123", createdAt: new Date(0).toISOString() }, "2.5.11", now)).toBe(
+      false,
+    )
+    expect(() => needsAttestation({ ...info, createdAt: new Date(now - 90000).toISOString() }, "2.5.11", now)).toThrow(
+      "window expired",
+    )
+    expect(() => needsAttestation({ ...info, createdAt: "invalid" }, "2.5.11", now)).toThrow("window expired")
+    expect(() => needsAttestation({ ...info, rekorLogId: undefined }, "2.5.11", now)).toThrow()
+    expect(() => needsAttestation({ ...info, yanked: true }, "2.5.11", now)).toThrow()
+    expect(() => needsAttestation(info, "2.5.10", now)).toThrow()
+  })
+
   test("reconstructs registry imports without rewriting ordinary string values", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "ax-jsr-recovery-"))
     try {
