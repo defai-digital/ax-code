@@ -1231,6 +1231,45 @@ describe("detectSecurity", () => {
     })
   })
 
+  test("does not flag a system temp root with fixed path segments", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const source = path.join(tmp.path, "temp-files.ts")
+    await fs.writeFile(
+      source,
+      `import { tmpdir } from "node:os"\nimport path from "node:path"\nconst file = path.join(tmpdir(), "ax-code", "prompt.txt")\n`,
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const report = await DebugEngine.detectSecurity(Instance.project.id, {
+          patterns: ["path_traversal"],
+          files: [source],
+        })
+        expect(report.findings).toHaveLength(0)
+      },
+    })
+  })
+
+  test("flags a variable segment below a system temp root", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const source = path.join(tmp.path, "unsafe-temp-files.ts")
+    await fs.writeFile(
+      source,
+      `import { tmpdir } from "node:os"\nimport path from "node:path"\nconst file = path.join(tmpdir(), userProvidedName)\n`,
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const report = await DebugEngine.detectSecurity(Instance.project.id, {
+          patterns: ["path_traversal"],
+          files: [source],
+        })
+        expect(report.findings).toHaveLength(1)
+        expect(report.findings[0]?.pattern).toBe("path_traversal")
+      },
+    })
+  })
+
   test("does not flag trusted build scripts as path traversal", async () => {
     await using tmp = await tmpdir({ git: true })
     const scriptDir = path.join(tmp.path, "script")

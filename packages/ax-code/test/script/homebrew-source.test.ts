@@ -124,8 +124,8 @@ describe("distribution support guardrails", () => {
     expect(text).toContain('RELEASE_READ_TOKEN="${GH_TOKEN:-}"')
     expect(text).toContain('LEGACY_TAP_AUTH_TOKEN="${TAP_TOKEN:-}"')
     expect(text).toContain('NAMED_TAP_AUTH_TOKEN="${HOMEBREW_TAP_TOKEN:-}"')
-    expect(text).toContain('add_tap_token "TAP_TOKEN" "${LEGACY_TAP_AUTH_TOKEN}"')
     expect(text).toContain('add_tap_token "HOMEBREW_TAP_TOKEN" "${NAMED_TAP_AUTH_TOKEN}"')
+    expect(text).toContain('add_tap_token "TAP_TOKEN" "${LEGACY_TAP_AUTH_TOKEN}"')
     expect(text).toContain("HOMEBREW_TAP_TOKEN is not configured; stable releases must update the Homebrew tap")
     expect(text).toContain('add_tap_token "GH_TOKEN" "${GH_TOKEN:-}"')
     expect(text).toContain('export GH_TOKEN="${RELEASE_READ_TOKEN}"')
@@ -134,6 +134,7 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("All configured Homebrew tap tokens failed")
     expect(text).toContain("git pull --rebase origin main")
     expect(text).toContain("git push origin HEAD:main")
+    expect(text.indexOf('add_tap_token "HOMEBREW_TAP_TOKEN"')).toBeLessThan(text.indexOf('add_tap_token "TAP_TOKEN"'))
     expect(text.indexOf('export GH_TOKEN="${RELEASE_READ_TOKEN}"')).toBeLessThan(
       text.indexOf('DARWIN_ARM64_SHA="$(download_asset "${DARWIN_ARM64_ASSET}")"'),
     )

@@ -34,7 +34,7 @@ export function assertCliCommandSize(cmd: string[], providerID: string, platform
 
 export async function materializeCliPrompt(text: string) {
   const directory = await mkdtemp(path.join(tmpdir(), "ax-code-cli-prompt-"))
-  const file = path.join(directory, "prompt.txt")
+  const file = `${directory}${path.sep}prompt.txt`
   const cleanup = async () => {
     await rm(directory, { recursive: true, force: true }).catch((error) => {
       log.warn("failed to remove CLI prompt file", { error: toErrorMessage(error) })

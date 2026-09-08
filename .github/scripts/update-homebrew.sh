@@ -82,11 +82,11 @@ if [ ! -f "${MINISIGN_PUBLIC_KEY}" ]; then
   exit 1
 fi
 
-# Prefer the legacy TAP_TOKEN first so existing tap-write credentials keep
-# working even if the newer HOMEBREW_TAP_TOKEN secret is present but scoped
-# incorrectly.
-add_tap_token "TAP_TOKEN" "${LEGACY_TAP_AUTH_TOKEN}"
+# Prefer the explicitly scoped token. The legacy TAP_TOKEN remains a fallback
+# for older release configurations, but should not generate avoidable 403
+# retries when both secrets are configured.
 add_tap_token "HOMEBREW_TAP_TOKEN" "${NAMED_TAP_AUTH_TOKEN}"
+add_tap_token "TAP_TOKEN" "${LEGACY_TAP_AUTH_TOKEN}"
 
 if [ "${#TAP_AUTH_TOKENS[@]}" -eq 0 ]; then
   if [ "${GITHUB_ACTIONS:-}" = "true" ]; then

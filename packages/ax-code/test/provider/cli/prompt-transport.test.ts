@@ -234,6 +234,18 @@ process.stdout.write(crypto.createHash("sha256").update(input).digest("hex") + "
   })
 })
 
+test("materializes prompt files under a private temporary directory with a fixed filename", async () => {
+  const resource = await transport.materializeCliPrompt("prompt body")
+  try {
+    expect(path.basename(resource.file)).toBe("prompt.txt")
+    expect(readFileSync(resource.file, "utf8")).toBe("prompt body")
+    if (process.platform !== "win32") expect(statSync(path.dirname(resource.file)).mode & 0o777).toBe(0o700)
+  } finally {
+    await resource.cleanup()
+  }
+  expect(existsSync(path.dirname(resource.file))).toBe(false)
+})
+
 test("Windows argv guard accounts for shim escaping and returns no prompt content", () => {
   const secretPrompt = 'private "prompt" & value '.repeat(200)
   const cmd = ["C:\\Program Files\\Kimi\\kimi.cmd", "-p", secretPrompt]

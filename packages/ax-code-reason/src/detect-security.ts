@@ -77,7 +77,10 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
     const nearby = lines.slice(Math.max(0, i - 5), Math.min(lines.length, i + 6)).join("\n")
     if (containmentRe.test(nearby)) continue
 
-    // Skip if all arguments are string literals (no user input)
+    // Skip paths made only from string literals, or a system temporary root
+    // followed exclusively by string literals. The latter is a common safe
+    // pattern for private scratch files; keep flagging any caller-controlled
+    // segment after tmpdir().
     let argsStr = lines[i].slice(lines[i].indexOf("path."))
     if (!argsStr.includes(")")) {
       let j = i + 1
@@ -86,7 +89,7 @@ function detectPathTraversal(lines: string[], file: string, max: number): DebugE
         j++
       }
     }
-    if (isPathCallWithOnlyStringLiterals(argsStr)) continue
+    if (isPathCallWithOnlyStringLiterals(argsStr) || isPathCallWithTrustedTemporaryRoot(argsStr)) continue
 
     findings.push({
       file,
@@ -124,6 +127,36 @@ function isPathCallWithOnlyStringLiterals(source: string): boolean {
     }
     if (source[index] === ")") return true
     return false
+  }
+
+  return false
+}
+
+function isPathCallWithTrustedTemporaryRoot(source: string): boolean {
+  const open = source.indexOf("(")
+  if (open < 0) return false
+  let index = skipWhitespace(source, open + 1)
+  const root = /^(?:os\.)?tmpdir\(\)/.exec(source.slice(index))
+  if (!root) return false
+  index += root[0].length
+  index = skipWhitespace(source, index)
+  if (source[index] !== ",") return false
+  index += 1
+
+  let sawSegment = false
+  while (index < source.length) {
+    index = skipWhitespace(source, index)
+    const quote = source[index]
+    if (quote !== '"' && quote !== "'" && quote !== "`") return false
+    const parsed = readStringLiteral(source, index, quote)
+    if (!parsed.ok || (quote === "`" && parsed.containsInterpolation)) return false
+    sawSegment = true
+    index = skipWhitespace(source, parsed.next)
+    if (source[index] === ",") {
+      index += 1
+      continue
+    }
+    return source[index] === ")" && sawSegment
   }
 
   return false
