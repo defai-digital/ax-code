@@ -4,6 +4,45 @@ import { ProviderError } from "../../src/provider/error"
 import { ProviderID } from "../../src/provider/schema"
 
 describe("provider error decoding", () => {
+  test("AX Trust upstream permission errors retain safe request context and actionable guidance", () => {
+    const parsed = ProviderError.parseAPICallError({
+      providerID: ProviderID.make("ax-trust"),
+      error: new APICallError({
+        message: "upstream denied the request",
+        url: "https://gateway.example.com/v1/chat/completions",
+        requestBodyValues: { model: "openai/gpt-oss-20b" },
+        statusCode: 403,
+        responseHeaders: { "X-Request-Id": "req_425" },
+        responseBody: JSON.stringify({
+          error: { type: "api_error", message: "upstream denied the request", code: "upstream_permission_error" },
+        }),
+        isRetryable: true,
+      }),
+    })
+    expect(parsed).toMatchObject({
+      type: "api_error",
+      message: expect.stringContaining("upstream model access"),
+      statusCode: 403,
+      isRetryable: false,
+      metadata: { errorCode: "upstream_permission_error", requestID: "req_425" },
+    })
+    expect(parsed.message).toContain("HTTP 403")
+    expect(parsed.message).toContain("req_425")
+  })
+
+  test("upstream permission stream errors are terminal and explain access requirements", () => {
+    expect(
+      ProviderError.parseStreamError({
+        type: "error",
+        error: { code: "upstream_permission_error", message: "upstream denied the request" },
+      }),
+    ).toMatchObject({
+      type: "api_error",
+      isRetryable: false,
+      message: expect.stringContaining("upstream model access"),
+    })
+  })
+
   test("decodes JSON records from strings and objects", () => {
     expect(ProviderError.parseJsonRecord(JSON.stringify({ type: "error" }))).toEqual({ type: "error" })
     expect(ProviderError.parseJsonRecord({ type: "error" })).toEqual({ type: "error" })

@@ -66,11 +66,12 @@ type PromptLoopErrorDeps = {
 
 function providerFallbackUnavailableMessage(input: {
   providerID: MessageV2.User["model"]["providerID"]
+  modelID: MessageV2.User["model"]["modelID"]
   errorMessage: string | undefined
 }) {
   const reason = input.errorMessage?.trim() || "unknown error"
   const punctuation = /[.!?]$/.test(reason) ? "" : "."
-  return `Provider ${input.providerID} failed: ${reason}${punctuation} No fallback provider available.`
+  return `Provider ${input.providerID} (model ${input.modelID}) failed: ${reason}${punctuation} No fallback provider available.`
 }
 
 function nonRetryableProviderError(error: unknown) {
@@ -277,6 +278,7 @@ export async function handlePromptLoopError(
       if (fallbackLookup.stopWithoutFallback) {
         const message = providerFallbackUnavailableMessage({
           providerID: input.currentModel.providerID,
+          modelID: input.currentModel.modelID,
           errorMessage: fallbackLookup.errorMessage,
         })
         ;(deps.warn ?? log.warn)("no fallback provider available", {

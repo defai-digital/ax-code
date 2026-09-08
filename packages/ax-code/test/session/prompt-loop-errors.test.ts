@@ -6,6 +6,7 @@ import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../s
 import { isLoopbackBaseURL } from "../../src/session/prompt-provider-fallback"
 import { SessionID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
+import { APICallError } from "ai"
 
 const primaryModel = {
   providerID: "primary" as ProviderID,
@@ -18,6 +19,47 @@ const fallbackModel = {
 }
 
 describe("prompt loop error transitions", () => {
+  test.each(["grok-4.6", "kimi-k3", "openai/gpt-oss-20b"])(
+    "upstream permission denial identifies model %s and request ID",
+    async (modelID) => {
+      const currentModel = { providerID: ProviderID.make("ax-trust"), modelID: ModelID.make(modelID) }
+      const error = MessageV2.fromError(
+        new APICallError({
+          message: "upstream denied the request",
+          url: "https://gateway.example.com/v1/chat/completions",
+          requestBodyValues: { model: modelID },
+          statusCode: 403,
+          responseHeaders: { "x-request-id": "req_425" },
+          responseBody: JSON.stringify({
+            error: { code: "upstream_permission_error", message: "upstream denied the request" },
+          }),
+          isRetryable: false,
+        }),
+        { providerID: currentModel.providerID },
+      )
+      const published: string[] = []
+      const result = await handlePromptLoopError(
+        { sessionID: SessionID.descending(), currentModel, error, consecutiveErrors: 1, step: 1 },
+        {
+          async isLocal() {
+            return false
+          },
+          async findFallback() {
+            return undefined
+          },
+          warn() {},
+          publishError(input) {
+            published.push(input.message)
+          },
+        },
+      )
+      expect(result.action).toBe("stop")
+      expect(published).toHaveLength(1)
+      expect(published[0]).toContain(modelID)
+      expect(published[0]).toContain("req_425")
+      expect(published[0]).toContain("upstream model access")
+    },
+  )
   test("switches to fallback model for repeated retryable provider errors without publishing a terminal error", async () => {
     const sessionID = SessionID.descending()
     const warnings: { message: string; fields: Record<string, unknown> }[] = []
@@ -231,7 +273,8 @@ describe("prompt loop error transitions", () => {
     expect(published).toEqual([
       {
         sessionID,
-        message: "Provider primary failed: Your token-plan quota has been exhausted. No fallback provider available.",
+        message:
+          "Provider primary (model primary-model) failed: Your token-plan quota has been exhausted. No fallback provider available.",
       },
     ])
   })
