@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "vitest": "^4.1.9"
+    "vitest": "catalog:"
   },
   "exports": {
     ".": "./src/index.ts"

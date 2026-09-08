@@ -47,7 +47,7 @@
     "prettier": "3.6.2",
     "tsx": "^4.22.4",
     "turbo": "2.9.14",
-    "vitest": "4.1.9"
+    "vitest": "catalog:"
   },
   "dependencies": {
     "@ax-code/plugin": "workspace:*",
@@ -90,7 +90,7 @@
       "undici@>=7.0.0 <7.29.0": "7.29.0",
       "tar@<7.5.21": "7.5.21",
       "@hono/node-server@<2.0.11": "2.0.11",
-      "hono@>=4.0.0 <4.12.34": "4.12.34",
+      "hono@>=4.0.0 <4.13.5": "4.13.5",
       "postcss@<8.5.23": "8.5.23",
       "fast-xml-parser@<5.7.0": "5.7.0",
       "protobufjs@<7.6.5": "7.6.5",
@@ -110,7 +110,7 @@
       "markdown-it@<14.2.0": "14.2.0",
       "@opentelemetry/core@<2.8.0": "2.8.0",
       "form-data@<4.0.6": "4.0.6",
-      "js-yaml@<4.3.1": "4.3.1",
+      "js-yaml@<4.3.2": "4.3.2",
       "@babel/core@<7.29.6": "7.29.6",
       "linkify-it@<5.0.2": "5.0.2",
       "shell-quote@<1.9.0": "1.9.0",

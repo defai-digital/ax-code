@@ -15,7 +15,7 @@
     "esbuild": "^0.28.1",
     "eslint": "^9.25.1",
     "typescript": "catalog:",
-    "vitest": "4.1.9"
+    "vitest": "catalog:"
   },
   "categories": [
     "AI",

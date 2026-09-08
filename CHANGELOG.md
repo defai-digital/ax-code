@@ -16,10 +16,11 @@ changes belong to AX Coder.
 - Restrict Markdown frontmatter to data-only parsing and reject executable language tags.
 - Isolate cached skills by source and manifest revision, limit streamed downloads, and prevent remote paths or duplicate destinations from escaping skill boundaries.
 - Download skill files containing literal percent signs or fragment characters from the correct URL.
+- Update Hono, js-yaml, and Vitest to address dependency security advisories, and require dependency scanning before CLI or SDK publication.
 
 ### Changed
 
-- Honor skill invocation policies consistently across model discovery, direct loading, and explicit user commands; expose the optional policy fields through SDK 2.5.9.
+- Honor skill invocation policies consistently across model discovery, direct loading, and explicit user commands; expose the optional policy fields through SDK 2.5.10.
 - Remove rotating footer tips from the terminal prompt.
 - Improve release notes with clearer descriptions of user-facing changes.
 
