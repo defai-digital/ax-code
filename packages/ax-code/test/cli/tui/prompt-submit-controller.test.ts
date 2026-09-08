@@ -95,6 +95,23 @@ function setupNewSession() {
   return { ...fixture, create }
 }
 
+test.each([15_300, 45_150])(
+  "session creation waits %d ms through SQLite contention without a premature failure",
+  async (delay) => {
+    vi.useFakeTimers()
+    const { controller, host, create, requests } = setupNewSession()
+    create.mockImplementation(
+      ({ id }) => new Promise((resolve) => setTimeout(() => resolve({ data: session(id) }), delay)),
+    )
+    const submitted = controller.submit()
+    await vi.advanceTimersByTimeAsync(delay)
+    await submitted
+    expect(host.toast.show).not.toHaveBeenCalled()
+    expect(create).toHaveBeenCalledTimes(1)
+    expect(requests).toHaveLength(1)
+  },
+)
+
 describe.each(WorkMode.ALL)("prompt submission in %s work mode", (workMode) => {
   test.each(["git status", "  printf 'first\\nsecond\\n' | head -n 1\n  pwd  ", "  /usr/bin/printf '%s' hello  "])(
     "submits shell input unchanged: %s",
