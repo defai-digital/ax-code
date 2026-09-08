@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { barChart, chip, flow, gauge, stat, stepSummary } from "../../src/quality/dre-graph-widgets"
+import { barChart, chip, dailyChart, flow, gauge, stat, stepSummary } from "../../src/quality/dre-graph-widgets"
 
 describe("quality.dre-graph-widgets", () => {
   test("escapes chip and stat text", () => {
@@ -41,6 +41,18 @@ describe("quality.dre-graph-widgets", () => {
     expect(html).toContain(`>HIGH</text>`)
   })
 
+  test("escapes a non-enum gauge level so it can never inject SVG content", () => {
+    // Regression for the latent XSS finding: gauge's `<text>` interpolates
+    // a level string. The helper must self-enforce escape regardless of
+    // caller. The actual output uppercases the input via toUpperCase()
+    // before esc(); the brackets are entity-encoded but their case is
+    // preserved.
+    const html = gauge({ score: 50, max: 100, level: "<script>foo</script>" })
+    expect(html).toContain("&lt;SCRIPT&gt;FOO&lt;/SCRIPT&gt;")
+    // The literal `<script>` tag must not survive.
+    expect(html).not.toContain("<script>foo</script>")
+  })
+
   test("renders bar chart data and escapes labels", () => {
     expect(barChart({ items: [] })).toBe(`<p class="empty">No data.</p>`)
 
@@ -54,5 +66,24 @@ describe("quality.dre-graph-widgets", () => {
     expect(html).toContain("unsafe&lt;script&gt;")
     expect(html).toContain("5%&lt;")
     expect(html).toContain("detail&amp;")
+  })
+})
+
+describe("quality.dre-graph-widgets.dailyChart", () => {
+  test("slices the MM-DD suffix when day is YYYY-MM-DD", () => {
+    const html = dailyChart({ days: [{ day: "2026-09-08", sessions: 1, tokens: 10 }] })
+    expect(html).toContain(`>09-08</span>`)
+  })
+
+  test("renders the full day string when the format is not YYYY-MM-DD", () => {
+    // Defensive against a future dayKey change: never silently truncate.
+    const html = dailyChart({ days: [{ day: "Sep 8", sessions: 1, tokens: 10 }] })
+    expect(html).toContain(`>Sep 8</span>`)
+  })
+
+  test("escapes the day label", () => {
+    const html = dailyChart({ days: [{ day: "<2026>&", sessions: 1, tokens: 10 }] })
+    expect(html).toContain("&lt;2026&gt;&amp;")
+    expect(html).not.toContain("<2026>&")
   })
 })

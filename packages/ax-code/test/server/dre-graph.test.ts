@@ -351,4 +351,26 @@ describe("dre graph quality readiness", () => {
       },
     })
   })
+
+  test("rejects a directory query beyond the zod length bound", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "oversize-dir" })
+        const app = Server.Default()
+        // 1025 'a' characters: one over the 1024 cap added by D3 to the
+        // DRE_GRAPH_QUALITY_QUERY zod schema. The route's validator should
+        // reject it before any handler runs.
+        const huge = "a".repeat(1025)
+        try {
+          const r = await app.request(`/dre-graph?directory=${huge}`)
+          expect(r.status).toBeGreaterThanOrEqual(400)
+          expect(r.status).toBeLessThan(500)
+        } finally {
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
 })

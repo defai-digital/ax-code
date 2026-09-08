@@ -37,6 +37,14 @@ describe("quality.dre-graph-assets", () => {
     expect(html).toContain(`if (wait && at >= waitAt) return`)
   })
 
+  test("guards SSE onmessage against malformed frames", () => {
+    // A malformed JSON frame must not bubble an exception out of the
+    // handler — earlier the bare JSON.parse would; the surrounding poll
+    // would keep running while live status silently got stuck.
+    const html = live({ sessionID: "session-1", directory: "src" })
+    expect(html).toContain(`try { data = JSON.parse(event.data) } catch { return }`)
+  })
+
   test("renders execution summary loader with script-safe session id", () => {
     const html = executionSummaryScript("<session>&\u2028")
 

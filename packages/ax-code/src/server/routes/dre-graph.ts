@@ -35,6 +35,12 @@ const log = Log.create({ service: "server.dre-graph" })
 
 const DRE_GRAPH_QUALITY_QUERY = z.object({
   quality: QueryBoolean.optional().default(false),
+  // Raw `c.req.url` query derivation is dangerous even with encodeURIComponent
+  // and esc() guards today — bind `directory` here (the only value reused as a
+  // fetch URL) so a future refactor that drops one escape layer cannot turn
+  // it into an injection/traversal vector. The `search` parameter remains raw
+  // because it's already rounded through `URLSearchParams` and esc().
+  directory: z.string().max(1024).optional(),
 })
 
 function emptyUsage(days?: number): SessionUsage.Info {

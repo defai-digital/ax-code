@@ -84,7 +84,7 @@ export function gauge(input: { score: number; max: number; level: string }) {
     `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ * 0.25}" stroke-dashoffset="${offset}" transform="rotate(135 50 50)" stroke-linecap="round" style="filter: drop-shadow(0 0 8px ${color}30)"/>`,
     `<text x="50" y="44" text-anchor="middle" fill="${color}" font-size="24" font-weight="700">${input.score}</text>`,
     `<text x="50" y="58" text-anchor="middle" fill="#a1a1aa" font-size="9">/ ${input.max}</text>`,
-    `<text x="50" y="76" text-anchor="middle" fill="${color}" font-size="7.5" font-weight="700" letter-spacing="0.12em">${input.level.toUpperCase()}</text>`,
+    `<text x="50" y="76" text-anchor="middle" fill="${color}" font-size="7.5" font-weight="700" letter-spacing="0.12em">${esc(input.level.toUpperCase())}</text>`,
     `</svg>`,
   ].join("")
 }
@@ -132,7 +132,10 @@ export function dailyChart(input: { days: { day: string; sessions: number; token
       return [
         `<div class="daily-col" title="${esc(`${d.day} — ${num(d.tokens)} tokens · ${sessions}`)}">`,
         `<div class="daily-bar-track"><div class="daily-bar" style="height:${pct.toFixed(1)}%"></div></div>`,
-        `<span class="daily-label">${esc(d.day.slice(5))}</span>`,
+        // Use only the MM-DD suffix when the day string is a YYYY-MM-DD (10
+        // chars); fall back to the full string so a format change elsewhere
+        // never produces a silently-truncated label.
+        `<span class="daily-label">${esc(d.day.length === 10 ? d.day.slice(5) : d.day)}</span>`,
         `</div>`,
       ].join("")
     }),
