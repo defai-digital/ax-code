@@ -23,6 +23,7 @@ describe("Unix node launcher", () => {
     const libEntry = path.join(installRoot, "lib", "index-node-tui.js")
     const shimDir = path.join(root, ".rbenv", "shims")
     const outputPath = path.join(root, "node-arguments.txt")
+    const cacheDir = path.join(root, "cache")
 
     await Promise.all([
       mkdir(binDir, { recursive: true }),
@@ -39,7 +40,14 @@ describe("Unix node launcher", () => {
     await chmod(fakeNode, 0o755)
     await symlink(launcher, path.join(shimDir, "ax-code"))
 
-    await execFileAsync(path.join(shimDir, "ax-code"), ["--version"])
+    await execFileAsync(path.join(shimDir, "ax-code"), ["--version"], {
+      env: { ...process.env, XDG_CACHE_HOME: cacheDir, AX_CODE_SYSTEM_NODE: "" },
+    })
+
+    // Branding must never overwrite the user's real cached runtime.
+    expect(await readFile(path.join(cacheDir, "ax-code/libexec/runtime/bin/AX-Code"), "utf8")).toBe(
+      await readFile(fakeNode, "utf8"),
+    )
 
     const argumentsText = await readFile(outputPath, "utf8")
     const entryArgument = argumentsText.split("\n").find((argument) => argument.endsWith("/lib/index-node-tui.js"))
