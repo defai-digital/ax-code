@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
+import { windowsNodeLauncherScript } from "../../../script/node-launcher"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
 const REPO_ROOT = path.resolve(PACKAGE_ROOT, "../..")
@@ -138,7 +139,8 @@ describe("AX Code TUI stability guardrails", () => {
     expect(build).toContain('spawnSync(distributionNode, ["-e", "require(process.argv[1])", ptyDir]')
     expect(build).toContain("bundledNode ? bundledNodeRuntime?.version")
     expect(build).toContain("node-pty build failed")
-    expect(build).toContain("WINDOWS_UTF8_WARNING")
+    expect(build).toContain("windowsNodeLauncherScript()")
+    expect(windowsNodeLauncherScript()).toContain("switched terminal code page")
   })
 
   test("keeps node-pty Windows fallback compatible with Node 26 release runners", async () => {
