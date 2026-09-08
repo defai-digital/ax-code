@@ -104,6 +104,14 @@ export namespace MCP {
     return (url: string | URL, init?: RequestInit) => Ssrf.pinnedFetch(url.toString(), { ...init, label })
   }
 
+  function assertAuthorizationOrigin(mcp: Extract<Config.Mcp, { type: "remote" }>, url: URL) {
+    if (!mcp.allowLoopback) return
+    const origin = Ssrf.loopbackOrigin(mcp.url, "mcp-auth")
+    if (Ssrf.loopbackOrigin(url.toString(), "mcp-auth") !== origin) {
+      throw new Error(`mcp-auth: loopback authorization must stay on the configured origin: ${origin}`)
+    }
+  }
+
   function remoteRequestInit(headers?: Record<string, string>): RequestInit {
     return { headers: mergeRemoteMcpHeaders(headers, mcpClientUserAgent(Installation.VERSION)) }
   }
@@ -712,6 +720,7 @@ export namespace MCP {
             },
             {
               onRedirect: async (url) => {
+                assertAuthorizationOrigin(mcp, url)
                 log.info("oauth redirect requested", { key, url: url.toString() })
                 // Store the URL - actual browser opening is handled by startAuth
               },
@@ -1495,6 +1504,7 @@ export namespace MCP {
         },
         {
           onRedirect: async (url) => {
+            assertAuthorizationOrigin(mcpConfig, url)
             capturedUrl = url
           },
         },
