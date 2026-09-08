@@ -269,6 +269,25 @@ describe("session.retry.retryable", () => {
     // While open, further network errors fail fast.
     expect(SessionRetry.retryable(mk())).toBeUndefined()
   })
+
+  test("recordNetworkSuccess clears the streak so intermittent failures never open the circuit", () => {
+    const mk = () =>
+      new MessageV2.APIError({
+        message: "fetch failed",
+        isRetryable: true,
+      }).toObject() as MessageV2.APIError
+
+    expect(SessionRetry.retryable(mk())).toBe("fetch failed")
+    expect(SessionRetry.retryable(mk())).toBe("fetch failed")
+    // A successful step between failures resets the streak.
+    SessionRetry.recordNetworkSuccess()
+    expect(SessionRetry.retryable(mk())).toBe("fetch failed")
+    expect(SessionRetry.retryable(mk())).toBe("fetch failed")
+    expect(SessionRetry.networkCircuitOpen()).toBe(false)
+    // Only three consecutive failures without an intervening success open it.
+    expect(SessionRetry.retryable(mk())).toBeUndefined()
+    expect(SessionRetry.networkCircuitOpen()).toBe(true)
+  })
 })
 
 describe("session.message-v2.fromError", () => {

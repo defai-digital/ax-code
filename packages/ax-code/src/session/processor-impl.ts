@@ -1359,7 +1359,11 @@ export namespace SessionProcessor {
                   }
                   // Retry limits apply to consecutive provider failures. A
                   // successful finish-step restores the full budget for the
-                  // next step in a long tool-using turn.
+                  // next step in a long tool-using turn, and clears the
+                  // network failure streak so intermittent failures never
+                  // accumulate across successes toward a spurious circuit
+                  // open (STAB-14).
+                  SessionRetry.recordNetworkSuccess(input.model.providerID)
                   attempt = 0
                   break
 
