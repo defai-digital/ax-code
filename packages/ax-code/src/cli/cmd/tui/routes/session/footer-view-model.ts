@@ -1,6 +1,6 @@
 import { formatDuration } from "@/util/format"
 import { Locale } from "@/util/locale"
-import { compactionGaugeLimit, type CompactionBudget } from "@/session/compaction-budget"
+import type { CompactionBudget } from "@/session/compaction-budget"
 import { parseStepTokenWindows, stepDecodeTotals } from "./step-windows"
 
 export type FooterSessionStatus =
@@ -147,24 +147,25 @@ export function footerTokenChip(input: {
 export type FooterContextGaugeTone = "muted" | "warning" | "error"
 export type FooterContextGauge = { ratio: number; percent: number; tone: FooterContextGaugeTone }
 
-// Context-window usage for the footer gauge (ADR-031 R8). Undefined when
-// no usable limit is known or no tokens have accumulated — the caller
-// hides the gauge entirely rather than guessing.
-//
-// Denominator is the compaction budget (SessionCompaction's usable input
-// tokens) when available, so 100% means "the next turn triggers
-// auto-compaction" and the warning/error tones actually fire. With
-// auto-compaction disabled the raw input cap is used instead. Only when
-// the budget can't be computed (no model limits) do we fall back to the
-// advertised context limit.
+// Context-window usage for the footer gauge (ADR-086). The gauge renders
+// only for sessions that disabled auto-compaction: with auto-compaction on
+// (the default) the runtime manages the window and the percentage was
+// non-actionable noise with a dual meaning — 100% meant "the next turn
+// triggers compaction", not truncation, and the compaction toast already
+// explains context loss after the fact. Users who disable auto-compaction
+// manage the window by hand, so they keep the gauge; their denominator is
+// the raw input cap (budget.cap, falling back to the advertised context
+// limit). Undefined when no usable limit is known or no tokens have
+// accumulated — the caller hides the gauge entirely rather than guessing.
 export function footerContextGauge(input: {
   totalTokens?: number
   contextLimit?: number
   budget?: CompactionBudget
   compactionAuto?: boolean
 }): FooterContextGauge | undefined {
+  if (input.compactionAuto !== false) return undefined
   const total = input.totalTokens ?? 0
-  const limit = compactionGaugeLimit({ budget: input.budget, auto: input.compactionAuto }) ?? input.contextLimit ?? 0
+  const limit = input.budget?.cap ?? input.contextLimit ?? 0
   if (total <= 0 || limit <= 0) return undefined
   const ratio = Math.min(1, total / limit)
   const percent = Math.round(ratio * 100)
@@ -214,7 +215,7 @@ export function footerGoalChip(input: {
   const tokens =
     goal.tokenBudget === undefined || goal.tokensUsed === undefined
       ? ""
-      : ` · ${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget)}${input.compact ? "" : " tok"}`
+      : ` - ${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget)}${input.compact ? "" : " tok"}`
   // Don't hint "/goal resume" once the token budget is exhausted — resuming
   // such a goal is refused server-side, so the hint would point at an action
   // that errors. The goal can still be cleared or replaced.
@@ -223,7 +224,7 @@ export function footerGoalChip(input: {
     !input.compact && (goal.status === "paused" || goal.status === "blocked") && !budgetExhausted
       ? "/goal resume"
       : undefined
-  const resume = resumeHint ? ` · ${resumeHint}` : ""
+  const resume = resumeHint ? ` - ${resumeHint}` : ""
   const tone: FooterSessionStatusTone =
     goal.status === "complete" ? "success" : goal.status === "active" ? "working" : "warning"
 
@@ -306,7 +307,7 @@ export function footerSessionStatusView(input: {
   const idleMs = status.lastActivityAt !== undefined ? Math.max(0, now - status.lastActivityAt) : 0
   const stale = idleMs >= staleAfterMs
   const inactive = stale && idleMs > 0 ? formatDuration(Math.max(1, Math.floor(idleMs / MS_PER_SECOND))) : undefined
-  const text = elapsed ? `${label} · ${elapsed}` : label
+  const text = elapsed ? `${label} - ${elapsed}` : label
 
   if (!inactive) return { label: text, stale, tone: stale ? "warning" : "working" }
 
@@ -320,8 +321,8 @@ export function footerSessionStatusView(input: {
       : status.waitState === "llm"
         ? "Still waiting for model"
         : "Still working"
-  const waiting = elapsed ? `${waitingText} · ${elapsed}` : waitingText
-  const labelWithHint = staleHint ? `${waiting} · ${staleHint}` : waiting
+  const waiting = elapsed ? `${waitingText} - ${elapsed}` : waitingText
+  const labelWithHint = staleHint ? `${waiting} - ${staleHint}` : waiting
 
   return {
     label: labelWithHint,

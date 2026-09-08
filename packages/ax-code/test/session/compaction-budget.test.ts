@@ -1,10 +1,5 @@
 import { describe, expect, test } from "vitest"
-import {
-  MIN_USABLE_TOKENS,
-  calculateCompactionBudget,
-  compactionGaugeLimit,
-  effectiveTokenTotal,
-} from "@/session/compaction-budget"
+import { calculateCompactionBudget, effectiveTokenTotal } from "@/session/compaction-budget"
 
 describe("calculateCompactionBudget", () => {
   test("context-limited model reserves 10% of context", () => {
@@ -62,27 +57,5 @@ describe("effectiveTokenTotal", () => {
   test("falls back to the component sum when total is missing or under-reported", () => {
     expect(effectiveTokenTotal(base)).toBe(21)
     expect(effectiveTokenTotal({ ...base, total: 10 })).toBe(21)
-  })
-})
-
-describe("compactionGaugeLimit", () => {
-  const budget = { cap: 200_000, reserved: 20_000, usable: 180_000 }
-
-  test("uses the usable budget so 100% means auto-compaction fires", () => {
-    expect(compactionGaugeLimit({ budget })).toBe(180_000)
-    expect(compactionGaugeLimit({ budget, auto: true })).toBe(180_000)
-  })
-
-  test("uses the raw input cap when auto-compaction is disabled", () => {
-    expect(compactionGaugeLimit({ budget, auto: false })).toBe(200_000)
-  })
-
-  test("uses the raw input cap when the usable budget is too small to compact", () => {
-    const degenerate = { cap: 10_000, reserved: 9_500, usable: MIN_USABLE_TOKENS - 1 }
-    expect(compactionGaugeLimit({ budget: degenerate })).toBe(10_000)
-  })
-
-  test("returns undefined without a budget", () => {
-    expect(compactionGaugeLimit({})).toBeUndefined()
   })
 })

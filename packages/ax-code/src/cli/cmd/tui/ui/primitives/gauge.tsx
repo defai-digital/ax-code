@@ -4,8 +4,10 @@ import { gaugeParts } from "./format"
 
 export type GaugeTone = "muted" | "warning" | "error"
 
-// Block gauge with percentage, e.g. "▰▰▰▱▱ 42%" (ADR-031 design-system
-// primitive). Renders nothing when no view is supplied so callers can pass
+// ASCII gauge with percentage, e.g. "###-- 42%" (ADR-031 design-system
+// primitive; segments are ASCII because every block glyph is East Asian
+// Ambiguous width and overlapped adjacent text on CJK terminals).
+// Renders nothing when no view is supplied so callers can pass
 // an optional view-model result straight through.
 export function Gauge(props: {
   view?: { ratio: number; percent: number; tone: GaugeTone }

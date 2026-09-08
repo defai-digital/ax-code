@@ -967,10 +967,12 @@ export function Prompt(props: PromptProps) {
     }
   })
 
-  // Context-window usage for the footer gauge (ADR-031 R8). Anchored on
-  // the most recent assistant message with usage data, measured against
-  // the compaction budget (not the raw context limit) so 100% means
-  // "the next turn triggers auto-compaction".
+  // Context-window usage for the footer gauge (ADR-086). Undefined — and
+  // therefore not rendered — unless auto-compaction is disabled: those
+  // users manage the window by hand and the gauge tells them when to
+  // /compact. Anchored on the most recent assistant message with usage
+  // data; denominator is the raw input cap (budget.cap, falling back to
+  // the advertised context limit).
   const contextGauge = createMemo(() => {
     if (!props.sessionID) return
     const msgs = sync.data.message[props.sessionID]
@@ -1348,7 +1350,10 @@ export function Prompt(props: PromptProps) {
                   <Show when={connectionChip()}>
                     {(chip) => (
                       <>
-                        <text fg={theme.textMuted}>·</text>
+                        {/* ASCII separator: U+00B7 middle dot is East Asian
+                            Ambiguous width and shifted following chips on
+                            CJK terminals (overlap bug class, see gauge). */}
+                        <text fg={theme.textMuted}>-</text>
                         <text flexShrink={0} fg={theme.warning}>
                           {chip()}
                         </text>
@@ -1358,7 +1363,7 @@ export function Prompt(props: PromptProps) {
                   <Show when={downloadChip()}>
                     {(chip) => (
                       <>
-                        <text fg={theme.textMuted}>·</text>
+                        <text fg={theme.textMuted}>-</text>
                         <text flexShrink={0} fg={theme.warning}>
                           {chip()}
                         </text>
@@ -1366,7 +1371,7 @@ export function Prompt(props: PromptProps) {
                     )}
                   </Show>
                   <Show when={showVariant()}>
-                    <text fg={theme.textMuted}>·</text>
+                    <text fg={theme.textMuted}>-</text>
                     <text>
                       <span style={{ fg: theme.textMuted }}>effort: </span>
                       <span
@@ -1446,7 +1451,10 @@ export function Prompt(props: PromptProps) {
                       >
                         <box paddingLeft={2} paddingRight={1} paddingTop={1} paddingBottom={1}>
                           <text fg={theme.text}>
-                            <span style={{ fg: theme.warning }}>▣ </span>
+                            {/* ASCII marker: U+25A3 is East Asian Ambiguous
+                                width and shifted the label on CJK terminals
+                                (overlap bug class, see gauge). */}
+                            <span style={{ fg: theme.warning }}>&gt; </span>
                             {view.label}
                           </text>
                           <text fg={theme.textMuted}>{previewText()}</text>
@@ -1519,9 +1527,9 @@ export function Prompt(props: PromptProps) {
                   <Show when={tokenChipView()} keyed>
                     {(chip) => (
                       <text fg={theme.textMuted}>
-                        ↑{chip.input} ↓{chip.output}
+                        in {chip.input} out {chip.output}
                         <Show when={chip.rate}>
-                          <span style={{ fg: theme.textMuted }}> · {chip.rate}</span>
+                          <span style={{ fg: theme.textMuted }}> - {chip.rate}</span>
                         </Show>
                       </text>
                     )}
@@ -1610,7 +1618,7 @@ export function Prompt(props: PromptProps) {
                 <box flexDirection="row" flexShrink={0} paddingRight={1}>
                   <Gauge
                     view={contextGauge()}
-                    label={compactionCount() > 0 ? `compacted×${compactionCount()}` : undefined}
+                    label={compactionCount() > 0 ? `compacted x${compactionCount()}` : undefined}
                   />
                 </box>
               </Show>

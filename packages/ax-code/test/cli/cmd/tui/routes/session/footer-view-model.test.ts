@@ -132,7 +132,7 @@ describe("footerGoalChip", () => {
         },
       }),
     ).toEqual({
-      label: "Goal: finish all phases · 1.2k/2.4k tok",
+      label: "Goal: finish all phases - 1.2k/2.4k tok",
       tone: "working",
       resumeHint: undefined,
     })
@@ -146,7 +146,7 @@ describe("footerGoalChip", () => {
           status: "blocked",
         },
       })?.label,
-    ).toBe("Goal blocked: wait for user input · /goal resume")
+    ).toBe("Goal blocked: wait for user input - /goal resume")
   })
 
   test("omits the resume hint when the token budget is exhausted", () => {
@@ -174,7 +174,7 @@ describe("footerGoalChip", () => {
       },
     })
     expect(chip).toEqual({
-      label: "Goal paused: wait for user input · 1.2k/2.4k",
+      label: "Goal paused: wait for user input - 1.2k/2.4k",
       tone: "warning",
       resumeHint: undefined,
     })
@@ -338,7 +338,7 @@ describe("footerSubagentStatusView", () => {
       now,
     })
     expect(view).toEqual({
-      label: "Subagent: Running command · 30s",
+      label: "Subagent: Running command - 30s",
       stale: false,
       tone: "working",
       running: 1,
@@ -367,7 +367,7 @@ describe("footerSubagentStatusView", () => {
       now,
     })
     // The child with the freshest activity represents the group.
-    expect(view?.label).toBe("2 subagents: Scanning files · 10s")
+    expect(view?.label).toBe("2 subagents: Scanning files - 10s")
     expect(view?.running).toBe(2)
     expect(view?.tone).toBe("working")
   })
@@ -388,7 +388,7 @@ describe("footerSubagentStatusView", () => {
     })
     expect(view?.stale).toBe(true)
     expect(view?.tone).toBe("warning")
-    expect(view?.label).toBe("Subagent: Still waiting for model · 2m")
+    expect(view?.label).toBe("Subagent: Still waiting for model - 2m")
   })
 
   test("shows the retry countdown when the child is retrying", () => {
@@ -417,7 +417,7 @@ describe("footerSubagentStatusView", () => {
       parentSessionID: "ses_parent",
       now,
     })
-    expect(view?.label).toBe("2 subagents: Thinking · 8s")
+    expect(view?.label).toBe("2 subagents: Thinking - 8s")
     expect(view?.running).toBe(2)
   })
 })

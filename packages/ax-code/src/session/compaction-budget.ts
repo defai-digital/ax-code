@@ -73,15 +73,3 @@ export function calculateCompactionBudget(
   const usable = Math.max(0, cap - reserved)
   return { cap, reserved, usable }
 }
-
-// Denominator for the TUI footer context gauge. With auto-compaction on,
-// 100% means "the next turn triggers compaction" (the usable budget). With
-// auto-compaction disabled — or a degenerate budget the compactor would
-// ignore (usable below MIN_USABLE_TOKENS, where compaction never fires) —
-// the meaningful ceiling is the raw input cap.
-export function compactionGaugeLimit(input: { budget?: CompactionBudget; auto?: boolean }): number | undefined {
-  const budget = input.budget
-  if (!budget) return undefined
-  if (input.auto !== false && budget.usable >= MIN_USABLE_TOKENS) return budget.usable
-  return budget.cap
-}

@@ -105,68 +105,65 @@ describe("resolveVisualCapability", () => {
 describe("gauge formatting", () => {
   test("fills proportionally and clamps", async () => {
     const { formatGauge } = await import("@/cli/cmd/tui/ui/primitives/format")
-    expect(formatGauge(0)).toBe("▱▱▱▱▱")
-    expect(formatGauge(0.5)).toBe("▰▰▰▱▱")
-    expect(formatGauge(1)).toBe("▰▰▰▰▰")
-    expect(formatGauge(2)).toBe("▰▰▰▰▰")
+    expect(formatGauge(0)).toBe("-----")
+    expect(formatGauge(0.5)).toBe("###--")
+    expect(formatGauge(1)).toBe("#####")
+    expect(formatGauge(2)).toBe("#####")
   })
 
   test("non-zero ratio always shows at least one filled cell", async () => {
     const { formatGauge } = await import("@/cli/cmd/tui/ui/primitives/format")
-    expect(formatGauge(0.01)).toBe("▰▱▱▱▱")
+    expect(formatGauge(0.01)).toBe("#----")
   })
 })
 
 describe("footerContextGauge", () => {
-  test("returns undefined without tokens or limit", async () => {
+  test("hidden while auto-compaction is enabled (the default)", async () => {
     const { footerContextGauge } = await import("@/cli/cmd/tui/routes/session/footer-view-model")
-    expect(footerContextGauge({})).toBeUndefined()
-    expect(footerContextGauge({ totalTokens: 100 })).toBeUndefined()
-    expect(footerContextGauge({ contextLimit: 200000 })).toBeUndefined()
+    const budget = { cap: 200_000, reserved: 20_000, usable: 180_000 }
+    expect(footerContextGauge({ totalTokens: 84_000, contextLimit: 200_000 })).toBeUndefined()
+    expect(footerContextGauge({ totalTokens: 84_000, contextLimit: 200_000, compactionAuto: true })).toBeUndefined()
+    expect(footerContextGauge({ totalTokens: 84_000, contextLimit: 200_000, budget })).toBeUndefined()
+    expect(
+      footerContextGauge({ totalTokens: 84_000, contextLimit: 200_000, budget, compactionAuto: true }),
+    ).toBeUndefined()
   })
 
-  test("computes ratio, percent, and tone thresholds", async () => {
+  test("returns undefined without tokens or limit when auto-compaction is off", async () => {
     const { footerContextGauge } = await import("@/cli/cmd/tui/routes/session/footer-view-model")
-    expect(footerContextGauge({ totalTokens: 84_000, contextLimit: 200_000 })).toEqual({
+    expect(footerContextGauge({ compactionAuto: false })).toBeUndefined()
+    expect(footerContextGauge({ totalTokens: 100, compactionAuto: false })).toBeUndefined()
+    expect(footerContextGauge({ contextLimit: 200_000, compactionAuto: false })).toBeUndefined()
+  })
+
+  test("computes ratio, percent, and tone thresholds against the raw cap", async () => {
+    const { footerContextGauge } = await import("@/cli/cmd/tui/routes/session/footer-view-model")
+    expect(footerContextGauge({ totalTokens: 84_000, contextLimit: 200_000, compactionAuto: false })).toEqual({
       ratio: 0.42,
       percent: 42,
       tone: "muted",
     })
-    expect(footerContextGauge({ totalTokens: 170_000, contextLimit: 200_000 })?.tone).toBe("warning")
-    expect(footerContextGauge({ totalTokens: 195_000, contextLimit: 200_000 })?.tone).toBe("error")
+    expect(footerContextGauge({ totalTokens: 170_000, contextLimit: 200_000, compactionAuto: false })?.tone).toBe(
+      "warning",
+    )
+    expect(footerContextGauge({ totalTokens: 195_000, contextLimit: 200_000, compactionAuto: false })?.tone).toBe(
+      "error",
+    )
   })
 
   test("clamps overflow to 100%", async () => {
     const { footerContextGauge } = await import("@/cli/cmd/tui/routes/session/footer-view-model")
-    const view = footerContextGauge({ totalTokens: 300_000, contextLimit: 200_000 })
+    const view = footerContextGauge({ totalTokens: 300_000, contextLimit: 200_000, compactionAuto: false })
     expect(view?.percent).toBe(100)
     expect(view?.ratio).toBe(1)
   })
 
-  test("measures against the compaction usable budget when available", async () => {
+  test("prefers the budget's raw input cap over the advertised context limit", async () => {
     const { footerContextGauge } = await import("@/cli/cmd/tui/routes/session/footer-view-model")
     const budget = { cap: 200_000, reserved: 20_000, usable: 180_000 }
-    // 162k is 81% of the raw context limit (barely warning) but 90% of the
-    // usable budget — the gauge should reflect the compaction threshold.
-    expect(footerContextGauge({ totalTokens: 162_000, contextLimit: 200_000, budget })).toEqual({
-      ratio: 0.9,
-      percent: 90,
-      tone: "warning",
-    })
-    expect(footerContextGauge({ totalTokens: 171_000, contextLimit: 200_000, budget })?.tone).toBe("error")
-  })
-
-  test("uses the raw input cap when auto-compaction is disabled", async () => {
-    const { footerContextGauge } = await import("@/cli/cmd/tui/routes/session/footer-view-model")
-    const budget = { cap: 200_000, reserved: 20_000, usable: 180_000 }
-    const view = footerContextGauge({ totalTokens: 162_000, contextLimit: 200_000, budget, compactionAuto: false })
+    // 162k against the budget cap (200k) is 81%, against the advertised
+    // context limit (400k) it would be 41% — the cap wins.
+    const view = footerContextGauge({ totalTokens: 162_000, contextLimit: 400_000, budget, compactionAuto: false })
     expect(view?.percent).toBe(81)
-  })
-
-  test("uses the raw input cap when the usable budget is degenerate", async () => {
-    const { footerContextGauge } = await import("@/cli/cmd/tui/routes/session/footer-view-model")
-    const budget = { cap: 10_000, reserved: 9_500, usable: 500 }
-    const view = footerContextGauge({ totalTokens: 5_000, budget })
-    expect(view?.percent).toBe(50)
   })
 })

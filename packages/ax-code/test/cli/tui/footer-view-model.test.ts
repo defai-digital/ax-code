@@ -25,7 +25,7 @@ describe("footerSessionStatusView", () => {
       },
     })
 
-    expect(view.label).toBe("Running command · 3m")
+    expect(view.label).toBe("Running command - 3m")
     expect(view.stale).toBe(false)
     expect(view.label).not.toMatch(/remaining|ETA|%/)
   })
@@ -41,7 +41,7 @@ describe("footerSessionStatusView", () => {
       ],
       status: { type: "busy", startedAt: 270_000, waitState: "llm" },
     })
-    expect(view.label).toBe("Thinking · 30s")
+    expect(view.label).toBe("Thinking - 30s")
   })
 
   test.each([
@@ -59,7 +59,7 @@ describe("footerSessionStatusView", () => {
       messages,
       status: { type: "busy", startedAt: 270_000, waitState: "llm" },
     })
-    expect(view.label).toBe("Thinking · 10s")
+    expect(view.label).toBe("Thinking - 10s")
   })
 
   test("labels recent llm work without marking it stale", () => {
@@ -125,7 +125,7 @@ describe("footerSessionStatusView", () => {
     expect(recentTool.stale).toBe(false)
     expect(recentTool.label).toContain("Running command")
     expect(staleTool.stale).toBe(true)
-    expect(staleTool.label).toBe("Still running command · 2m")
+    expect(staleTool.label).toBe("Still running command - 2m")
     expect(staleTool.label).not.toContain("no tool update")
     expect(staleTool.label).not.toContain("stalled")
   })
