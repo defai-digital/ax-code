@@ -40,8 +40,17 @@ export function formatSkillList(skills: Skill.Info[]) {
 
   return skills
     .map((skill) => {
-      const status = skill.standardIssues?.length ? "warn" : "ok"
-      return `${status.padEnd(4)}  ${skill.name.padEnd(24)}  ${skill.description}`
+      const status = skill.standardIssues?.length || skill.invocationIssues?.length ? "warn" : "ok"
+      const invocation = skill.invocationIssues?.length
+        ? " [invocation disabled: invalid policy]"
+        : skill.modelInvocable === false
+          ? skill.userInvocable === false
+            ? " [invocation disabled]"
+            : " [manual only]"
+          : skill.userInvocable === false
+            ? " [model only]"
+            : ""
+      return `${status.padEnd(4)}  ${skill.name.padEnd(24)}  ${skill.description}${invocation}`
     })
     .join(EOL)
     .concat(EOL)

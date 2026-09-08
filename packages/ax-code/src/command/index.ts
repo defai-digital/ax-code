@@ -380,6 +380,7 @@ export namespace Command {
     }
 
     for (const skill of await Skill.all()) {
+      if (skill.userInvocable === false) continue
       // Agent-only builtins stay loadable via the skill tool, but they are not
       // first-class slash commands. Users invoke /debug or /plan instead.
       if (skill.scope === "builtin" && Skill.SLASH_HIDDEN_BUILTIN_SKILLS.has(skill.name)) continue

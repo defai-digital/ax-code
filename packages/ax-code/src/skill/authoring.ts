@@ -139,11 +139,11 @@ async function assertContained(target: string) {
 
 export function buildSkillValidationReport(skills: Skill.Info[]): SkillValidationReport {
   const issues = skills
-    .filter((skill) => skill.standardIssues?.length)
+    .filter((skill) => skill.standardIssues?.length || skill.invocationIssues?.length)
     .map((skill) => ({
       name: skill.name,
       location: skill.location,
-      issues: skill.standardIssues ?? [],
+      issues: [...(skill.standardIssues ?? []), ...(skill.invocationIssues ?? [])],
     }))
 
   return {
@@ -183,7 +183,10 @@ export function buildSkillDoctorReport(skills: Skill.Info[]): SkillDoctorReport 
 export function buildSkillTriggerReport(skills: Skill.Info[], files: string[]): SkillTriggerReport {
   return {
     files,
-    matched: Skill.matchByPaths(skills, files).map((skill) => ({
+    matched: Skill.matchByPaths(
+      skills.filter((skill) => skill.modelInvocable !== false),
+      files,
+    ).map((skill) => ({
       name: skill.name,
       description: skill.description,
       location: skill.location,
@@ -219,7 +222,7 @@ export async function createSkill(input: SkillCreateRequest): Promise<SkillCreat
 }
 
 function skillDoctorIssues(skill: Skill.Info, nameCounts: Map<string, number>) {
-  const issues = [...(skill.standardIssues ?? [])]
+  const issues = [...(skill.standardIssues ?? []), ...(skill.invocationIssues ?? [])]
   const descriptionWords = skill.description.trim().split(/\s+/).filter(Boolean)
   if (skill.description.trim().length < 12 || descriptionWords.length < 3) issues.push("description is too vague")
   if (skill.content.length > 200_000) issues.push("SKILL.md exceeds 200KB")

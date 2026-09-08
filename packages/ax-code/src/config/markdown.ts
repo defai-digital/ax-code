@@ -124,13 +124,23 @@ export namespace ConfigMarkdown {
     return match ? match[1] : null
   }
 
-  async function load(file: string, text: string) {
+  async function load(file: string, text: string, strict = false) {
     // Reject oversized or alias-heavy frontmatter before handing it to the
     // YAML parser, which is vulnerable to quadratic alias expansion (#251).
     const frontmatter = extractFrontmatter(text)
     if (frontmatter) {
       const rejection = rejectDangerousFrontmatter(file, frontmatter)
       if (rejection) throw rejection
+    }
+    if (strict) {
+      try {
+        // Options disable gray-matter's cache, which otherwise retains a
+        // partially initialized result when parsing throws. Policy documents
+        // must also bypass the permissive Markdown fallback.
+        return matter(text, {})
+      } catch (err) {
+        throw wrap(file)(err)
+      }
     }
     try {
       return matter(text)
@@ -156,8 +166,8 @@ export namespace ConfigMarkdown {
     return load(file, text)
   }
 
-  export function parseText(location: string, content: string) {
-    return load(location, content)
+  export function parseText(location: string, content: string, options?: { strict?: boolean }) {
+    return load(location, content, options?.strict)
   }
 
   export const FrontmatterError = NamedError.create(

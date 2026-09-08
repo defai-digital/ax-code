@@ -243,3 +243,20 @@ describe("ConfigMarkdown: frontmatter parsing failure", () => {
     expect(err.data.message).toContain("Failed to parse YAML frontmatter")
   })
 })
+
+describe("ConfigMarkdown: strict policy parsing", () => {
+  test("rejects malformed YAML repeatedly without accepting a cached partial result", async () => {
+    const text = "---\npolicy: [unclosed\n  broken: {\n---"
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await expect(ConfigMarkdown.parseText("policy.yaml", text, { strict: true })).rejects.toMatchObject({
+        name: "ConfigFrontmatterError",
+      })
+    }
+  })
+
+  test("does not repair malformed policy syntax through the Markdown fallback", async () => {
+    await expect(
+      ConfigMarkdown.parseText("policy.yaml", "---\npolicy: invalid: mapping\n---", { strict: true }),
+    ).rejects.toMatchObject({ name: "ConfigFrontmatterError" })
+  })
+})

@@ -340,7 +340,7 @@ export namespace SystemPrompt {
   export async function skills(agent: Agent.Info, messages?: MessageV2.WithParts[]) {
     if (Permission.disabled(["skill"], agent.permission).has("skill")) return
 
-    const list = await Skill.available(agent)
+    const list = await Skill.modelAvailable(agent)
 
     let recommended: Set<string> | undefined
     if (messages) {

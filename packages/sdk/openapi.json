@@ -34873,6 +34873,18 @@
                       },
                       "builtin": {
                         "type": "boolean"
+                      },
+                      "modelInvocable": {
+                        "type": "boolean"
+                      },
+                      "userInvocable": {
+                        "type": "boolean"
+                      },
+                      "invocationIssues": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       }
                     },
                     "required": [

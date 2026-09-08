@@ -16016,6 +16016,9 @@ export type AppSkillsResponses = {
     sourceTool?: "ax-code" | "agents" | "opencode" | "claude" | "builtin" | "config"
     scope?: "builtin" | "project" | "user" | "config" | "compat"
     builtin?: boolean
+    modelInvocable?: boolean
+    userInvocable?: boolean
+    invocationIssues?: Array<string>
   }>
 }
 

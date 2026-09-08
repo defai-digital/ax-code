@@ -334,7 +334,7 @@ function task(info: ToolProps<typeof TaskTool>) {
 function skill(info: ToolProps<typeof SkillTool>) {
   inline({
     icon: "→",
-    title: `Skill "${info.input.name}"`,
+    title: info.input.query !== undefined ? `Skill search "${info.input.query}"` : `Skill "${info.input.name}"`,
   })
 }
 

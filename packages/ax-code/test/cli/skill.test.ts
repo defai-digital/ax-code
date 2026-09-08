@@ -29,6 +29,24 @@ const baseSkill = (overrides: Partial<Skill.Info>): Skill.Info => ({
 })
 
 describe("skill command helpers", () => {
+  test("lists invocation restrictions and excludes disabled skills from trigger recommendations", () => {
+    const manual = baseSkill({ name: "manual", modelInvocable: false, paths: ["**/*.ts"] })
+    const automatic = baseSkill({ name: "automatic", paths: ["**/*.ts"] })
+    const invalid = baseSkill({
+      name: "invalid",
+      invocationIssues: ["Invalid policy"],
+      modelInvocable: false,
+      userInvocable: false,
+    })
+    const output = formatSkillList([manual, invalid])
+    expect(output).toContain("[manual only]")
+    expect(output).toContain("warn  invalid")
+    expect(output).toContain("[invocation disabled: invalid policy]")
+    expect(buildSkillTriggerReport([manual, automatic], ["src/app.ts"]).matched.map((skill) => skill.name)).toEqual([
+      "automatic",
+    ])
+  })
+
   test("buildSkillValidationReport summarizes standard issues", () => {
     const report = buildSkillValidationReport([
       baseSkill({ name: "release-notes" }),

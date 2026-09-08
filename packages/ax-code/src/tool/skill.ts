@@ -7,6 +7,8 @@ import { Ripgrep } from "../file/ripgrep"
 import { iife } from "@/util/iife"
 import { Filesystem } from "@/util/filesystem"
 import { Recorder } from "../replay/recorder"
+import { Agent } from "../agent/agent"
+import { SkillCatalog } from "../skill/catalog"
 
 function escapeXmlAttribute(value: string) {
   return value
@@ -26,8 +28,16 @@ function isSkillEntrypoint(relativePath: string) {
   return normalized === "SKILL.md"
 }
 
+interface SkillMetadata {
+  name?: string
+  dir?: string
+  total?: number
+  shown?: number
+  nextOffset?: number
+}
+
 export const SkillTool = Tool.define("skill", async (ctx) => {
-  const list = await Skill.available(ctx?.agent)
+  const list = await Skill.modelAvailable(ctx?.agent)
 
   const description =
     list.length === 0
@@ -48,32 +58,76 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
         ].join("\n")
 
   const examples = list
-    .map((skill) => `'${escapePromptMetadata(skill.name)}'`)
+    .map((skill) => escapePromptMetadata(skill.name))
+    .filter((name) => name.length <= 64)
     .slice(0, 3)
+    .map((name) => `'${name}'`)
     .join(", ")
   const hint = examples.length > 0 ? ` (e.g., ${examples}, ...)` : ""
 
-  const parameters = z.object({
-    name: z.string().describe(`The name of the skill from available_skills${hint}`),
-  })
+  const parameters = z
+    .object({
+      name: z.string().max(4096).optional().describe(`The name of the skill to load${hint}`),
+      query: z
+        .string()
+        .max(256)
+        .optional()
+        .describe('Search eligible skill names and descriptions without loading instructions. Use "" to list all.'),
+      offset: z
+        .number()
+        .int()
+        .nonnegative()
+        .max(Number.MAX_SAFE_INTEGER)
+        .optional()
+        .describe("Continuation offset returned by a metadata search."),
+    })
+    .refine(
+      (input) => (input.name !== undefined) !== (input.query !== undefined),
+      "Provide exactly one of name or query",
+    )
+    .refine((input) => input.offset === undefined || input.query !== undefined, "offset requires query")
 
   return {
-    description,
+    description: `${description}\nUse query to search or page through eligible skill metadata; use name to load instructions.`,
     parameters,
-    async execute(params: z.infer<typeof parameters>, ctx) {
-      const skill = await Skill.get(params.name)
+    async execute(params: z.infer<typeof parameters>, ctx): Promise<Tool.InvocationResult<SkillMetadata>> {
+      const agent = await Agent.get(ctx.agent)
+      if (!agent) throw new Error("Unknown agent for skill invocation")
+      const eligible = await Skill.modelAvailable(agent)
+      if (params.query !== undefined) {
+        const matches = SkillCatalog.search(eligible, params.query)
+        const page = SkillCatalog.page(matches, { verbose: false, paginate: true, offset: params.offset })
+        // Discovery reveals metadata only. Existing skill permissions still apply.
+        if (page.names.length)
+          await ctx.ask({
+            permission: "skill",
+            patterns: page.names,
+            always: [],
+            metadata: { query: params.query },
+          })
+        return {
+          title: "Skill metadata search",
+          output: page.output,
+          metadata: { total: page.total, shown: page.shown, nextOffset: page.nextOffset },
+        }
+      }
+      const name = params.name!
+      const skill = await Skill.get(name)
 
       if (!skill) {
-        const available = await Skill.all().then((x) => x.map((skill) => escapePromptMetadata(skill.name)).join(", "))
+        throw new Error(`Skill "${escapePromptMetadata(name)}" not found. Use query to search eligible skill metadata.`)
+      }
+
+      if (!eligible.some((entry) => entry.name === name)) {
         throw new Error(
-          `Skill "${escapePromptMetadata(params.name)}" not found. Available skills: ${available || "none"}`,
+          "Skill is not available for model invocation. A valid manual-only skill requires an explicit user slash command; do not reproduce its steps through another tool.",
         )
       }
 
       await ctx.ask({
         permission: "skill",
-        patterns: [params.name],
-        always: [params.name],
+        patterns: [name],
+        always: [name],
         metadata: {},
       })
 

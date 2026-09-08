@@ -73,8 +73,13 @@ export function WebSearch(props: ToolProps<any>) {
 
 export function Skill(props: ToolProps<typeof SkillTool>) {
   return (
-    <InlineTool icon="→" pending="Loading skill..." complete={props.input.name} part={props.part}>
-      Skill "{props.input.name}"
+    <InlineTool
+      icon="→"
+      pending={props.input.query !== undefined ? "Searching skills..." : "Loading skill..."}
+      complete={props.input.query !== undefined || props.input.name !== undefined}
+      part={props.part}
+    >
+      {props.input.query !== undefined ? `Skill search "${props.input.query}"` : `Skill "${props.input.name}"`}
     </InlineTool>
   )
 }

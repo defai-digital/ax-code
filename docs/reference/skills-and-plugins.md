@@ -46,6 +46,42 @@ ax-code            # TUI skill dialog
 # or use the skill tool from a session
 ```
 
+## Invocation controls
+
+AX Code reads these optional controls when discovering a skill:
+
+| Location                     | Field                                     | Effect                                                                                                           |
+| ---------------------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `SKILL.md` frontmatter       | `disable-model-invocation: true`          | Keep the explicit `/skill-name` command, but exclude the skill from model discovery and direct model tool loads. |
+| `SKILL.md` frontmatter       | `user-invocable: false`                   | Omit the skill from slash commands; model invocation remains available unless separately disabled.               |
+| Sibling `agents/openai.yaml` | `policy.allow_implicit_invocation: false` | Require explicit slash invocation, including for skills imported through `.agents/skills`.                       |
+
+Use YAML booleans `true` and `false`. Missing controls preserve the defaults. If multiple sources disagree,
+a restrictive declaration wins. Invalid control types or malformed sidecar policy disable both invocation modes
+and produce invocation diagnostics in the skill inventory and runtime logs. Correct the metadata before using the skill.
+The optional sidecar must be smaller than 64 KiB; YAML document delimiters and aliases are not supported there.
+
+These controls govern skill invocation, independently of existing agent permissions. A natural-language mention
+of a manual-only skill does not authorize the model to load it; invoke its slash command. Declared `allowed-tools`
+remain workflow instructions and do not grant permissions.
+
+## Bounded discovery
+
+The model initially receives skill summaries, not full instructions. Each skill metadata block in the system prompt
+and tool description has an 8,000-character budget. Descriptions are shortened before entries are omitted;
+file-matched recommendations receive priority when the list still exceeds that budget. An omission notice explains
+how to retrieve more summaries. This is a character limit, not a token count or a performance guarantee.
+
+The `skill` tool has two mutually exclusive modes:
+
+- `{"name":"api-contract"}` loads a skill through the existing permission check.
+- `{"query":"database"}` searches eligible names and descriptions without loading skill bodies.
+- `{"query":"","offset":20}` continues a listing using the exact `nextOffset` from the previous result.
+
+Search is literal and case-insensitive. Empty queries list eligible skills. Follow `nextOffset` until it is absent.
+Manual-only and permission-denied skills are excluded from model discovery. Oversized individual metadata entries
+are skipped with a notice. Names and source precedence remain unchanged.
+
 ## Plugins
 
 Configure plugins in `ax-code.json`:

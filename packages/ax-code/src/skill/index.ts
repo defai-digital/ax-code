@@ -1,7 +1,6 @@
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
-import { pathToFileURL } from "url"
 import z from "zod"
 import type { Agent } from "@/agent/agent"
 import { Flag } from "@/flag/flag"
@@ -16,6 +15,8 @@ import { Glob } from "../util/glob"
 import { Log } from "../util/log"
 import { Discovery } from "./discovery"
 import { SkillValidate } from "./validate"
+import { SkillInvocationPolicy } from "./invocation-policy"
+import { SkillCatalog } from "./catalog"
 import { parseJsonResult } from "@/util/json-value"
 
 export namespace Skill {
@@ -41,6 +42,9 @@ export namespace Skill {
     sourceTool: z.enum(["ax-code", "agents", "opencode", "claude", "builtin", "config"]).optional(),
     scope: z.enum(["builtin", "project", "user", "config", "compat"]).optional(),
     builtin: z.boolean().optional(),
+    modelInvocable: z.boolean().optional(),
+    userInvocable: z.boolean().optional(),
+    invocationIssues: z.array(z.string()).optional(),
   })
   export type Info = z.infer<typeof Info>
 
@@ -78,6 +82,8 @@ export namespace Skill {
       })
     }
 
+    const policy = await SkillInvocationPolicy.read(match, data)
+    for (const issue of policy.issues) log.warn("invalid skill invocation policy", { location: match, issue })
     state.dirs.add(path.dirname(match))
     state.skills[parsed.data.name] = {
       name: parsed.data.name,
@@ -85,6 +91,9 @@ export namespace Skill {
       location: match,
       content: md.content,
       ...frontmatterFields(parsed.data, data, match),
+      modelInvocable: policy.modelInvocable,
+      userInvocable: policy.userInvocable,
+      ...(policy.issues.length ? { invocationIssues: policy.issues } : {}),
       ...(source?.sourceTool ? { sourceTool: source.sourceTool } : {}),
       ...(source?.scope ? { scope: source.scope } : {}),
     }
@@ -263,12 +272,18 @@ export namespace Skill {
     const data = md.data as Record<string, unknown>
     const parsed = Info.pick({ name: true, description: true }).safeParse(data)
     if (!parsed.success) return
+    const policy = SkillInvocationPolicy.normalize(data)
+    for (const issue of policy.issues)
+      log.warn("invalid built-in skill invocation policy", { location: entry.location, issue })
     state.skills[parsed.data.name] = {
       name: parsed.data.name,
       description: parsed.data.description,
       location: entry.location,
       content: md.content,
       ...frontmatterFields(parsed.data, data, entry.location),
+      modelInvocable: policy.modelInvocable,
+      userInvocable: policy.userInvocable,
+      ...(policy.issues.length ? { invocationIssues: policy.issues } : {}),
       sourceTool: "builtin",
       scope: "builtin",
       builtin: true,
@@ -356,52 +371,13 @@ export namespace Skill {
     return s
   })
 
-  function escapeMetadata(value: string) {
-    return value
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#39;")
-      .replace(/\s+/g, " ")
-      .trim()
-  }
-
-  function formatLocation(skill: Info) {
-    if (skill.builtin) return `builtin://${encodeURIComponent(skill.name)}/SKILL.md`
-    return pathToFileURL(skill.location).href
-  }
-
   export function fmt(list: Info[], opts: { verbose: boolean; recommended?: Set<string> }) {
     if (list.length === 0) return "No skills are currently available."
+    return SkillCatalog.page(list, opts).output
+  }
 
-    if (opts.verbose) {
-      return [
-        "<available_skills>",
-        ...list.flatMap((skill) => {
-          const recommended = opts.recommended?.has(skill.name)
-          return [
-            recommended ? `  <skill recommended="true">` : "  <skill>",
-            `    <name>${escapeMetadata(skill.name)}</name>`,
-            `    <description>${escapeMetadata(skill.description)}</description>`,
-            `    <location>${formatLocation(skill)}</location>`,
-            ...(recommended
-              ? [`    <note>This skill matches files in the current context. Consider loading it.</note>`]
-              : []),
-            "  </skill>",
-          ]
-        }),
-        "</available_skills>",
-      ].join("\n")
-    }
-
-    return [
-      "## Available Skills",
-      ...list.map((skill) => {
-        const marker = opts.recommended?.has(skill.name) ? " (recommended - matches current files)" : ""
-        return `- **${escapeMetadata(skill.name)}**: ${escapeMetadata(skill.description)}${marker}`
-      }),
-    ].join("\n")
+  export async function modelAvailable(agent?: Agent.Info) {
+    return (await available(agent)).filter((skill) => skill.modelInvocable !== false)
   }
 
   export function matchByPaths(skills: Info[], filePaths: string[]): Info[] {
