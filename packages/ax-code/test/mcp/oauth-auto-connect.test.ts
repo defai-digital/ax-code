@@ -25,6 +25,7 @@ let callbackRunning = false
 // Controls whether the mock transport simulates a 401 that triggers the SDK
 // auth flow (which calls provider.state()) or a simple UnauthorizedError.
 let simulateAuthFlow = true
+let registrationError: Error | undefined
 
 function assertMockPublicUrl(url: string) {
   const hostname = new URL(url).hostname.toLowerCase()
@@ -70,6 +71,7 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
       transportInstances.push(this)
     }
     async start() {
+      if (registrationError) throw registrationError
       if (authenticatedUrls.has(this.url)) return
       // Simulate what the real SDK transport does on 401:
       // It calls auth() which eventually calls provider.state(), then
@@ -166,6 +168,7 @@ beforeEach(() => {
   clientInstances.length = 0
   authenticatedUrls.clear()
   simulateAuthFlow = true
+  registrationError = undefined
   resetMockOAuthCallback()
 })
 
@@ -231,6 +234,31 @@ async function trustConfiguredMcp(name: string) {
   if (!("type" in entry.config)) throw new Error(`MCP config is disabled for ${name}`)
   await McpTrust.trust(name, entry.config, entry.source)
 }
+
+test.each([
+  ["https://mcp.figma.com/mcp", "Figma MCP Catalog"],
+  ["https://example.com/mcp", "provide oauth.clientId"],
+])("registration rejection guidance is consistent on connect and startAuth for %s", async (url, hint) => {
+  registrationError = new Error("HTTP 403: Invalid OAuth error response: SyntaxError: Unexpected token Forbidden")
+  const config = { type: "remote" as const, url, enabled: false }
+  await using tmp = await tmpdir({ git: true, config: { mcp: { design: config } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      try {
+        await trustConfiguredMcp("design")
+        const result = await MCP.add("design", { ...config, enabled: true })
+        expect(result.status.design).toMatchObject({
+          status: "needs_client_registration",
+          error: expect.stringContaining(hint),
+        })
+        await expect(MCP.startAuth("design")).rejects.toThrow(hint)
+      } finally {
+        await Instance.dispose()
+      }
+    },
+  })
+})
 
 test("first connect to OAuth server shows needs_auth instead of failed", async () => {
   await using tmp = await tmpdir({

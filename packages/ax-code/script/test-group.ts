@@ -30,6 +30,7 @@ const e2e = new Set([
   // Needs process isolation: mock.module leaks across files in one Bun process.
   "test/code-intelligence/query-native-dispatch.test.ts",
   "test/mcp/headers.test.ts",
+  "test/mcp/loopback.test.ts",
   "test/mcp/oauth-callback.test.ts",
   "test/mcp/oauth-browser.test.ts",
   "test/script/update-models.test.ts",

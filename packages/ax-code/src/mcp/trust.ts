@@ -105,6 +105,7 @@ export namespace McpTrust {
       name,
       type: config.type,
       url: normalizedRemoteUrl(config.url),
+      ...(config.allowLoopback ? { allowLoopback: true } : {}),
       headers: recordFingerprintShape(config.headers),
     })
   }

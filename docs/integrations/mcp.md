@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-28
+Last reviewed: 2026-09-08
 Owner: ax-code runtime
 
 AX Code can connect to Model Context Protocol servers for external tools, prompts, and resources. MCP is powerful, so AX Code treats MCP configuration and MCP-provided content as a trust boundary.
@@ -124,32 +124,47 @@ Mutating MCP HTTP routes require a process-local runtime authorization header in
 
 ## Figma MCP
 
-AX Code bundles a local Figma template backed by the [`figma-developer-mcp`](https://github.com/figma/figma-mcp) npm package. Use it with a personal access token:
+### Figma Desktop
 
-```bash
-ax-code mcp add   # From template → figma
-# Provide your FIGMA_API_KEY when prompted
-```
+In the Figma desktop app, open a design file, switch to Dev Mode, and enable the desktop MCP server in the inspect panel. Opening the app alone does not enable the server. See [Figma's desktop setup instructions](https://developers.figma.com/docs/figma-mcp-server/local-server-installation/).
 
-### Figma Remote OAuth (mcp.figma.com)
-
-Figma's remote MCP endpoint (`https://mcp.figma.com/mcp`) advertises a `registration_endpoint` but returns **HTTP 403 Forbidden** to clients that are not on Figma's allowlist during dynamic client registration (RFC 7591). This means the "Custom remote → No pre-registered client ID" path cannot succeed for Figma out of the box.
-
-To use the remote endpoint, register an OAuth application with Figma and provide the issued credentials in your config:
+Add this entry to your AX Code configuration:
 
 ```json
 {
   "mcp": {
-    "figma-remote": {
+    "figma-desktop": {
       "type": "remote",
-      "url": "https://mcp.figma.com/mcp",
-      "oauth": {
-        "clientId": "YOUR_FIGMA_CLIENT_ID",
-        "clientSecret": "YOUR_FIGMA_CLIENT_SECRET"
-      }
+      "url": "http://127.0.0.1:3845/mcp",
+      "allowLoopback": true,
+      "oauth": false
     }
   }
 }
 ```
 
-For most local development workflows, the token-based local template (`figma-developer-mcp`) is simpler and does not require OAuth registration.
+For a project configuration, review the entry and grant trust:
+
+```bash
+ax-code mcp trust figma-desktop
+```
+
+`type: "remote"` selects HTTP/SSE transport, including HTTP servers on this machine. `type: "local"` selects a subprocess using stdio.
+
+### Loopback HTTP MCP policy
+
+`allowLoopback` defaults to false. Setting it to true permits HTTP(S) on `localhost`, `127.0.0.1`, or `[::1]` at the configured scheme, hostname, and port only. It requires a loopback URL without embedded credentials. Shared project entries still require trust; enabling the option invalidates trust previously granted without it.
+
+Redirects, SSE message endpoints, and OAuth requests must stay on that same origin. Other ports, public destinations, private network addresses, and cloud metadata endpoints remain blocked. DNS answers for `localhost` must all be loopback addresses and are pinned for each connection. Local services that depend on an external OAuth issuer are not supported by this option. Use `oauth: false` for Figma Desktop.
+
+If the connection is refused, check that the desktop MCP server is enabled and listening on port 3845. Switching to `localhost` or disabling OAuth alone does not enable loopback access.
+
+### Figma Remote OAuth (mcp.figma.com)
+
+Figma's hosted endpoint is `https://mcp.figma.com/mcp`. Figma requires an approved client in its [MCP Catalog](https://www.figma.com/mcp-catalog/). Client developers must follow [Figma's remote access registration requirements](https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/).
+
+A rejected dynamic registration is not resolved merely by creating an ordinary Figma OAuth application or supplying its client ID and secret. Use credentials issued for an approved MCP integration when available. AX Code reports the Catalog requirement when registration is rejected by the official endpoint. Loopback access does not grant hosted-server approval.
+
+### Token-based template
+
+The built-in `figma` template runs the separate `figma-developer-mcp` package with `FIGMA_API_KEY`. It is distinct from Figma's official Desktop and hosted MCP servers.

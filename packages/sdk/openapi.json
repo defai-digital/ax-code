@@ -43691,6 +43691,10 @@
             "type": "string",
             "description": "URL of the remote MCP server"
           },
+          "allowLoopback": {
+            "description": "Opt in to localhost, 127.0.0.1, or [::1] HTTP(S) MCP on the configured origin only. Defaults to false; project entries still require trust.",
+            "type": "boolean"
+          },
           "enabled": {
             "description": "Enable or disable the MCP server on startup",
             "type": "boolean"
