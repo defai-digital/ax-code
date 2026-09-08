@@ -1359,6 +1359,20 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
+      // Explicit terminal classification must win over the transient-message
+      // heuristic below: a CLI-adapter failure can carry isRetryable === false
+      // while its message still contains a transient marker ("fetch failed").
+      case e instanceof Error && (e as { isRetryable?: unknown }).isRetryable === false:
+        // CLI adapters can report a terminal provider-side failure without an
+        // HTTP response. Preserve the explicit classification so the prompt
+        // loop surfaces it once instead of treating it as an unknown retry.
+        return new MessageV2.APIError(
+          {
+            message: e.message,
+            isRetryable: false,
+          },
+          { cause: e },
+        ).toObject()
       case isTransientNetworkError(e):
         return new MessageV2.APIError(
           {
@@ -1379,17 +1393,6 @@ export namespace MessageV2 {
       // bare class-name string.
       case BlastRadius.LimitExceededError.isInstance(e):
         return normalizeToPlain(e) as ReturnType<typeof fromError>
-      case e instanceof Error && (e as { isRetryable?: unknown }).isRetryable === false:
-        // CLI adapters can report a terminal provider-side failure without an
-        // HTTP response. Preserve the explicit classification so the prompt
-        // loop surfaces it once instead of treating it as an unknown retry.
-        return new MessageV2.APIError(
-          {
-            message: e.message,
-            isRetryable: false,
-          },
-          { cause: e },
-        ).toObject()
       case e instanceof Error:
         return new NamedError.Unknown({ message: NamedError.message(e) }, { cause: e }).toObject()
       default:

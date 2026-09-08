@@ -443,11 +443,14 @@ export namespace Session {
       }
 
       // Publish events after all batches commit so subscribers never
-      // observe a partial fork.
+      // observe a partial fork. Detached publishes match the compensating
+      // delete above: awaiting each subscriber round-trip serializes O(n)
+      // bus hops for large forks without adding any ordering guarantee —
+      // the events themselves are published synchronously in commit order.
       for (const { info, parts } of plan) {
-        await Bus.publish(MessageV2.Event.Updated, { info })
+        Bus.publishDetached(MessageV2.Event.Updated, { info })
         for (const part of parts) {
-          await Bus.publish(MessageV2.Event.PartUpdated, { part })
+          Bus.publishDetached(MessageV2.Event.PartUpdated, { part })
         }
       }
 
@@ -1129,7 +1132,7 @@ export namespace Session {
     const time = Date.now()
     const store = SessionShard.storeFor(part.sessionID, { write: true })
     store.use((db) => {
-      MessageWrite.parts(db, [part], time)
+      MessageWrite.parts(db, [part], time, Date.now())
       store.effect(() =>
         Bus.publishDetached(MessageV2.Event.PartUpdated, {
           part: { ...part },
@@ -1168,7 +1171,7 @@ export namespace Session {
     for (let i = 0; i < parts.length; i += PARTS_BATCH_SIZE) {
       const batch = parts.slice(i, i + PARTS_BATCH_SIZE)
       store.transaction((db) => {
-        MessageWrite.parts(db, batch, time)
+        MessageWrite.parts(db, batch, time, Date.now())
         store.effect(() => {
           for (const part of batch) {
             Bus.publishDetached(MessageV2.Event.PartUpdated, { part: { ...part } })
@@ -1186,7 +1189,7 @@ export namespace Session {
     const store = SessionShard.storeFor(info.sessionID, { write: true })
     store.transaction((db) => {
       MessageWrite.message(db, info, messageTimeUpdated)
-      MessageWrite.parts(db, parts, partTime)
+      MessageWrite.parts(db, parts, partTime, Date.now())
     })
 
     await Bus.publish(MessageV2.Event.Updated, { info })

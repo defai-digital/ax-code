@@ -1258,6 +1258,23 @@ describe("session.message-v2.fromError", () => {
     })
   })
 
+  test("explicit isRetryable false beats the transient-message heuristic", () => {
+    // A CLI adapter can flag a terminal failure while its message still
+    // contains a transient marker. The explicit classification must win.
+    const error = Object.assign(new Error("fetch failed: provider refused the session"), {
+      isRetryable: false as const,
+    })
+    const result = MessageV2.fromError(error, { providerID })
+
+    expect(result).toStrictEqual({
+      name: "APIError",
+      data: {
+        message: "fetch failed: provider refused the session",
+        isRetryable: false,
+      },
+    })
+  })
+
   test("serializes response error codes", () => {
     const cases = [
       {

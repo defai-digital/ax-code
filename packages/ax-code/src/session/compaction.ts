@@ -14,6 +14,7 @@ import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { PRUNE_MINIMUM, PRUNE_PROTECT } from "@/constants/session"
 import { Database } from "@/storage/db"
+import { SessionShard } from "./shard"
 import { MessageTable, PartTable } from "./session.sql"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { ContextTier } from "./context-tier"
@@ -638,7 +639,11 @@ When constructing the summary, try to stick to this template:
             system: original.system,
             variant: original.variant,
           }
-          Database.transaction((db) => {
+          // Route through the shard store that owns this session's rows:
+          // a registry `Database.transaction` would write the replay message
+          // to the wrong physical DB once session sharding is enabled —
+          // the exact hazard processor-impl documents for its own batches.
+          SessionShard.storeFor(input.sessionID, { write: true }).transaction((db) => {
             const { id, sessionID, ...data } = replayMsg
             db.insert(MessageTable)
               .values({
@@ -700,7 +705,9 @@ When constructing the summary, try to stick to this template:
               end: Date.now(),
             },
           }
-          Database.transaction((db) => {
+          // Same shard routing as the replay branch above: the continue
+          // marker must land in the store `Session.messages` reads from.
+          SessionShard.storeFor(input.sessionID, { write: true }).transaction((db) => {
             const { id, sessionID, ...data } = continueMsg
             db.insert(MessageTable)
               .values({

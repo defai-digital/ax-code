@@ -4,6 +4,7 @@ import { Instance } from "../../src/project/instance"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
+import { MessageWrite } from "../../src/session/message-write"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import { MessageTable, PartTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
@@ -142,6 +143,27 @@ describe.each([false, true])("session writes with shards=%s", (sharded) => {
         time_created: 10,
         data: { text: "single" },
       })
+    })
+  })
+
+  test("conflict-updated parts stamp a fresh time_updated, never the creation time", async () => {
+    await withSession(async (info) => {
+      await Session.updateMessage(info)
+      const part = textPart(info, "initial")
+      await Session.updatePart(part)
+      // Backdate the stored row so a stale conflict stamp is distinguishable
+      // from the wall clock.
+      const store = SessionShard.storeFor(info.sessionID, { write: true })
+      store.use((db) =>
+        db.update(PartTable).set({ time_created: 10, time_updated: 20 }).where(eq(PartTable.id, part.id)).run(),
+      )
+      const before = Date.now()
+      // A backdated `time` (creation-ordered) must not become time_updated.
+      store.use((db) => MessageWrite.parts(db, [{ ...part, text: "rewritten" }], 50))
+      const row = partRows(info).find((candidate) => candidate.id === part.id)!
+      expect(row.time_created).toBe(10)
+      expect(row.time_updated).toBeGreaterThanOrEqual(before)
+      expect(row.data).toMatchObject({ type: "text", text: "rewritten" })
     })
   })
 
@@ -382,6 +404,39 @@ describe.each([false, true])("session writes with shards=%s", (sharded) => {
       expect(partRows(info)).toHaveLength(parts.length)
       const registry = Database.use((db) => db.select().from(PartTable).where(eq(PartTable.message_id, info.id)).all())
       expect(registry).toHaveLength(sharded ? 0 : parts.length)
+    })
+  })
+
+  test("raw shard-routed inserts (compaction pattern) are readable and do not leak into the registry", async () => {
+    await withSession(async (info) => {
+      await Session.updateMessage(info)
+      // This mirrors the auto-compaction replay/continue writes: raw
+      // MessageTable/PartTable inserts inside the owning shard transaction.
+      // A registry Database.transaction here would split-brain once
+      // AX_CODE_SHARD_SESSIONS ships.
+      const marker = userMessage(info.sessionID)
+      marker.time.created = Date.now()
+      const markerPart = textPart(marker, "Continue if you have next steps")
+      SessionShard.storeFor(info.sessionID, { write: true }).transaction((db) => {
+        const { id, sessionID, ...data } = marker
+        db.insert(MessageTable).values({ id, session_id: sessionID, time_created: marker.time.created, data }).run()
+        const { id: partID, messageID, sessionID: partSessionID, ...partData } = markerPart
+        db.insert(PartTable)
+          .values({
+            id: partID,
+            message_id: messageID,
+            session_id: partSessionID,
+            time_created: Date.now(),
+            data: partData,
+          })
+          .run()
+      })
+      const messages = await Session.messages({ sessionID: info.sessionID })
+      expect(messages.map((message) => message.info.id)).toContain(marker.id)
+      const registryMessage = Database.use((db) =>
+        db.select().from(MessageTable).where(eq(MessageTable.id, marker.id)).all(),
+      )
+      expect(registryMessage).toHaveLength(sharded ? 0 : 1)
     })
   })
 
