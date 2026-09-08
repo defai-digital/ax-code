@@ -249,8 +249,8 @@ describe("pinned input layout helpers", () => {
   })
 
   test("counts an expanded subagent rail including the overflow row", () => {
-    expect(subagentPanelRows({ terminalHeight: 60, activeCount: 20, collapsed: false })).toBe(8)
-    expect(subagentPanelRows({ terminalHeight: 60, activeCount: 2, collapsed: true })).toBe(1)
+    expect(subagentPanelRows({ terminalHeight: 60, activeCount: 20, collapsed: false })).toBe(9)
+    expect(subagentPanelRows({ terminalHeight: 60, activeCount: 2, collapsed: true })).toBe(2)
     expect(subagentPanelRows({ terminalHeight: 60, activeCount: 0, collapsed: false })).toBe(0)
   })
 

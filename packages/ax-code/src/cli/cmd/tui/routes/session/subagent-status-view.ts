@@ -253,11 +253,28 @@ export function subagentPanelTitle(activeCount: number) {
   return Locale.pluralize(activeCount, "Subagent", "Subagents {}")
 }
 
+export function isGoalPlanner(item: SubagentStatusItem) {
+  return item.agent === "goal-plan-writer" || (!item.agent && item.title === "Goal plan writer")
+}
+
+export function isGoalPlanning(view: SubagentStatusView) {
+  return view.items.some((item) => item.active && isGoalPlanner(item))
+}
+
+export function subagentPanelItems(view: SubagentStatusView) {
+  return view.items
+    .filter((item) => item.active)
+    .toSorted((a, b) => Number(isGoalPlanner(b)) - Number(isGoalPlanner(a)))
+}
+
 // Lead-line summary for the panel header so even a collapsed panel tells the
 // user what is running. Items are sorted active-first, and the item label is
 // already "agent: activity · elapsed( · no update Ns)".
 export function subagentPanelHeaderSummary(view: SubagentStatusView): string | undefined {
-  const lead = view.items.find((item) => item.active)
+  const lead = subagentPanelItems(view)[0]
+  if (lead && isGoalPlanner(lead)) {
+    return [lead.activity, lead.elapsed, lead.stale ? "No recent updates" : undefined].filter(Boolean).join(" · ")
+  }
   return lead?.label
 }
 

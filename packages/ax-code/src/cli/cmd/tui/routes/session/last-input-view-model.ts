@@ -1,4 +1,5 @@
 import { stringWidth } from "@/bun/node-compat"
+import { subagentPanelLayout } from "./subagent-panel-layout"
 
 export type PinnedInputHeader = "hidden" | "session" | "subagent"
 export type PinnedInputPreviewVisibility = "fully-visible" | "partial" | "offscreen" | "unknown"
@@ -54,8 +55,6 @@ const SESSION_HEADER_ROWS = 5
 const SUBAGENT_SESSION_HEADER_ROWS = 9
 const TWO_LINE_MIN_COLUMNS = 72
 const ONE_LINE_MIN_COLUMNS = 48
-const SUBAGENT_MAX_PANEL_ROWS = 8
-const SUBAGENT_MAX_TERMINAL_FRACTION = 0.15
 const ELLIPSIS = "…"
 
 function isVisibleTextPart(part: Part) {
@@ -81,16 +80,7 @@ export function normalizePreviewText(text: string) {
 }
 
 export function subagentPanelRows(input: { terminalHeight: number; activeCount: number; collapsed: boolean }) {
-  if (input.activeCount <= 0) return 0
-  if (input.collapsed) return 1
-  const panelRows = Math.max(
-    2,
-    Math.min(SUBAGENT_MAX_PANEL_ROWS, Math.floor(input.terminalHeight * SUBAGENT_MAX_TERMINAL_FRACTION)),
-  )
-  const body = panelRows - 1
-  if (input.activeCount <= body) return 1 + input.activeCount
-  const visibleLimit = body > 1 ? body - 1 : body
-  return 1 + visibleLimit + 1
+  return subagentPanelLayout(input).rows
 }
 
 export function sessionChromeRows(input: { header: PinnedInputHeader; subagentRows: number }) {

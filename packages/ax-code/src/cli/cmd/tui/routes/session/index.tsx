@@ -115,6 +115,7 @@ import {
   type SubagentStatusItem,
 } from "./subagent-status-view"
 import { SubagentStatusPanel } from "./subagent-status-panel"
+import { hasNewActiveSubagent } from "./subagent-panel-layout"
 import { SessionRouteContext as context } from "./context"
 import { followUpQueue } from "../../component/prompt/follow-up-queue-store"
 
@@ -296,7 +297,20 @@ export function Session() {
   const [showHeader, setShowHeader] = kv.signal("header_visible", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
-  const [subagentPanelCollapsed, setSubagentPanelCollapsed] = kv.signal("subagent_panel_collapsed", false)
+  const [subagentPanelCollapsed, setSubagentPanelCollapsed] = createSignal(false)
+  let previousSubagentSession = ""
+  let previousActiveSubagents = new Set<string>()
+  createEffect(() => {
+    const sessionID = route.sessionID
+    const activeIDs = subagentTasks()
+      .items.filter((item) => item.active)
+      .map((item) => item.id)
+    if (sessionID !== previousSubagentSession || hasNewActiveSubagent(previousActiveSubagents, activeIDs)) {
+      setSubagentPanelCollapsed(false)
+    }
+    previousSubagentSession = sessionID
+    previousActiveSubagents = new Set(activeIDs)
+  })
   const [stoppingSubagents, setStoppingSubagents] = createSignal<ReadonlySet<string>>(new Set())
   const [statusTick, setStatusTick] = createSignal(0)
 
@@ -743,6 +757,16 @@ export function Session() {
 
   const command = useCommandDialog()
   command.register(() => [
+    {
+      title: subagentPanelCollapsed() ? "Expand active agents" : "Collapse active agents",
+      value: "session.subagents.toggle",
+      category: "Session",
+      enabled: subagentTasks().running > 0,
+      onSelect: (dialog) => {
+        setSubagentPanelCollapsed((value) => !value)
+        dialog.clear()
+      },
+    },
     ...displayCommands({
       conceal,
       currentModel: () => local.model.current(),
