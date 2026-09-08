@@ -4,7 +4,7 @@ export interface CliProviderDefinition {
   binary: string
   args: string[]
   parser: CliOutputParser
-  promptMode: "stdin" | "arg" | "positional"
+  promptMode: "stdin" | "arg" | "positional" | "file"
   promptFlag?: string
   workspaceArg?: string
 }
@@ -14,7 +14,7 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     binary: "claude",
     args: ["--print", "--verbose", "--output-format", "stream-json"],
     parser: claudeCodeParser,
-    promptMode: "positional",
+    promptMode: "stdin",
   },
   "codex-cli": {
     binary: "codex",
@@ -26,8 +26,8 @@ export const CLI_PROVIDER_DEFINITIONS: Record<string, CliProviderDefinition> = {
     binary: "grok",
     args: [],
     parser: grokBuildCliParser,
-    promptMode: "arg",
-    promptFlag: "-p",
+    promptMode: "file",
+    promptFlag: "--prompt-file",
   },
   // Kimi Code CLI (membership): non-interactive -p/--prompt mode with stream-json JSONL.
   // Note: Kimi does not accept Claude's --print flag; -p itself enables headless mode.

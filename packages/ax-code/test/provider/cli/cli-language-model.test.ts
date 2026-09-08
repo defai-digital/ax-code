@@ -1067,7 +1067,7 @@ describe("CliLanguageModel", () => {
     }
   })
 
-  test("passes Claude Code prompt as a positional argument", () => {
+  test("keeps Claude Code prompt out of argv for stdin delivery", () => {
     const definition = CLI_PROVIDER_DEFINITIONS["claude-code"]
     expect(definition).toBeDefined()
 
@@ -1084,7 +1084,8 @@ describe("CliLanguageModel", () => {
     )
 
     expect(cmd).not.toContain("-p")
-    expect(cmd.at(-1)).toBe("write file")
+    expect(cmd).toContain("--print")
+    expect(cmd).not.toContain("write file")
   })
 
   test("does not define the retired qoder-cli bridge", () => {
@@ -1148,7 +1149,7 @@ describe("CliLanguageModel", () => {
     expect(cmd.slice(-2)).toEqual(["-p", "write file"])
   })
 
-  test("passes Grok Build CLI prompt through headless -p mode", () => {
+  test("passes Grok Build CLI prompt file through headless mode", () => {
     const definition = CLI_PROVIDER_DEFINITIONS["grok-build-cli"]
     expect(definition).toBeDefined()
 
@@ -1162,10 +1163,10 @@ describe("CliLanguageModel", () => {
         promptMode: definition?.promptMode ?? "arg",
         promptFlag: definition?.promptFlag,
       },
-      "write file",
+      "/tmp/prompt.txt",
     )
 
-    expect(cmd).toEqual(["grok", "-p", "write file"])
+    expect(cmd).toEqual(["grok", "--prompt-file", "/tmp/prompt.txt"])
   })
 
   test("maps effort to each supported CLI's native arguments", () => {

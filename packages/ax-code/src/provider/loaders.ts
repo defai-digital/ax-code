@@ -650,7 +650,7 @@ interface CliLoaderOpts {
   binary: string
   args: string[]
   parser: CliOutputParser
-  promptMode: "stdin" | "arg" | "positional"
+  promptMode: "stdin" | "arg" | "positional" | "file"
   promptFlag?: string
   workspaceArg?: string
 }

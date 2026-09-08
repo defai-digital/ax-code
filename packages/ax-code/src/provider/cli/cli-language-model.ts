@@ -8,6 +8,7 @@ import { Process } from "../../util/process"
 import { Env } from "../../util/env"
 import { promptToText } from "./prompt"
 import { materializeCliAttachments } from "./attachments"
+import { assertCliCommandSize, materializeCliPrompt } from "./prompt-transport"
 import { parseCliJsonEventLine, stdoutHasCliJsonEvents, type CliOutputParser } from "./parser"
 import { buffer } from "node:stream/consumers"
 import { StringDecoder } from "node:string_decoder"
@@ -30,7 +31,7 @@ export interface CliLanguageModelConfig {
   binary: string
   args: string[]
   parser: CliOutputParser
-  promptMode: "stdin" | "arg" | "positional"
+  promptMode: "stdin" | "arg" | "positional" | "file"
   promptFlag?: string
   workspaceArg?: string
   providerEnvKeys?: readonly string[]
@@ -205,6 +206,8 @@ export function buildCliCommand(
   if (config.modelID !== config.providerID) cmd.push("--model", config.modelID)
   if (config.promptMode === "arg") cmd.push(config.promptFlag ?? "-p", prompt)
   if (config.promptMode === "positional") cmd.push(prompt)
+  // File mode receives an already-materialized path, never the prompt text.
+  if (config.promptMode === "file") cmd.push(config.promptFlag ?? "--prompt-file", prompt)
   return cmd
 }
 
@@ -252,6 +255,43 @@ export class CliLanguageModel implements LanguageModelV3 {
     return this.config.promptMode === "stdin"
   }
 
+  private async startProcess(options: LanguageModelV3CallOptions, jsonInstruction?: string) {
+    const attachments = await materializeCliAttachments(options.prompt)
+    let promptFile: Awaited<ReturnType<typeof materializeCliPrompt>> | undefined
+    const cleanup = async () => {
+      await Promise.all([attachments.cleanup(), promptFile?.cleanup()])
+    }
+    try {
+      const promptText = promptToText(options.prompt, {
+        providerID: this.config.providerID,
+        attachments: attachments.refs,
+      })
+      const text = jsonInstruction ? `${promptText}\n\n${jsonInstruction}` : promptText
+      if (this.config.promptMode === "file") promptFile = await materializeCliPrompt(text)
+      // Materializing attachments or the prompt yields to cancellation.
+      if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
+      const cmd = this.buildCmd(promptFile?.file ?? text, options.providerOptions)
+      assertCliCommandSize(cmd, this.config.providerID)
+      const proc = Process.spawn(cmd, {
+        cwd: currentInstanceDirectory(),
+        stdin: this.useStdin() ? "pipe" : "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+        env: cliEnv(this.config.providerEnvKeys, this.config.providerID),
+        // Group leader so Shell.killTree terminates subprocesses on abort/timeout.
+        detached: process.platform !== "win32",
+      })
+      // Retain input files until exit, including cancellation and asynchronous
+      // spawn errors. Callers observe completion only after cleanup finishes.
+      proc.exited = proc.exited.finally(cleanup)
+      return { proc, text }
+    } catch (error) {
+      // A synchronous spawn failure never produces a child exit event.
+      await cleanup()
+      throw error
+    }
+  }
+
   private setupProcessAbort(proc: Process.Child, signal: AbortSignal | undefined, logLabel: string) {
     let _isAborted = false
     let _killPromise = Promise.resolve<void>(undefined)
@@ -277,6 +317,7 @@ export class CliLanguageModel implements LanguageModelV3 {
     }
 
     signal?.addEventListener("abort", onAbort, { once: true })
+    if (signal?.aborted) onAbort()
     const removeAbortListener = () => signal?.removeEventListener("abort", onAbort)
     void proc.exited.then(removeAbortListener, removeAbortListener)
 
@@ -297,33 +338,9 @@ export class CliLanguageModel implements LanguageModelV3 {
   async doGenerate(options: LanguageModelV3CallOptions) {
     if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
 
-    const attachments = await materializeCliAttachments(options.prompt)
-    const promptText = promptToText(options.prompt, {
-      providerID: this.config.providerID,
-      attachments: attachments.refs,
-    })
     const jsonInstruction = jsonResponseInstruction(options.responseFormat)
-    const text = jsonInstruction ? `${promptText}\n\n${jsonInstruction}` : promptText
-    const proc = Process.spawn(this.buildCmd(text, options.providerOptions), {
-      cwd: currentInstanceDirectory(),
-      stdin: this.useStdin() ? "pipe" : "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-      env: cliEnv(this.config.providerEnvKeys, this.config.providerID),
-      // Group leader so setupProcessAbort's Shell.killTree can signal the
-      // whole tree on abort/timeout. Without this, process.kill(-pid, ...)
-      // fails (not a group leader) and killTree falls back to killing only
-      // this process, leaking any subprocess the CLI itself started (a bash
-      // tool call, a dev server) as an orphan.
-      detached: process.platform !== "win32",
-    })
+    const { proc, text } = await this.startProcess(options, jsonInstruction)
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli generate")
-    // Remove materialized attachment temp files once the process exits
-    // (success, error, or kill). cleanup() never rejects.
-    proc.exited.then(
-      () => attachments.cleanup(),
-      () => attachments.cleanup(),
-    )
 
     if (!proc.stdout || !proc.stderr) {
       await abort.kill()
@@ -432,28 +449,8 @@ export class CliLanguageModel implements LanguageModelV3 {
   async doStream(options: LanguageModelV3CallOptions) {
     if (options.abortSignal?.aborted) throw readAbortError(options.abortSignal)
 
-    const attachments = await materializeCliAttachments(options.prompt)
-    const text = promptToText(options.prompt, {
-      providerID: this.config.providerID,
-      attachments: attachments.refs,
-    })
-    const proc = Process.spawn(this.buildCmd(text, options.providerOptions), {
-      cwd: currentInstanceDirectory(),
-      stdin: this.useStdin() ? "pipe" : "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
-      env: cliEnv(this.config.providerEnvKeys, this.config.providerID),
-      // See doGenerate: group leader so Shell.killTree can kill the whole
-      // process tree on abort/timeout instead of leaking orphaned children.
-      detached: process.platform !== "win32",
-    })
+    const { proc, text } = await this.startProcess(options)
     const abort = this.setupProcessAbort(proc, options.abortSignal, "cli stream")
-    // Remove materialized attachment temp files once the process exits
-    // (success, error, or kill). cleanup() never rejects.
-    proc.exited.then(
-      () => attachments.cleanup(),
-      () => attachments.cleanup(),
-    )
 
     if (!proc.stdout || !proc.stderr) {
       await abort.kill()
