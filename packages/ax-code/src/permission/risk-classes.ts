@@ -93,7 +93,7 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   // its own mutation plan.
   "ops_approve",
   // Opens a URL in the user's real browser — an external surface comparable
-  // to webfetch (network egress plus a prompt-injection vector aimed at the
+  // to the web retrieval tool (network egress plus a prompt-injection vector aimed at the
   // human).
   "browser_open",
   // Destructive bash gate and sandbox escalation. Both are also

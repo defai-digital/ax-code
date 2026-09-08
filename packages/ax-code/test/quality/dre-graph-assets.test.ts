@@ -62,6 +62,19 @@ describe("quality.dre-graph-assets", () => {
     expect(html).toContain(`if (err && err.name === "AbortError") return`)
   })
 
+  test("renders one parseable, same-origin polling implementation", () => {
+    const html = live({ sessionID: "session-1", directory: "src" })
+    const script = html.match(/<script>\n([\s\S]*)\n<\/script>/)?.[1]
+
+    expect(script).toBeDefined()
+    expect(() => new Function(script!)).not.toThrow()
+    expect(script?.match(/const sync = async \(\) =>/g)).toHaveLength(1)
+    expect(script).toContain(`const poll = new URL(cfg.poll, window.location.origin)`)
+    expect(script).toContain(`const urlAllowlist = window.location.origin`)
+    expect(script).toContain(`if (poll.origin !== urlAllowlist) return`)
+    expect(script).toContain(`fetch(poll, { cache: "no-store"`)
+  })
+
   test("sync() flips the live badge on repeated non-OK responses (R4-2)", () => {
     const html = live({ sessionID: "session-1", directory: "src" })
     // 4xx is terminal — one strike trips the badge to "poll error".

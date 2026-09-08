@@ -30329,7 +30329,8 @@
             "in": "query",
             "name": "directory",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 1024
             }
           },
           {
@@ -30368,7 +30369,8 @@
             "in": "query",
             "name": "directory",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 1024
             }
           },
           {
