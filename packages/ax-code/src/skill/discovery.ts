@@ -218,7 +218,9 @@ export namespace Discovery {
       }
 
       const safeFiles = files.flatMap((file) => {
-        if (isExternalFileReference(file.path)) {
+        // WHATWG URLs interpret backslashes as separators, unlike POSIX paths.
+        // Remote manifests use forward slashes on every supported platform.
+        if (isExternalFileReference(file.path) || file.path.includes("\\")) {
           log.warn("skill entry has external file reference", { url: index, skill: skill.name, file })
           return []
         }
@@ -234,6 +236,18 @@ export namespace Discovery {
         }
         return [{ file, dest }]
       })
+
+      // Reject aliases before concurrent writes. Use portable case folding so
+      // a manifest accepted on Linux cannot collide on Windows or macOS.
+      const destinations = new Set<string>()
+      for (const { dest } of safeFiles) {
+        const key = dest.normalize("NFC").toLowerCase()
+        if (destinations.has(key)) {
+          log.warn("skill entry has duplicate destination", { url: index, skill: skill.name, dest })
+          return null
+        }
+        destinations.add(key)
+      }
 
       const downloads = await mapWithConcurrency(safeFiles, fileConcurrency, ({ file, dest }) =>
         // Bound global outbound network fan-out across concurrent skill installs (STAB-04).

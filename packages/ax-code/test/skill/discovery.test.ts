@@ -127,6 +127,63 @@ afterAll(async () => {
 describe("Discovery.pull", () => {
   const pull = (url: string) => Discovery.pull(url)
 
+  test("rejects backslash network references before fetching them", async () => {
+    const implementation = pinnedFetchSpy.getMockImplementation()!
+    const requested: string[] = []
+    pinnedFetchSpy.mockImplementation(async (url) => {
+      requested.push(String(url))
+      if (String(url).endsWith("index.json"))
+        return Response.json({
+          skills: [
+            {
+              name: "backslash-skill",
+              files: [
+                { path: "SKILL.md", sha256: safeSkillHash },
+                { path: "\\\\attacker.example/payload.md", sha256: safeSkillHash },
+              ],
+            },
+          ],
+        })
+      return new Response(safeSkillBody)
+    })
+    try {
+      await pull(`${origin}/backslash-source/`)
+      expect(requested.every((url) => new URL(url).origin === origin)).toBe(true)
+    } finally {
+      pinnedFetchSpy.mockImplementation(implementation)
+    }
+  })
+
+  test.each(["./SKILL.md", "skill.md"])(
+    "rejects duplicate destination alias %s before downloading skill files",
+    async (alias) => {
+      const implementation = pinnedFetchSpy.getMockImplementation()!
+      let downloads = 0
+      pinnedFetchSpy.mockImplementation(async (url) => {
+        if (String(url).endsWith("index.json"))
+          return Response.json({
+            skills: [
+              {
+                name: "duplicate-skill",
+                files: [
+                  { path: "SKILL.md", sha256: safeSkillHash },
+                  { path: alias, sha256: safeSkillHash },
+                ],
+              },
+            ],
+          })
+        downloads++
+        return new Response(safeSkillBody)
+      })
+      try {
+        expect(await pull(`${origin}/duplicate-source/`)).toEqual([])
+        expect(downloads).toBe(0)
+      } finally {
+        pinnedFetchSpy.mockImplementation(implementation)
+      }
+    },
+  )
+
   test("cancels an oversized chunked index before buffering the entire response", async () => {
     const body = new TextEncoder().encode(JSON.stringify({ skills: [], padding: "x".repeat(2 * 1024 * 1024) }))
     let offset = 0
