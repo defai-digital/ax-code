@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.14.8] - 2026-09-08
+
+### Changed
+
+- Prepare AX Code 7.14.8 and SDK 2.5.8.
+
+### Fixed
+
+- Bound consecutive failing tool turns with recovery checkpoints and an explicit stop.
+- Restore the previous Windows runtime when launcher, version, or environment validation fails.
+- Preserve Windows launcher exit codes and keep native warnings out of version detection.
+- Isolate Unix launcher test branding from the user's runtime cache.
+
 ## [7.14.7] - 2026-09-08
 
 ### Changed
