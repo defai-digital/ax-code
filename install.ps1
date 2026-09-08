@@ -325,6 +325,30 @@ function Assert-NodeBundleRuntime([string]$Root) {
   }
 }
 
+function Move-RuntimePath([string]$Source, [string]$Destination) {
+  for ($attempt = 0; $attempt -lt 10; $attempt++) {
+    try {
+      # Every runtime move targets an absent path. Never let a retry nest a
+      # source directory inside a destination left by another operation.
+      if (Test-Path -LiteralPath $Destination) {
+        throw "Runtime destination already exists: $Destination"
+      }
+      Move-Item -LiteralPath $Source -Destination $Destination -ErrorAction Stop
+      return
+    } catch {
+      $exception = $_.Exception
+      while ($exception.InnerException -and (($exception.HResult -band 0xffff) -notin @(32, 33))) {
+        $exception = $exception.InnerException
+      }
+      $code = $exception.HResult -band 0xffff
+      if ($attempt -ge 9 -or $code -notin @(32, 33)) { throw }
+      # Windows may retain an execution or antivirus handle briefly after a
+      # version probe exits. Retry sharing/lock violations, not other I/O errors.
+      Start-Sleep -Milliseconds 200
+    }
+  }
+}
+
 function Install-NodeBundleTree([string]$Root, [string]$ExpectedVersion = "local") {
   $launcher = Join-Path $Root "bin\ax-code.cmd"
   $lib = Join-Path $Root "lib"
@@ -382,14 +406,14 @@ function Install-NodeBundleTree([string]$Root, [string]$ExpectedVersion = "local
         if (Test-Path -LiteralPath $destination) {
           $backup = Join-Path $backupRoot $relative
           New-Item -ItemType Directory -Force -Path (Split-Path -Parent $backup) | Out-Null
-          Move-Item -LiteralPath $destination -Destination $backup -ErrorAction Stop
+          Move-RuntimePath $destination $backup
           $backedUp += $relative
         }
       }
       foreach ($relative in $paths) {
         $staged = Join-Path $stagingRoot $relative
         if (Test-Path -LiteralPath $staged) {
-          Move-Item -LiteralPath $staged -Destination (Join-Path $InstallRoot $relative) -ErrorAction Stop
+          Move-RuntimePath $staged (Join-Path $InstallRoot $relative)
           $installed += $relative
         }
       }
@@ -404,11 +428,11 @@ function Install-NodeBundleTree([string]$Root, [string]$ExpectedVersion = "local
       try {
         for ($i = $installed.Count - 1; $i -ge 0; $i--) {
           $relative = $installed[$i]
-          Move-Item -LiteralPath (Join-Path $InstallRoot $relative) -Destination (Join-Path $stagingRoot $relative) -ErrorAction Stop
+          Move-RuntimePath (Join-Path $InstallRoot $relative) (Join-Path $stagingRoot $relative)
         }
         for ($i = $backedUp.Count - 1; $i -ge 0; $i--) {
           $relative = $backedUp[$i]
-          Move-Item -LiteralPath (Join-Path $backupRoot $relative) -Destination (Join-Path $InstallRoot $relative) -ErrorAction Stop
+          Move-RuntimePath (Join-Path $backupRoot $relative) (Join-Path $InstallRoot $relative)
         }
         $preserveBackup = $false
       } catch {

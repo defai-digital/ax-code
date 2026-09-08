@@ -18,6 +18,7 @@ concurrency:
 permissions:
   contents: read
   id-token: write
+  attestations: write
 
 env:
   AX_CODE_SDK_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -77,4 +78,12 @@ jobs:
         run: pnpm --dir packages/sdk/js run check:jsr-score
 
       - name: Publish JSR package with provenance
+        continue-on-error: true
         run: pnpm --dir packages/sdk/js run publish:jsr
+
+      # A publish request can succeed before its provenance request loses the
+      # connection. Verify actual content and provenance before accepting success.
+      - name: Verify published SDK and provenance
+        uses: ./.github/actions/sdk-publication
+        with:
+          tag: ${{ env.AX_CODE_SDK_RELEASE_TAG }}

@@ -114,6 +114,67 @@ ${body}
 }
 
 describe.skipIf(!available)("PowerShell runtime installation", () => {
+  test.each(["backup", "activation", "rollback"])("tolerates a transient sharing lock during %s", async (phase) => {
+    await runInstaller(`
+New-PreviousInstall
+$script:locks = 0
+$script:rollingBack = $false
+if ("${phase}" -eq "rollback") {
+  function Verify-InstalledRuntime { $script:rollingBack = $true; throw "Simulated final check failure" }
+}
+function Move-Item {
+  [CmdletBinding()]
+  param([string]$LiteralPath, [string]$Destination)
+  $target = if ("${phase}" -eq "backup") {
+    $LiteralPath -eq $InstallNodeDir -and -not $script:rollingBack
+  } elseif ("${phase}" -eq "activation") {
+    $Destination -eq $InstallNodeDir -and $LiteralPath -notmatch "previous"
+  } else {
+    $script:rollingBack -and $LiteralPath -eq $InstallNodeDir
+  }
+  if ($target) {
+    $script:locks++
+    if ($script:locks -le 2) { throw [System.IO.IOException]::new("Simulated sharing violation", -2147024864) }
+  }
+  Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
+}
+if ("${phase}" -eq "rollback") {
+  $failure = $null
+  try { Install-NodeBundleTree $Source } catch { $failure = $_ }
+  if ($failure -notmatch "previous runtime restored") { throw "Expected restoration: $failure" }
+  Assert-PreviousInstall
+} else {
+  Install-NodeBundleTree $Source
+  Assert-InstalledBundle
+}
+Assert-Equal $script:locks 3
+`)
+  })
+
+  test("bounds persistent sharing-lock retries and retains the recovery tree", async () => {
+    await runInstaller(`
+New-PreviousInstall
+$script:attempts = 0
+$script:rollingBack = $false
+function Verify-InstalledRuntime { $script:rollingBack = $true; throw "Simulated final check failure" }
+function Move-Item {
+  [CmdletBinding()]
+  param([string]$LiteralPath, [string]$Destination)
+  if ($script:rollingBack -and $LiteralPath -eq $InstallNodeDir) {
+    $script:attempts++
+    throw [System.IO.IOException]::new("Simulated persistent sharing violation", -2147024864)
+  }
+  Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
+}
+$failure = $null
+try { Install-NodeBundleTree $Source } catch { $failure = $_ }
+if ($failure -notmatch "Recovery files remain at") { throw "Expected recovery path: $failure" }
+Assert-Equal $script:attempts 10
+$backup = Get-ChildItem -LiteralPath $env:AX_TEST_ROOT -Directory -Force | Where-Object { $_.Name -like ".ax-code-install-*" }
+Assert-Equal (Get-Content -LiteralPath (Join-Path $backup.FullName "previous/node/bin/node.exe") -Raw) "previous"
+`)
+  })
+
   test("accepts a version on stdout with a native warning on stderr", async () => {
     await runInstaller(`
 Install-NodeBundleTree $Source
