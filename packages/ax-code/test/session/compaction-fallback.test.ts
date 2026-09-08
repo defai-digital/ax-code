@@ -165,6 +165,78 @@ describe("session.compaction model fallback (C9)", () => {
     })
   })
 
+  test.each([false, true])(
+    "a ChatGPT-incompatible helper falls back directly to the session model (pinned=%s)",
+    async (pinned) => {
+      await using tmp = await tmpdir({ config: pinned ? { agent: { compaction: { model: "test/test-pin" } } } : {} })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const small = createModel({ providerID: "test", modelID: "test-small" })
+          const pin = createModel({ providerID: "test", modelID: "test-pin" })
+          const resolvePin = vi
+            .spyOn(Provider, "resolvePinnedModel")
+            .mockResolvedValue({ providerID: ProviderID.make("test"), modelID: ModelID.make("test-pin") })
+          const session = createModel({ providerID: "test", modelID: "test-model" })
+          const smallSpy = vi.spyOn(Provider, "getSmallModel").mockResolvedValue(small)
+          const { getModel } = mockProviders({
+            "test/test-model": session,
+            "test/test-small": small,
+            "test/test-pin": pin,
+          })
+          const processor = mockProcessor([
+            {
+              type: "fail",
+              error: apiError({
+                message: "The gpt-5.4-mini model is not supported when using Codex with a ChatGPT account.",
+                statusCode: 400,
+                isRetryable: false,
+              }),
+            },
+            { type: "succeed" },
+          ])
+          try {
+            const { session: s, user } = await seedSession()
+            const result = await SessionCompaction.process({
+              parentID: user.id,
+              messages: await Session.messages({ sessionID: s.id }),
+              sessionID: s.id,
+              abort: new AbortController().signal,
+              auto: true,
+            })
+
+            expect(result).toBe("continue")
+            // Exactly one retry: small tier first, session model as the next rung.
+            expect(processor.models).toEqual([
+              { providerID: "test", modelID: pinned ? "test-pin" : "test-small" },
+              { providerID: "test", modelID: "test-model" },
+            ])
+
+            // Both attempts are recorded as assistant messages; the failed one
+            // carries the retryAttempt metadata.
+            const assistants = await compactionAssistantMessages(s.id)
+            expect(assistants).toHaveLength(2)
+            const [failed, succeeded] = assistants
+            expect(failed?.providerID).toBe("test")
+            expect(failed?.modelID).toBe(pinned ? "test-pin" : "test-small")
+            expect(MessageV2.APIError.isInstance(failed?.error)).toBe(true)
+            if (MessageV2.APIError.isInstance(failed?.error)) {
+              expect(failed.error.data.metadata?.retryAttempt).toBe("1")
+              expect(failed.error.data.metadata?.failureClass).toBe("model_unsupported")
+            }
+            expect(succeeded?.modelID).toBe("test-model")
+            expect(succeeded?.error).toBeUndefined()
+          } finally {
+            resolvePin.mockRestore()
+            processor.spy.mockRestore()
+            smallSpy.mockRestore()
+            getModel.mockRestore()
+          }
+        },
+      })
+    },
+  )
+
   test("a non-retryable error (invalid request) does not retry", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -438,6 +510,34 @@ describe("session.compaction-fallback classifier", () => {
       isRetryable: false,
     }).toObject()
     expect(CompactionFallback.classify(sdkVerdict)).toEqual({ class: "invalid_request", retryable: false })
+  })
+
+  test("recognizes CLI unknown and wrapped account-model errors without retrying unrelated failures", () => {
+    const message = "The 'gpt-5.4-mini' model is not supported when using Codex with a ChatGPT account."
+    expect(CompactionFallback.classify(new NamedError.Unknown({ message }).toObject())).toEqual({
+      class: "model_unsupported",
+      retryable: true,
+    })
+    expect(
+      CompactionFallback.classify(
+        new MessageV2.APIError({
+          message: "CLI failed",
+          responseBody: message,
+          statusCode: 400,
+          isRetryable: false,
+        }).toObject(),
+      ),
+    ).toEqual({ class: "model_unsupported", retryable: true })
+    expect(
+      CompactionFallback.classify(
+        new MessageV2.APIError({
+          message: "Unsupported model parameter: temperature",
+          statusCode: 400,
+          isRetryable: false,
+        }).toObject(),
+      ).retryable,
+    ).toBe(false)
+    expect(CompactionFallback.classify(new MessageV2.AbortedError({ message }).toObject()).retryable).toBe(false)
   })
 
   test("annotate persists retry metadata on non-APIError transient shapes", () => {

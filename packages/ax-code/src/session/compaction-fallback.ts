@@ -6,11 +6,14 @@ import { MessageV2 } from "./message-v2"
  * Codex's `compact_model_fallback.rs`. Only error classes that may succeed
  * with a different model retry down the compaction ladder: server overload,
  * response stream disconnect/timeout, and internal server errors (5xx).
- * Invalid requests (4xx auth/validation) and context-window-exceeded are
+ * The explicit Codex ChatGPT model-compatibility rejection also permits a
+ * switch to the session model; it never permits retrying the rejected model.
+ * Other invalid requests (4xx auth/validation) and context-window-exceeded are
  * request-shape problems that no model switch fixes, so they never retry.
  */
 export namespace CompactionFallback {
   export type FailureClass =
+    | "model_unsupported"
     | "server_overloaded"
     | "stream_disconnect"
     | "internal_server_error"
@@ -84,6 +87,10 @@ export namespace CompactionFallback {
     return undefined
   }
 
+  function unsupportedCodexModel(text: string | undefined) {
+    return !!text && /\bmodel is not supported when using codex with a chatgpt account\b/i.test(text)
+  }
+
   /** Classify a recorded assistant-message error into the C9 taxonomy. */
   export function classify(error: NonNullable<MessageV2.Assistant["error"]>): Classification {
     if (MessageV2.ContextOverflowError.isInstance(error)) {
@@ -96,6 +103,14 @@ export namespace CompactionFallback {
       const statusCode = error.data?.statusCode
       const message = error.data?.message
       const responseBody = error.data?.responseBody
+      if (
+        (statusCode === undefined || statusCode === 400) &&
+        !matches(message, PERMANENT_PATTERNS) &&
+        !matches(responseBody, PERMANENT_PATTERNS) &&
+        (unsupportedCodexModel(message) || unsupportedCodexModel(responseBody))
+      ) {
+        return { class: "model_unsupported", retryable: true }
+      }
       // Honor the AI SDK's explicit non-retryable verdict and the permanent
       // billing/quota taxonomy before any transient check: retrying those
       // wastes the single ladder attempt on an error no model switch fixes.
@@ -124,6 +139,9 @@ export namespace CompactionFallback {
         return { class: "stream_disconnect", retryable: true }
       }
       return { class: "unknown", retryable: false }
+    }
+    if (NamedError.Unknown.isInstance(error) && unsupportedCodexModel(dataMessage(error))) {
+      return { class: "model_unsupported", retryable: true }
     }
     if (matches(dataMessage(error), STREAM_PATTERNS)) {
       return { class: "stream_disconnect", retryable: true }

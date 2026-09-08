@@ -4222,3 +4222,41 @@ test("getSmallModel follows small_model to the connected provider serving the sa
     },
   })
 })
+
+test.each([false, true])(
+  "getSmallModel only selects a Codex mini with an explicit override (override=%s)",
+  async (override) => {
+    const loader = vi.spyOn(CUSTOM_LOADERS, "codex-cli").mockResolvedValue({ autoload: true })
+    try {
+      await using tmp = await tmpdir({
+        config: {
+          enabled_providers: ["codex-cli"],
+          ...(override ? { small_model: "codex-cli/gpt-5.4-mini" } : {}),
+          provider: {
+            "codex-cli": {
+              models: {
+                "gpt-5.4-mini": {
+                  name: "GPT Mini",
+                  family: "gpt-mini",
+                  tool_call: true,
+                  limit: { context: 100000, output: 16000 },
+                },
+              },
+            },
+          },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          expect(await Provider.getModel(ProviderID.make("codex-cli"), ModelID.make("gpt-5.4-mini"))).toBeDefined()
+          expect((await Provider.getSmallModel(ProviderID.make("codex-cli")))?.id).toBe(
+            override ? "gpt-5.4-mini" : undefined,
+          )
+        },
+      })
+    } finally {
+      loader.mockRestore()
+    }
+  },
+)

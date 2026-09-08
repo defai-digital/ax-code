@@ -23,6 +23,25 @@ Use the expensive model for reasoning-dense work, and cheap models for mechanica
 
 See `ax-code.json.example` at the repo root for a concrete DeepSeek + Alibaba example.
 
+### Codex CLI auxiliary models
+
+Codex model availability depends on the account's sign-in method and client, not
+only the catalog's text or tool capabilities. AX Code therefore does not infer
+a `codex-cli` small model from names or family metadata. Without an explicit
+`small_model` or compaction-agent model, compaction uses the session model.
+
+If you configure an auxiliary model, verify it works with the same Codex login.
+An explicit Codex rejection that a model is unsupported with a ChatGPT account
+allows compaction to try the session model once, skipping other small models.
+The rejected attempt remains in session history. Other authentication,
+billing, validation, cancellation, and context-overflow failures retain their
+existing handling; the local-provider privacy guard still applies.
+
+For an affected older installation, remove an incompatible `small_model` or
+`agent.compaction.model` override and explicitly pin `agent.compaction.model`
+to a model already verified with that Codex account. Changing only the visible
+session model does not override a separately pinned compaction model.
+
 ## Task-type auto-routing rules
 
 Do **not** auto-route all low-value tasks to a cheap model. Split them by failure cost:

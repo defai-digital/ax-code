@@ -1369,6 +1369,11 @@ export namespace Provider {
       })
     }
 
+    // Codex's catalog includes API models that the CLI's current ChatGPT
+    // account may not support. Without an explicit override, auxiliary calls
+    // must use their session model rather than infer access from a mini family.
+    if (providerID === "codex-cli") return undefined
+
     // Await discovery so models populated solely by discovery loaders (e.g. a
     // local Ollama endpoint) are visible before the priority scan runs.
     // getModel() and defaultModel() both do this; omitting it here caused

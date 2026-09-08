@@ -408,13 +408,16 @@ export namespace SessionCompaction {
       ? await Provider.getModel(pinned.providerID, pinned.modelID)
       : ((await Provider.getSmallModel(userModel.providerID)) ??
         (await Provider.getModel(userModel.providerID, userModel.modelID)))
-    // C9: resolve the next ladder rung lazily — only on a transient failure —
+    // C9: resolve the next ladder rung lazily — only on a recoverable failure —
     // so the happy path performs no extra provider lookups. Order mirrors the
     // primary selection: the provider's small tier first (when an agent pin
     // skipped it), then the session's main model.
-    const resolveNextRung = async (current: Provider.Model): Promise<Provider.Model | undefined> => {
+    const resolveNextRung = async (
+      current: Provider.Model,
+      sessionOnly = false,
+    ): Promise<Provider.Model | undefined> => {
       const candidates: Array<Provider.Model | undefined> = []
-      if (agent.model) {
+      if (agent.model && !sessionOnly) {
         candidates.push(await Provider.getSmallModel(userModel.providerID).catch(() => undefined))
       }
       candidates.push(await Provider.getModel(userModel.providerID, userModel.modelID).catch(() => undefined))
@@ -423,8 +426,9 @@ export namespace SessionCompaction {
       )
     }
     // C9: a transient provider error retries once against the next ladder
-    // rung (max CompactionFallback.MAX_ATTEMPTS total attempts). Non-transient
-    // classes (invalid request, context-window-exceeded) never retry.
+    // rung (max CompactionFallback.MAX_ATTEMPTS total attempts). An explicit
+    // Codex account/model incompatibility goes straight to the session model.
+    // Other invalid requests and context-window-exceeded never retry.
     for (let attempt = 1; attempt <= CompactionFallback.MAX_ATTEMPTS; attempt++) {
       const msg = (await Session.updateMessage({
         id: MessageID.ascending(),
@@ -621,7 +625,7 @@ When constructing the summary, try to stick to this template:
         CompactionFallback.annotate(error, { retryAttempt: attempt, failureClass: failure.class })
         await Session.updateMessage(processor.message)
         if (failure.retryable && attempt < CompactionFallback.MAX_ATTEMPTS) {
-          const next = await resolveNextRung(model)
+          const next = await resolveNextRung(model, failure.class === "model_unsupported")
           if (next) {
             // Privacy guard (same rule as the prompt loop's provider
             // fallback): a session on a local provider must never silently
@@ -636,7 +640,7 @@ When constructing the summary, try to stick to this template:
                 failureClass: failure.class,
               })
             } else {
-              log.warn("compaction failed with a transient error, retrying with the next fallback model", {
+              log.warn("compaction failed, retrying with the next fallback model", {
                 sessionID: input.sessionID,
                 attempt,
                 failureClass: failure.class,
