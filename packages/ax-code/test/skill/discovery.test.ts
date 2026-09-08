@@ -126,6 +126,64 @@ afterAll(async () => {
 
 describe("Discovery.pull", () => {
   const pull = (url: string) => Discovery.pull(url)
+  let literalAttempt = 0
+
+  test.each([
+    ["references/overview#details.md", "references/overview%23details.md"],
+    ["references/version%notes.md", "references/version%25notes.md"],
+    ["%2e%2e/escaped.md", "%252e%252e/escaped.md"],
+    ["references/with spaces.md", "references/with%20spaces.md"],
+  ])("downloads the literal manifest filename %s", async (filename, encoded) => {
+    const implementation = pinnedFetchSpy.getMockImplementation()!
+    const requested: string[] = []
+    const base = `${origin}/literal-paths-${++literalAttempt}/`
+    pinnedFetchSpy.mockImplementation(async (url) => {
+      requested.push(String(url))
+      if (String(url) === `${base}index.json`)
+        return Response.json({
+          skills: [
+            {
+              name: "literal-skill",
+              files: [
+                { path: "SKILL.md", sha256: safeSkillHash },
+                { path: filename, sha256: safeSkillHash },
+              ],
+            },
+          ],
+        })
+      return new Response(safeSkillBody)
+    })
+    try {
+      const roots = await pull(base)
+      expect(roots).toHaveLength(1)
+      expect(requested.sort()).toEqual(
+        [`${base}index.json`, `${base}literal-skill/SKILL.md`, `${base}literal-skill/${encoded}`].sort(),
+      )
+      expect(await readFile(path.join(roots[0], filename), "utf8")).toBe(safeSkillBody)
+    } finally {
+      pinnedFetchSpy.mockImplementation(implementation)
+    }
+  })
+
+  test("ignores malformed Unicode filenames without rejecting a valid skill", async () => {
+    pinnedFetchSpy.mockResolvedValueOnce(
+      Response.json({
+        skills: [
+          {
+            name: "unicode-skill",
+            files: [
+              { path: "SKILL.md", sha256: safeSkillHash },
+              { path: "references/\uD800.md", sha256: safeSkillHash },
+            ],
+          },
+        ],
+      }),
+    )
+    pinnedFetchSpy.mockResolvedValueOnce(new Response(safeSkillBody))
+    const roots = await pull(`${origin}/malformed-unicode/`)
+    expect(roots).toHaveLength(1)
+    expect(await readdir(roots[0])).toEqual(["SKILL.md"])
+  })
 
   test("rejects backslash network references before fetching them", async () => {
     const implementation = pinnedFetchSpy.getMockImplementation()!

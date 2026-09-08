@@ -220,7 +220,7 @@ export namespace Discovery {
       const safeFiles = files.flatMap((file) => {
         // WHATWG URLs interpret backslashes as separators, unlike POSIX paths.
         // Remote manifests use forward slashes on every supported platform.
-        if (isExternalFileReference(file.path) || file.path.includes("\\")) {
+        if (isExternalFileReference(file.path) || file.path.includes("\\") || !file.path.isWellFormed()) {
           log.warn("skill entry has external file reference", { url: index, skill: skill.name, file })
           return []
         }
@@ -234,7 +234,11 @@ export namespace Discovery {
           log.warn("skill entry path escapes skill root", { url: index, skill: skill.name, file })
           return []
         }
-        return [{ file, dest }]
+        // Manifest entries are filesystem paths, not URL references. Encode
+        // their validated relative segments so #, %, and encoded dot segments
+        // cannot change which remote file is fetched.
+        const relative = path.relative(root, dest).split(path.sep).map(encodeURIComponent).join("/")
+        return [{ file, dest, url: new URL(relative, `${host}/${skill.name}/`).href }]
       })
 
       // Reject aliases before concurrent writes. Use portable case folding so
@@ -249,11 +253,9 @@ export namespace Discovery {
         destinations.add(key)
       }
 
-      const downloads = await mapWithConcurrency(safeFiles, fileConcurrency, ({ file, dest }) =>
+      const downloads = await mapWithConcurrency(safeFiles, fileConcurrency, ({ file, dest, url }) =>
         // Bound global outbound network fan-out across concurrent skill installs (STAB-04).
-        OutboundLimits.network.run(() =>
-          download(new URL(file.path, `${host}/${skill.name}/`).href, dest, file.sha256),
-        ),
+        OutboundLimits.network.run(() => download(url, dest, file.sha256)),
       )
       if (!downloads.every(Boolean)) return null
 
