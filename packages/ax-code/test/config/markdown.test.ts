@@ -1,6 +1,62 @@
 import { expect, test, describe } from "vitest"
 import { ConfigMarkdown } from "../../src/config/markdown"
 
+describe("ConfigMarkdown: parser boundaries", () => {
+  test("does not execute language-tagged frontmatter in either parsing mode", async () => {
+    const key = "__ax_markdown_execution_probe__"
+    const globals = globalThis as unknown as Record<string, unknown>
+    try {
+      for (const strict of [false, true]) {
+        const text = `---javascript\n({ name: (globalThis.${key} = true, "probe") })\n---\nBody`
+        const result = await ConfigMarkdown.parseText("probe.md", text, { strict }).catch((error) => error)
+        expect(globals[key]).toBeUndefined()
+        expect(ConfigMarkdown.FrontmatterError.isInstance(result)).toBe(true)
+      }
+    } finally {
+      delete globals[key]
+    }
+  })
+
+  test("rejects malformed YAML on every ordinary parse attempt", async () => {
+    const text = "---\nname: cache-probe\ninvalid: [unclosed\n---\nBody"
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await expect(ConfigMarkdown.parseText("cache-probe.md", text)).rejects.toMatchObject({
+        name: "ConfigFrontmatterError",
+      })
+    }
+  })
+
+  test("repaired Markdown metadata does not vanish on a repeated parse", async () => {
+    const text = "---\nname: repaired-probe\ndescription: Review: verify first\n---\nBody"
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const parsed = await ConfigMarkdown.parseText("repaired.md", text)
+      expect(parsed.data.name).toBe("repaired-probe")
+      expect(parsed.data.description).toBe("Review: verify first")
+    }
+  })
+
+  test("parsed data is not shared between separate callers", async () => {
+    const text = "---\nname: isolated-probe\npolicy:\n  allowed: false\n---\nBody"
+    const first = await ConfigMarkdown.parseText("first.md", text)
+    first.data.policy.allowed = true
+    const second = await ConfigMarkdown.parseText("second.md", text)
+    expect(second.data.policy.allowed).toBe(false)
+  })
+
+  test("guards YAML with a language tag, a BOM, or no closing delimiter", async () => {
+    for (const text of [
+      "---yaml\nname: tagged\nvalue: &anchor restricted\ncopy: *anchor\n---\nBody",
+      "\uFEFF---\nvalue: &anchor restricted\ncopy: *anchor\n---\nBody",
+      "---\nvalue: &anchor restricted\ncopy: *anchor",
+      `---yaml\nname: tagged\nvalue: ${"x".repeat(256 * 1024)}\n---\nBody`,
+    ]) {
+      await expect(ConfigMarkdown.parseText("guarded.md", text)).rejects.toMatchObject({
+        name: "ConfigFrontmatterError",
+      })
+    }
+  })
+})
+
 describe("ConfigMarkdown: normal template", () => {
   const template = `This is a @valid/path/to/a/file and it should also match at
   the beginning of a line:

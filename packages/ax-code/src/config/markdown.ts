@@ -119,16 +119,31 @@ export namespace ConfigMarkdown {
       { cause: err },
     )
 
-  function extractFrontmatter(text: string): string | null {
-    const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/)
-    return match ? match[1] : null
+  function prepareFrontmatter(file: string, input: string) {
+    // gray-matter strips a BOM and accepts language tags before choosing an
+    // engine. Normalize data-only tags before it can select an executable one.
+    const text = input.replace(/^\uFEFF/, "")
+    if (!text.startsWith("---") || text.startsWith("----")) return { text, frontmatter: null }
+    const newline = text.indexOf("\n")
+    const header = (newline === -1 ? text : text.slice(0, newline)).trimEnd()
+    if (!/^---[\t ]*(?:(?:yaml|yml|json)[\t ]*)?$/.test(header)) {
+      throw new FrontmatterError({ path: file, message: `${file}: Only YAML or JSON frontmatter is supported` })
+    }
+    const body = newline === -1 ? "" : text.slice(newline + 1)
+    // Match the exact closing-prefix behavior of gray-matter, including its
+    // acceptance of an unterminated block, so no parsed bytes bypass guards.
+    const closing = body.startsWith("---") ? 0 : body.indexOf("\n---")
+    const frontmatter = closing === -1 ? body : body.slice(0, closing)
+    return { text: `---\n${body}`, frontmatter }
   }
 
   async function load(file: string, text: string, strict = false) {
     // Reject oversized or alias-heavy frontmatter before handing it to the
     // YAML parser, which is vulnerable to quadratic alias expansion (#251).
-    const frontmatter = extractFrontmatter(text)
-    if (frontmatter) {
+    const prepared = prepareFrontmatter(file, text)
+    text = prepared.text
+    const frontmatter = prepared.frontmatter
+    if (frontmatter !== null) {
       const rejection = rejectDangerousFrontmatter(file, frontmatter)
       if (rejection) throw rejection
     }
@@ -143,10 +158,10 @@ export namespace ConfigMarkdown {
       }
     }
     try {
-      return matter(text)
+      return matter(text, {})
     } catch {
       try {
-        return matter(fallbackSanitization(text))
+        return matter(fallbackSanitization(text), {})
       } catch (err) {
         throw wrap(file)(err)
       }
