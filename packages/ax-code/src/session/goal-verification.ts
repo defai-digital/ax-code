@@ -65,6 +65,13 @@ export namespace GoalVerification {
     if (metadata?.["passed"] === false || metadata?.["allPassed"] === false) return false
     const status = metadata?.["status"]
     if (status === "failed" || status === "error" || status === "timeout") return false
+    const envelopes = metadata?.["verificationEnvelopes"]
+    if (Array.isArray(envelopes)) {
+      return envelopes.some((entry) => {
+        const result = asRecordOrUndefined(asRecordOrUndefined(entry)?.["result"])
+        return result?.["status"] === "passed" && result["passed"] === true
+      })
+    }
     return true
   }
 

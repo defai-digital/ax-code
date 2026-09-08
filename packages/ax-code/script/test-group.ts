@@ -59,6 +59,7 @@ const e2e = new Set([
   "test/tool/skill.test.ts",
   "test/tool/tool.test.ts",
   "test/tool/verify_project.test.ts",
+  "test/tool/goal-assurance.test.ts",
 ])
 
 const runtimeContract = new Set([
@@ -77,6 +78,9 @@ const runtimeContract = new Set([
   "test/session/message-recovery.test.ts",
   "test/permission/next.test.ts",
   "test/tool/bash-strict-mode.test.ts",
+  "test/tool/goal-assurance.test.ts",
+  "test/session/goal-check-verification.test.ts",
+  "test/quality/source-state.test.ts",
 ])
 
 const recovery = new Set([

@@ -1,15 +1,23 @@
 import { GoalPlan } from "./goal-plan"
 import type { SessionID } from "./schema"
+import type { SourceState } from "../quality/verification-envelope"
+import type { GoalVerification } from "./goal-verification"
+import { GoalCheckVerification } from "./goal-check-verification"
 
 export namespace GoalContractVerification {
   export type Decision =
     | { ok: true }
-    | { ok: false; reason: "missing_plan" | "digest_mismatch" | "missing_evidence"; message: string }
+    | {
+        ok: false
+        reason: "missing_plan" | "digest_mismatch" | "missing_evidence" | "missing_executed_checks"
+        message: string
+      }
 
   export function decide(input: {
     sessionID: SessionID
     created: number
     acceptanceEvidence?: Record<string, string>
+    execution?: { messages: readonly GoalVerification.Message[]; source: SourceState; cwd: string }
   }): Decision {
     const stored = GoalPlan.storedDigest(input.sessionID, input.created)
     const result = GoalPlan.read(input.sessionID, input.created)
@@ -28,6 +36,23 @@ export namespace GoalContractVerification {
       }
     }
     const contract = result.contract
+    if (contract.assurance) {
+      const missing = input.execution
+        ? GoalCheckVerification.missing({
+            assurance: contract.assurance,
+            sessionID: input.sessionID,
+            created: input.created,
+            digest: stored,
+            ...input.execution,
+          })
+        : contract.assurance.checks.map((check) => check.id)
+      if (missing.length)
+        return {
+          ok: false,
+          reason: "missing_executed_checks",
+          message: `Cannot mark the goal complete: required checks lack current successful execution evidence: ${missing.join(", ")}. Run verify_project with goalCheck for each missing id after the last source change. Prose evidence and ordinary shell commands do not satisfy these checks.`,
+        }
+    }
     const evidence = input.acceptanceEvidence ?? {}
     const missing = contract.acceptance.filter((item) => !String(evidence[item.id] ?? "").trim())
     if (missing.length > 0) {

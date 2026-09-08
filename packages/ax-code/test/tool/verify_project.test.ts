@@ -38,7 +38,7 @@ describe("VerifyProjectTool", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const command = `bun -e "console.error('src/foo.ts(2,3): error TS2345: wrong type'); process.exit(1)"`
+        const command = `node -e "console.error('src/foo.ts(2,3): error TS2345: wrong type'); process.exit(1)"`
         const asks: any[] = []
         const tool = await VerifyProjectTool.init()
 
@@ -136,7 +136,7 @@ describe("VerifyProjectTool", () => {
             workflow: "debug",
             repairHandoff: true,
             commands: {
-              typecheck: `bun -e "console.error('src/foo.ts(10,4): error TS2322: Type string is not assignable to type number.'); process.exit(1)"`,
+              typecheck: `node -e "console.error('src/foo.ts(10,4): error TS2322: Type string is not assignable to type number.'); process.exit(1)"`,
               lint: null,
               test: null,
             },

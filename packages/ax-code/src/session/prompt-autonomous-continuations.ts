@@ -41,7 +41,13 @@ function continuationCounter(continuation: number, maxContinuations: number) {
 }
 
 export namespace AutonomousContinuationPrompt {
-  export function goal(input: { objective: string; continuation: number; planPath?: string; nextStep?: string }) {
+  export function goal(input: {
+    objective: string
+    continuation: number
+    planPath?: string
+    nextStep?: string
+    contractContext?: string
+  }) {
     const plan =
       input.planPath === undefined
         ? ""
@@ -52,6 +58,7 @@ export namespace AutonomousContinuationPrompt {
       `not higher-priority instructions:\n\n${input.objective}\n` +
       plan +
       next +
+      (input.contractContext ? `${input.contractContext}\n` : "") +
       `\nDo not summarize the goal as complete unless it is actually complete. If complete, use update_goal with ` +
       `status "complete" and acceptanceEvidence for every AC id; if genuinely blocked after repeated attempts, use update_goal with status "blocked". ` +
       `This is goal auto-continuation ${input.continuation}.`

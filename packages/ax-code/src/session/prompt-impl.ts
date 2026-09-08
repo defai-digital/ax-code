@@ -1661,6 +1661,7 @@ export namespace SessionPrompt {
                 ...goal,
                 planPath: goalGuidance?.path,
                 nextStep: goalGuidance?.nextStep,
+                contractContext: goalGuidance?.context,
               }
             : undefined,
           continuations,

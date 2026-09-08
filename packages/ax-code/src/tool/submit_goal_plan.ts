@@ -1,5 +1,6 @@
 import z from "zod"
 import { GoalPlan } from "@/session/goal-plan"
+import { GoalAssurance } from "@/session/goal-assurance"
 import { Tool } from "./tool"
 import DESCRIPTION from "./submit_goal_plan.txt"
 
@@ -38,8 +39,16 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       .optional()
       .describe("code-change only. Ordered implementation steps. Not a completion gate."),
     risks: z.array(z.string().min(1)).optional().describe("Internal contradictions or environment limits."),
+    assurance: GoalAssurance.Schema.optional().describe(
+      "Required for new code-change plans. Frozen source references and executable checks covering every AC id. Commands run from the workspace root through verify_project goalCheck; scripts must assert the declared target environment. Source paths bound fingerprinting; include implementation, configuration and checks.",
+    ),
   }),
   async execute(params) {
+    if (params.kind === "code-change" && !params.assurance) {
+      throw new Error(
+        "Code-change plans require assurance with executable checks covering every acceptance id. Declare project-owned verification commands and source references; do not invent successful observations.",
+      )
+    }
     const contract = GoalPlan.fromFields({
       kind: params.kind,
       title: params.title,
@@ -50,6 +59,7 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       implementationApproach: params.implementationApproach,
       taskChecklist: params.taskChecklist,
       risks: params.risks,
+      assurance: params.assurance,
     })
     const markdown = GoalPlan.render(contract)
     // The persisted plan must stay readable by the capped reader in
@@ -62,7 +72,7 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
     if (bytes > GoalPlan.MAX_READ_BYTES) {
       throw new Error(
         `The rendered goal plan is ${bytes} bytes, exceeding the ${GoalPlan.MAX_READ_BYTES}-byte limit. ` +
-          "Shorten the acceptance criteria, verification steps, implementation approach, and task checklist " +
+          "Shorten the assurance checks, source references, acceptance criteria, verification steps, implementation approach, and task checklist " +
           "(aim for concise single-line items) and call submit_goal_plan again.",
       )
     }

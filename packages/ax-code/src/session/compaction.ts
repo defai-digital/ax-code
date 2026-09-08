@@ -486,9 +486,13 @@ When constructing the summary, try to stick to this template:
 
 [What technical decisions were made, and why? Include rejected alternatives when the rejection matters.]
 
+## Sources and environments
+
+[Preserve the active goal plan path and source references/revisions. Distinguish legacy authority from comments and previous implementations. Keep source and target environments separate; include schema, deployed revision, verification time and location only when observed. Never copy credentials. Mark unknown facts unverified and replaced findings superseded. New user corrections override historical summaries. Reread the frozen goal contract and recheck mutable facts before continuing.]
+
 ## Progress
 
-[What work has been completed, what is still in progress? State verification status explicitly: which tests, typecheck, or builds ran, and whether they passed, failed, or have not been run yet.]
+[What work has been completed, what is still in progress? State verification status explicitly: which tests, typecheck, builds, database, migration, parity, configuration or deployment checks ran, and whether they passed, failed, were skipped, or have not been run yet. Preserve executed goal check ids and remaining acceptance coverage. A completed batch does not complete the entire migration.]
 
 ## Errors
 

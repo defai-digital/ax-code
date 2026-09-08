@@ -61,6 +61,7 @@ export async function buildTurnContext(input: {
             : `  Do not start new substantive work for this goal unless the runtime resumes it.`,
           ...(goalGuidance?.path ? [`  Plan: ${goalGuidance.path}`] : []),
           ...(goalGuidance?.nextStep ? [`  Next checklist step: ${goalGuidance.nextStep}`] : []),
+          ...(goalGuidance?.context ? [goalGuidance.context] : []),
           `</session_goal>`,
         ].join("\n")
       : undefined

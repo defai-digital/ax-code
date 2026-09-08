@@ -11,6 +11,7 @@ type GoalContinuationInfo = {
   timeUsedSeconds: number
   planPath?: string
   nextStep?: string
+  contractContext?: string
 }
 
 type PromptLoopGoalTransition =
@@ -51,6 +52,7 @@ export function handlePromptLoopGoalContinuation(
         continuation: decision.continuation,
         planPath: input.goal?.planPath,
         nextStep: input.goal?.nextStep,
+        contractContext: input.goal?.contractContext,
       }),
       // An active goal means we're in a fresh budget cycle (new or resumed goal),
       // so clear any stale wrap-up state from a previous goal in this session.

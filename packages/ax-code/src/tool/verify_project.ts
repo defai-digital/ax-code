@@ -25,6 +25,8 @@ import { Hash } from "../util/hash"
 import { Tool } from "./tool"
 import DESCRIPTION from "./verify_project.txt"
 import { normalizeToWorkspacePath } from "./file-path"
+import { verifyGoalCheck } from "./verify-goal-check"
+import type { GoalCheckVerification } from "../session/goal-check-verification"
 
 const POLICY_CONTEXT_MAX_CHARS = 4_000
 
@@ -243,9 +245,28 @@ function repairHandoffMetadata(input: {
   }
 }
 
+type VerifyProjectMetadata = {
+  passed: boolean
+  envelopeIds: { envelopeId: string; name: string; status: VerificationEnvelope["result"]["status"] }[]
+  verificationEnvelopes: VerificationEnvelope[]
+  goalCheckReceipt?: GoalCheckVerification.Receipt
+  commands?: Awaited<ReturnType<typeof resolveCommands>>
+  repairHandoff?: ReturnType<typeof repairHandoffMetadata>
+  policy?: { rules: PolicyRules; requiredChecksPassed: boolean; missingRequiredChecks: PolicyRequiredCheck[] }
+  policyContext?: ReturnType<typeof policyContext>
+}
+
 export const VerifyProjectTool = Tool.define("verify_project", {
   description: DESCRIPTION,
   parameters: z.object({
+    goalCheck: z
+      .string()
+      .min(1)
+      .max(40)
+      .optional()
+      .describe(
+        "Execute this required check id from the active frozen goal plan. Uses its exact command and records completion evidence. Do not combine with command overrides, paths, workflow, scopeDescription or repairHandoff.",
+      ),
     workflow: WorkflowEnum.optional().describe('Assurance lane: "review", "debug", or "qa". Defaults to "qa".'),
     paths: z.array(z.string().min(1)).max(200).optional().describe("Repo-relative files that define the scope."),
     scopeDescription: z.string().min(1).max(500).optional().describe("Human-readable scope when paths are not enough."),
@@ -257,7 +278,19 @@ export const VerifyProjectTool = Tool.define("verify_project", {
       "Optional command overrides. Omit a field to infer from package.json, set it to null to skip, or set it to a command string to run exactly that command.",
     ),
   }),
-  execute: async (args, ctx) => {
+  execute: async (args, ctx): Promise<{ title: string; output: string; metadata: VerifyProjectMetadata }> => {
+    if (args.goalCheck !== undefined) {
+      if (
+        args.commands !== undefined ||
+        args.paths !== undefined ||
+        args.workflow !== undefined ||
+        args.scopeDescription !== undefined ||
+        args.repairHandoff !== undefined
+      ) {
+        throw new Error("goalCheck cannot be combined with verification overrides; the frozen plan selects the check")
+      }
+      return verifyGoalCheck(args.goalCheck, ctx)
+    }
     const workflow = args.workflow ?? "qa"
     const cwd = Instance.worktree
     const paths = normalizePaths(args.paths)

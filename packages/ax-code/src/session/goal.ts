@@ -212,12 +212,19 @@ export namespace SessionGoal {
     return goal
   }
 
-  export async function setStatus(input: { sessionID: SessionID; status: Status }): Promise<Info> {
+  export async function setStatus(input: {
+    sessionID: SessionID
+    status: Status
+    expected?: { created: number; status: Status }
+  }): Promise<Info> {
     const now = Date.now()
     const store = SessionShard.storeFor(input.sessionID, { write: true })
     const goal = store.transaction((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) throw new Error("No goal is set for this session")
+      if (input.expected && (row.time_created !== input.expected.created || row.status !== input.expected.status)) {
+        throw new Error("The goal changed during verification; verify the current goal before updating it")
+      }
       assertCanSetStatus(row, input.status)
       db.update(SessionGoalTable)
         .set({ status: input.status, time_updated: now })

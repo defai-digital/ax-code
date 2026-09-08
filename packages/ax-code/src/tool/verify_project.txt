@@ -3,6 +3,7 @@ Run project verification and record the result as structured evidence. Use this 
 This tool runs configured project commands, so it requires bash permission for each non-skipped command.
 
 Input:
+- goalCheck: optional required check id from the active frozen goal plan. Execute exactly that command with bash permission and record a receipt tied to this goal, session, workspace and current source bytes. Do not combine with other parameters. Rerun every required check after source changes. The project script must assert the intended external environment and business behavior; a target label alone is not proof.
 - workflow: optional "review" | "debug" | "qa"; defaults to "qa"
 - paths: optional repo-relative files that define the verification scope and help test selection
 - scopeDescription: optional human-readable scope when paths alone are not enough

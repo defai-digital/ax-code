@@ -147,6 +147,7 @@ Opens a local browser dashboard with the run summary, timeline, changes, validat
 
 ## Related
 
+- [Goal assurance](goal-assurance.md) — executable acceptance checks and source freshness for long goals
 - [Why AX Code](../why-ax-code.md) — what this evidence layer is for
 - [Verified Multi-Model Changes](verified-multi-model-change.md) — producing candidates worth comparing
 - [Semantic Layer](../architecture/semantic-layer.md) — provenance envelopes on graph and LSP answers

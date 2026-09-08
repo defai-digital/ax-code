@@ -4,6 +4,9 @@ import { SessionGoal } from "@/session/goal"
 import { GoalContractVerification } from "@/session/goal-contract-verification"
 import { GoalPlanOrchestration } from "@/session/goal-plan-orchestration"
 import { GoalVerification } from "@/session/goal-verification"
+import { GoalPlan } from "@/session/goal-plan"
+import { currentSourceState } from "@/quality/source-state"
+import { Instance } from "@/project/instance"
 import { Todo } from "@/session/todo"
 import { Tool } from "./tool"
 import { ToolNumber } from "./schema"
@@ -72,6 +75,7 @@ export const UpdateGoalTool = Tool.define("update_goal", {
       .describe("Required when a goal plan exists: map each acceptance id (AC1, AC2, …) to a short evidence string."),
   }),
   async execute(params, ctx) {
+    let expected: { created: number; status: SessionGoal.Status } | undefined
     if (params.status === "complete") {
       // Evidence gate: the goal continuation prompt alone does not stop a
       // model from declaring success early (observed in the field — a goal
@@ -83,24 +87,44 @@ export const UpdateGoalTool = Tool.define("update_goal", {
       // from earlier goal-less conversation (or history inherited by a fork)
       // cannot block a goal that never modified a file.
       const currentGoal = await SessionGoal.get(ctx.sessionID)
+      if (!currentGoal) throw new Error("No goal is set for this session")
+      expected = { created: currentGoal.time.created, status: currentGoal.status }
+      const messages = await Session.messages({ sessionID: ctx.sessionID })
       if (currentGoal) {
+        const plan = GoalPlan.read(ctx.sessionID, currentGoal.time.created)
+        const assurance = plan.status === "found" ? plan.contract.assurance : undefined
         const contract = GoalContractVerification.decide({
           sessionID: ctx.sessionID,
           created: currentGoal.time.created,
           acceptanceEvidence: params.acceptanceEvidence,
+          ...(assurance
+            ? {
+                execution: {
+                  messages,
+                  source: await currentSourceState(
+                    Instance.worktree,
+                    Instance.project.vcs ?? "",
+                    assurance.sourcePaths,
+                  ),
+                  cwd: Instance.worktree,
+                },
+              }
+            : {}),
         })
         if (!contract.ok) throw new Error(contract.message)
       }
       const decision = GoalVerification.decide({
-        messages: await Session.messages({ sessionID: ctx.sessionID }),
+        messages,
         pendingTodos: Todo.active(ctx.sessionID),
         since: currentGoal?.time.created,
       })
       if (!decision.ok) throw new Error(decision.message)
     }
+    ctx.abort.throwIfAborted()
     const goal = await SessionGoal.setStatus({
       sessionID: ctx.sessionID,
       status: params.status,
+      expected,
     })
     const completionBudgetReport =
       params.status === "complete" && (goal.tokenBudget !== undefined || goal.timeUsedSeconds > 0)

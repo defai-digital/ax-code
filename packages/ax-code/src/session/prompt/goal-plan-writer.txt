@@ -15,7 +15,7 @@ does not need web research.
 
 ## Goal kind — pick exactly one
 
-- code-change — modify the workspace; the diff is the evidence.
+- code-change — modify the workspace; the diff and executed acceptance checks are evidence.
 - analysis — understand existing code; deliverable is prose.
 - research — gather external info; deliverable is a summary.
 
@@ -34,6 +34,40 @@ Cover every acceptance criterion. Tag each step `gating` (pass/fail) or
 observation that must be present. Drive real shipped functions, not mocks of
 the unit under test.
 
+For code-change goals, supply an assurance contract (version 1). Declare concise
+source references with roles legacy, requirement, or implementation. Reference
+the inspected revision or object when available; comments and previous migration
+implementations are leads, not proof of legacy behavior. Never invent fields or
+requirements to reconcile conflicting sources. Record missing sources in risks.
+
+Declare sourcePaths relative to the workspace for bounded source fingerprinting. Include
+the implementation, configuration and check scripts that affect the outcome.
+Git workspaces fingerprint tracked and nonignored untracked files within those
+paths; explicitly name ignored configuration files that affect acceptance.
+
+Each assurance check has a unique id, acceptanceIds (AC1, AC2, ...), exact command
+run from the workspace root, purpose and environment (the required target, not a
+claim that it has been observed). Cover every acceptance id. Commands must exit
+nonzero on failure, unavailable dependencies or skipped required assertions.
+Use existing project checks where available; if a check must be implemented,
+state that in the checklist. Do not wrap failures with `|| true` or replace a
+check with a command that only prints success. A command's exit code can only
+prove the assertions that command actually makes.
+
+For migrations, inspect relevant UI/API flows, database definitions and executable
+logic (triggers, procedures, jobs), configuration branches, schema/data mappings,
+old/new parity and deployment state. Include relevant checks; do not treat UI or
+unit tests as proof of these other layers. Database/deployment scripts must assert
+the intended instance, schema, configuration and deployed revision before checks.
+Do not put credentials in commands, references or environment descriptions.
+Unavailable required environments remain unverified; never downgrade required
+acceptance to best-effort evidence to permit completion.
+
+For large projects, retain the whole requested scope but organize work into bounded
+business-flow batches and a coverage inventory. Completing one batch does not
+complete the whole migration. Preserve explicit approved behavior changes separately
+from faithful migration requirements.
+
 ## Output
 
 Call submit_goal_plan with:
@@ -46,6 +80,7 @@ Call submit_goal_plan with:
 - implementationApproach and taskChecklist (code-change only; 2–8 concrete
   steps; these are how-guidance, never the judged contract)
 - risks only when the objective contradicts itself or the environment
+- assurance (required for code-change): version, sourcePaths, sources, checks
 
 ## Size budget
 

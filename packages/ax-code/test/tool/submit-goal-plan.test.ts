@@ -2,13 +2,55 @@ import { describe, expect, test } from "vitest"
 import { SubmitGoalPlanTool } from "../../src/tool/submit_goal_plan"
 import { GoalPlan } from "../../src/session/goal-plan"
 import { MessageID } from "../../src/session/schema"
+import type { GoalAssurance } from "../../src/session/goal-assurance"
+
+const assurance: GoalAssurance.Contract = {
+  version: 1,
+  sourcePaths: ["src"],
+  sources: [{ role: "requirement", reference: "User acceptance criteria" }],
+  checks: [
+    {
+      id: "tests",
+      acceptanceIds: ["AC1"],
+      command: "node check.cjs",
+      purpose: "Assert acceptance",
+      environment: "local fixture",
+    },
+  ],
+}
 
 describe("submit_goal_plan", () => {
+  test("new code-change plans cannot omit executable assurance", async () => {
+    const tool = await SubmitGoalPlanTool.init()
+    await expect(
+      tool.execute(
+        {
+          kind: "code-change",
+          acceptance: ["Feature works"],
+          verification: [{ tag: "gating", action: "inspect", observation: "works" }],
+          nonGoals: ["other features"],
+          assumedScope: "src",
+          implementationApproach: "Implement",
+          taskChecklist: ["Implement", "Verify"],
+        },
+        {
+          sessionID: "ses_test" as any,
+          messageID: MessageID.ascending(),
+          agent: "goal-plan-writer",
+          abort: new AbortController().signal,
+          messages: [],
+          metadata() {},
+          async ask() {},
+        },
+      ),
+    ).rejects.toThrow(/require assurance/)
+  })
   test("renders a canonical contract", async () => {
     const tool = await SubmitGoalPlanTool.init()
     const result = await tool.execute(
       {
         kind: "code-change",
+        assurance,
         title: "Add health endpoint",
         acceptance: ["GET /health returns 200"],
         verification: [{ tag: "gating", action: "curl the endpoint", observation: "HTTP 200" }],
@@ -38,6 +80,10 @@ describe("submit_goal_plan", () => {
     const tool = await SubmitGoalPlanTool.init()
     const params = {
       kind: "code-change" as const,
+      assurance: {
+        ...assurance,
+        checks: [{ ...assurance.checks[0], acceptanceIds: ["AC1", "AC2", "AC3", "AC4", "AC5"] }],
+      },
       title: "A very verbose plan",
       acceptance: Array.from({ length: 5 }, (_, index) => `Criterion ${index}: ${"outcome ".repeat(120)}`),
       verification: Array.from({ length: 8 }, (_, index) => ({
@@ -73,6 +119,7 @@ describe("submit_goal_plan", () => {
     const result = await tool.execute(
       {
         kind: "code-change",
+        assurance,
         title: "A large but compact plan",
         acceptance: ["The feature works end to end"],
         verification: [{ tag: "gating", action: "run the test suite", observation: "all checks pass" }],
@@ -105,7 +152,7 @@ describe("submit_goal_plan", () => {
     const tool = await SubmitGoalPlanTool.init()
     const result = await tool.execute(
       {
-        kind: "code-change",
+        kind: "analysis",
         title: "x",
         acceptance: ["a"],
         verification: [{ tag: "gating", action: "a", observation: "a" }],
@@ -129,7 +176,7 @@ describe("submit_goal_plan", () => {
     expect(Buffer.byteLength(result.output, "utf8")).toBeLessThanOrEqual(GoalPlan.MAX_READ_BYTES)
     expect(result.output.split("\n").length).toBeGreaterThan(Truncate.MAX_LINES)
     expect(result.metadata.truncated).toBe(false)
-    expect(result.output).toContain("## Task checklist")
+    expect(result.output).toContain("## Assumed scope")
     expect(() => GoalPlan.parse(result.output)).not.toThrow()
   })
 })

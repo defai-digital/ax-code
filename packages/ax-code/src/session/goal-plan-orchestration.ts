@@ -116,6 +116,7 @@ export namespace GoalPlanOrchestration {
       `Read it first. Seed todos from its acceptance criteria. Work the task checklist in order and ` +
       `check items off in the plan file as you complete them. Before calling update_goal with status ` +
       `"complete", run the verification plan and supply acceptanceEvidence for every AC id. ` +
+      `For an assurance contract, execute every required check using verify_project with its goalCheck id; ordinary shell runs and prose cannot replace these receipts. ` +
       `Work until the goal is complete, blocked, paused, cleared, or budget-limited.`
     )
   }
@@ -123,7 +124,7 @@ export namespace GoalPlanOrchestration {
   export function resumePrompt(input: { objective: string; path: string }) {
     return (
       `Goal resumed: ${input.objective}\n\n` +
-      `Continue from the plan at ${input.path}. ` +
+      `Read the current frozen plan at ${input.path} before continuing. Reconcile newer user corrections with historical summaries, recheck changed source and environment facts, and keep unverified findings explicit. ` +
       `Work toward this goal until it is complete, blocked, paused, cleared, or budget-limited.`
     )
   }

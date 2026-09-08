@@ -14,6 +14,28 @@ function assistant(...parts: unknown[]): GoalVerification.Message {
 }
 
 describe("GoalVerification.decide", () => {
+  test("skipped verification cannot satisfy a file mutation", () => {
+    expect(
+      GoalVerification.decide({
+        messages: [
+          assistant(toolPart("edit")),
+          assistant({
+            type: "tool",
+            tool: "verify_project",
+            state: {
+              status: "completed",
+              metadata: {
+                passed: true,
+                verificationEnvelopes: [{ result: { passed: true, status: "skipped" } }],
+              },
+            },
+          }),
+        ],
+        pendingTodos: [],
+      }).ok,
+    ).toBe(false)
+  })
+
   test("allows completion when there are no todos and no file changes", () => {
     expect(
       GoalVerification.decide({

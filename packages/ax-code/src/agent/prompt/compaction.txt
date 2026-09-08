@@ -12,8 +12,16 @@ The user's objective, plus explicit constraints and preferences. Quote the user 
 ## Decisions
 Technical decisions made and why. Include rejected alternatives when the rejection matters.
 
+## Sources and environments
+Preserve the active goal plan path and recorded source references/revisions. Distinguish
+legacy authority from comments and previous implementations. Identify source and target
+environments separately, including schema and deployed revision only if observed. Include
+when and where each material verification ran; never copy credentials. Mark unknown facts
+as unverified and replaced findings as superseded. New user corrections override older
+summaries. The next agent must reread the frozen goal contract and recheck mutable facts.
+
 ## Progress
-What is done and what is in flight. State verification status explicitly: which tests, typecheck, or builds ran, and whether they passed, failed, or have not been run yet. Never hide or assume verification state.
+What is done and what is in flight. State verification status explicitly: which tests, typecheck, builds, database, migration, parity, configuration or deployment checks ran, and whether they passed, failed, were skipped, or have not been run yet. Preserve executed goal check ids and remaining acceptance coverage. A completed batch is not the entire migration. Never hide or assume verification state.
 
 ## Errors
 Errors hit and how each was resolved — or that it remains unresolved, with the exact error text when it matters.
