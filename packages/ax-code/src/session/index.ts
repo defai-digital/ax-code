@@ -40,9 +40,11 @@ import { Global } from "@/global"
 import type { LanguageModelV2Usage } from "@ai-sdk/provider"
 import { Filesystem } from "@/util/filesystem"
 import { NamedError } from "@ax-code/util/error"
+import { SESSION_CREATE_BUSY_RETRY } from "@/constants/session-create"
 
 export namespace Session {
   const log = Log.create({ service: "session" })
+  export const CreationBusyError = NamedError.create("SessionCreationBusyError", z.object({ message: z.string() }))
 
   const parentTitlePrefix = "New session - "
   const childTitlePrefix = "Child session - "
@@ -509,15 +511,25 @@ export namespace Session {
         updated: Date.now(),
       },
     }
-    log.info("created", result)
-    Database.use((db) => {
-      db.insert(SessionTable).values(toRow(result)).run()
-      Database.effect(() =>
-        Bus.publishDetached(Event.Created, {
-          info: result,
-        }),
+    try {
+      await Database.transactionWithBusyRetry((db) => {
+        db.insert(SessionTable).values(toRow(result)).run()
+        Database.effect(() =>
+          Bus.publishDetached(Event.Created, {
+            info: result,
+          }),
+        )
+      }, SESSION_CREATE_BUSY_RETRY)
+    } catch (error) {
+      if (!Database.isBusyError(error)) throw error
+      throw new CreationBusyError(
+        {
+          message: `Session creation could not acquire the local database write lock after ${SESSION_CREATE_BUSY_RETRY.attempts} attempts. Wait for another AX Code process to finish writing, then retry.`,
+        },
+        { cause: error },
       )
-    })
+    }
+    log.info("created", result)
     // Event.Created already fired in the transaction above — skip redundant Updated
     return result
   }

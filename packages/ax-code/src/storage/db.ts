@@ -220,9 +220,17 @@ export namespace Database {
   // Used to distinguish transient cross-process writer contention (retryable)
   // from real storage failures (corruption, read-only) that must stay fatal.
   export function isBusyError(error: unknown) {
-    const errcode = (error as { errcode?: unknown } | null | undefined)?.errcode
-    if (typeof errcode === "number") return (errcode & 0xff) === 5
-    return error instanceof Error && error.message.includes("database is locked")
+    const seen = new Set<object>()
+    let current = error
+    while (current && typeof current === "object" && !seen.has(current) && seen.size < 32) {
+      seen.add(current)
+      const wrapped = current as { errcode?: unknown; code?: unknown; cause?: unknown }
+      if (typeof wrapped.errcode === "number" && (wrapped.errcode & 0xff) === 5) return true
+      if (typeof wrapped.code === "string" && /^SQLITE_BUSY(?:_|$)/.test(wrapped.code)) return true
+      if (current instanceof Error && current.message.includes("database is locked")) return true
+      current = wrapped.cause
+    }
+    return false
   }
 
   // Resolver for the ambient projectID, wired by project/instance.ts at module

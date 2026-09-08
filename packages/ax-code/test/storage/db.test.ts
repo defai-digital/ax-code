@@ -21,6 +21,17 @@ describe("Database.Path", () => {
 })
 
 describe("Database.isBusyError", () => {
+  test("recognizes wrapped SQLite busy errors and terminates on cyclic causes", () => {
+    const busy = Object.assign(new Error("database is locked"), { errcode: 517 })
+    expect(
+      Database.isBusyError(new Error("Failed query", { cause: new Error("Transaction failed", { cause: busy }) })),
+    ).toBe(true)
+    expect(Database.isBusyError({ cause: { code: "SQLITE_BUSY" } })).toBe(true)
+    const cyclic = new Error("Failed query")
+    cyclic.cause = cyclic
+    expect(Database.isBusyError(cyclic)).toBe(false)
+    expect(Database.isBusyError(new Error("Failed query", { cause: new Error("disk I/O error") }))).toBe(false)
+  })
   test("matches node:sqlite SQLITE_BUSY errors by errcode", () => {
     expect(Database.isBusyError(Object.assign(new Error("database is locked"), { errcode: 5 }))).toBe(true)
     // Extended result codes keep SQLITE_BUSY in the low byte (e.g. 517 = SQLITE_BUSY_SNAPSHOT).

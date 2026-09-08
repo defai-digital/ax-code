@@ -17,7 +17,7 @@ import { axEngineDownloadChip, type AxEngineDownloadJobView } from "../ax-engine
 import { isQueueableStatus } from "./follow-up-queue"
 import { enqueueFollowUp } from "./follow-up-queue-store"
 import { assign } from "./part"
-import { SUBMIT_ACCEPT_TIMEOUT_MS } from "./prompt-config"
+import { SESSION_CREATE_TIMEOUT_MS } from "@/constants/session-create"
 import { submitPromptRoute } from "./prompt-submit"
 import type { AsyncSessionRoute } from "./prompt-types"
 import { createSubmitAbortError, isSubmitAbortError, type SubmitStage } from "./submit-state"
@@ -451,8 +451,8 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
             { id: sessionID, directory: props.workspaceID ?? sdk.baseDirectory },
             { signal: nextSubmitAbort.signal },
           ),
-          SUBMIT_ACCEPT_TIMEOUT_MS,
-          `Session creation timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
+          SESSION_CREATE_TIMEOUT_MS,
+          `Session creation timed out after ${SESSION_CREATE_TIMEOUT_MS}ms. The local database may be busy; check other AX Code processes before retrying.`,
         )
         if (res.error) throw new Error(errorMessage(res.error))
         if (!res.data?.id) throw new Error("Session creation returned no data")
