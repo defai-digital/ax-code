@@ -3,6 +3,7 @@ import { chmod, copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises
 import os from "node:os"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
+import { windowsNodeLauncherScript } from "../packages/ax-code/script/node-launcher"
 
 const installer = path.resolve(import.meta.dirname, "../install.ps1")
 const powershell = process.env.AX_TEST_POWERSHELL ?? (process.platform === "win32" ? "powershell.exe" : "pwsh")
@@ -22,7 +23,10 @@ async function runInstaller(body: string) {
   try {
     const source = path.join(root, "source bundle")
     const files = {
-      "bin/ax-code.cmd": "@echo off\r\n",
+      "bin/ax-code.cmd":
+        process.platform === "win32"
+          ? windowsNodeLauncherScript()
+          : '#!/bin/sh\nexec "$AX_TEST_NODE" "$(dirname "$0")/../lib/index-node-tui.js" "$@"\n',
       "lib/index-node-tui.js": 'import { version } from "solid-js"; console.log(version)\n',
       "node_modules/solid-js/package.json": JSON.stringify({ type: "module", exports: "./index.js" }),
       "node_modules/solid-js/index.js": 'export const version = "9.9.9"\n',
@@ -32,6 +36,7 @@ async function runInstaller(body: string) {
       const target = path.join(source, relative)
       await mkdir(path.dirname(target), { recursive: true })
       await writeFile(target, content)
+      if (relative === "bin/ax-code.cmd") await chmod(target, 0o755)
     }
     const node = path.join(source, "node/bin/node.exe")
     await mkdir(path.dirname(node), { recursive: true })
@@ -109,6 +114,45 @@ ${body}
 }
 
 describe.skipIf(!available)("PowerShell runtime installation", () => {
+  test("accepts a version on stdout with a native warning on stderr", async () => {
+    await runInstaller(`
+Install-NodeBundleTree $Source
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("AX Code warning: switched terminal code page to UTF-8"); console.log("9.9.9")'
+Verify-InstalledRuntime "9.9.9"
+Assert-Equal $ErrorActionPreference "Stop"
+`)
+  })
+
+  test("reports the native exit code and stderr when a launcher fails", async () => {
+    await runInstaller(`
+Install-NodeBundleTree $Source
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("Simulated launcher failure"); console.log("9.9.9"); process.exit(23)'
+$failure = $null
+try { Verify-InstalledRuntime "9.9.9" } catch { $failure = $_ }
+if ($failure -notmatch "Simulated launcher failure" -or $failure -notmatch "23") { throw "Missing launcher diagnostics: $failure" }
+Assert-Equal $ErrorActionPreference "Stop"
+`)
+  })
+
+  test.each(["launcher", "version", "environment"])(
+    "restores the previous runtime when the final %s check fails",
+    async (kind) => {
+      await runInstaller(`
+New-PreviousInstall
+if ("${kind}" -eq "launcher") {
+  Set-Content -LiteralPath (Join-Path $Source "bin/ax-code.cmd") -Value '${process.platform === "win32" ? "@echo off\r\necho Simulated launcher failure 1>&2\r\nexit /b 23" : '#!/bin/sh\nprintf "Simulated launcher failure\\n" >&2\nexit 23'}'
+}
+if ("${kind}" -eq "environment") { $env:NODE_OPTIONS = "--ax-test-invalid-option" }
+$expected = if ("${kind}" -eq "version") { "8.8.8" } else { "9.9.9" }
+$failure = $null
+try { Install-NodeBundleTree $Source $expected } catch { $failure = $_ }
+if ($failure -notmatch "previous runtime restored") { throw "Expected restoration: $failure" }
+Assert-PreviousInstall
+Assert-Equal $ErrorActionPreference "Stop"
+`)
+    },
+  )
+
   test("installs a complete bundle with resolvable runtime dependencies", async () => {
     await runInstaller(`
 Install-NodeBundleTree $Source

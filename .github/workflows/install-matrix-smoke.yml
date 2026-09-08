@@ -313,7 +313,9 @@ jobs:
 
       - name: Install ax-code from PowerShell release installer
         if: ${{ steps.channel.outputs.enabled == 'true' }}
-        shell: pwsh
+        # Match ax-code upgrade, which invokes Windows PowerShell 5.1. PowerShell
+        # 7 does not reproduce its terminating errors for redirected stderr.
+        shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
           $Version = "${{ steps.version.outputs.version }}"

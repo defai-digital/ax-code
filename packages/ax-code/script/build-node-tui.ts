@@ -10,8 +10,7 @@ import { collectPackageRuntimeDependencies, resolveInstalledPackagePath } from "
 import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
 import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
-import { WINDOWS_UTF8_WARNING } from "./source-launcher"
-import { unixNodeLauncherScript } from "./node-launcher"
+import { unixNodeLauncherScript, windowsNodeLauncherScript } from "./node-launcher"
 import { copyTuiDistPackage, toTuiDistPackageJson, withoutTuiTransformDependencies } from "./tui-dist"
 import pkg from "../package.json"
 
@@ -303,22 +302,9 @@ if (process.arch === arch) {
 // node (support/debug escape hatch), which also remains the fallback when no
 // runtime ships beside the bundle. --disable-warning=ExperimentalWarning
 // silences Node's "FFI is experimental" notice on every run.
-const nodeArgs = `--experimental-ffi --disable-warning=ExperimentalWarning`
 await writeText(path.join(outBin, "ax-code"), unixNodeLauncherScript())
 await fs.promises.chmod(path.join(outBin, "ax-code"), 0o755)
-await writeText(
-  path.join(outBin, "ax-code.cmd"),
-  [
-    `@echo off`,
-    `set AX_CODE_ORIGINAL_CWD=%CD%`,
-    `${WINDOWS_UTF8_WARNING.replaceAll("\n", "\r\n")}if not defined AX_CODE_SYSTEM_NODE if exist "%~dp0..\\node\\bin\\node.exe" (`,
-    `  "%~dp0..\\node\\bin\\node.exe" ${nodeArgs} "%~dp0..\\lib\\index-node-tui.js" %*`,
-    `  exit /b %ERRORLEVEL%`,
-    `)`,
-    `node ${nodeArgs} "%~dp0..\\lib\\index-node-tui.js" %*`,
-    ``,
-  ].join("\r\n"),
-)
+await writeText(path.join(outBin, "ax-code.cmd"), windowsNodeLauncherScript())
 
 // --- Make the distribution self-contained (Bun-free) -----------------------
 // The bundle externalizes the native FFI/.node packages and ax-tui; ship them

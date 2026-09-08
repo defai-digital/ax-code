@@ -1,4 +1,28 @@
-export const UNIX_NODE_LAUNCH_ARGS = "--experimental-ffi --disable-warning=ExperimentalWarning"
+import { WINDOWS_UTF8_WARNING } from "./source-launcher"
+
+export const NODE_LAUNCH_ARGS = "--experimental-ffi --disable-warning=ExperimentalWarning"
+
+export function windowsNodeLauncherScript() {
+  // Keep exit /b outside parenthesized blocks: cmd expands %ERRORLEVEL%
+  // when reading the block, before Node has run, masking the real exit code.
+  return [
+    "@echo off",
+    "setlocal DisableDelayedExpansion",
+    'set "ERRORLEVEL="',
+    'set "AX_CODE_ORIGINAL_CWD=%CD%"',
+    WINDOWS_UTF8_WARNING.trimEnd(),
+    "if defined AX_CODE_SYSTEM_NODE goto system_node",
+    'if not exist "%~dp0..\\node\\bin\\node.exe" goto system_node',
+    `"%~dp0..\\node\\bin\\node.exe" ${NODE_LAUNCH_ARGS} "%~dp0..\\lib\\index-node-tui.js" %*`,
+    "exit /b %ERRORLEVEL%",
+    ":system_node",
+    `node ${NODE_LAUNCH_ARGS} "%~dp0..\\lib\\index-node-tui.js" %*`,
+    "exit /b %ERRORLEVEL%",
+    "",
+  ]
+    .join("\n")
+    .replaceAll("\n", "\r\n")
+}
 
 // Resolve a Node binary, hardlink it as AX-Code, and exec that path so the
 // TTY job name is AX-Code instead of node (Apple Terminal / iTerm).
@@ -26,7 +50,7 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
       ln -sf "\$lib" "\$cache/lib/$(basename "\$lib")" 2>/dev/null || true
     done
   fi
-  exec "$branded" ${UNIX_NODE_LAUNCH_ARGS} "$@"
+  exec "$branded" ${NODE_LAUNCH_ARGS} "$@"
 }`
 
 export function unixNodeLauncherScript() {
@@ -46,7 +70,7 @@ export function unixNodeLauncherScript() {
     '  brand_and_exec_node "$dir/../node/bin/node" "$dir/../lib/index-node-tui.js" "$@"',
     "fi",
     'if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node.exe" ]; then',
-    `  exec "$dir/../node/bin/node.exe" ${UNIX_NODE_LAUNCH_ARGS} "$dir/../lib/index-node-tui.js" "$@"`,
+    `  exec "$dir/../node/bin/node.exe" ${NODE_LAUNCH_ARGS} "$dir/../lib/index-node-tui.js" "$@"`,
     "fi",
     'brand_and_exec_node "$(command -v node)" "$dir/../lib/index-node-tui.js" "$@"',
     "",

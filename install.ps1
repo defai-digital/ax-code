@@ -325,7 +325,7 @@ function Assert-NodeBundleRuntime([string]$Root) {
   }
 }
 
-function Install-NodeBundleTree([string]$Root) {
+function Install-NodeBundleTree([string]$Root, [string]$ExpectedVersion = "local") {
   $launcher = Join-Path $Root "bin\ax-code.cmd"
   $lib = Join-Path $Root "lib"
   $entry = Join-Path $lib "index-node-tui.js"
@@ -394,6 +394,10 @@ function Install-NodeBundleTree([string]$Root) {
         }
       }
       Assert-NodeBundleRuntime $InstallRoot
+      Assert-NodeFfiRuntime (Join-Path $InstallNodeDir "bin\node.exe")
+      # The actual launcher can fail even when invoking Node directly works.
+      # Keep its environment and version checks inside the rollback boundary.
+      Verify-InstalledRuntime $ExpectedVersion
     } catch {
       $failure = $_
       $preserveBackup = $true
@@ -438,6 +442,7 @@ function Install-FromBinary([string]$Path) {
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
   Remove-Item -LiteralPath $InstallCmdPath -Force -ErrorAction SilentlyContinue
   Copy-Item -LiteralPath $Path -Destination $InstallPath -Force
+  Verify-InstalledRuntime "local"
   Write-Info "Installed ax-code from: $Path"
   return "local"
 }
@@ -475,7 +480,7 @@ function Install-FromRelease {
       throw "Downloaded archive did not contain the bundled Node runtime"
     }
 
-    Install-NodeBundleTree $root
+    Install-NodeBundleTree $root $release.Version
     return $release.Version
   } finally {
     Remove-Item -LiteralPath $tmpDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -487,18 +492,28 @@ function Get-InstalledVersion {
   if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
     return $null
   }
+  $stderrPath = [System.IO.Path]::GetTempFileName()
+  $previousErrorAction = $ErrorActionPreference
   try {
-    $output = (& $target --version 2>$null)
-    if ($LASTEXITCODE -ne 0) {
-      return $null
+    try {
+      # Windows PowerShell 5.1 promotes redirected native stderr to errors.
+      # A code-page warning is not a failed launch: use the process exit code
+      # and keep stderr separate so it cannot contaminate the version string.
+      $ErrorActionPreference = "Continue"
+      $output = & $target --version 2>$stderrPath
+      $exitCode = $LASTEXITCODE
+    } finally {
+      $ErrorActionPreference = $previousErrorAction
     }
     $text = ($output | Out-String).Trim()
-    if (-not $text) {
-      return $null
+    if ($exitCode -ne 0 -or -not $text) {
+      $details = (Get-Content -LiteralPath $stderrPath -Raw | Out-String).Trim()
+      if (-not $details) { $details = "stdout: '$text'" }
+      throw "Installed ax-code launcher '$target' failed its version check (exit code $exitCode). $details"
     }
     return $text
-  } catch {
-    return $null
+  } finally {
+    Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
   }
 }
 
@@ -509,7 +524,7 @@ function Verify-InstalledRuntime([string]$ExpectedVersion) {
 
   $directVersion = Get-InstalledVersion
   if (-not $directVersion) {
-    throw "Installed ax-code launcher in $InstallDir did not run cleanly. Close all AX Code sessions and rerun the installer."
+    throw "Installed ax-code launcher in $InstallDir did not report a version."
   }
   if ($ExpectedVersion -and $ExpectedVersion -ne "local") {
     if ($directVersion -ne $ExpectedVersion -and $directVersion -ne "v$ExpectedVersion") {
@@ -660,13 +675,6 @@ if ($Binary) {
 } else {
   $installedVersion = Install-FromRelease
 }
-
-$installedNodePath = Join-Path $InstallNodeDir "bin\node.exe"
-if (Test-Path -LiteralPath $InstallCmdPath -PathType Leaf) {
-  Assert-NodeFfiRuntime $installedNodePath
-}
-
-Verify-InstalledRuntime $installedVersion
 
 if ($NoModifyPath) {
   Write-Info "Add this directory to PATH to use ax-code globally: $InstallDir"
