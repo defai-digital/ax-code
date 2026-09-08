@@ -9,7 +9,7 @@ import { Filesystem } from "../util/filesystem"
 import { git } from "../util/git"
 import { parseLsTreeSize, parseNameStatusLine, parseNumstatLine } from "../util/git-output"
 import { Log } from "../util/log"
-import { KeyedSerialQueue } from "../util/queue"
+import { KeyedSerialQueue, work } from "../util/queue"
 
 export namespace Snapshot {
   export const Patch = z.object({
@@ -36,6 +36,13 @@ export namespace Snapshot {
   const prune = "7.days"
   const pruneMs = 7 * 24 * 60 * 60 * 1000
   const maxFileSize = 1024 * 1024
+  // Snapshot git subprocesses sit on the per-turn critical path; a hung git
+  // (stalled mount, credential prompt, lock not matched by LOCK_CONTENTION)
+  // must surface as a bounded error instead of freezing the whole session.
+  // Process.run escalates SIGTERM -> SIGKILL and reports exit code 124.
+  const gitTimeoutMs = 300_000
+  // `git gc` is the one legitimately long-running snapshot command.
+  const gcTimeoutMs = 30 * 60 * 1000
   const core = ["-c", "core.longpaths=true", "-c", "core.symlinks=true"]
   const cfg = ["-c", "core.autocrlf=false", ...core]
   const quote = [...cfg, "-c", "core.quotepath=false"]
@@ -69,9 +76,10 @@ export namespace Snapshot {
     return path.join(current.gitdir, "ax-code", "snapshots", hash)
   }
 
-  async function runGit(args: string[], options?: { cwd?: string; env?: Record<string, string> }) {
+  async function runGit(args: string[], options?: { cwd?: string; env?: Record<string, string>; timeout?: number }) {
     const result = await git(args, {
       cwd: options?.cwd ?? Instance.directory,
+      timeout: options?.timeout ?? gitTimeoutMs,
       ...(options?.env ? { env: options.env } : {}),
     })
     return {
@@ -94,7 +102,7 @@ export namespace Snapshot {
 
       const scheduleCleanup = () => {
         const cleanup = () =>
-          withOperationLock(next, () => cleanupFor(next)).catch((error) => {
+          withOperationLock(next, () => cleanupFor(next, { auto: true })).catch((error) => {
             log.warn("scheduled snapshot cleanup failed", { error })
           })
         next.cleanupDelay = setTimeout(() => {
@@ -282,7 +290,7 @@ export namespace Snapshot {
     })
   }
 
-  async function cleanupFor(current: State) {
+  async function cleanupFor(current: State, options?: { auto?: boolean }) {
     if (!(await enabled(current))) return
     if (!(await exists(current.gitdir))) return
     const cutoff = Date.now() - pruneMs
@@ -320,7 +328,14 @@ export namespace Snapshot {
       }
       if (deletedRefs > 0) log.info("deleted expired snapshot refs", { deletedRefs, prune })
     }
-    const result = await runGit(args(current, ["gc", `--prune=${prune}`]), { cwd: current.directory })
+    // The scheduled path uses `gc --auto` so the hourly timer only repacks
+    // when git's own thresholds are exceeded; an unconditional full repack
+    // can hold the shared serial operation queue (and therefore the next
+    // turn's track()/patch()) for seconds to minutes on large stores.
+    const result = await runGit(args(current, ["gc", ...(options?.auto ? ["--auto"] : []), `--prune=${prune}`]), {
+      cwd: current.directory,
+      timeout: gcTimeoutMs,
+    })
     if (result.code !== 0) {
       log.warn("cleanup failed", {
         exitCode: result.code,
@@ -354,6 +369,16 @@ export namespace Snapshot {
   export async function cleanup() {
     const current = await state()
     await withOperationLock(current, () => cleanupFor(current))
+  }
+
+  /**
+   * Scheduled variant of cleanup(): runs `git gc --auto` so the periodic
+   * timer skips the repack unless git's thresholds are exceeded. Exported
+   * for tests; the in-process timer calls cleanupFor with the same options.
+   */
+  export async function cleanupScheduled() {
+    const current = await state()
+    await withOperationLock(current, () => cleanupFor(current, { auto: true }))
   }
 
   export async function track() {
@@ -441,6 +466,27 @@ export namespace Snapshot {
       if (!valid(hash)) {
         log.warn("failed to get diff", { hash, error: "invalid snapshot hash" })
         return { hash, files: [] }
+      }
+      if (hash === current.prevHash) {
+        // Unchanged short-circuit mirroring track(): when the requested
+        // baseline is the last tracked tree and the worktree is clean against
+        // it, staging and diffing can only produce an empty file list. Any
+        // check failure falls through to the full path below, preserving the
+        // existing error behavior.
+        await syncExclude(current)
+        const quiet = await runGit([...cfg, ...args(current, ["diff", "--no-ext-diff", "--quiet", hash, "--", "."])], {
+          cwd: current.worktree,
+        })
+        if (quiet.code === 0) {
+          const untracked = await runGit(
+            [...cfg, ...args(current, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."])],
+            { cwd: current.worktree },
+          )
+          if (untracked.code === 0 && untracked.text.length === 0) {
+            log.info("patch (unchanged)", { hash })
+            return { hash, files: [] }
+          }
+        }
       }
       await add(current)
       // Diff the whole worktree (see add() above) — a "." pathspec scoped to
@@ -807,22 +853,34 @@ export namespace Snapshot {
         throw new Error(`Snapshot diff failed: numstat exited with code ${numstat.code}`)
       }
 
-      for (const line of numstat.text.split("\n")) {
-        if (!line) continue
+      const entries = numstat.text.split("\n").flatMap((line) => {
+        if (!line) return []
         const parsed = parseNumstatLine(line)
-        if (!parsed) continue
-        const [before, after] = parsed.binary
-          ? ["", ""]
-          : await Promise.all([show(current, from, parsed.file), show(current, to, parsed.file)])
-        result.push({
-          file: parsed.file,
-          before,
-          after,
-          additions: parsed.additions,
-          deletions: parsed.deletions,
-          status: status.get(parsed.file) ?? "modified",
-        })
-      }
+        return parsed ? [parsed] : []
+      })
+      // Per-file content fetches are read-only git calls against the snapshot
+      // gitdir, so they are safe to parallelize; bound the concurrency to
+      // keep the subprocess count contained. Results are written back at
+      // their original index so the output stays in numstat order.
+      const ordered: Snapshot.FileDiff[] = new Array(entries.length)
+      await work(
+        4,
+        entries.map((parsed, index) => ({ parsed, index })),
+        async ({ parsed, index }) => {
+          const [before, after] = parsed.binary
+            ? ["", ""]
+            : await Promise.all([show(current, from, parsed.file), show(current, to, parsed.file)])
+          ordered[index] = {
+            file: parsed.file,
+            before,
+            after,
+            additions: parsed.additions,
+            deletions: parsed.deletions,
+            status: status.get(parsed.file) ?? "modified",
+          }
+        },
+      )
+      for (const diff of ordered) result.push(diff)
 
       return result
     })

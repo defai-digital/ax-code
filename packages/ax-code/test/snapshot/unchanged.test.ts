@@ -89,6 +89,55 @@ test("capture refreshes worktree excludes before admitting untracked files", asy
   })
 })
 
+test("unchanged patch against the tracked tree skips staging", async () => {
+  await using tmp = await tmpdir({ git: true, init: (dir) => fs.writeFile(path.join(dir, "sample.txt"), "Stable\n") })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const baseline = (await Snapshot.track())!
+      const git = vi.spyOn(Git, "git")
+      const result = await Snapshot.patch(baseline)
+      expect(result).toEqual({ hash: baseline, files: [] })
+      expect(git.mock.calls.some(([args]) => args.includes("add") || args.includes("write-tree"))).toBe(false)
+    },
+  })
+})
+
+test("snapshot git subprocesses are bounded by a timeout", async () => {
+  await using tmp = await tmpdir({ git: true, init: (dir) => fs.writeFile(path.join(dir, "sample.txt"), "Stable\n") })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const git = vi.spyOn(Git, "git")
+      await Snapshot.track()
+      expect(git.mock.calls.length).toBeGreaterThan(0)
+      for (const [, options] of git.mock.calls) {
+        expect(typeof options?.timeout).toBe("number")
+        expect(options?.timeout).toBeGreaterThan(0)
+      }
+    },
+  })
+})
+
+test("scheduled cleanup asks git gc --auto while manual cleanup stays unconditional", async () => {
+  await using tmp = await tmpdir({ git: true, init: (dir) => fs.writeFile(path.join(dir, "sample.txt"), "Stable\n") })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Snapshot.track()
+      const git = vi.spyOn(Git, "git")
+      await Snapshot.cleanupScheduled()
+      const scheduled = git.mock.calls.find(([args]) => args.includes("gc"))
+      expect(scheduled?.[0]).toContain("--auto")
+      git.mockClear()
+      await Snapshot.cleanup()
+      const manual = git.mock.calls.find(([args]) => args.includes("gc"))
+      expect(manual).toBeDefined()
+      expect(manual?.[0]).not.toContain("--auto")
+    },
+  })
+})
+
 test("subdirectory captures keep external edits, deletions and ignore changes visible", async () => {
   await using tmp = await tmpdir({
     git: true,

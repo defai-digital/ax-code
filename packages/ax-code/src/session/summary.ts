@@ -212,6 +212,13 @@ export namespace SessionSummary {
     },
   )
 
+  // Git tree hashes are content-addressed, so an identical (from,to) pair
+  // always produces an identical diff. finish-step queues a summary every
+  // step with the turn-start message snapshot, which recomputes the same
+  // pair once per step; a small bounded cache makes those repeats free.
+  const DIFF_CACHE_LIMIT = 8
+  const diffCache = new Map<string, Snapshot.FileDiff[]>()
+
   export async function computeDiff(input: { messages: MessageV2.WithParts[] }) {
     let from: string | undefined
     let to: string | undefined
@@ -235,7 +242,18 @@ export namespace SessionSummary {
       }
     }
 
-    if (from && to) return Snapshot.diffFull(from, to)
+    if (from && to) {
+      const key = `${from}\0${to}`
+      const cached = diffCache.get(key)
+      if (cached) return cached
+      const diffs = await Snapshot.diffFull(from, to)
+      if (diffCache.size >= DIFF_CACHE_LIMIT) {
+        const oldest = diffCache.keys().next().value
+        if (oldest !== undefined) diffCache.delete(oldest)
+      }
+      diffCache.set(key, diffs)
+      return diffs
+    }
     return []
   }
 }
