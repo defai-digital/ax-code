@@ -1,6 +1,6 @@
 import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js"
 import { toErrorMessage } from "../util/error-message"
-import { FIGMA_DESKTOP_MCP_URL, FIGMA_MCP_ORIGIN, FIGMA_MCP_REQUIREMENTS_URL } from "./constants"
+import { FIGMA_DESKTOP_MCP_URL, FIGMA_MCP_ORIGIN, FIGMA_MCP_DOCS_URL } from "./constants"
 
 const TRANSIENT_ERRNO = new Set([
   "ECONNRESET",
@@ -69,7 +69,7 @@ export function mcpRegistrationRejection(name: string, url: string): string {
     return (
       `Figma rejected OAuth client registration for "${name}". ` +
       "Figma remote MCP requires an approved client in the Figma MCP Catalog; ordinary OAuth app credentials do not establish MCP access. " +
-      `See ${FIGMA_MCP_REQUIREMENTS_URL} for client registration requirements. ` +
+      `See ${FIGMA_MCP_DOCS_URL} for client registration requirements. ` +
       `For local access, enable Figma Desktop MCP and configure ${FIGMA_DESKTOP_MCP_URL} with allowLoopback: true and oauth: false.`
     )
   }
