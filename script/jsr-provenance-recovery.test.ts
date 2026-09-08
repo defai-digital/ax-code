@@ -2,6 +2,8 @@ import { describe, expect, test } from "vitest"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { X509Certificate } from "node:crypto"
+import { rootCertificates } from "node:tls"
 import {
   digest,
   expectedFiles,
@@ -82,10 +84,16 @@ describe("SDK provenance recovery", () => {
         }).toString("base64"),
         signatures: [{ sig: "signature" }],
       },
-      verificationMaterial: { certificate: { rawBytes: "certificate" }, tlogEntries: [{ logIndex: "123" }] },
+      verificationMaterial: {
+        certificate: { rawBytes: new X509Certificate(rootCertificates[0]).raw.toString("base64") },
+        tlogEntries: [{ logIndex: "123" }],
+      },
     }
     const result = await toJsrBundle(bundle, "2.5.10", hash)
     expect(result.verificationMaterial.tlogEntries).toEqual([{ logIndex: 123 }])
+    expect(result.verificationMaterial.content.x509CertificateChain.certificates[0].rawBytes).toBe(
+      new X509Certificate(rootCertificates[0]).toString(),
+    )
     await expect(toJsrBundle(bundle, "2.5.9", hash)).rejects.toThrow()
     await expect(toJsrBundle(bundle, "2.5.10", digest("other"))).rejects.toThrow()
     await expect(toJsrBundle({ ...bundle, verificationMaterial: {} }, "2.5.10", hash)).rejects.toThrow()

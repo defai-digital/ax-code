@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { createHash } from "node:crypto"
+import { createHash, X509Certificate } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { createRequire } from "node:module"
@@ -138,6 +138,11 @@ export async function toJsrBundle(bundle, version, manifestDigest) {
   const certificate = material.certificate ?? material.x509CertificateChain?.certificates?.[0]
   assert.equal(typeof certificate?.rawBytes, "string")
   assert(certificate.rawBytes.length > 0)
+  const pem = new X509Certificate(
+    certificate.rawBytes.startsWith("-----BEGIN CERTIFICATE-----")
+      ? certificate.rawBytes
+      : Buffer.from(certificate.rawBytes, "base64"),
+  ).toString()
   assert.equal(material.tlogEntries?.length, 1)
   const logIndex = Number(material.tlogEntries[0].logIndex)
   assert(Number.isSafeInteger(logIndex) && logIndex >= 0)
@@ -150,7 +155,7 @@ export async function toJsrBundle(bundle, version, manifestDigest) {
       dsseEnvelope: { ...envelope, signatures: [{ keyid: "", sig: envelope.signatures[0].sig }] },
     },
     verificationMaterial: {
-      content: { $case: "x509CertificateChain", x509CertificateChain: { certificates: [certificate] } },
+      content: { $case: "x509CertificateChain", x509CertificateChain: { certificates: [{ rawBytes: pem }] } },
       tlogEntries: [{ logIndex }],
     },
   }
