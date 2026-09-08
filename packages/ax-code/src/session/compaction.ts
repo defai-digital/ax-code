@@ -37,6 +37,25 @@ export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
   const inFlight = new Set<string>()
 
+  /**
+   * Walk backward through `messages` to find the most recent user-role
+   * message that does NOT carry a compaction part — i.e. the user's actual
+   * triggering turn. Used by the non-overflow continue branch to inherit
+   * format/tools/system/variant. Exported so the regression is testable
+   * without driving the full Provider stack.
+   */
+  export function pickSourceUser(messages: MessageV2.WithParts[], parentID: MessageID): MessageV2.User | undefined {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (!m) continue
+      if (m.info.id === parentID) continue
+      if (m.info.role !== "user") continue
+      if (m.parts.some((p) => p.type === "compaction")) continue
+      return m.info as MessageV2.User
+    }
+    return undefined
+  }
+
   export const TriggerReason = MessageV2.CompactionTriggerReason
   export type TriggerReason = MessageV2.CompactionTriggerReason
 
@@ -505,11 +524,10 @@ When constructing the summary, try to stick to this template:
       const tokenBudget = await requestBudget(model)
       if (tokenBudget) {
         const system = SystemPrompt.request({ agent, model, system: [], userSystem: userMessage.system })
-        const historyModelMessages = historyGroups.flatMap((group) => group.modelMessages)
         const untrimmedTokens =
           estimateRequestTokens({
             system,
-            messages: [...historyModelMessages, compactionPromptMessage(promptText)],
+            messages: [...historyGroups.flatMap((group) => group.modelMessages), compactionPromptMessage(promptText)],
           }) + COMPACTION_REQUEST_HEADROOM_TOKENS
 
         if (untrimmedTokens > tokenBudget.usable) {
@@ -540,11 +558,13 @@ When constructing the summary, try to stick to this template:
           }
         }
 
-        const finalModelMessages = selectedGroups.flatMap((group) => group.modelMessages)
         const finalTokens =
           estimateRequestTokens({
             system,
-            messages: [...finalModelMessages, compactionPromptMessage(finalPromptText)],
+            messages: [
+              ...selectedGroups.flatMap((group) => group.modelMessages),
+              compactionPromptMessage(finalPromptText),
+            ],
           }) + COMPACTION_REQUEST_HEADROOM_TOKENS
         if (finalTokens > tokenBudget.usable) {
           log.warn("compaction instructions exceed model window after omitting history", {
@@ -558,6 +578,9 @@ When constructing the summary, try to stick to this template:
           )
         }
       }
+      // Hoisted one level outside the budget block so the `processor.process`
+      // call below reuses the same post-trim array rather than recomputing
+      // `selectedGroups.flatMap` a second time.
       const historyModelMessages = selectedGroups.flatMap((group) => group.modelMessages)
       const result = await processor.process({
         user: userMessage,
@@ -624,6 +647,15 @@ When constructing the summary, try to stick to this template:
         return "stop"
       }
 
+      // Walk backward from the marker to find the most recent user-role message
+      // that does NOT carry a compaction part — i.e. the user's actual
+      // triggering turn. The non-overflow continue branch reuses this to
+      // inherit format/tools/system/variant; without it, every auto-
+      // compaction silently dropped the user's output format and tool
+      // selection. Exported as a pure helper so the regression is
+      // unit-testable without driving the full process / Provider stack.
+      const sourceUser = pickSourceUser(input.messages, input.parentID)
+
       if (input.auto) {
         if (replay) {
           const original = replay.info as MessageV2.User
@@ -676,6 +708,10 @@ When constructing the summary, try to stick to this template:
             }
           })
         } else {
+          // Inherit format/tools/system/variant from the source user turn so
+          // a non-overflow compaction does not silently drop JSON-schema
+          // structured output, tool overrides, the per-turn system prompt,
+          // or the user-selected effort variant.
           const continueMsg: MessageV2.User = {
             id: MessageID.ascending(),
             role: "user",
@@ -683,6 +719,10 @@ When constructing the summary, try to stick to this template:
             time: { created: Date.now() },
             agent: userMessage.agent,
             model: userMessage.model,
+            format: sourceUser?.format,
+            tools: sourceUser?.tools,
+            system: sourceUser?.system,
+            variant: sourceUser?.variant,
           }
           const overflowNotice =
             input.triggerReason === "request_too_large"

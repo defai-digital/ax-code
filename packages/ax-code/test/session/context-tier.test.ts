@@ -185,4 +185,13 @@ describe("ContextTier", () => {
       expect(dist.total).toBe(5)
     })
   })
+
+  describe("classify (post-reason-removal)", () => {
+    test("does not emit a `reason` field any more", () => {
+      const classified = ContextTier.classify([makeMessage({ role: "user" }), makeMessage({ role: "assistant" })])
+      for (const c of classified) {
+        expect(c).not.toHaveProperty("reason")
+      }
+    })
+  })
 })

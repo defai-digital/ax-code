@@ -515,9 +515,18 @@ describe("session.prompt helpers", () => {
   })
 
   test("maps pending compaction results to loop actions", () => {
+    // Any "stop" from SessionCompaction.process indicates a bail (overflow
+    // bail, request-too-large bail, processor.message.error), an abort, or
+    // a non-retryable failure. The non-overflow (proactive) case used to
+    // be reported as "completed", which silently dropped the user's turn
+    // when a proactive compaction bailed. It is now reported as "error".
     expect(pendingCompactionDecision({ result: "stop" })).toEqual({
       type: "break",
-      reason: "completed",
+      reason: "error",
+    })
+    expect(pendingCompactionDecision({ result: "stop", overflow: false })).toEqual({
+      type: "break",
+      reason: "error",
     })
     expect(pendingCompactionDecision({ result: "stop", overflow: true })).toEqual({
       type: "break",

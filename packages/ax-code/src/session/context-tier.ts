@@ -19,13 +19,19 @@ export namespace ContextTier {
   export interface ClassifiedMessage {
     message: MessageV2.WithParts
     tier: Tier
-    reason: string
   }
 
-  /** Classify all messages in a session into tiers.
-   *  Tier 1 = last 2 turns + tool results referencing currently open files
-   *  Tier 2 = turns 3-5 + code intelligence results
-   *  Tier 3 = everything else (compaction summaries, old tool results)
+  /**
+   * Classify all messages in a session into tiers.
+   *
+   * Tier 1 = last 2 turns + tool results referencing currently open files
+   * Tier 2 = turns 3-5 + code intelligence results
+   * Tier 3 = everything else (compaction summaries, old tool results)
+   *
+   * The `reason` field previously included here was unused: the only consumer
+   * (`prune`, in compaction.ts) reads `tier` via `tierMap` and never
+   * surfaced a debug reason anywhere. Computing it cost two extra predicate
+   * scans + a string allocation per message; the field is removed.
    */
   export function classify(
     messages: MessageV2.WithParts[],
@@ -39,7 +45,7 @@ export namespace ContextTier {
 
     return messages.map((msg, idx) => {
       const tier = classifyMessage(msg, idx, turnBoundaries)
-      return { message: msg, tier, reason: tierReason(msg, tier) }
+      return { message: msg, tier }
     })
   }
 
@@ -113,16 +119,6 @@ export namespace ContextTier {
 
   function isCompactionSummary(msg: MessageV2.WithParts): boolean {
     return msg.parts.some((p) => p.type === "compaction") || (msg.info as Record<string, unknown>).summary === true
-  }
-
-  function tierReason(msg: MessageV2.WithParts, tier: Tier): string {
-    if (tier === 1) return "within recent turns"
-    if (tier === 2) {
-      if (isCodeIntelligenceResult(msg)) return "code intelligence result"
-      if (isFileEditResult(msg)) return "file edit result"
-      return "within supporting turns"
-    }
-    return "historical content"
   }
 
   /** Get the tier distribution for a message set. */

@@ -88,8 +88,14 @@ export function pendingCompactionDecision(input: {
   overflow?: boolean
   busyRetries?: number
 }): PendingCompactionDecision {
+  // Any "stop" from SessionCompaction.process indicates a bail (context-
+  // overflow bail, request-too-large bail, processor.message.error), an
+  // abort, or a non-retryable failure — never a successful completion. The
+  // previous "completed" mapping silently dropped the user's turn on a
+  // proactive (non-overflow) failure path; escalating it here forces the
+  // prompt loop to surface the error instead of reporting success.
   if (input.result === "stop") {
-    return { type: "break", reason: input.overflow ? "error" : "completed" }
+    return { type: "break", reason: "error" }
   }
   if (input.result === "busy") {
     if (retryLimitReached(input.busyRetries, PENDING_COMPACTION_BUSY_RETRY_LIMIT)) {

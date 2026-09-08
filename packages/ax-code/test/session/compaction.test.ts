@@ -19,7 +19,7 @@ import {
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
   type AxEngineBuiltinModelID,
 } from "../../src/provider/ax-engine"
-import { MessageID, PartID } from "../../src/session/schema"
+import { MessageID, PartID, SessionID } from "../../src/session/schema"
 
 Log.init({ print: false })
 
@@ -1303,5 +1303,93 @@ describe("session.compaction.trimMessagesForCompaction", () => {
     const result = SessionCompaction.trimMessagesForCompaction({ messages: [], estimate, budgetTokens: 100 })
     expect(result.messages).toEqual([])
     expect(result.omitted).toBe(0)
+  })
+})
+
+describe("session.compaction.pickSourceUser", () => {
+  const sessionID = SessionID.make("ses_picksrc")
+
+  function userMessage(id: MessageID, extras: Partial<MessageV2.User> = {}): MessageV2.WithParts {
+    return {
+      info: {
+        id,
+        sessionID,
+        role: "user",
+        time: { created: 1000 },
+        model: { providerID: ProviderID.make("test"), modelID: ModelID.make("m") },
+        agent: "build",
+        ...extras,
+      } as MessageV2.User,
+      parts: [],
+    }
+  }
+
+  function assistantMessage(id: MessageID, summary?: boolean): MessageV2.WithParts {
+    return {
+      info: {
+        id,
+        sessionID,
+        role: "assistant",
+        time: { created: 1000 },
+        parentID: MessageID.ascending(),
+        modelID: ModelID.make("m"),
+        providerID: ProviderID.make("test"),
+        agent: "build",
+        mode: "",
+        path: { cwd: "/tmp", root: "/tmp" },
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        ...(summary ? { summary: true } : {}),
+      } as unknown as MessageV2.Assistant,
+      parts: [],
+    }
+  }
+
+  function compactionPart(messageID: MessageID): MessageV2.Part {
+    return { type: "compaction" } as MessageV2.Part
+  }
+
+  // The marker is itself a user-role message created by
+  // SessionCompaction.create(); it carries `model`, `agent`, etc. like any
+  // other user message. The previous inline literals omitted `model`, which
+  // broke tsgo's nominal check when cast to `MessageV2.WithParts`.
+  function markerMessage(id: MessageID, parts: MessageV2.Part[] = []): MessageV2.WithParts {
+    return {
+      info: {
+        id,
+        sessionID,
+        role: "user",
+        time: { created: Date.now() },
+        agent: "build",
+        model: { providerID: ProviderID.make("test"), modelID: ModelID.make("m") },
+      } as MessageV2.User,
+      parts,
+    }
+  }
+
+  test("returns the most recent user message above the marker", () => {
+    const a = userMessage(MessageID.ascending())
+    const marker = markerMessage(MessageID.ascending(), [compactionPart(a.info.id)])
+    expect(SessionCompaction.pickSourceUser([a, marker], marker.info.id)).toBe(a.info)
+  })
+
+  test("skips prior user messages that themselves carry a compaction part", () => {
+    const older = markerMessage(MessageID.ascending(), [compactionPart(MessageID.ascending())])
+    const a = userMessage(MessageID.ascending())
+    const marker = markerMessage(MessageID.ascending(), [compactionPart(a.info.id)])
+    expect(SessionCompaction.pickSourceUser([older, a, marker], marker.info.id)).toBe(a.info)
+  })
+
+  test("returns undefined when there is no real user turn before the marker", () => {
+    const marker = markerMessage(MessageID.ascending(), [])
+    expect(SessionCompaction.pickSourceUser([marker], marker.info.id)).toBeUndefined()
+  })
+
+  test("skips assistant messages while walking backward", () => {
+    // The historical flow is user → assistant → user(marker with
+    // compaction). The picked source must still be the earlier user turn.
+    const source = userMessage(MessageID.ascending())
+    const assistant = assistantMessage(MessageID.ascending())
+    const marker = markerMessage(MessageID.ascending(), [compactionPart(source.info.id)])
+    expect(SessionCompaction.pickSourceUser([source, assistant, marker], marker.info.id)).toBe(source.info)
   })
 })
