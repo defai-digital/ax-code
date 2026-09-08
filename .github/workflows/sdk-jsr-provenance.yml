@@ -61,8 +61,11 @@ jobs:
             const repository = `https://github.com/${context.repo.owner}/${context.repo.repo}`
             const predicate = {
               buildDefinition: {
-                buildType: `${repository}/.github/workflows/sdk-jsr-provenance.yml`,
-                externalParameters: { tag: process.env.SDK_TAG },
+                buildType: 'https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1',
+                externalParameters: {
+                  workflow: { ref: context.ref, repository, path: '.github/workflows/sdk-jsr-provenance.yml' },
+                  tag: process.env.SDK_TAG
+                },
                 internalParameters: { verifiedFiles: files.size },
                 resolvedDependencies: [{ uri: `git+${repository}@refs/tags/${process.env.SDK_TAG}`, digest: { gitCommit: commit } }]
               },
