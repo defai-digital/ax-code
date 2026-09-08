@@ -226,6 +226,29 @@ export namespace AutonomousContinuationPrompt {
     )
   }
 
+  /**
+   * Injected when several consecutive turns ended with every tool call
+   * failing (no tool completed successfully). Distinct from the read-only
+   * no-progress nudge: this fires fast (3/4/5) because an all-error turn is
+   * never productive exploration — it is a wrong path, missing binary,
+   * denied permission, or an environment failure.
+   */
+  export function failedToolTurnNudge(input: {
+    consecutiveFailedToolTurns: number
+    maxFailedToolTurns: number
+    forced?: boolean
+  }) {
+    return (
+      `Agent-loop checkpoint: your last ${input.consecutiveFailedToolTurns} turns each ended with every tool call ` +
+      `failing (no tool completed successfully). ` +
+      (input.forced
+        ? `Tools are disabled for your next turn — respond with a text summary of what is blocking you and what you would try next. `
+        : `Pause and diagnose: read the exact error text from the failing tools, correct the wrong path or assumption, or explain what blocks you. `) +
+      `After ${input.maxFailedToolTurns} consecutive all-failing turns the loop stops. ` +
+      `Do not repeat the same failing call — change strategy or state the blocker instead.`
+    )
+  }
+
   /** Absolute tool-calling cap: productive implement/test/commit runs, not a stall. */
   export function toolCallingBackstopNudge(input: {
     consecutiveToolCallingTurns: number

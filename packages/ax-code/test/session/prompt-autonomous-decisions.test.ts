@@ -15,6 +15,8 @@ import {
   isTruncatedModelTurn,
   isMutatingProgressTurn,
   isNoProgressToolTurn,
+  isFailedToolTurn,
+  failedToolTurnDecision,
   isReadOnlyExplorationTurn,
   modelTurnFinished,
   ordinaryRunCeilingConvergenceDecision,
@@ -35,6 +37,9 @@ import {
   AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
   AX_ENGINE_READ_ONLY_TURN_FORCE,
   AX_ENGINE_READ_ONLY_TURN_NUDGE,
+  FAILED_TOOL_TURN_FORCE,
+  FAILED_TOOL_TURN_NUDGE,
+  MAX_FAILED_TOOL_TURNS,
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
 } from "../../src/session/prompt-loop-config"
 
@@ -1059,6 +1064,56 @@ describe("tool-only turn decision", () => {
   })
 })
 
+describe("failed tool turn fast ladder", () => {
+  const config = {
+    nudgeThreshold: FAILED_TOOL_TURN_NUDGE,
+    forceThreshold: FAILED_TOOL_TURN_FORCE,
+    maxTurns: MAX_FAILED_TOOL_TURNS,
+  }
+
+  test("ships the 3/4/5 thresholds for all-error turns", () => {
+    expect(FAILED_TOOL_TURN_NUDGE).toBe(3)
+    expect(FAILED_TOOL_TURN_FORCE).toBe(4)
+    expect(MAX_FAILED_TOOL_TURNS).toBe(5)
+  })
+
+  test("walks the fast ladder: nudge at 3, forced at 4, stop at 5", () => {
+    expect(failedToolTurnDecision({ consecutiveFailedToolTurns: 1, failedToolNudges: 0, ...config })).toEqual({
+      action: "ignore",
+    })
+    expect(failedToolTurnDecision({ consecutiveFailedToolTurns: 2, failedToolNudges: 0, ...config })).toEqual({
+      action: "ignore",
+    })
+    expect(failedToolTurnDecision({ consecutiveFailedToolTurns: 3, failedToolNudges: 0, ...config })).toEqual({
+      action: "nudge",
+      final: false,
+      forced: false,
+    })
+    expect(failedToolTurnDecision({ consecutiveFailedToolTurns: 4, failedToolNudges: 1, ...config })).toEqual({
+      action: "nudge",
+      final: true,
+      forced: true,
+    })
+    expect(failedToolTurnDecision({ consecutiveFailedToolTurns: 5, failedToolNudges: 2, ...config })).toEqual({
+      action: "stop",
+    })
+  })
+
+  test("a jumped streak still nudges first, then stops once nudges are spent", () => {
+    // Mirrors toolOnlyTurnDecision: the nudge ladder catches up before a hard
+    // stop, so a model gets a strategy-change chance even after a large jump.
+    expect(failedToolTurnDecision({ consecutiveFailedToolTurns: 6, failedToolNudges: 0, ...config })).toEqual({
+      action: "nudge",
+      final: false,
+      forced: false,
+    })
+    // Once both nudges are spent, a streak at or past the cap stops.
+    expect(failedToolTurnDecision({ consecutiveFailedToolTurns: 6, failedToolNudges: 2, ...config })).toEqual({
+      action: "stop",
+    })
+  })
+})
+
 describe("progress-aware stall helpers", () => {
   test("treats completed edits and patches as progress", () => {
     expect(isMutatingProgressTurn([{ type: "patch" }])).toBe(true)
@@ -1101,6 +1156,84 @@ describe("progress-aware stall helpers", () => {
         new Set(['bash:{"command":"ls"}', 'bash:{"command":"pwd"}']),
       ),
     ).toBe(false)
+  })
+
+  test("failed tool turn counts as no progress regardless of tool type or signature", () => {
+    // A failed mutation (edit) with a novel signature still means "no progress" —
+    // it must not reset the streak. isMutatingProgressTurn requires completed.
+    expect(isFailedToolTurn([{ type: "tool", tool: "edit", state: { status: "error" } }])).toBe(true)
+    // A failed read-only command is also no progress, even with a novel signature.
+    expect(isFailedToolTurn([{ type: "tool", tool: "bash", state: { status: "error" } }])).toBe(true)
+    // Multiple failing tools in one turn.
+    expect(
+      isFailedToolTurn([
+        { type: "tool", tool: "bash", state: { status: "error" } },
+        { type: "tool", tool: "edit", state: { status: "error" } },
+      ]),
+    ).toBe(true)
+  })
+
+  test("failed tool turn is not progress when a patch was still persisted", () => {
+    expect(isFailedToolTurn([{ type: "tool", tool: "edit", state: { status: "error" } }, { type: "patch" }])).toBe(
+      false,
+    )
+  })
+
+  test("failed tool turn is not no-progress when any tool completed successfully", () => {
+    // One completed read + one failed edit = some progress (evidence gathered).
+    expect(
+      isFailedToolTurn([
+        { type: "tool", tool: "read", state: { status: "completed" } },
+        { type: "tool", tool: "edit", state: { status: "error" } },
+      ]),
+    ).toBe(false)
+    // A single successful tool call is progress.
+    expect(isFailedToolTurn([{ type: "tool", tool: "bash", state: { status: "completed" } }])).toBe(false)
+  })
+
+  test("failed tool turn ignores non-tool parts and empty inputs", () => {
+    expect(isFailedToolTurn([])).toBe(false)
+    expect(isFailedToolTurn(undefined)).toBe(false)
+    // step-finish / other non-tool parts without any tool call is not a failure.
+    expect(isFailedToolTurn([{ type: "step-finish" }])).toBe(false)
+    // A still-running tool part (interrupted turn) is not a confirmed failure.
+    expect(
+      isFailedToolTurn([
+        { type: "tool", tool: "bash", state: { status: "error" } },
+        { type: "tool", tool: "bash", state: { status: "running" } },
+      ]),
+    ).toBe(false)
+  })
+
+  test("failed tool turn treats pending as not-a-confirmed-failure", () => {
+    expect(
+      isFailedToolTurn([
+        { type: "tool", tool: "bash", state: { status: "error" } },
+        { type: "tool", tool: "bash", state: { status: "pending" } },
+      ]),
+    ).toBe(false)
+  })
+
+  test("failed tool turn is not triggered by a patch-only turn (no tool parts)", () => {
+    expect(isFailedToolTurn([{ type: "patch" }])).toBe(false)
+  })
+
+  test("a completed bash tool is progress even when it reports a non-zero exit", () => {
+    // bash non-zero exit is surfaced as a completed part (metadata.exit), not a
+    // tool error. isFailedToolTurn keys off state.status === "error", so this
+    // is deliberately NOT a failed turn: test-failure loops keep the slower
+    // no-progress ladder instead of the fast 3/4/5 stop.
+    expect(isFailedToolTurn([{ type: "tool", tool: "bash", state: { status: "completed" } }])).toBe(false)
+  })
+
+  test("a tool part with no state is not a confirmed failure", () => {
+    // Defensive chain (part.state?.status): a missing state object is not
+    // evidence of failure, so the turn must not count toward the fast ladder.
+    expect(isFailedToolTurn([{ type: "tool", tool: "bash" }])).toBe(false)
+  })
+
+  test("non-tool, non-patch parts are ignored when every tool errored", () => {
+    expect(isFailedToolTurn([{ type: "text" }, { type: "tool", tool: "grep", state: { status: "error" } }])).toBe(true)
   })
 
   test("absolute tool-calling backstop forces a wrap-up exactly at the cap", () => {

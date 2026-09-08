@@ -321,6 +321,23 @@ export function isNoProgressToolTurn(
   return signatures.every((signature) => priorSignatures.has(signature))
 }
 
+/**
+ * True when a turn called tools but none of them completed successfully — every
+ * tool part ended in the "error" state and no source patch was persisted. Failed
+ * mutations and failed reads both count as "no progress": a model stuck retrying
+ * a failing command (each attempt a novel signature) must not reset the no-progress
+ * streak and burn to the cumulative turn ceiling. Complement to
+ * isNoProgressToolTurn, which only recognizes read-only signature repetition.
+ */
+export function isFailedToolTurn(parts: readonly ToolActivityPart[] | undefined): boolean {
+  if (!parts?.length) return false
+  // A persisted patch means the turn wrote source — that is progress.
+  if (parts.some((part) => part.type === "patch")) return false
+  const tools = parts.filter((part) => part.type === "tool")
+  if (tools.length === 0) return false
+  return tools.every((part) => part.state?.status === "error")
+}
+
 function canonicalizePartInput(input: unknown): string {
   if (typeof input === "string") return input.length > 4096 ? input.slice(0, 4096) : input
   try {
@@ -477,6 +494,32 @@ export function toolOnlyTurnDecision(input: {
     if (input.recentProgress || wrapUps < 2) {
       return { action: "nudge", final: true, forced: true }
     }
+    return { action: "stop" }
+  }
+  return { action: "ignore" }
+}
+
+/**
+ * Fast ladder for consecutive all-failing tool turns (isFailedToolTurn). No
+ * recentProgress / forcedWrapUps leniency: an all-error turn is never
+ * productive, so the only sensible outcomes are a strategy change (nudge),
+ * a forced text summary (force), or a hard stop. Thresholds are 3/4/5 by
+ * default, mirroring the codebase's "3 consecutive errors" convention.
+ */
+export function failedToolTurnDecision(input: {
+  consecutiveFailedToolTurns: number
+  failedToolNudges: number
+  nudgeThreshold: number
+  forceThreshold: number
+  maxTurns: number
+}): ToolOnlyTurnDecision {
+  const thresholds = [input.nudgeThreshold, input.forceThreshold]
+  const nextThreshold = thresholds[input.failedToolNudges]
+  if (nextThreshold !== undefined && input.consecutiveFailedToolTurns >= nextThreshold) {
+    const final = input.failedToolNudges === thresholds.length - 1
+    return { action: "nudge", final, forced: final }
+  }
+  if (input.consecutiveFailedToolTurns >= input.maxTurns) {
     return { action: "stop" }
   }
   return { action: "ignore" }

@@ -23,6 +23,16 @@ export const MAX_TOOL_ONLY_TURNS = 35
 // kept tool-calling would go from that single reminder straight to a hard
 // stop 20 turns later with no further signal.
 export const TOOL_ONLY_TURN_FINAL_NUDGE = MAX_TOOL_ONLY_TURNS - 5
+// Dedicated fast ladder for turns where EVERY tool call errored (no tool
+// completed successfully). Unlike the 15/30/35 tool-only ladder — calibrated
+// for legitimate deep read-only exploration — an all-error turn has no
+// productive form: it is either a pathological loop or an environment failure
+// (missing binary, wrong path, denied permission). Match the codebase's
+// existing "3 consecutive errors" convention (MAX_CONSECUTIVE_ERRORS,
+// DOOM_LOOP_THRESHOLD, ToolErrorPatternTracker THRESHOLD).
+export const FAILED_TOOL_TURN_NUDGE = 3
+export const FAILED_TOOL_TURN_FORCE = 4
+export const MAX_FAILED_TOOL_TURNS = 5
 // Local MLX prefill makes every extra model/tool round comparatively
 // expensive. Still bound open-ended inspection, but allow a real evidence
 // window first: pure Q&A (LOC counts, greps) is read-only work and must not

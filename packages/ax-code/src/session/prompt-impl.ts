@@ -77,6 +77,8 @@ import {
   shouldRestoreForcedTextOnlyTurn,
   isMutatingProgressTurn,
   isNoProgressToolTurn,
+  isFailedToolTurn,
+  failedToolTurnDecision,
   toolCallingBackstopDecision,
   toolCallingBackstopWrapUp,
   toolOnlyStopMessage,
@@ -114,6 +116,9 @@ import {
   AX_ENGINE_READ_ONLY_TURN_NUDGE,
   AX_ENGINE_TRUNCATED_CODE_RECOVERY_MAX_OUTPUT_TOKENS,
   AX_ENGINE_TRUNCATED_RECOVERY_MAX_OUTPUT_TOKENS,
+  FAILED_TOOL_TURN_FORCE,
+  FAILED_TOOL_TURN_NUDGE,
+  MAX_FAILED_TOOL_TURNS,
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
   effectivePacingMaxSteps,
   promptLoopLimits,
@@ -430,6 +435,13 @@ export namespace SessionPrompt {
     // Number of nudge continuations injected during the current no-progress
     // streak. Reset alongside consecutiveToolOnlyTurns.
     let toolOnlyNudges = 0
+    // Consecutive turns where EVERY tool call errored (isFailedToolTurn). Uses
+    // a fast 3/4/5 ladder because an all-error turn has no productive form —
+    // it is a wrong path, missing binary, denied permission, or an environment
+    // failure, not legitimate deep exploration. Reset on any turn with a
+    // completed tool or a non-tool-calls finish.
+    let consecutiveFailedToolTurns = 0
+    let failedToolNudges = 0
     // How many times a FINAL / forced wrap-up has fired this run. Not reset
     // with the streak (#340): after two forced wrap-ups with no recent
     // mutations, the hard stop may fire. The first FINAL checkpoint is
@@ -523,6 +535,8 @@ export namespace SessionPrompt {
       consecutiveToolOnlyTurns = 0
       consecutiveToolCallingTurns = 0
       toolOnlyNudges = 0
+      consecutiveFailedToolTurns = 0
+      failedToolNudges = 0
       recentMutatingTurnsRemaining = 0
       consecutiveAxEngineReadOnlyTurns = 0
       axEngineReadOnlyNudged = false
@@ -1281,6 +1295,8 @@ export namespace SessionPrompt {
         consecutiveToolOnlyTurns = 0
         consecutiveToolCallingTurns = 0
         toolOnlyNudges = 0
+        consecutiveFailedToolTurns = 0
+        failedToolNudges = 0
         recentMutatingTurnsRemaining = 0
         consecutiveAxEngineReadOnlyTurns = 0
         axEngineReadOnlyNudged = false
@@ -1481,6 +1497,8 @@ export namespace SessionPrompt {
             consecutiveToolOnlyTurns = 0
             consecutiveToolCallingTurns = 0
             toolOnlyNudges = 0
+            consecutiveFailedToolTurns = 0
+            failedToolNudges = 0
             consecutiveAxEngineReadOnlyTurns = 0
             axEngineReadOnlyNudged = false
             axEngineReadOnlyHasEvidence = false
@@ -1690,9 +1708,12 @@ export namespace SessionPrompt {
 
       // No-progress stall: finish=tool-calls is the normal agent state, so
       // we increment only when the turn is read-only inspection whose
-      // signatures already appeared this run. Mutations and novel reads
-      // reset the streak. A hard stop fires only after forced wrap-ups
-      // with no recent mutations. Errored turns neither reset nor count.
+      // signatures already appeared this run, OR when every tool call in the
+      // turn errored (isFailedToolTurn). Mutations and novel reads reset the
+      // streak. A hard stop fires only after forced wrap-ups with no recent
+      // mutations. A turn whose tools all failed must count toward the streak
+      // instead of resetting it — otherwise a model stuck retrying a failing
+      // command (novel signature each attempt) never trips the breaker.
       if (!modelFinished && !processor.message.error) {
         // #381: a successful update_goal(status=complete) that ends the turn
         // with tool-calls must force a final text summary, not climb toward
@@ -1713,6 +1734,8 @@ export namespace SessionPrompt {
           consecutiveToolOnlyTurns = 0
           consecutiveToolCallingTurns = 0
           toolOnlyNudges = 0
+          consecutiveFailedToolTurns = 0
+          failedToolNudges = 0
           consecutiveAxEngineReadOnlyTurns = 0
           axEngineReadOnlyNudged = false
           axEngineReadOnlyHasEvidence = false
@@ -1736,11 +1759,21 @@ export namespace SessionPrompt {
           recentMutatingTurnsRemaining -= 1
         }
         consecutiveToolCallingTurns += 1
-        if (isNoProgressToolTurn(currentParts, priorToolSignatures, sessionToolCycleSignatures(sessionID))) {
+        const failedTurn = isFailedToolTurn(currentParts)
+        if (
+          isNoProgressToolTurn(currentParts, priorToolSignatures, sessionToolCycleSignatures(sessionID)) ||
+          failedTurn
+        ) {
           consecutiveToolOnlyTurns += 1
         } else {
           consecutiveToolOnlyTurns = 0
           toolOnlyNudges = 0
+        }
+        if (failedTurn) {
+          consecutiveFailedToolTurns += 1
+        } else {
+          consecutiveFailedToolTurns = 0
+          failedToolNudges = 0
         }
         const axEngineReadOnlyTurn =
           model.providerID === AX_ENGINE_PROVIDER_ID && isReadOnlyExplorationTurn(currentParts)
@@ -1795,6 +1828,54 @@ export namespace SessionPrompt {
           axEngineReadOnlyNudged = false
           axEngineReadOnlyHasEvidence = false
           axEngineLargeEvidenceGraceUsed = false
+        }
+        const failedToolTransition = failedToolTurnDecision({
+          consecutiveFailedToolTurns,
+          failedToolNudges,
+          nudgeThreshold: FAILED_TOOL_TURN_NUDGE,
+          forceThreshold: FAILED_TOOL_TURN_FORCE,
+          maxTurns: MAX_FAILED_TOOL_TURNS,
+        })
+        if (failedToolTransition.action === "nudge") {
+          if (failedToolTransition.forced) armForceTextOnlyTurn("tool_only_breaker")
+          log.info("failed-tool turn nudge", {
+            command: "session.prompt.loop",
+            status: "nudge",
+            sessionID,
+            consecutiveFailedToolTurns,
+            forced: failedToolTransition.forced,
+          })
+          await createAutonomousTextContinuation({
+            sessionID,
+            messages: msgs,
+            text: AutonomousContinuationPrompt.failedToolTurnNudge({
+              consecutiveFailedToolTurns,
+              maxFailedToolTurns: MAX_FAILED_TOOL_TURNS,
+              forced: failedToolTransition.forced,
+            }),
+          })
+          failedToolNudges += 1
+          continue
+        }
+        if (failedToolTransition.action === "stop") {
+          log.warn("failed-tool turn convergence limit", {
+            command: "session.prompt.loop",
+            status: "stopped",
+            errorCode: "FAILED_TOOL_TURN_LIMIT",
+            sessionID,
+            consecutiveFailedToolTurns,
+            maxFailedToolTurns: MAX_FAILED_TOOL_TURNS,
+          })
+          await publishPromptFailure({
+            sessionID,
+            assistant: processor.message,
+            message:
+              `Agent loop stopped after ${consecutiveFailedToolTurns} consecutive turns where every tool call failed. ` +
+              `Inspect the failing tool errors (wrong path, missing binary, denied permission, or invalid input) ` +
+              `and address them before retrying.`,
+          })
+          reason = "stalled"
+          break
         }
         const toolOnlyTransition = toolOnlyTurnDecision({
           consecutiveToolOnlyTurns,
