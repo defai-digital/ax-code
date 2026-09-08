@@ -11901,6 +11901,10 @@ export type SessionCreateErrors = {
    * Bad request
    */
   400: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
 }
 
 /** Error response payload for `POST /session` — Create session */

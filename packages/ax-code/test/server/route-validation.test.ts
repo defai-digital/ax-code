@@ -29,6 +29,39 @@ afterEach(async () => {
 })
 
 describe("server route validation", () => {
+  test("session creation preserves actionable lock contention guidance over HTTP", async () => {
+    await Instance.provide({
+      directory: root,
+      fn: async () => {
+        const server = Server.Default()
+        const message =
+          "Session creation could not acquire the local database write lock after 3 attempts. Wait for another AX Code process to finish writing, then retry."
+        const create = vi
+          .spyOn(Session, "create")
+          .mockRejectedValue(
+            new Session.CreationBusyError({ message }, { cause: new Error("database is locked: sk-test-token") }),
+          )
+        try {
+          const response = await server.request("/session", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+          })
+          expect(response.status).toBe(409)
+          const body = await response.json()
+          expect(body).toMatchObject({
+            name: "SessionCreationBusyError",
+            message,
+            code: "SESSION_CREATION_BUSY",
+            retryable: true,
+          })
+          expect(JSON.stringify(body)).not.toContain("sk-test-token")
+        } finally {
+          create.mockRestore()
+        }
+      },
+    })
+  })
   test("session prompt returns a non-2xx JSON error when prompt fails", async () => {
     await Instance.provide({
       directory: root,

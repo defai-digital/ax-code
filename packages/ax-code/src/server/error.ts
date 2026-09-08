@@ -86,6 +86,17 @@ function httpExceptionEnvelope(error: HTTPException, logRef?: string): AppErrorE
 
 function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelope {
   if (error instanceof NotFoundError) return notFoundEnvelope(error, logRef)
+  if (Session.CreationBusyError.isInstance(error)) {
+    return {
+      name: "SessionCreationBusyError",
+      message: error.data.message,
+      status: 409,
+      code: "SESSION_CREATION_BUSY",
+      logRef,
+      retryable: true,
+      details: { resource: "session" },
+    }
+  }
   if (error instanceof Provider.ModelNotFoundError) {
     return {
       name: "InvalidRequestError",
