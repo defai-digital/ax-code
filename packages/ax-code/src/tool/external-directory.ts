@@ -2,6 +2,7 @@ import path from "path"
 import { promises as fs } from "fs"
 import type { Tool } from "./tool"
 import { Instance } from "../project/instance"
+import { File } from "../file"
 import { Filesystem } from "../util/filesystem"
 import { uniqueStrings } from "../util/string-list"
 import { resolveToolFilePath } from "./file-path"
@@ -64,9 +65,9 @@ export async function assertSymlinkInsideProject(target: string): Promise<void> 
   })
   if (lstat?.isSymbolicLink()) {
     const real = await fs.realpath(targetPath).catch(() => null)
-    if (!real) throw new Error("Access denied: symlink target is dangling or inaccessible")
+    if (!real) throw new File.AccessDeniedError({ message: "Access denied: symlink target is dangling or inaccessible" })
     if (!Filesystem.contains(projectRoot, real)) {
-      throw new Error("Access denied: symlink target escapes project directory")
+      throw new File.AccessDeniedError({ message: "Access denied: symlink target escapes project directory" })
     }
   }
 
@@ -84,9 +85,10 @@ export async function assertSymlinkInsideProject(target: string): Promise<void> 
     }
 
     const realAncestor = await fs.realpath(ancestor).catch(() => null)
-    if (!realAncestor) throw new Error("Access denied: parent directory is dangling or inaccessible")
+    if (!realAncestor)
+      throw new File.AccessDeniedError({ message: "Access denied: parent directory is dangling or inaccessible" })
     if (!Filesystem.contains(projectRoot, realAncestor)) {
-      throw new Error("Access denied: parent directory escapes project directory")
+      throw new File.AccessDeniedError({ message: "Access denied: parent directory escapes project directory" })
     }
     break
   }

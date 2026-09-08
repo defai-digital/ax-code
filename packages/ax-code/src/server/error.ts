@@ -6,6 +6,7 @@ import z from "zod"
 import { NamedError } from "@ax-code/util/error"
 import { NotFoundError } from "../storage/db"
 import { Provider } from "../provider/provider"
+import { Session } from "../session"
 
 export const AppErrorEnvelope = z
   .object({
@@ -187,7 +188,11 @@ function namedErrorEnvelope(error: NamedError, logRef?: string): AppErrorEnvelop
 }
 
 function plainErrorEnvelope(error: Error, logRef?: string): AppErrorEnvelope {
-  if (error.constructor.name === "BusyError" && /^Session .* is busy$/.test(error.message)) {
+  // instanceof survives minification; `error.constructor.name` does not. In
+  // the compiled release entry a mangled class name silently downgraded
+  // SessionBusyError to a 500 UnknownError. The message regex stays as a
+  // secondary guard against plain-Error lookalikes.
+  if (error instanceof Session.BusyError && /^Session .* is busy$/.test(error.message)) {
     return {
       name: "SessionBusyError",
       message: "Session is busy",
