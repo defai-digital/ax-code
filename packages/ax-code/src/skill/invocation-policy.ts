@@ -83,6 +83,7 @@ export namespace SkillInvocationPolicy {
   }
 
   export async function read(location: string, data: Record<string, unknown>): Promise<Result> {
+    // @scan-suppress security_scan - location is an already-discovered SKILL.md; the sibling path is the fixed agents/openai.yaml constant.
     const sidecarPath = path.join(path.dirname(location), SIDECAR_RELATIVE)
 
     let handle: FileHandle
