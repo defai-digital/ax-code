@@ -167,6 +167,15 @@ export namespace ProviderError {
     }
   }
 
+  function upstreamPermissionMessage(requestID?: string): string {
+    return (
+      "The upstream provider denied access (upstream_permission_error). " +
+      "Ask your AX Trust administrator to check the upstream credential, upstream model access, and account or region restrictions. " +
+      "Retrying the same request will not resolve this permission denial." +
+      (requestID ? ` Request ID: ${requestID}.` : "")
+    )
+  }
+
   // DashScope (Coding Plan) and Token Plan both throttle on a sliding
   // short-window allocatable-token reservation. Same error class, same
   // mitigation — recognize either backend so retry/backoff applies uniformly.
@@ -231,6 +240,13 @@ export namespace ProviderError {
     if (body.type !== "error") return
 
     switch (bodyError?.code) {
+      case "upstream_permission_error":
+        return {
+          type: "api_error",
+          message: upstreamPermissionMessage(),
+          isRetryable: false,
+          responseBody,
+        }
       case "context_length_exceeded":
         return {
           type: "context_overflow",
@@ -324,6 +340,27 @@ export namespace ProviderError {
     }
 
     const metadata = input.error.url ? { url: input.error.url } : undefined
+
+    if (input.error.statusCode === 403 && bodyError?.code === "upstream_permission_error") {
+      const rawRequestID = Object.entries(input.error.responseHeaders ?? {}).find(
+        ([name]) => name.toLowerCase() === "x-request-id",
+      )?.[1]
+      const requestID =
+        rawRequestID && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(rawRequestID) ? rawRequestID : undefined
+      return {
+        type: "api_error",
+        message: `HTTP 403: ${upstreamPermissionMessage(requestID)}`,
+        statusCode: input.error.statusCode,
+        isRetryable: false,
+        responseHeaders: input.error.responseHeaders,
+        responseBody: input.error.responseBody,
+        metadata: {
+          ...metadata,
+          errorCode: "upstream_permission_error",
+          ...(requestID ? { requestID } : {}),
+        },
+      }
+    }
 
     if (isAlibabaShortWindowQuota(input.providerID, m, input.error.responseBody, input.error.url)) {
       return {
