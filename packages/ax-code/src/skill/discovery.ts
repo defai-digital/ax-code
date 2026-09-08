@@ -111,7 +111,28 @@ export namespace Discovery {
         await res.body?.cancel().catch(() => {})
         throw asDiscoveryError(`skill-discovery: ${url} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
       }
-      return res.arrayBuffer()
+      if (!res.body) return new ArrayBuffer(0)
+      const reader = res.body.getReader()
+      const buffer = new Uint8Array(MAX_SKILL_FILE_BYTES)
+      let size = 0
+      let complete = false
+      try {
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) {
+            complete = true
+            return buffer.slice(0, size).buffer
+          }
+          if (size + value.byteLength > buffer.length) {
+            throw asDiscoveryError(`skill-discovery: ${url} exceeds ${MAX_SKILL_FILE_BYTES} bytes`)
+          }
+          buffer.set(value, size)
+          size += value.byteLength
+        }
+      } finally {
+        if (!complete) await reader.cancel().catch((err) => log.warn("failed to cancel skill response", { url, err }))
+        reader.releaseLock()
+      }
     } catch (err) {
       if (err instanceof DiscoveryError) throw err
       throw asDiscoveryError(`skill-discovery: fetch failed for ${url}`, err)
@@ -182,8 +203,13 @@ export namespace Discovery {
 
     const dirs = await mapWithConcurrency(list, skillConcurrency, async (skill) => {
       const files = skill.files.map(normalizeFile)
-      const cacheRoot = path.resolve(cache)
-      const root = path.resolve(cache, skill.name)
+      // Bind cached resources to both their source and the complete manifest.
+      // A revised skill must not inherit resources removed from its manifest.
+      const revision = createHash("sha256")
+        .update(JSON.stringify({ index, files: [...files].sort((a, b) => a.path.localeCompare(b.path)) }))
+        .digest("hex")
+      const cacheRoot = path.resolve(cache, revision)
+      const root = path.resolve(cacheRoot, skill.name)
       const rootPrefix = root + path.sep
       const cachePrefix = cacheRoot + path.sep
       if (root !== cacheRoot && !rootPrefix.startsWith(cachePrefix)) {

@@ -293,7 +293,7 @@ export namespace Skill {
   const state = Instance.state(async () => {
     const ctx = Instance.current
     const s: State = {
-      skills: {},
+      skills: Object.create(null),
       dirs: new Set<string>(),
     }
 

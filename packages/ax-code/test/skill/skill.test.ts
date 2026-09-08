@@ -14,6 +14,29 @@ function userSkills(skills: Skill.Info[]) {
   return skills.filter((s) => !Skill.BUILTIN_NAMES.has(s.name))
 }
 
+test("skill names do not use or mutate the registry object prototype", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const skillDir = path.join(dir, ".agents", "skills", "prototype-name")
+      await fs.mkdir(skillDir, { recursive: true })
+      await fs.writeFile(
+        path.join(skillDir, "SKILL.md"),
+        "---\nname: __proto__\ndescription: A legacy skill name.\n---\nInstructions",
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(await Skill.get("toString")).toBeUndefined()
+      expect(await Skill.get("constructor")).toBeUndefined()
+      expect((await Skill.all()).some((skill) => skill.name === "__proto__")).toBe(true)
+      expect((await Skill.get("__proto__"))?.content.trim()).toBe("Instructions")
+    },
+  })
+})
+
 async function createGlobalSkill(homeDir: string) {
   const skillDir = path.join(homeDir, ".claude", "skills", "global-test-skill")
   await fs.mkdir(skillDir, { recursive: true })

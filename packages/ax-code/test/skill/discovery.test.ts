@@ -127,6 +127,63 @@ afterAll(async () => {
 describe("Discovery.pull", () => {
   const pull = (url: string) => Discovery.pull(url)
 
+  test("cancels an oversized chunked index before buffering the entire response", async () => {
+    const body = new TextEncoder().encode(JSON.stringify({ skills: [], padding: "x".repeat(2 * 1024 * 1024) }))
+    let offset = 0
+    let cancelled = false
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (offset === body.length) return controller.close()
+          const end = Math.min(offset + 16384, body.length)
+          controller.enqueue(body.subarray(offset, end))
+          offset = end
+        },
+        cancel() {
+          cancelled = true
+        },
+      }),
+    )
+    pinnedFetchSpy.mockResolvedValueOnce(response)
+    expect(await pull(`${origin}/oversized-chunked-index/`)).toEqual([])
+    expect(cancelled).toBe(true)
+    expect(offset).toBeLessThan(body.length)
+  })
+
+  test("keeps source and manifest revisions isolated for skills with the same name", async () => {
+    const hash = (text: string) => createHash("sha256").update(text).digest("hex")
+    async function version(source: string, body: string, resource: string) {
+      pinnedFetchSpy.mockResolvedValueOnce(
+        Response.json({
+          skills: [
+            {
+              name: "collision-skill",
+              files: [
+                { path: "SKILL.md", sha256: hash(body) },
+                { path: resource, sha256: hash(resource) },
+              ],
+            },
+          ],
+        }),
+      )
+      pinnedFetchSpy.mockImplementationOnce(
+        async (url) => new Response(String(url).endsWith("SKILL.md") ? body : resource),
+      )
+      pinnedFetchSpy.mockImplementationOnce(
+        async (url) => new Response(String(url).endsWith("SKILL.md") ? body : resource),
+      )
+      const roots = await pull(source)
+      expect(roots).toHaveLength(1)
+      return roots[0]
+    }
+    const original = await version(`${origin}/source-a/`, "Original", "original.txt")
+    const otherSource = await version(`${origin}/source-b/`, "Other source", "other.txt")
+    const revised = await version(`${origin}/source-a/`, "Revised", "revised.txt")
+    expect(new Set([original, otherSource, revised]).size).toBe(3)
+    expect(await readFile(path.join(original, "SKILL.md"), "utf8")).toBe("Original")
+    expect(await Filesystem.exists(path.join(revised, "original.txt"))).toBe(false)
+  })
+
   test("decodes skill discovery index values", () => {
     expect(
       Discovery.decodeIndexValue({
@@ -202,7 +259,7 @@ describe("Discovery.pull", () => {
     await rm(path.join(cacheDir, "safe-skill"), { recursive: true, force: true })
     const dirs = await pull(`${origin}/hashed-skill/`)
     expect(dirs.length).toBe(1)
-    expect(await Filesystem.exists(path.join(cacheDir, "safe-skill", "SKILL.md"))).toBe(true)
+    expect(await Filesystem.exists(path.join(dirs[0], "SKILL.md"))).toBe(true)
   })
 
   test("rejects skill files with mismatched sha256 integrity metadata", async () => {
