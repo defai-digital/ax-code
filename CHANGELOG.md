@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.14.4] - 2026-09-08
+
+### Changed
+
+- Prepare AX Code 7.14.4 and SDK 2.5.4.
+
 ## [7.14.3] - 2026-09-07
 
 ### Changed
