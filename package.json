@@ -82,6 +82,7 @@
       "node-pty-prebuilt-multiarch"
     ],
     "overrides": {
+      "@ai-sdk/provider-utils@>=4.0.0 <4.0.33": "4.0.33",
       "serialize-javascript": ">=7.0.5",
       "seroval": ">=1.5.3",
       "diff@<8.0.3": "8.0.3",

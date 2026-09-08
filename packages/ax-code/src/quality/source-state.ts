@@ -11,6 +11,15 @@ const MAX_FILES = 20_000
 const MAX_BYTES = 128 * 1024 * 1024
 const log = Log.create({ service: "verification.source-state" })
 
+function assertContained(root: string, input: string): string {
+  const absolute = path.resolve(root, input)
+  const relative = path.relative(root, absolute)
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("Source path escapes workspace")
+  }
+  return absolute
+}
+
 // Hash actual source bytes: porcelain alone cannot distinguish two edits to
 // the same dirty file. The prefix prevents old status-only digests from being
 // mistaken for fresh content evidence. Never modify the index or snapshot store.
@@ -37,9 +46,7 @@ export async function currentSourceState(
       ].sort()
       if (sourcePaths?.length) {
         const scopes = sourcePaths.map((scope) => {
-          const absolute = path.resolve(root, scope)
-          if (absolute !== root && !absolute.startsWith(root + path.sep))
-            throw new Error("Source path escapes workspace")
+          const absolute = assertContained(root, scope)
           return path.relative(root, absolute).split(path.sep).join("/")
         })
         entries = entries.filter((file) =>
@@ -51,7 +58,12 @@ export async function currentSourceState(
         // explicitly or assert them inside the project check.
         for (const scope of scopes) {
           try {
-            if (!(await fs.lstat(path.join(root, scope))).isDirectory()) entries.push(scope)
+            const absolute = assertContained(root, scope)
+            const stat = await fs.lstat(absolute)
+            if (stat.isSymbolicLink() || (await fs.realpath(absolute)) !== absolute) {
+              throw new Error("Linked source cannot be fingerprinted within the workspace")
+            }
+            if (!stat.isDirectory()) entries.push(scope)
           } catch (error) {
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
             entries.push(scope)
@@ -70,8 +82,7 @@ export async function currentSourceState(
     const seen = new Set<string>()
     const visit = async (relative: string, depth = 0): Promise<void> => {
       if (depth > 64) throw new Error("Source directory depth exceeds fingerprint limit")
-      const absolute = path.resolve(root, relative)
-      if (absolute !== root && !absolute.startsWith(root + path.sep)) throw new Error("Source path escapes workspace")
+      const absolute = assertContained(root, relative)
       if (seen.has(absolute)) return
       seen.add(absolute)
       if (++count > MAX_FILES) throw new Error("Source file count exceeds fingerprint limit")
@@ -94,8 +105,10 @@ export async function currentSourceState(
         hash.update(JSON.stringify([normalized, "directory"]))
         const children = (await fs.readdir(absolute)).sort()
         for (const child of children) {
-          if (child === ".git" || path.join(relative, child) === path.join(".ax-code", "goals")) continue
-          await visit(path.join(relative, child), depth + 1)
+          const childPath = assertContained(root, path.join(absolute, child))
+          const childRelative = path.relative(root, childPath)
+          if (child === ".git" || childRelative.split(path.sep).join("/") === ".ax-code/goals") continue
+          await visit(childRelative, depth + 1)
         }
         return
       }

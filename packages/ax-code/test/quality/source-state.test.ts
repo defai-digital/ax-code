@@ -67,3 +67,15 @@ test.skipIf(process.platform === "win32")("source fingerprints refuse linked fil
   await fs.symlink(path.join(tmp.path, "config.txt"), path.join(tmp.path, "linked.txt"))
   expect((await currentSourceState(tmp.path, "", ["linked.txt"])).available).toBe(false)
 })
+
+test.skipIf(process.platform === "win32")(
+  "Git scopes refuse linked directories instead of certifying empty input",
+  async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using external = await tmpdir()
+    await fs.mkdir(path.join(external.path, "src"))
+    await fs.writeFile(path.join(external.path, "src/config.txt"), "external source")
+    await fs.symlink(external.path, path.join(tmp.path, "linked"))
+    expect((await currentSourceState(tmp.path, "git", ["linked/src"])).available).toBe(false)
+  },
+)

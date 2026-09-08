@@ -77,6 +77,7 @@ export namespace GoalCheckVerification {
           receipt.checkID !== check.id ||
           receipt.contractDigest !== input.digest ||
           receipt.command !== check.command ||
+          // @scan-suppress security_scan - Normalize solely for equality; no filesystem access or authorization occurs here.
           path.resolve(receipt.cwd) !== path.resolve(input.cwd) ||
           receipt.startedAt < input.created ||
           receipt.endedAt < receipt.startedAt ||
