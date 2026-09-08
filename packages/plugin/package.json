@@ -43,6 +43,6 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "@typescript/native-preview": "catalog:",
-    "vitest": "^4.1.9"
+    "vitest": "^5.0.0"
   }
 }

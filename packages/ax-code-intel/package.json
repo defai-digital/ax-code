@@ -63,6 +63,6 @@
     "@types/which": "3.0.4",
     "@typescript/native-preview": "catalog:",
     "typescript": "catalog:",
-    "vitest": "^4.1.9"
+    "vitest": "^5.0.0"
   }
 }
