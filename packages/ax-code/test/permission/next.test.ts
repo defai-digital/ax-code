@@ -345,6 +345,61 @@ test("ask - interactive-only permissions still honor explicit deny rules", async
   })
 })
 
+test("reply - concurrent always and reject serialize instead of interleaving", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const sessionID = SessionID.make("ses_concurrent")
+      const asks = [
+        Permission.ask({
+          sessionID,
+          permission: "bash",
+          patterns: ["curl example.com"],
+          metadata: {},
+          always: ["curl example.com"],
+          ruleset: [],
+        }).then(
+          () => "resolved" as const,
+          () => "rejected" as const,
+        ),
+        Permission.ask({
+          sessionID,
+          permission: "webfetch",
+          patterns: ["https://example.com"],
+          metadata: {},
+          always: [],
+          ruleset: [],
+        }).then(
+          () => "resolved" as const,
+          () => "rejected" as const,
+        ),
+      ]
+      const [bashReq, webfetchReq] = await waitForPending(2)
+
+      // Fire both replies at once. Post-fix both go through the same
+      // serialized reply queue: the always-persistence completes (or the
+      // entry is gone) before the reject sweep runs, and vice versa.
+      const [alwaysResult, rejectResult] = await Promise.all([
+        Permission.reply({ requestID: bashReq.id, reply: "always" }),
+        Permission.reply({ requestID: webfetchReq.id, reply: "reject" }),
+      ])
+      expect(alwaysResult !== false).toBe(true)
+      expect(rejectResult).toBe(true)
+
+      const outcomes = await Promise.all(asks)
+      expect(outcomes).toEqual(["resolved", "rejected"])
+      expect(await Permission.list()).toEqual([])
+
+      // The always rule was persisted despite the concurrent reject sweep.
+      const row = Database.use((db) =>
+        db.select().from(PermissionTable).where(eq(PermissionTable.project_id, Instance.project.id)).get(),
+      )
+      expect(row?.data).toContainEqual({ permission: "bash", pattern: "curl example.com", action: "allow" })
+    },
+  })
+})
+
 test("loadPolicy - malformed policy returns empty ruleset and does not block tools", async () => {
   // A parse error in policy.json means the restrictions are unknown, not
   // that everything should be denied. Returning [] (no policy) keeps the

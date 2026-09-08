@@ -518,13 +518,18 @@ export namespace Permission {
     }
 
     if (input.reply === "reject") {
-      for (const [id, entry] of [...pending.entries()]) {
-        if (entry.info.sessionID !== existing.info.sessionID) continue
-        pending.delete(id)
-        publishReply(entry, input.reply)
-        entry.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
-      }
-      return true
+      // Serialize with the always-reply queue: without this, a concurrent
+      // "Always" could persist rules in the middle of a session-wide reject
+      // sweep, leaving both effects interleaved nondeterministically.
+      return serializeAlwaysReply(s, async () => {
+        for (const [id, entry] of [...pending.entries()]) {
+          if (entry.info.sessionID !== existing.info.sessionID) continue
+          pending.delete(id)
+          publishReply(entry, input.reply)
+          entry.deferred.reject(input.message ? new CorrectedError({ feedback: input.message }) : new RejectedError())
+        }
+        return true
+      })
     }
 
     if (input.reply === "once") {

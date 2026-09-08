@@ -87,6 +87,31 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   // approval token); the permission still never auto-approves outside
   // full-access isolation.
   "ops_apply",
+  // Cloud Operations approval gate: issues the single-use plan-bound token
+  // that authorizes ops_apply. Per-call by design (no always patterns,
+  // mirroring bash_destructive) — an autonomous agent must never approve
+  // its own mutation plan.
+  "ops_approve",
+  // Opens a URL in the user's real browser — an external surface comparable
+  // to webfetch (network egress plus a prompt-injection vector aimed at the
+  // human).
+  "browser_open",
+  // Destructive bash gate and sandbox escalation. Both are also
+  // INTERACTIVE_ONLY (permission/index.ts), so no wildcard rule can
+  // pre-approve them; classifying them as RISK documents that autonomous
+  // mode must never auto-approve either.
+  "bash_destructive",
+  "isolation_escalation",
+  // Multi-agent orchestration: parallel subagents and ensemble fan-outs
+  // carry the same cost/privilege implications as `task`, and the runtime
+  // already deny-gates them in restricted agent rulesets.
+  "task_parallel",
+  "arena",
+  "council",
+  // Asking the user a question surfaces UI but has no side effects; the
+  // runtime still deny-gates it inside restricted agent contexts, so it
+  // stays in the risk class rather than auto-approving.
+  "question",
 ])
 
 export function classify(permission: string): RiskClass {

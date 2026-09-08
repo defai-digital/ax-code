@@ -31,9 +31,11 @@ describe("permission risk classification", () => {
   })
 
   test("unknown permissions classify as unknown", () => {
-    expect(classify("isolation_escalation")).toBe("unknown")
+    // isolation_escalation used to be the example here; it is now an
+    // explicitly classified risk permission (see risk-class-coverage).
     expect(classify("doom_loop")).toBe("unknown")
     expect(classify("totally_made_up")).toBe("unknown")
+    expect(classify("brand_new_tool")).toBe("unknown")
   })
 
   test("safe and risk sets do not overlap", () => {
