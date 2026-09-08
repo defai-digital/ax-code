@@ -26,6 +26,7 @@ let callbackRunning = false
 // auth flow (which calls provider.state()) or a simple UnauthorizedError.
 let simulateAuthFlow = true
 let registrationError: Error | undefined
+let authorizationRedirectUrl = "https://auth.example.com/authorize?state=test"
 
 function assertMockPublicUrl(url: string) {
   const hostname = new URL(url).hostname.toLowerCase()
@@ -87,7 +88,7 @@ vi.mock("@modelcontextprotocol/sdk/client/streamableHttp.js", () => ({
         }
         // The SDK calls redirectToAuthorization to redirect the user
         if (this.authProvider.redirectToAuthorization) {
-          await this.authProvider.redirectToAuthorization(new URL("https://auth.example.com/authorize?state=test"))
+          await this.authProvider.redirectToAuthorization(new URL(authorizationRedirectUrl))
         }
         throw new MockUnauthorizedError()
       }
@@ -169,6 +170,7 @@ beforeEach(() => {
   authenticatedUrls.clear()
   simulateAuthFlow = true
   registrationError = undefined
+  authorizationRedirectUrl = "https://auth.example.com/authorize?state=test"
   resetMockOAuthCallback()
 })
 
@@ -253,6 +255,45 @@ test.each([
           error: expect.stringContaining(hint),
         })
         await expect(MCP.startAuth("design")).rejects.toThrow(hint)
+      } finally {
+        await Instance.dispose()
+      }
+    },
+  })
+})
+
+test.each(["https://auth.example.com/authorize", "http://127.0.0.1:3846/authorize"])(
+  "loopback OAuth cannot redirect the user's browser to %s",
+  async (url) => {
+    authorizationRedirectUrl = url
+    const config = { type: "remote" as const, url: "http://127.0.0.1:3845/mcp", allowLoopback: true, enabled: false }
+    await using tmp = await tmpdir({ git: true, config: { mcp: { desktop: config } } })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        try {
+          await trustConfiguredMcp("desktop")
+          await expect(MCP.startAuth("desktop")).rejects.toThrow("loopback")
+          const result = await MCP.add("desktop", { ...config, enabled: true })
+          expect(result.status.desktop).toMatchObject({ status: "failed", error: expect.stringContaining("loopback") })
+        } finally {
+          await Instance.dispose()
+        }
+      },
+    })
+  },
+)
+
+test("loopback OAuth permits authorization on the configured origin", async () => {
+  authorizationRedirectUrl = "http://127.0.0.1:3845/authorize?state=test"
+  const config = { type: "remote" as const, url: "http://127.0.0.1:3845/mcp", allowLoopback: true, enabled: false }
+  await using tmp = await tmpdir({ git: true, config: { mcp: { desktop: config } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      try {
+        await trustConfiguredMcp("desktop")
+        expect(await MCP.startAuth("desktop")).toMatchObject({ authorizationUrl: authorizationRedirectUrl })
       } finally {
         await Instance.dispose()
       }
