@@ -45,6 +45,7 @@ import {
   combineTransportErrors,
   isTransientMcpConnectError,
   mcpClientUserAgent,
+  mcpRegistrationRejection,
   mergeRemoteMcpHeaders,
 } from "./connect-error"
 
@@ -93,7 +94,13 @@ export namespace MCP {
     })
   }
 
-  function pinnedMcpFetch(label: string) {
+  async function remoteMcpFetch(mcp: Extract<Config.Mcp, { type: "remote" }>, label: string) {
+    if (mcp.allowLoopback) {
+      const origin = Ssrf.loopbackOrigin(mcp.url, label)
+      return (url: string | URL, init?: RequestInit) =>
+        Ssrf.pinnedLoopbackFetch(url.toString(), origin, { ...init, label })
+    }
+    await Ssrf.assertPublicUrl(mcp.url, label)
     return (url: string | URL, init?: RequestInit) => Ssrf.pinnedFetch(url.toString(), { ...init, label })
   }
 
@@ -674,8 +681,15 @@ export namespace MCP {
     let status: Status | undefined = undefined
 
     if (mcp.type === "remote") {
+      // MCP.add also reaches this path. A loopback opt-in must not reuse trust
+      // granted to the same project entry before the network policy changed.
+      if (mcp.allowLoopback) {
+        const trust = await trustDecision(key, mcp)
+        if (!trust.trusted) return { mcpClient: undefined, status: needsTrustStatus(trust) }
+      }
       let callbackListenerStarted = false
       try {
+        const fetch = await remoteMcpFetch(mcp, "mcp")
         // OAuth is enabled by default for remote servers unless explicitly disabled with oauth: false
         const oauthDisabled = mcp.oauth === false
         const oauthConfig = isRecord(mcp.oauth) ? mcp.oauth : undefined
@@ -705,9 +719,7 @@ export namespace MCP {
           )
         }
 
-        await Ssrf.assertPublicUrl(mcp.url, "mcp")
         const requestInit = remoteRequestInit(mcp.headers)
-        const fetch = pinnedMcpFetch("mcp")
 
         // Lazy factories: a transport is only constructed when its candidate
         // is actually tried, so untried candidates leak no sockets and a
@@ -775,12 +787,12 @@ export namespace MCP {
               })
               status = {
                 status: "needs_client_registration" as const,
-                error: "Server does not support dynamic client registration. Please provide clientId in config.",
+                error: mcpRegistrationRejection(key, mcp.url),
               }
               // Show toast for needs_client_registration
               Bus.publishDetached(NotificationEvent.ToastShow, {
                 title: "MCP Authentication Required",
-                message: `Server "${key}" requires a pre-registered client ID. Add clientId to your config.`,
+                message: status.error,
                 variant: "warning",
                 duration: TOAST_DURATION_LONG_MS,
               })
@@ -1452,7 +1464,7 @@ export namespace MCP {
     }
 
     // SSRF guard: validate the URL before initiating OAuth flow (BUG-003)
-    await Ssrf.assertPublicUrl(mcpConfig.url, "mcp-auth")
+    const fetch = await remoteMcpFetch(mcpConfig, "mcp-auth")
 
     if (mcpConfig.oauth === false) {
       throw new Error(`MCP server ${mcpName} has OAuth explicitly disabled`)
@@ -1493,7 +1505,7 @@ export namespace MCP {
       const transport = new StreamableHTTPClientTransport(new URL(mcpConfig.url), {
         authProvider,
         requestInit: remoteRequestInit(mcpConfig.headers),
-        fetch: pinnedMcpFetch("mcp-auth"),
+        fetch,
       })
       const client = createClient()
 
@@ -1534,10 +1546,7 @@ export namespace MCP {
         // "Forbidden" and the SDK wraps it as a SyntaxError).
         const errMsg = toErrorMessage(error)
         if (isDynamicRegistrationRejection(errMsg)) {
-          throw new Error(
-            `Dynamic client registration was rejected by "${mcpName}". ` +
-              `The server may require a pre-registered client ID — provide oauth.clientId and oauth.clientSecret in your MCP config.`,
-          )
+          throw new Error(mcpRegistrationRejection(mcpName, mcpConfig.url))
         }
         throw error
       }

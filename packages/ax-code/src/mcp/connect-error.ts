@@ -62,3 +62,18 @@ export function mergeRemoteMcpHeaders(
 export function mcpClientUserAgent(version: string): string {
   return `ax-code/${version}`
 }
+
+export function mcpRegistrationRejection(name: string, url: string): string {
+  if (new URL(url).origin === "https://mcp.figma.com") {
+    return (
+      `Figma rejected OAuth client registration for "${name}". ` +
+      "Figma remote MCP requires an approved client in the Figma MCP Catalog; ordinary OAuth app credentials do not establish MCP access. " +
+      "See https://developers.figma.com/docs/figma-mcp-server/remote-server-installation/ for client registration requirements. " +
+      "For local access, enable Figma Desktop MCP and configure http://127.0.0.1:3845/mcp with allowLoopback: true and oauth: false."
+    )
+  }
+  return (
+    `Dynamic client registration was rejected by "${name}". ` +
+    "The server may require a pre-registered client ID; provide oauth.clientId and, only if required by the server, oauth.clientSecret."
+  )
+}

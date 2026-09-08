@@ -2767,6 +2767,10 @@ export type McpRemoteConfig = {
    */
   url: string
   /**
+   * Opt in to localhost, 127.0.0.1, or [::1] HTTP(S) MCP on the configured origin only. Defaults to false; project entries still require trust.
+   */
+  allowLoopback?: boolean
+  /**
    * Enable or disable the MCP server on startup
    */
   enabled?: boolean

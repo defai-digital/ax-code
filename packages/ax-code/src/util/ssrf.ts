@@ -162,6 +162,27 @@ export namespace Ssrf {
     return hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname
   }
 
+  function isLoopbackAddress(address: string): boolean {
+    return address === "127.0.0.1" || address === "::1"
+  }
+
+  /** Explicit local MCP authority. This does not relax public-only URL validation. */
+  export function loopbackOrigin(url: string, label = "ssrf"): string {
+    const parsed = new URL(url)
+    const hostname = ipFromHostname(parsed.hostname)
+    if (
+      (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+      (hostname !== "localhost" && !isLoopbackAddress(hostname)) ||
+      parsed.username ||
+      parsed.password
+    ) {
+      throw new Error(
+        `${label}: loopback access requires an HTTP(S) URL at localhost, 127.0.0.1, or [::1] without URL credentials`,
+      )
+    }
+    return parsed.origin
+  }
+
   function responseHeaders(headers: http.IncomingHttpHeaders): Headers {
     const result = new Headers()
     for (const [key, value] of Object.entries(headers)) {
@@ -364,18 +385,25 @@ export namespace Ssrf {
     label: string,
     fetchFn?: FetchFn,
     dnsResolveFn?: DnsResolveFn,
+    localOrigin?: string,
   ): Promise<Response> {
+    init?.signal?.throwIfAborted()
     const parsed = new URL(url)
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new Error(`${label}: unsupported URL scheme: ${parsed.protocol}`)
     }
 
     const hostname = ipFromHostname(parsed.hostname)
+    if (localOrigin !== undefined && loopbackOrigin(url, label) !== localOrigin) {
+      throw new Error(`${label}: loopback request must stay on the configured origin: ${localOrigin}`)
+    }
 
     // If already an IP literal, just validate and fetch directly
     if (net.isIP(hostname)) {
       const bad = net.isIP(hostname) === 4 ? isPrivateIPv4(hostname) : isPrivateIPv6(hostname)
-      if (bad) throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
+      if (bad && localOrigin === undefined) {
+        throw new Error(`${label}: refusing to fetch private/reserved address: ${hostname}`)
+      }
       const { label: _, ...fetchInit } = init ?? {}
       if (fetchFn) {
         return fetchFn(url, { ...fetchInit, redirect: "manual" })
@@ -417,12 +445,21 @@ export namespace Ssrf {
 
     // Validate ALL resolved addresses
     for (const { address, family } of addresses) {
+      if (localOrigin !== undefined) {
+        if (!isLoopbackAddress(address)) {
+          throw new Error(
+            `${label}: refusing loopback hostname ${hostname} resolving to non-loopback address ${address}`,
+          )
+        }
+        continue
+      }
       const bad = family === 4 ? isPrivateIPv4(address) : isPrivateIPv6(address)
       if (bad) {
         throw new Error(`${label}: refusing to fetch ${hostname} — resolves to private/reserved address ${address}`)
       }
     }
 
+    init?.signal?.throwIfAborted()
     // Use the first valid address. Rewrite the URL to connect to the
     // resolved IP directly, preventing a second DNS lookup.
     const resolved = addresses[0]
@@ -468,13 +505,35 @@ export namespace Ssrf {
     fetchFn?: FetchFn,
     dnsResolveFn?: DnsResolveFn,
   ): Promise<Response> {
+    return fetchWithRedirects(url, init, fetchFn, dnsResolveFn)
+  }
+
+  /** Every request, including redirects and SDK follow-ups, stays on one local origin. */
+  export async function pinnedLoopbackFetch(
+    url: string,
+    origin: string,
+    init?: PinnedFetchInit,
+    fetchFn?: FetchFn,
+    dnsResolveFn?: DnsResolveFn,
+  ): Promise<Response> {
+    const localOrigin = loopbackOrigin(origin, init?.label)
+    return fetchWithRedirects(url, init, fetchFn, dnsResolveFn, localOrigin)
+  }
+
+  async function fetchWithRedirects(
+    url: string,
+    init?: PinnedFetchInit,
+    fetchFn?: FetchFn,
+    dnsResolveFn?: DnsResolveFn,
+    localOrigin?: string,
+  ): Promise<Response> {
     const label = init?.label ?? "ssrf"
     const redirectMode = init?.redirect ?? "follow"
     let currentUrl = url
     let currentInit = { ...init, redirect: "manual" } as PinnedFetchInit
 
     for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
-      const response = await pinnedFetchOnce(currentUrl, currentInit, label, fetchFn, dnsResolveFn)
+      const response = await pinnedFetchOnce(currentUrl, currentInit, label, fetchFn, dnsResolveFn, localOrigin)
       if (!isRedirect(response.status)) return response
       if (redirectMode === "manual") return response
       if (redirectMode === "error") throw new Error(`${label}: redirect refused: ${currentUrl}`)
@@ -484,6 +543,7 @@ export namespace Ssrf {
 
       const location = response.headers.get("location")
       if (!location) return response
+      await response.body?.cancel()
       const redirectUrl = new URL(location, currentUrl)
       if (redirectUrl.protocol !== "http:" && redirectUrl.protocol !== "https:") {
         throw new Error(`${label}: redirect to unsupported URL scheme: ${redirectUrl.protocol}`)

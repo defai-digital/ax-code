@@ -4,10 +4,27 @@ import {
   combineTransportErrors,
   isTransientMcpConnectError,
   mcpClientUserAgent,
+  mcpRegistrationRejection,
   mergeRemoteMcpHeaders,
 } from "../../src/mcp/connect-error"
 
 describe("mcp connect-error", () => {
+  test("Figma registration guidance identifies the official endpoint and approved-client requirement", () => {
+    const message = mcpRegistrationRejection("design", "https://mcp.figma.com/mcp")
+    expect(message).toContain("Figma MCP Catalog")
+    expect(message).toContain("ordinary OAuth app credentials do not establish MCP access")
+    expect(message).toContain("allowLoopback: true")
+    expect(message).not.toContain("provide oauth.clientId")
+    for (const url of [
+      "https://example.com/mcp",
+      "https://mcp.figma.com.example.com/mcp",
+      "http://mcp.figma.com/mcp",
+    ]) {
+      const generic = mcpRegistrationRejection("figma", url)
+      expect(generic).not.toContain("Figma MCP Catalog")
+      expect(generic).toContain("only if required")
+    }
+  })
   test("retries reset, refused, and 503-style failures", () => {
     expect(isTransientMcpConnectError(Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }))).toBe(true)
     expect(isTransientMcpConnectError(new Error("fetch failed"))).toBe(true)
