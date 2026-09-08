@@ -2,7 +2,6 @@ import { Database } from "../storage/db"
 import { Session } from "./index"
 import { SessionTable } from "./session.sql"
 import { providerModelKey } from "../provider/model-key"
-import { Pricing } from "../provider/pricing"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 
@@ -31,20 +30,6 @@ export namespace SessionUsage {
   export type ModelUsage = {
     messages: number
     tokens: number
-    /** Estimated USD cost of this model's usage; omitted when unpriced. */
-    costUsd?: number
-  }
-
-  /**
-   * Estimated dollar cost over recorded tokens (ADR-084). Computed at read
-   * time from the bundled pricing table; models without a pricing entry are
-   * excluded from `totalUsd` and pull `coverage` below 1 so UIs can flag the
-   * estimate as partial instead of reading unpriced usage as free.
-   */
-  export type CostEstimate = {
-    totalUsd: number
-    /** priced messages / messages with recorded tokens; undefined when none */
-    coverage: number | undefined
   }
 
   export type DayUsage = {
@@ -68,8 +53,6 @@ export namespace SessionUsage {
     perDay: DayUsage[]
     perSession: Record<string, number>
     activeDays: number
-    /** Estimated USD cost; totalUsd is 0 with undefined coverage when no model is priced. */
-    cost: CostEstimate
   }
 
   function dayKey(ts: number) {
@@ -123,12 +106,7 @@ export namespace SessionUsage {
       perDay: [],
       perSession: {},
       activeDays: 0,
-      cost: { totalUsd: 0, coverage: undefined },
     }
-
-    let costTotalUsd = 0
-    let pricedMessages = 0
-    let messagesWithTokens = 0
 
     const perDay = new Map<string, DayUsage>()
     if (input.days !== undefined) {
@@ -189,25 +167,6 @@ export namespace SessionUsage {
               (tokens.cache?.read ?? 0) +
               (tokens.cache?.write ?? 0)
 
-            // Cost estimation (ADR-084): unpriced models contribute nothing
-            // and pull coverage below 1 rather than reading as free.
-            messagesWithTokens++
-            const cost = Pricing.estimateCost(
-              message.info.modelID,
-              {
-                input: tokens.input ?? 0,
-                output: tokens.output ?? 0,
-                reasoning: tokens.reasoning ?? 0,
-                cache: { read: tokens.cache?.read ?? 0, write: tokens.cache?.write ?? 0 },
-              },
-              message.info.providerID,
-            )
-            if (cost) {
-              pricedMessages++
-              costTotalUsd += cost.usd
-              modelEntry.costUsd = (modelEntry.costUsd ?? 0) + cost.usd
-            }
-
             bumpDay(
               message.info.time.created,
               totalTokens({
@@ -240,10 +199,6 @@ export namespace SessionUsage {
     info.cacheShare = cacheBase > 0 ? info.tokens.cache.read / cacheBase : undefined
     info.perDay = [...perDay.values()]
     info.activeDays = info.perDay.filter((day) => day.sessions > 0 || day.tokens > 0).length
-    info.cost = {
-      totalUsd: costTotalUsd,
-      coverage: messagesWithTokens > 0 ? pricedMessages / messagesWithTokens : undefined,
-    }
     return info
   }
 }

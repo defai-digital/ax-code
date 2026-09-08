@@ -4,7 +4,6 @@ import { Session } from "../../session"
 import { bootstrap } from "../bootstrap"
 import { Database } from "../../storage/db"
 import { providerModelKey } from "../../provider/model-key"
-import { Pricing } from "../../provider/pricing"
 import { SessionTable } from "../../session/session.sql"
 import { Project } from "../../project/project"
 import { Instance } from "../../project/instance"
@@ -46,8 +45,6 @@ interface SessionStats {
   days: number
   tokensPerSession: number
   medianTokensPerSession: number
-  /** Estimated USD cost over recorded tokens; undefined when nothing is priced (ADR-084). */
-  estimatedCostUsd: number | undefined
 }
 
 export const StatsCommand = cmd({
@@ -174,7 +171,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
     days: 0,
     tokensPerSession: 0,
     medianTokensPerSession: 0,
-    estimatedCostUsd: undefined,
   }
 
   if (filteredSessions.length > 1000) {
@@ -326,40 +322,6 @@ export async function aggregateSessionStats(days?: number, projectFilter?: strin
         ? (sessionTotalTokens[mid - 1] + sessionTotalTokens[mid]) / 2
         : sessionTotalTokens[mid]
 
-  // Estimated cost (ADR-084): sum per-model estimates; models without a
-  // pricing entry contribute nothing. Unpriced usage is visible through the
-  // model list, and the estimate is labeled as covering priced models only.
-  let estimatedCostUsd: number | undefined
-  let pricedModels = 0
-  let totalModels = 0
-  for (const [model, usage] of Object.entries(stats.modelUsage)) {
-    totalModels++
-    const separator = model.indexOf("/")
-    const providerID = separator > 0 ? model.slice(0, separator) : undefined
-    const modelID = separator > 0 ? model.slice(separator + 1) : model
-    const cost = Pricing.estimateCost(
-      modelID,
-      {
-        input: usage.tokens.input,
-        output: usage.tokens.output,
-        cache: { read: usage.tokens.cache.read, write: usage.tokens.cache.write },
-      },
-      providerID,
-    )
-    if (cost) {
-      pricedModels++
-      estimatedCostUsd = (estimatedCostUsd ?? 0) + cost.usd
-    }
-  }
-  if (pricedModels === 0) {
-    estimatedCostUsd = undefined
-  } else if (pricedModels < totalModels) {
-    console.log(
-      `Note: cost estimate covers ${pricedModels}/${totalModels} models; usage of unpriced models is excluded.`,
-    )
-  }
-  stats.estimatedCostUsd = estimatedCostUsd
-
   return stats
 }
 
@@ -395,9 +357,6 @@ export function displayStats(stats: SessionStats, toolLimit?: number, modelLimit
   console.log(renderRow("Output", formatNumber(stats.totalTokens.output)))
   console.log(renderRow("Cache Read", formatNumber(stats.totalTokens.cache.read)))
   console.log(renderRow("Cache Write", formatNumber(stats.totalTokens.cache.write)))
-  if (stats.estimatedCostUsd !== undefined) {
-    console.log(renderRow("Est. Cost (USD)", `$${stats.estimatedCostUsd.toFixed(2)}`))
-  }
   console.log("└────────────────────────────────────────────────────────┘")
   console.log()
 
