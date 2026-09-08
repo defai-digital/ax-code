@@ -781,11 +781,19 @@ When constructing the summary, try to stick to this template:
     return "stop"
   }
 
-  /** Remove request-body media while preserving enough context to replay an overflowed user turn safely. */
+  /**
+   * Remove request-body media while preserving non-media file attachments
+   * and enough context to replay an overflowed user turn safely. Image
+   * and PDF parts become a text placeholder; text/code/binary attachments
+   * survive unchanged so the compaction message does not lose the cheap,
+   * high-value context those files carried (the overflow was caused by
+   * media, not by the attachments themselves — see DeepSeek compaction-v2
+   * #4 / C-DEFER-3 in the PRD addendum).
+   */
   export function projectReplayParts(parts: MessageV2.Part[], triggerReason?: TriggerReason): MessageV2.Part[] {
     return parts.flatMap((part): MessageV2.Part[] => {
       if (part.type !== "file") return [part]
-      if (!MessageV2.isMedia(part.mime)) return []
+      if (!MessageV2.isMedia(part.mime)) return [part]
       return [
         {
           id: part.id,

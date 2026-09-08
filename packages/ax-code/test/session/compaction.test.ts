@@ -912,6 +912,77 @@ describe("session.compaction overflow replay", () => {
       expect(contextParts[0].text).not.toContain("provider request-size limit")
     }
   })
+
+  test("preserves non-media file attachments (C-DEFER-3: was silently dropped)", () => {
+    // Before the fix, projectReplayParts returned [] for every non-media
+    // file part, dropping them from the compact replay entirely. Text,
+    // code, and binary attachments are cheap, high-value context that
+    // should survive an overflow caused by unrelated media.
+    const messageID = MessageID.make("msg_attachments")
+    const sessionID = "ses_attachments" as never
+    const input: MessageV2.Part[] = [
+      {
+        id: PartID.make("prt_txt"),
+        messageID,
+        sessionID,
+        type: "file",
+        mime: "text/plain",
+        filename: "notes.txt",
+        url: "data:text/plain;base64,TWFnaWNzaGVsbA==",
+      },
+      {
+        id: PartID.make("prt_ts"),
+        messageID,
+        sessionID,
+        type: "file",
+        mime: "application/typescript",
+        filename: "schema.ts",
+        url: "data:application/typescript;base64,ZGVtby54",
+      },
+    ]
+    const parts = SessionCompaction.projectReplayParts(input, "request_too_large")
+
+    expect(parts).toHaveLength(2)
+    for (const part of parts) {
+      expect(part).toMatchObject({ type: "file" })
+      if (part.type === "file") {
+        expect(part.mime).not.toMatch(/^(image|video|audio)\//)
+      }
+    }
+    expect(parts.map((p) => (p.type === "file" ? p.filename : null))).toEqual(["notes.txt", "schema.ts"])
+  })
+
+  test("mixed media + non-media: media is placeholdered, non-media survives", () => {
+    const messageID = MessageID.make("msg_mixed")
+    const sessionID = "ses_mixed" as never
+    const input: MessageV2.Part[] = [
+      {
+        id: PartID.make("prt_png"),
+        messageID,
+        sessionID,
+        type: "file",
+        mime: "image/png",
+        filename: "snap.png",
+        url: "data:image/png;base64,AAAA",
+      },
+      {
+        id: PartID.make("prt_log"),
+        messageID,
+        sessionID,
+        type: "file",
+        mime: "text/x-log",
+        filename: "server.log",
+        url: "data:text/x-log;base64,Zm9v",
+      },
+      { id: PartID.make("prt_text"), messageID, sessionID, type: "text", text: "see log" },
+    ]
+    const parts = SessionCompaction.projectReplayParts(input, "context_overflow_error")
+
+    expect(parts).toHaveLength(3)
+    expect(parts[0]).toMatchObject({ type: "text", synthetic: true })
+    expect(parts[1]).toMatchObject({ type: "file", mime: "text/x-log" })
+    expect(parts[2]).toMatchObject({ type: "text", text: "see log" })
+  })
 })
 
 describe("session.getUsage", () => {
