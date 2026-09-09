@@ -65,6 +65,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = "Stop"
+          $VerbosePreference = "Continue"
           $Version = $env:INPUT_VERSION.TrimStart("v")
           $Installer = Join-Path $env:GITHUB_WORKSPACE "install.ps1"
           $Launcher = Join-Path $HOME ".ax-code\bin\ax-code.cmd"

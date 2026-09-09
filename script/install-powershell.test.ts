@@ -117,6 +117,10 @@ describe.skipIf(!available)("PowerShell runtime installation", () => {
   const moveErrors = [
     { name: "sharing lock", exception: '[System.IO.IOException]::new("Simulated sharing violation", -2147024864)' },
     { name: "access denial", exception: '[System.UnauthorizedAccessException]::new("Simulated access denial")' },
+    {
+      name: "Framework directory access denial",
+      exception: '[System.IO.IOException]::new("Simulated Framework directory access denial")',
+    },
   ]
   test.each(moveErrors.flatMap((error) => ["backup", "activation", "rollback"].map((phase) => ({ ...error, phase }))))(
     "tolerates a transient $name during $phase",
@@ -182,6 +186,52 @@ Assert-Equal (Get-Content -LiteralPath (Join-Path $backup.FullName "previous/nod
 `)
   })
 
+  test.skipIf(process.platform !== "win32")(
+    "retries a real Windows directory lock after its handle closes",
+    async () => {
+      await runInstaller(`
+Add-Type -TypeDefinition @"
+using System;
+using System.IO;
+using System.Threading;
+public sealed class AxInstallerDirectoryLock : IDisposable {
+  private readonly FileStream file;
+  private Thread worker;
+  public AxInstallerDirectoryLock(string path) {
+    file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+  }
+  public void ReleaseAfter(int milliseconds) {
+    worker = new Thread(() => { Thread.Sleep(milliseconds); file.Dispose(); });
+    worker.Start();
+  }
+  public void Dispose() {
+    if (worker != null) worker.Join();
+    file.Dispose();
+  }
+}
+"@
+$directory = Join-Path $Source "node"
+$destination = Join-Path $env:AX_TEST_ROOT "moved-node"
+$lock = [AxInstallerDirectoryLock]::new((Join-Path $directory "bin/node.exe"))
+try {
+  $failure = $null
+  try {
+    Microsoft.PowerShell.Management\\Move-Item -LiteralPath $directory -Destination $destination -ErrorAction Stop
+  } catch { $failure = $_ }
+  if (-not $failure) { throw "Expected an actual locked-directory move failure" }
+  $native = $failure.Exception.GetBaseException()
+  if ($PSVersionTable.PSEdition -eq "Desktop") {
+    Assert-Equal $native.HResult -2146232800
+  }
+  $lock.ReleaseAfter(600)
+  Move-RuntimePath $directory $destination
+  Assert-Equal (Test-Path -LiteralPath $directory) $false
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $destination "bin/node.exe")) $true
+} finally { $lock.Dispose() }
+`)
+    },
+  )
+
   test("fails immediately for unrelated move errors without changing the runtime", async () => {
     await runInstaller(`
 New-PreviousInstall
@@ -198,6 +248,25 @@ try { Install-NodeBundleTree $Source } catch { $failure = $_ }
 if ($failure -notmatch "Simulated path length failure") { throw "Missing original error: $failure" }
 Assert-Equal $script:attempts 1
 Assert-PreviousInstall
+`)
+  })
+
+  test("does not retry a generic I/O failure when moving a file", async () => {
+    await runInstaller(`
+$script:attempts = 0
+function Move-Item {
+  [CmdletBinding()]
+  param([string]$LiteralPath, [string]$Destination)
+  $script:attempts++
+  throw [System.IO.IOException]::new("Simulated unrelated file failure")
+}
+function Start-Sleep { throw "Unexpected retry for a file error" }
+$failure = $null
+try {
+  Move-RuntimePath (Join-Path $Source "package.json") (Join-Path $env:AX_TEST_ROOT "moved-package.json")
+} catch { $failure = $_ }
+if ($failure -notmatch "Simulated unrelated file failure") { throw "Missing original file error: $failure" }
+Assert-Equal $script:attempts 1
 `)
   })
 
