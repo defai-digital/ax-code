@@ -960,6 +960,9 @@ export type Event =
   | EventLspUpdated
   | EventLspClientDiagnostics
   | EventSessionGoal
+  | EventNotificationToastShow
+  | EventNotificationMonitorLine
+  | EventNotificationMonitorExit
   | EventMessageUpdated
   | EventMessageRemoved
   | EventMessagePartUpdated
@@ -977,9 +980,6 @@ export type Event =
   | EventTaskQueueDeleted
   | EventSessionCompacted
   | EventTodoUpdated
-  | EventNotificationToastShow
-  | EventNotificationMonitorLine
-  | EventNotificationMonitorExit
   | EventFileEdited
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed

@@ -37745,6 +37745,15 @@
             "$ref": "#/components/schemas/Event.session.goal"
           },
           {
+            "$ref": "#/components/schemas/Event.notification.toast.show"
+          },
+          {
+            "$ref": "#/components/schemas/Event.notification.monitor.line"
+          },
+          {
+            "$ref": "#/components/schemas/Event.notification.monitor.exit"
+          },
+          {
             "$ref": "#/components/schemas/Event.message.updated"
           },
           {
@@ -37794,15 +37803,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.todo.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.notification.toast.show"
-          },
-          {
-            "$ref": "#/components/schemas/Event.notification.monitor.line"
-          },
-          {
-            "$ref": "#/components/schemas/Event.notification.monitor.exit"
           },
           {
             "$ref": "#/components/schemas/Event.file.edited"
