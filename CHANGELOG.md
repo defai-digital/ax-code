@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.0] - 2026-09-09
+
+### Fixed
+
+- Preserve conversation history and coding tools when a continuation is ambiguous or a story request refers to earlier context.
+- Prevent intermittent missing-library failures when multiple macOS sessions start together. Runtime caches now keep Node versions separate and publish replacement files atomically; Homebrew uses the shared release launcher.
+- Restore UTF-8 input and output code pages when a Windows console is reused, even when an inherited launcher marker claims it is already configured.
+- Preserve large session RPC responses split across stdout chunks, with limits applied to each complete frame.
+
+### Changed
+
+- Make AX Engine model readiness cancellable and reduce overhead for explicit, self-contained creative requests.
+- Preserve partial creative responses when the model reaches its output limit.
+- Combine Windows snapshot path scans while retaining unsupported-path and recovery checks.
+
 ## [7.14.11] - 2026-09-09
 
 ### Fixed
