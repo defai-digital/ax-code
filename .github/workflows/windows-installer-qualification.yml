@@ -1,0 +1,83 @@
+name: Windows Installer Qualification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - install.ps1
+      - script/install-powershell.test.ts
+      - .github/workflows/windows-installer-qualification.yml
+  pull_request:
+    paths:
+      - install.ps1
+      - script/install-powershell.test.ts
+      - .github/workflows/windows-installer-qualification.yml
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published runtime version to install with the candidate installer
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: ${{ matrix.label }} / candidate installer
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            label: windows-x64
+          - os: windows-11-arm
+            label: windows-arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      INPUT_VERSION: ${{ inputs.version }}
+      AX_CODE_DISABLE_AUTOUPDATE: "1"
+      AX_CODE_DISABLE_AUTO_INDEX: "1"
+      AX_CODE_DISABLE_LSP_DOWNLOAD: "1"
+      AX_CODE_DISABLE_MODELS_FETCH: "1"
+      AX_CODE_DISABLE_PROJECT_CONFIG: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set isolated state paths
+        shell: bash
+        run: bash .github/scripts/set-isolated-home-env.sh "$RUNNER_TEMP/ax-code-candidate-installer-state"
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Test installer replacement and rollback
+        run: pnpm exec vitest run script/install-powershell.test.ts
+      - name: Validate published runtime version
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: bash .github/scripts/validate-install-matrix-inputs.sh "$INPUT_VERSION" windows
+      - name: Qualify candidate installer with the signed public runtime
+        if: github.event_name == 'workflow_dispatch'
+        # This qualifies checkout source without replacing published installers.
+        # Windows PowerShell 5.1 matches the ax-code upgrade subprocess.
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $Version = $env:INPUT_VERSION.TrimStart("v")
+          $Installer = Join-Path $env:GITHUB_WORKSPACE "install.ps1"
+          $Launcher = Join-Path $HOME ".ax-code\bin\ax-code.cmd"
+          foreach ($Phase in @("fresh install", "runtime replacement")) {
+            Write-Host "Qualifying $Phase from candidate installer against runtime $Version"
+            & $Installer -Version $Version -NoModifyPath
+            $Output = (& $Launcher --version | Out-String).Trim()
+            if ($LASTEXITCODE -ne 0 -or $Output -ne $Version) {
+              throw "Candidate $Phase did not produce runtime $Version. Output: $Output"
+            }
+          }
+          $Doctor = (& $Launcher doctor 2>&1 | Out-String)
+          Write-Host $Doctor
+          if ($LASTEXITCODE -ne 0 -or $Doctor -notmatch 'Runtime: Node .* \(node-bundled\)') {
+            throw "Candidate installation did not start the bundled runtime"
+          }
