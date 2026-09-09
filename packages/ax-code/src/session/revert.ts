@@ -207,11 +207,24 @@ export namespace SessionRevert {
     if (rootBoundary.snapshot && files.length > 0) {
       patches.unshift({ hash: rootBoundary.snapshot, files })
     }
+    // Moving a revert boundary forwards must also reapply files touched only
+    // by the previously hidden turns. New-boundary patches take precedence;
+    // remaining paths return to the snapshot saved before the first undo.
+    const previous = scope.session.revert
+    let previousEntries: PatchEntry[] = []
+    if (previous?.snapshot) {
+      previousEntries = patchEntries(
+        store,
+        scope.sessions.map((session) => session.id),
+        boundaryPosition({ sessionID: input.sessionID, messageID: previous.messageID, partID: previous.partID }, store),
+      )
+      patches.push({ hash: previous.snapshot, files: [...new Set(previousEntries.flatMap((entry) => entry.files))] })
+    }
     return {
       session: scope.session,
       revert: rootBoundary.revert,
       patches,
-      descendants: contributions(scope.session, entries),
+      descendants: contributions(scope.session, [...entries, ...previousEntries]),
     }
   }
 
@@ -283,8 +296,30 @@ export namespace SessionRevert {
     assertIdle(scope.sessions)
     const session = scope.session
     if (!session.revert) return session
-    if (session.revert.snapshot) await Snapshot.restore(session.revert.snapshot)
-    return Session.clearRevert(input.sessionID)
+    if (!session.revert.snapshot) return Session.clearRevert(input.sessionID)
+    const planned = await plan({
+      sessionID: input.sessionID,
+      messageID: session.revert.messageID,
+      partID: session.revert.partID,
+    })
+    const files = [...new Set(planned.patches.flatMap((patch) => patch.files))]
+    const before = await Snapshot.track()
+    // Restore only this undo's paths. Snapshot.revert also removes paths absent
+    // from the target tree, while a whole-tree checkout leaves deleted files.
+    await Snapshot.revert([{ hash: session.revert.snapshot, files }])
+    try {
+      return await Session.clearRevert(input.sessionID)
+    } catch (error) {
+      if (before && files.length > 0) {
+        await Snapshot.revert([{ hash: before, files }]).catch((rollbackError) => {
+          log.error("failed to restore workspace after session unrevert failure", {
+            sessionID: input.sessionID,
+            error: rollbackError,
+          })
+        })
+      }
+      throw error
+    }
   }
 
   export async function cleanup(session: Session.Info) {
