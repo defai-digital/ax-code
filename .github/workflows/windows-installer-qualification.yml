@@ -76,8 +76,17 @@ jobs:
               throw "Candidate $Phase did not produce runtime $Version. Output: $Output"
             }
           }
-          $Doctor = (& $Launcher doctor 2>&1 | Out-String)
+          $PreviousErrorAction = $ErrorActionPreference
+          try {
+            # PowerShell 5.1 treats ordinary native stderr (such as first-run
+            # migration notices) as errors. Validate the actual exit code.
+            $ErrorActionPreference = "Continue"
+            $Doctor = (& $Launcher doctor 2>&1 | Out-String)
+            $DoctorExit = $LASTEXITCODE
+          } finally {
+            $ErrorActionPreference = $PreviousErrorAction
+          }
           Write-Host $Doctor
-          if ($LASTEXITCODE -ne 0 -or $Doctor -notmatch 'Runtime: Node .* \(node-bundled\)') {
+          if ($DoctorExit -ne 0 -or $Doctor -notmatch 'Runtime: Node .* \(node-bundled\)') {
             throw "Candidate installation did not start the bundled runtime"
           }
