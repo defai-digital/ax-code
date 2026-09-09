@@ -17,6 +17,7 @@ import { PartID } from "./schema"
 import { ToolRegistry } from "../tool/registry"
 import { Tool } from "../tool/tool"
 import { MCP } from "../mcp"
+import { ToolDiscovery } from "./tool-discovery"
 import { McpPermissionPattern } from "../mcp/permission-pattern"
 import { WebMcpProfile } from "../mcp/webmcp-profile"
 import { ProviderTransform } from "../provider/transform"
@@ -445,7 +446,9 @@ export async function resolveTools(input: ResolveToolsInput) {
     (item) => !isDisabledByConfig(item.id) && !disabledRegistryTools.has(item.id) && !isolationDisabled.has(item.id),
   )
   const batchableRegistryTools = new Map(
-    enabledRegistryTools.filter((item) => item.id !== "batch" && item.id !== "task").map((item) => [item.id, item]),
+    enabledRegistryTools
+      .filter((item) => item.id !== "batch" && item.id !== "task" && item.id !== "read_recipe")
+      .map((item) => [item.id, item]),
   )
 
   async function invokeRegistryTool(inputTool: {
@@ -455,7 +458,7 @@ export async function resolveTools(input: ResolveToolsInput) {
     isolationPolicy: "escalate" | "fail-closed"
   }): Promise<Tool.InvocationResult> {
     const { item, args, options, isolationPolicy } = inputTool
-    const exposeDispatcher = item.id === "batch" && isolationPolicy === "escalate"
+    const exposeDispatcher = (item.id === "batch" || item.id === "read_recipe") && isolationPolicy === "escalate"
     const ctx = context(args, options, undefined, exposeDispatcher)
 
     return runToolLifecycle({
@@ -607,6 +610,7 @@ export async function resolveTools(input: ResolveToolsInput) {
   }
 
   const mcpTools = await MCP.tools()
+  const discoveryCatalog: ToolDiscovery.Entry[] = []
   const disabledMcpTools = Permission.disabled(Object.keys(mcpTools), ruleset)
   for (const [key, item] of Object.entries(mcpTools)) {
     if (isDisabledByConfig(key) || disabledMcpTools.has(key)) continue
@@ -627,6 +631,7 @@ export async function resolveTools(input: ResolveToolsInput) {
       inputSchema: mcpTool.inputSchema,
     })
     mcpTool.inputSchema = jsonSchema(transformed)
+    discoveryCatalog.push({ name: key, description: mcpTool.description ?? "", schema: transformed })
     // Wrap execute to add plugin hooks and format output
     mcpTool.execute = async (args, opts) => {
       const ctx = context(args, opts)
@@ -701,5 +706,43 @@ export async function resolveTools(input: ResolveToolsInput) {
     tools[key] = mcpTool
   }
 
+  const discoveryEnabled = (await Config.get()).experimental?.mcp_tool_discovery === true
+  // Revoke selections even when the entire admitted catalog disappears.
+  const visible = ToolDiscovery.visible(input.session.id, discoveryEnabled ? discoveryCatalog : [])
+  if (
+    discoveryEnabled &&
+    discoveryCatalog.length > 0 &&
+    !isDisabledByConfig("tool_search") &&
+    !Permission.disabled(["tool_search"], ruleset).has("tool_search")
+  ) {
+    if (Object.hasOwn(tools, "tool_search"))
+      throw new Error("MCP discovery conflicts with an existing tool_search tool")
+    for (const entry of discoveryCatalog) if (!visible.has(entry.name)) delete tools[entry.name]
+    tools.tool_search = tool({
+      description: ToolDiscovery.description(discoveryCatalog),
+      inputSchema: ToolDiscovery.Query,
+      async execute(args, options) {
+        const ctx = context(args, options)
+        return runToolLifecycle({
+          toolID: "tool_search",
+          sessionID: ctx.sessionID,
+          callID: ctx.callID,
+          args,
+          cwd: Instance.directory,
+          execute: async () => {
+            ctx.abort.throwIfAborted()
+            await ctx.ask({ permission: "tool_search", patterns: [args.query], always: ["*"], metadata: {} })
+            ctx.abort.throwIfAborted()
+            const result = ToolDiscovery.search(ctx.sessionID, discoveryCatalog, args)
+            return {
+              title: `Discovered ${result.tools.length} tools`,
+              metadata: { count: result.tools.length },
+              output: JSON.stringify(result),
+            }
+          },
+        })
+      },
+    })
+  }
   return tools
 }

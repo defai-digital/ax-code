@@ -32,6 +32,7 @@ import {
 } from "./compaction-budget"
 import { MediaProjection } from "./media-projection"
 import { agentModel } from "./prompt-command-selection"
+import { SessionEvidence } from "./evidence"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -663,6 +664,18 @@ When constructing the summary, try to stick to this template:
       // selection. Exported as a pure helper so the regression is
       // unit-testable without driving the full process / Provider stack.
       const sourceUser = pickSourceUser(input.messages, input.parentID)
+      if ((await Config.get()).experimental?.context_recovery === true) {
+        const pointer = SessionEvidence.recoveryPointer(messages)
+        if (pointer)
+          await Session.updatePart({
+            id: PartID.ascending(),
+            messageID: processor.message.id,
+            sessionID: input.sessionID,
+            type: "text",
+            synthetic: true,
+            text: pointer,
+          })
+      }
 
       if (input.auto) {
         if (replay) {

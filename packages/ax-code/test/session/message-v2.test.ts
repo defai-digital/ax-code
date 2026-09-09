@@ -1743,3 +1743,50 @@ describe("session.message-v2.toModelMessage providerMetadata shape", () => {
     expect(content[0]?.providerOptions).toEqual({ openaiCompatible: { thinkTag: "think" } })
   })
 })
+
+test("projects only completed recipe selections while preserving interrupted and orphaned child evidence", async () => {
+  const info = assistantInfo("msg_recipe", "msg_user")
+  const child: MessageV2.ToolPart = {
+    ...basePart(info.id, "part_child"),
+    type: "tool",
+    tool: "read",
+    callID: "child",
+    parentCallID: "parent",
+    state: {
+      status: "completed",
+      input: { filePath: "large.ts" },
+      output: "large intermediate",
+      title: "read",
+      metadata: {},
+      time: { start: 0, end: 1 },
+    },
+  }
+  const parent: MessageV2.ToolPart = {
+    ...basePart(info.id, "part_parent"),
+    type: "tool",
+    tool: "read_recipe",
+    callID: "parent",
+    state: {
+      status: "completed",
+      input: {},
+      output: "small selection",
+      title: "recipe",
+      metadata: { recipeProjection: true },
+      time: { start: 0, end: 2 },
+    },
+  }
+  const projected = JSON.stringify(await MessageV2.toModelMessages([{ info, parts: [parent, child] }], model))
+  expect(projected).toContain("small selection")
+  expect(projected).not.toContain("large intermediate")
+  expect(JSON.stringify(await MessageV2.toModelMessages([{ info, parts: [child] }], model))).toContain(
+    "large intermediate",
+  )
+  const interrupted: MessageV2.ToolPart = {
+    ...parent,
+    state: { status: "error", input: {}, error: "cancelled", time: { start: 0, end: 2 } },
+  }
+  expect(JSON.stringify(await MessageV2.toModelMessages([{ info, parts: [interrupted, child] }], model))).toContain(
+    "large intermediate",
+  )
+  expect(child.state).toMatchObject({ output: "large intermediate" })
+})

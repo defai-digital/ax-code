@@ -129,3 +129,25 @@ test("AX Engine retains core by default and coding prompts omit unavailable adva
     },
   })
 })
+
+test("opt-in harness tools materialize provider JSON schemas through the real registry", async () => {
+  await using tmp = await tmpdir()
+  vi.spyOn(Config, "get").mockResolvedValue({
+    provider: { test: { options: { toolProfile: "coding" } } },
+    experimental: { context_recovery: true, read_only_recipes: true },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const tools = await ToolRegistry.tools({
+        providerID: ProviderID.make("test"),
+        modelID: ModelID.make("test-model"),
+      })
+      for (const id of ["context_recover", "read_recipe"]) {
+        const tool = tools.find((tool) => tool.id === id)
+        expect(tool).toBeDefined()
+        expect(z.toJSONSchema(tool!.parameters)).toMatchObject({ type: "object" })
+      }
+    },
+  })
+})

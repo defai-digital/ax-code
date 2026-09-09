@@ -238,8 +238,8 @@ describe("session.processor", () => {
     })
   })
 
-  test("recovers a rejected two-image request by reducing bytes while retaining both original inputs", async () => {
-    await using tmp = await tmpdir({ git: true })
+  test.each([false, true])("recovers both original images with tail reminders enabled: %s", async (tailReminders) => {
+    await using tmp = await tmpdir({ git: true, config: { experimental: { tail_reminders: tailReminders } } })
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -270,7 +270,17 @@ describe("session.processor", () => {
           url,
         }))
         await Session.updateParts(parts)
-        const messages = [{ info: streamInput.user, parts }]
+        const reminder: MessageV2.TextPart = {
+          id: PartID.ascending(),
+          messageID: streamInput.user.id,
+          sessionID: streamInput.sessionID,
+          type: "text",
+          text: "Keep both original images and follow the latest request.",
+          synthetic: true,
+          metadata: { axDynamicReminder: true },
+        }
+        const messages: MessageV2.WithParts[] = [{ info: streamInput.user, parts: [...parts, reminder] }]
+        const original = JSON.stringify(messages)
         const request = await preparePromptRequest({
           sessionID: streamInput.sessionID,
           messages,
@@ -286,6 +296,8 @@ describe("session.processor", () => {
         const requestBytes: number[] = []
         streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input: LLM.StreamInput) => {
           const wire = JSON.stringify(input.messages)
+          expect(wire.split(reminder.text)).toHaveLength(2)
+          if (tailReminders) expect(input.messages.at(-1)).toEqual({ role: "user", content: reminder.text })
           requestBytes.push(Buffer.byteLength(wire))
           if (Buffer.byteLength(wire) > 1200 * 1024)
             throw Object.assign(new Error("request too large"), { statusCode: 413 })
@@ -317,6 +329,7 @@ describe("session.processor", () => {
         expect(requestBytes[0]).toBeGreaterThan(1200 * 1024)
         expect(requestBytes[1]).toBeLessThan(1200 * 1024)
         expect(processor.message.error).toBeUndefined()
+        expect(JSON.stringify(messages)).toBe(original)
         expect(parts.every((part) => part.url === url && part.mime === "image/png")).toBe(true)
         expect(
           (await MessageV2.get({ sessionID: streamInput.sessionID, messageID: streamInput.user.id })).parts,

@@ -6,8 +6,14 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Add independent, default-off controls for context recovery, MCP tool discovery, tail reminders, and read-only tool recipes.
+- Add generation-scoped session steering, verified skill candidates, and matched harness evaluation.
+
 ### Fixed
 
+- Preserve the current project directory in headless runs and report failed HTTP submissions instead of returning success.
 - Use atomic Windows runtime renames to avoid partial replacements, retry short-lived file locks and access-denied errors, and preserve rollback on persistent failures.
 - Keep Windows installation checks consistent across candidate and release workflows, accepting native warnings while rejecting failed probes and invalid runtime output.
 

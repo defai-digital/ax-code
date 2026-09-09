@@ -1,3 +1,4 @@
+import { defer } from "@/util/defer"
 import type { Argv } from "yargs"
 import { AsyncLocalStorage } from "node:async_hooks"
 import path from "path"
@@ -665,7 +666,10 @@ export const RunCommand = cmd({
         return false
       }
 
-      const events = await sdk.event.subscribe()
+      const eventAbort = new AbortController()
+      using _events = defer(() => eventAbort.abort())
+      // @scan-suppress lifecycle_scan - The scoped disposer above aborts the owned SSE subscription on every exit; closeEvents also aborts before returning the iterator.
+      const events = await sdk.event.subscribe(undefined, { signal: eventAbort.signal })
       let error: string | undefined
       let finalMessage: string | undefined
       let finalAssistantMessageID: string | undefined
@@ -951,6 +955,7 @@ export const RunCommand = cmd({
       }
 
       const closeEvents = async () => {
+        eventAbort.abort()
         const stream = events.stream as AsyncIterator<unknown>
         await (stream.return?.(undefined) ?? Promise.resolve()).catch(() => {})
       }
@@ -958,22 +963,28 @@ export const RunCommand = cmd({
 
       try {
         if (args.command) {
-          await sdk.session.command({
-            sessionID,
-            agent,
-            model: runModel ? `${runModel.providerID}/${runModel.modelID}` : undefined,
-            command: args.command,
-            arguments: message,
-            variant: args.variant,
-          })
+          await sdk.session.command(
+            {
+              sessionID,
+              agent,
+              model: runModel ? `${runModel.providerID}/${runModel.modelID}` : undefined,
+              command: args.command,
+              arguments: message,
+              variant: args.variant,
+            },
+            { throwOnError: true },
+          )
         } else {
-          await sdk.session.prompt({
-            sessionID,
-            agent,
-            model: runModel,
-            variant: args.variant,
-            parts: [...files, { type: "text", text: message }],
-          })
+          await sdk.session.prompt(
+            {
+              sessionID,
+              agent,
+              model: runModel,
+              variant: args.variant,
+              parts: [...files, { type: "text", text: message }],
+            },
+            { throwOnError: true },
+          )
         }
       } catch (e) {
         await closeEvents()

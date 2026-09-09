@@ -15,6 +15,7 @@ import { Env } from "@/util/env"
 import { resolveToolFilePath } from "./file-path"
 import { parseNativeJsonArray } from "../util/native-json"
 import { errorCode } from "@/util/error-message"
+import { CanonicalOutput } from "./canonical-output"
 
 const NativeSearchMatch = z.object({
   path: z.string(),
@@ -46,6 +47,7 @@ export const GrepTool = Tool.define("grep", {
     include: z.string().optional().describe('File pattern to include in the search (e.g. "*.js", "*.{ts,tsx}")'),
   }),
   concurrencySafe: () => true,
+  outputSchema: CanonicalOutput.Grep,
   async execute(params, ctx) {
     if (!params.pattern) {
       throw new Error("pattern is required")
@@ -107,6 +109,7 @@ export const GrepTool = Tool.define("grep", {
           return {
             title: params.pattern,
             metadata: { matches: 0, truncated: false },
+            data: { matches: [], truncated: false },
             output: "No files found",
           }
         }
@@ -137,6 +140,14 @@ export const GrepTool = Tool.define("grep", {
 
         return {
           title: params.pattern,
+          data: {
+            matches: visibleMatches.map((match) => ({
+              path: match.path,
+              line: match.line,
+              text: match.matchText.slice(0, MAX_LINE_LENGTH),
+            })),
+            truncated,
+          },
           metadata: {
             matches: totalMatches,
             truncated,
@@ -207,6 +218,7 @@ export const GrepTool = Tool.define("grep", {
       return {
         title: params.pattern,
         metadata: { matches: 0, truncated: false },
+        data: { matches: [], truncated: false },
         output: "No files found",
       }
     }
@@ -263,6 +275,7 @@ export const GrepTool = Tool.define("grep", {
       return {
         title: params.pattern,
         metadata: { matches: 0, truncated: false },
+        data: { matches: [], truncated: false },
         output: "No files found",
       }
     }
@@ -298,6 +311,12 @@ export const GrepTool = Tool.define("grep", {
 
     return {
       title: params.pattern,
+      data: {
+        matches: matches
+          .slice(0, limit)
+          .map((match) => ({ path: match.path, line: match.lineNum, text: match.lineText.slice(0, MAX_LINE_LENGTH) })),
+        truncated,
+      },
       metadata: {
         matches: totalMatches,
         truncated,

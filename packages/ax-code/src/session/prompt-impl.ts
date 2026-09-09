@@ -1,3 +1,4 @@
+import { SessionSteering } from "./steering"
 import { NativePerf } from "@/perf/native"
 import { SessionID, type MessageID, type PartID, type SessionStop } from "./schema"
 import { MessageV2 } from "./message-v2"
@@ -239,6 +240,23 @@ export namespace SessionPrompt {
     return loop({ sessionID: input.sessionID })
   })
 
+  export const steeringState = SessionSteering.view
+
+  export async function steer(sessionID: SessionID, input: SessionSteering.Input) {
+    const session = await Session.get(sessionID)
+    assertWorkSessionSendable({ metadata: session.metadata })
+    return SessionSteering.submit(sessionID, input, async () => {
+      if (session.parentID) return
+      const { LifecycleHooks } = await import("@/hooks/lifecycle")
+      const result = await LifecycleHooks.runForWorkspace({
+        event: "UserPromptSubmit",
+        sessionID,
+        args: { prompt: input.text },
+      })
+      if (result.blocked) throw new Error("UserPromptSubmit hook blocked steering")
+    })
+  }
+
   function start(sessionID: SessionID) {
     return runState.start(sessionID)
   }
@@ -321,6 +339,9 @@ export namespace SessionPrompt {
     })
     await using _loopTimer = defer(() => loopTimer.stop())
     await using _ = defer(() => {
+      // An interrupted loop can finish cleanup after a successor has started.
+      // Only the current generation owns queue draining and cancellation.
+      if (runState.resume(sessionID) !== abort) return
       return finishPromptLoopQueue({
         sessionID,
         reason,
@@ -620,6 +641,29 @@ export namespace SessionPrompt {
 
       // On step 0 or after compaction, load full history. Otherwise only fetch new messages.
       ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: cachedMsgs }))
+
+      const steeringBase = SessionSteering.hasPending(sessionID, abort) ? scanLoopMessages(msgs).lastUser : undefined
+      if (
+        steeringBase &&
+        (await SessionSteering.drain(sessionID, abort, async (steering) => {
+          await createUserMessage(
+            {
+              sessionID,
+              messageID: steering.messageID,
+              agentRouting: "preserve",
+              agent: steeringBase.agent,
+              model: steeringBase.model,
+              variant: steeringBase.variant,
+              tools: steeringBase.tools,
+              isolation: steeringBase.isolation,
+              parts: [{ type: "text", text: steering.text }],
+            },
+            steering,
+          )
+        }))
+      ) {
+        ;({ msgs, cached: cachedMsgs } = await loopMessages({ sessionID, cached: undefined }))
+      }
 
       let { lastUser, lastUserParts, lastAssistant, lastFinished, lastFinishedStepTokens, tasks } =
         scanLoopMessages(msgs)

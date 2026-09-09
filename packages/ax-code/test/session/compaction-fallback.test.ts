@@ -1,3 +1,4 @@
+import { Config } from "../../src/config/config"
 import { describe, expect, test, vi } from "vitest"
 import { NamedError } from "@ax-code/util/error"
 import { SessionCompaction } from "../../src/session/compaction"
@@ -100,6 +101,7 @@ async function seedSession() {
     tools: {},
     mode: "build",
   } as MessageV2.User)
+  if (user.role !== "user") throw new Error("Expected the seeded user message")
   return { session, user }
 }
 
@@ -556,5 +558,64 @@ describe("session.compaction-fallback classifier", () => {
     const overflow = new MessageV2.ContextOverflowError({ message: "prompt is too long" }).toObject()
     CompactionFallback.annotate(overflow, { retryAttempt: 1, failureClass: "context_window_exceeded" })
     expect("metadata" in overflow.data).toBe(false)
+  })
+})
+
+test.each([false, true])("opt-in compaction retains source evidence and user settings (auto: %s)", async (auto) => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await Config.get()
+      const configSpy = vi
+        .spyOn(Config, "get")
+        .mockResolvedValue({ ...config, experimental: { ...config.experimental, context_recovery: true } })
+      const { session, user } = await seedSession()
+      const settings = {
+        format: { type: "text" as const },
+        tools: { bash: false },
+        system: "Preserve the requested migration boundaries.",
+        variant: "high",
+      }
+      await Session.updateMessage({ ...user, ...settings })
+      if (auto) {
+        await SessionCompaction.create({ sessionID: session.id, agent: user.agent, model: user.model, auto })
+      }
+      const source = await Session.messages({ sessionID: session.id })
+      const parentID = source.at(-1)!.info.id
+      const model = createModel({ providerID: "test", modelID: "test-model" })
+      const providers = mockProviders({ "test/test-model": model })
+      const processor = mockProcessor([{ type: "succeed" }])
+      try {
+        expect(
+          await SessionCompaction.process({
+            parentID,
+            messages: source,
+            sessionID: session.id,
+            abort: new AbortController().signal,
+            auto,
+          }),
+        ).toBe("continue")
+        const messages = await Session.messages({ sessionID: session.id })
+        const text = messages
+          .filter((message) => message.info.role === "assistant")
+          .flatMap((message) => message.parts)
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("\n")
+        expect(text).toContain("context_recover")
+        expect(text).toContain(user.id)
+        expect(messages.some((message) => message.info.id === user.id)).toBe(true)
+        if (auto) {
+          const continuation = messages.filter((message) => message.info.role === "user").at(-1)!
+          expect(continuation.info.id).not.toBe(parentID)
+          expect(continuation.info).toMatchObject(settings)
+        }
+      } finally {
+        configSpy.mockRestore()
+        providers.getModel.mockRestore()
+        processor.spy.mockRestore()
+      }
+    },
   })
 })

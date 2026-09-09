@@ -700,6 +700,22 @@ export type Config = {
      */
     batch_tool?: boolean
     /**
+     * Enable bounded current-session evidence recovery after compaction
+     */
+    context_recovery?: boolean
+    /**
+     * Discover MCP tool schemas on demand while keeping built-in tools eager
+     */
+    mcp_tool_discovery?: boolean
+    /**
+     * Project changing task reminders after stable request history for cache experiments
+     */
+    tail_reminders?: boolean
+    /**
+     * Enable bounded declarative read-only tool recipes
+     */
+    read_only_recipes?: boolean
+    /**
      * Enable experimental context-introspection tools (context_status)
      */
     context_tools?: boolean
@@ -4109,6 +4125,23 @@ export type SnapshotPart = {
   snapshot: string
 }
 
+/** AX Code API schema `SteeringReceipt` (auto-generated from the OpenAPI contract). */
+export type SteeringReceipt = {
+  sessionID: string
+  generation: string
+  clientID: string
+  status: "accepted" | "applied" | "rejected"
+  messageID?: string
+  reason?: string
+}
+
+/** AX Code API schema `SteeringState` (auto-generated from the OpenAPI contract). */
+export type SteeringState = {
+  generation: string | null
+  receipts: Array<SteeringReceipt>
+  retention: "process-local; at most 256 receipts per session"
+}
+
 /** AX Code API schema `StepFinishPart` (auto-generated from the OpenAPI contract). */
 export type StepFinishPart = {
   id: string
@@ -4279,6 +4312,7 @@ export type ToolPart = {
   messageID: string
   type: "tool"
   callID: string
+  parentCallID?: string
   tool: string
   state: ToolState
   metadata?: {
@@ -12743,6 +12777,90 @@ export type SessionForkResponses = {
 
 /** Successful response payload for `POST /session/{sessionID}/fork` — Fork session */
 export type SessionForkResponse = SessionForkResponses[keyof SessionForkResponses]
+
+/** Request payload shape for `GET /session/{sessionID}/steering` — Get active generation and steering receipts */
+export type SessionSteeringData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/steering"
+}
+
+/** Error response payloads for `GET /session/{sessionID}/steering` — Get active generation and steering receipts */
+export type SessionSteeringErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `GET /session/{sessionID}/steering` — Get active generation and steering receipts */
+export type SessionSteeringError = SessionSteeringErrors[keyof SessionSteeringErrors]
+
+/** Success response payloads for `GET /session/{sessionID}/steering` — Get active generation and steering receipts */
+export type SessionSteeringResponses = {
+  /**
+   * Steering state
+   */
+  200: SteeringState
+}
+
+/** Successful response payload for `GET /session/{sessionID}/steering` — Get active generation and steering receipts */
+export type SessionSteeringResponse = SessionSteeringResponses[keyof SessionSteeringResponses]
+
+/** Request payload shape for `POST /session/{sessionID}/steering` — Steer a specific active generation */
+export type SessionSteerData = {
+  body?: {
+    expectedGeneration: string
+    clientID: string
+    text: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/steering"
+}
+
+/** Error response payloads for `POST /session/{sessionID}/steering` — Steer a specific active generation */
+export type SessionSteerErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+  /**
+   * Conflict
+   */
+  409: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /session/{sessionID}/steering` — Steer a specific active generation */
+export type SessionSteerError = SessionSteerErrors[keyof SessionSteerErrors]
+
+/** Success response payloads for `POST /session/{sessionID}/steering` — Steer a specific active generation */
+export type SessionSteerResponses = {
+  /**
+   * Steering receipt
+   */
+  200: SteeringReceipt
+}
+
+/** Successful response payload for `POST /session/{sessionID}/steering` — Steer a specific active generation */
+export type SessionSteerResponse = SessionSteerResponses[keyof SessionSteerResponses]
 
 /** Request payload shape for `POST /session/{sessionID}/abort` — Abort session */
 export type SessionAbortData = {

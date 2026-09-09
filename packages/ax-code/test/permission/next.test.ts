@@ -1016,6 +1016,35 @@ test("ask - autonomous full-access never implicitly approves computer use", asyn
   })
 })
 
+test.each(["context_recover", "read_recipe", "tool_search"])(
+  "ask - autonomous full-access admits %s while preserving explicit denials",
+  async (permission) => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_AUTONOMOUS", "true")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const request = {
+          sessionID: SessionID.make(`session_autonomous_${permission}`),
+          permission,
+          patterns: ["current-session"],
+          metadata: {},
+          always: ["*"],
+        }
+        await expect(
+          Permission.ask({ ...request, ruleset: [] }, { signal: AbortSignal.timeout(1_000) }),
+        ).resolves.toBeUndefined()
+        await expect(
+          Permission.ask({ ...request, ruleset: [{ permission, pattern: "*", action: "deny" }] }),
+        ).rejects.toBeInstanceOf(Permission.DeniedError)
+        expect(await Permission.list()).toHaveLength(0)
+      },
+    })
+  },
+)
+
 test("ask - autonomous default full-access approves established risk permissions", async () => {
   await using tmp = await tmpdir({ git: true })
   vi.stubEnv("AX_CODE_AUTONOMOUS", "true")

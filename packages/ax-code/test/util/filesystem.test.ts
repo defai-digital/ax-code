@@ -1,4 +1,4 @@
-import { describe, test, expect } from "vitest"
+import { afterEach, describe, test, expect, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { Filesystem } from "../../src/util/filesystem"
@@ -716,4 +716,41 @@ describe("filesystem", () => {
       expect(() => Filesystem.resolve(path.join(file, "child"))).toThrow()
     })
   })
+})
+
+describe("callerCwd", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+  })
+  test("ignores an inherited PWD that identifies a different directory", async () => {
+    await using actual = await tmpdir()
+    await using inherited = await tmpdir()
+    vi.stubEnv("AX_CODE_ORIGINAL_CWD", undefined)
+    vi.stubEnv("PWD", inherited.path)
+    vi.spyOn(process, "cwd").mockReturnValue(actual.path)
+    expect(Filesystem.callerCwd()).toBe(actual.path)
+  })
+  test("preserves a logical symlink spelling only when it resolves to the actual cwd", async () => {
+    await using tmp = await tmpdir()
+    const actual = path.join(tmp.path, "actual")
+    const logical = path.join(tmp.path, "logical")
+    await fs.mkdir(actual)
+    await fs.symlink(actual, logical, process.platform === "win32" ? "junction" : "dir")
+    vi.stubEnv("AX_CODE_ORIGINAL_CWD", undefined)
+    vi.stubEnv("PWD", logical)
+    vi.spyOn(process, "cwd").mockReturnValue(actual)
+    expect(Filesystem.callerCwd()).toBe(logical)
+  })
+})
+
+test("callerCwd preserves the explicit wrapper origin contract", () => {
+  const original = process.env.AX_CODE_ORIGINAL_CWD
+  process.env.AX_CODE_ORIGINAL_CWD = path.resolve("wrapper-origin")
+  try {
+    expect(Filesystem.callerCwd()).toBe(path.resolve("wrapper-origin"))
+  } finally {
+    if (original === undefined) delete process.env.AX_CODE_ORIGINAL_CWD
+    else process.env.AX_CODE_ORIGINAL_CWD = original
+  }
 })

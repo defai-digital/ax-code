@@ -248,6 +248,10 @@ import type {
   SessionShellResponses,
   SessionStatusErrors,
   SessionStatusResponses,
+  SessionSteerErrors,
+  SessionSteeringErrors,
+  SessionSteeringResponses,
+  SessionSteerResponses,
   SessionSummarizeErrors,
   SessionSummarizeResponses,
   SessionTodoErrors,
@@ -4335,6 +4339,77 @@ export class Session2 extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<SessionForkResponses, unknown, ThrowOnError>({
       url: "/session/{sessionID}/fork",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get active generation and steering receipts
+   *
+   * Receipts are process-local and bounded. Applied means durably admitted at a loop boundary, not guaranteed provider completion.
+   */
+  public steering<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionSteeringResponses, SessionSteeringErrors, ThrowOnError>({
+      url: "/session/{sessionID}/steering",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Steer a specific active generation
+   *
+   * Accept a bounded correction for the next loop boundary. Stale generations and hook vetoes return rejected receipts; reused client IDs with different content conflict.
+   */
+  public steer<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      expectedGeneration: string
+      clientID: string
+      text: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "expectedGeneration" },
+            { in: "body", key: "clientID" },
+            { in: "body", key: "text" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionSteerResponses, SessionSteerErrors, ThrowOnError>({
+      url: "/session/{sessionID}/steering",
       ...options,
       ...params,
       headers: {

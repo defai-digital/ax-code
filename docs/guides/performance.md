@@ -70,3 +70,6 @@ existing session event log; it does not enable an external telemetry exporter.
 For a useful comparison, hold the task, repository revision, provider endpoint, exact model, reasoning effort, tool
 permissions, and cache conditions constant. Record first visible response time and time to a verified result, including
 tests and repair attempts. A smaller request or faster local snapshot alone does not establish faster cloud task completion.
+
+Use [harness controls and verified evaluation](harness-controls.md) to try context recovery, MCP discovery, read-only
+recipes, and matched fixture comparisons with independent verification.

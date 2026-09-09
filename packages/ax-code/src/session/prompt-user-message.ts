@@ -61,7 +61,10 @@ export async function createAutonomousTextContinuation(args: {
   })
 }
 
-export async function createUserMessage(input: CreateUserMessageInput) {
+export async function createUserMessage(
+  input: CreateUserMessageInput,
+  admission?: { beforeCommit(): void; afterCommit(): void },
+) {
   const messageID = input.messageID ?? MessageID.ascending()
   let agentName = input.agent || (await Agent.defaultAgent())
   const messageText = input.parts
@@ -141,8 +144,9 @@ export async function createUserMessage(input: CreateUserMessageInput) {
     },
   )
 
+  if (admission && info.id !== messageID) throw new Error("Steering message identity changed during transformation")
   validateUserMessageForSave({ sessionID: input.sessionID, info, parts })
-  await Session.updateMessageWithParts(info, parts)
+  await Session.updateMessageWithParts(info, parts, admission)
 
   return {
     info,

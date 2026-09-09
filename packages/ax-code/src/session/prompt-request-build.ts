@@ -10,6 +10,7 @@ import { systemPrompt as getSystemPrompt } from "./prompt-system"
 import type { SessionID } from "./schema"
 import { Config } from "@/config/config"
 import { recoverUserImages } from "./media-recovery"
+import { projectTailReminders } from "./reminder-projection"
 
 export type PromptRequestCache = Parameters<typeof getSystemPrompt>[0]["cache"]
 
@@ -57,12 +58,16 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // Build system prompt and convert messages to model format in parallel.
   // Both walk the same messages/model independently with no side effects.
   const format = input.lastUser.format ?? { type: "text" }
+  const projection =
+    (await Config.get()).experimental?.tail_reminders === true
+      ? projectTailReminders(requestMessagesSource)
+      : { messages: requestMessagesSource, reminder: undefined }
   const convertMessages = async (mediaProjection: MediaProjection.Mode) => {
     const source =
       mediaProjection === "normal"
-        ? requestMessagesSource
+        ? projection.messages
         : await recoverUserImages({
-            messages: requestMessagesSource,
+            messages: projection.messages,
             userID: input.lastUser.id,
             mode: mediaProjection,
             config: (await Config.get()).attachment?.image,
@@ -74,6 +79,7 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
     })
     return [
       ...modelMessages,
+      ...(projection.reminder ? [{ role: "user" as const, content: projection.reminder }] : []),
       ...(input.isLastStep
         ? [
             {

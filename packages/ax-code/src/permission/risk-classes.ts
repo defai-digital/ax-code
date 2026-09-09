@@ -112,6 +112,11 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   // runtime still deny-gates it inside restricted agent contexts, so it
   // stays in the risk class rather than auto-approving.
   "question",
+  // Experimental harness tools are read-only, but their explicit permission
+  // gates must still honor configured deny rules in autonomous mode.
+  "context_recover",
+  "read_recipe",
+  "tool_search",
 ])
 
 export function classify(permission: string): RiskClass {
