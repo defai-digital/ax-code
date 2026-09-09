@@ -746,9 +746,14 @@ export namespace Snapshot {
       const applyTarget = async (target: (typeof targets)[number]) => {
         log.info("reverting", target)
         const rel = path.relative(current.worktree, target.file)
-        const result = await runGit([...core, ...args(current, ["checkout", target.hash, "--", rel])], {
-          cwd: current.worktree,
-        })
+        // Patch paths name individual files, including brackets used in routes.
+        // Git's `--` ends options but still expands wildcard and magic pathspecs.
+        const result = await runGit(
+          [...core, "--literal-pathspecs", ...args(current, ["checkout", target.hash, "--", rel])],
+          {
+            cwd: current.worktree,
+          },
+        )
         if (result.code !== 0) {
           const tree = await runGit([...core, ...args(current, ["ls-tree", target.hash, "--", rel])], {
             cwd: current.worktree,

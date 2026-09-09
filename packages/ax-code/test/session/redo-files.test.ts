@@ -168,3 +168,66 @@ test("two undo levels and redo restore files and messages while preserving unrel
     },
   })
 }, 60_000)
+
+test("undo and redo preserve manual edits to paths matched by a changed filename", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const target = path.join(tmp.path, "route[1].txt")
+      const neighbor = path.join(tmp.path, "route1.txt")
+      await fs.writeFile(target, "target before\n")
+      await fs.writeFile(neighbor, "neighbor before\n")
+      const session = await Session.create({})
+      const user = await Session.updateMessage({
+        id: MessageID.ascending(),
+        role: "user",
+        sessionID: session.id,
+        agent: "default",
+        model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test") },
+        time: { created: Date.now() },
+      })
+      const assistant = await Session.updateMessage({
+        id: MessageID.ascending(),
+        role: "assistant",
+        sessionID: session.id,
+        mode: "default",
+        agent: "default",
+        path: { cwd: tmp.path, root: tmp.path },
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        modelID: ModelID.make("test"),
+        providerID: ProviderID.make("test"),
+        parentID: user.id,
+        time: { created: Date.now() },
+      })
+      const hash = await Snapshot.track()
+      expect(hash).toBeDefined()
+      await fs.writeFile(target, "target after\n")
+      const patch = await Snapshot.patch(hash!)
+      await Session.updatePart({
+        id: PartID.ascending(),
+        messageID: assistant.id,
+        sessionID: session.id,
+        type: "patch",
+        ...patch,
+      })
+      await fs.writeFile(neighbor, "manual edit before undo\n")
+      const messages = await Session.messages({ sessionID: session.id })
+      const input = { sessionID: session.id, messageID: user.id }
+      const preview = await SessionRevert.preview(input)
+      expect(preview.diffs.map((diff) => diff.file)).toEqual(["route[1].txt"])
+
+      await SessionRevert.revert(input)
+      expect(await fs.readFile(target, "utf8")).toBe("target before\n")
+      expect(await fs.readFile(neighbor, "utf8")).toBe("manual edit before undo\n")
+      expect((await Session.get(session.id)).revert?.messageID).toBe(user.id)
+      await fs.writeFile(neighbor, "manual edit after undo\n")
+
+      await SessionRevert.unrevert({ sessionID: session.id })
+      expect(await fs.readFile(target, "utf8")).toBe("target after\n")
+      expect(await fs.readFile(neighbor, "utf8")).toBe("manual edit after undo\n")
+      expect((await Session.get(session.id)).revert).toBeUndefined()
+      expect(await Session.messages({ sessionID: session.id })).toEqual(messages)
+    },
+  })
+})
