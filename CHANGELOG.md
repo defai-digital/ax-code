@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.14.11] - 2026-09-09
+
+### Fixed
+
+- Reject deletion of unmanaged directories when Git no longer lists the requested worktree.
+- Keep sandbox ownership records until filesystem cleanup succeeds, allowing retries after file locks or partial Git removal.
+- Remove sandbox records using their original path spelling so macOS and Windows cleanup does not leave stale entries.
+- Reject oversized Council evidence and preflight complete prompts against member limits before inference.
+- Verify Wiki freshness against current source hashes and effective discovery configuration; treat unverified sources as navigation only.
+
+### Added
+
+- Add explicit AX Trust session cache affinity and configurable prompt-cache annotations for verified provider routes.
+- Exercise worktree cleanup recovery alongside reserved-path snapshot checks in native Windows CI.
+
 ## [7.14.10] - 2026-09-09
 
 ### Added
