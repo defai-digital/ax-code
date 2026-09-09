@@ -7,15 +7,15 @@ Use it to supervise a compatible signed AX Code runtime through typed **headless
 ## Install
 
 ```bash
-pnpm add jsr:@defai-digital/ax-code-sdk@2.5.11
+pnpm add jsr:@defai-digital/ax-code-sdk@2.5.12
 ```
 
 ```bash
-deno add jsr:@defai-digital/ax-code-sdk@2.5.11
+deno add jsr:@defai-digital/ax-code-sdk@2.5.12
 ```
 
 ```bash
-npx jsr add @defai-digital/ax-code-sdk@2.5.11
+npx jsr add @defai-digital/ax-code-sdk@2.5.12
 ```
 
 Requires **Node.js 24+** (or Deno with Node compatibility). Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`.
@@ -208,7 +208,7 @@ This package is the first-party TypeScript/JavaScript SDK. For Python, Go, Java,
 
 ## Migration from `@ax-code/sdk` 1.4.0
 
-| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.5.11)                                  |
+| Before (`@ax-code/sdk` 1.4.0)                             | After (`@defai-digital/ax-code-sdk` 2.5.12)                                  |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `import { createAxCode } from "@ax-code/sdk"`             | `import { startHeadlessBackend } from "@defai-digital/ax-code-sdk/headless"` |
 | `import { createAxCodeClient } from "@ax-code/sdk"`       | `import { createHeadlessClient } from "@defai-digital/ax-code-sdk/headless"` |

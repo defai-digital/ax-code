@@ -6,16 +6,26 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.14.10] - 2026-09-09
+
 ### Added
 
 - Add independent, default-off controls for context recovery, MCP tool discovery, tail reminders, and read-only tool recipes.
-- Add generation-scoped session steering, verified skill candidates, and matched harness evaluation.
+- Add generation-scoped session steering through the runtime and SDK 2.5.12, verified skill candidates, and matched harness evaluation.
 
 ### Fixed
 
 - Preserve the current project directory in headless runs and report failed HTTP submissions instead of returning success.
 - Use atomic Windows runtime renames to avoid partial replacements, retry short-lived file locks and access-denied errors, and preserve rollback on persistent failures.
 - Keep Windows installation checks consistent across candidate and release workflows, accepting native warnings while rejecting failed probes and invalid runtime output.
+- Verify the installed Windows backend with a real stdio health request, matching the response identity, version, and bundled runtime mode.
+- Keep terminal title and progress control sequences out of redirected output so JSON commands and backend pipes remain parseable.
+- Return an empty JSON array when listing sessions in a new or empty project.
+- Match skill candidate verification to current source contents and the clean Git revision, rejecting stale or legacy fingerprints.
+- Classify experimental harness permissions to avoid unexpected autonomous-mode prompts while preserving explicit denials.
+- Make doctor distinguish unavailable process enumeration from zero running instances, recognize Windows runtime command lines, and avoid counting launcher children twice.
+- Load effective runtime configuration in doctor and report configured credential presence separately from live authentication.
+- Scan all recent log files, recognize structured severity levels, and avoid duplicate or unrelated TUI error reports.
 
 ## [7.14.9] - 2026-09-08
 
