@@ -657,6 +657,16 @@ export namespace Worktree {
     cancelPendingStartScripts(input.directory)
 
     const directory = await canonical(input.directory)
+    // Capture the recorded spellings before Git or filesystem cleanup removes
+    // the paths. Canonical comparison keys may change case on macOS/Windows
+    // and cannot replace the original database keys after the directory is gone.
+    const recordedDirectories = (
+      await Promise.all(
+        (await Project.sandboxes(Instance.project.id)).map(async (sandbox) =>
+          (await canonical(sandbox)) === directory ? sandbox : undefined,
+        ),
+      )
+    ).filter((sandbox): sandbox is string => sandbox !== undefined)
     const locate = async (stdout: Uint8Array | undefined) => {
       const lines = outputText(stdout)
         .split("\n")
@@ -702,7 +712,7 @@ export namespace Worktree {
       await git(["fsmonitor--daemon", "stop"], { cwd: target })
     }
 
-    const cleanupInstanceAndSandbox = async () => {
+    const cleanupInstance = async () => {
       if (Instance.list().includes(directory)) {
         await Instance.provide({
           directory,
@@ -716,14 +726,18 @@ export namespace Worktree {
           })
         })
       }
+    }
 
-      await Project.removeSandbox(Instance.project.id, directory).catch((error) => {
-        log.warn("failed to remove worktree from project sandboxes", {
-          directory,
-          projectID: Instance.project.id,
-          error: toErrorMessage(error),
+    const cleanupSandbox = async () => {
+      for (const sandbox of recordedDirectories) {
+        await Project.removeSandbox(Instance.project.id, sandbox).catch((error) => {
+          log.warn("failed to remove worktree from project sandboxes", {
+            directory: sandbox,
+            projectID: Instance.project.id,
+            error: toErrorMessage(error),
+          })
         })
-      })
+      }
     }
 
     const list = await git(["worktree", "list", "--porcelain"], { cwd: Instance.worktree })
@@ -744,17 +758,16 @@ export namespace Worktree {
         throw new RemoveFailedError({ message: "Worktree not found" })
       }
       const managedRoot = await canonical(path.join(Global.Path.data, "worktree", Instance.project.id))
-      const sandboxes = await Project.sandboxes(Instance.project.id)
-      const recorded = (
-        await Promise.all(sandboxes.map(async (sandbox) => (await canonical(sandbox)) === directory))
-      ).some(Boolean)
+      const recorded = recordedDirectories.length > 0
       if (!recorded && (directory === managedRoot || !Filesystem.contains(managedRoot, directory))) {
         throw new RemoveFailedError({ message: "Worktree not found" })
       }
       const directoryExists = await exists(directory)
       if (directoryExists) await stop(directory)
-      await cleanupInstanceAndSandbox()
+      await cleanupInstance()
       if (directoryExists) await clean(directory)
+      // A failed cleanup must retain ownership so an external leftover can be retried.
+      await cleanupSandbox()
       return true
     }
 
@@ -776,7 +789,7 @@ export namespace Worktree {
       }
     }
 
-    await cleanupInstanceAndSandbox()
+    await cleanupInstance()
 
     const branch = entry.branch?.replace(/^refs\/heads\//, "")
     let cleanupError: unknown
@@ -805,6 +818,7 @@ export namespace Worktree {
       }
       throw cleanupError
     }
+    await cleanupSandbox()
     if (branchError) throw branchError
 
     return true
