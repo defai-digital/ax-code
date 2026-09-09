@@ -458,7 +458,7 @@ export const SessionListCommand = cmd({
     await bootstrapReadonly(process.cwd(), async () => {
       const sessions = [...Session.list({ roots: true, limit: args.maxCount })]
 
-      if (sessions.length === 0) {
+      if (sessions.length === 0 && args.format !== "json") {
         return
       }
 

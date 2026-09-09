@@ -21,12 +21,16 @@ $ProbeLabel = $ProbeArguments -join " "
 $StderrPath = [System.IO.Path]::GetTempFileName()
 $PreviousErrorAction = $ErrorActionPreference
 $PreviousNativeErrorAction = $PSNativeCommandUseErrorActionPreference
+$PreviousOutputEncoding = $OutputEncoding
 try {
   try {
     # Windows PowerShell 5.1 promotes redirected native stderr to errors.
     # Keep diagnostics separate and decide success from this process's exit.
     $ErrorActionPreference = "Continue"
     $PSNativeCommandUseErrorActionPreference = $false
+    # PowerShell 5.1 can inherit UTF-8 with a BOM. RPC stdin must start with
+    # the JSON request itself; preserve the caller's encoding after the probe.
+    $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
     # Native commands update the global automatic variable. A script-local
     # reset would shadow it when this helper is called from another script.
     $global:LASTEXITCODE = $null
@@ -39,6 +43,7 @@ try {
   } finally {
     $ErrorActionPreference = $PreviousErrorAction
     $PSNativeCommandUseErrorActionPreference = $PreviousNativeErrorAction
+    $OutputEncoding = $PreviousOutputEncoding
   }
   $Diagnostics = (Get-Content -LiteralPath $StderrPath -Raw | Out-String).Trim()
   if ($Diagnostics) { Write-Host $Diagnostics }

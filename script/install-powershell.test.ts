@@ -336,7 +336,9 @@ Assert-Equal $ErrorActionPreference "Stop"
       await runInstaller(`
 Install-NodeBundleTree $Source
 Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'const args = process.argv.slice(2); if (JSON.stringify(args) !== JSON.stringify(${JSON.stringify(args)})) { console.error("Unexpected probe arguments: " + JSON.stringify(args)); process.exit(23) }; ${inputCheck} console.log(${JSON.stringify(output)})'
+${name === "backend" ? "$PreviousEncoding = [System.Text.UTF8Encoding]::new($true); $OutputEncoding = $PreviousEncoding" : ""}
 & $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options}
+${name === "backend" ? 'if (-not [object]::ReferenceEquals($OutputEncoding, $PreviousEncoding)) { throw "Probe changed caller output encoding" }' : ""}
 `)
     },
   )
