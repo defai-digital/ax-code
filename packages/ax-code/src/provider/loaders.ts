@@ -24,7 +24,16 @@ import { LOCAL_LLM_RUNTIMES, normalizeLocalRuntimeBaseURL } from "./local-runtim
 
 const log = Log.create({ service: "provider.loaders" })
 
-export type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>) => Promise<any>
+export interface CustomModelLoaderContext {
+  signal?: AbortSignal
+}
+
+export type CustomModelLoader = (
+  sdk: any,
+  modelID: string,
+  options?: Record<string, any>,
+  context?: CustomModelLoaderContext,
+) => Promise<any>
 export type CustomVarsLoader = (options: Record<string, any>) => Record<string, string>
 export type CustomDiscoverModels = (provider: Provider.Info) => Promise<Record<string, Provider.Model>>
 export type CustomLoader = (provider: Provider.Info) => Promise<{

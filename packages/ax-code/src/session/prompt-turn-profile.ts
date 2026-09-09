@@ -1,6 +1,7 @@
 import { MessageV2 } from "./message-v2"
 
 export type ResponseOnlyIntent = "translate" | "reformat" | "shorten" | "rewrite"
+export type ConversationIntent = "new-story" | "continue-story"
 
 export type TurnExecutionProfile =
   | { kind: "default"; reason: string }
@@ -14,6 +15,16 @@ export type TurnExecutionProfile =
       sourceTextChars: number
       promptTextChars: number
     }
+  | {
+      kind: "conversation"
+      intent: ConversationIntent
+      reason: string
+      currentUserID: MessageV2.User["id"]
+      sourceAssistantID?: MessageV2.Assistant["id"]
+      requestMessages: MessageV2.WithParts[]
+      sourceTextChars: number
+      promptTextChars: number
+    }
 
 export const RESPONSE_ONLY_SYSTEM_PROMPT = [
   "<response_only_turn>",
@@ -22,6 +33,16 @@ export const RESPONSE_ONLY_SYSTEM_PROMPT = [
   "Follow the user's requested language, length, tone, or format while preserving the answer's meaning and important caveats.",
   "Return only the transformed answer.",
   "</response_only_turn>",
+].join("\n")
+
+export const CONVERSATION_SYSTEM_PROMPT = [
+  "<direct_conversation_turn>",
+  "Answer the user's clear creative request directly.",
+  "Do not inspect the workspace, call tools, discuss the coding project, or ask a clarifying question.",
+  "For a continuation, continue only the immediately preceding assistant response.",
+  "Unless the user requests a specific length or more detail, keep the response concise and target 250 to 400 words.",
+  "Return only the requested creative response.",
+  "</direct_conversation_turn>",
 ].join("\n")
 
 const LANGUAGE_TARGET = [
@@ -102,12 +123,24 @@ const REWRITE_PATTERNS: Array<{ intent: Exclude<ResponseOnlyIntent, "translate">
 ]
 
 const REPOSITORY_OR_EDIT_SIGNAL =
-  /\b(?:app|ui|code|source|file|repo(?:sitory)?|project|workspace|i18n|l10n|locale|locali[sz]ation|implement|edit|modify|change|fix|patch|refactor|commit|push|pull\s+request|component|function|class|test|readme)\b|(?:程式|代码|代碼|原始碼|源码|檔案|文件|專案|项目|應用|应用|介面|界面|本地化|國際化|国际化|實作|实现|修改|編輯|编辑|修復|修复|提交)/i
+  /\b(?:app|ui|code|source|file|repo(?:sitory)?|project|workspace|i18n|l10n|locale|locali[sz]ation|implement|edit|modify|change|fix|patch|refactor|commit|push|pull\s+request|component|function|class|tests?|readme)\b|(?:程式|代码|代碼|原始碼|源码|檔案|文件|專案|项目|應用|应用|介面|界面|本地化|國際化|国际化|實作|实现|修改|編輯|编辑|修復|修复|提交)/i
 
 const PATH_OR_CODE_SIGNAL =
   /`[^`]+`|(?:^|\s)(?:\.\.?\/|\/)[^\s]+|\b[\w.-]+\.(?:c|cc|cpp|css|go|h|hpp|html|java|js|jsx|json|md|php|po|py|rb|rs|sh|swift|toml|ts|tsx|vue|yaml|yml)\b/i
 
 const MULTI_TASK_SIGNAL = /\b(?:also|and\s+then|then\s+also)\b|(?:另外|然後|然后|並且|并且)/i
+const STRUCTURED_FORMAT_SIGNAL = /\b(?:json|xml|yaml|csv|schema)\b/i
+
+const NEW_STORY_PATTERNS = [
+  /^(?:please\s+)?(?:tell|write|create)\s+(?:me\s+)?(?:(?:a|an|another|one\s+more)\s+)?(?:new\s+)?(?:short\s+)?story(?:\s+[^\n]{1,160})?[.!?]*$/i,
+  /^(?:please\s+)?(?:another|one\s+more)\s+(?:new\s+)?(?:short\s+)?story(?:\s+[^\n]{1,160})?[.!?]*$/i,
+  /^(?:請|请)?(?:再)?(?:講|讲|說|说|寫|写|創作|创作)(?:一個|一个|另一个|另一個|新的)?(?:短篇)?故事(?:[^\n]{0,120})?[。！？.!?]*$/,
+]
+
+const CONTINUE_STORY_PATTERNS = [
+  /^(?:please\s+)?(?:continue|go\s+on|keep\s+going)(?:\s+(?:the|that|this)\s+story)?(?:\s+[^\n]{0,80})?[.!?]*$/i,
+  /^(?:請|请)?(?:繼續|继续|接著|接着)(?:這個|这个|那個|那个)?故事(?:[^\n]{0,80})?[。！？.!?]*$/,
+]
 
 function defaultProfile(reason: string): TurnExecutionProfile {
   return { kind: "default", reason }
@@ -128,6 +161,24 @@ function responseOnlyIntent(text: string): ResponseOnlyIntent | undefined {
     if (candidate.pattern.test(text)) return candidate.intent
   }
   return undefined
+}
+
+function conversationIntent(text: string): ConversationIntent | undefined {
+  if (NEW_STORY_PATTERNS.some((pattern) => pattern.test(text))) return "new-story"
+  if (CONTINUE_STORY_PATTERNS.some((pattern) => pattern.test(text))) return "continue-story"
+  return undefined
+}
+
+function projectTextMessage(message: MessageV2.WithParts): MessageV2.WithParts {
+  return {
+    info: { ...message.info },
+    parts: message.parts
+      .filter(
+        (part): part is MessageV2.TextPart =>
+          part.type === "text" && !part.ignored && !part.synthetic && part.text.trim().length > 0,
+      )
+      .map((part) => ({ ...part })),
+  }
 }
 
 export function detectTurnExecutionProfile(input: {
@@ -153,9 +204,24 @@ export function detectTurnExecutionProfile(input: {
   if (REPOSITORY_OR_EDIT_SIGNAL.test(userText)) return defaultProfile("repository_or_edit_signal")
   if (PATH_OR_CODE_SIGNAL.test(userText)) return defaultProfile("path_or_code_signal")
   if (MULTI_TASK_SIGNAL.test(userText)) return defaultProfile("multi_task_signal")
+  if (STRUCTURED_FORMAT_SIGNAL.test(userText)) return defaultProfile("structured_format_signal")
 
   const intent = responseOnlyIntent(userText)
-  if (!intent) return defaultProfile("no_response_transform_intent")
+  const conversation = conversationIntent(userText)
+  if (!intent && !conversation) return defaultProfile("no_compact_text_intent")
+
+  const projectedUser = projectTextMessage(current)
+  if (conversation === "new-story") {
+    return {
+      kind: "conversation",
+      intent: conversation,
+      reason: "self_contained_story_request",
+      currentUserID: current.info.id,
+      requestMessages: [projectedUser],
+      sourceTextChars: 0,
+      promptTextChars: userText.length,
+    }
+  }
 
   const source = input.messages[currentIndex - 1]
   if (!source || source.info.role !== "assistant") return defaultProfile("no_immediate_assistant")
@@ -166,19 +232,22 @@ export function detectTurnExecutionProfile(input: {
   const sourceTextParts = usableText(source.parts)
   if (sourceTextParts.length === 0) return defaultProfile("assistant_has_no_text")
 
-  const projectedAssistant: MessageV2.WithParts = {
-    info: { ...source.info },
-    parts: source.parts
-      .filter(
-        (part): part is MessageV2.TextPart =>
-          part.type === "text" && !part.ignored && !part.synthetic && part.text.trim().length > 0,
-      )
-      .map((part) => ({ ...part })),
+  const projectedAssistant = projectTextMessage(source)
+
+  if (conversation === "continue-story") {
+    return {
+      kind: "conversation",
+      intent: conversation,
+      reason: "continue_previous_story",
+      sourceAssistantID: source.info.id,
+      currentUserID: current.info.id,
+      requestMessages: [projectedAssistant, projectedUser],
+      sourceTextChars: sourceTextParts.join("\n").length,
+      promptTextChars: userText.length,
+    }
   }
-  const projectedUser: MessageV2.WithParts = {
-    info: { ...current.info },
-    parts: current.parts.map((part) => ({ ...part })),
-  }
+
+  if (!intent) return defaultProfile("no_response_transform_intent")
 
   return {
     kind: "response-only",
@@ -197,3 +266,5 @@ export function responseOnlyUsesFastReasoning(user: Pick<MessageV2.User, "reques
   const variant = user.variant?.trim().toLowerCase()
   return variant === undefined || variant === "" || variant === "auto" || variant === "default"
 }
+
+export const textOnlyUsesFastReasoning = responseOnlyUsesFastReasoning

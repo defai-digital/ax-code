@@ -11,6 +11,10 @@ function finiteNumber(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
+function optionalMilliseconds(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}ms` : "?"
+}
+
 function eventTokens(value: unknown) {
   if (!value || typeof value !== "object") return { input: 0, output: 0 }
   const tokens = value as { input?: unknown; output?: unknown }
@@ -442,8 +446,12 @@ export namespace Replay {
           break
         case "llm.response":
           const tokens = eventTokens(event.tokens)
+          const timing = event.timing
+          const phases = timing
+            ? ` setup=${optionalMilliseconds(timing.setupMs)} first=${optionalMilliseconds(timing.firstContentMs)} text=${optionalMilliseconds(timing.firstTextMs)} stream=${optionalMilliseconds(timing.streamMs)}`
+            : ""
           lines.push(
-            `[llm]     response finish=${event.finishReason} tokens=${tokens.input}/${tokens.output} ${finiteNumber(event.latencyMs)}ms`,
+            `[llm]     response finish=${event.finishReason} tokens=${tokens.input}/${tokens.output} ${finiteNumber(event.latencyMs)}ms${phases}`,
           )
           break
         case "step.start":

@@ -5,6 +5,7 @@ import {
   findRunModelError,
   formatRunToolFallbackInput,
   isRunEventStreamFormat,
+  joinRunMessageArguments,
   refreshRunProvidersOnModelMiss,
   resolveRunAgentDisplayName,
   resolveRunModel,
@@ -24,6 +25,12 @@ test("run command fallback tool formatter handles non-json-safe input", () => {
       },
     }),
   ).toBe("Unknown")
+})
+
+test("run command preserves parsed message text without adding shell quotes", () => {
+  expect(joinRunMessageArguments(["tell me a short story about Japan"])).toBe("tell me a short story about Japan")
+  expect(joinRunMessageArguments(["tell", "me", "a story"])).toBe("tell me a story")
+  expect(joinRunMessageArguments(['say "hello"', "now"])).toBe('say "hello" now')
 })
 
 test("run command model validation flags unknown provider or model (#405)", () => {

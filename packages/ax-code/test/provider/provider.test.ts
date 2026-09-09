@@ -416,6 +416,59 @@ test("concurrent getLanguage calls share one model loader invocation", async () 
   }
 })
 
+test("getLanguage passes caller cancellation to custom model loaders", async () => {
+  const providerID = ProviderID.make("signal-provider")
+  const originalLoader = CUSTOM_LOADERS[providerID]
+  let receivedSignal: AbortSignal | undefined
+
+  CUSTOM_LOADERS[providerID] = (async () => ({
+    autoload: false,
+    async getModel(_sdk, _modelID, _options, context) {
+      receivedSignal = context?.signal
+      return await new Promise((_resolve, reject) => {
+        context?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {
+          once: true,
+        })
+      })
+    },
+  })) satisfies CustomLoader
+
+  try {
+    await using tmp = await tmpdir({
+      config: {
+        provider: {
+          [providerID]: {
+            name: "Signal Provider",
+            npm: "cli",
+            env: [],
+            models: {
+              "signal-model": {
+                name: "Signal Model",
+                limit: { context: 8192, output: 1024 },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getModel(providerID, ModelID.make("signal-model"))
+        const controller = new AbortController()
+        const pending = Provider.getLanguage(model, { signal: controller.signal })
+        await vi.waitFor(() => expect(receivedSignal).toBe(controller.signal))
+        controller.abort()
+        await expect(pending).rejects.toMatchObject({ name: "AbortError" })
+      },
+    })
+  } finally {
+    if (originalLoader) CUSTOM_LOADERS[providerID] = originalLoader
+    else delete CUSTOM_LOADERS[providerID]
+  }
+})
+
 test("getLanguage retries model load when provider cache invalidates before the loader resolves", async () => {
   const providerID = ProviderID.make("race-provider")
   const originalLoader = CUSTOM_LOADERS[providerID]

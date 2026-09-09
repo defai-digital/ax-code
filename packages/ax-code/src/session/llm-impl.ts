@@ -130,7 +130,7 @@ export namespace LLM {
   }
 
   export async function stream(input: StreamInput) {
-    const timing = NativePerf.enabled() ? RequestTiming.create() : undefined
+    const timing = RequestTiming.create()
     const l = log
       .clone()
       .tag("providerID", input.model.providerID)
@@ -156,7 +156,7 @@ export namespace LLM {
       input.model.providerID === "ax-engine" ? LOCAL_ENGINE_SETUP_TIMEOUT_MS : DEFAULT_SETUP_TIMEOUT_MS
     const [language, cfg, provider] = await withTimeout(
       Promise.all([
-        Provider.getLanguage(input.model),
+        Provider.getLanguage(input.model, { signal: input.abort }),
         input.config ?? Config.get(),
         Provider.getProvider(input.model.providerID),
       ]),

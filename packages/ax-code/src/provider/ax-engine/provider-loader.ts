@@ -345,7 +345,7 @@ export function axEngineLoader(): CustomLoader {
         }
         return models
       },
-      async getModel(sdk: any, modelID: string, options?: Record<string, any>) {
+      async getModel(sdk: any, modelID: string, options?: Record<string, any>, context?: { signal?: AbortSignal }) {
         const externalBaseURL = configuredExternalBaseURL
         if (externalBaseURL) {
           const requestedModelID =
@@ -360,7 +360,7 @@ export function axEngineLoader(): CustomLoader {
           const contracts = await fetchAxEngineModelContracts({
             baseURL: externalBaseURL,
             apiKey: resolveAxEngineApiKey(runtimeProvider.options, runtimeProvider.key),
-            signal: undefined,
+            signal: context?.signal,
           })
           const contract = requireAxEngineCodingContract(contracts, apiModelID)
           const ref = modelRefs.get(apiModelID)
@@ -372,7 +372,7 @@ export function axEngineLoader(): CustomLoader {
           ...options,
           modelID: normalizeModelID(options?.modelID ?? modelID),
         }
-        const contract = await ensureManagedReady(runtimeProvider, selectedOptions)
+        const contract = await ensureManagedReady(runtimeProvider, selectedOptions, context?.signal)
         const apiModelID = contract.id
         const ref = modelRefs.get(apiModelID)
         if (ref) applyLiveContract(ref, contract)

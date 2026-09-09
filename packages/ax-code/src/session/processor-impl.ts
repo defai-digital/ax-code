@@ -454,6 +454,7 @@ export namespace SessionProcessor {
           try {
             let usedTools = false
             let receivedFinish = false
+            const requestStartedAt = Date.now()
             let stepStartTime = Date.now()
             let stepParts: Array<
               | { type: "text"; text: string }
@@ -1275,7 +1276,10 @@ export namespace SessionProcessor {
                       reasoning: usage.tokens.reasoning,
                       cache: usage.tokens.cache,
                     },
-                    latencyMs: Date.now() - stepStartTime,
+                    // End-to-end provider latency includes model resolution,
+                    // local-engine readiness, prefill, and decoding. Step part
+                    // timestamps remain anchored to the SDK start-step event.
+                    latencyMs: Date.now() - requestStartedAt,
                     ...(requestTiming ? { timing: requestTiming } : {}),
                     stepIndex: attempt,
                   })

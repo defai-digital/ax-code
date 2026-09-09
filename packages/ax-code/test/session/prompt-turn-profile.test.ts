@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import {
+  CONVERSATION_SYSTEM_PROMPT,
   detectTurnExecutionProfile,
   RESPONSE_ONLY_SYSTEM_PROMPT,
   responseOnlyUsesFastReasoning,
@@ -202,5 +203,45 @@ describe("response-only turn execution profile", () => {
     expect(RESPONSE_ONLY_SYSTEM_PROMPT).toContain("immediately preceding assistant answer")
     expect(RESPONSE_ONLY_SYSTEM_PROMPT).toContain("Do not inspect the workspace")
     expect(RESPONSE_ONLY_SYSTEM_PROMPT).toContain("Return only the transformed answer")
+  })
+})
+
+describe("direct conversation turn execution profile", () => {
+  test.each([
+    ["tell me a story about Japan", "new-story", 1],
+    ["another new story set in Beijing", "new-story", 1],
+    ["continue the story", "continue-story", 2],
+  ])("matches the reproduced story prompt: %s", (text, intent, requestMessages) => {
+    const profile = detect(text)
+
+    expect(profile).toMatchObject({ kind: "conversation", intent })
+    if (profile.kind !== "conversation") throw new Error("expected conversation profile")
+    expect(profile.requestMessages).toHaveLength(requestMessages)
+  })
+
+  test.each([
+    "Write a story for the tests",
+    "Tell me a story about src/index.ts",
+    "Continue the story and then inspect the repo",
+    "Create a story as JSON",
+  ])("rejects repository work or requests outside the narrow creative contract: %s", (text) => {
+    expect(detect(text).kind).toBe("default")
+  })
+
+  test("requires completed assistant text for continuation", () => {
+    const incomplete = assistantMessage("Partial", { finish: "length" })
+    const user = userMessage("continue the story")
+
+    expect(detectTurnExecutionProfile({ messages: [incomplete, user], currentUser: user.info })).toMatchObject({
+      kind: "default",
+      reason: "assistant_not_completed_text",
+    })
+  })
+
+  test("uses a compact direct-answer system contract", () => {
+    expect(CONVERSATION_SYSTEM_PROMPT).toContain("Answer the user's clear creative request directly")
+    expect(CONVERSATION_SYSTEM_PROMPT).toContain("Do not inspect the workspace")
+    expect(CONVERSATION_SYSTEM_PROMPT).toContain("ask a clarifying question")
+    expect(CONVERSATION_SYSTEM_PROMPT).toContain("target 250 to 400 words")
   })
 })

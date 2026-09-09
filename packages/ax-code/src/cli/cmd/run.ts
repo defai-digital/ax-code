@@ -123,6 +123,13 @@ export function isRunEventStreamFormat(format: string | undefined): boolean {
   return format === "json" || format === "jsonl" || format === "ndjson"
 }
 
+export function joinRunMessageArguments(args: readonly string[]): string {
+  // Yargs has already removed shell quoting and preserved each argument's
+  // contents. Re-adding quotes around an argument containing spaces changes
+  // the user's prompt and can defeat prompt classification downstream.
+  return args.join(" ")
+}
+
 export function formatRunToolFallbackInput(input: unknown): string {
   if (!isNonEmptyRecord(input)) return "Unknown"
   const seen = new WeakSet<object>()
@@ -508,9 +515,7 @@ export const RunCommand = cmd({
     const callerCwd = Filesystem.callerCwd()
     const previousCwd = process.cwd()
 
-    let message = [...args.message, ...(args["--"] || [])]
-      .map((arg) => (arg.includes(" ") ? `"${arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"` : arg))
-      .join(" ")
+    let message = joinRunMessageArguments([...args.message, ...(args["--"] || [])])
 
     const directory = (() => {
       if (!args.dir) return undefined

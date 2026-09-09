@@ -230,7 +230,15 @@ export const TraceCommand: CommandModule = {
               case "llm.response": {
                 const tokens = e.tokens as { input?: number; output?: number } | undefined
                 const usage = tokens ? ` tokens=${tokens.input ?? 0}/${tokens.output ?? 0}` : ""
-                console.log(`  [${offset}] LLM    ${e.finishReason}${usage} (${e.latencyMs}ms)`)
+                const timing = e.timing as
+                  | { setupMs?: number; firstContentMs?: number; firstTextMs?: number; streamMs?: number }
+                  | undefined
+                const phase = (value: number | undefined) =>
+                  typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}ms` : "?"
+                const phases = timing
+                  ? ` setup=${phase(timing.setupMs)} first=${phase(timing.firstContentMs)} text=${phase(timing.firstTextMs)} stream=${phase(timing.streamMs)}`
+                  : ""
+                console.log(`  [${offset}] LLM    ${e.finishReason}${usage} (${e.latencyMs}ms)${phases}`)
                 break
               }
               case "error":

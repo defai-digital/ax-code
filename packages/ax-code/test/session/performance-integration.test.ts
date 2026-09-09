@@ -40,7 +40,7 @@ afterEach(async () => {
   await Instance.disposeAll()
 })
 
-test("real prompt, SDK and adapter honor coding admission and persist opt-in timings", async () => {
+test("real prompt, SDK and adapter honor coding admission and persist request timings", async () => {
   const captured: Array<{ tools: Array<{ function: { name: string } }>; bytes: number }> = []
   const adapter = createOpenAICompatible({
     name: "performance-fixture",
@@ -100,12 +100,11 @@ test("real prompt, SDK and adapter honor coding admission and persist opt-in tim
             const response = responses[0]
             if (response.type !== "llm.response") throw new Error("Missing response event")
             expect(response.latencyMs).toBeGreaterThanOrEqual(0)
-            if (profiling) {
-              expect(response.timing).toMatchObject({ boundary: "provider-adapter", attempt: 1 })
-              expect(response.timing!.firstContentMs).toBeGreaterThanOrEqual(0)
-              expect(response.timing!.firstTextMs).toBeGreaterThanOrEqual(response.timing!.firstContentMs!)
-              expect(response.timing!.streamMs).toBeGreaterThanOrEqual(response.timing!.firstTextMs!)
-            } else expect(response).not.toHaveProperty("timing")
+            expect(response.timing).toMatchObject({ boundary: "provider-adapter", attempt: 1 })
+            expect(response.timing!.firstContentMs).toBeGreaterThanOrEqual(0)
+            expect(response.timing!.firstTextMs).toBeGreaterThanOrEqual(response.timing!.firstContentMs!)
+            expect(response.timing!.streamMs).toBeGreaterThanOrEqual(response.timing!.firstTextMs!)
+            expect(response.latencyMs).toBeGreaterThanOrEqual(response.timing!.setupMs)
             expect(captured.at(-1)!.tools.map((tool) => tool.function.name)).not.toContain("bash")
           } finally {
             await Session.remove(session.id)
@@ -133,4 +132,81 @@ test("real prompt, SDK and adapter honor coding admission and persist opt-in tim
       "session.snapshot.patch",
     ]),
   )
+}, 60_000)
+
+test("AX Engine story turns omit coding tools and project only required conversation text", async () => {
+  const axEngineModel: Provider.Model = {
+    ...model,
+    id: ModelID.make("story-model"),
+    providerID: ProviderID.make("ax-engine"),
+    api: { ...model.api, id: "story-model" },
+  }
+  const captured: Array<Record<string, unknown>> = []
+  const adapter = createOpenAICompatible({
+    name: "story-fixture",
+    baseURL: "https://example.invalid/v1",
+    fetch: async (input, init) => {
+      const request = new Request(input, init)
+      captured.push(z.record(z.string(), z.unknown()).parse(await request.json()))
+      const chunks = [
+        { id: "test", choices: [{ delta: { role: "assistant" } }] },
+        { id: "test", choices: [{ delta: { content: "Story response." } }] },
+        {
+          id: "test",
+          choices: [{ delta: {}, finish_reason: captured.length === 3 ? "length" : "stop" }],
+          usage: { prompt_tokens: 20, completion_tokens: 3, total_tokens: 23 },
+        },
+      ]
+      return new Response(chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n", {
+        headers: { "Content-Type": "text/event-stream" },
+      })
+    },
+  })
+  vi.spyOn(Provider, "getLanguage").mockResolvedValue(adapter.chatModel(axEngineModel.id))
+  vi.spyOn(Provider, "getModel").mockResolvedValue(axEngineModel)
+  vi.spyOn(Provider, "getProvider").mockResolvedValue({
+    id: axEngineModel.providerID,
+    name: "AX Engine",
+    env: [],
+    models: {},
+    options: {},
+    source: "custom",
+  })
+  vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({ title: "Story fixture" })
+      try {
+        for (const text of ["tell me a story about Japan", "another new story set in Beijing", "continue the story"]) {
+          const result = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: axEngineModel.providerID, modelID: axEngineModel.id },
+            parts: [{ type: "text", text }],
+          })
+          expect(result.info.role).toBe("assistant")
+        }
+      } finally {
+        await Session.remove(session.id)
+      }
+    },
+  })
+
+  expect(captured).toHaveLength(3)
+  for (const body of captured) {
+    expect(body.tools ?? []).toEqual([])
+    expect(JSON.stringify(body)).not.toContain("AGENTS.md")
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(12_000)
+  }
+  const conversationLengths = captured.map(
+    (body) =>
+      z
+        .array(z.object({ role: z.string() }).passthrough())
+        .parse(body.messages)
+        .filter((message) => message.role !== "system").length,
+  )
+  expect(conversationLengths).toEqual([1, 1, 2])
 }, 60_000)

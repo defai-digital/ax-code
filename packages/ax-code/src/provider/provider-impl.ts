@@ -40,7 +40,13 @@ import { ModelID, ProviderID } from "./schema"
 import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
 import { isNonChatModelID, modelSelectableForProvider, sameSkuOnConnectedProvider } from "./model-selectability"
-import { CUSTOM_LOADERS, type CustomModelLoader, type CustomVarsLoader, type CustomDiscoverModels } from "./loaders"
+import {
+  CUSTOM_LOADERS,
+  type CustomModelLoader,
+  type CustomModelLoaderContext,
+  type CustomVarsLoader,
+  type CustomDiscoverModels,
+} from "./loaders"
 import { LOCAL_LLM_PROVIDER_IDS } from "@/mode/provider-category"
 import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
@@ -1219,7 +1225,11 @@ export namespace Provider {
     }
   }
 
-  export async function getLanguage(model: Model, retryDepth = 0): Promise<Lang> {
+  export async function getLanguage(
+    model: Model,
+    context: CustomModelLoaderContext = {},
+    retryDepth = 0,
+  ): Promise<Lang> {
     const s = await state()
     const provider = s.providers[model.providerID]
     if (!provider) {
@@ -1231,7 +1241,7 @@ export namespace Provider {
       if (retryDepth >= MODEL_CACHE_INVALIDATION_RETRY_LIMIT) {
         throw new Error(`Provider model cache repeatedly invalidated while loading ${model.providerID}/${model.id}`)
       }
-      return getLanguage(model, retryDepth + 1)
+      return getLanguage(model, context, retryDepth + 1)
     }
 
     const cached = s.models.get(key)
@@ -1243,8 +1253,12 @@ export namespace Provider {
     // In-flight dedup: the pending check below and the modelPending registration
     // after the loader promise is created run with no await in between, so concurrent
     // callers cannot both miss the pending entry and start duplicate loads.
+    // Managed AX Engine readiness can take minutes. A signal-owned caller must
+    // be able to stop its own readiness attempt instead of joining a shared
+    // load that may have been started by a background title request.
+    const callerOwnsLoad = model.providerID === AX_ENGINE_PROVIDER_ID && context.signal !== undefined
     const pending = s.modelPending.get(key)
-    if (pending) {
+    if (pending && !callerOwnsLoad) {
       const language = await pending
       if (s.generation === currentModelCacheGeneration()) return language
       return retryAfterInvalidation()
@@ -1253,10 +1267,15 @@ export namespace Provider {
     const promise = Promise.resolve().then(async (): Promise<Lang> => {
       // CLI providers bypass SDK loading — their custom loaders handle everything
       if (s.modelLoaders[model.providerID] && model.api?.npm === "cli") {
-        const language = await s.modelLoaders[model.providerID](null, model.api.id, {
-          ...provider.options,
-          ...model.options,
-        })
+        const language = await s.modelLoaders[model.providerID](
+          null,
+          model.api.id,
+          {
+            ...provider.options,
+            ...model.options,
+          },
+          context,
+        )
         if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)
         return language as Lang
       }
@@ -1265,7 +1284,12 @@ export namespace Provider {
 
       try {
         const language = s.modelLoaders[model.providerID]
-          ? await s.modelLoaders[model.providerID](sdk, model.api.id, { ...provider.options, ...model.options })
+          ? await s.modelLoaders[model.providerID](
+              sdk,
+              model.api.id,
+              { ...provider.options, ...model.options },
+              context,
+            )
           : sdk.languageModel(model.api.id)
         if (s.generation === currentModelCacheGeneration()) cacheLanguage(s.models, key, language as Lang)
         return language as Lang
@@ -1281,14 +1305,14 @@ export namespace Provider {
         throw e
       }
     })
-    s.modelPending.set(key, promise)
+    if (!callerOwnsLoad) s.modelPending.set(key, promise)
 
     try {
       const language = await promise
       if (s.generation === currentModelCacheGeneration()) return language
       return retryAfterInvalidation()
     } finally {
-      if (s.modelPending.get(key) === promise) {
+      if (!callerOwnsLoad && s.modelPending.get(key) === promise) {
         s.modelPending.delete(key)
       }
     }

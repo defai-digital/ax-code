@@ -131,6 +131,30 @@ describe("ax-engine transport isolation", () => {
 })
 
 describe("ax-engine probe contracts", () => {
+  test("model resolution forwards caller cancellation to the live contract probe", async () => {
+    const controller = new AbortController()
+    let requestSignal: AbortSignal | null | undefined
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        requestSignal = init?.signal
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {
+            once: true,
+          })
+        })
+      }),
+    )
+    const loader = await axEngineLoader()(provider("http://127.0.0.1:31421/v1"))
+    const pending = loader.getModel!({ languageModel: vi.fn() }, "local-model", {}, { signal: controller.signal })
+    const outcome = pending.catch((error) => error)
+
+    await vi.waitFor(() => expect(requestSignal).toBeDefined())
+    controller.abort()
+    expect(requestSignal?.aborted).toBe(true)
+    await expect(outcome).resolves.toMatchObject({ name: "AbortError" })
+  })
+
   test.each(["discovery", "connection"])("%s keeps a deadline with a caller signal", async (kind) => {
     const deadline = new AbortController()
     const caller = new AbortController()

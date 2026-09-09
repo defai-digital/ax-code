@@ -104,9 +104,10 @@ import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { createPromptRunState } from "./prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
 import {
+  CONVERSATION_SYSTEM_PROMPT,
   detectTurnExecutionProfile,
   RESPONSE_ONLY_SYSTEM_PROMPT,
-  responseOnlyUsesFastReasoning,
+  textOnlyUsesFastReasoning,
   type TurnExecutionProfile,
 } from "./prompt-turn-profile"
 import { SystemPrompt } from "./system"
@@ -1049,7 +1050,7 @@ export namespace SessionPrompt {
       }
       const isLastStep = step >= maxSteps
 
-      if (activeTurnProfile?.kind === "response-only" && activeTurnProfile.currentUserID !== lastUser.id) {
+      if (activeTurnProfile?.kind !== "default" && activeTurnProfile?.currentUserID !== lastUser.id) {
         activeTurnProfile = undefined
       }
       if (
@@ -1063,9 +1064,9 @@ export namespace SessionPrompt {
         !pendingAxEngineTurnInstruction
       ) {
         const profile = detectTurnExecutionProfile({ messages: msgs, currentUser: lastUser })
-        if (profile.kind === "response-only") {
+        if (profile.kind !== "default") {
           activeTurnProfile = profile
-          armForceTextOnlyTurn("response_only")
+          armForceTextOnlyTurn(profile.kind === "response-only" ? "response_only" : "other")
           log.info("turn execution profile selected", {
             command: "session.prompt.profile",
             status: "ok",
@@ -1084,8 +1085,8 @@ export namespace SessionPrompt {
         }
       }
 
-      const responseOnlyProfile = activeTurnProfile?.kind === "response-only" ? activeTurnProfile : undefined
-      const responseOnlyFastReasoning = responseOnlyProfile ? responseOnlyUsesFastReasoning(lastUser) : false
+      const textOnlyProfile = activeTurnProfile?.kind !== "default" ? activeTurnProfile : undefined
+      const textOnlyFastReasoning = textOnlyProfile ? textOnlyUsesFastReasoning(lastUser) : false
       const pendingInstructionForRequest =
         lastUser.format?.type === "json_schema" ? undefined : pendingAxEngineTurnInstruction
 
@@ -1112,8 +1113,13 @@ export namespace SessionPrompt {
         model,
         cache: cachedSystemPrompt,
         structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
-        requestMessagesSource: responseOnlyProfile?.requestMessages,
-        systemOverride: responseOnlyProfile ? [RESPONSE_ONLY_SYSTEM_PROMPT] : undefined,
+        requestMessagesSource: textOnlyProfile?.requestMessages,
+        systemOverride:
+          textOnlyProfile?.kind === "response-only"
+            ? [RESPONSE_ONLY_SYSTEM_PROMPT]
+            : textOnlyProfile?.kind === "conversation"
+              ? [CONVERSATION_SYSTEM_PROMPT]
+              : undefined,
         ephemeralSystem: pendingInstructionForRequest ? [pendingInstructionForRequest] : undefined,
         mediaProjection,
       })
@@ -1123,7 +1129,7 @@ export namespace SessionPrompt {
       // budget the same way — `tools: {}` means "no overrides" (all tools
       // still counted), not "zero tools".
       const omitToolSchemas =
-        Boolean(responseOnlyProfile) || ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
+        Boolean(textOnlyProfile) || ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
       const preflightCompaction = await NativePerf.runAsync("session.preflight", undefined, () =>
         maybeSchedulePreflightCompaction({
           sessionID,
@@ -1268,7 +1274,7 @@ export namespace SessionPrompt {
           tools,
           model,
           toolChoice,
-          small: responseOnlyFastReasoning,
+          small: textOnlyFastReasoning,
           config: cfg,
           maxOutputTokens: maxOutputTokensForRequest,
         },
@@ -1302,7 +1308,7 @@ export namespace SessionPrompt {
         if (maxOutputTokensForRequest !== undefined && pendingMaxOutputTokens === maxOutputTokensForRequest) {
           pendingMaxOutputTokens = undefined
         }
-        if (responseOnlyProfile && activeTurnProfile === responseOnlyProfile) {
+        if (textOnlyProfile && activeTurnProfile === textOnlyProfile) {
           activeTurnProfile = undefined
         }
       }
@@ -1456,6 +1462,21 @@ export namespace SessionPrompt {
         const currentTruncatedModelOutputPrefix = truncatedModelTurn
           ? truncatedModelOutputPrefix(truncatedOutputText)
           : undefined
+        if (truncatedModelTurn && textOnlyProfile?.kind === "conversation") {
+          // A direct conversation has no pending repository work for an
+          // autonomous recovery turn to complete. Preserve the partial text
+          // and stop at the provider limit instead of paying for another
+          // full local generation with coding-oriented recovery instructions.
+          log.info("direct conversation reached provider output limit", {
+            command: "session.prompt.loop",
+            status: "stopped",
+            sessionID,
+            profile: textOnlyProfile.kind,
+            intent: textOnlyProfile.intent,
+          })
+          reason = "completed"
+          break
+        }
         // Local engines pay ~minutes per full output window. Cap recovery
         // attempts so a soft-ignored "keep it short" instruction cannot burn
         // three full 2k generations on a single user prompt.
