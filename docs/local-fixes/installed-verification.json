@@ -1,0 +1,28 @@
+{
+  "snapshot": {
+    "officialScanMs": 4821.5809000000145,
+    "installedScanMs": 2471.474400000001,
+    "installedSha256": "ac29d9f7f43578d609f1696292005726f0bab7a80279648974f1782defff4c00",
+    "passed": true,
+    "equivalentTrees": 46,
+    "historicalIndexPreserved": 2,
+    "doctorChecks": 7,
+    "officialEnumerationCalls": 92,
+    "optimizedEnumerationCalls": 46,
+    "matchingWarnings": 36,
+    "verifiedAt": "2026-09-09T15:27:46.861Z"
+  },
+  "session": {
+    "passed": true,
+    "checks": 8,
+    "wrappedBusyDetected": true,
+    "cyclesTerminate": true,
+    "successOnThirdAttempt": true,
+    "retryLimit": 3,
+    "nonBusyNotRetried": true,
+    "timeoutMs": 52000,
+    "localSourceTimeoutMs": 57000,
+    "sessionAndTuiWiringPresent": true,
+    "scope": "Executed extracted installed functions with injected database callbacks; no real database lock was taken"
+  }
+}

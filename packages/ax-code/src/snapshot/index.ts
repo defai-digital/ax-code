@@ -292,15 +292,30 @@ export namespace Snapshot {
 
   async function windowsExclusions(current: State): Promise<string[]> {
     if (!WindowsSnapshotPaths.enabled()) return []
-    await checkWindowsHistory(current)
+    // Inspect indexed and untracked paths together without discarding historical entries.
     const result = await runGit(
-      [...cfg, ...args(current, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."])],
+      [...cfg, ...args(current, ["ls-files", "--cached", "--others", "--exclude-standard", "-t", "-z"])],
       { cwd: current.worktree },
     )
     if (result.code !== 0) {
       throw new Error(`Snapshot Windows path check failed: git ls-files exited with code ${result.code}`)
     }
-    const paths = WindowsSnapshotPaths.select(result.text)
+    const indexed: string[] = []
+    const untracked: string[] = []
+    for (const record of result.text.split("\0")) {
+      if (!record) continue
+      if (!/^[HSMRCK?] /.test(record) || record.length < 3) throw new Error("Invalid snapshot path inspection output")
+      ;(record[0] === "?" ? untracked : indexed).push(record.slice(2))
+    }
+    const historicalPaths = WindowsSnapshotPaths.select(indexed.join("\0"))
+    if (historicalPaths.length) {
+      throw new UnsupportedPathError({
+        paths: historicalPaths,
+        snapshotStore: current.gitdir,
+        message: `Unsupported Windows paths already exist in the snapshot index: ${historicalPaths.map((file) => JSON.stringify(file)).join(", ")}. No historical entries were removed. Back up the snapshot store at ${current.gitdir}, rename the affected project paths, and rebuild the snapshot index before retrying. An unsupported historical tree cannot be restored on Windows.`,
+      })
+    }
+    const paths = WindowsSnapshotPaths.select(untracked.join("\0"))
     const signature = JSON.stringify(paths)
     if (paths.length && signature !== current.warnedWindowsPaths) {
       log.warn("unsupported Windows paths excluded from snapshot; rollback cannot restore these files", { paths })

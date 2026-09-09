@@ -1,0 +1,1474 @@
+diff --git a/desktop/packages/electron/scripts/dev.mjs b/desktop/packages/electron/scripts/dev.mjs
+index b3e60d18f..67e9b8be0 100644
+--- a/desktop/packages/electron/scripts/dev.mjs
++++ b/desktop/packages/electron/scripts/dev.mjs
+@@ -89,6 +89,7 @@ const spawnManaged = (children, command, args, options = {}) => {
+     cwd: options.cwd || root,
+     env: options.env || process.env,
+     stdio: options.stdio || "inherit",
++    shell: options.shell || false,
+   })
+   children.add(child)
+   child.on("exit", () => children.delete(child))
+@@ -163,6 +164,9 @@ const sharedEnv = {
+ const vite = spawnManaged(children, "pnpm", ["run", "dev:vite"], {
+   cwd: webDir,
+   env: sharedEnv,
++  // Windows Node spawn cannot resolve `pnpm.cmd` without a shell; dev on
++  // Windows needs this so the Vite renderer server can start.
++  shell: process.platform === "win32",
+ })
+ 
+ vite.once("exit", (code, signal) => {
+diff --git a/desktop/packages/electron/scripts/package.mjs b/desktop/packages/electron/scripts/package.mjs
+index 24058a15a..8e43adcb0 100644
+--- a/desktop/packages/electron/scripts/package.mjs
++++ b/desktop/packages/electron/scripts/package.mjs
+@@ -32,7 +32,7 @@ const builderEnv = resolveAppleSigningEnv(args)
+ // resources/ax-computer so electron-builder's extraResources entry resolves.
+ // When the release artifact is absent (OSS/dev builds) the script stages a
+ // README.txt placeholder instead — packaging succeeds either way.
+-const stage = spawnSync("bash", [path.join(__dirname, "stage-ax-computer.sh")], {
++const stage = spawnSync("bash", [path.join(__dirname, "stage-ax-computer.sh").replace(/\\/g, "/")], {
+   stdio: "inherit",
+   cwd: electronDir,
+ })
+@@ -45,7 +45,7 @@ if (stage.status !== 0) process.exit(stage.status ?? 1)
+ // target. Release builds (AX_CODE_STAGE_REQUIRED=true) fail closed when the
+ // pinned CLI release archive or its minisign signature is missing/invalid;
+ // dev/OSS builds stage a README.txt placeholder instead.
+-const stageAxCode = spawnSync("bash", [path.join(__dirname, "stage-ax-code.sh"), ...args], {
++const stageAxCode = spawnSync("bash", [path.join(__dirname, "stage-ax-code.sh").replace(/\\/g, "/"), ...args], {
+   stdio: "inherit",
+   cwd: electronDir,
+ })
+diff --git a/desktop/packages/electron/scripts/rebuild-native.mjs b/desktop/packages/electron/scripts/rebuild-native.mjs
+index 3d669970d..671c4c6fa 100644
+--- a/desktop/packages/electron/scripts/rebuild-native.mjs
++++ b/desktop/packages/electron/scripts/rebuild-native.mjs
+@@ -28,12 +28,21 @@ const modules = ["node-pty"]
+ console.log(`[rebuild-native] electron ${electronVersion}, arch ${arch}`)
+ console.log(`[rebuild-native] modules: ${modules.join(", ")}`)
+ 
+-await rebuild({
+-  buildPath: packageRoot,
+-  electronVersion,
+-  arch,
+-  onlyModules: modules,
+-  force: true,
+-})
+-
+-console.log("[rebuild-native] done")
++try {
++  await rebuild({
++    buildPath: packageRoot,
++    electronVersion,
++    arch,
++    onlyModules: modules,
++    force: true,
++  })
++  console.log("[rebuild-native] done")
++} catch (error) {
++  // node-pty's source build fails on Windows (the winpty `shared` submodule is
++  // absent from the npm tarball), so a hard failure here would block the whole
++  // desktop build. Degrade to the prebuilds shipped in node-pty@1.1.0 and
++  // continue — the integrated terminal is best-effort on Windows, and the core
++  // desktop (chat/sessions) must still package.
++  console.warn(`[rebuild-native] node-pty rebuild failed: ${error?.message ?? error}`)
++  console.warn("[rebuild-native] continuing with shipped node-pty prebuilds")
++}
+diff --git a/desktop/packages/electron/scripts/resolve-dev-ax-code-binary.mjs b/desktop/packages/electron/scripts/resolve-dev-ax-code-binary.mjs
+index 2e0a5d3d3..2befbd5a7 100644
+--- a/desktop/packages/electron/scripts/resolve-dev-ax-code-binary.mjs
++++ b/desktop/packages/electron/scripts/resolve-dev-ax-code-binary.mjs
+@@ -10,7 +10,7 @@
+ import fs from "node:fs"
+ import os from "node:os"
+ import path from "node:path"
+-import { fileURLToPath } from "node:url"
++import { fileURLToPath, pathToFileURL } from "node:url"
+ 
+ const defaultElectronDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+ 
+@@ -84,7 +84,7 @@ export function resolveDevAxCodeBinary(options = {}) {
+           "@echo off",
+           `set "AX_CODE_SOURCE_CWD=${packageCwd}"`,
+           `set "AX_CODE_SOURCE_ENTRY=${entry}"`,
+-          `set "AX_CODE_SOURCE_LOADER=${loader}"`,
++          `set "AX_CODE_SOURCE_LOADER=${pathToFileURL(loader).href}"`,
+           `set "AX_CODE_SOURCE_NODE_FFI_RUNNER=${nodeFfiRunner}"`,
+           "set AX_CODE_ORIGINAL_CWD=%CD%",
+           'cd /d "%AX_CODE_SOURCE_CWD%"',
+diff --git a/desktop/packages/electron/src/axcode-runtime-supervisor.js b/desktop/packages/electron/src/axcode-runtime-supervisor.js
+index 750c1ec47..07e0332ac 100644
+--- a/desktop/packages/electron/src/axcode-runtime-supervisor.js
++++ b/desktop/packages/electron/src/axcode-runtime-supervisor.js
+@@ -134,7 +134,11 @@ const defaultIsExecutable = (candidate) => {
+ function resolveSpawnInvocation(binary, args, platform, env) {
+   if (platform === "win32" && /\.(cmd|bat)$/i.test(binary)) {
+     const comspec = trim(env.ComSpec) || trim(env.COMSPEC) || "cmd.exe"
+-    const quoted = [`"${binary}"`, ...args].join(" ")
++    // Wrap the WHOLE command line in an outer quote pair (in addition to the
++    // per-binary quotes). cmd.exe /s /c strips the outer pair, leaving the
++    // inner quoted path intact; without it a path containing spaces ("AX Code"
++    // install dir) is truncated at the first space and the runtime never spawns.
++    const quoted = `"${[`"${binary}"`, ...args].join(" ")}"`
+     return { command: comspec, args: ["/d", "/s", "/c", quoted], windowsVerbatimArguments: true }
+   }
+   return { command: binary, args, windowsVerbatimArguments: false }
+diff --git a/desktop/packages/electron/src/axcode-runtime-supervisor.test.mjs b/desktop/packages/electron/src/axcode-runtime-supervisor.test.mjs
+index a0a02bab1..7c0d1fa8a 100644
+--- a/desktop/packages/electron/src/axcode-runtime-supervisor.test.mjs
++++ b/desktop/packages/electron/src/axcode-runtime-supervisor.test.mjs
+@@ -532,7 +532,7 @@ describe("resolveSpawnInvocation", () => {
+       ComSpec: "C:\\Windows\\System32\\cmd.exe",
+     })
+     expect(result.command).toBe("C:\\Windows\\System32\\cmd.exe")
+-    expect(result.args).toEqual(["/d", "/s", "/c", '"C:\\tools\\ax-code.cmd" serve --port 4096'])
++    expect(result.args).toEqual(["/d", "/s", "/c", '""C:\\tools\\ax-code.cmd" serve --port 4096"'])
+     expect(result.windowsVerbatimArguments).toBe(true)
+   })
+ 
+diff --git a/desktop/packages/electron/src/desktop-renderer-protocol.js b/desktop/packages/electron/src/desktop-renderer-protocol.js
+index 5db541cc8..1de70c231 100644
+--- a/desktop/packages/electron/src/desktop-renderer-protocol.js
++++ b/desktop/packages/electron/src/desktop-renderer-protocol.js
+@@ -96,7 +96,10 @@ const buildPackagedRendererCsp = () => {
+   const connectSrc = LOOPBACK_CONNECT_SRC.join(" ")
+   return [
+     `default-src 'self' ${PACKAGED_RENDERER_ORIGIN}`,
+-    "script-src 'self' 'unsafe-inline'",
++    // 'wasm-unsafe-eval' lets the terminal renderer (xterm + its WASM addon)
++    // compile WebAssembly; the packaged CSP previously omitted it, so the
++    // integrated terminal failed at startup with a CSP violation.
++    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
+     "style-src 'self' 'unsafe-inline'",
+     `img-src 'self' ${PACKAGED_RENDERER_ORIGIN} data: blob:`,
+     `font-src 'self' ${PACKAGED_RENDERER_ORIGIN} data:`,
+@@ -189,7 +192,13 @@ const copyProxiedRequestHeaders = (request) => {
+   const headers = new Headers()
+   const source = request?.headers
+   if (!source) return headers
+-  const skip = new Set(["host", "connection", "content-length"])
++  // Server-to-server proxy traffic must not carry the browser's CSRF /
++  // Fetch-Metadata headers. The web server's request-security middleware
++  // (core-routes.js) rejects non-loopback Origin / cross-site Sec-Fetch-Site,
++  // and the packaged renderer's app:// Origin is not a loopback HTTP origin,
++  // so forwarding it verbatim turned every POST (session create, send message)
++  // into a 403 "Forbidden".
++  const skip = new Set(["host", "connection", "content-length", "origin", "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-fetch-user"])
+   if (typeof source.forEach === "function") {
+     source.forEach((value, key) => {
+       if (skip.has(String(key).toLowerCase())) return
+diff --git a/desktop/packages/electron/src/main.js b/desktop/packages/electron/src/main.js
+index c5468fd8a..af179f7de 100644
+--- a/desktop/packages/electron/src/main.js
++++ b/desktop/packages/electron/src/main.js
+@@ -3019,6 +3019,9 @@ app.whenReady().then(async () => {
+         env: applyBundledAxCodeEnv({ ...process.env }, bundledAxCodeEnv),
+         settingsReader: readSettingsRoot,
+         logger: console,
++        // Source-mode dev (AX_CODE_BINARY → .dev-bin/ax-code.cmd) runs the CLI
++        // through tsx on the fly, so cold startup can exceed the 30s default.
++        listeningTimeoutMs: 120_000,
+         onOriginChange: (origin, context = {}) => {
+           runtimeOrigin = typeof origin === "string" && origin ? origin : null
+           runtimeRetryExhausted = context.exhausted === true
+diff --git a/desktop/packages/ui/src/App.tsx b/desktop/packages/ui/src/App.tsx
+index a03a3bd81..8c956673d 100644
+--- a/desktop/packages/ui/src/App.tsx
++++ b/desktop/packages/ui/src/App.tsx
+@@ -479,7 +479,9 @@ function App({ apis }: AppProps) {
+ 
+     let active = true
+     let retries = 0
+-    const MAX_RETRIES = 15
++    // Source-mode dev boots the ax-code runtime through tsx (~30s cold start);
++    // the 15×2s budget raced that and surfaced a spurious "Startup failed".
++    const MAX_RETRIES = 60
+     const attempt = async () => {
+       const state = useConfigStore.getState()
+       if (state.providers.length > 0 && useAgentsStore.getState().agents.length > 0) return
+diff --git a/desktop/packages/ui/src/sync/child-store.ts b/desktop/packages/ui/src/sync/child-store.ts
+index cd4fa4372..50be92155 100644
+--- a/desktop/packages/ui/src/sync/child-store.ts
++++ b/desktop/packages/ui/src/sync/child-store.ts
+@@ -34,6 +34,15 @@ function createDirectoryStore(directory: string): StoreApi<DirectoryStore> {
+   return store
+ }
+ 
++// Stable fallback store for when no directory is open yet (first-run / welcome
++// state). Hooks such as useDirectoryChildStore return this instead of throwing,
++// so the app can render before a project folder is opened.
++export const EMPTY_DIRECTORY_STORE = create<DirectoryStore>()((set) => ({
++  ...INITIAL_STATE,
++  patch: (partial: Partial<State>) => set(partial),
++  replace: (next: State) => set(next),
++}))
++
+ export class ChildStoreManager {
+   readonly children = new Map<string, StoreApi<DirectoryStore>>()
+   private readonly lifecycle = new Map<string, DirState>()
+diff --git a/desktop/packages/ui/src/sync/sync-context-impl.tsx b/desktop/packages/ui/src/sync/sync-context-impl.tsx
+index 572129343..4c4784c38 100644
+--- a/desktop/packages/ui/src/sync/sync-context-impl.tsx
++++ b/desktop/packages/ui/src/sync/sync-context-impl.tsx
+@@ -25,7 +25,7 @@ import {
+ } from "./event-routing"
+ import { haveEquivalentSyncSnapshots } from "./snapshot-equality"
+ import { useGlobalSyncStore, type GlobalSyncStore } from "./global-sync-store"
+-import { ChildStoreManager, type DirectoryStore } from "./child-store"
++import { ChildStoreManager, EMPTY_DIRECTORY_STORE, type DirectoryStore } from "./child-store"
+ import { useI18nStore, formatMessage } from "@/lib/i18n/store"
+ import { ingestScheduledTaskRuntimeEvent, isScheduledTaskRuntimeEventType } from "@/lib/scheduledTaskEvents"
+ import {
+@@ -1454,6 +1454,7 @@ export function useGlobalSyncSelector<T>(selector: (state: GlobalSyncStore) => T
+ export function useDirectoryChildStore(directory?: string): StoreApi<DirectoryStore> {
+   const system = useSyncSystem()
+   const dir = directory ?? system.directory
++  if (!dir) return EMPTY_DIRECTORY_STORE
+   return system.childStores.ensureChild(dir)
+ }
+ 
+diff --git a/desktop/packages/web/server/lib/ax-code/core-routes.js b/desktop/packages/web/server/lib/ax-code/core-routes.js
+index 1c0afa3f9..17132ed35 100644
+--- a/desktop/packages/web/server/lib/ax-code/core-routes.js
++++ b/desktop/packages/web/server/lib/ax-code/core-routes.js
+@@ -27,12 +27,17 @@ export const createApiRequestSecurityMiddleware = () => (req, res, next) => {
+   }
+ 
+   const secFetchSite = asTrimmedHeader(req.headers?.["sec-fetch-site"]).toLowerCase()
+-  if (secFetchSite === "cross-site") {
++  const originHeader = asTrimmedHeader(req.headers?.origin)
++  // The packaged Electron renderer loads via the app:// scheme, so its
++  // cross-origin fetches to this loopback server carry `Origin: app://ax-code`
++  // (or an opaque "null") rather than a real http(s) website origin. Treat that
++  // as a trusted non-browser client so the local UI's POSTs (create session,
++  // send message) are not CSRF-blocked.
++  const isPackagedRendererOrigin = originHeader === "app://ax-code" || originHeader === "null"
++  if (secFetchSite === "cross-site" && !isPackagedRendererOrigin) {
+     return res.status(403).json({ error: "Forbidden" })
+   }
+-
+-  const originHeader = asTrimmedHeader(req.headers?.origin)
+-  if (originHeader && !normalizeLoopbackHttpOrigin(originHeader)) {
++  if (originHeader && !isPackagedRendererOrigin && !normalizeLoopbackHttpOrigin(originHeader)) {
+     return res.status(403).json({ error: "Forbidden" })
+   }
+ 
+diff --git a/desktop/packages/web/server/lib/security/response-headers.js b/desktop/packages/web/server/lib/security/response-headers.js
+index 52f1b8cdf..134383bf5 100644
+--- a/desktop/packages/web/server/lib/security/response-headers.js
++++ b/desktop/packages/web/server/lib/security/response-headers.js
+@@ -22,7 +22,15 @@ export const applyPackagedRendererCorsHeaders = (req, res) => {
+   if (origin !== PACKAGED_RENDERER_ORIGIN) return false
+   res.setHeader("Access-Control-Allow-Origin", PACKAGED_RENDERER_ORIGIN)
+   res.setHeader("Access-Control-Allow-Credentials", "true")
+-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization")
++  // The SDK's directory-scoped client (createAxCodeClient with a `directory`)
++  // adds x-ax-code-directory / x-opencode-directory (and the workspace variants)
++  // as custom headers. A custom header makes POST a non-simple request, so the
++  // browser preflights and must see those header names allowed here — otherwise
++  // create-session POSTs fail with "Failed to fetch".
++  res.setHeader(
++    "Access-Control-Allow-Headers",
++    "Content-Type, Accept, Authorization, x-ax-code-directory, x-opencode-directory, x-ax-code-workspace, x-opencode-workspace",
++  )
+   res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS")
+   res.setHeader("Vary", "Origin")
+   return true
+diff --git a/docs/providers/custom-provider.md b/docs/providers/custom-provider.md
+index d6d6d3b32..ca22ed5b4 100644
+--- a/docs/providers/custom-provider.md
++++ b/docs/providers/custom-provider.md
+@@ -16,7 +16,7 @@ This covers self-hosted aggregators and relay gateways such as LiteLLM, one-api,
+ For each request AX Code needs three things from a provider entry:
+ 
+ - **`npm`** — the AI SDK adapter that speaks the wire protocol. Use `@ai-sdk/openai-compatible` for OpenAI-style endpoints and `@ai-sdk/anthropic` for Anthropic-style endpoints. Only `@ai-sdk/*` adapters are bundled/installable.
+-- **`options.baseURL`** — the gateway URL. Falls back to the provider `api` field, then to the model's own `api.url`. Supports `${ENV_VAR}` substitution.
++- **`options.baseURL`** — the gateway URL. Falls back to the provider `api` field, then to the model's own `api.url`. Supports `{env:VAR}` substitution.
+ - **A credential** — resolved in order from `options.apiKey`, then the persisted auth store, then the provider's `env` variables.
+ 
+ Custom providers also need an explicit **`models`** map: unlike the built-in registry, AX Code does not know which models a private endpoint exposes, so you declare them.
+@@ -38,7 +38,7 @@ Most aggregators (LiteLLM, one-api, new-api, free/self-hosted gateways) expose a
+       "npm": "@ai-sdk/openai-compatible",
+       "options": {
+         "baseURL": "https://gateway.example.com/v1",
+-        "apiKey": "${MY_GATEWAY_API_KEY}",
++        "apiKey": "{env:MY_GATEWAY_API_KEY}",
+       },
+       "models": {
+         "gpt-4o": {
+@@ -56,7 +56,7 @@ Most aggregators (LiteLLM, one-api, new-api, free/self-hosted gateways) expose a
+ 
+ - The key `"my-gateway"` is the provider id you select in `/connect` and `ax-code models`.
+ - Each key under `models` must be the **exact model id the gateway expects** in the request body.
+-- Prefer `${ENV_VAR}` over a literal key so the secret stays out of committed config.
++- Prefer `{env:VAR}` over a literal key so the secret stays out of committed config.
+ 
+ ## Anthropic-compatible gateway
+ 
+@@ -71,7 +71,7 @@ Relays that expose `/v1/messages` (the Claude API shape) use the Anthropic adapt
+       "npm": "@ai-sdk/anthropic",
+       "options": {
+         "baseURL": "https://gateway.example.com",
+-        "apiKey": "${MY_GATEWAY_API_KEY}",
++        "apiKey": "{env:MY_GATEWAY_API_KEY}",
+       },
+       "models": {
+         "claude-sonnet-4-6": {
+diff --git a/packages/ax-code/src/cli/cmd/doctor-health.ts b/packages/ax-code/src/cli/cmd/doctor-health.ts
+index cbf756c6f..f4676241f 100644
+--- a/packages/ax-code/src/cli/cmd/doctor-health.ts
++++ b/packages/ax-code/src/cli/cmd/doctor-health.ts
+@@ -11,7 +11,6 @@ export type DoctorCheck = {
+ // tui-backend is the TUI's own stdio backend subprocess, not a competing instance.
+ const READ_ONLY_AX_CODE_PATTERNS = [/(\s|^)doctor(\s|$)/, /(\s|^)--version(\s|$)/, /(\s|^)tui-backend(\s|$)/]
+ const RECENT_LOG_WINDOW_MS = 24 * 60 * 60 * 1000
+-const MAX_RECENT_LOG_FILES = 5
+ const DEFAULT_RUN_TIMEOUT_MS = 5_000
+ const STACK_FIELD_PATTERN = /(?:\sstack=|"stack"\s*:)/i
+ 
+@@ -49,19 +48,77 @@ function parseDecimalPid(value: string): number | undefined {
+ export async function getRunningInstancesCheck(
+   input: {
+     currentPid?: number
++    platform?: NodeJS.Platform
+     run?: (command: string[]) => Promise<string>
+   } = {},
+ ): Promise<DoctorCheck | undefined> {
+   const currentPid = input.currentPid ?? process.pid
++  const platform = input.platform ?? process.platform
+   const run = input.run ?? defaultRun
+ 
++  const unavailable: DoctorCheck = {
++    name: "Running instances",
++    status: "warn",
++    detail: "Could not enumerate ax-code processes; running instances are unknown",
++  }
++  if (platform === "win32") {
++    try {
++      const raw = await run([
++        "powershell.exe",
++        "-NoProfile",
++        "-NonInteractive",
++        "-Command",
++        "$ErrorActionPreference = 'Stop'; $items = @(Get-CimInstance Win32_Process -Filter \"Name = 'node.exe' OR Name = 'ax-code.exe' OR Name = 'bun.exe'\" | Select-Object ProcessId, ParentProcessId, Name, CommandLine); ConvertTo-Json -InputObject $items -Compress",
++      ])
++      const rows: unknown = JSON.parse(raw.replace(/^\uFEFF/, ""))
++      if (!Array.isArray(rows)) return unavailable
++      const candidates: { pid: number; parent: number; command: string }[] = []
++      for (const row of rows) {
++        if (
++          !row ||
++          !Number.isSafeInteger(row.ProcessId) ||
++          !Number.isSafeInteger(row.ParentProcessId) ||
++          typeof row.Name !== "string"
++        )
++          return unavailable
++        // A denied command line cannot safely be treated as a non-instance.
++        if (typeof row.CommandLine !== "string") return unavailable
++        const command: string = row.CommandLine
++        const arguments_ = Array.from(command.matchAll(/"([^"]*)"|(\S+)/g), (match) =>
++          path.win32.normalize(match[1] ?? match[2]),
++        )
++        const isAxCode =
++          /^ax-code\.exe$/i.test(row.Name) ||
++          arguments_.some((argument) =>
++            /[\\/]\.?ax-code[\\/](?:(?:lib|dist)[\\/]index(?:-node-tui)?\.js|src[\\/]index\.ts)$/i.test(argument),
++          )
++        if (isAxCode && row.ProcessId !== currentPid && !isReadOnlyAxCodeCommand(command)) {
++          candidates.push({ pid: row.ProcessId, parent: row.ParentProcessId, command })
++        }
++      }
++      const pids = new Set(candidates.map((row) => row.pid))
++      const instances = candidates.filter((row) => !pids.has(row.parent))
++      return instances.length === 0
++        ? { name: "Running instances", status: "ok", detail: "No other ax-code processes" }
++        : {
++            name: "Running instances",
++            status: "warn",
++            detail: `${instances.length} other ax-code process(es) found. PIDs: ${instances.map((row) => row.pid).join(", ")}. Close unused instances if startup or port conflicts occur.`,
++          }
++    } catch {
++      return unavailable
++    }
++  }
++
+   let raw = ""
+   try {
+     raw = await run(["pgrep", "-a", "-x", "ax-code"])
+   } catch {
+-    return undefined
++    return unavailable
+   }
+ 
++  if (raw.trim() && !raw.split("\n").some((line) => /^\d+(?:\s|$)/.test(line.trim()))) return unavailable
++
+   const others = raw
+     .split("\n")
+     .map((line) => line.trim())
+@@ -139,7 +196,6 @@ export async function getRecentLogsChecks(input: {
+   const recent = withStats
+     .filter((entry) => entry.mtimeMs > 0 && now - entry.mtimeMs <= RECENT_LOG_WINDOW_MS)
+     .sort((a, b) => b.mtimeMs - a.mtimeMs)
+-    .slice(0, MAX_RECENT_LOG_FILES)
+ 
+   if (recent.length === 0) {
+     return [
+@@ -159,11 +215,68 @@ export async function getRecentLogsChecks(input: {
+   const tuiErrors: string[] = []
+   let latestRecentErrors: string[] = []
+ 
++  // Read every file in the window. Empty workers and text/JSON pairs must not
++  // displace older errors. Match mirrored events only within the same log pair.
++  const recentPaths = new Set(recent.map((entry) => entry.target))
++  const unreadable = new Set<string>()
++  const read = async (target: string) => {
++    try {
++      return await readFile(target)
++    } catch {
++      unreadable.add(target)
++      return ""
++    }
++  }
+   for (const entry of recent) {
+-    const content = await readFile(entry.target).catch(() => "")
+-    const lines = content.split("\n").filter(Boolean)
+-    const errors = lines.filter((line) => line.startsWith("ERROR"))
+-    const warns = lines.filter((line) => line.startsWith("WARN"))
++    const lines = (await read(entry.target)).split("\n").filter(Boolean)
++    const pairedPath = entry.target.replace(/\.json\.log$/, ".log")
++    const mirrors = (pairedPath !== entry.target && recentPaths.has(pairedPath) ? await read(pairedPath) : "").split(
++      "\n",
++    )
++    const errors: string[] = []
++    const warns: string[] = []
++    for (const line of lines) {
++      let severity = /^ERROR\b/.test(line) ? "error" : /^WARN\b/.test(line) ? "warn" : undefined
++      let display = line
++      if (line.trimStart().startsWith("{")) {
++        try {
++          const event = JSON.parse(line)
++          const level = typeof event.level === "string" ? event.level.toLowerCase() : event.level
++          severity =
++            level === "error" || level === "fatal" || (typeof level === "number" && level >= 50)
++              ? "error"
++              : level === "warn" || level === "warning" || level === 40
++                ? "warn"
++                : undefined
++          if (!severity) continue
++          const message =
++            typeof event.msg === "string" ? event.msg : typeof event.message === "string" ? event.message : ""
++          const date = new Date(event.time)
++          const stamp = Number.isNaN(date.getTime()) ? undefined : date.toISOString().split(".")[0]
++          const mirror =
++            stamp && entry.target.endsWith(".json.log")
++              ? mirrors.findIndex(
++                  (text) =>
++                    text.startsWith(severity === "error" ? "ERROR " : "WARN ") &&
++                    text.includes(stamp) &&
++                    (typeof event.service !== "string" || text.includes(`service=${event.service} `)) &&
++                    !!message &&
++                    text.trimEnd().endsWith(message),
++                )
++              : -1
++          if (mirror !== -1) {
++            mirrors.splice(mirror, 1)
++            continue
++          }
++          // Do not classify a provider error as a TUI crash merely because its stack names the bundle.
++          display = `${severity.toUpperCase()} service=${typeof event.service === "string" ? event.service : "unknown"} ${message}`
++        } catch {
++          continue
++        }
++      }
++      if (severity === "error") errors.push(display)
++      if (severity === "warn") warns.push(display)
++    }
+     totalErrors += errors.length
+     totalWarns += warns.length
+ 
+@@ -185,6 +298,12 @@ export async function getRecentLogsChecks(input: {
+       detail: `${recent.length} file(s) checked from the last 24h — ${totalErrors} errors, ${totalWarns} warnings`,
+     },
+   ]
++  if (unreadable.size)
++    checks.push({
++      name: "Log access",
++      status: "warn",
++      detail: `${unreadable.size} recent log file(s) could not be read; counts are incomplete`,
++    })
+ 
+   if (tuiErrors.length > 0) {
+     checks.push({
+@@ -214,6 +333,7 @@ async function defaultRun(command: string[]) {
+     timeout: DEFAULT_RUN_TIMEOUT_MS,
+     nothrow: true,
+   })
+-  if (result.code === 124) return `command timed out after ${DEFAULT_RUN_TIMEOUT_MS}ms`
+-  return result.code === 0 ? result.text : result.stderr.toString()
++  if (command[0] === "pgrep" && result.code === 1 && !result.stderr.toString().trim()) return ""
++  if (result.code !== 0) throw new Error("Process enumeration failed")
++  return result.text
+ }
+diff --git a/packages/ax-code/src/cli/cmd/doctor.ts b/packages/ax-code/src/cli/cmd/doctor.ts
+index fd6b1b4b0..0d3b2f291 100644
+--- a/packages/ax-code/src/cli/cmd/doctor.ts
++++ b/packages/ax-code/src/cli/cmd/doctor.ts
+@@ -17,11 +17,11 @@ import { Log } from "../../util/log"
+ import { Filesystem } from "../../util/filesystem"
+ import { NativeAddon } from "../../native/addon"
+ import { Database } from "../../storage/db"
+-import { recordCount } from "@/util/record"
+ import { Locale } from "@/util/locale"
+ import { getTuiPreloadCheck } from "./doctor-preload"
+ import { getDoctorDatabaseCheck } from "./doctor-storage"
+ import { getRecentLogsChecks, getRunningInstancesCheck } from "./doctor-health"
++import { getDoctorConfiguration, getConfiguredCredentialProviders } from "./doctor-config"
+ import { getComputerUseCheck } from "./doctor-computer"
+ import path from "path"
+ import { realpathSync } from "fs"
+@@ -339,24 +339,10 @@ export const DoctorCommand: CommandModule = {
+     // 4. Data directory
+     checks.push(await getDoctorDatabaseCheck({ databasePath: Database.Path }))
+ 
+-    // 5. Config
+-    try {
+-      const config = await Config.get()
+-      const providerCount = recordCount(config.provider)
+-      checks.push({
+-        name: "Configuration",
+-        status: "ok",
+-        detail: `Loaded (${Locale.pluralize(providerCount, "{} provider", "{} providers")} configured)`,
+-      })
+-    } catch {
+-      // Config.get() requires project instance which isn't available in standalone CLI mode
+-      // Check if config file exists instead
+-      checks.push({
+-        name: "Configuration",
+-        status: project.configPath ? "ok" : "warn",
+-        detail: project.configPath ? "Config file found" : "No config file — using defaults (this is fine)",
+-      })
+-    }
++    // 5. Config: resolve the same global/project sources as a normal session.
++    const configuration = await getDoctorConfiguration(project.callerCwd)
++    checks.push(configuration.check)
++    const configuredCredentials = getConfiguredCredentialProviders(configuration.config)
+ 
+     // 6. Credentials — combine `ax-code providers login` entries (auth.json)
+     // with environment variable fallbacks. Previously we only checked
+@@ -399,8 +385,10 @@ export const DoctorCommand: CommandModule = {
+       // rather than crashing the whole doctor report.
+     }
+ 
+-    if (stored.length > 0 || envKeys.length > 0) {
++    if (stored.length > 0 || envKeys.length > 0 || configuredCredentials.length > 0) {
+       const parts: string[] = []
++      if (configuredCredentials.length > 0)
++        parts.push(`${configuredCredentials.length} in configuration (${configuredCredentials.join(", ")})`)
+       if (stored.length > 0) {
+         parts.push(`${stored.length} stored (${stored.sort().join(", ")})`)
+       }
+@@ -410,14 +398,15 @@ export const DoctorCommand: CommandModule = {
+       checks.push({
+         name: "Credentials",
+         status: "ok",
+-        detail: parts.join(" + "),
++        detail: parts.join(" + ") + "; presence only, authentication not tested",
+       })
+     } else {
+       checks.push({
+         name: "Credentials",
+         status: "warn",
+-        detail:
+-          "No credentials found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY)",
++        detail: configuration.config
++          ? "No credentials found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY)"
++          : "Credential check incomplete because configuration could not be loaded",
+       })
+     }
+ 
+@@ -576,7 +565,7 @@ export const DoctorCommand: CommandModule = {
+     // transform TUI JSX during build and do not resolve the preload from disk.
+     checks.push(getTuiPreloadCheck())
+ 
+-    // 12. Recent logs analysis — scan last 5 log files for TUI crashes / errors
++    // 12. Recent logs analysis — scan log files modified within the last 24 hours
+     checks.push(...(await getRecentLogsChecks({ logDir: Global.Path.log })))
+ 
+     // 12. Code intelligence index status
+diff --git a/packages/ax-code/src/cli/cmd/tui/component/prompt/index.tsx b/packages/ax-code/src/cli/cmd/tui/component/prompt/index.tsx
+index ab3e576cb..59e01cf49 100644
+--- a/packages/ax-code/src/cli/cmd/tui/component/prompt/index.tsx
++++ b/packages/ax-code/src/cli/cmd/tui/component/prompt/index.tsx
+@@ -126,6 +126,7 @@ import {
+   setPromptPartSourceRange,
+ } from "./prompt-helpers"
+ import { PLACEHOLDERS, SHELL_PLACEHOLDERS, SUBMIT_ACCEPT_TIMEOUT_MS } from "./prompt-config"
++import { SESSION_CREATE_TIMEOUT_MS } from "@/session/create-policy"
+ import type { AsyncSessionRoute, PromptProps, PromptRef } from "./prompt-types"
+ import { Installation } from "@/installation"
+ import { useTuiConfig } from "../../context/tui-config"
+@@ -1444,8 +1445,8 @@ export function Prompt(props: PromptProps) {
+             { id: sessionID, directory: props.workspaceID ?? sdk.baseDirectory },
+             { signal: nextSubmitAbort.signal },
+           ),
+-          SUBMIT_ACCEPT_TIMEOUT_MS,
+-          `Session creation timed out after ${SUBMIT_ACCEPT_TIMEOUT_MS}ms`,
++          SESSION_CREATE_TIMEOUT_MS,
++          `Session creation timed out after ${SESSION_CREATE_TIMEOUT_MS}ms`,
+         )
+         if (res.error) throw new Error(errorMessage(res.error))
+         if (!res.data?.id) throw new Error("Session creation returned no data")
+diff --git a/packages/ax-code/src/session/index.ts b/packages/ax-code/src/session/index.ts
+index c4718e04f..1ca6701e5 100644
+--- a/packages/ax-code/src/session/index.ts
++++ b/packages/ax-code/src/session/index.ts
+@@ -23,6 +23,7 @@ import { SelfCorrection } from "./correction"
+ import { BlastRadius } from "./blast-radius"
+ import { BackgroundShell } from "../tool/bash-background"
+ import { SessionStatus } from "./status"
++import { SESSION_CREATE_RETRY } from "./create-policy"
+ import { SessionMetadata } from "./metadata"
+ import { fn } from "@/util/fn"
+ import { Command } from "../command"
+@@ -505,15 +506,23 @@ export namespace Session {
+         updated: Date.now(),
+       },
+     }
+-    log.info("created", result)
+-    Database.use((db) => {
++    await Database.transactionWithBusyRetry((db) => {
+       db.insert(SessionTable).values(toRow(result)).run()
+       Database.effect(() =>
+         Bus.publishDetached(Event.Created, {
+           info: result,
+         }),
+       )
++    }, SESSION_CREATE_RETRY).catch((error) => {
++      if (Database.isBusyError(error)) {
++        throw new Error(
++          "Session database is locked by another AX Code process. Wait for ongoing operations to finish and try again.",
++          { cause: error },
++        )
++      }
++      throw error
+     })
++    log.info("created", result)
+     // Event.Created already fired in the transaction above — skip redundant Updated
+     return result
+   }
+@@ -982,28 +991,37 @@ export namespace Session {
+     //      context anyway, so `Database.effect` would fall through to
+     //      immediate execution; calling Bus directly is clearer.
+     const items = [...allDescendants, session]
+-    for (const item of items) {
+-      await SessionPrompt.cancel(item.id).catch((e) =>
+-        log.warn("session cancel failed", { sessionID: item.id, error: e }),
+-      )
+-    }
+-    for (const item of items) {
+-      SelfCorrection.reset(item.id)
+-      BlastRadius.reset(item.id)
+-      SessionStatus.clear(item.id)
+-      // Kill any background shells the session (or a descendant) started —
+-      // without this a deleted session's dev server keeps running with no
+-      // surviving session able to see or kill it.
+-      await BackgroundShell.killForSession(item.id).catch((e) =>
+-        log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
+-      )
+-      // Drop the out-of-band session_diff blob written by revert/summary.
+-      // CASCADE only covers DB rows, so without this every session that ever
+-      // recorded a diff would leak its file on delete.
+-      await Storage.remove(["session_diff", item.id]).catch((e) =>
+-        log.warn("session_diff cleanup failed", { sessionID: item.id, error: e }),
+-      )
+-    }
++    // Cleanup was two serial per-item loops; for a session with many
++    // descendants that turned into O(N) sequential awaits. Each item's
++    // cancellation and cleanup is independent, so fan them out. The DB rows
++    // are already deleted above, so cancelDescendantSessions' child lookup is
++    // a no-op and cannot race the fan-out.
++    await Promise.all(
++      items.map((item) =>
++        SessionPrompt.cancel(item.id).catch((e) =>
++          log.warn("session cancel failed", { sessionID: item.id, error: e }),
++        ),
++      ),
++    )
++    await Promise.all(
++      items.map(async (item) => {
++        SelfCorrection.reset(item.id)
++        BlastRadius.reset(item.id)
++        SessionStatus.clear(item.id)
++        // Kill any background shells the session (or a descendant) started —
++        // without this a deleted session's dev server keeps running with no
++        // surviving session able to see or kill it.
++        await BackgroundShell.killForSession(item.id).catch((e) =>
++          log.warn("background shell cleanup failed", { sessionID: item.id, error: e }),
++        )
++        // Drop the out-of-band session_diff blob written by revert/summary.
++        // CASCADE only covers DB rows, so without this every session that ever
++        // recorded a diff would leak its file on delete.
++        await Storage.remove(["session_diff", item.id]).catch((e) =>
++          log.warn("session_diff cleanup failed", { sessionID: item.id, error: e }),
++        )
++      }),
++    )
+     for (const desc of allDescendants) {
+       Bus.publishDetached(Event.Deleted, { info: desc })
+     }
+diff --git a/packages/ax-code/src/snapshot/index.ts b/packages/ax-code/src/snapshot/index.ts
+index cc1a495cc..7c0ccf2f6 100644
+--- a/packages/ax-code/src/snapshot/index.ts
++++ b/packages/ax-code/src/snapshot/index.ts
+@@ -10,6 +10,9 @@ import { git } from "../util/git"
+ import { parseLsTreeSize, parseNameStatusLine, parseNumstatLine } from "../util/git-output"
+ import { Log } from "../util/log"
+ import { KeyedSerialQueue } from "../util/queue"
++import { Bus } from "../bus"
++import { NotificationEvent } from "../notification/events"
++import { inspectWindowsSnapshotPaths, snapshotPathspecs } from "./windows-paths"
+ 
+ export namespace Snapshot {
+   export const Patch = z.object({
+@@ -50,6 +53,7 @@ export namespace Snapshot {
+     cleanupDelay?: ReturnType<typeof setTimeout>
+     cleanupInterval?: ReturnType<typeof setInterval>
+     disposed?: boolean
++    reservedWarning?: string
+   }
+ 
+   function valid(hash: string) {
+@@ -259,6 +263,32 @@ export namespace Snapshot {
+ 
+   async function add(current: State) {
+     await syncExclude(current)
++    const excluded: string[] = []
++    if (process.platform === "win32") {
++      const listed = await runGit(
++        args(current, ["ls-files", "-t", "-z", "--cached", "--others", "--exclude-standard"]),
++        { cwd: current.worktree },
++      )
++      if (listed.code !== 0) throw new Error(`Snapshot path inspection failed: ${listed.stderr}`)
++      const inspected = inspectWindowsSnapshotPaths(listed.text)
++      if (inspected.indexed.length) {
++        throw new Error(
++          `Snapshot index contains Windows reserved paths: ${inspected.indexed.join(", ")}. ` +
++            "Rename these paths and rebuild the snapshot index before continuing; existing snapshots have not been changed.",
++        )
++      }
++      excluded.push(...inspected.excluded)
++      const warningKey = JSON.stringify(excluded.slice().sort())
++      if (excluded.length && current.reservedWarning !== warningKey) {
++        const message =
++          `Windows reserved paths excluded from snapshots: ${excluded.slice(0, 5).join(", ")}` +
++          (excluded.length > 5 ? ` and ${excluded.length - 5} more` : "") +
++          ". These files cannot be restored by rollback. Rename them to include them in snapshots."
++        log.warn("Windows reserved paths excluded from snapshots", { paths: excluded, message })
++        Bus.publishDetached(NotificationEvent.ToastShow, { message, variant: "warning", duration: 15_000 })
++      }
++      current.reservedWarning = warningKey
++    }
+     // Stage the whole worktree, not just `current.directory` — a session's
+     // working directory can be a subdirectory of the git worktree (e.g. a
+     // monorepo package), and edits outside it are explicitly permitted (see
+@@ -266,7 +296,9 @@ export namespace Snapshot {
+     // silently drop those files from every snapshot: `write-tree` never sees
+     // them, so track()/patch()/diff() miss them and restore()/revert() can
+     // never roll them back.
+-    const result = await runGit([...cfg, ...args(current, ["add", "."])], { cwd: current.worktree })
++    const result = await runGit([...cfg, ...args(current, ["add", "--", ...snapshotPathspecs(excluded)])], {
++      cwd: current.worktree,
++    })
+     if (result.code === 0) return
+     log.error("failed to stage snapshot files", {
+       cwd: current.worktree,
+diff --git a/packages/ax-code/src/storage/db.ts b/packages/ax-code/src/storage/db.ts
+index a63e807c7..a14b782b3 100644
+--- a/packages/ax-code/src/storage/db.ts
++++ b/packages/ax-code/src/storage/db.ts
+@@ -220,9 +220,18 @@ export namespace Database {
+   // Used to distinguish transient cross-process writer contention (retryable)
+   // from real storage failures (corruption, read-only) that must stay fatal.
+   export function isBusyError(error: unknown) {
+-    const errcode = (error as { errcode?: unknown } | null | undefined)?.errcode
+-    if (typeof errcode === "number") return (errcode & 0xff) === 5
+-    return error instanceof Error && error.message.includes("database is locked")
++    // Drizzle wraps failures from BEGIN IMMEDIATE in a query error. Inspect
++    // its cause as well, otherwise transactionWithBusyRetry never retries
++    // the actual cross-process lock contention it is intended to handle.
++    const seen = new Set<unknown>()
++    while (error && typeof error === "object" && !seen.has(error)) {
++      seen.add(error)
++      const current = error as { errcode?: unknown; cause?: unknown }
++      if (typeof current.errcode === "number") return (current.errcode & 0xff) === 5
++      if (error instanceof Error && error.message.includes("database is locked")) return true
++      error = current.cause
++    }
++    return false
+   }
+ 
+   // Resolver for the ambient projectID, wired by project/instance.ts at module
+diff --git a/packages/ax-code/test/cli/doctor-health.test.ts b/packages/ax-code/test/cli/doctor-health.test.ts
+index a56ad439b..acbb21567 100644
+--- a/packages/ax-code/test/cli/doctor-health.test.ts
++++ b/packages/ax-code/test/cli/doctor-health.test.ts
+@@ -1,3 +1,4 @@
++import path from "path"
+ import { describe, expect, test } from "vitest"
+ import { getRecentLogsChecks, getRunningInstancesCheck } from "../../src/cli/cmd/doctor-health"
+ 
+@@ -5,6 +6,7 @@ describe("doctor running instances", () => {
+   test("ignores the current process and read-only doctor commands", async () => {
+     const check = await getRunningInstancesCheck({
+       currentPid: 100,
++      platform: "linux",
+       run: async () => ["100 ax-code doctor", "200 ax-code", "300 ax-code --version"].join("\n"),
+     })
+ 
+@@ -19,6 +21,7 @@ describe("doctor running instances", () => {
+   test("reports clean state when no other instances remain", async () => {
+     const check = await getRunningInstancesCheck({
+       currentPid: 100,
++      platform: "linux",
+       run: async () => "100 ax-code doctor\n",
+     })
+ 
+@@ -32,6 +35,7 @@ describe("doctor running instances", () => {
+   test("ignores the TUI backend subprocess", async () => {
+     const check = await getRunningInstancesCheck({
+       currentPid: 100,
++      platform: "linux",
+       run: async () => "100 ax-code\n200 node /opt/ax-code/index.js tui-backend --stdio\n",
+     })
+ 
+@@ -50,6 +54,7 @@ describe("doctor running instances", () => {
+     ])
+     const check = await getRunningInstancesCheck({
+       currentPid: 100,
++      platform: "linux",
+       run: async (command) => {
+         if (command[0] === "pgrep") return "100\n200\n201\n202\n"
+         const pid = Number(command.at(-1))
+@@ -68,6 +73,7 @@ describe("doctor running instances", () => {
+   test("ignores malformed non-decimal pgrep pid fields", async () => {
+     const check = await getRunningInstancesCheck({
+       currentPid: 100,
++      platform: "linux",
+       run: async () => "0x10 ax-code\n1e3 ax-code\n100 ax-code doctor\n",
+     })
+ 
+@@ -112,8 +118,8 @@ describe("doctor recent logs", () => {
+       logDir: "/tmp/logs",
+       now: 12_000,
+       readdir: async () => Object.keys(files).map((file) => file.split("/").at(-1)!),
+-      stat: async (target) => stats[target as keyof typeof stats],
+-      readFile: async (target) => files[target as keyof typeof files],
++      stat: async (target) => stats[target.replace(/\\/g, "/") as keyof typeof stats],
++      readFile: async (target) => files[target.replace(/\\/g, "/") as keyof typeof files],
+     })
+ 
+     expect(checks[0]).toEqual({
+@@ -166,3 +172,140 @@ describe("doctor recent logs", () => {
+     })
+   })
+ })
++
++describe("doctor audit regressions", () => {
++  test("Windows enumerates Node entrypoints and collapses parent/backend processes", async () => {
++    const rows = [
++      {
++        ProcessId: 100,
++        ParentProcessId: 1,
++        Name: "node.exe",
++        CommandLine: "node C:\\Users\\me\\.ax-code\\lib\\index-node-tui.js doctor",
++      },
++      {
++        ProcessId: 200,
++        ParentProcessId: 1,
++        Name: "node.exe",
++        CommandLine: 'node "C:\\Users\\my name\\.ax-code\\bin\\..\\lib\\index-node-tui.js"',
++      },
++      {
++        ProcessId: 201,
++        ParentProcessId: 200,
++        Name: "node.exe",
++        CommandLine: "node C:\\Users\\me\\.ax-code\\lib\\index-node-tui.js tui-backend --stdio",
++      },
++      { ProcessId: 202, ParentProcessId: 200, Name: "ax-code.exe", CommandLine: "ax-code.exe" },
++      {
++        ProcessId: 300,
++        ParentProcessId: 1,
++        Name: "node.exe",
++        CommandLine: "node C:\\Users\\me\\.ax-code\\lib\\index-node-tui.js serve",
++      },
++      { ProcessId: 400, ParentProcessId: 1, Name: "node.exe", CommandLine: "node C:\\other\\index.js" },
++      {
++        ProcessId: 401,
++        ParentProcessId: 1,
++        Name: "node.exe",
++        CommandLine: "node C:/repo/ax-code/node_modules/some-test/index.js",
++      },
++    ]
++    const check = await getRunningInstancesCheck({
++      platform: "win32",
++      currentPid: 100,
++      run: async (args) => {
++        expect(args[0]).toBe("powershell.exe")
++        return JSON.stringify(rows)
++      },
++    })
++    expect(check?.detail).toContain("2 other")
++    expect(check?.detail).toContain("PIDs: 200, 300")
++  })
++
++  test.each(["[]", "\uFEFF[]"])("Windows empty enumeration is clean: %s", async (raw) => {
++    expect((await getRunningInstancesCheck({ platform: "win32", run: async () => raw }))?.status).toBe("ok")
++  })
++
++  test.each(["spawn pgrep ENOENT", "command timed out", "{}", '[{"ProcessId":12}]'])(
++    "enumeration failure is not a clean result: %s",
++    async (raw) => {
++      expect((await getRunningInstancesCheck({ platform: "win32", run: async () => raw }))?.status).toBe("warn")
++    },
++  )
++  test("Unix command failures remain visible", async () => {
++    expect((await getRunningInstancesCheck({ platform: "linux", run: async () => "spawn pgrep ENOENT" }))?.status).toBe(
++      "warn",
++    )
++    expect(
++      (
++        await getRunningInstancesCheck({
++          platform: "linux",
++          run: async () => {
++            throw new Error("denied")
++          },
++        })
++      )?.status,
++    ).toBe("warn")
++  })
++
++  const scan = (files: Record<string, string>) =>
++    getRecentLogsChecks({
++      logDir: "/logs",
++      now: 12_000,
++      readdir: async () => Object.keys(files),
++      stat: async () => ({ mtimeMs: 10_000 }),
++      readFile: async (target) => files[path.basename(target)],
++    })
++  test("JSON numeric and named severities count without trusting stack paths", async () => {
++    const checks = await scan({
++      "json.json.log":
++        [
++          { level: 50, service: "llm", msg: "denied", stack: "index-node-tui.js" },
++          { level: "fatal", service: "llm", msg: "failed" },
++          { level: 40, msg: "careful" },
++          { level: "warning", msg: "careful again" },
++          { level: 30, msg: "ok" },
++        ]
++          .map((event) => JSON.stringify(event))
++          .join("\n") + "\n{bad json",
++    })
++    expect(checks[0].detail).toContain("2 errors, 2 warnings")
++    expect(checks.some((check) => check.name === "TUI errors in logs")).toBe(false)
++  })
++  test("JSON renderer crash is a failure", async () => {
++    expect(
++      (await scan({ "x.json.log": JSON.stringify({ level: 50, service: "tui", msg: "renderer crashed" }) }))[1].status,
++    ).toBe("fail")
++  })
++  test("five empty files cannot hide a sixth error log", async () => {
++    const checks = await scan({
++      "1.log": "",
++      "2.log": "",
++      "3.log": "",
++      "4.log": "",
++      "5.log": "",
++      "6.log": "ERROR renderer crashed",
++    })
++    expect(checks[0].detail).toContain("1 errors")
++    expect(checks[1].status).toBe("fail")
++  })
++  test("paired JSON/text events count once while JSON-only events remain visible", async () => {
++    const event = { level: 50, time: "2026-09-08T12:00:00Z", service: "llm", msg: "denied" }
++    const checks = await scan({
++      "x.log": "ERROR 2026-09-08T12:00:00 +1ms service=llm denied",
++      "x.json.log": JSON.stringify(event) + "\n" + JSON.stringify({ ...event, msg: "different failure" }),
++    })
++    expect(checks[0].detail).toContain("2 errors")
++  })
++  test("unreadable files disclose incomplete counts", async () => {
++    const checks = await getRecentLogsChecks({
++      logDir: "/logs",
++      now: 12_000,
++      readdir: async () => ["a.log"],
++      stat: async () => ({ mtimeMs: 10_000 }),
++      readFile: async () => {
++        throw new Error("denied")
++      },
++    })
++    expect(checks.some((check) => check.status === "warn" && check.detail.includes("incomplete"))).toBe(true)
++  })
++})
+diff --git a/packages/ax-code/test/cli/doctor.test.ts b/packages/ax-code/test/cli/doctor.test.ts
+index bbb5e90ca..6dfa9858d 100644
+--- a/packages/ax-code/test/cli/doctor.test.ts
++++ b/packages/ax-code/test/cli/doctor.test.ts
+@@ -24,7 +24,9 @@ afterEach(async () => {
+ describe("cli doctor PATH launchers", () => {
+   test("detects Homebrew binaries via their Cellar realpath", () => {
+     expect(
+-      isHomebrewManagedPath("/opt/homebrew/bin/ax-code", () => "/opt/homebrew/Cellar/ax-code/7.7.1/bin/ax-code"),
++      isHomebrewManagedPath("/opt/homebrew/bin/ax-code", () =>
++        path.join("/opt/homebrew", "Cellar", "ax-code/7.7.1/bin/ax-code"),
++      ),
+     ).toBe(true)
+     expect(isHomebrewManagedPath("/Users/dev/.local/bin/ax-code", (p) => p)).toBe(false)
+   })
+diff --git a/packages/ax-code/test/snapshot/snapshot.test.ts b/packages/ax-code/test/snapshot/snapshot.test.ts
+index 743d66945..5b53b9d71 100644
+--- a/packages/ax-code/test/snapshot/snapshot.test.ts
++++ b/packages/ax-code/test/snapshot/snapshot.test.ts
+@@ -1202,7 +1202,7 @@ test("restore function", async () => {
+       expect(before).toBeTruthy()
+ 
+       // Make changes
+-      await $`rm ${tmp.path}/a.txt`.quiet()
++      await fs.unlink(path.join(tmp.path, "a.txt"))
+       await Filesystem.write(`${tmp.path}/new.txt`, "new content")
+       await Filesystem.write(`${tmp.path}/b.txt`, "modified")
+ 
+diff --git a/packages/ax-code/test/storage/db.test.ts b/packages/ax-code/test/storage/db.test.ts
+index ab6f29958..3e2a415a7 100644
+--- a/packages/ax-code/test/storage/db.test.ts
++++ b/packages/ax-code/test/storage/db.test.ts
+@@ -21,6 +21,15 @@ describe("Database.Path", () => {
+ })
+ 
+ describe("Database.isBusyError", () => {
++  test("recognizes busy errors wrapped by Drizzle and handles cyclic causes", () => {
++    const busy = Object.assign(new Error("database is locked"), { errcode: 5 })
++    expect(Database.isBusyError(new Error("Failed to run the query 'begin immediate'", { cause: busy }))).toBe(true)
++    const cycle = new Error("not a database error")
++    cycle.cause = cycle
++    expect(Database.isBusyError(cycle)).toBe(false)
++    expect(Database.isBusyError(new Error("query failed", { cause: new Error("disk I/O error") }))).toBe(false)
++  })
++
+   test("matches node:sqlite SQLITE_BUSY errors by errcode", () => {
+     expect(Database.isBusyError(Object.assign(new Error("database is locked"), { errcode: 5 }))).toBe(true)
+     // Extended result codes keep SQLITE_BUSY in the low byte (e.g. 517 = SQLITE_BUSY_SNAPSHOT).
+diff --git a/packages/ax-code/src/cli/cmd/doctor-config.ts b/packages/ax-code/src/cli/cmd/doctor-config.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/ax-code/src/cli/cmd/doctor-config.ts
+@@ -0,0 +1,36 @@
++import { Config } from "../../config/config"
++import { Instance } from "../../project/instance"
++import type { DoctorCheck } from "./doctor-health"
++
++export async function getDoctorConfiguration(directory: string): Promise<{ config?: Config.Info; check: DoctorCheck }> {
++  try {
++    // Use runtime discovery, merging, JSONC parsing and environment expansion.
++    // Standalone doctor does not otherwise have an active project instance.
++    const config = await Instance.provide({ directory, fn: () => Config.get() })
++    const count = Object.keys(config.provider ?? {}).length
++    return {
++      config,
++      check: {
++        name: "Configuration",
++        status: "ok",
++        detail: `Loaded effective configuration (${count} provider(s) configured; runtime defaults included)`,
++      },
++    }
++  } catch {
++    // Parser errors can contain config contents, including keys. Do not print them.
++    return {
++      check: {
++        name: "Configuration",
++        status: "fail",
++        detail: "Could not load effective configuration; check configuration syntax and file access",
++      },
++    }
++  }
++}
++
++export function getConfiguredCredentialProviders(config?: Config.Info): string[] {
++  return Object.entries(config?.provider ?? {})
++    .filter(([, provider]) => typeof provider.options?.apiKey === "string" && provider.options.apiKey.trim().length > 0)
++    .map(([id]) => id)
++    .sort()
++}
+diff --git a/packages/ax-code/src/session/create-policy.ts b/packages/ax-code/src/session/create-policy.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/ax-code/src/session/create-policy.ts
+@@ -0,0 +1,10 @@
++import { DurableStoragePolicy } from "../storage/policy"
++
++export const SESSION_CREATE_RETRY = { attempts: 3, baseMs: 50, maxMs: 1_000 } as const
++
++// Creation can wait for a competing CLI/desktop writer on every attempt.
++// Keep the UI deadline beyond that entire window, including RPC overhead.
++export const SESSION_CREATE_TIMEOUT_MS =
++  SESSION_CREATE_RETRY.attempts * DurableStoragePolicy.busyTimeoutMs +
++  (SESSION_CREATE_RETRY.attempts - 1) * SESSION_CREATE_RETRY.maxMs +
++  10_000
+diff --git a/packages/ax-code/src/snapshot/windows-paths.ts b/packages/ax-code/src/snapshot/windows-paths.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/ax-code/src/snapshot/windows-paths.ts
+@@ -0,0 +1,29 @@
++// Windows resolves these path components as devices, including when an
++// extension is present. Git cannot safely index them through normal paths.
++const RESERVED = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\.|$)/i
++
++export function isWindowsReservedPath(file: string): boolean {
++  return file.split(/[\\/]/).some((part) => RESERVED.test(part.replace(/[ .]+$/, "")))
++}
++
++export function snapshotPathspecs(excluded: string[]): string[] {
++  // Literal pathspecs prevent user-controlled filenames from becoming Git
++  // patterns. Excluding a directory component also excludes its descendants.
++  return [".", ...excluded.map((file) => `:(top,exclude,literal)${file}`)]
++}
++
++// `git ls-files -t -z --cached --others --exclude-standard` labels each
++// untracked path with '?' and tracked paths with H/S/M. Parse NUL records so
++// whitespace, newlines and Git pathspec characters remain literal filenames.
++export function inspectWindowsSnapshotPaths(output: string): { indexed: string[]; excluded: string[] } {
++  const indexed = new Set<string>()
++  const excluded = new Set<string>()
++  for (const record of output.split("\0")) {
++    if (!record) continue
++    if (!/^[HSM?] /.test(record) || record.length < 3) throw new Error("Invalid snapshot path inspection output")
++    const file = record.slice(2)
++    if (!isWindowsReservedPath(file)) continue
++    ;(record[0] === "?" ? excluded : indexed).add(file)
++  }
++  return { indexed: [...indexed], excluded: [...excluded] }
++}
+diff --git a/packages/ax-code/test/cli/doctor-config.test.ts b/packages/ax-code/test/cli/doctor-config.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/ax-code/test/cli/doctor-config.test.ts
+@@ -0,0 +1,73 @@
++import { afterEach, expect, test } from "vitest"
++import fs from "fs/promises"
++import path from "path"
++import { Config } from "../../src/config/config"
++import { Global } from "../../src/global"
++import { Instance } from "../../src/project/instance"
++import { getDoctorConfiguration, getConfiguredCredentialProviders } from "../../src/cli/cmd/doctor-config"
++import { tmpdir } from "../fixture/fixture"
++
++const original = Global.Path.config
++afterEach(async () => {
++  await Instance.disposeAll()
++  ;(Global.Path as { config: string }).config = original
++  Config.global.reset()
++})
++
++test.each(["ax-code.json", "ax-code.jsonc"])(
++  "standalone doctor loads global %s and inline credentials",
++  async (filename) => {
++    await using global = await tmpdir()
++    await using project = await tmpdir()
++    ;(Global.Path as { config: string }).config = global.path
++    Config.global.reset()
++    await fs.writeFile(
++      path.join(global.path, filename),
++      JSON.stringify({ provider: { custom: { options: { apiKey: "test-only-secret" }, models: {} } } }),
++    )
++    const result = await getDoctorConfiguration(project.path)
++    expect(result.check.status).toBe("ok")
++    expect(result.check.detail).toContain("1 provider")
++    expect(getConfiguredCredentialProviders(result.config)).toEqual(["custom"])
++    expect(result.check.detail).not.toContain("test-only-secret")
++  },
++)
++
++test("invalid global configuration is a load failure, not missing configuration", async () => {
++  await using project = await tmpdir()
++  await using global = await tmpdir()
++  ;(Global.Path as { config: string }).config = global.path
++  Config.global.reset()
++  await fs.writeFile(path.join(global.path, "ax-code.json"), '{ "provider": secret-invalid-json')
++  const result = await getDoctorConfiguration(project.path)
++  expect(result.check.status).toBe("fail")
++  expect(result.config).toBeUndefined()
++  expect(result.check.detail).not.toContain("secret-invalid-json")
++})
++
++test("untrusted project credentials do not override effective global credentials", async () => {
++  await using global = await tmpdir()
++  await using project = await tmpdir()
++  ;(Global.Path as { config: string }).config = global.path
++  Config.global.reset()
++  await fs.writeFile(
++    path.join(global.path, "ax-code.json"),
++    JSON.stringify({ provider: { custom: { options: { apiKey: "global-test-key" } } } }),
++  )
++  await fs.writeFile(
++    path.join(project.path, "ax-code.jsonc"),
++    '{ // project override\n "provider": {"custom": {"options": {"apiKey": ""}}}}',
++  )
++  const result = await getDoctorConfiguration(project.path)
++  expect(result.check.status).toBe("ok")
++  expect(getConfiguredCredentialProviders(result.config)).toEqual(["custom"])
++})
++
++test("missing, whitespace and non-string credentials are not counted", () => {
++  expect(getConfiguredCredentialProviders()).toEqual([])
++  expect(
++    getConfiguredCredentialProviders({
++      provider: { a: { options: { apiKey: " " } }, b: { options: { apiKey: 123 } }, c: {} },
++    } as any),
++  ).toEqual([])
++})
+diff --git a/packages/ax-code/test/session/session-create-busy.test.ts b/packages/ax-code/test/session/session-create-busy.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/ax-code/test/session/session-create-busy.test.ts
+@@ -0,0 +1,72 @@
++import { expect, test } from "vitest"
++import { DatabaseSync } from "node:sqlite"
++import { Session } from "../../src/session"
++import { SessionID } from "../../src/session/schema"
++import { Instance } from "../../src/project/instance"
++import { Database, eq } from "../../src/storage/db"
++import { SessionTable } from "../../src/session/session.sql"
++import { DurableStoragePolicy } from "../../src/storage/policy"
++import { Bus } from "../../src/bus"
++import { tmpdir } from "../fixture/fixture"
++
++test("session creation recovers after a competing SQLite writer releases its lock", async () => {
++  await using tmp = await tmpdir()
++  await Instance.provide({
++    directory: tmp.path,
++    fn: async () => {
++      const db = Database.Client()
++      const writer = new DatabaseSync(Database.Path)
++      const id = SessionID.descending()
++      const events: Session.Info[] = []
++      const unsubscribe = Bus.subscribe(Session.Event.Created, (event) => {
++        events.push(event.properties.info)
++      })
++      // Force the first attempt to encounter real SQLITE_BUSY, then release
++      // the competing connection while creation yields between attempts.
++      db.run("PRAGMA busy_timeout = 1")
++      writer.exec("BEGIN IMMEDIATE")
++      const release = setTimeout(() => writer.exec("ROLLBACK"), 0)
++      try {
++        const session = await Session.createNext({ id, directory: tmp.path })
++        expect(session.id).toBe(id)
++        expect(await Session.get(id)).toEqual(session)
++        expect(events.map((event) => event.id)).toEqual([id])
++        expect(db.select().from(SessionTable).where(eq(SessionTable.id, id)).all()).toHaveLength(1)
++      } finally {
++        clearTimeout(release)
++        writer.close()
++        db.run(`PRAGMA busy_timeout = ${DurableStoragePolicy.busyTimeoutMs}`)
++        unsubscribe()
++        await Instance.dispose()
++      }
++    },
++  })
++})
++
++test("persistent lock failure leaves no session and emits no created event", async () => {
++  await using tmp = await tmpdir()
++  await Instance.provide({
++    directory: tmp.path,
++    fn: async () => {
++      const db = Database.Client()
++      const writer = new DatabaseSync(Database.Path)
++      const id = SessionID.descending()
++      const events: string[] = []
++      const unsubscribe = Bus.subscribe(Session.Event.Created, (event) => {
++        events.push(event.properties.info.id)
++      })
++      db.run("PRAGMA busy_timeout = 1")
++      writer.exec("BEGIN IMMEDIATE")
++      try {
++        await expect(Session.createNext({ id, directory: tmp.path })).rejects.toThrow("database is locked")
++        expect(db.select().from(SessionTable).where(eq(SessionTable.id, id)).all()).toHaveLength(0)
++        expect(events).toEqual([])
++      } finally {
++        writer.close()
++        db.run(`PRAGMA busy_timeout = ${DurableStoragePolicy.busyTimeoutMs}`)
++        unsubscribe()
++        await Instance.dispose()
++      }
++    },
++  })
++})
+diff --git a/packages/ax-code/test/snapshot/windows-paths.test.ts b/packages/ax-code/test/snapshot/windows-paths.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/ax-code/test/snapshot/windows-paths.test.ts
+@@ -0,0 +1,162 @@
++import { expect, test } from "vitest"
++import fs from "node:fs/promises"
++import path from "node:path"
++import { execFileSync } from "node:child_process"
++import { inspectWindowsSnapshotPaths, isWindowsReservedPath } from "../../src/snapshot/windows-paths"
++import { Snapshot } from "../../src/snapshot"
++import { Instance } from "../../src/project/instance"
++import { Global } from "../../src/global"
++import { Bus } from "../../src/bus"
++import { NotificationEvent } from "../../src/notification/events"
++import { tmpdir } from "../fixture/fixture"
++
++const reserved = [
++  "NUL",
++  "CON",
++  "PRN",
++  "AUX",
++  ...["COM", "LPT"].flatMap((prefix) => Array.from({ length: 9 }, (_, i) => `${prefix}${i + 1}`)),
++  ...["COM", "LPT"].flatMap((prefix) => ["¹", "²", "³"].map((digit) => prefix + digit)),
++  "nul",
++  "con.txt",
++  "PRN.log",
++  "AUX.json",
++  "NUL.txt",
++  "COM1.txt",
++  "LPT9.log",
++  "nested/CON",
++]
++const valid = ["normal.txt", "CONSOLE.txt", "AUXILIARY.txt", "COM10", "LPT10", "null"]
++
++test("combined path inspection preserves tracked protections and literal untracked names", () => {
++  expect(
++    inspectWindowsSnapshotPaths(
++      "H CON\0S AUX\0M PRN\0M PRN\0? spaced dir/NUL.txt\0? [abc]/CON\0? newline\nname/AUX\0? normal.txt\0",
++    ),
++  ).toEqual({
++    indexed: ["CON", "AUX", "PRN"],
++    excluded: ["spaced dir/NUL.txt", "[abc]/CON", "newline\nname/AUX"],
++  })
++  expect(inspectWindowsSnapshotPaths("")).toEqual({ indexed: [], excluded: [] })
++  expect(() => inspectWindowsSnapshotPaths("fatal: inspection failed")).toThrow("Invalid snapshot path inspection")
++})
++
++test("one tagged Git listing matches separate tracked and untracked scans, including ignore rules", async () => {
++  await using tmp = await tmpdir({ git: true })
++  const git = (args: string[]) => execFileSync("git", args, { cwd: tmp.path, encoding: "utf8" })
++  await fs.writeFile(path.join(tmp.path, "tracked.txt"), "tracked")
++  git(["add", "tracked.txt"])
++  await fs.writeFile(path.join(tmp.path, ".gitignore"), "ignored.txt\ntracked.txt\n")
++  await fs.writeFile(path.join(tmp.path, "ignored.txt"), "ignored")
++  await fs.writeFile(path.join(tmp.path, "new file.txt"), "new")
++  const separate = (args: string[]) =>
++    git(["ls-files", "-z", ...args])
++      .split("\0")
++      .filter(Boolean)
++      .sort()
++  const tagged = git(["ls-files", "-t", "-z", "--cached", "--others", "--exclude-standard"]).split("\0").filter(Boolean)
++  expect(
++    tagged
++      .filter((v) => v[0] !== "?")
++      .map((v) => v.slice(2))
++      .sort(),
++  ).toEqual(separate(["--cached"]))
++  expect(
++    tagged
++      .filter((v) => v[0] === "?")
++      .map((v) => v.slice(2))
++      .sort(),
++  ).toEqual(separate(["--others", "--exclude-standard"]))
++})
++
++test("recognizes reserved path components without rejecting valid near-matches", () => {
++  for (const name of reserved) expect(isWindowsReservedPath(name), name).toBe(true)
++  for (const name of valid) expect(isWindowsReservedPath(name), name).toBe(false)
++  expect(isWindowsReservedPath("src/AUX/data.txt")).toBe(true)
++  expect(isWindowsReservedPath("src\\con.txt\\data.txt")).toBe(true)
++  expect(isWindowsReservedPath("CON ")).toBe(true)
++})
++
++test.skipIf(process.platform !== "win32")(
++  "snapshots survive all 36 reserved paths and preserve normal-file rollback",
++  async () => {
++    await using tmp = await tmpdir({ git: true })
++    const names = reserved.map((name, i) => `case-${i}/${name}`)
++    names.push("reserved-dir/AUX/child.txt")
++    const payload = "reserved fixture content\n"
++    for (const name of names) {
++      const file = path.toNamespacedPath(path.join(tmp.path, name))
++      await fs.mkdir(path.dirname(file), { recursive: true })
++      await fs.writeFile(file, payload)
++    }
++    for (const name of valid) await fs.writeFile(path.join(tmp.path, name), "before\n")
++    await Instance.provide({
++      directory: tmp.path,
++      fn: async () => {
++        const notices: string[] = []
++        const off = Bus.subscribe(NotificationEvent.ToastShow, (event) => notices.push(event.properties.message))
++        try {
++          const before = await Snapshot.track()
++          expect(before).toMatch(/^[0-9a-f]{40}$/)
++          const gitdir = path.join(Global.Path.data, "snapshot", Instance.project.id)
++          const files = execFileSync("git", ["--git-dir", gitdir, "ls-tree", "-r", "--name-only", before!], {
++            encoding: "utf8",
++          })
++            .trim()
++            .split("\n")
++            .sort()
++          expect(files).toEqual(valid.slice().sort())
++          expect(notices).toHaveLength(1)
++          expect(notices[0]).toContain("cannot be restored by rollback")
++          await fs.writeFile(path.join(tmp.path, "normal.txt"), "after\n")
++          expect(await Snapshot.track()).not.toBe(before)
++          expect(notices).toHaveLength(1)
++          await Snapshot.restore(before!)
++          expect(await fs.readFile(path.join(tmp.path, "normal.txt"), "utf8")).toBe("before\n")
++          for (const name of names) {
++            expect(await fs.readFile(path.toNamespacedPath(path.join(tmp.path, name)), "utf8")).toBe(payload)
++          }
++        } finally {
++          off()
++          await Instance.dispose()
++        }
++      },
++    })
++  },
++  60_000,
++)
++
++test.skipIf(process.platform !== "win32")(
++  "does not silently drop reserved paths from an existing snapshot index",
++  async () => {
++    await using tmp = await tmpdir({ git: true })
++    await Instance.provide({
++      directory: tmp.path,
++      fn: async () => {
++        try {
++          await Snapshot.track()
++          const gitdir = path.join(Global.Path.data, "snapshot", Instance.project.id)
++          const blob = execFileSync("git", ["--git-dir", gitdir, "hash-object", "-w", "--stdin"], {
++            input: "historical",
++            encoding: "utf8",
++          }).trim()
++          execFileSync("git", [
++            "-c",
++            "core.protectNTFS=false",
++            "--git-dir",
++            gitdir,
++            "update-index",
++            "--add",
++            "--cacheinfo",
++            `100644,${blob},CON`,
++          ])
++          await expect(Snapshot.track()).rejects.toThrow("Snapshot index contains Windows reserved paths")
++          const index = execFileSync("git", ["--git-dir", gitdir, "ls-files"], { encoding: "utf8" })
++          expect(index).toContain("CON")
++        } finally {
++          await Instance.dispose()
++        }
++      },
++    })
++  },
++)

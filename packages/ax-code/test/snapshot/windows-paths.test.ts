@@ -8,6 +8,7 @@ import { Global } from "@/global"
 import { Bus } from "@/bus"
 import { NotificationEvent } from "@/notification/events"
 import { git } from "@/util/git"
+import { Process } from "@/util/process"
 import { tmpdir } from "../fixture/fixture"
 
 const reserved = [
@@ -50,6 +51,28 @@ async function snapshotGit(command: string[]) {
 afterEach(async () => {
   vi.restoreAllMocks()
   await Instance.disposeAll()
+})
+
+test("inspects cached and untracked paths together when staging a snapshot", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.spyOn(WindowsSnapshotPaths, "enabled").mockReturnValue(true)
+  await write(tmp.path, "normal.txt")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await Snapshot.track()
+      await write(tmp.path, "normal.txt", "changed\n")
+      await write(tmp.path, "new.txt")
+      const run = vi.spyOn(Process, "run")
+      const tree = await Snapshot.track()
+      const scans = run.mock.calls.map(([command]) => command).filter((command) => command.includes("ls-files"))
+      expect(scans.filter((command) => command.includes("--others"))).toHaveLength(1)
+      expect(scans.find((command) => command.includes("--others"))).toEqual(
+        expect.arrayContaining(["--cached", "--others", "--exclude-standard", "-t", "-z"]),
+      )
+      expect((await snapshotGit(["ls-tree", "-r", "--name-only", tree!])).text()).toContain("new.txt")
+    },
+  })
 })
 
 test("classifies all reported reserved paths and valid near-matches", () => {

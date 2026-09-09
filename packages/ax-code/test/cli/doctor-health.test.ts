@@ -118,8 +118,8 @@ describe("doctor recent logs", () => {
       logDir: "/tmp/logs",
       now: 12_000,
       readdir: async () => Object.keys(files).map((file) => file.split("/").at(-1)!),
-      stat: async (target) => stats[target as keyof typeof stats],
-      readFile: async (target) => files[target as keyof typeof files],
+      stat: async (target) => stats[target.replaceAll("\\", "/") as keyof typeof stats],
+      readFile: async (target) => files[target.replaceAll("\\", "/") as keyof typeof files],
     })
 
     expect(checks[0]).toEqual({
@@ -210,7 +210,7 @@ describe("reported doctor regressions", () => {
       logDir: "/logs",
       now: 2000,
       readdir: async () => ["1.log", "2.log", "3.log", "4.log", "5.log", "6.json.log"],
-      stat: async (target) => ({ mtimeMs: 1900 - Number(target.split("/").at(-1)![0]) }),
+      stat: async (target) => ({ mtimeMs: 1900 - Number(target.split(/[\\/]/).at(-1)![0]) }),
       readFile: async (target) =>
         target.endsWith("6.json.log") ? '{"level":50,"service":"tui","msg":"renderer crashed"}' : "",
     })
