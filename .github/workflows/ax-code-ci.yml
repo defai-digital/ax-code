@@ -66,6 +66,9 @@ jobs:
       # Match the Windows release lane: these Git tests do not need optional native builds.
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build SDK runtime exports
+        working-directory: packages/sdk/js
+        run: pnpm exec tsc
       - name: Test reserved-path snapshot admission and rollback
         working-directory: packages/ax-code
         env:
