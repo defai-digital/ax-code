@@ -6,6 +6,14 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.1] - 2026-09-09
+
+### Fixed
+
+- Restore files correctly across partial and full redo, including additions and deletions, while preserving unrelated manual edits.
+- Treat snapshot filenames literally during undo and redo. Bracketed route paths and other Git wildcard characters can no longer overwrite matching neighboring files or prevent newly added files from being removed.
+- Verify file restoration and session state on native Windows x64 and ARM64, including Unicode filenames, CRLF content, and recovery after metadata failures.
+
 ## [7.15.0] - 2026-09-09
 
 ### Fixed
