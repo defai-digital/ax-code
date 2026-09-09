@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync, chmodSync } from "node:fs"
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync, chmodSync, mkdirSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
@@ -46,8 +46,30 @@ describe("node FFI runner process branding", () => {
         verify: false,
       })
       expect(path.basename(branded)).toBe("AX-Code")
-      expect(branded).toBe(path.join(cacheDir, "runtime", "bin", "AX-Code"))
+      expect(branded).toMatch(/runtime-[a-f0-9]+[/\\]bin[/\\]AX-Code$/)
       expect(statSync(branded).ino).toBe(statSync(nodePath).ino)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test("preparing a different Node keeps existing runtime binaries and libraries paired", () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "ax-code-brand-versions-"))
+    try {
+      const branded = ["first", "second"].map((version) => {
+        const runtime = path.join(root, version)
+        mkdirSync(path.join(runtime, "bin"), { recursive: true })
+        mkdirSync(path.join(runtime, "lib"))
+        const node = path.join(runtime, "bin", "node")
+        writeFileSync(node, version)
+        writeFileSync(path.join(runtime, "lib", "libnode.dylib"), version)
+        return resolveBrandedNodePath(node, { cacheDir: path.join(root, "cache"), platform: "darwin", verify: false })
+      })
+      expect(branded[0]).not.toBe(branded[1])
+      for (const [index, version] of ["first", "second"].entries()) {
+        expect(readFileSync(branded[index], "utf8")).toBe(version)
+        expect(readFileSync(path.join(path.dirname(branded[index]), "../lib/libnode.dylib"), "utf8")).toBe(version)
+      }
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

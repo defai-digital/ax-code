@@ -39,16 +39,31 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   done
   real_dir="$(CDPATH= cd -- "$(dirname -- "$real")" && pwd -P)"
   real="$real_dir/$(basename "$real")"
-  cache="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec/runtime"
-  mkdir -p "\$cache/bin" "\$cache/lib"
-  branded="\$cache/bin/AX-Code"
-  ln -f "$real" "$branded" 2>/dev/null || cp "$real" "$branded" 2>/dev/null || branded="$node_bin"
-  src_lib="\$real_dir/../lib"
-  if [ -d "\$src_lib" ] && [ "\$cache/lib" != "\$src_lib" ]; then
-    for lib in "\$src_lib"/libnode*; do
-      [ -e "\$lib" ] || continue
-      ln -sf "\$lib" "\$cache/lib/$(basename "\$lib")" 2>/dev/null || true
+  identity="$( { printf '%s\\n' "$real"; ls -di "$real"; } | cksum)"
+  cache="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec/runtime-\${identity%% *}"
+  branded="$cache/bin/AX-Code"
+  if ! mkdir -p "$cache/bin" "$cache/lib"; then
+    exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
+  fi
+  src_lib="$real_dir/../lib"
+  if [ -d "$src_lib" ]; then
+    for lib in "$src_lib"/libnode*; do
+      [ -e "$lib" ] || continue
+      dest="$cache/lib/$(basename "$lib")"
+      [ "$lib" -ef "$dest" ] && continue
+      pending="$dest.$$"
+      if ! { ln -s "$lib" "$pending" && mv -f "$pending" "$dest"; } 2>/dev/null; then
+        rm -f "$pending"
+        exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
+      fi
     done
+  fi
+  if [ ! "$real" -ef "$branded" ]; then
+    pending="$branded.$$"
+    if ! { { ln "$real" "$pending" || cp "$real" "$pending"; } && mv -f "$pending" "$branded"; } 2>/dev/null; then
+      rm -f "$pending"
+      exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
+    fi
   fi
   exec "$branded" ${NODE_LAUNCH_ARGS} "$@"
 }`

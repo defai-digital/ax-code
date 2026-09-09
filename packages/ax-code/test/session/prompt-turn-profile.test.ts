@@ -224,6 +224,15 @@ describe("direct conversation turn execution profile", () => {
     "Tell me a story about src/index.ts",
     "Continue the story and then inspect the repo",
     "Create a story as JSON",
+    "continue",
+    "please go on",
+    "keep going",
+    "continue the migration",
+    "go on with the investigation",
+    "Tell me a story based on the above",
+    "Write a story using the characters we discussed earlier",
+    "Another story with the same constraints",
+    "Tell me a story about them",
   ])("rejects repository work or requests outside the narrow creative contract: %s", (text) => {
     expect(detect(text).kind).toBe("default")
   })

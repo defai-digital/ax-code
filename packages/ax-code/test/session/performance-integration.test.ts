@@ -134,79 +134,108 @@ test("real prompt, SDK and adapter honor coding admission and persist request ti
   )
 }, 60_000)
 
-test("AX Engine story turns omit coding tools and project only required conversation text", async () => {
-  const axEngineModel: Provider.Model = {
-    ...model,
-    id: ModelID.make("story-model"),
-    providerID: ProviderID.make("ax-engine"),
-    api: { ...model.api, id: "story-model" },
-  }
-  const captured: Array<Record<string, unknown>> = []
-  const adapter = createOpenAICompatible({
-    name: "story-fixture",
-    baseURL: "https://example.invalid/v1",
-    fetch: async (input, init) => {
-      const request = new Request(input, init)
-      captured.push(z.record(z.string(), z.unknown()).parse(await request.json()))
-      const chunks = [
-        { id: "test", choices: [{ delta: { role: "assistant" } }] },
-        { id: "test", choices: [{ delta: { content: "Story response." } }] },
-        {
-          id: "test",
-          choices: [{ delta: {}, finish_reason: captured.length === 3 ? "length" : "stop" }],
-          usage: { prompt_tokens: 20, completion_tokens: 3, total_tokens: 23 },
-        },
-      ]
-      return new Response(chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n", {
-        headers: { "Content-Type": "text/event-stream" },
-      })
-    },
-  })
-  vi.spyOn(Provider, "getLanguage").mockResolvedValue(adapter.chatModel(axEngineModel.id))
-  vi.spyOn(Provider, "getModel").mockResolvedValue(axEngineModel)
-  vi.spyOn(Provider, "getProvider").mockResolvedValue({
-    id: axEngineModel.providerID,
-    name: "AX Engine",
-    env: [],
-    models: {},
-    options: {},
-    source: "custom",
-  })
-  vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+test.each([
+  {
+    name: "self-contained story turns omit coding tools",
+    prompts: ["tell me a story about Japan", "another new story set in Beijing", "continue the story"],
+    compact: true,
+  },
+  {
+    name: "ambiguous continuation retains the coding request and tools",
+    prompts: ["Investigate the migration mismatch in the legacy database", "continue"],
+    compact: false,
+  },
+  {
+    name: "a story referring to earlier evidence retains that evidence",
+    prompts: ["The lighthouse keeper is named Mira and cannot leave the island", "Write a story based on the above"],
+    compact: false,
+  },
+])(
+  "AX Engine $name",
+  async ({ prompts, compact }) => {
+    const axEngineModel: Provider.Model = {
+      ...model,
+      id: ModelID.make("story-model"),
+      providerID: ProviderID.make("ax-engine"),
+      api: { ...model.api, id: "story-model" },
+    }
+    const captured: Array<Record<string, unknown>> = []
+    const adapter = createOpenAICompatible({
+      name: "story-fixture",
+      baseURL: "https://example.invalid/v1",
+      fetch: async (input, init) => {
+        const request = new Request(input, init)
+        captured.push(z.record(z.string(), z.unknown()).parse(await request.json()))
+        const chunks = [
+          { id: "test", choices: [{ delta: { role: "assistant" } }] },
+          { id: "test", choices: [{ delta: { content: "Story response." } }] },
+          {
+            id: "test",
+            choices: [{ delta: {}, finish_reason: captured.length === 3 ? "length" : "stop" }],
+            usage: { prompt_tokens: 20, completion_tokens: 3, total_tokens: 23 },
+          },
+        ]
+        return new Response(chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n", {
+          headers: { "Content-Type": "text/event-stream" },
+        })
+      },
+    })
+    vi.spyOn(Provider, "getLanguage").mockResolvedValue(adapter.chatModel(axEngineModel.id))
+    vi.spyOn(Provider, "getModel").mockResolvedValue(axEngineModel)
+    vi.spyOn(Provider, "getProvider").mockResolvedValue({
+      id: axEngineModel.providerID,
+      name: "AX Engine",
+      env: [],
+      models: {},
+      options: {},
+      source: "custom",
+    })
+    vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
 
-  await using tmp = await tmpdir({ git: true })
-  await Instance.provide({
-    directory: tmp.path,
-    fn: async () => {
-      const session = await Session.create({ title: "Story fixture" })
-      try {
-        for (const text of ["tell me a story about Japan", "another new story set in Beijing", "continue the story"]) {
-          const result = await SessionPrompt.prompt({
-            sessionID: session.id,
-            agent: "build",
-            model: { providerID: axEngineModel.providerID, modelID: axEngineModel.id },
-            parts: [{ type: "text", text }],
-          })
-          expect(result.info.role).toBe("assistant")
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Story fixture" })
+        try {
+          for (const text of prompts) {
+            const result = await SessionPrompt.prompt({
+              sessionID: session.id,
+              agent: "build",
+              model: { providerID: axEngineModel.providerID, modelID: axEngineModel.id },
+              parts: [{ type: "text", text }],
+            })
+            expect(result.info.role).toBe("assistant")
+          }
+        } finally {
+          await Session.remove(session.id)
         }
-      } finally {
-        await Session.remove(session.id)
-      }
-    },
-  })
+      },
+    })
 
-  expect(captured).toHaveLength(3)
-  for (const body of captured) {
-    expect(body.tools ?? []).toEqual([])
-    expect(JSON.stringify(body)).not.toContain("AGENTS.md")
-    expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(12_000)
-  }
-  const conversationLengths = captured.map(
-    (body) =>
-      z
-        .array(z.object({ role: z.string() }).passthrough())
-        .parse(body.messages)
-        .filter((message) => message.role !== "system").length,
-  )
-  expect(conversationLengths).toEqual([1, 1, 2])
-}, 60_000)
+    expect(captured).toHaveLength(prompts.length)
+    if (!compact) {
+      const last = captured.at(-1)!
+      const tools = z.array(z.object({ function: z.object({ name: z.string() }) })).parse(last.tools)
+      expect(tools.map((tool) => tool.function.name)).toContain("read")
+      expect(JSON.stringify(last.messages)).toContain(prompts[0])
+      expect(JSON.stringify(last.messages)).toContain(prompts[1])
+      expect(JSON.stringify(last.messages)).not.toContain("<direct_conversation_turn>")
+      return
+    }
+    for (const body of captured) {
+      expect(body.tools ?? []).toEqual([])
+      expect(JSON.stringify(body)).not.toContain("AGENTS.md")
+      expect(Buffer.byteLength(JSON.stringify(body))).toBeLessThan(12_000)
+    }
+    const conversationLengths = captured.map(
+      (body) =>
+        z
+          .array(z.object({ role: z.string() }).passthrough())
+          .parse(body.messages)
+          .filter((message) => message.role !== "system").length,
+    )
+    expect(conversationLengths).toEqual([1, 1, 2])
+  },
+  60_000,
+)

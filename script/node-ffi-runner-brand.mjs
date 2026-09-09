@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
+import { createHash, randomUUID } from "node:crypto"
 
 // Visible job/tab token. Apple Terminal, iTerm, and VS Code `${process}` use
 // the executed file's basename (proc_pidpath), not process.title and not argv0.
@@ -37,22 +38,20 @@ function isSameFile(left, right, fsMod) {
 function linkOrCopy(real, branded, fsMod) {
   fsMod.mkdirSync(path.dirname(branded), { recursive: true })
   if (isSameFile(branded, real, fsMod)) return true
+  const pending = `${branded}.${randomUUID()}`
   try {
-    fsMod.unlinkSync(branded)
-  } catch {
-    // first time, or the file is busy
-  }
-  try {
-    fsMod.linkSync(real, branded)
+    try {
+      fsMod.linkSync(real, pending)
+    } catch {
+      fsMod.copyFileSync(real, pending)
+      fsMod.chmodSync(pending, 0o755)
+    }
+    fsMod.renameSync(pending, branded)
     return true
   } catch {
-    try {
-      fsMod.copyFileSync(real, branded)
-      fsMod.chmodSync(branded, 0o755)
-      return true
-    } catch {
-      return false
-    }
+    return false
+  } finally {
+    fsMod.rmSync(pending, { force: true })
   }
 }
 
@@ -77,19 +76,19 @@ function linkNodeLibs(realNode, branded, fsMod) {
     if (!name.startsWith("libnode")) continue
     const dest = path.join(destLib, name)
     const src = path.join(srcLib, name)
+    if (isSameFile(src, dest, fsMod)) continue
+    const pending = `${dest}.${randomUUID()}`
     try {
-      fsMod.unlinkSync(dest)
-    } catch {
-      // replace any previous link
-    }
-    try {
-      fsMod.symlinkSync(src, dest)
-    } catch {
       try {
-        fsMod.copyFileSync(src, dest)
+        fsMod.symlinkSync(src, pending)
       } catch {
-        // ignore a single lib copy failure; verifyRunnable will catch it
+        fsMod.copyFileSync(src, pending)
       }
+      fsMod.renameSync(pending, dest)
+    } catch {
+      // verifyBrandedNodeRuns will reject an incomplete runtime.
+    } finally {
+      fsMod.rmSync(pending, { force: true })
     }
   }
 }
@@ -125,7 +124,11 @@ export function resolveBrandedNodePath(nodePath, options = {}) {
 
   // Isolated runtime only. Do not hardlink into Node's own bin/ (Homebrew
   // Cellar is shared, and rewriting sibling libs previously destroyed libnode).
-  const branded = path.join(cacheDir, "runtime", "bin", name)
+  const stat = fsMod.statSync(real)
+  const identity = createHash("sha256")
+    .update(`${real}\n${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`)
+    .digest("hex")
+  const branded = path.join(cacheDir, `runtime-${identity}`, "bin", name)
   if (linkOrCopy(real, branded, fsMod)) {
     linkNodeLibs(real, branded, fsMod)
     if (options.verify === false || verifyBrandedNodeRuns(branded, options)) return branded

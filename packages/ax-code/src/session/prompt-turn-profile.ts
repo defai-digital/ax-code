@@ -130,6 +130,10 @@ const PATH_OR_CODE_SIGNAL =
 
 const MULTI_TASK_SIGNAL = /\b(?:also|and\s+then|then\s+also)\b|(?:另外|然後|然后|並且|并且)/i
 const STRUCTURED_FORMAT_SIGNAL = /\b(?:json|xml|yaml|csv|schema)\b/i
+// A new story can omit history only when it does not refer back to that history.
+// Ambiguous references take the ordinary path, which retains evidence and tools.
+const STORY_CONTEXT_REFERENCE =
+  /\b(?:above|earlier|previous|same|discussed|mentioned|provided|given|attached|following|them|their|it|its|this|that|these|those|our)\b|(?:\u4e0a\u6587|\u4e0a\u9762|\u524d\u9762|\u4e4b\u524d|\u525b\u624d|\u521a\u624d|\u76f8\u540c|\u4e00\u6a23|\u4e00\u6837|\u9019|\u8fd9|\u90a3|\u4ed6\u5011|\u4ed6\u4eec)/i
 
 const NEW_STORY_PATTERNS = [
   /^(?:please\s+)?(?:tell|write|create)\s+(?:me\s+)?(?:(?:a|an|another|one\s+more)\s+)?(?:new\s+)?(?:short\s+)?story(?:\s+[^\n]{1,160})?[.!?]*$/i,
@@ -138,8 +142,8 @@ const NEW_STORY_PATTERNS = [
 ]
 
 const CONTINUE_STORY_PATTERNS = [
-  /^(?:please\s+)?(?:continue|go\s+on|keep\s+going)(?:\s+(?:the|that|this)\s+story)?(?:\s+[^\n]{0,80})?[.!?]*$/i,
-  /^(?:請|请)?(?:繼續|继续|接著|接着)(?:這個|这个|那個|那个)?故事(?:[^\n]{0,80})?[。！？.!?]*$/,
+  /^(?:please\s+)?(?:continue|go\s+on\s+with|keep\s+going\s+with)\s+(?:the|that|this)\s+story(?:\s+please)?[.!?]*$/i,
+  /^(?:\u8acb|\u8bf7)?(?:\u7e7c\u7e8c|\u7ee7\u7eed|\u63a5\u8457|\u63a5\u7740)(?:\u9019\u500b|\u8fd9\u4e2a|\u90a3\u500b|\u90a3\u4e2a)?\u6545\u4e8b[\u3002\uff01\uff1f.!?]*$/,
 ]
 
 function defaultProfile(reason: string): TurnExecutionProfile {
@@ -212,6 +216,7 @@ export function detectTurnExecutionProfile(input: {
 
   const projectedUser = projectTextMessage(current)
   if (conversation === "new-story") {
+    if (STORY_CONTEXT_REFERENCE.test(userText)) return defaultProfile("story_context_reference")
     return {
       kind: "conversation",
       intent: conversation,

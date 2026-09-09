@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test } from "vitest"
 import { execFile } from "node:child_process"
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
-import { unixNodeLauncherScript } from "../../script/node-launcher"
+import { UNIX_BRAND_AND_EXEC_NODE, unixNodeLauncherScript } from "../../script/node-launcher"
 
 const execFileAsync = promisify(execFile)
 const temporaryRoots: string[] = []
@@ -45,7 +45,9 @@ describe("Unix node launcher", () => {
     })
 
     // Branding must never overwrite the user's real cached runtime.
-    expect(await readFile(path.join(cacheDir, "ax-code/libexec/runtime/bin/AX-Code"), "utf8")).toBe(
+    const runtimes = await readdir(path.join(cacheDir, "ax-code/libexec"))
+    expect(runtimes).toHaveLength(1)
+    expect(await readFile(path.join(cacheDir, "ax-code/libexec", runtimes[0], "bin/AX-Code"), "utf8")).toBe(
       await readFile(fakeNode, "utf8"),
     )
 
@@ -56,6 +58,35 @@ describe("Unix node launcher", () => {
     expect(argumentsText).not.toContain(path.join(root, ".rbenv", "lib"))
     expect(argumentsText).toContain("--version")
   })
+
+  test.skipIf(process.platform !== "darwin")(
+    "concurrent launches keep Homebrew Node libraries available",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-concurrent-"))
+      temporaryRoots.push(root)
+      // Prefer the dynamic Homebrew runtime: static Node binaries cannot expose
+      // the missing-libnode startup failure even when a library link disappears.
+      const node = await realpath("/opt/homebrew/bin/node").catch(() => process.execPath)
+      const launcher = path.join(root, "launcher")
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node "$1" -e 'process.stdout.write("ready")'\n`,
+        { mode: 0o755 },
+      )
+      for (let round = 0; round < 4; round++) {
+        const results = await Promise.all(
+          Array.from({ length: 8 }, () =>
+            execFileAsync(launcher, [node], {
+              env: { ...process.env, XDG_CACHE_HOME: path.join(root, "cache") },
+              timeout: 10_000,
+            }),
+          ),
+        )
+        expect(results.map((result) => result.stdout)).toEqual(Array(8).fill("ready"))
+      }
+    },
+    30_000,
+  )
 
   test("brands the Node binary as AX-Code before exec", () => {
     const script = unixNodeLauncherScript()

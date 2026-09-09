@@ -1,4 +1,5 @@
 import { test, expect } from "vitest"
+import { spawnSync } from "node:child_process"
 import {
   ensureWindowsUtf8Console,
   UTF8_CONSOLE_GUARD_ENV,
@@ -145,3 +146,55 @@ test("swallows exec failure and leaves the guard unset", () => {
   expect(result).toBe(false)
   expect(env[UTF8_CONSOLE_GUARD_ENV]).toBeUndefined()
 })
+
+test.skipIf(process.platform !== "win32" || Number(process.versions.node.split(".")[0]) < 26)(
+  "repairs a real isolated Windows console after output code-page drift",
+  () => {
+    const child = spawnSync(
+      process.execPath,
+      [
+        "--experimental-ffi",
+        "--disable-warning=ExperimentalWarning",
+        "--input-type=module",
+        "--eval",
+        `
+          import assert from "node:assert/strict"
+          import { dlopen } from "node:ffi"
+          const { ensureWindowsUtf8Console, UTF8_CONSOLE_GUARD_ENV } = await import(process.argv[1])
+          const library = dlopen("kernel32.dll", {
+            FreeConsole: { arguments: [], return: "i32" },
+            AllocConsole: { arguments: [], return: "i32" },
+            GetConsoleCP: { arguments: [], return: "u32" },
+            GetConsoleOutputCP: { arguments: [], return: "u32" },
+            SetConsoleCP: { arguments: ["u32"], return: "i32" },
+            SetConsoleOutputCP: { arguments: ["u32"], return: "i32" },
+          })
+          const api = library.functions
+          // Detach only this child; never change the developer's shared console.
+          api.FreeConsole()
+          assert.equal(api.AllocConsole(), 1)
+          try {
+            const env = { [UTF8_CONSOLE_GUARD_ENV]: "1" }
+            for (let restart = 0; restart < 2; restart++) {
+              assert.equal(api.SetConsoleCP(65001), 1)
+              assert.equal(api.SetConsoleOutputCP(936), 1)
+              assert.equal(ensureWindowsUtf8Console({ isTTY: true, env, exec: () => {
+                throw new Error("Native console API unexpectedly fell back to chcp")
+              } }), true)
+              assert.equal(api.GetConsoleCP(), 65001)
+              assert.equal(api.GetConsoleOutputCP(), 65001)
+            }
+          } finally {
+            api.FreeConsole()
+          }
+          process.stdout.write("native-console-ready")
+        `,
+        new URL("../../../src/cli/bootstrap/windows-console.ts", import.meta.url).href,
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 15_000 },
+    )
+    expect(child.error).toBeUndefined()
+    expect(child.status, child.stderr).toBe(0)
+    expect(child.stdout).toBe("native-console-ready")
+  },
+)

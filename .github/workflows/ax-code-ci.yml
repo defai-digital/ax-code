@@ -54,25 +54,29 @@ permissions:
 
 jobs:
   windows-snapshot:
-    name: Windows snapshot and worktree recovery
-    runs-on: windows-2022
+    name: Windows runtime and recovery (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-11-arm]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
       - name: Setup Ax-code JS toolchain
         uses: ./.github/actions/setup-ax-code-toolchain
         with:
           checkout: "false"
-          node-version: "24"
+          node-version: "26"
       # Match the Windows release lane: these Git tests do not need optional native builds.
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build SDK runtime exports
         working-directory: packages/sdk/js
         run: pnpm exec tsc
-      - name: Test snapshot admission, rollback, and worktree cleanup recovery
+      - name: Test native console, process framing, and Git recovery
         working-directory: packages/ax-code
         env:
-          AX_TEST_FILES: test/snapshot/windows-paths.test.ts,test/worktree/remove-recovery.test.ts
+          AX_TEST_FILES: test/cli/bootstrap/windows-console.test.ts,test/cli/tui/process-wire.test.ts,test/snapshot/windows-paths.test.ts,test/worktree/remove-recovery.test.ts
         run: pnpm exec vitest run --retry=0
 
   deterministic:
