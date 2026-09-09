@@ -114,8 +114,14 @@ ${body}
 }
 
 describe.skipIf(!available)("PowerShell runtime installation", () => {
-  test.each(["backup", "activation", "rollback"])("tolerates a transient sharing lock during %s", async (phase) => {
-    await runInstaller(`
+  const moveErrors = [
+    { name: "sharing lock", exception: '[System.IO.IOException]::new("Simulated sharing violation", -2147024864)' },
+    { name: "access denial", exception: '[System.UnauthorizedAccessException]::new("Simulated access denial")' },
+  ]
+  test.each(moveErrors.flatMap((error) => ["backup", "activation", "rollback"].map((phase) => ({ ...error, phase }))))(
+    "tolerates a transient $name during $phase",
+    async ({ phase, exception }) => {
+      await runInstaller(`
 New-PreviousInstall
 $script:locks = 0
 $script:rollingBack = $false
@@ -134,7 +140,7 @@ function Move-Item {
   }
   if ($target) {
     $script:locks++
-    if ($script:locks -le 2) { throw [System.IO.IOException]::new("Simulated sharing violation", -2147024864) }
+    if ($script:locks -le 2) { throw ${exception} }
   }
   Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
 }
@@ -149,9 +155,10 @@ if ("${phase}" -eq "rollback") {
 }
 Assert-Equal $script:locks 3
 `)
-  })
+    },
+  )
 
-  test("bounds persistent sharing-lock retries and retains the recovery tree", async () => {
+  test.each(moveErrors)("bounds persistent $name retries and retains the recovery tree", async ({ exception }) => {
     await runInstaller(`
 New-PreviousInstall
 $script:attempts = 0
@@ -162,7 +169,7 @@ function Move-Item {
   param([string]$LiteralPath, [string]$Destination)
   if ($script:rollingBack -and $LiteralPath -eq $InstallNodeDir) {
     $script:attempts++
-    throw [System.IO.IOException]::new("Simulated persistent sharing violation", -2147024864)
+    throw ${exception}
   }
   Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
 }
@@ -172,6 +179,25 @@ if ($failure -notmatch "Recovery files remain at") { throw "Expected recovery pa
 Assert-Equal $script:attempts 10
 $backup = Get-ChildItem -LiteralPath $env:AX_TEST_ROOT -Directory -Force | Where-Object { $_.Name -like ".ax-code-install-*" }
 Assert-Equal (Get-Content -LiteralPath (Join-Path $backup.FullName "previous/node/bin/node.exe") -Raw) "previous"
+`)
+  })
+
+  test("fails immediately for unrelated move errors without changing the runtime", async () => {
+    await runInstaller(`
+New-PreviousInstall
+$script:attempts = 0
+function Move-Item {
+  [CmdletBinding()]
+  param([string]$LiteralPath, [string]$Destination)
+  $script:attempts++
+  throw [System.IO.PathTooLongException]::new("Simulated path length failure")
+}
+function Start-Sleep { throw "Unexpected retry for an unrelated error" }
+$failure = $null
+try { Install-NodeBundleTree $Source } catch { $failure = $_ }
+if ($failure -notmatch "Simulated path length failure") { throw "Missing original error: $failure" }
+Assert-Equal $script:attempts 1
+Assert-PreviousInstall
 `)
   })
 

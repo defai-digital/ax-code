@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Retry short-lived Windows access-denied errors during runtime replacement while preserving rollback on persistent failures.
+
 ## [7.14.9] - 2026-09-08
 
 ### Fixed

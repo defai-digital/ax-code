@@ -326,6 +326,7 @@ function Assert-NodeBundleRuntime([string]$Root) {
 }
 
 function Move-RuntimePath([string]$Source, [string]$Destination) {
+  $retryableCodes = @(5, 32, 33)
   for ($attempt = 0; $attempt -lt 10; $attempt++) {
     try {
       # Every runtime move targets an absent path. Never let a retry nest a
@@ -337,13 +338,14 @@ function Move-RuntimePath([string]$Source, [string]$Destination) {
       return
     } catch {
       $exception = $_.Exception
-      while ($exception.InnerException -and (($exception.HResult -band 0xffff) -notin @(32, 33))) {
+      while ($exception.InnerException -and (($exception.HResult -band 0xffff) -notin $retryableCodes)) {
         $exception = $exception.InnerException
       }
       $code = $exception.HResult -band 0xffff
-      if ($attempt -ge 9 -or $code -notin @(32, 33)) { throw }
-      # Windows may retain an execution or antivirus handle briefly after a
-      # version probe exits. Retry sharing/lock violations, not other I/O errors.
+      if ($attempt -ge 9 -or $code -notin $retryableCodes) { throw }
+      # Windows can report access denied as an execution or antivirus handle
+      # drains after a probe. Retry briefly without changing permissions; a
+      # persistent denial still fails through the existing rollback boundary.
       Start-Sleep -Milliseconds 200
     }
   }
