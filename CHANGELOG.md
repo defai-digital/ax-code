@@ -8,7 +8,7 @@ changes belong to AX Coder.
 
 ### Fixed
 
-- Retry short-lived Windows access-denied errors during runtime replacement while preserving rollback on persistent failures.
+- Use atomic Windows runtime renames to avoid partial replacements, retry short-lived file locks and access-denied errors, and preserve rollback on persistent failures.
 
 ## [7.14.9] - 2026-09-08
 
