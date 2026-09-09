@@ -17,7 +17,7 @@ import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
 import { Database } from "../../storage/db"
-import { recordCount } from "@/util/record"
+import { getDoctorConfiguration, getConfiguredCredentialProviders } from "./doctor-config"
 import { Locale } from "@/util/locale"
 import { getTuiPreloadCheck } from "./doctor-preload"
 import { getDoctorDatabaseCheck } from "./doctor-storage"
@@ -339,24 +339,10 @@ export const DoctorCommand: CommandModule = {
     // 4. Data directory
     checks.push(await getDoctorDatabaseCheck({ databasePath: Database.Path }))
 
-    // 5. Config
-    try {
-      const config = await Config.get()
-      const providerCount = recordCount(config.provider)
-      checks.push({
-        name: "Configuration",
-        status: "ok",
-        detail: `Loaded (${Locale.pluralize(providerCount, "{} provider", "{} providers")} configured)`,
-      })
-    } catch {
-      // Config.get() requires project instance which isn't available in standalone CLI mode
-      // Check if config file exists instead
-      checks.push({
-        name: "Configuration",
-        status: project.configPath ? "ok" : "warn",
-        detail: project.configPath ? "Config file found" : "No config file — using defaults (this is fine)",
-      })
-    }
+    // 5. Load exactly the configuration that this project uses at runtime.
+    const configuration = await getDoctorConfiguration(project.callerCwd)
+    checks.push(configuration.check)
+    const configuredCredentials = getConfiguredCredentialProviders(configuration.config)
 
     // 6. Credentials — combine `ax-code providers login` entries (auth.json)
     // with environment variable fallbacks. Previously we only checked
@@ -368,6 +354,7 @@ export const DoctorCommand: CommandModule = {
     // in the bundled snapshot) so new providers are picked up
     // automatically and doctor stays in sync with the rest of the app.
     // See issue #18.
+    let credentialSourcesIncomplete = !configuration.config
     const stored: string[] = []
     try {
       const auth = await Auth.all()
@@ -379,6 +366,7 @@ export const DoctorCommand: CommandModule = {
         }
       }
     } catch {
+      credentialSourcesIncomplete = true
       // auth.json might not exist on a fresh install — that's fine,
       // we just proceed with the env var check.
     }
@@ -395,12 +383,15 @@ export const DoctorCommand: CommandModule = {
         }
       }
     } catch {
+      credentialSourcesIncomplete = true
       // models.dev snapshot failed to load — degrade to no env check
       // rather than crashing the whole doctor report.
     }
 
-    if (stored.length > 0 || envKeys.length > 0) {
+    if (stored.length > 0 || envKeys.length > 0 || configuredCredentials.length > 0) {
       const parts: string[] = []
+      if (configuredCredentials.length)
+        parts.push(`${configuredCredentials.length} in configuration (${configuredCredentials.join(", ")})`)
       if (stored.length > 0) {
         parts.push(`${stored.length} stored (${stored.sort().join(", ")})`)
       }
@@ -410,14 +401,15 @@ export const DoctorCommand: CommandModule = {
       checks.push({
         name: "Credentials",
         status: "ok",
-        detail: parts.join(" + "),
+        detail: `${parts.join(" + ")}; presence only, authentication not tested${credentialSourcesIncomplete ? "; some sources unavailable" : ""}`,
       })
     } else {
       checks.push({
         name: "Credentials",
         status: "warn",
-        detail:
-          "No credentials found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY)",
+        detail: credentialSourcesIncomplete
+          ? "Credential check incomplete: one or more sources could not be loaded; authentication not tested"
+          : "No credentials found. Run `ax-code providers login` or set a provider env var (e.g. ANTHROPIC_API_KEY); presence only, authentication not tested",
       })
     }
 
@@ -460,7 +452,7 @@ export const DoctorCommand: CommandModule = {
     }
 
     try {
-      const config = await Config.get().catch(() => Config.global())
+      const config = configuration.config ?? (await Config.global())
       checks.push(
         getIsolationPolicyCheck({
           config: config?.isolation,
@@ -503,7 +495,7 @@ export const DoctorCommand: CommandModule = {
     if (runningInstances) checks.push(runningInstances)
 
     try {
-      const config = await Config.get().catch(() => Config.global())
+      const config = configuration.config ?? (await Config.global())
       checks.push(getAxEngineDoctorCheck(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {})))
     } catch (error) {
       checks.push({
@@ -516,7 +508,7 @@ export const DoctorCommand: CommandModule = {
     // 11a. Computer use — preflight the configured desktop-control backend
     // (spawn + MCP handshake + list_apps, capped by the probe timeout).
     try {
-      const config = await Config.get().catch(() => Config.global())
+      const config = configuration.config ?? (await Config.global())
       checks.push(await getComputerUseCheck({ config: config?.computer }))
     } catch (error) {
       checks.push({
@@ -576,7 +568,7 @@ export const DoctorCommand: CommandModule = {
     // transform TUI JSX during build and do not resolve the preload from disk.
     checks.push(getTuiPreloadCheck())
 
-    // 12. Recent logs analysis — scan last 5 log files for TUI crashes / errors
+    // 12. Recent logs analysis — scan all log files modified within 24 hours for TUI crashes / errors
     checks.push(...(await getRecentLogsChecks({ logDir: Global.Path.log })))
 
     // 12. Code intelligence index status
