@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
+import { spawnSync } from "node:child_process"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, test } from "vitest"
 import {
   AX_CODE_TERMINAL_TITLE,
@@ -20,6 +21,7 @@ function captureStream(writes: string[] = []) {
     writes,
     stream: {
       writable: true,
+      isTTY: true,
       write(chunk: string) {
         writes.push(chunk)
         return true
@@ -65,6 +67,29 @@ describe("terminal title", () => {
     const disabled = captureStream()
     expect(claimAxCodeTerminalTitle(disabled.stream, { AX_CODE_DISABLE_TERMINAL_TITLE: "1" })).toBe(false)
     expect(disabled.writes).toEqual([])
+  })
+
+  test.each([false, undefined])("does not claim a stream whose isTTY is %s", (isTTY) => {
+    const capture = captureStream()
+    expect(claimAxCodeTerminalTitle({ ...capture.stream, isTTY }, {})).toBe(false)
+    expect(capture.writes).toEqual([])
+  })
+
+  test("keeps actual piped Node stdout parseable without terminal control sequences", () => {
+    const module = pathToFileURL(path.join(repoRoot, "packages/ax-code/src/util/terminal-title.ts")).href
+    const child = spawnSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "--eval",
+        `import { claimAxCodeTerminalTitle } from ${JSON.stringify(module)}; claimAxCodeTerminalTitle(process.stdout, {}); process.stdout.write('{"ok":true}');`,
+      ],
+      { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"], encoding: "utf8", timeout: 10_000 },
+    )
+    expect(child.status, child.stderr).toBe(0)
+    expect(child.stdout).toBe('{"ok":true}')
   })
 
   test("claims at entry for TUI launches, not for help/version or the disable flag", () => {

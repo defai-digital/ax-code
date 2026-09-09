@@ -22,12 +22,23 @@ import {
 } from "../../../src/cli/cmd/tui/terminal-cleanup"
 
 const TITLE_CLEAR_SEQUENCE = "\x1b]2;\x07\x1b]1;\x07"
+const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY")
+
+beforeEach(() => {
+  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true })
+})
+
+afterEach(() => {
+  if (originalStdoutIsTTY) Object.defineProperty(process.stdout, "isTTY", originalStdoutIsTTY)
+  else delete (process.stdout as { isTTY?: boolean }).isTTY
+})
 
 function captureStream(writes: string[] = []) {
   return {
     writes,
     stream: {
       writable: true,
+      isTTY: true,
       write(chunk: string) {
         writes.push(chunk)
         return true
@@ -141,6 +152,7 @@ describe("tui renderer profile", () => {
     expect(setTuiTerminalTitle("ax-code", profile, { writable: false, write: () => true })).toBe(false)
     expect(
       setTuiTerminalTitle("ax-code", profile, {
+        isTTY: true,
         write() {
           throw new Error("broken stdout")
         },
@@ -153,16 +165,12 @@ describe("tui renderer profile", () => {
       advancedTerminal: false,
       terminalTitleDisabled: false,
     })
-    // Piped/redirected stdout: escape bytes would pollute the redirected
-    // output, so an explicit isTTY false must suppress the write.
-    const piped = captureStream()
-    expect(setTuiTerminalTitle("ax-code", profile, { ...piped.stream, isTTY: false })).toBe(false)
-    expect(piped.writes).toEqual([])
+    for (const isTTY of [false, undefined]) {
+      const piped = captureStream()
+      expect(setTuiTerminalTitle("ax-code", profile, { ...piped.stream, isTTY })).toBe(false)
+      expect(piped.writes).toEqual([])
+    }
 
-    // isTTY undefined (test fakes, some real contexts) and true still write.
-    const fake = captureStream()
-    expect(setTuiTerminalTitle("ax-code", profile, fake.stream)).toBe(true)
-    expect(fake.writes).toEqual(["\x1b]2;ax-code\x07\x1b]1;ax-code\x07"])
     const tty = captureStream()
     expect(setTuiTerminalTitle("ax-code", profile, { ...tty.stream, isTTY: true })).toBe(true)
     expect(tty.writes).toEqual(["\x1b]2;ax-code\x07\x1b]1;ax-code\x07"])
@@ -257,9 +265,11 @@ describe("tui renderer profile", () => {
     test("a non-TTY stdout fails activation and rolls back to inactive", () => {
       vi.useFakeTimers()
       const profile = resolveTuiRenderProfile({ advancedTerminal: false, terminalTitleDisabled: false })
-      const piped = captureStream()
-      expect(setTuiTerminalProgress(true, profile, { ...piped.stream, isTTY: false })).toBe(false)
-      expect(piped.writes).toEqual([])
+      for (const isTTY of [false, undefined]) {
+        const piped = captureStream()
+        expect(setTuiTerminalProgress(true, profile, { ...piped.stream, isTTY })).toBe(false)
+        expect(piped.writes).toEqual([])
+      }
       // The write never reached a terminal, so no keepalive may be running.
       vi.advanceTimersByTime(TUI_TERMINAL_PROGRESS_KEEPALIVE_MS * 3)
 
@@ -274,6 +284,7 @@ describe("tui renderer profile", () => {
       const profile = resolveTuiRenderProfile({ advancedTerminal: false, terminalTitleDisabled: false })
       const broken = {
         writable: true,
+        isTTY: true,
         write() {
           throw new Error("broken stdout")
         },
@@ -295,6 +306,7 @@ describe("tui renderer profile", () => {
     const writes: string[] = []
     const stream = {
       writable: true,
+      isTTY: true,
       write(chunk: string, callback?: () => void) {
         writes.push(chunk)
         if (callback) queueMicrotask(callback)
@@ -388,6 +400,7 @@ describe("tui renderer profile", () => {
     const writes: string[] = []
     const stream = {
       writable: true,
+      isTTY: true,
       write(chunk: string) {
         writes.push(chunk)
         return true

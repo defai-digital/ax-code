@@ -71,6 +71,7 @@ jobs:
         # This qualifies checkout source without replacing published installers.
         # Windows PowerShell 5.1 matches the ax-code upgrade subprocess.
         shell: powershell
+        timeout-minutes: 5
         run: |
           $ErrorActionPreference = "Stop"
           $VerbosePreference = "Continue"
@@ -82,5 +83,6 @@ jobs:
             Write-Host "Qualifying $Phase from candidate installer against runtime $Version"
             & $Installer -Version $Version -NoModifyPath
             & $Probe -Launcher $Launcher -Version $Version
+            & $Probe -Launcher $Launcher -Backend -Version $Version
           }
           & $Probe -Launcher $Launcher -Doctor

@@ -131,10 +131,9 @@ type TuiSequenceStream = {
 }
 
 function writeTuiSequence(stream: TuiSequenceStream, sequence: string) {
-  // Explicit non-TTY (piped/redirected stdout): escape bytes would pollute the
-  // redirected output, and the progress keepalive would write every second.
-  // Undefined isTTY (test fakes, some real contexts) still writes.
-  if (stream.isTTY === false) return false
+  // Node leaves isTTY undefined on pipes and redirected files. Only a
+  // confirmed terminal may receive title or repeated progress sequences.
+  if (stream.isTTY !== true) return false
   if (stream.writable === false || stream.destroyed) return false
   try {
     stream.write(sequence)

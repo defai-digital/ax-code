@@ -391,6 +391,15 @@ jobs:
           $Launcher = (Get-Command ax-code -ErrorAction Stop).Source
           & .github/scripts/assert-windows-runtime.ps1 -Launcher $Launcher -Doctor
 
+      - name: Smoke - installed Windows backend stdio handshake
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: pwsh
+        timeout-minutes: 1
+        run: |
+          $Version = "${{ steps.version.outputs.version }}"
+          $Launcher = (Get-Command ax-code -ErrorAction Stop).Source
+          & .github/scripts/assert-windows-runtime.ps1 -Launcher $Launcher -Backend -Version $Version
+
   linux:
     name: ${{ matrix.label }} / linux
     strategy:

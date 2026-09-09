@@ -119,7 +119,8 @@ export function claimAxCodeTerminalTitle(
   title: string = AX_CODE_TERMINAL_TITLE,
 ) {
   if (isTerminalTitleDisabled(env)) return false
-  if (stream.isTTY === false) return false
+  // Node leaves isTTY undefined on pipes and redirected files.
+  if (stream.isTTY !== true) return false
   if (stream.writable === false || stream.destroyed) return false
   try {
     stream.write(axCodeTerminalTitleSequence(title))

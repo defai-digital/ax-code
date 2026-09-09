@@ -317,21 +317,34 @@ Assert-Equal $ErrorActionPreference "Stop"
   })
 
   const probes = [
-    { name: "version", options: '-Version "9.9.9"', argument: "--version", output: "9.9.9" },
-    { name: "doctor", options: "-Doctor", argument: "doctor", output: "Runtime: Node v26.8.1 (node-bundled)" },
+    { name: "version", options: '-Version "9.9.9"', arguments: ["--version"], output: "9.9.9" },
+    { name: "doctor", options: "-Doctor", arguments: ["doctor"], output: "Runtime: Node v26.8.1 (node-bundled)" },
+    {
+      name: "backend",
+      options: '-Backend -Version "9.9.9"',
+      arguments: ["tui-backend", "--stdio"],
+      output: JSON.stringify({ type: "rpc.result", id: 1, result: { version: "9.9.9", runtimeMode: "node-bundled" } }),
+    },
   ]
-  test.each(probes)("passes the exact $name probe argument to the launcher", async ({ options, argument, output }) => {
-    await runInstaller(`
+  test.each(probes)(
+    "passes the exact $name probe arguments and input to the launcher",
+    async ({ name, options, arguments: args, output }) => {
+      const inputCheck =
+        name === "backend"
+          ? 'let input = ""; for await (const chunk of process.stdin) input += chunk; const request = JSON.parse(input); if (request.type !== "rpc.request" || request.method !== "health" || request.id !== 1) throw new Error("Unexpected backend request");'
+          : ""
+      await runInstaller(`
 Install-NodeBundleTree $Source
-Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'const args = process.argv.slice(2); if (args.length !== 1 || args[0] !== "${argument}") { console.error("Unexpected probe arguments: " + JSON.stringify(args)); process.exit(23) }; console.log("${output}")'
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'const args = process.argv.slice(2); if (JSON.stringify(args) !== JSON.stringify(${JSON.stringify(args)})) { console.error("Unexpected probe arguments: " + JSON.stringify(args)); process.exit(23) }; ${inputCheck} console.log(${JSON.stringify(output)})'
 & $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options}
 `)
-  })
+    },
+  )
 
   test.each(probes)("accepts a successful $name probe with stderr warnings", async ({ options, output }) => {
     await runInstaller(`
 Install-NodeBundleTree $Source
-Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("Applying first-run database migrations"); console.log("${output}")'
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("Applying first-run database migrations"); console.log(${JSON.stringify(output)})'
 $PSNativeCommandUseErrorActionPreference = $true
 & $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options}
 Assert-Equal $ErrorActionPreference "Stop"
@@ -342,7 +355,7 @@ Assert-Equal $PSNativeCommandUseErrorActionPreference $true
   test.each(probes)("rejects a failed $name probe even when stdout matches", async ({ options, output }) => {
     await runInstaller(`
 Install-NodeBundleTree $Source
-Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("Simulated native probe failure"); console.log("${output}"); process.exit(23)'
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("Simulated native probe failure"); console.log(${JSON.stringify(output)}); process.exit(23)'
 $PSNativeCommandUseErrorActionPreference = $true
 $failure = $null
 try { & $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options} } catch { $failure = $_ }
@@ -357,13 +370,53 @@ Assert-Equal $PSNativeCommandUseErrorActionPreference $true
   test.each(probes)("rejects $name evidence printed only on stderr", async ({ options, output }) => {
     await runInstaller(`
 Install-NodeBundleTree $Source
-Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("${output}"); console.log("unqualified output")'
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error(${JSON.stringify(output)}); console.log("unqualified output")'
 $failure = $null
 try { & $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options} } catch { $failure = $_ }
 if (-not $failure -or $failure -notmatch "unqualified output") {
   throw "Expected rejection of stderr-only evidence: $failure"
 }
 Assert-Equal $ErrorActionPreference "Stop"
+`)
+  })
+
+  test.each([
+    {
+      name: "wrong response ID",
+      frames: [{ type: "rpc.result", id: 2, result: { version: "9.9.9", runtimeMode: "node-bundled" } }],
+    },
+    { name: "RPC error", frames: [{ type: "rpc.error", id: 1, error: { message: "backend failed" } }] },
+    {
+      name: "source runtime",
+      frames: [{ type: "rpc.result", id: 1, result: { version: "9.9.9", runtimeMode: "source" } }],
+    },
+    {
+      name: "stale version",
+      frames: [{ type: "rpc.result", id: 1, result: { version: "8.8.8", runtimeMode: "node-bundled" } }],
+    },
+    { name: "empty stdout", frames: [] },
+    {
+      name: "evidence split between responses",
+      frames: [
+        { type: "rpc.result", id: 1, result: { version: "9.9.9", runtimeMode: "source" } },
+        { type: "rpc.result", id: 2, result: { version: "9.9.9", runtimeMode: "node-bundled" } },
+      ],
+    },
+    {
+      name: "duplicate health replies",
+      frames: [
+        { type: "rpc.result", id: 1, result: { version: "9.9.9", runtimeMode: "node-bundled" } },
+        { type: "rpc.result", id: 1, result: { version: "9.9.9", runtimeMode: "node-bundled" } },
+      ],
+    },
+  ])("rejects a backend probe with $name", async ({ frames }) => {
+    const output = frames.map((frame) => JSON.stringify(frame)).join("\n")
+    await runInstaller(`
+Install-NodeBundleTree $Source
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.log(${JSON.stringify(output)})'
+$failure = $null
+try { & $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath -Backend -Version "9.9.9" } catch { $failure = $_ }
+if (-not $failure) { throw "Expected backend probe rejection" }
 `)
   })
 
