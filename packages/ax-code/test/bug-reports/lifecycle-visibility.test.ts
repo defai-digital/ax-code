@@ -99,13 +99,15 @@ describe("bug report lifecycle visibility guards", () => {
     expect(migration).not.toContain("delete rest.messageID")
   })
 
-  test("keeps worktree cleanup ordered before deleting directories", async () => {
+  test("keeps worktree instance cleanup ordered before deleting directories", async () => {
     const worktree = await source("worktree/index-impl.ts")
 
     expect(worktree).toContain("await fs.rm(info.directory, { recursive: true, force: true })")
     expect(worktree).not.toContain("fs.rmdir(info.directory)")
 
-    const cleanupIndex = worktree.indexOf("await cleanupInstanceAndSandbox()")
+    // Sandbox ownership now survives until filesystem cleanup succeeds. The
+    // recovery tests exercise that behavior; instance disposal still comes first.
+    const cleanupIndex = worktree.indexOf("await cleanupInstance()")
     const cleanIndexes = ["await clean(directory)", "await clean(entry.path)"]
       .map((needle) => worktree.indexOf(needle, cleanupIndex))
       .filter((index) => index !== -1)
