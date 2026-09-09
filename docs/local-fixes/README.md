@@ -6,6 +6,8 @@ The subsequent [session-load issue report](issue-session-load-large-rpc.md) docu
 
 The [Windows restart mojibake issue report](issue-windows-console-restart-mojibake.md) documents independent input/output code-page drift, the native console repair, and real Ctrl+C/restart validation.
 
+The [Redo file-state issue report](issue-redo-file-state.md) documents partial/full redo file omissions, affected-path restoration, and the passing multi-turn filesystem regression test.
+
 Windows snapshot staging enumerates indexed and untracked paths in one tagged, NUL-delimited Git command. Unsupported historical paths still fail without removing index entries. Unsupported untracked paths retain the upstream exclusion and warning behavior. Restore protection and the upstream command-line-length handling remain intact.
 
 The official base already includes the Windows doctor process checks, structured log severity, complete recent-log scanning, effective configuration and inline credential discovery, Windows reserved-path handling, and nested SQLite busy-error retry fixes. Its session creation timeout is 52 seconds; the earlier local source used 57 seconds. Both cover the configured three-attempt lock-wait budget.
