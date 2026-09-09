@@ -10,8 +10,16 @@ import { git } from "../util/git"
 import { parseLsTreeSize, parseNameStatusLine, parseNumstatLine } from "../util/git-output"
 import { Log } from "../util/log"
 import { KeyedSerialQueue, work } from "../util/queue"
+import { NamedError } from "@ax-code/util/error"
+import { Bus } from "../bus"
+import { NotificationEvent } from "../notification/events"
+import { WindowsSnapshotPaths } from "./windows-paths"
 
 export namespace Snapshot {
+  export const UnsupportedPathError = NamedError.create(
+    "SnapshotUnsupportedWindowsPathError",
+    z.object({ message: z.string(), paths: z.array(z.string()), snapshotStore: z.string() }),
+  )
   export const Patch = z.object({
     hash: z.string(),
     files: z.string().array(),
@@ -57,6 +65,7 @@ export namespace Snapshot {
     cleanupDelay?: ReturnType<typeof setTimeout>
     cleanupInterval?: ReturnType<typeof setInterval>
     disposed?: boolean
+    warnedWindowsPaths?: string
   }
 
   function valid(hash: string) {
@@ -265,8 +274,51 @@ export namespace Snapshot {
     await Filesystem.write(target, await read(file))
   }
 
+  async function checkWindowsHistory(current: State, tree?: string) {
+    if (!WindowsSnapshotPaths.enabled()) return
+    const command = tree ? ["ls-tree", "-r", "--name-only", "-z", tree] : ["ls-files", "--cached", "-z"]
+    const result = await runGit([...cfg, ...args(current, command)], { cwd: current.worktree })
+    if (result.code !== 0) {
+      throw new Error(`Snapshot Windows path check failed: ${command[0]} exited with code ${result.code}`)
+    }
+    const paths = WindowsSnapshotPaths.select(result.text)
+    if (!paths.length) return
+    throw new UnsupportedPathError({
+      paths,
+      snapshotStore: current.gitdir,
+      message: `Unsupported Windows paths already exist in the ${tree ? "requested snapshot tree" : "snapshot index"}: ${paths.map((file) => JSON.stringify(file)).join(", ")}. No historical entries were removed. Back up the snapshot store at ${current.gitdir}, rename the affected project paths, and rebuild the snapshot index before retrying. An unsupported historical tree cannot be restored on Windows.`,
+    })
+  }
+
+  async function windowsExclusions(current: State): Promise<string[]> {
+    if (!WindowsSnapshotPaths.enabled()) return []
+    await checkWindowsHistory(current)
+    const result = await runGit(
+      [...cfg, ...args(current, ["ls-files", "--others", "--exclude-standard", "-z", "--", "."])],
+      { cwd: current.worktree },
+    )
+    if (result.code !== 0) {
+      throw new Error(`Snapshot Windows path check failed: git ls-files exited with code ${result.code}`)
+    }
+    const paths = WindowsSnapshotPaths.select(result.text)
+    const signature = JSON.stringify(paths)
+    if (paths.length && signature !== current.warnedWindowsPaths) {
+      log.warn("unsupported Windows paths excluded from snapshot; rollback cannot restore these files", { paths })
+      const names = paths.map((file) => JSON.stringify(file)).join(", ")
+      Bus.publishDetached(NotificationEvent.ToastShow, {
+        title: "Partial snapshot coverage",
+        message: `Snapshot excludes ${paths.length} unsupported Windows path(s): ${names.length > 2000 ? `${names.slice(0, 2000)}… (full list in logs)` : names}. These files cannot be restored by rollback. Rename them to supported filenames to include them in future snapshots.`,
+        variant: "warning",
+        duration: 20_000,
+      })
+    }
+    current.warnedWindowsPaths = signature
+    return paths
+  }
+
   async function add(current: State, options?: { excludesSynced: boolean }) {
     if (!options?.excludesSynced) await syncExclude(current)
+    const excluded = await windowsExclusions(current)
     // Stage the whole worktree, not just `current.directory` — a session's
     // working directory can be a subdirectory of the git worktree (e.g. a
     // monorepo package), and edits outside it are explicitly permitted (see
@@ -274,7 +326,22 @@ export namespace Snapshot {
     // silently drop those files from every snapshot: `write-tree` never sees
     // them, so track()/patch()/diff() miss them and restore()/revert() can
     // never roll them back.
-    const result = await runGit([...cfg, ...args(current, ["add", "."])], { cwd: current.worktree })
+    // Keep potentially large exclusion sets out of Windows argv. NUL-separated
+    // literal pathspecs preserve whitespace, newlines, and wildcard characters.
+    let temporary: string | undefined
+    let result: Awaited<ReturnType<typeof runGit>>
+    try {
+      const command = ["add", "."]
+      if (excluded.length) {
+        temporary = await fs.mkdtemp(path.join(current.gitdir, "pathspec-"))
+        const file = path.join(temporary, "paths")
+        await fs.writeFile(file, [".", ...excluded.map((name) => `:(top,exclude,literal)${name}`), ""].join("\0"))
+        command.splice(1, 1, `--pathspec-from-file=${file}`, "--pathspec-file-nul")
+      }
+      result = await runGit([...cfg, ...args(current, command)], { cwd: current.worktree })
+    } finally {
+      if (temporary) await fs.rm(temporary, { recursive: true, force: true })
+    }
     if (result.code === 0) return
     log.error("failed to stage snapshot files", {
       cwd: current.worktree,
@@ -389,6 +456,7 @@ export namespace Snapshot {
       await ensureRepo(current)
 
       if (current.prevHash) {
+        await checkWindowsHistory(current)
         // HEAD stays unborn in this tree-only repository. Compare against the
         // recorded tree, including work outside a session's subdirectory and
         // files newly admitted by ignore rules. patch/restore may change the
@@ -468,6 +536,7 @@ export namespace Snapshot {
         return { hash, files: [] }
       }
       if (hash === current.prevHash) {
+        await checkWindowsHistory(current)
         // Unchanged short-circuit mirroring track(): when the requested
         // baseline is the last tracked tree and the worktree is clean against
         // it, staging and diffing can only produce an empty file list. Any
@@ -523,6 +592,7 @@ export namespace Snapshot {
         return
       }
       log.info("restore", { commit: snapshot })
+      await checkWindowsHistory(current, snapshot)
       await add(current)
       const savedTree = await runGit([...core, ...args(current, ["write-tree"])], { cwd: current.worktree })
       if (savedTree.code !== 0) {

@@ -53,6 +53,24 @@ permissions:
   actions: read
 
 jobs:
+  windows-snapshot:
+    name: Windows snapshot reserved paths
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v7
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+      - name: Test reserved-path snapshot admission and rollback
+        working-directory: packages/ax-code
+        env:
+          AX_TEST_FILES: test/snapshot/windows-paths.test.ts
+        run: pnpm exec vitest run --retry=0
+
   deterministic:
     runs-on: ubuntu-latest
     env:

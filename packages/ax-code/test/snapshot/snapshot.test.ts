@@ -100,7 +100,7 @@ test("tracks deleted files correctly", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(path.join(tmp.path, "a.txt"))
 
       expect((await Snapshot.patch(before!)).files).toContain(fwd(tmp.path, "a.txt"))
     },
@@ -261,7 +261,7 @@ test("multiple file operations", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(path.join(tmp.path, "a.txt"))
       await Filesystem.write(`${tmp.path}/c.txt`, "C")
       await $`mkdir -p ${tmp.path}/dir`.quiet()
       await Filesystem.write(`${tmp.path}/dir/d.txt`, "D")
@@ -1181,7 +1181,7 @@ test("diff function with various changes", async () => {
       expect(before).toBeTruthy()
 
       // Make various changes
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(path.join(tmp.path, "a.txt"))
       await Filesystem.write(`${tmp.path}/new.txt`, "new content")
       await Filesystem.write(`${tmp.path}/b.txt`, "modified content")
 
@@ -1202,7 +1202,7 @@ test("restore function", async () => {
       expect(before).toBeTruthy()
 
       // Make changes
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(path.join(tmp.path, "a.txt"))
       await Filesystem.write(`${tmp.path}/new.txt`, "new content")
       await Filesystem.write(`${tmp.path}/b.txt`, "modified")
 
@@ -1258,7 +1258,7 @@ test("revert should not delete files that existed but were deleted in snapshot",
       const snapshot1 = await Snapshot.track()
       expect(snapshot1).toBeTruthy()
 
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(path.join(tmp.path, "a.txt"))
 
       const snapshot2 = await Snapshot.track()
       expect(snapshot2).toBeTruthy()
@@ -1448,7 +1448,7 @@ test("diffFull with file deletions", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(path.join(tmp.path, "a.txt"))
 
       const after = await Snapshot.track()
       expect(after).toBeTruthy()
@@ -1501,7 +1501,7 @@ test("diffFull with addition and deletion", async () => {
       expect(before).toBeTruthy()
 
       await Filesystem.write(`${tmp.path}/added.txt`, "added content")
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(path.join(tmp.path, "a.txt"))
 
       const after = await Snapshot.track()
       expect(after).toBeTruthy()
@@ -1536,7 +1536,7 @@ test("diffFull with multiple additions and deletions", async () => {
 
       await Filesystem.write(`${tmp.path}/multi1.txt`, "line1\nline2\nline3")
       await Filesystem.write(`${tmp.path}/multi2.txt`, "single line")
-      await $`rm ${tmp.path}/a.txt`.quiet()
+      await fs.unlink(path.join(tmp.path, "a.txt"))
       await $`rm ${tmp.path}/b.txt`.quiet()
 
       const after = await Snapshot.track()
