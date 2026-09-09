@@ -342,7 +342,13 @@ function Move-RuntimePath([string]$Source, [string]$Destination) {
         $exception = $exception.InnerException
       }
       $code = $exception.HResult -band 0xffff
-      if ($attempt -ge 9 -or $code -notin $retryableCodes) { throw }
+      # .NET Framework DirectoryInfo.MoveTo loses ERROR_ACCESS_DENIED and
+      # throws plain IOException (COR_E_IO). This affects PowerShell 5.1.
+      # Restrict that compatibility case to an existing directory source.
+      $frameworkDirectoryFailure = $exception.GetType() -eq [System.IO.IOException] -and
+        $exception.HResult -eq -2146232800 -and (Test-Path -LiteralPath $Source -PathType Container)
+      if ($attempt -ge 9 -or ($code -notin $retryableCodes -and -not $frameworkDirectoryFailure)) { throw }
+      Write-Verbose "Retrying runtime move after $($exception.GetType().Name) (HRESULT $($exception.HResult)); attempt $($attempt + 1)/10"
       # Windows can report access denied as an execution or antivirus handle
       # drains after a probe. Retry briefly without changing permissions; a
       # persistent denial still fails through the existing rollback boundary.
