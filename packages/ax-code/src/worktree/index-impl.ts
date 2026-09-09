@@ -11,6 +11,7 @@ import { fn } from "../util/fn"
 import { Log } from "../util/log"
 import { Process } from "../util/process"
 import { git } from "../util/git"
+import { Filesystem } from "../util/filesystem"
 import { toErrorMessage } from "../util/error-message"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
@@ -733,6 +734,23 @@ export namespace Worktree {
     const entry = await locate(list.stdout)
 
     if (!entry?.path) {
+      // Git no longer lists this path. Only delete leftovers we own: a
+      // recorded sandbox for this project, or an unregistered directory
+      // under the per-project worktree root. A missing git entry must not
+      // recursively delete an arbitrary existing folder (including paths
+      // inside the primary workspace).
+      const primary = await canonical(Instance.worktree)
+      if (directory === primary || Filesystem.contains(primary, directory)) {
+        throw new RemoveFailedError({ message: "Worktree not found" })
+      }
+      const managedRoot = await canonical(path.join(Global.Path.data, "worktree", Instance.project.id))
+      const sandboxes = await Project.sandboxes(Instance.project.id)
+      const recorded = (
+        await Promise.all(sandboxes.map(async (sandbox) => (await canonical(sandbox)) === directory))
+      ).some(Boolean)
+      if (!recorded && (directory === managedRoot || !Filesystem.contains(managedRoot, directory))) {
+        throw new RemoveFailedError({ message: "Worktree not found" })
+      }
       const directoryExists = await exists(directory)
       if (directoryExists) await stop(directory)
       await cleanupInstanceAndSandbox()

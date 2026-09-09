@@ -6,6 +6,7 @@ import { Global } from "@/global"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Worktree } from "@/worktree"
+import { Filesystem } from "@/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
@@ -85,11 +86,16 @@ test("remove surfaces inaccessible target directories", async () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await expect(Worktree.remove({ directory: target })).rejects.toMatchObject({ code: "EACCES" })
+        // Unmanaged paths fail closed as "not found" without probing them,
+        // so an unreadable parent is not recursively deleted.
+        await expect(Worktree.remove({ directory: target })).rejects.toMatchObject({
+          name: "WorktreeRemoveFailedError",
+        })
       },
     })
   } finally {
     await fs.chmod(locked, 0o700)
+    expect(await Filesystem.exists(locked)).toBe(true)
   }
 })
 

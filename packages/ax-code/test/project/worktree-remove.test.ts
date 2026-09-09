@@ -6,6 +6,7 @@ import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { Worktree } from "../../src/worktree"
 import { Filesystem } from "../../src/util/filesystem"
+import { Global } from "../../src/global"
 import { tmpdir } from "../fixture/fixture"
 
 function run(cmd: string, cwd?: string) {
@@ -39,6 +40,39 @@ async function startFsmonitor(dir: string) {
 }
 
 describe("Worktree.remove", () => {
+  test("does not recursively delete a directory that is not a git worktree", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const keep = path.join(tmp.path, "keep-me")
+    await fs.mkdir(keep)
+    const canary = path.join(keep, "canary.txt")
+    await fs.writeFile(canary, "do not delete\n")
+
+    await expect(
+      Instance.provide({
+        directory: tmp.path,
+        fn: () => Worktree.remove({ directory: keep }),
+      }),
+    ).rejects.toMatchObject({ name: "WorktreeRemoveFailedError" })
+
+    expect(await fs.readFile(canary, "utf8")).toBe("do not delete\n")
+  })
+
+  test("still removes an unregistered leftover under the managed worktree root", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const leftover = path.join(Global.Path.data, "worktree", Instance.project.id, "orphan-leftover")
+        await fs.mkdir(leftover, { recursive: true })
+        await fs.writeFile(path.join(leftover, "junk.txt"), "stale\n")
+
+        const ok = await Worktree.remove({ directory: leftover })
+        expect(ok).toBe(true)
+        await expect(fs.stat(leftover)).rejects.toThrow()
+      },
+    })
+  })
+
   test("continues when git remove exits non-zero after detaching", async () => {
     await using tmp = await tmpdir({ git: true })
     const root = tmp.path
