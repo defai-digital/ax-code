@@ -44,6 +44,7 @@ function printStatus(status: WikiStatus, json: boolean) {
   UI.println(`  pages:    ${status.pageCount}`)
   UI.println(`  manifest: ${status.manifest ? "present" : "missing"}`)
   UI.println(`  stale:    ${status.stale ? "yes" : "no"}`)
+  UI.println(`  freshness: ${status.freshness}`)
   UI.println(`  healthy:  ${status.healthy ? "yes" : "no"}`)
   UI.println("")
   UI.println("Recommendations:")
@@ -71,9 +72,14 @@ export const WikiStatusCommand = cmd({
     commonOptions(yargs).option("json", { type: "boolean", default: false, describe: "machine-readable JSON" }),
   handler: async (args) => {
     await withWiki(args, async ({ root, config }) => {
-      const status = await getWikiStatus({ root, wikiDir: config.dir, repositoryHead: await gitHeadCommit(root) })
+      const status = await getWikiStatus({
+        root,
+        wikiDir: config.dir,
+        repositoryHead: await gitHeadCommit(root),
+        config: engineConfig(config),
+      })
       printStatus(status, args.json === true)
-      if (!status.healthy || status.stale) process.exitCode = 1
+      if (!status.healthy || status.freshness !== "fresh") process.exitCode = 1
     })
   },
 })
@@ -86,7 +92,12 @@ export const WikiDoctorCommand = cmd({
   handler: async (args) => {
     await withWiki(args, async ({ root, config }) => {
       const head = await gitHeadCommit(root)
-      const status = await getWikiStatus({ root, wikiDir: config.dir, repositoryHead: head })
+      const status = await getWikiStatus({
+        root,
+        wikiDir: config.dir,
+        repositoryHead: head,
+        config: engineConfig(config),
+      })
       const lint = await lintWiki({
         root,
         wikiDir: config.dir,
@@ -108,7 +119,7 @@ export const WikiDoctorCommand = cmd({
         UI.println("  ax-code index         → precise symbols, callers, references")
         UI.println("  .ax-code/memory.json  → preferences and decisions")
       }
-      if (!status.healthy || !lint.ok || lint.stale) process.exitCode = 1
+      if (!status.healthy || status.freshness !== "fresh" || !lint.ok || lint.stale) process.exitCode = 1
     })
   },
 })

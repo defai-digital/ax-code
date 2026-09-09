@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
+import { chmod, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, test, vi } from "vitest"
@@ -8,6 +8,8 @@ import {
   buildAxWiki,
   emptyEvidenceBundle,
   lintWiki,
+  getWikiStatus,
+  maybeRenderAxWikiProtocol,
   loadWikiManifest,
   mergeProtectedSections,
   type WikiPageGenerationRequest,
@@ -119,6 +121,83 @@ describe("AX Wiki build lifecycle", () => {
     const report = await lintWiki({ root })
     expect(report.stale).toBe(true)
     expect(report.issues.some((issue) => issue.code === "wiki.stale")).toBe(true)
+  })
+
+  test("runtime wiki consumption marks modified sources stale while preserving structural health", async () => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    expect((await getWikiStatus({ root })).freshness).toBe("fresh")
+    await writeFile(path.join(root, "README.md"), "# Updated source\n")
+    const status = await getWikiStatus({ root })
+    expect(status.healthy).toBe(true)
+    expect(status.stale).toBe(true)
+    expect(status.freshness).toBe("stale")
+    const protocol = await maybeRenderAxWikiProtocol(root)
+    expect(protocol).toContain("stale")
+    expect(protocol).toContain("navigation only")
+    expect(protocol).not.toContain("Prefer the wiki before")
+  })
+
+  test.each(["add", "delete"])("runtime freshness detects a source %s without a commit", async (change) => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    if (change === "add") await writeFile(path.join(root, "added.ts"), "export const added = true\n")
+    else await rm(path.join(root, "packages/core/src/index.ts"))
+    expect((await getWikiStatus({ root })).freshness).toBe("stale")
+    expect((await lintWiki({ root })).stale).toBe(true)
+  })
+
+  test("runtime freshness honors explicit source exclusions and custom wiki paths", async () => {
+    const root = await fixture()
+    const config = { exclude: ["packages/web/**"] }
+    const wikiDir = "knowledge"
+    await buildAxWiki({ root, wikiDir, config, action: "generate", generator: generator() })
+    await writeFile(path.join(root, "packages/web/src/index.ts"), "export const changed = true\n")
+    expect((await getWikiStatus({ root, wikiDir, config })).freshness).toBe("fresh")
+    expect(await maybeRenderAxWikiProtocol(root, { wikiDir, config })).toContain("Source freshness: fresh")
+    expect((await getWikiStatus({ root, wikiDir })).freshness).toBe("stale")
+  })
+
+  test("undefined runtime config does not erase source exclusions from disk", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "ax-wiki.config.json"), JSON.stringify({ exclude: ["packages/web/**"] }))
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    expect((await getWikiStatus({ root, config: { exclude: undefined } })).freshness).toBe("fresh")
+  })
+
+  test("invalid source configuration leaves wiki available but freshness unknown", async () => {
+    const root = await fixture()
+    await buildAxWiki({ root, action: "generate", generator: generator() })
+    await writeFile(path.join(root, "ax-wiki.config.json"), "{invalid-json")
+    expect(await getWikiStatus({ root })).toMatchObject({ healthy: true, freshness: "unknown" })
+    const protocol = await maybeRenderAxWikiProtocol(root)
+    expect(protocol).toContain("freshness: unknown")
+    expect(protocol).toContain("navigation only")
+    expect(protocol).not.toContain("Prefer the wiki before")
+  })
+
+  test.runIf(process.platform !== "win32" && process.getuid?.() !== 0)(
+    "unreadable sources cannot verify as fresh",
+    async () => {
+      const root = await fixture()
+      await buildAxWiki({ root, action: "generate", generator: generator() })
+      const file = path.join(root, "README.md")
+      await chmod(file, 0)
+      try {
+        expect(await getWikiStatus({ root })).toMatchObject({ healthy: true, freshness: "unknown" })
+        await expect(lintWiki({ root })).rejects.toThrow()
+      } finally {
+        await chmod(file, 0o600)
+      }
+    },
+  )
+
+  test("missing and disabled wiki paths do not load invalid source configuration", async () => {
+    const root = await fixture()
+    await writeFile(path.join(root, "ax-wiki.config.json"), "{invalid-json")
+    expect(await getWikiStatus({ root })).toMatchObject({ healthy: false, freshness: "unknown" })
+    expect(await maybeRenderAxWikiProtocol(root)).toBeUndefined()
+    expect(await maybeRenderAxWikiProtocol(root, { enabled: false })).toBeUndefined()
   })
 
   test.runIf(process.platform !== "win32")("refuses a symlinked output directory", async () => {

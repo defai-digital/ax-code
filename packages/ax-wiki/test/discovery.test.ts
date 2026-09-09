@@ -71,6 +71,20 @@ describe("readSourceEvidence", () => {
     expect(evidence?.content).toBe("你好")
     expect(evidence?.truncated).toBe(false)
   })
+
+  test("marks the per-file prefix limit even when the page has remaining budget", async () => {
+    const root = await fixture()
+    const body = Buffer.from("// Stable background\n".repeat(2000) + "export function criticalTailGuard() {}\n")
+    await writeFile(path.join(root, "entry.ts"), body)
+    const [evidence] = await readSourceEvidence({
+      root,
+      sources: [sourceFor("entry.ts", body)],
+      maxTotalBytes: 160_000,
+    })
+    expect(evidence?.truncated).toBe(true)
+    expect(Buffer.byteLength(evidence!.content)).toBe(32_000)
+    expect(evidence?.content).not.toContain("criticalTailGuard")
+  })
 })
 
 function createGate() {

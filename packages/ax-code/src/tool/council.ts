@@ -8,6 +8,7 @@ import z from "zod"
 import { Config } from "../config/config"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
+import { CouncilContext } from "../mode/council-context"
 import { Debate } from "../mode/debate"
 import { EnsembleShared } from "../mode/ensemble-shared"
 import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
@@ -124,7 +125,10 @@ function validateMemberSelections(
 
 const parameters = z.object({
   question: z.string().min(1).describe("The review or design question for the council"),
-  context: z.string().optional().describe("Optional code, diff, or design context to include for every member"),
+  context: z
+    .string()
+    .optional()
+    .describe("Required evidence shared verbatim with every member when supplied; maximum 24000 UTF-16 code units"),
   kind: z.enum(["review", "design"]).optional().describe("review (default) or design trade-off"),
   debateRounds: z
     .number()
@@ -204,29 +208,34 @@ function parseJsonFromText(text: string): unknown {
   return undefined
 }
 
-async function runMember(input: {
+type ResolvedMember = {
   member: EnsembleShared.MemberSpec
-  kind: "review" | "design"
-  question: string
-  context?: string
-  debateContext?: string
+  model?: Provider.Model
+  error?: string
+}
+
+async function runMember(input: {
+  resolved: ResolvedMember
+  system: string
+  userParts: string
   timeoutMs: number
   reasoningScale?: number
   memberOverrides?: Record<string, number>
   abort: AbortSignal
   retryOnce?: boolean
 }): Promise<Council.CouncilMemberResult> {
-  const { member, kind, question, context, debateContext, timeoutMs, abort, retryOnce = true } = input
+  const { resolved, system, userParts, timeoutMs, abort, retryOnce = true } = input
+  const { member } = resolved
   const started = Date.now()
   const maxAttempts = retryOnce ? 2 : 1
 
-  // Resolve the model once up front (before the fan-out timer starts) so the
-  // member timeout can scale for reasoning models. Lookup failures become
-  // member errors, same as failures inside execute would.
+  // Models are resolved before shared prompt admission. Keep SDK loading
+  // outside the member timer and preserve lookup failures as member errors.
   let model: Provider.Model
   let language: Awaited<ReturnType<typeof Provider.getLanguage>>
   try {
-    model = await Provider.getModel(member.providerID, member.modelID)
+    if (!resolved.model) throw new Error(resolved.error ?? "Model resolution failed")
+    model = resolved.model
     // Resolve the language model up front too (same rationale as getModel
     // above): a cold SDK load/install must not count against the member's
     // reasoning timeout. A load failure becomes a member error, as before.
@@ -265,16 +274,6 @@ async function runMember(input: {
         })
       },
       execute: async (_m, signal) => {
-        const userParts = [
-          `Kind: ${kind}`,
-          `Question: ${question}`,
-          context ? `\nContext:\n${context.slice(0, 24_000)}` : "",
-          debateContext ? `\n${debateContext}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n")
-        const system = `${systemPrompt(kind)}\n\n${JSON_OUTPUT_INSTRUCTION}`
-
         try {
           const r = streamObject({
             model: language,
@@ -398,6 +397,8 @@ async function runMember(input: {
 
 type CouncilMetadata = {
   status: string
+  contextAdmission?: CouncilContext.Admission
+  promptBudget?: CouncilContext.PromptBudget
   totalMembers?: number
   successfulMembers?: number
   failedMembers?: number
@@ -441,6 +442,19 @@ export const CouncilTool = Tool.define("council", async () => {
           title: "Council disabled",
           output: EnsemblePreflight.councilDisabledMessage(),
           metadata,
+        }
+      }
+      ctx.abort.throwIfAborted()
+      const contextAdmission = CouncilContext.admit(args.context)
+      if (contextAdmission.status === "rejected") {
+        return {
+          title: "Council context rejected",
+          output:
+            `Council rejected ${contextAdmission.suppliedCharacters} UTF-16 code units ` +
+            `(${contextAdmission.suppliedBytes} bytes) of required context; the limit is ${contextAdmission.maxCharacters}. ` +
+            "No member inference ran and no context was truncated. Split the review into explicitly scoped requests " +
+            "or reduce optional background while retaining the required evidence.",
+          metadata: { status: "context_rejected", successfulMembers: 0, contextAdmission } as CouncilMetadata,
         }
       }
       const providerSnap = await EnsembleShared.snapshotSelectableProviders()
@@ -507,14 +521,56 @@ export const CouncilTool = Tool.define("council", async () => {
         }
       }
 
+      const resolvedMembers: ResolvedMember[] = await Promise.all(
+        members.map(async (member) => {
+          try {
+            return { member, model: await Provider.getModel(member.providerID, member.modelID) }
+          } catch (error) {
+            return { member, error: FanOut.describeError(error) }
+          }
+        }),
+      )
+      ctx.abort.throwIfAborted()
+      const system = `${systemPrompt(kind)}\n\n${JSON_OUTPUT_INSTRUCTION}`
+      const userParts = CouncilContext.userPrompt({ kind, question: args.question, context: args.context })
+      const checkPrompt = (user: string) =>
+        CouncilContext.checkPrompt({
+          system,
+          user,
+          fallbackInstruction: JSON_OUTPUT_INSTRUCTION,
+          members: resolvedMembers
+            .filter((resolved) => resolved.model)
+            .map(({ member, model }) => ({
+              memberId: member.memberId,
+              limit: model?.limit,
+              maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
+            })),
+        })
+      let promptBudget = checkPrompt(userParts)
+      if (!promptBudget.ok) {
+        return {
+          title: "Council input budget rejected",
+          output:
+            "Council rejected the complete prompt before any member inference. No context was truncated.\n\n" +
+            promptBudget.reasons.join("\n") +
+            "\n\nThe budget uses a conservative UTF-8-byte estimate plus schema/framing reserve, not a tokenizer count. " +
+            "Split the review into explicitly scoped requests, reduce optional background, or select models with sufficient input capacity.",
+          metadata: {
+            status: "context_rejected",
+            successfulMembers: 0,
+            contextAdmission,
+            promptBudget,
+          } as CouncilMetadata,
+        }
+      }
+
       let councilCompleted = 0
       let results = await Promise.all(
-        members.map(async (member) => {
+        resolvedMembers.map(async (resolved) => {
           const result = await runMember({
-            member,
-            kind,
-            question: args.question,
-            context: args.context,
+            resolved,
+            system,
+            userParts,
             timeoutMs,
             reasoningScale,
             memberOverrides,
@@ -523,7 +579,7 @@ export const CouncilTool = Tool.define("council", async () => {
           councilCompleted++
           log.info("council member progress", {
             toolName: "council",
-            memberId: member.memberId,
+            memberId: resolved.member.memberId,
             completed: councilCompleted,
             total: members.length,
           })
@@ -549,16 +605,25 @@ export const CouncilTool = Tool.define("council", async () => {
 
         const summary = Debate.buildAnonymousSynthesis(report, round)
         const synthesis = Debate.renderSynthesisPrompt(summary)
+        const debatePrompt = CouncilContext.userPrompt({
+          kind,
+          question: args.question,
+          context: args.context,
+          debateContext: synthesis,
+        })
+        promptBudget = checkPrompt(debatePrompt)
+        if (!promptBudget.ok) {
+          debateStopReason = "input_budget_rejected"
+          break
+        }
         debateNotes.push(`### Debate round ${round}`, "", synthesis, "")
 
         results = await Promise.all(
-          members.map((member) =>
+          resolvedMembers.map((resolved) =>
             runMember({
-              member,
-              kind,
-              question: args.question,
-              context: args.context,
-              debateContext: synthesis,
+              resolved,
+              system,
+              userParts: debatePrompt,
               timeoutMs,
               reasoningScale,
               memberOverrides,
@@ -579,6 +644,22 @@ export const CouncilTool = Tool.define("council", async () => {
       const overallLines = results.filter((r) => !r.error && r.overall).map((r) => `- **${r.memberId}:** ${r.overall}`)
 
       const parts = [markdown]
+      if (!promptBudget.ok) {
+        parts.unshift(
+          "Council is incomplete: the next debate round was rejected before inference. The last completed round is retained below.",
+          ...promptBudget.reasons,
+          "",
+        )
+      }
+      parts.push(
+        "",
+        `Context admission: accepted ${contextAdmission.suppliedCharacters} UTF-16 code units verbatim; no truncation. ` +
+          "This describes supplied text only, not semantic evidence completeness.",
+        "Input budget uses a conservative UTF-8-byte estimate with schema/framing reserve, not a tokenizer count.",
+      )
+      if (promptBudget.unknownLimitMembers.length) {
+        parts.push(`Model input limits are unknown for: ${promptBudget.unknownLimitMembers.join(", ")}.`)
+      }
       if (resolution.rejected.length) {
         parts.push("", "## Skipped member selections", ...resolution.rejected.map((error) => `- ${error}`))
       }
@@ -602,7 +683,9 @@ export const CouncilTool = Tool.define("council", async () => {
       }).catch(() => undefined)
 
       const metadata: CouncilMetadata = {
-        status: report.incomplete ? "incomplete" : "ok",
+        status: report.incomplete || !promptBudget.ok ? "incomplete" : "ok",
+        contextAdmission,
+        promptBudget,
         totalMembers: report.totalMembers,
         successfulMembers: report.successfulMembers,
         failedMembers: report.failedMembers,
@@ -618,10 +701,11 @@ export const CouncilTool = Tool.define("council", async () => {
       }
 
       return {
-        title: report.incomplete
-          ? `Council incomplete (${report.successfulMembers}/${report.totalMembers})`
-          : `Council ${report.consensus.length}c/${report.majority.length}m/${report.minority.length}mi/${report.singleton.length}s` +
-            (debateRoundsRun ? ` d${debateRoundsRun}` : ""),
+        title:
+          report.incomplete || !promptBudget.ok
+            ? `Council incomplete (${report.successfulMembers}/${report.totalMembers})`
+            : `Council ${report.consensus.length}c/${report.majority.length}m/${report.minority.length}mi/${report.singleton.length}s` +
+              (debateRoundsRun ? ` d${debateRoundsRun}` : ""),
         output: parts.join("\n"),
         metadata,
       }

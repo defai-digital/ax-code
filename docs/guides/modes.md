@@ -115,6 +115,25 @@ Local models and memory guidance: [AX Engine Model Selection](../providers/ax-en
 
 Needs at least two successful members for meaningful consensus tiers; otherwise the report is marked incomplete.
 
+**Evidence admission.** Members receive only the supplied question and context. They do not inherit the calling
+session or read files from paths in the brief. Include the requirements, relevant diff, required original snippets,
+and verification evidence needed for the stated review scope.
+
+The optional `context` is accepted verbatim up to 24,000 UTF-16 code units. Larger context returns
+`context_rejected` before member inference; AX Code never silently shortens it. Split the review into explicitly
+scoped requests or remove optional background while retaining required evidence.
+
+Before each round, AX Code checks the whole prompt against a 128,000-byte local cap and every resolved member's
+known input/context limits, reserving the requested output and fallback instruction plus 2,048 tokens for schema
+and framing. Input size uses a deliberately conservative UTF-8-byte estimate. It can reject prompts that would fit;
+it is neither an exact tokenizer count nor a guarantee about provider serialization. Unknown model limits are
+disclosed and remain subject to the local caps. If a debate round cannot fit, the result is incomplete and retains
+the last completed round's report.
+
+`contextAdmission` records the local context-length gate, supplied size, and a content digest; `promptBudget` checks
+the complete request separately. Both must pass before inference. These fields are independent of `successfulMembers`
+and do not establish semantic completeness, source freshness, or guaranteed review quality.
+
 **Timeouts.** Each member runs under `modes.council.timeoutMs` (default 180000 ms); models that declare
 reasoning capability get `modes.council.reasoningTimeoutScale` times that budget (default 3, so 540000 ms).
 To give one known-slow member more time without inflating everyone else's wait, set an absolute
@@ -141,8 +160,8 @@ model key wins over the provider-wide key, and either wins over the base/scale c
 
 ### Agent workflow (important)
 
-Call **`council` within the first 1–2 tool rounds** with a short `context` brief.  
-Do **not** open `task_parallel` multi-explore digs first — that path is for parallel file research, not multi-provider ensemble, and often never reaches `council`.  
+Call **`council` early once the relevant evidence is available** with an explicitly scoped `context` brief.
+Avoid broad multi-explore digs unrelated to that review; gather the required original evidence before asking members for code findings.
 If the user asked for council/arena, `task_parallel` is rejected until the ensemble tool has been the intended primary action.
 
 ### When not to

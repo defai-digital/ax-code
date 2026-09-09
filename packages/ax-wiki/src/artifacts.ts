@@ -8,7 +8,7 @@ import { createWikiPlan } from "./plan.js"
 import { validateWikiCandidate } from "./validate.js"
 import { atomicWrite, loadAxWikiConfig, loadWikiManifest } from "./build.js"
 import { assertWikiDirectorySafe } from "./safety.js"
-import type { AxWikiConfig, WikiCard, WikiManifest, WikiPage, WikiValidationReport } from "./types.js"
+import type { AxWikiConfig, WikiCard, WikiManifest, WikiPage, WikiSource, WikiValidationReport } from "./types.js"
 
 async function exists(file: string): Promise<boolean> {
   return access(file)
@@ -158,6 +158,20 @@ export async function relatedWikiPages(input: {
   return { symbol: input.symbol.trim(), matches, pageCount: pages.length }
 }
 
+export type WikiFreshness = "fresh" | "stale" | "unknown"
+
+async function sourceConfig(root: string, overrides?: AxWikiConfig): Promise<AxWikiConfig> {
+  const disk = await loadAxWikiConfig(root)
+  const explicit = Object.fromEntries(Object.entries(overrides ?? {}).filter(([, value]) => value !== undefined))
+  return { ...disk, ...explicit }
+}
+
+function sourcesDiffer(sources: WikiSource[], recorded: Record<string, string>): boolean {
+  return (
+    Object.keys(recorded).length !== sources.length || sources.some((source) => recorded[source.path] !== source.hash)
+  )
+}
+
 export type WikiStatus = {
   root: string
   wikiDir: string
@@ -167,6 +181,8 @@ export type WikiStatus = {
   pageCount: number
   manifest?: WikiManifest
   stale: boolean
+  /** Source freshness at check time; healthy only describes artifact availability. */
+  freshness: WikiFreshness
   healthy: boolean
   recommendations: string[]
 }
@@ -175,6 +191,7 @@ export async function getWikiStatus(input: {
   root: string
   wikiDir?: string
   repositoryHead?: string
+  config?: AxWikiConfig
 }): Promise<WikiStatus> {
   const root = path.resolve(input.root)
   const wikiDir = sanitizeWikiDir(input.wikiDir)
@@ -191,16 +208,39 @@ export async function getWikiStatus(input: {
     : undefined
   const pages = directory ? await listMarkdownFiles(absolute) : []
   const manifest = await loadWikiManifest(root, wikiDir).catch(() => undefined)
-  const stale = Boolean(
+  const staleByHead = Boolean(
     input.repositoryHead && manifest?.repositoryHead && input.repositoryHead !== manifest.repositoryHead,
   )
   const healthy = directory && Boolean(index) && Boolean(manifest)
+  let freshness: WikiFreshness = "unknown"
+  if (healthy && manifest) {
+    try {
+      const sources = await discoverSources({
+        root,
+        wikiDir,
+        config: await sourceConfig(root, input.config),
+        strict: true,
+      })
+      freshness = staleByHead || sourcesDiffer(sources, manifest.sources) ? "stale" : "fresh"
+    } catch {
+      // A failed check must not advertise fresh sources or disable navigation.
+      freshness = "unknown"
+    }
+  }
+  const stale = freshness === "stale" || staleByHead
   const recommendations: string[] = []
   if (!directory) recommendations.push(`No AX Wiki at ${wikiDir}/. Run: ax-code wiki generate`)
   else if (!index) recommendations.push("AX Wiki has no quickstart.md. Run: ax-code wiki generate")
   if (!manifest) recommendations.push("AX Wiki manifest is missing or invalid. Run: ax-code wiki generate")
-  if (stale) recommendations.push("AX Wiki is behind git HEAD. Run: ax-code wiki update")
-  if (healthy && !stale) recommendations.push("AX Wiki is ready. Use ax-code wiki update after substantial changes.")
+  if (stale) recommendations.push("AX Wiki sources or repository revision have changed. Run: ax-code wiki update")
+  if (healthy && freshness === "unknown")
+    recommendations.push(
+      "AX Wiki source freshness could not be verified. Use it for navigation only and verify current source files.",
+    )
+  if (freshness === "fresh")
+    recommendations.push(
+      "AX Wiki sources match the current repository. Use ax-code wiki update after substantial changes.",
+    )
   return {
     root,
     wikiDir,
@@ -210,6 +250,7 @@ export async function getWikiStatus(input: {
     pageCount: pages.length,
     manifest,
     stale,
+    freshness,
     healthy,
     recommendations,
   }
@@ -223,12 +264,8 @@ export async function lintWiki(input: {
 }): Promise<WikiValidationReport & { stale: boolean; wikiDir: string }> {
   const root = path.resolve(input.root)
   const wikiDir = sanitizeWikiDir(input.wikiDir)
-  const diskConfig = await loadAxWikiConfig(root)
-  const explicitConfig = Object.fromEntries(
-    Object.entries(input.config ?? {}).filter((entry) => entry[1] !== undefined),
-  ) as AxWikiConfig
-  const config = { ...diskConfig, ...explicitConfig }
-  const sources = await discoverSources({ root, wikiDir, config })
+  const config = await sourceConfig(root, input.config)
+  const sources = await discoverSources({ root, wikiDir, config, strict: true })
   const plan = createWikiPlan(sources, config)
   let manifest: WikiManifest | undefined
   let manifestCorrupt = false
@@ -249,11 +286,7 @@ export async function lintWiki(input: {
   const staleByHead = Boolean(
     input.repositoryHead && manifest?.repositoryHead && input.repositoryHead !== manifest.repositoryHead,
   )
-  const staleBySource =
-    Boolean(manifest && sources.some((source) => manifest.sources[source.path] !== source.hash)) ||
-    Boolean(
-      manifest && Object.keys(manifest.sources).some((source) => !sources.some((current) => current.path === source)),
-    )
+  const staleBySource = Boolean(manifest && sourcesDiffer(sources, manifest.sources))
   const stale = staleByHead || staleBySource
   if (stale)
     report.issues.push({

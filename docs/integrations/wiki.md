@@ -102,6 +102,22 @@ You can also place compiler guidance in `ax-wiki.instructions.md` and core engin
 
 When a healthy wiki exists and `wiki.enabled` is not `false`, session prompts receive a compact `<repo_wiki>` protocol. It tells agents to start at quickstart, load only relevant pages, verify important claims through cited files, and use graph/LSP tools for structural questions.
 
+`healthy` describes the presence of the wiki directory, index, and manifest. The separate `freshness` field is
+`fresh`, `stale`, or `unknown`. Status and session routing compare current source hashes using the effective
+include/exclude and size settings, so uncommitted edits, additions, and deletions are detected. Checks do not reuse
+a cached fresh verdict; they scan eligible sources with bounded read concurrency. Missing or disabled wikis avoid
+the source scan. Freshness is a point-in-time source check, not validation of every generated claim or page; use lint
+for artifact validation.
+
+Stale or unverified wikis remain available for navigation, with an explicit instruction to verify current original
+source before relying on implementation claims. Verification errors produce `unknown`, and `wiki status` exits
+unsuccessfully when freshness cannot be confirmed.
+
+Wiki evidence is bounded: each selected source contributes at most its first 32,000 bytes within the page budget,
+with truncation marked for the generator. GraphContext can add selected snippets, but each snippet is limited to
+80 lines. These navigation aids do not guarantee preservation of every changed function or required guard; provide
+the necessary original code separately for a scoped review.
+
 The managed `<!-- AX-WIKI:START -->` block in `AGENTS.md` carries the same routing policy without copying wiki content into repository instructions.
 
 ## CI

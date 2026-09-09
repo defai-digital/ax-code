@@ -76,7 +76,7 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   ".zig": "Zig",
 }
 
-async function gitFiles(root: string): Promise<string[] | undefined> {
+async function gitFiles(root: string, strict = false): Promise<string[] | undefined> {
   try {
     const { stdout } = await execFileAsync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], {
       cwd: root,
@@ -84,23 +84,28 @@ async function gitFiles(root: string): Promise<string[] | undefined> {
       maxBuffer: 32 * 1024 * 1024,
     })
     return stdout.toString("utf8").split("\0").filter(Boolean).map(normalizePath)
-  } catch {
+  } catch (error) {
+    const failure = error as { code?: string | number; stderr?: string | Buffer }
+    // A non-Git tree (or unavailable Git executable) uses filesystem discovery.
+    // Other enumeration failures must not verify an incomplete inventory as fresh.
+    if (strict && failure.code !== "ENOENT" && !String(failure.stderr).includes("not a git repository")) throw error
     return undefined
   }
 }
 
-async function walkFiles(root: string, directory = root): Promise<string[]> {
+async function walkFiles(root: string, directory = root, strict = false): Promise<string[]> {
   const output: string[] = []
   let entries
   try {
     entries = await readdir(directory, { withFileTypes: true })
-  } catch {
+  } catch (error) {
+    if (strict) throw error
     return output
   }
   for (const entry of entries) {
     if (entry.isDirectory() && SKIP_DIRS.has(entry.name)) continue
     const absolute = path.join(directory, entry.name)
-    if (entry.isDirectory()) output.push(...(await walkFiles(root, absolute)))
+    if (entry.isDirectory()) output.push(...(await walkFiles(root, absolute, strict)))
     else if (entry.isFile() || entry.isSymbolicLink()) output.push(normalizePath(path.relative(root, absolute)))
   }
   return output
@@ -142,6 +147,7 @@ async function readHashedSource(input: {
   root: string
   relative: string
   maxSourceBytes: number
+  strict?: boolean
 }): Promise<WikiSource | undefined> {
   const absolute = resolveInside(input.root, input.relative)
   let fh
@@ -149,7 +155,9 @@ async function readHashedSource(input: {
     // O_NOFOLLOW refuses out-of-tree symlink escapes without a separate
     // lstat/open race. In-tree symlink sources are skipped.
     fh = await open(absolute, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
-  } catch {
+  } catch (error) {
+    const code = (error as { code?: string }).code
+    if (input.strict && code !== "ENOENT" && code !== "ELOOP") throw error
     return undefined
   }
   try {
@@ -165,7 +173,8 @@ async function readHashedSource(input: {
       category: categoryFor(input.relative),
       language: LANGUAGE_BY_EXTENSION[extension],
     }
-  } catch {
+  } catch (error) {
+    if (input.strict) throw error
     return undefined
   } finally {
     await fh.close()
@@ -176,14 +185,16 @@ export async function discoverSources(input: {
   root: string
   wikiDir: string
   config?: AxWikiConfig
+  /** Freshness verification must distinguish I/O failure from excluded sources. */
+  strict?: boolean
 }): Promise<WikiSource[]> {
   const root = path.resolve(input.root)
   const config = input.config ?? {}
-  const candidates = (await gitFiles(root)) ?? (await walkFiles(root))
+  const candidates = (await gitFiles(root, input.strict)) ?? (await walkFiles(root, root, input.strict))
   const unique = [...new Set(candidates.map(normalizePath))].sort()
   const eligible = unique.filter((relative) => shouldInclude(relative, input.wikiDir, config))
   const hashed = await mapWithBoundedConcurrency(eligible, DISCOVERY_READ_CONCURRENCY, (relative) =>
-    readHashedSource({ root, relative, maxSourceBytes: config.maxSourceBytes ?? 512_000 }),
+    readHashedSource({ root, relative, maxSourceBytes: config.maxSourceBytes ?? 512_000, strict: input.strict }),
   )
   return hashed.filter((source): source is WikiSource => source !== undefined)
 }

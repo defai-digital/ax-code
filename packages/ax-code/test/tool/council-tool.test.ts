@@ -82,7 +82,10 @@ const ctx = {
 }
 
 afterEach(() => vi.restoreAllMocks())
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(Provider.getModel).mockResolvedValue({} as any)
+})
 
 describe("council execute()", () => {
   test("runs distinct DeepSeek and Qwen models on the same connected gateway", async () => {
@@ -329,6 +332,128 @@ describe("council timeout", () => {
 })
 
 describe("council request shaping", () => {
+  const configureMembers = () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { council: { maxMembers: 3, debateRounds: 0 } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b", "c"]), rejected: [] })
+    generateObject.mockResolvedValue({ object: { overall: "ok", issues: [] } })
+  }
+
+  test("every member receives the complete boundary context and the same prompt", async () => {
+    configureMembers()
+    const tail = "REQUIRED_TAIL_GUARD!!"
+    const context = "x".repeat(24_000 - tail.length) + tail
+    expect(context.length).toBe(24_000)
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review", context }, ctx)
+    const prompts = generateObject.mock.calls.map(([request]) => request.messages[1].content)
+    expect(prompts).toHaveLength(3)
+    expect(new Set(prompts).size).toBe(1)
+    expect(prompts[0]).toContain(context)
+    expect(result.metadata.contextAdmission?.status).toBe("accepted")
+    expect(result.metadata.successfulMembers).toBe(3)
+    expect(result.metadata.promptBudget?.unknownLimitMembers).toEqual(["a/m", "b/m", "c/m"])
+  })
+
+  test("rejects all members before loading a language model if one member cannot fit", async () => {
+    configureMembers()
+    vi.mocked(Provider.getModel).mockImplementation(
+      async (providerID) =>
+        ({
+          id: "m",
+          providerID,
+          limit: { context: providerID === "b" ? 5000 : 100_000, output: 4000 },
+        }) as any,
+    )
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review", context: "Full required source" }, ctx)
+    expect(result.metadata.status).toBe("context_rejected")
+    expect(result.output).toContain("b/m")
+    expect(result.metadata.contextAdmission?.status).toBe("accepted")
+    expect(result.metadata.promptBudget?.ok).toBe(false)
+    expect(Provider.getLanguage).not.toHaveBeenCalled()
+    expect(generateObject).not.toHaveBeenCalled()
+    expect(generateText).not.toHaveBeenCalled()
+  })
+
+  test("rejects an oversized question even with empty context and unknown model limits", async () => {
+    configureMembers()
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "x".repeat(128_000) }, ctx)
+    expect(result.metadata.status).toBe("context_rejected")
+    expect(generateObject).not.toHaveBeenCalled()
+  })
+
+  test("keeps required evidence intact through the streamed text fallback", async () => {
+    configureMembers()
+    generateObject.mockRejectedValue(new Error("No object generated"))
+    generateText.mockResolvedValue({ text: '{"overall":"ok","issues":[]}' })
+    const context = "\u{1f600}".repeat(10_000) + "TAIL_GUARD"
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review", context }, ctx)
+    expect(result.metadata.successfulMembers).toBe(3)
+    for (const [request] of generateText.mock.calls) {
+      expect(request.messages[1].content).toContain(context)
+      expect(request.maxRetries).toBe(0)
+    }
+  })
+
+  test("keeps lookup failures as failed members while admitting other members", async () => {
+    configureMembers()
+    vi.mocked(Provider.getModel).mockImplementation(async (providerID) => {
+      if (providerID === "b") throw new Error("Model lookup unavailable")
+      return {} as any
+    })
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review" }, ctx)
+    expect(result.metadata.successfulMembers).toBe(2)
+    expect(result.metadata.failedMembers).toBe(1)
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    expect(result.output).toContain("Model lookup unavailable")
+  })
+
+  test("preserves the first report when a debate round exceeds the input budget", async () => {
+    configureMembers()
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { council: { maxMembers: 3, debateRounds: 1 } } } as any)
+    vi.mocked(Provider.getModel).mockResolvedValue({
+      id: "m",
+      providerID: "a",
+      limit: { input: 3500, context: 100_000, output: 4000 },
+    } as any)
+    generateObject
+      .mockResolvedValueOnce({
+        object: {
+          overall: "First report retained",
+          issues: [{ severity: "high", category: "auth", summary: "Required guard is absent. ".repeat(15) }],
+        },
+      })
+      .mockResolvedValue({ object: { overall: "ok", issues: [] } })
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review" }, ctx)
+    expect(generateObject).toHaveBeenCalledTimes(3)
+    expect(result.metadata.status).toBe("incomplete")
+    expect(result.metadata.debateRoundsRun).toBe(0)
+    expect(result.metadata.debateStopReason).toBe("input_budget_rejected")
+    expect(result.metadata.successfulMembers).toBe(3)
+    expect(result.output).toContain("First report retained")
+    expect(result.output).toContain("last completed round")
+  })
+
+  test("rejects oversized required context before any member inference", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { council: { maxMembers: 3 } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b", "c"]), rejected: [] })
+    generateObject.mockResolvedValue({ object: { overall: "ok", issues: [] } })
+    const context = "const stable = 1;\n".repeat(2000) + "CRITICAL_TAIL_DIFF: permission check removed"
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review the complete diff", context }, ctx)
+    expect(generateObject).not.toHaveBeenCalled()
+    expect(generateText).not.toHaveBeenCalled()
+    expect(result.metadata.status).toBe("context_rejected")
+    expect(result.metadata.successfulMembers).toBe(0)
+    expect(result.metadata.contextAdmission).toMatchObject({ status: "rejected", suppliedCharacters: context.length })
+    expect(result.output).toContain("24000")
+    expect(result.output).not.toContain("CRITICAL_TAIL_DIFF")
+  })
+
   test("every member request carries a bounded output limit", async () => {
     vi.mocked(Config.getFresh).mockResolvedValue({
       modes: { council: { enabled: true, maxMembers: 3, debateRounds: 0 } },

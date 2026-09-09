@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
 import path from "path"
 import { writeFile, mkdir } from "node:fs/promises"
+import { buildAxWiki } from "@ax-code/ax-wiki"
 import { Agent } from "../../src/agent/agent"
 import { Instance } from "../../src/project/instance"
 import { EventQuery } from "../../src/replay/query"
@@ -274,6 +275,42 @@ describe("session.system", () => {
       if (original === undefined) delete process.env.AX_CODE_AUTONOMOUS
       else process.env.AX_CODE_AUTONOMOUS = original
     }
+  })
+
+  test("environment passes Wiki discovery settings and refreshes source freshness after edits", async () => {
+    const wikiConfig = { include: ["README.md"] }
+    await using tmp = await tmpdir({
+      git: true,
+      config: { wiki: { ...wikiConfig, dir: "knowledge" } },
+      init: async (dir) => {
+        await writeFile(path.join(dir, "README.md"), "# Fixture\n\nA source used for Wiki routing verification.\n")
+        await writeFile(path.join(dir, "excluded.ts"), "export const excluded = true\n")
+      },
+    })
+    await buildAxWiki({
+      root: tmp.path,
+      wikiDir: "knowledge",
+      config: wikiConfig,
+      action: "generate",
+      generator: async () => ({
+        summary: "Source-backed navigation for the fixture repository.",
+        body: "## Overview\n\nThis page describes the fixture repository using the supplied original source. Read current original files to verify implementation details before making a change.",
+        symbols: [],
+      }),
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = { api: { id: "test-model" }, providerID: "test-provider" } as any
+        const fresh = (await SystemPrompt.environment(model)).join("\n")
+        expect(fresh).toContain("Source freshness: fresh")
+        expect(fresh).toContain("knowledge/quickstart.md")
+        await writeFile(path.join(tmp.path, "README.md"), "# Modified fixture\n")
+        const stale = (await SystemPrompt.environment(model)).join("\n")
+        expect(stale).toContain("Source freshness: stale")
+        expect(stale).toContain("navigation only")
+      },
+    })
   })
 
   test("skills output includes recommendations when messages match skill paths", async () => {

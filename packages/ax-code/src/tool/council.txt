@@ -1,6 +1,8 @@
 Fan out a structured review or design question to multiple connected LLM providers, then aggregate agreement into consensus / strict-majority / minority / singleton findings.
 
-**Call this tool early.** Put a short brief in `context` (stack + key paths). Do **not** run `task_parallel` or long monorepo explores first — that delays multi-provider review and often never reaches this tool.
+**Call this tool early once the relevant evidence is available.** Supply the requirements, relevant diff, required original snippets, and verification evidence in `context`. Members only see the supplied question and context; paths do not give them file access or session history. Avoid broad repository exploration unrelated to the review scope.
+
+Context is required evidence when supplied: at most 24000 UTF-16 code units, sent verbatim or rejected before member inference. Never cut off required evidence to fit. Split oversized reviews into explicitly scoped requests or reduce optional background. Complete prompts also undergo a conservative input-budget check including output and fallback reserves. Estimates are not tokenizer counts; unknown model limits are disclosed. A successful member response does not prove the caller included every relevant source.
 
 Optional anonymous debate rounds (`debateRounds` or `modes.council.debateRounds`) re-share Chatham-House synthesis without member identities. Debate is capped at three rounds, stops early on convergence, and is included in the budget estimate.
 
