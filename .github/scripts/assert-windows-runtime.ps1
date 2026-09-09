@@ -19,31 +19,43 @@ if (-not (Test-Path -LiteralPath $Launcher -PathType Leaf)) {
 [string[]]$ProbeArguments = if ($Backend) { @("tui-backend", "--stdio") } elseif ($Doctor) { @("doctor") } else { @("--version") }
 $ProbeLabel = $ProbeArguments -join " "
 $StderrPath = [System.IO.Path]::GetTempFileName()
+$StdinPath = $null
+$StdoutPath = $null
 $PreviousErrorAction = $ErrorActionPreference
 $PreviousNativeErrorAction = $PSNativeCommandUseErrorActionPreference
-$PreviousOutputEncoding = $OutputEncoding
 try {
   try {
     # Windows PowerShell 5.1 promotes redirected native stderr to errors.
     # Keep diagnostics separate and decide success from this process's exit.
     $ErrorActionPreference = "Continue"
     $PSNativeCommandUseErrorActionPreference = $false
-    # PowerShell 5.1 can inherit UTF-8 with a BOM. RPC stdin must start with
-    # the JSON request itself; preserve the caller's encoding after the probe.
-    $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
     # Native commands update the global automatic variable. A script-local
     # reset would shadow it when this helper is called from another script.
     $global:LASTEXITCODE = $null
-    $Output = if ($Backend) {
-      ('{"type":"rpc.request","method":"health","id":1}' | & $Launcher @ProbeArguments 2>$StderrPath | Out-String).Trim()
+    if ($Backend) {
+      # Redirect explicit bytes instead of passing RPC through PowerShell's
+      # native pipeline, which can add a BOM under Windows PowerShell 5.1.
+      $StdinPath = [System.IO.Path]::GetTempFileName()
+      $StdoutPath = [System.IO.Path]::GetTempFileName()
+      [System.IO.File]::WriteAllText($StdinPath, "{`"type`":`"rpc.request`",`"method`":`"health`",`"id`":1}`n", [System.Text.UTF8Encoding]::new($false))
+      $ProcessLauncher = $Launcher
+      $ProcessArguments = $ProbeArguments
+      if ($env:OS -eq "Windows_NT") {
+        # Start-Process needs cmd.exe to execute the installed .cmd launcher.
+        # Double quoting keeps paths with spaces inside cmd's /s /c command.
+        $ProcessLauncher = $env:ComSpec
+        $ProcessArguments = '/d /s /c ""{0}" {1}"' -f $Launcher, ($ProbeArguments -join " ")
+      }
+      $Process = Start-Process -FilePath $ProcessLauncher -ArgumentList $ProcessArguments -RedirectStandardInput $StdinPath -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath -NoNewWindow -Wait -PassThru
+      try { $ProbeExit = $Process.ExitCode } finally { $Process.Dispose() }
+      $Output = ([System.IO.File]::ReadAllText($StdoutPath)).Trim()
     } else {
-      (& $Launcher @ProbeArguments 2>$StderrPath | Out-String).Trim()
+      $Output = (& $Launcher @ProbeArguments 2>$StderrPath | Out-String).Trim()
+      $ProbeExit = $global:LASTEXITCODE
     }
-    $ProbeExit = $global:LASTEXITCODE
   } finally {
     $ErrorActionPreference = $PreviousErrorAction
     $PSNativeCommandUseErrorActionPreference = $PreviousNativeErrorAction
-    $OutputEncoding = $PreviousOutputEncoding
   }
   $Diagnostics = (Get-Content -LiteralPath $StderrPath -Raw | Out-String).Trim()
   if ($Diagnostics) { Write-Host $Diagnostics }
@@ -79,5 +91,7 @@ try {
     throw "Expected runtime version $Version, got '$Output'"
   }
 } finally {
-  Remove-Item -LiteralPath $StderrPath -Force -ErrorAction SilentlyContinue
+  foreach ($TemporaryPath in @($StdinPath, $StdoutPath, $StderrPath)) {
+    if ($TemporaryPath) { Remove-Item -LiteralPath $TemporaryPath -Force -ErrorAction SilentlyContinue }
+  }
 }

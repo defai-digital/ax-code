@@ -268,9 +268,9 @@ describe("AX Code TUI stability guardrails", () => {
     // plain OSC 9;<text> as a desktop notification, so activation there would
     // spam a bogus "4;3" notification every second via the keepalive.
     expect(renderer).toContain("if (!profile.allowTerminalTitle || !supported) active = false")
-    // Piped/redirected stdout (explicit isTTY false) must not receive escape
-    // bytes; undefined isTTY (test fakes, some real contexts) still writes.
-    expect(renderer).toContain("if (stream.isTTY === false) return false")
+    // Node pipes leave isTTY undefined. Require a confirmed terminal before
+    // writing escape bytes to stdout, including progress keepalive writes.
+    expect(renderer).toContain("if (stream.isTTY !== true) return false")
   })
 
   test("does not register the terminal suspend command on Windows", async () => {
