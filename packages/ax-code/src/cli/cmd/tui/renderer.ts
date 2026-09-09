@@ -5,6 +5,7 @@ import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { toErrorMessage } from "@/util/error-message"
 import { axCodeTerminalTitleSequence } from "@/util/terminal-title"
+import { ensureWindowsUtf8Console } from "@/cli/bootstrap/windows-console"
 import {
   clearTuiMainScreen,
   disableTuiMouseTracking,
@@ -257,6 +258,9 @@ export async function destroyTuiRenderer(
 }
 
 export function renderTui(root: TuiRenderRoot, options?: Parameters<typeof createTuiRenderOptions>[0]) {
+  // Bootstrap and backend startup can run other console-attached programs.
+  // Recheck output encoding immediately before the native renderer emits UTF-8.
+  ensureWindowsUtf8Console()
   const profile = getTuiRenderProfile()
   // xterm modifyOtherKeys is the complementary path for terminals that do not
   // support Kitty keyboard reporting. The native renderer owns Kitty setup,

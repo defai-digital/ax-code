@@ -4,6 +4,8 @@ This branch starts at the official `v7.14.11` tag (commit `ce0ea3b3d`) and ports
 
 The subsequent [session-load issue report](issue-session-load-large-rpc.md) documents the fix for large transcript RPC responses being truncated by the process transport, including reproduction, implementation, and installed-runtime verification.
 
+The [Windows restart mojibake issue report](issue-windows-console-restart-mojibake.md) documents independent input/output code-page drift, the native console repair, and real Ctrl+C/restart validation.
+
 Windows snapshot staging enumerates indexed and untracked paths in one tagged, NUL-delimited Git command. Unsupported historical paths still fail without removing index entries. Unsupported untracked paths retain the upstream exclusion and warning behavior. Restore protection and the upstream command-line-length handling remain intact.
 
 The official base already includes the Windows doctor process checks, structured log severity, complete recent-log scanning, effective configuration and inline credential discovery, Windows reserved-path handling, and nested SQLite busy-error retry fixes. Its session creation timeout is 52 seconds; the earlier local source used 57 seconds. Both cover the configured three-attempt lock-wait budget.
