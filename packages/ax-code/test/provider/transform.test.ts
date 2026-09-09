@@ -3635,3 +3635,22 @@ describe("ProviderTransform.message - unsupported modality gate", () => {
     expect(content[1]).toEqual(imageFilePart)
   })
 })
+
+describe("Explicit prompt cache policy owns annotations", () => {
+  test.each(["off", "unknown", "alibaba-explicit"])("does not restore positional caching for %s", (mode) => {
+    const model = {
+      id: ModelID.make("qwen3.8-max"),
+      providerID: ProviderID.make("alibaba-token-plan"),
+      api: { id: "qwen3.8-max", url: "https://example.test/v1", npm: "@ai-sdk/openai-compatible" },
+      capabilities: { input: { text: true }, output: { text: true }, interleaved: false },
+      options: { promptCacheMode: mode },
+    } as any
+    const messages = [
+      { role: "system", content: "Unclassified context" },
+      { role: "user", content: "Changing task" },
+    ] as any[]
+    const result = ProviderTransform.message(messages, model, {})
+    expect(JSON.stringify(result)).not.toContain("cache_control")
+    expect(JSON.stringify(result)).not.toContain("cacheControl")
+  })
+})

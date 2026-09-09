@@ -45,6 +45,15 @@ export namespace PromptCachePolicy {
     return "off"
   }
 
+  // Only absence retains the first-party default. Every configured value
+  // other than the verified mode fails closed, including empty/non-string values.
+  export function resolveMode(providerID: string, modeOverride?: unknown): PolicyMode {
+    if (modeOverride !== undefined) {
+      return modeOverride === "alibaba-explicit" ? "alibaba-explicit" : "off"
+    }
+    return policyMode(providerID)
+  }
+
   export function honorsExplicitCache(providerID: string): boolean {
     return policyMode(providerID) === "alibaba-explicit"
   }
@@ -79,16 +88,25 @@ export namespace PromptCachePolicy {
     return "dynamic"
   }
 
-  // Render blocks according to policy. For alibaba-explicit mode, stable blocks
-  // receive cache_control; dynamic blocks do not. For "off" mode, no annotation.
-  export function render(blocks: CacheBlock[], providerID: string): RenderResult {
-    const mode = policyMode(providerID)
+  // DashScope explicit-cache bills per annotated breakpoint. Annotating every
+  // stable block inflates cache cost without adding hits — the leading blocks
+  // already cover the shared prefix — so explicit stable-block markers are
+  // capped at the first MAX_STABLE_BLOCK_MARKERS stable blocks.
+  export const MAX_STABLE_BLOCK_MARKERS = 4
+
+  // Render blocks according to policy. For alibaba-explicit mode, the first
+  // MAX_STABLE_BLOCK_MARKERS stable blocks receive cache_control; later stable
+  // blocks and all dynamic blocks do not. For "off" mode, no annotation.
+  export function render(blocks: CacheBlock[], providerID: string, modeOverride?: unknown): RenderResult {
+    const mode = resolveMode(providerID, modeOverride)
     const debugLines: string[] = []
     const rendered: RenderResult["blocks"] = []
+    let marked = 0
 
     for (const block of blocks) {
       const kind = block.kind
-      if (mode === "alibaba-explicit" && kind === "stable") {
+      if (mode === "alibaba-explicit" && kind === "stable" && marked < MAX_STABLE_BLOCK_MARKERS) {
+        marked++
         rendered.push({ content: block.content, cacheControl: { type: "ephemeral" } })
         debugLines.push(`[cache=stable] ${block.label ?? "(unlabeled)"} (${block.content.length}ch)`)
       } else {

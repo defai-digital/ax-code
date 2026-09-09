@@ -365,6 +365,10 @@ export namespace ProviderTransform {
   }
 
   function shouldApplyCaching(model: Provider.Model, options: Record<string, unknown>, msgs?: ModelMessage[]): boolean {
+    // An explicit model policy owns stable-block annotations in the session
+    // layer. Never add positional markers to dynamic messages or rescue an
+    // unknown/off mode when that layer intentionally emitted no markers.
+    if (model.options?.promptCacheMode !== undefined) return false
     const usesAnthropicAutomaticCaching =
       options.cacheControl !== undefined &&
       (model.api.npm === "@ai-sdk/anthropic" || model.api.npm === "@ai-sdk/google-vertex/anthropic")

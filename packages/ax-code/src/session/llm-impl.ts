@@ -281,6 +281,11 @@ export namespace LLM {
 
     const variant =
       !input.small && input.model.variants && input.user.variant ? (input.model.variants[input.user.variant] ?? {}) : {}
+    // model.options.promptCacheMode is a local cache-policy knob, not a wire
+    // field: pull it out before merging so a verified-model override never
+    // leaks into the request body as a provider option.
+    const { promptCacheMode: promptCacheModeOption, ...modelOptions } = input.model.options ?? {}
+    const promptCacheModeOverride = promptCacheModeOption
     const base = input.small
       ? ProviderTransform.smallOptions(input.model)
       : ProviderTransform.options({
@@ -293,7 +298,7 @@ export namespace LLM {
       input.model,
       pipe(
         base,
-        mergeDeep(input.model.options),
+        mergeDeep(modelOptions),
         mergeDeep(input.agent.options),
         mergeDeep(variant),
         mergeDeep(reasoningPolicyDecision.options),
@@ -337,7 +342,14 @@ export namespace LLM {
     // user message so they are not merged into the cached system prefix and
     // re-written every turn.
     const cacheCaps = getModelCapabilities(input.model.id, input.model.providerID)
-    const promptCacheEligible = cacheCaps.promptCache === "supported" || cacheCaps.promptCache === "experimental"
+    // An explicit `promptCacheMode: "alibaba-explicit"` override marks the
+    // model as verified for DashScope-style cache_control even when the
+    // capability registry has not vouched for it. Unknown configured modes
+    // resolve to "off" inside the policy, never to annotations.
+    const promptCacheEligible =
+      cacheCaps.promptCache === "supported" ||
+      cacheCaps.promptCache === "experimental" ||
+      promptCacheModeOverride === "alibaba-explicit"
     const collapseSystem = ProviderTransform.requiresSingleLeadingSystem(input.model)
     let requestMessages = input.messages
     let blocksForRender = cacheBlocks
@@ -355,7 +367,7 @@ export namespace LLM {
 
     let systemMessages: ModelMessage[]
     if (promptCacheEligible) {
-      const cacheResult = PromptCachePolicy.render(blocksForRender, input.model.providerID)
+      const cacheResult = PromptCachePolicy.render(blocksForRender, input.model.providerID, promptCacheModeOverride)
       systemMessages = cacheResult.blocks.map((block) =>
         systemMessage(block.content, cacheResult.mode, block.cacheControl),
       )
@@ -510,6 +522,17 @@ export namespace LLM {
           }),
       ...input.model.headers,
       ...headers,
+    }
+    // AX Trust gateways key prompt-cache affinity on the session. The header
+    // is sent only on the explicit provider opt-in (provider.options.axTrust
+    // === true); opting out leaves the headers above untouched. This path
+    // never synthesizes a body-level prompt_cache_key/promptCacheKey — the
+    // body cache key stays governed by ProviderTransform.options.
+    if (provider.options?.["axTrust"] === true) {
+      for (const name of Object.keys(requestHeaders)) {
+        if (name.toLowerCase() === "x-ax-prompt-cache-key") delete requestHeaders[name]
+      }
+      requestHeaders["X-AX-Prompt-Cache-Key"] = input.sessionID
     }
     const streamErrorHolder: { error?: unknown } = {}
     // Stream watchdog: providers can either stop producing chunks without

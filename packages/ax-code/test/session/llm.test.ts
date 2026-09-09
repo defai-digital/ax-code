@@ -1323,6 +1323,285 @@ describe("session.llm.stream", () => {
   })
 })
 
+describe("session.llm.stream - AX Trust prompt-cache header", () => {
+  test("sends X-AX-Prompt-Cache-Key with the session ID when axTrust is enabled", async () => {
+    const providerID = "openrouter"
+    const modelID = "openai/gpt-5.2"
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-openrouter-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                  axTrust: true,
+                },
+                models: { [modelID]: { headers: { "x-ax-prompt-cache-key": "stale-configured-key" } } },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        const sessionID = SessionID.make("session-axtrust-on")
+        const user = {
+          id: MessageID.make("user-axtrust-on"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "test",
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        expect(capture.headers.get("X-AX-Prompt-Cache-Key")).toBe("session-axtrust-on")
+        // Opting in must not disturb the existing outbound headers.
+        expect(capture.headers.get("Authorization")).toBe("Bearer test-openrouter-key")
+        expect(capture.headers.get("X-Title")).toBe("AX Code")
+        // The header path never synthesizes a body-level prompt cache key.
+        expect(capture.body.promptCacheKey).toBeUndefined()
+        expect(capture.body.prompt_cache_key).toBeUndefined()
+        expect(capture.body.axTrust).toBeUndefined()
+      },
+    })
+  })
+
+  test("omits X-AX-Prompt-Cache-Key when axTrust is not enabled", async () => {
+    const providerID = "openrouter"
+    const modelID = "openai/gpt-5.2"
+
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-openrouter-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                  axTrust: false,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        const sessionID = SessionID.make("session-axtrust-off")
+        const user = {
+          id: MessageID.make("user-axtrust-off"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "test",
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {
+        }
+
+        const capture = await request
+        // Explicit opt-out leaves the header set untouched.
+        expect(capture.headers.get("X-AX-Prompt-Cache-Key")).toBeNull()
+        expect(capture.headers.get("Authorization")).toBe("Bearer test-openrouter-key")
+      },
+    })
+  })
+})
+
+describe("session.llm.stream - model promptCacheMode override", () => {
+  async function streamWithModelOptions(
+    modelOptions: Record<string, unknown> | undefined,
+    sessionIDRaw: string,
+    providerID = "deepseek",
+    modelID = "deepseek-v4-flash",
+  ): Promise<Capture> {
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    const fixture = await loadFixture(providerID, modelID)
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  apiKey: "test-key",
+                  baseURL: `${state.server.url.origin}/v1`,
+                },
+                ...(modelOptions === undefined
+                  ? { models: { [modelID]: fixture.model } }
+                  : { models: { [modelID]: { ...fixture.model, options: modelOptions } } }),
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    // Keep the disposable config directory alive until the request completes.
+    return await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        const sessionID = SessionID.make(sessionIDRaw)
+        const user = {
+          id: MessageID.make(`user-${sessionIDRaw}`),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "test",
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {
+        }
+
+        return await request
+      },
+    })
+  }
+
+  test("alibaba-explicit override annotates stable system blocks on a non-Alibaba route", async () => {
+    const capture = await streamWithModelOptions({ promptCacheMode: "alibaba-explicit" }, "session-cache-override-on")
+
+    const systemMessages = (
+      capture.body.messages as Array<{ role: string; content: string; cache_control?: { type?: string } }>
+    ).filter((m) => m.role === "system")
+    expect(systemMessages.length).toBeGreaterThan(0)
+    expect(systemMessages.some((m) => m.cache_control?.type === "ephemeral")).toBe(true)
+    // The policy knob is consumed locally and must not reach the wire body.
+    expect(capture.body.promptCacheMode).toBeUndefined()
+    expect(capture.body.promptCacheKey).toBeUndefined()
+  })
+
+  test("unknown mode cannot be rescued by first-party positional caching", async () => {
+    const capture = await streamWithModelOptions(
+      { promptCacheMode: "unknown" },
+      "session-first-party-off",
+      "alibaba-token-plan",
+      "qwen3.8-max",
+    )
+    expect(JSON.stringify(capture.body.messages)).not.toContain("cache_control")
+    expect(capture.body.promptCacheMode).toBeUndefined()
+  })
+
+  test("unknown promptCacheMode value keeps annotations off", async () => {
+    const capture = await streamWithModelOptions({ promptCacheMode: "dashscope-v9" }, "session-cache-override-unknown")
+
+    const systemMessages = (
+      capture.body.messages as Array<{ role: string; content: string; cache_control?: { type?: string } }>
+    ).filter((m) => m.role === "system")
+    expect(systemMessages.some((m) => m.cache_control !== undefined)).toBe(false)
+    expect(capture.body.promptCacheMode).toBeUndefined()
+  })
+
+  test("unverified models stay unannotated without an override", async () => {
+    const capture = await streamWithModelOptions(undefined, "session-cache-no-override")
+
+    const systemMessages = (
+      capture.body.messages as Array<{ role: string; content: string; cache_control?: { type?: string } }>
+    ).filter((m) => m.role === "system")
+    expect(systemMessages.some((m) => m.cache_control !== undefined)).toBe(false)
+  })
+})
+
 describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
   const origSuperLong = process.env.AX_CODE_SUPER_LONG
   const origSuperLongOverride = process.env.AX_CODE_SUPER_LONG_SESSION_OVERRIDE
