@@ -1,5 +1,7 @@
 import path from "path"
 import fs from "fs/promises"
+import { parseWindowsAxCodeProcesses, WINDOWS_PROCESS_COMMAND } from "./doctor-processes"
+import { parseJsonResult } from "../../util/json-value"
 import { Process } from "../../util/process"
 
 export type DoctorCheck = {
@@ -11,7 +13,6 @@ export type DoctorCheck = {
 // tui-backend is the TUI's own stdio backend subprocess, not a competing instance.
 const READ_ONLY_AX_CODE_PATTERNS = [/(\s|^)doctor(\s|$)/, /(\s|^)--version(\s|$)/, /(\s|^)tui-backend(\s|$)/]
 const RECENT_LOG_WINDOW_MS = 24 * 60 * 60 * 1000
-const MAX_RECENT_LOG_FILES = 5
 const DEFAULT_RUN_TIMEOUT_MS = 5_000
 const STACK_FIELD_PATTERN = /(?:\sstack=|"stack"\s*:)/i
 
@@ -43,24 +44,48 @@ function isTuiError(line: string) {
 function parseDecimalPid(value: string): number | undefined {
   if (!/^\d+$/.test(value)) return undefined
   const pid = Number(value)
-  return Number.isSafeInteger(pid) ? pid : undefined
+  return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined
 }
 
 export async function getRunningInstancesCheck(
   input: {
     currentPid?: number
+    platform?: NodeJS.Platform
     run?: (command: string[]) => Promise<string>
   } = {},
 ): Promise<DoctorCheck | undefined> {
   const currentPid = input.currentPid ?? process.pid
   const run = input.run ?? defaultRun
 
+  const unknown: DoctorCheck = {
+    name: "Running instances",
+    status: "warn",
+    detail: "Unable to enumerate AX Code processes — instance count is unknown",
+  }
+  if ((input.platform ?? process.platform) === "win32") {
+    try {
+      const processes = parseWindowsAxCodeProcesses(await run(WINDOWS_PROCESS_COMMAND))
+      const all = new Set(processes.map((item) => item.pid))
+      const primary = processes.filter((item) => item.pid !== currentPid && !item.readOnly && !all.has(item.parent))
+      return primary.length === 0
+        ? { name: "Running instances", status: "ok", detail: "No other ax-code processes" }
+        : {
+            name: "Running instances",
+            status: "warn",
+            detail: `${primary.length} other ax-code process(es) found. PIDs: ${primary.map((item) => item.pid).join(", ")}. Review these instances for startup or port conflicts.`,
+          }
+    } catch {
+      return unknown
+    }
+  }
   let raw = ""
   try {
     raw = await run(["pgrep", "-a", "-x", "ax-code"])
   } catch {
-    return undefined
+    return unknown
   }
+  if (raw.split("\n").some((line) => line.trim() && parseDecimalPid(line.trim().split(/\s/)[0]) === undefined))
+    return unknown
 
   const others = raw
     .split("\n")
@@ -111,6 +136,50 @@ export async function getRunningInstancesCheck(
   }
 }
 
+type LogEvent = { severity: "error" | "warn"; summary: string; tui: boolean; mirrorKey?: string }
+
+function logEvent(line: string): LogEvent | undefined {
+  const value = parseJsonResult(line)
+  if (value.ok && value.value && typeof value.value === "object" && !Array.isArray(value.value)) {
+    const row = value.value as Record<string, unknown>
+    const level = typeof row.level === "string" ? row.level.toLowerCase() : row.level
+    const severity = [50, 60, "error", "fatal"].includes(level as string | number)
+      ? "error"
+      : [40, "warn", "warning"].includes(level as string | number)
+        ? "warn"
+        : undefined
+    if (!severity) return
+    const service = typeof row.service === "string" ? row.service : ""
+    const message = typeof row.msg === "string" ? row.msg : typeof row.message === "string" ? row.message : ""
+    const summary = `${severity.toUpperCase()} ${service ? `service=${service} ` : ""}${message}`
+    return {
+      severity,
+      summary,
+      tui: isTuiError(`${service} ${message}`),
+      mirrorKey: eventKey(row.time ?? row.timestamp, severity, service, message),
+    }
+  }
+  const match = line.match(/^(ERROR|WARN)\b/)
+  if (!match) return
+  const severity = match[1] === "ERROR" ? "error" : "warn"
+  const fields = line.match(/^(?:ERROR|WARN)\s+(\d{4}-\d\d-\d\dT[\d:.]+Z?)\s+(?:\+\d+ms\s+)?service=(\S+)\s+(.+)$/)
+  return {
+    severity,
+    summary: line,
+    tui: isTuiError(line),
+    mirrorKey: fields ? eventKey(fields[1], severity, fields[2], fields[3]) : undefined,
+  }
+}
+
+function eventKey(time: unknown, severity: string, service: string, message: string) {
+  if (!service || !message || (typeof time !== "string" && typeof time !== "number")) return
+  const value =
+    typeof time === "number" ? time : Date.parse(time.endsWith("Z") || /[+-]\d\d:\d\d$/.test(time) ? time : `${time}Z`)
+  if (!Number.isFinite(value)) return
+  // Text timestamps have second precision. Match only inside the same paired log files.
+  return JSON.stringify([Math.floor(value / 1000), severity, service, message])
+}
+
 export async function getRecentLogsChecks(input: {
   logDir: string
   now?: number
@@ -123,7 +192,13 @@ export async function getRecentLogsChecks(input: {
   const readdir = input.readdir ?? (async (target: string) => fs.readdir(target))
   const stat = input.stat ?? (async (target: string) => fs.stat(target))
 
-  const logFiles = (await readdir(input.logDir).catch(() => []))
+  let accessFailures = 0
+  const logFiles = (
+    await readdir(input.logDir).catch((error) => {
+      if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") accessFailures++
+      return []
+    })
+  )
     .filter(isLogFile)
     .map((name) => path.join(input.logDir, name))
 
@@ -132,17 +207,20 @@ export async function getRecentLogsChecks(input: {
       target,
       mtimeMs: await stat(target)
         .then((result) => result.mtimeMs)
-        .catch(() => 0),
+        .catch(() => {
+          accessFailures++
+          return 0
+        }),
     })),
   )
 
   const recent = withStats
     .filter((entry) => entry.mtimeMs > 0 && now - entry.mtimeMs <= RECENT_LOG_WINDOW_MS)
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .slice(0, MAX_RECENT_LOG_FILES)
 
   if (recent.length === 0) {
     return [
+      ...(accessFailures ? [logAccessWarning(accessFailures)] : []),
       {
         name: "Recent logs",
         status: withStats.length > 0 ? "ok" : "warn",
@@ -159,23 +237,41 @@ export async function getRecentLogsChecks(input: {
   const tuiErrors: string[] = []
   let latestRecentErrors: string[] = []
 
+  const mirrors = new Map<string, [number, number]>()
   for (const entry of recent) {
-    const content = await readFile(entry.target).catch(() => "")
-    const lines = content.split("\n").filter(Boolean)
-    const errors = lines.filter((line) => line.startsWith("ERROR"))
-    const warns = lines.filter((line) => line.startsWith("WARN"))
-    totalErrors += errors.length
-    totalWarns += warns.length
-
-    if (errors.length > 0 && latestRecentErrors.length === 0) {
-      latestRecentErrors = errors.slice(-3)
+    let content: string
+    try {
+      content = await readFile(entry.target)
+    } catch {
+      accessFailures++
+      continue
     }
-
-    for (const line of errors) {
-      if (isTuiError(line)) {
-        tuiErrors.push(`[${path.basename(entry.target)}] ${line.slice(0, 160)}`)
+    const errors: string[] = []
+    for (const line of content.split("\n")) {
+      const event = logEvent(line)
+      if (!event) continue
+      if (event.mirrorKey) {
+        const json = entry.target.endsWith(".json.log")
+        const key = `${entry.target.replace(/(?:\.json)?\.log$/, "")}\0${event.mirrorKey}`
+        const counts = mirrors.get(key) ?? [0, 0]
+        const side = json ? 1 : 0
+        counts[side]++
+        mirrors.set(key, counts)
+        if (counts[side] <= counts[1 - side]) continue
+      }
+      if (event.severity === "warn") {
+        totalWarns++
+        continue
+      }
+      totalErrors++
+      errors.push(event.summary)
+      if (errors.length > 3) errors.shift()
+      if (event.tui) {
+        tuiErrors.push(`[${path.basename(entry.target)}] ${event.summary.slice(0, 160)}`)
+        if (tuiErrors.length > 3) tuiErrors.shift()
       }
     }
+    if (errors.length && latestRecentErrors.length === 0) latestRecentErrors = errors.slice(-3)
   }
 
   const checks: DoctorCheck[] = [
@@ -185,6 +281,8 @@ export async function getRecentLogsChecks(input: {
       detail: `${recent.length} file(s) checked from the last 24h — ${totalErrors} errors, ${totalWarns} warnings`,
     },
   ]
+
+  if (accessFailures) checks.push(logAccessWarning(accessFailures))
 
   if (tuiErrors.length > 0) {
     checks.push({
@@ -214,6 +312,15 @@ async function defaultRun(command: string[]) {
     timeout: DEFAULT_RUN_TIMEOUT_MS,
     nothrow: true,
   })
-  if (result.code === 124) return `command timed out after ${DEFAULT_RUN_TIMEOUT_MS}ms`
-  return result.code === 0 ? result.text : result.stderr.toString()
+  if (result.code === 0) return result.text
+  if (command[0] === "pgrep" && result.code === 1 && !result.stderr.toString().trim()) return ""
+  throw new Error("Process enumeration failed")
+}
+
+function logAccessWarning(count: number): DoctorCheck {
+  return {
+    name: "Log access",
+    status: "warn",
+    detail: `${count} log access failure(s); error and warning counts are incomplete`,
+  }
 }
