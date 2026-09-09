@@ -19,8 +19,6 @@ if (-not (Test-Path -LiteralPath $Launcher -PathType Leaf)) {
 [string[]]$ProbeArguments = if ($Backend) { @("tui-backend", "--stdio") } elseif ($Doctor) { @("doctor") } else { @("--version") }
 $ProbeLabel = $ProbeArguments -join " "
 $StderrPath = [System.IO.Path]::GetTempFileName()
-$StdinPath = $null
-$StdoutPath = $null
 $PreviousErrorAction = $ErrorActionPreference
 $PreviousNativeErrorAction = $PSNativeCommandUseErrorActionPreference
 try {
@@ -33,22 +31,39 @@ try {
     # reset would shadow it when this helper is called from another script.
     $global:LASTEXITCODE = $null
     if ($Backend) {
-      # Redirect explicit bytes instead of passing RPC through PowerShell's
-      # native pipeline, which can add a BOM under Windows PowerShell 5.1.
-      $StdinPath = [System.IO.Path]::GetTempFileName()
-      $StdoutPath = [System.IO.Path]::GetTempFileName()
-      [System.IO.File]::WriteAllText($StdinPath, "{`"type`":`"rpc.request`",`"method`":`"health`",`"id`":1}`n", [System.Text.UTF8Encoding]::new($false))
+      # Own the pipe and write request bytes directly. PowerShell 5.1 can add
+      # a BOM through its native pipeline; file-backed stdin also behaves
+      # differently from the real backend pipe through the Windows launcher.
       $ProcessLauncher = $Launcher
-      $ProcessArguments = $ProbeArguments
+      $ProcessArguments = $ProbeArguments -join " "
       if ($env:OS -eq "Windows_NT") {
-        # Start-Process needs cmd.exe to execute the installed .cmd launcher.
+        # ProcessStartInfo needs cmd.exe to execute the installed .cmd launcher.
         # Double quoting keeps paths with spaces inside cmd's /s /c command.
         $ProcessLauncher = $env:ComSpec
         $ProcessArguments = '/d /s /c ""{0}" {1}"' -f $Launcher, ($ProbeArguments -join " ")
       }
-      $Process = Start-Process -FilePath $ProcessLauncher -ArgumentList $ProcessArguments -RedirectStandardInput $StdinPath -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath -NoNewWindow -Wait -PassThru
-      try { $ProbeExit = $Process.ExitCode } finally { $Process.Dispose() }
-      $Output = ([System.IO.File]::ReadAllText($StdoutPath)).Trim()
+      $Process = [System.Diagnostics.Process]::new()
+      try {
+        $Process.StartInfo.FileName = $ProcessLauncher
+        $Process.StartInfo.Arguments = $ProcessArguments
+        $Process.StartInfo.UseShellExecute = $false
+        $Process.StartInfo.RedirectStandardInput = $true
+        $Process.StartInfo.RedirectStandardOutput = $true
+        $Process.StartInfo.RedirectStandardError = $true
+        $Process.StartInfo.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+        $Process.StartInfo.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
+        if (-not $Process.Start()) { throw "Could not start backend probe" }
+        # Drain both streams concurrently so diagnostics cannot block stdout.
+        $StdoutTask = $Process.StandardOutput.ReadToEndAsync()
+        $StderrTask = $Process.StandardError.ReadToEndAsync()
+        $RequestBytes = [System.Text.Encoding]::UTF8.GetBytes("{`"type`":`"rpc.request`",`"method`":`"health`",`"id`":1}`n")
+        $Process.StandardInput.BaseStream.Write($RequestBytes, 0, $RequestBytes.Length)
+        $Process.StandardInput.BaseStream.Close()
+        $Process.WaitForExit()
+        $ProbeExit = $Process.ExitCode
+        $Output = $StdoutTask.GetAwaiter().GetResult().Trim()
+        [System.IO.File]::WriteAllText($StderrPath, $StderrTask.GetAwaiter().GetResult(), [System.Text.UTF8Encoding]::new($false))
+      } finally { $Process.Dispose() }
     } else {
       $Output = (& $Launcher @ProbeArguments 2>$StderrPath | Out-String).Trim()
       $ProbeExit = $global:LASTEXITCODE
@@ -57,7 +72,7 @@ try {
     $ErrorActionPreference = $PreviousErrorAction
     $PSNativeCommandUseErrorActionPreference = $PreviousNativeErrorAction
   }
-  $Diagnostics = (Get-Content -LiteralPath $StderrPath -Raw | Out-String).Trim()
+  $Diagnostics = ([System.IO.File]::ReadAllText($StderrPath)).Trim()
   if ($Diagnostics) { Write-Host $Diagnostics }
   if ($Output) { Write-Host $Output }
   if ($null -eq $ProbeExit -or $ProbeExit -ne 0) {
@@ -91,7 +106,5 @@ try {
     throw "Expected runtime version $Version, got '$Output'"
   }
 } finally {
-  foreach ($TemporaryPath in @($StdinPath, $StdoutPath, $StderrPath)) {
-    if ($TemporaryPath) { Remove-Item -LiteralPath $TemporaryPath -Force -ErrorAction SilentlyContinue }
-  }
+  Remove-Item -LiteralPath $StderrPath -Force -ErrorAction SilentlyContinue
 }
