@@ -325,6 +325,18 @@ function Assert-NodeBundleRuntime([string]$Root) {
   }
 }
 
+function Move-RuntimeItem([string]$LiteralPath, [string]$Destination) {
+  # Keep runtime, staging, and backup moves as same-volume renames. The
+  # PowerShell provider can fall back to recursive moves after DirectoryInfo.MoveTo
+  # fails, leaving partial destinations. Use same-volume rename operations.
+  # Directory.Move also preserves Win32 error codes on .NET Framework.
+  if ([System.IO.Directory]::Exists($LiteralPath)) {
+    [System.IO.Directory]::Move($LiteralPath, $Destination)
+  } else {
+    [System.IO.File]::Move($LiteralPath, $Destination)
+  }
+}
+
 function Move-RuntimePath([string]$Source, [string]$Destination) {
   $retryableCodes = @(5, 32, 33)
   for ($attempt = 0; $attempt -lt 10; $attempt++) {
@@ -334,7 +346,7 @@ function Move-RuntimePath([string]$Source, [string]$Destination) {
       if (Test-Path -LiteralPath $Destination) {
         throw "Runtime destination already exists: $Destination"
       }
-      Move-Item -LiteralPath $Source -Destination $Destination -ErrorAction Stop
+      Move-RuntimeItem -LiteralPath $Source -Destination $Destination
       return
     } catch {
       $exception = $_.Exception
@@ -342,17 +354,15 @@ function Move-RuntimePath([string]$Source, [string]$Destination) {
         $exception = $exception.InnerException
       }
       $code = $exception.HResult -band 0xffff
-      # .NET Framework DirectoryInfo.MoveTo loses ERROR_ACCESS_DENIED and
-      # throws plain IOException (COR_E_IO). This affects PowerShell 5.1.
-      # Restrict that compatibility case to an existing directory source.
-      $frameworkDirectoryFailure = $exception.GetType() -eq [System.IO.IOException] -and
-        $exception.HResult -eq -2146232800 -and (Test-Path -LiteralPath $Source -PathType Container)
-      if ($attempt -ge 9 -or ($code -notin $retryableCodes -and -not $frameworkDirectoryFailure)) { throw }
+      if ($attempt -ge 9 -or $code -notin $retryableCodes) { throw }
       Write-Verbose "Retrying runtime move after $($exception.GetType().Name) (HRESULT $($exception.HResult)); attempt $($attempt + 1)/10"
       # Windows can report access denied as an execution or antivirus handle
       # drains after a probe. Retry briefly without changing permissions; a
       # persistent denial still fails through the existing rollback boundary.
-      Start-Sleep -Milliseconds 200
+      # Back off up to two seconds per wait (thirteen seconds total), since
+      # hosted Windows file handles can outlive the initial two-second budget.
+      $delay = [Math]::Min(200 * [Math]::Pow(2, $attempt), 2000)
+      Start-Sleep -Milliseconds $delay
     }
   }
 }

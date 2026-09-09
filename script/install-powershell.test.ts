@@ -64,6 +64,7 @@ foreach ($statement in $ast.EndBlock.Statements) {
     . ([scriptblock]::Create($statement.Extent.Text))
   }
 }
+$script:OriginalRuntimeMove = (Get-Command Move-RuntimeItem).ScriptBlock
 $Source = Join-Path $env:AX_TEST_ROOT "source bundle"
 $InstallRoot = Join-Path $env:AX_TEST_ROOT "installed bundle"
 $InstallDir = Join-Path $InstallRoot "bin"
@@ -117,10 +118,6 @@ describe.skipIf(!available)("PowerShell runtime installation", () => {
   const moveErrors = [
     { name: "sharing lock", exception: '[System.IO.IOException]::new("Simulated sharing violation", -2147024864)' },
     { name: "access denial", exception: '[System.UnauthorizedAccessException]::new("Simulated access denial")' },
-    {
-      name: "Framework directory access denial",
-      exception: '[System.IO.IOException]::new("Simulated Framework directory access denial")',
-    },
   ]
   test.each(moveErrors.flatMap((error) => ["backup", "activation", "rollback"].map((phase) => ({ ...error, phase }))))(
     "tolerates a transient $name during $phase",
@@ -132,7 +129,7 @@ $script:rollingBack = $false
 if ("${phase}" -eq "rollback") {
   function Verify-InstalledRuntime { $script:rollingBack = $true; throw "Simulated final check failure" }
 }
-function Move-Item {
+function Move-RuntimeItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination)
   $target = if ("${phase}" -eq "backup") {
@@ -146,7 +143,7 @@ function Move-Item {
     $script:locks++
     if ($script:locks -le 2) { throw ${exception} }
   }
-  Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
+  & $script:OriginalRuntimeMove @PSBoundParameters
 }
 if ("${phase}" -eq "rollback") {
   $failure = $null
@@ -168,14 +165,14 @@ New-PreviousInstall
 $script:attempts = 0
 $script:rollingBack = $false
 function Verify-InstalledRuntime { $script:rollingBack = $true; throw "Simulated final check failure" }
-function Move-Item {
+function Move-RuntimeItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination)
   if ($script:rollingBack -and $LiteralPath -eq $InstallNodeDir) {
     $script:attempts++
     throw ${exception}
   }
-  Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
+  & $script:OriginalRuntimeMove @PSBoundParameters
 }
 $failure = $null
 try { Install-NodeBundleTree $Source } catch { $failure = $_ }
@@ -183,6 +180,27 @@ if ($failure -notmatch "Recovery files remain at") { throw "Expected recovery pa
 Assert-Equal $script:attempts 10
 $backup = Get-ChildItem -LiteralPath $env:AX_TEST_ROOT -Directory -Force | Where-Object { $_.Name -like ".ax-code-install-*" }
 Assert-Equal (Get-Content -LiteralPath (Join-Path $backup.FullName "previous/node/bin/node.exe") -Raw) "previous"
+`)
+  })
+
+  test.each(["node", "package.json"])("never merges a runtime %s into an occupied destination", async (relative) => {
+    await runInstaller(`
+$sourcePath = Join-Path $Source "${relative}"
+$destination = Join-Path $env:AX_TEST_ROOT "occupied-target"
+$marker = $destination
+if ("${relative}" -eq "node") {
+  New-Item -ItemType Directory -Path $destination | Out-Null
+  $marker = Join-Path $destination "original.txt"
+}
+Set-Content -LiteralPath $marker -Value "original" -NoNewline
+$failure = $null
+try { Move-RuntimeItem $sourcePath $destination } catch { $failure = $_ }
+if (-not $failure) { throw "Expected an occupied destination to reject the move" }
+Assert-Equal (Test-Path -LiteralPath $sourcePath) $true
+Assert-Equal (Get-Content -LiteralPath $marker -Raw) "original"
+if ("${relative}" -eq "node") {
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $destination "node")) $false
+}
 `)
   })
 
@@ -216,14 +234,16 @@ $lock = [AxInstallerDirectoryLock]::new((Join-Path $directory "bin/node.exe"))
 try {
   $failure = $null
   try {
-    Microsoft.PowerShell.Management\\Move-Item -LiteralPath $directory -Destination $destination -ErrorAction Stop
+    Move-RuntimeItem -LiteralPath $directory -Destination $destination
   } catch { $failure = $_ }
   if (-not $failure) { throw "Expected an actual locked-directory move failure" }
   $native = $failure.Exception.GetBaseException()
-  if ($PSVersionTable.PSEdition -eq "Desktop") {
-    Assert-Equal $native.HResult -2146232800
+  if (($native.HResult -band 0xffff) -notin @(5, 32, 33)) {
+    throw "Expected a preserved native lock code, got $($native.HResult): $failure"
   }
-  $lock.ReleaseAfter(600)
+  Assert-Equal (Test-Path -LiteralPath $destination) $false
+  Assert-Equal (Test-Path -LiteralPath (Join-Path $directory "bin/node.exe")) $true
+  $lock.ReleaseAfter(3000)
   Move-RuntimePath $directory $destination
   Assert-Equal (Test-Path -LiteralPath $directory) $false
   Assert-Equal (Test-Path -LiteralPath (Join-Path $destination "bin/node.exe")) $true
@@ -236,7 +256,7 @@ try {
     await runInstaller(`
 New-PreviousInstall
 $script:attempts = 0
-function Move-Item {
+function Move-RuntimeItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination)
   $script:attempts++
@@ -254,7 +274,7 @@ Assert-PreviousInstall
   test("does not retry a generic I/O failure when moving a file", async () => {
     await runInstaller(`
 $script:attempts = 0
-function Move-Item {
+function Move-RuntimeItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination)
   $script:attempts++
@@ -350,7 +370,7 @@ Assert-PreviousInstall
   test.each(["backup", "activation"])("restores the previous runtime when %s fails", async (phase) => {
     await runInstaller(`
 New-PreviousInstall
-function Move-Item {
+function Move-RuntimeItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination)
   if ("${phase}" -eq "backup" -and $LiteralPath -eq $InstallNodeModulesDir) {
@@ -359,7 +379,7 @@ function Move-Item {
   if ("${phase}" -eq "activation" -and $Destination -eq $InstallNodeModulesDir -and $LiteralPath -notmatch "previous") {
     throw "The destination cannot be written."
   }
-  Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
+  & $script:OriginalRuntimeMove @PSBoundParameters
 }
 $failure = $null
 try { Install-NodeBundleTree $Source } catch { $failure = $_ }
@@ -387,11 +407,11 @@ Assert-PreviousInstall
   test("retains recovery files if the previous runtime cannot be fully restored", async () => {
     await runInstaller(`
 New-PreviousInstall
-function Move-Item {
+function Move-RuntimeItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination)
   if ($Destination -eq $InstallNodeModulesDir) { throw "Simulated activation and rollback failure" }
-  Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
+  & $script:OriginalRuntimeMove @PSBoundParameters
 }
 $failure = $null
 try { Install-NodeBundleTree $Source } catch { $failure = $_ }
@@ -405,10 +425,10 @@ Assert-Equal (Get-Content -LiteralPath (Join-Path $backup.FullName "previous/nod
   test("restores the previous runtime if the installed entry fails its startup check", async () => {
     await runInstaller(`
 New-PreviousInstall
-function Move-Item {
+function Move-RuntimeItem {
   [CmdletBinding()]
   param([string]$LiteralPath, [string]$Destination)
-  Microsoft.PowerShell.Management\\Move-Item @PSBoundParameters
+  & $script:OriginalRuntimeMove @PSBoundParameters
   if ($Destination -eq $InstallLibDir -and $LiteralPath -notmatch "previous") {
     Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'throw new Error("Simulated installed entry failure")'
   }
