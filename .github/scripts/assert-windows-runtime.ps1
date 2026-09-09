@@ -52,7 +52,14 @@ try {
         $Process.StartInfo.RedirectStandardError = $true
         $Process.StartInfo.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
         $Process.StartInfo.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
-        if (-not $Process.Start()) { throw "Could not start backend probe" }
+        # .NET Framework creates an auto-flushing stdin writer with the console
+        # input encoding during Start(), before our byte writes. Suppress that
+        # writer's BOM as well, then restore the caller's console encoding.
+        $PreviousInputEncoding = [Console]::InputEncoding
+        try {
+          [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+          if (-not $Process.Start()) { throw "Could not start backend probe" }
+        } finally { [Console]::InputEncoding = $PreviousInputEncoding }
         # Drain both streams concurrently so diagnostics cannot block stdout.
         $StdoutTask = $Process.StandardOutput.ReadToEndAsync()
         $StderrTask = $Process.StandardError.ReadToEndAsync()
