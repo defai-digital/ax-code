@@ -12,6 +12,12 @@ changes belong to AX Coder.
 
 - Restore files correctly across partial and full redo, including additions and deletions, while preserving unrelated manual edits.
 - Treat snapshot filenames literally during undo and redo. Bracketed route paths and other Git wildcard characters can no longer overwrite matching neighboring files or prevent newly added files from being removed.
+- Report each test shard's actual status instead of marking successful shards as failed, and retain process errors even when test assertions pass.
+
+### Changed
+
+- Prepare manifest-verified TUI native dependencies before CI tests and use the verified cache offline during testing.
+- Preserve per-shard output, process exit details, and both initial and final test results for release diagnostics.
 - Verify file restoration and session state on native Windows x64 and ARM64, including Unicode filenames, CRLF content, and recovery after metadata failures.
 
 ## [7.15.0] - 2026-09-09

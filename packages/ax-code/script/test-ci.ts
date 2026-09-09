@@ -6,11 +6,13 @@ import { existsSync } from "fs"
 import type { Readable } from "node:stream"
 import { check, list, pick, root } from "./test-group"
 import { writeCoverageArtifacts } from "./test-coverage"
+import { prepareTestNative } from "./test-native"
 
 export type Result = {
   code: number
   file: string
   artifacts?: string[]
+  artifactResults?: Array<{ file: string; code: number }>
   ignored: number
   coverageDir?: string
   stats: {
@@ -209,14 +211,14 @@ async function run(
   // The 30s per-test timeout and setup/preload files come from vitest.config.ts.
   // The exact file set is passed through the config's `include` via AX_TEST_FILES
   // (vitest positional filters can't reliably target an exact set).
-  const command = [vitestCli(), "run", "--reporter=junit"]
+  const command = [vitestCli(), "run", "--reporter=default", "--reporter=junit"]
   // This lane measures first-attempt behavior independently of the normal
   // deterministic group's timing-sensitive retry policy.
   if (group === "runtime-contract") command.push("--retry=0")
   if (shardCoverage) {
     command.push("--reporter=blob", `--outputFile.junit=${file}`, `--outputFile.blob=${shardCoverage.blobFile}`)
   } else {
-    command.push(`--outputFile=${file}`)
+    command.push(`--outputFile.junit=${file}`)
   }
   const maxWorkers = process.env.AX_TEST_MAX_WORKERS
   if (maxWorkers) {
@@ -230,22 +232,31 @@ async function run(
       `--coverage.reportsDirectory=${shardCoverage?.reportsDirectory ?? coverageDir}`,
     )
   }
+  const started = Date.now()
+  const label = `${group} run ${run}${shard ? ` shard ${shard}` : ""}`
+  console.log(`Starting ${label}: ${files.length} test files`)
   const proc = spawn(process.execPath, command, {
     cwd: root,
     stdio: ["inherit", "pipe", "pipe"],
     env: { ...process.env, AX_TEST_FILES: files.join(",") },
   })
-  const [stdout, stderr, code] = await Promise.all([
+  const [stdout, stderr, exit] = await Promise.all([
     tee(proc.stdout, process.stdout),
     tee(proc.stderr, process.stderr),
-    new Promise<number>((resolve) => {
-      proc.on("exit", (value) => resolve(value ?? 1))
-      proc.on("error", () => resolve(1))
+    new Promise<{ code: number; signal?: string; error?: string }>((resolve) => {
+      proc.on("exit", (code, signal) => resolve({ code: code ?? 1, ...(signal ? { signal } : {}) }))
+      proc.on("error", (error) => resolve({ code: 1, error: error.message }))
     }),
   ])
   const stats = await parseJUnit(file, `${stdout}\n${stderr}`)
+  const durationMs = Date.now() - started
+  const prefix = file.replace(/\.xml$/, "")
+  await fs.writeFile(`${prefix}.stdout.log`, stdout)
+  await fs.writeFile(`${prefix}.stderr.log`, stderr)
+  await fs.writeFile(`${prefix}.result.json`, JSON.stringify({ files, ...exit, durationMs, stats }, null, 2) + "\n")
+  console.log(`Finished ${label}: exit ${exit.code}, ${stats.failures} failures, ${(durationMs / 1000).toFixed(1)}s`)
   return {
-    code: code !== 0 && stats.failures === 0 && stats.ignored > 0 ? 0 : code,
+    code: exit.code !== 0 && stats.failures === 0 && stats.ignored > 0 ? 0 : exit.code,
     file,
     ignored: stats.ignored,
     coverageDir,
@@ -288,6 +299,10 @@ export function didLastRunFail(runs: Result[]) {
   return (runs.at(-1)?.code ?? 1) !== 0
 }
 
+function artifactResults(result: Result) {
+  return result.artifactResults ?? (result.artifacts ?? [result.file]).map((file) => ({ file, code: result.code }))
+}
+
 export function aggregateRunResults(group: string, run: number, dir: string, results: Result[]): Result {
   if (results.length === 0) throw new Error("Cannot aggregate an empty test run")
   const coverageDirs = new Set(results.flatMap((result) => (result.coverageDir ? [result.coverageDir] : [])))
@@ -297,6 +312,7 @@ export function aggregateRunResults(group: string, run: number, dir: string, res
     code: results.some((result) => result.code !== 0) ? 1 : 0,
     file: path.join(dir, `${group}-${run}${results.length > 1 ? "-shards" : ""}.xml`),
     artifacts: results.flatMap((result) => result.artifacts ?? [result.file]),
+    artifactResults: results.flatMap(artifactResults),
     ignored: results.reduce((sum, result) => sum + result.ignored, 0),
     coverageDir: coverageDirs.values().next().value,
     stats: results.reduce(
@@ -328,6 +344,10 @@ export function renderSummaryText(group: string, runs: Result[]) {
   out.push(`- failures: ${first.stats.failures}`)
   out.push(`- skipped: ${first.stats.skipped}`)
   out.push(`- runtime: ${fmt(first.stats.time)}`)
+  const final = runs[runs.length - 1]!
+  out.push(`- final: ${final.code === 0 ? "passed" : "failed"}`)
+  out.push(`- final tests: ${final.stats.tests}`)
+  out.push(`- final failures: ${final.stats.failures}`)
   if (retry.length) {
     out.push(`- reruns: ${retry.length}`)
     out.push(`- likely flaky: ${flaky ? "yes" : "no"}`)
@@ -341,8 +361,8 @@ export function renderSummaryText(group: string, runs: Result[]) {
   out.push("")
   out.push("Artifacts:")
   for (const run of runs) {
-    for (const artifact of run.artifacts ?? [run.file]) {
-      out.push(`- ${path.basename(artifact)} (${run.code === 0 ? "passed" : "failed"})`)
+    for (const artifact of artifactResults(run)) {
+      out.push(`- ${path.basename(artifact.file)} (${artifact.code === 0 ? "passed" : "failed"})`)
     }
   }
   out.push("")
@@ -375,6 +395,14 @@ async function main() {
 
   const dir = path.resolve(root, arg("--dir") ?? path.join(testingReports, "junit"))
   await fs.mkdir(dir, { recursive: true })
+
+  if (files.some((file) => file.includes("/tui/"))) {
+    console.log("Preparing manifest-verified TUI native dependencies before tests")
+    process.env.AX_TEST_TUI_NATIVE_CACHE = await prepareTestNative({
+      cacheDir: process.env.AX_TEST_TUI_NATIVE_CACHE ?? path.join(testingReports, "native-cache"),
+    })
+    console.log("TUI native dependencies are ready for offline test workers")
+  }
 
   const shardSize = process.env.AX_TEST_SHARD_SIZE ? Number.parseInt(process.env.AX_TEST_SHARD_SIZE, 10) : files.length
   const shards = shardFiles(files, shardSize)

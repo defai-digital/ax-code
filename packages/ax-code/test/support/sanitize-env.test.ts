@@ -86,3 +86,17 @@ describe("sanitizeAxCodeEnv", () => {
     }
   })
 })
+
+test("reasserts only the explicit test native cache after sanitization", () => {
+  const env: NodeJS.ProcessEnv = {
+    AX_CODE_TUI_NATIVE_CACHE_DIR: "/untrusted-host-cache",
+    AX_CODE_TUI_NATIVE_OFFLINE: "0",
+    AX_TEST_TUI_NATIVE_CACHE: "/verified-test-cache",
+  }
+  sanitizeAxCodeEnv(env)
+  expect(env.AX_CODE_TUI_NATIVE_CACHE_DIR).toBe("/verified-test-cache")
+  expect(env.AX_CODE_TUI_NATIVE_OFFLINE).toBe("1")
+  sanitizeAxCodeEnv(env)
+  expect(env.AX_CODE_TUI_NATIVE_CACHE_DIR).toBe("/verified-test-cache")
+  expect(env.AX_CODE_TUI_NATIVE_OFFLINE).toBe("1")
+})

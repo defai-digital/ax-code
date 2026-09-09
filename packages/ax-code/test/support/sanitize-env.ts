@@ -32,5 +32,11 @@ export function sanitizeAxCodeEnv(env: NodeJS.ProcessEnv = process.env): string[
       deleted.push(key)
     }
   }
+  // Only the test runner's explicit verified cache can survive isolation.
+  // Reassert this after every sanitization, regardless of setup-file order.
+  if (env.AX_TEST_TUI_NATIVE_CACHE) {
+    env.AX_CODE_TUI_NATIVE_CACHE_DIR = env.AX_TEST_TUI_NATIVE_CACHE
+    env.AX_CODE_TUI_NATIVE_OFFLINE = "1"
+  }
   return deleted
 }

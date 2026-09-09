@@ -335,3 +335,16 @@ describe("script.test-ci", () => {
     expect(summary).toContain("- native-2.xml (failed)")
   })
 })
+
+test("summaries report each shard's status and retain a failed process with passing assertions", () => {
+  const result = aggregateRunResults("deterministic", 2, "/tmp/junit", [
+    { code: 0, file: "/tmp/pass.xml", ignored: 0, stats: { tests: 4, failures: 0, skipped: 0, time: 1 } },
+    { code: 1, file: "/tmp/process-failure.xml", ignored: 0, stats: { tests: 3, failures: 0, skipped: 0, time: 1 } },
+  ])
+  const summary = renderSummaryText("deterministic", [result])
+  expect(summary).toContain("- pass.xml (passed)")
+  expect(summary).toContain("- process-failure.xml (failed)")
+  expect(summary).toContain("- final: failed")
+  expect(summary).toContain("- final failures: 0")
+  expect(didLastRunFail([result])).toBe(true)
+})
