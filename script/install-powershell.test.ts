@@ -317,9 +317,17 @@ Assert-Equal $ErrorActionPreference "Stop"
   })
 
   const probes = [
-    { name: "version", options: '-Version "9.9.9"', output: "9.9.9" },
-    { name: "doctor", options: "-Doctor", output: "Runtime: Node v26.8.1 (node-bundled)" },
+    { name: "version", options: '-Version "9.9.9"', argument: "--version", output: "9.9.9" },
+    { name: "doctor", options: "-Doctor", argument: "doctor", output: "Runtime: Node v26.8.1 (node-bundled)" },
   ]
+  test.each(probes)("passes the exact $name probe argument to the launcher", async ({ options, argument, output }) => {
+    await runInstaller(`
+Install-NodeBundleTree $Source
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'const args = process.argv.slice(2); if (args.length !== 1 || args[0] !== "${argument}") { console.error("Unexpected probe arguments: " + JSON.stringify(args)); process.exit(23) }; console.log("${output}")'
+& $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options}
+`)
+  })
+
   test.each(probes)("accepts a successful $name probe with stderr warnings", async ({ options, output }) => {
     await runInstaller(`
 Install-NodeBundleTree $Source

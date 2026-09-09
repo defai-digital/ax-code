@@ -13,7 +13,7 @@ if (-not (Test-Path -LiteralPath $Launcher -PathType Leaf)) {
   throw "Runtime launcher not found: $Launcher"
 }
 
-$ProbeArguments = if ($Doctor) { @("doctor") } else { @("--version") }
+$ProbeArgument = if ($Doctor) { "doctor" } else { "--version" }
 $StderrPath = [System.IO.Path]::GetTempFileName()
 $PreviousErrorAction = $ErrorActionPreference
 $PreviousNativeErrorAction = $PSNativeCommandUseErrorActionPreference
@@ -26,7 +26,7 @@ try {
     # Native commands update the global automatic variable. A script-local
     # reset would shadow it when this helper is called from another script.
     $global:LASTEXITCODE = $null
-    $Output = (& $Launcher @ProbeArguments 2>$StderrPath | Out-String).Trim()
+    $Output = (& $Launcher $ProbeArgument 2>$StderrPath | Out-String).Trim()
     $ProbeExit = $global:LASTEXITCODE
   } finally {
     $ErrorActionPreference = $PreviousErrorAction
@@ -36,7 +36,7 @@ try {
   if ($Diagnostics) { Write-Host $Diagnostics }
   if ($Output) { Write-Host $Output }
   if ($null -eq $ProbeExit -or $ProbeExit -ne 0) {
-    throw "Runtime probe '$($ProbeArguments -join ' ')' failed (exit code $ProbeExit). $Diagnostics"
+    throw "Runtime probe '$ProbeArgument' failed (exit code $ProbeExit). $Diagnostics"
   }
   if ($Doctor) {
     if ($Output -notmatch 'Runtime: Node .* \(node-bundled\)') {
