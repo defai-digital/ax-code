@@ -9,6 +9,7 @@ changes belong to AX Coder.
 ### Fixed
 
 - Use atomic Windows runtime renames to avoid partial replacements, retry short-lived file locks and access-denied errors, and preserve rollback on persistent failures.
+- Keep Windows installation checks consistent across candidate and release workflows, accepting native warnings while rejecting failed probes and invalid runtime output.
 
 ## [7.14.9] - 2026-09-08
 

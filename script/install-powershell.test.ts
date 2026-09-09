@@ -103,7 +103,13 @@ ${body}
     const result = spawnSync(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-File", script], {
       encoding: "utf8",
       timeout: 20_000,
-      env: { ...process.env, AX_TEST_INSTALLER: installer, AX_TEST_ROOT: root, AX_TEST_NODE: process.execPath },
+      env: {
+        ...process.env,
+        AX_TEST_INSTALLER: installer,
+        AX_TEST_ROOT: root,
+        AX_TEST_NODE: process.execPath,
+        AX_TEST_RUNTIME_PROBE: path.resolve(import.meta.dirname, "../.github/scripts/assert-windows-runtime.ps1"),
+      },
     })
     expect(result.error).toBeUndefined()
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
@@ -306,6 +312,49 @@ Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value '
 $failure = $null
 try { Verify-InstalledRuntime "9.9.9" } catch { $failure = $_ }
 if ($failure -notmatch "Simulated launcher failure" -or $failure -notmatch "23") { throw "Missing launcher diagnostics: $failure" }
+Assert-Equal $ErrorActionPreference "Stop"
+`)
+  })
+
+  const probes = [
+    { name: "version", options: '-Version "9.9.9"', output: "9.9.9" },
+    { name: "doctor", options: "-Doctor", output: "Runtime: Node v26.8.1 (node-bundled)" },
+  ]
+  test.each(probes)("accepts a successful $name probe with stderr warnings", async ({ options, output }) => {
+    await runInstaller(`
+Install-NodeBundleTree $Source
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("Applying first-run database migrations"); console.log("${output}")'
+$PSNativeCommandUseErrorActionPreference = $true
+& $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options}
+Assert-Equal $ErrorActionPreference "Stop"
+Assert-Equal $PSNativeCommandUseErrorActionPreference $true
+`)
+  })
+
+  test.each(probes)("rejects a failed $name probe even when stdout matches", async ({ options, output }) => {
+    await runInstaller(`
+Install-NodeBundleTree $Source
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("Simulated native probe failure"); console.log("${output}"); process.exit(23)'
+$PSNativeCommandUseErrorActionPreference = $true
+$failure = $null
+try { & $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options} } catch { $failure = $_ }
+if ($failure -notmatch "exit code 23" -or $failure -notmatch "Simulated native probe failure") {
+  throw "Missing native failure diagnostics: $failure"
+}
+Assert-Equal $ErrorActionPreference "Stop"
+Assert-Equal $PSNativeCommandUseErrorActionPreference $true
+`)
+  })
+
+  test.each(probes)("rejects $name evidence printed only on stderr", async ({ options, output }) => {
+    await runInstaller(`
+Install-NodeBundleTree $Source
+Set-Content -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -Value 'console.error("${output}"); console.log("unqualified output")'
+$failure = $null
+try { & $env:AX_TEST_RUNTIME_PROBE -Launcher $InstallCmdPath ${options} } catch { $failure = $_ }
+if (-not $failure -or $failure -notmatch "unqualified output") {
+  throw "Expected rejection of stderr-only evidence: $failure"
+}
 Assert-Equal $ErrorActionPreference "Stop"
 `)
   })

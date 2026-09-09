@@ -6,11 +6,15 @@ on:
     paths:
       - install.ps1
       - script/install-powershell.test.ts
+      - .github/scripts/assert-windows-runtime.ps1
+      - .github/workflows/install-matrix-smoke.yml
       - .github/workflows/windows-installer-qualification.yml
   pull_request:
     paths:
       - install.ps1
       - script/install-powershell.test.ts
+      - .github/scripts/assert-windows-runtime.ps1
+      - .github/workflows/install-matrix-smoke.yml
       - .github/workflows/windows-installer-qualification.yml
   workflow_dispatch:
     inputs:
@@ -54,6 +58,10 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Test installer replacement and rollback
         run: pnpm exec vitest run script/install-powershell.test.ts
+      - name: Test runtime probes with PowerShell 7
+        env:
+          AX_TEST_POWERSHELL: pwsh
+        run: pnpm exec vitest run script/install-powershell.test.ts -t 'probe|evidence printed'
       - name: Validate published runtime version
         if: github.event_name == 'workflow_dispatch'
         shell: bash
@@ -69,25 +77,10 @@ jobs:
           $Version = $env:INPUT_VERSION.TrimStart("v")
           $Installer = Join-Path $env:GITHUB_WORKSPACE "install.ps1"
           $Launcher = Join-Path $HOME ".ax-code\bin\ax-code.cmd"
+          $Probe = Join-Path $env:GITHUB_WORKSPACE ".github\scripts\assert-windows-runtime.ps1"
           foreach ($Phase in @("fresh install", "runtime replacement")) {
             Write-Host "Qualifying $Phase from candidate installer against runtime $Version"
             & $Installer -Version $Version -NoModifyPath
-            $Output = (& $Launcher --version | Out-String).Trim()
-            if ($LASTEXITCODE -ne 0 -or $Output -ne $Version) {
-              throw "Candidate $Phase did not produce runtime $Version. Output: $Output"
-            }
+            & $Probe -Launcher $Launcher -Version $Version
           }
-          $PreviousErrorAction = $ErrorActionPreference
-          try {
-            # PowerShell 5.1 treats ordinary native stderr (such as first-run
-            # migration notices) as errors. Validate the actual exit code.
-            $ErrorActionPreference = "Continue"
-            $Doctor = (& $Launcher doctor 2>&1 | Out-String)
-            $DoctorExit = $LASTEXITCODE
-          } finally {
-            $ErrorActionPreference = $PreviousErrorAction
-          }
-          Write-Host $Doctor
-          if ($DoctorExit -ne 0 -or $Doctor -notmatch 'Runtime: Node .* \(node-bundled\)') {
-            throw "Candidate installation did not start the bundled runtime"
-          }
+          & $Probe -Launcher $Launcher -Doctor

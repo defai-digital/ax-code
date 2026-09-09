@@ -373,11 +373,7 @@ jobs:
           if (($Resolved -ine $ExpectedCmd) -and ($Resolved -ine $ExpectedExe)) {
             throw "expected installer-linked ax-code at $ExpectedCmd or $ExpectedExe, got $Resolved"
           }
-          $Output = (ax-code --version).Trim()
-          Write-Host $Output
-          if ($Output -ne $Version -and $Output -ne "v$Version") {
-            throw "expected installer-linked ax-code --version to be $Version, got $Output"
-          }
+          & .github/scripts/assert-windows-runtime.ps1 -Launcher $Resolved -Version $Version
           "$HOME\.ax-code\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: ax-code --version
@@ -385,21 +381,15 @@ jobs:
         shell: pwsh
         run: |
           $Version = "${{ steps.version.outputs.version }}"
-          $Output = (ax-code --version).Trim()
-          Write-Host $Output
-          if ($Output -ne $Version -and $Output -ne "v$Version") {
-            throw "expected ax-code --version to be $Version, got $Output"
-          }
+          $Launcher = (Get-Command ax-code -ErrorAction Stop).Source
+          & .github/scripts/assert-windows-runtime.ps1 -Launcher $Launcher -Version $Version
 
       - name: ax-code doctor - assert Windows runtime is Node bundled
         if: ${{ steps.channel.outputs.enabled == 'true' }}
         shell: pwsh
         run: |
-          $Output = (ax-code doctor 2>&1 | Out-String)
-          Write-Host $Output
-          if ($Output -notmatch 'Runtime: Node .* \(node-bundled\)') {
-            throw "Windows install did not report node-bundled runtimeMode"
-          }
+          $Launcher = (Get-Command ax-code -ErrorAction Stop).Source
+          & .github/scripts/assert-windows-runtime.ps1 -Launcher $Launcher -Doctor
 
   linux:
     name: ${{ matrix.label }} / linux
