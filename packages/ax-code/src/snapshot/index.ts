@@ -333,7 +333,9 @@ export namespace Snapshot {
     try {
       const command = ["add", "."]
       if (excluded.length) {
+        // @scan-suppress security_scan - gitdir is the managed snapshot directory; mkdtemp uses a fixed prefix and a random suffix.
         temporary = await fs.mkdtemp(path.join(current.gitdir, "pathspec-"))
+        // @scan-suppress security_scan - temporary is the mkdtemp result above; paths is a fixed leaf, and excluded names only enter file contents.
         const file = path.join(temporary, "paths")
         await fs.writeFile(file, [".", ...excluded.map((name) => `:(top,exclude,literal)${name}`), ""].join("\0"))
         command.splice(1, 1, `--pathspec-from-file=${file}`, "--pathspec-file-nul")
