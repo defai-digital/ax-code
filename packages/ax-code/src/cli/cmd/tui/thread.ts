@@ -230,8 +230,9 @@ function isBackendProtocolMessage(line: string) {
   return type === "rpc.result" || type === "rpc.error" || type === "rpc.event"
 }
 
-// Cap on the backend stdout line buffer in createProcessWire — see below.
-const MAX_BACKEND_STDOUT_BUFFER = 1024 * 1024
+// A single RPC result includes the serialized transcript, including tool output.
+// Bound individual UTF-8 frames, not stdout chunks, which can contain many frames.
+const MAX_BACKEND_STDOUT_FRAME_BYTES = 64 * 1024 * 1024
 
 export function createProcessWire(child: any, target: string): RpcWireTarget {
   const wire: RpcWireTarget = {
@@ -261,12 +262,16 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
       }
     },
   }
+  let fragments: string[] = []
+  let bufferedBytes = 0
   // The backend can exit before a write discovers the broken stdin pipe.
   // Notify the RPC client from the child lifecycle too, so startup and
   // in-flight requests fail immediately instead of waiting for timeouts.
   const notifyWireDeath = () => {
     if (wire.wireClosed) return
     wire.wireClosed = true
+    fragments = []
+    bufferedBytes = 0
     const onWireDeath = wire.onWireDeath
     wire.onmessage = null
     wire.onWireDeath = null
@@ -296,6 +301,7 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
       target,
       error: toErrorMessage(error),
     })
+    notifyWireDeath()
   })
   child.stderr?.on("error", (error: unknown) => {
     DiagnosticLog.recordProcess("tui.backendStderrStreamError", { target, error })
@@ -304,30 +310,30 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
       error: toErrorMessage(error),
     })
   })
-  let buffer = ""
   child.stdout?.setEncoding("utf8")
   child.stdout?.on("data", (chunk: unknown) => {
-    buffer += String(chunk)
-    // Cap the line buffer: a backend writing a newline-free stretch (binary
-    // garbage, a stuck process) would otherwise grow it without bound. 1MB is
-    // far past any legitimate protocol line.
-    if (buffer.length > MAX_BACKEND_STDOUT_BUFFER) {
-      DiagnosticLog.recordProcess("tui.backendStdoutBufferTruncated", {
-        target,
-        length: buffer.length,
-      })
-      Log.Default.warn("TUI backend stdout line buffer exceeded cap, truncating", {
-        target,
-        length: buffer.length,
-      })
-      buffer = ""
-      return
-    }
-    while (true) {
-      const index = buffer.indexOf("\n")
-      if (index < 0) break
-      const line = buffer.slice(0, index)
-      buffer = buffer.slice(index + 1)
+    if (wire.wireClosed) return
+    const text = String(chunk)
+    let offset = 0
+    while (offset < text.length && !wire.wireClosed) {
+      const index = text.indexOf("\n", offset)
+      const fragment = text.slice(offset, index < 0 ? text.length : index)
+      bufferedBytes += Buffer.byteLength(fragment, "utf8")
+      if (bufferedBytes > MAX_BACKEND_STDOUT_FRAME_BYTES) {
+        const detail = { target, bytes: bufferedBytes, maxBytes: MAX_BACKEND_STDOUT_FRAME_BYTES }
+        DiagnosticLog.recordProcess("tui.backendStdoutFrameTooLarge", detail)
+        Log.Default.warn("TUI backend RPC frame exceeds size limit; closing wire", detail)
+        // Dropping part of a response strands the pending RPC and makes its
+        // tail look like stdout noise. Fail every pending call immediately.
+        notifyWireDeath()
+        return
+      }
+      if (fragment) fragments.push(fragment)
+      if (index < 0) return
+      const line = fragments.join("")
+      fragments = []
+      bufferedBytes = 0
+      offset = index + 1
       if (!line.trim()) continue
       if (!isBackendProtocolMessage(line)) {
         DiagnosticLog.recordProcess("tui.backendProtocolNoise", {
