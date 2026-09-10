@@ -92,3 +92,23 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
      if (pfnClosePseudoConsole)
      {
        pfnClosePseudoConsole(handle->hpc);
+diff --git a/src/win/winpty.cc b/src/win/winpty.cc
+--- a/src/win/winpty.cc
++++ b/src/win/winpty.cc
+@@ -165,6 +165,8 @@
+     goto cleanup;
+   }
+
++  // Keep initialized locals outside the cleanup label scope for modern MSVC.
++  {
+   int cols = info[4]->Int32Value(Nan::GetCurrentContext()).FromJust();
+   int rows = info[5]->Int32Value(Nan::GetCurrentContext()).FromJust();
+   bool debug = Nan::To<bool>(info[6]).FromJust();
+@@ -234,6 +236,7 @@
+   info.GetReturnValue().Set(marshal);
+
+   goto cleanup;
++  }
+
+ cleanup:
+   delete filename;

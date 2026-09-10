@@ -10,7 +10,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
-- Restore Windows PTY builds with modern SDKs and Node 26 by keeping private ConPTY function types available and overriding inherited LLVM LTO options for MSVC.
+- Restore Windows PTY builds with modern SDKs and Node 26 by keeping private ConPTY function types available, overriding inherited LLVM LTO options, and fixing cleanup scopes rejected by MSVC.
+- Execute the PTY WebSocket upgrade handler so existing terminal sessions can connect, receive output, and send input.
 - Require real PTY input, output, resize, and successful exit during release packaging and after installation on every supported platform.
 - Use ASCII alternatives for ambiguous-width TUI glyphs and update truncation budgets to prevent layout drift in CJK terminals.
 - Preserve failed test-shard exits when no JUnit error was recorded, even if output mentions a harmless interruption.
