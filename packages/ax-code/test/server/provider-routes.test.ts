@@ -484,9 +484,9 @@ describe("provider routes", () => {
     const response = await Server.Default().request(`/provider/ax-engine/models?directory=${directory}`)
     expect(response.status).toBe(200)
     const body = (await response.json()) as { models: Array<{ id: string }> }
-    expect(body.models.slice(0, 3).map((model) => model.id)).toEqual([
+    expect(body.models.map((model) => model.id)).toEqual([
+      expect.stringMatching(/^AutomatosX\/AX-Ornith-1\.5-9B-MLX-AXQ-6bit-MTP@[a-f0-9]{40}$/),
       "qwen3.8-27b-axq-6bit",
-      "ornith-35b-axq-6bit",
       "qwen3-coder-next-axq-6bit",
     ])
     const dynamic = body.models.filter((model) => model.id.startsWith("AutomatosX/"))
