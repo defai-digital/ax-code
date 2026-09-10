@@ -65,7 +65,39 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
 
  struct pty_baton {
    int id;
-@@ -123,7 +124,7 @@
+@@ -44,8 +45,10 @@
+   HANDLE hOut;
+   HPCON hpc;
+
+-  HANDLE hShell;
+-  HANDLE hWait;
++  HANDLE hShell = nullptr;
++  HANDLE hWait = nullptr;
++  bool asyncClosed = true;
++  bool consoleClosed = false;
+   Nan::Callback cb;
+   uv_async_t async;
+   uv_thread_t tid;
+@@ -55,6 +58,18 @@
+
+ static std::vector<pty_baton*> ptyHandles;
+ static volatile LONG ptyCounter;
++
++// The exit notification and output-drain cleanup may finish in either order.
++static void release_baton_if_closed(pty_baton* baton) {
++  if (!baton->asyncClosed || !baton->consoleClosed) return;
++  for (auto it = ptyHandles.begin(); it != ptyHandles.end(); ++it) {
++    if (*it == baton) {
++      ptyHandles.erase(it);
++      break;
++    }
++  }
++  delete baton;
++}
+
+ static pty_baton* get_pty_baton(int id) {
+   for (size_t i = 0; i < ptyHandles.size(); ++i) {
+@@ -123,7 +138,7 @@
    bool fLoadedDll = hLibrary != nullptr;
    if (fLoadedDll)
    {
@@ -74,7 +106,54 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
      if (pfnCreate)
      {
        if (phPC == NULL || phInput == NULL || phOutput == NULL)
-@@ -400,7 +401,7 @@
+@@ -246,11 +261,14 @@
+   Nan::HandleScope scope;
+   pty_baton *baton = static_cast<pty_baton*>(async->data);
+
+-  UnregisterWait(baton->hWait);
++  UnregisterWaitEx(baton->hWait, INVALID_HANDLE_VALUE);
++  baton->hWait = nullptr;
+
+   // Get exit code
+   DWORD exitCode = 0;
+   GetExitCodeProcess(baton->hShell, &exitCode);
++  CloseHandle(baton->hShell);
++  baton->hShell = nullptr;
+
+   // Call function
+   v8::Local<v8::Value> args[1] = {
+@@ -261,6 +279,11 @@
+   baton->cb.Call(1, args, &asyncResource);
+   // Clean up
+   baton->cb.Reset();
++  uv_close(reinterpret_cast<uv_handle_t*>(async), [](uv_handle_t* closed) {
++    pty_baton* baton = static_cast<pty_baton*>(closed->data);
++    baton->asyncClosed = true;
++    release_baton_if_closed(baton);
++  });
+ }
+
+ static NAN_METHOD(PtyConnect) {
+@@ -362,6 +385,10 @@
+     return throwNanError(&info, "Cannot create process", true);
+   }
+
++  CloseHandle(piClient.hThread);
++  DeleteProcThreadAttributeList(siEx.lpAttributeList);
++  delete[] attrList;
++
+   // Update handle
+   handle->hShell = piClient.hProcess;
+   handle->cb.Reset(exitCallback);
+@@ -369,6 +396,7 @@
+
+   // Setup OnProcessExit callback
+   uv_async_init(uv_default_loop(), &handle->async, OnProcessExit);
++  handle->asyncClosed = false;
+
+   // Setup Windows wait for process exit event
+   RegisterWaitForSingleObject(&handle->hWait, piClient.hProcess, OnProcessExitWinEvent, (PVOID)handle, INFINITE, WT_EXECUTEONLYONCE);
+@@ -400,7 +428,7 @@
    bool fLoadedDll = hLibrary != nullptr;
    if (fLoadedDll)
    {
@@ -83,7 +162,16 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
      if (pfnResizePseudoConsole)
      {
        COORD size = {cols, rows};
-@@ -428,7 +429,7 @@
+@@ -422,20 +450,26 @@
+
+   int id = info[0]->Int32Value(Nan::GetCurrentContext()).FromJust();
+
+-  const pty_baton* handle = get_pty_baton(id);
++  pty_baton* handle = get_pty_baton(id);
++  if (!handle || handle->consoleClosed) return info.GetReturnValue().SetUndefined();
++  handle->consoleClosed = true;
+
+   HANDLE hLibrary = LoadLibraryExW(L"kernel32.dll", 0, 0);
    bool fLoadedDll = hLibrary != nullptr;
    if (fLoadedDll)
    {
@@ -92,6 +180,18 @@ diff --git a/src/win/conpty.cc b/src/win/conpty.cc
      if (pfnClosePseudoConsole)
      {
        pfnClosePseudoConsole(handle->hpc);
+     }
+   }
+
+-  CloseHandle(handle->hShell);
++  if (hLibrary) FreeLibrary((HMODULE)hLibrary);
++  CloseHandle(handle->hIn);
++  CloseHandle(handle->hOut);
++  // hShell belongs to OnProcessExit until its exit code has been read.
++  release_baton_if_closed(handle);
+
+   return info.GetReturnValue().SetUndefined();
+ }
 diff --git a/src/win/winpty.cc b/src/win/winpty.cc
 --- a/src/win/winpty.cc
 +++ b/src/win/winpty.cc
@@ -112,3 +212,32 @@ diff --git a/src/win/winpty.cc b/src/win/winpty.cc
 
  cleanup:
    delete filename;
+diff --git a/lib/windowsPtyAgent.js b/lib/windowsPtyAgent.js
+--- a/lib/windowsPtyAgent.js
++++ b/lib/windowsPtyAgent.js
+@@ -233,7 +233,11 @@
+         this._inSocket.writable = false;
+         this._outSocket.readable = false;
+         this._outSocket.writable = false;
++        this._inSocket.destroy();
+         this._outSocket.destroy();
++        if (this._useConpty) {
++            this._ptyNative.kill(this._pty);
++        }
+     };
+     return WindowsPtyAgent;
+ }());
+diff --git a/src/windowsPtyAgent.ts b/src/windowsPtyAgent.ts
+--- a/src/windowsPtyAgent.ts
++++ b/src/windowsPtyAgent.ts
+@@ -236,6 +236,10 @@
+     this._inSocket.writable = false;
+     this._outSocket.readable = false;
+     this._outSocket.writable = false;
++    this._inSocket.destroy();
+     this._outSocket.destroy();
++    if (this._useConpty) {
++      this._ptyNative.kill(this._pty);
++    }
+   }
+ }

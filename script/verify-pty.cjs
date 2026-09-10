@@ -12,7 +12,7 @@ async function verifyPty(modulePath, { timeoutMs = 15_000 } = {}) {
     "process.stdin.on('data', chunk => { input += chunk;",
     "if (!/[\\r\\n]/.test(input)) return;",
     "const line = input.split(/[\\r\\n]/)[0];",
-    "process.stdout.write('AX_CODE_PTY_RESULT_' + [...line].reverse().join('') + '\\n', () => process.exit(0)); });",
+    "process.stdout.write(('d'.repeat(64) + '\\n').repeat(256) + 'AX_CODE_PTY_RESULT_' + [...line].reverse().join('') + '\\n', () => process.exit(0)); });",
     "process.stdout.write('AX_CODE_PTY_READY\\n');",
   ].join(" ")
   let child
