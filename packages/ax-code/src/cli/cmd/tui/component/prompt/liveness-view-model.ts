@@ -48,8 +48,8 @@ export function connectionChipText(input: {
   if (input.streamHealth === "unavailable") return "Backend unavailable"
   if (input.streamHealth === "error") return "Backend error"
   if (!input.phase || input.connected) return undefined
-  if (input.phase === "reconnecting") return "Reconnecting…"
-  if (input.phase === "connecting") return "Connecting…"
+  if (input.phase === "reconnecting") return "Reconnecting..."
+  if (input.phase === "connecting") return "Connecting..."
   if (input.phase === "stopped") return "Disconnected"
   return undefined
 }

@@ -139,7 +139,7 @@ export function SubagentStatusPanel(props: {
                           onMouseDown={(event: MouseEvent) => event.stopPropagation()}
                           onMouseUp={(event: MouseEvent) => stop(event, item)}
                         >
-                          [{stopping() ? "…" : "Stop"}]
+                          [{stopping() ? "..." : "Stop"}]
                         </text>
                       </box>
                     </Show>

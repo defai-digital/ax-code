@@ -55,7 +55,7 @@ const SESSION_HEADER_ROWS = 5
 const SUBAGENT_SESSION_HEADER_ROWS = 9
 const TWO_LINE_MIN_COLUMNS = 72
 const ONE_LINE_MIN_COLUMNS = 48
-const ELLIPSIS = "…"
+const ELLIPSIS = "..."
 
 function isVisibleTextPart(part: Part) {
   return part.type === "text" && !part.synthetic && !part.ignored && !!part.text?.trim()
@@ -172,8 +172,8 @@ export function truncateToCellWidth(text: string, width: number) {
   if (width <= 0) return ""
   if (stringWidth(text) <= width) return text
   const ellipsisWidth = stringWidth(ELLIPSIS)
-  const budget = Math.max(1, width - ellipsisWidth)
-  return fitWidth(text, budget) + ELLIPSIS
+  const budget = Math.max(0, width - ellipsisWidth)
+  return fitWidth(text, budget).trimEnd() + ELLIPSIS
 }
 
 export function wrapPreview(text: string, firstLineWidth: number, nextLineWidth: number, maxLines: 1 | 2) {

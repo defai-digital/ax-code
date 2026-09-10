@@ -29,7 +29,7 @@ export function Bash(props: ToolProps<typeof BashTool>) {
   const limited = createMemo(() => {
     if (!overflow()) return output()
     if (expanded()) return capped().text
-    return [...lines().slice(0, 10), "…"].join("\n")
+    return [...lines().slice(0, 10), "..."].join("\n")
   })
 
   const workdirDisplay = createMemo(() => {
@@ -61,7 +61,7 @@ export function Bash(props: ToolProps<typeof BashTool>) {
               <text fg={theme.text}>{limited()}</text>
             </Show>
             <Show when={expanded() && capped().truncated}>
-              <text fg={theme.textMuted}>… truncated, {capped().total} lines total</text>
+              <text fg={theme.textMuted}>... truncated, {capped().total} lines total</text>
             </Show>
             <Show when={overflow()}>
               <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
@@ -89,7 +89,7 @@ export function Write(props: ToolProps<typeof WriteTool>) {
   const visibleContent = createMemo(() => {
     if (!overflow()) return props.input.content
     if (expanded()) return capped().text
-    return lines().slice(0, 20).join("\n") + "\n…"
+    return lines().slice(0, 20).join("\n") + "\n..."
   })
   const display = createMemo(() => codeDisplayView({ filePath: props.input.filePath, content: visibleContent() }))
 
@@ -105,7 +105,7 @@ export function Write(props: ToolProps<typeof WriteTool>) {
             <SessionCodeRenderer display={display()} conceal={false} fg={theme.text} syntaxStyle={syntax()} />
           </line_number>
           <Show when={expanded() && capped().truncated}>
-            <text fg={theme.textMuted}>… truncated, {capped().total} lines total</text>
+            <text fg={theme.textMuted}>... truncated, {capped().total} lines total</text>
           </Show>
           <Show when={overflow()}>
             <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
@@ -142,7 +142,7 @@ export function Edit(props: ToolProps<typeof EditTool>) {
   // Never truncate the patch string itself — slicing mid-hunk makes the
   // diff parser throw and render its error view. Collapse by clipping the
   // rendered preview height instead (as the Bash renderer constrains its
-  // collapsed output), with the "…" indicator outside the diff content.
+  // collapsed output), with the "..." indicator outside the diff content.
   const collapsed = createMemo(() => overflow() && !expanded())
   const summary = createMemo(() => diffSummary(rawDiff()))
 
@@ -184,7 +184,7 @@ export function Edit(props: ToolProps<typeof EditTool>) {
           </box>
           <Show when={collapsed()}>
             <text paddingLeft={1} fg={theme.textMuted}>
-              …
+              ...
             </text>
           </Show>
           <Show when={overflow()}>
@@ -270,7 +270,7 @@ function ApplyPatchFile(props: {
         </box>
         <Show when={collapsed()}>
           <text paddingLeft={1} fg={theme.textMuted}>
-            …
+            ...
           </text>
         </Show>
         <Show when={overflow()}>

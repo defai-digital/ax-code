@@ -20,5 +20,5 @@ export function recentSessionTitle(session: { title?: string }, maxLength = 64):
   const title = session.title?.trim()
   if (!title || title.length === 0) return "Untitled session"
   if (title.length <= maxLength) return title
-  return `${title.slice(0, Math.max(1, maxLength - 1)).trimEnd()}…`
+  return `${title.slice(0, Math.max(1, maxLength - 3)).trimEnd()}...`
 }

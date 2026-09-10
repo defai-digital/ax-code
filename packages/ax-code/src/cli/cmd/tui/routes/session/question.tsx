@@ -571,7 +571,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
           </Show>
           <Show when={!confirm()}>
             <text fg={theme.text}>
-              {"↑↓"} <span style={{ fg: theme.textMuted }}>select</span>
+              {"Up/Down"} <span style={{ fg: theme.textMuted }}>select</span>
             </text>
           </Show>
           <text fg={theme.text}>

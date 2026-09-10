@@ -231,7 +231,7 @@ describe("derivePinnedInputBanner", () => {
 
 describe("wrapPreview", () => {
   test("keeps the last word that already fits when the prefix ends on a boundary", () => {
-    expect(wrapPreview("hello world extra words that wrap", 11, 20, 2)).toEqual(["hello world", "extra words that wr…"])
+    expect(wrapPreview("hello world extra words that wrap", 11, 20, 2)).toEqual(["hello world", "extra words that..."])
   })
 
   test("backs up to the last space when the fitted prefix ends mid-word", () => {
@@ -245,7 +245,7 @@ describe("pinned input layout helpers", () => {
   })
 
   test("truncates by terminal cell width rather than string length", () => {
-    expect(truncateToCellWidth("你好世界", 3)).toBe("你…")
+    expect(truncateToCellWidth("你好世界", 3)).toBe("...")
   })
 
   test("counts an expanded subagent rail including the overflow row", () => {

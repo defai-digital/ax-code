@@ -26,7 +26,7 @@ export function axEngineModelStateAnnotation(entry: {
     case "downloadable":
       return "Not downloaded"
     case "downloading":
-      return "Downloading…"
+      return "Downloading..."
     case "failed":
       return entry.blockers?.[0] ? `Download failed: ${entry.blockers[0]}` : "Download failed"
     case "not-fit":

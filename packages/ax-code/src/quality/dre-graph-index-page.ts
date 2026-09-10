@@ -24,7 +24,7 @@ function usagePanel(usage: SessionUsage.Info) {
       label: "Cache share",
       value: usage.cacheShare === undefined ? "—" : `${Math.round(usage.cacheShare * 100)}%`,
       kind: usage.cacheShare === undefined ? "neutral" : usage.cacheShare >= 0.5 ? "low" : "neutral",
-      icon: "▣",
+      icon: "#",
     }),
     `</div>`,
     `<p class="muted" style="font-size:12px;margin-top:10px">${num(usage.tokens.input)} in · ${num(
@@ -102,7 +102,7 @@ function health(rows: SessionSummaryRow[]) {
       label: "Validation pass rate",
       value: passRate === undefined ? "—" : `${passRate}%`,
       kind: passRate === undefined ? "neutral" : passRate >= 80 ? "low" : passRate >= 40 ? "medium" : "high",
-      icon: "▣",
+      icon: "#",
     }),
     `</div>`,
     `</div>`,

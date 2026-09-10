@@ -58,10 +58,10 @@ describe("prompt footer connection chip", () => {
 
   test("labels socket-level phases", () => {
     expect(connectionChipText({ phase: "connecting", connected: false, streamHealth: "connecting" })).toBe(
-      "Connecting…",
+      "Connecting...",
     )
     expect(connectionChipText({ phase: "reconnecting", connected: false, streamHealth: "connected" })).toBe(
-      "Reconnecting…",
+      "Reconnecting...",
     )
     expect(connectionChipText({ phase: "stopped", connected: false, streamHealth: "connected" })).toBe("Disconnected")
   })

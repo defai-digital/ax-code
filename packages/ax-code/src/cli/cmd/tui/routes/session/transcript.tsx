@@ -525,7 +525,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   const overflow = createMemo(() => isFinal() && lines().length > 50)
   const visibleText = createMemo(() => {
     if (expanded() || !overflow()) return trimmed()
-    return lines().slice(0, 50).join("\n") + "\n…"
+    return lines().slice(0, 50).join("\n") + "\n..."
   })
 
   // While streaming, paint the throttled snapshot as plain text — a cheap
@@ -616,7 +616,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
         </Switch>
         <Show when={overflow()}>
           <text fg={theme.textMuted} onMouseUp={() => setExpanded((prev) => !prev)}>
-            {expanded() ? "Click to collapse" : `… ${lines().length - 50} more lines · click to expand`}
+            {expanded() ? "Click to collapse" : `... ${lines().length - 50} more lines · click to expand`}
           </text>
         </Show>
       </box>

@@ -75,7 +75,7 @@ export function RefactorPlan(props: ToolProps<typeof RefactorPlanTool>) {
                   {(file) => <text fg={theme.text}>{"  " + normalize(file)}</text>}
                 </For>
                 <Show when={affectedFiles().length > 15}>
-                  <text fg={theme.textMuted}>{`  … and ${affectedFiles().length - 15} more`}</text>
+                  <text fg={theme.textMuted}>{`  ... and ${affectedFiles().length - 15} more`}</text>
                 </Show>
               </box>
             </Show>
@@ -265,7 +265,7 @@ export function ImpactAnalyze(props: ToolProps<typeof ImpactAnalyzeTool>) {
                   )}
                 </For>
                 <Show when={!expanded() && affected().length > MAX_INLINE}>
-                  <text fg={theme.textMuted}>{`… and ${affected().length - MAX_INLINE} more (click to expand)`}</text>
+                  <text fg={theme.textMuted}>{`... and ${affected().length - MAX_INLINE} more (click to expand)`}</text>
                 </Show>
               </box>
             </Show>
@@ -341,7 +341,7 @@ export function DedupScan(props: ToolProps<typeof DedupScanTool>) {
                   </For>
                   <Show when={cluster.members.length > MAX_MEMBERS_PER_CLUSTER}>
                     <text fg={theme.textMuted}>
-                      {`  … and ${cluster.members.length - MAX_MEMBERS_PER_CLUSTER} more`}
+                      {`  ... and ${cluster.members.length - MAX_MEMBERS_PER_CLUSTER} more`}
                     </text>
                   </Show>
                   <Show when={cluster.suggestedExtractionTarget}>
@@ -353,7 +353,7 @@ export function DedupScan(props: ToolProps<typeof DedupScanTool>) {
               )}
             </For>
             <Show when={clusters().length > MAX_CLUSTERS}>
-              <text fg={theme.textMuted}>{`… and ${clusters().length - MAX_CLUSTERS} more cluster(s)`}</text>
+              <text fg={theme.textMuted}>{`... and ${clusters().length - MAX_CLUSTERS} more cluster(s)`}</text>
             </Show>
           </box>
         </BlockTool>

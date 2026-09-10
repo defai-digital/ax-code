@@ -33,7 +33,7 @@ export function usageSection(input: { usage: SessionUsage.Info; duration?: numbe
       label: "Cache share",
       value: usage.cacheShare === undefined ? "—" : `${Math.round(usage.cacheShare * 100)}%`,
       kind: usage.cacheShare !== undefined && usage.cacheShare >= 0.5 ? "low" : "neutral",
-      icon: "▣",
+      icon: "#",
     }),
     stat({ label: "Duration", value: time(input.duration), icon: "⏱" }),
     `</div>`,

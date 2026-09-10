@@ -7,7 +7,7 @@ import {
 describe("axEngineModelStateAnnotation", () => {
   test("annotates missing weights and in-flight downloads", () => {
     expect(axEngineModelStateAnnotation({ state: "downloadable" })).toBe("Not downloaded")
-    expect(axEngineModelStateAnnotation({ state: "downloading" })).toBe("Downloading…")
+    expect(axEngineModelStateAnnotation({ state: "downloading" })).toBe("Downloading...")
   })
 
   test("surfaces the download failure reason when the catalog provides one", () => {
@@ -45,7 +45,7 @@ describe("axEngineModelStateAnnotations", () => {
     ])
     expect([...annotations.entries()]).toEqual([
       ["missing-model", "Not downloaded"],
-      ["busy-model", "Downloading…"],
+      ["busy-model", "Downloading..."],
     ])
   })
 

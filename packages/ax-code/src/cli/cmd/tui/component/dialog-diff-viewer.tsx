@@ -135,7 +135,7 @@ function DialogDiffDetail(props: { diff: Snapshot.FileDiff }) {
     if (capped.hidden > 0) {
       options.push({
         title: "",
-        description: `… truncated, ${capped.hidden} more lines`,
+        description: `... truncated, ${capped.hidden} more lines`,
         value: "truncated",
         descriptionFg: theme.textMuted,
         disabled: true,

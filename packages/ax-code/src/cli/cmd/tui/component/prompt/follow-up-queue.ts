@@ -76,5 +76,5 @@ export function followUpPreview(item: QueuedFollowUp, maxLength = 48): string {
   const text = followUpText(item).replace(/\s+/g, " ")
   if (!text) return "(empty message)"
   if (text.length <= maxLength) return text
-  return text.slice(0, Math.max(1, maxLength - 1)) + "…"
+  return text.slice(0, Math.max(1, maxLength - 3)) + "..."
 }

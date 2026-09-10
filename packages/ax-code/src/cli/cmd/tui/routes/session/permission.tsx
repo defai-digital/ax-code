@@ -191,7 +191,7 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
           <box>
             <For each={files.slice(0, 10)}>{(f) => <text fg={theme.text}>{"  " + normalizePath(f)}</text>}</For>
             <Show when={files.length > 10}>
-              <text fg={theme.textMuted}>{`  … and ${files.length - 10} more`}</text>
+              <text fg={theme.textMuted}>{`  ... and ${files.length - 10} more`}</text>
             </Show>
           </box>
         </box>

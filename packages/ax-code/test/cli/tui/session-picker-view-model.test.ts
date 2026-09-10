@@ -41,7 +41,7 @@ describe("recentSessionTitle", () => {
     const title = "x".repeat(100)
     const result = recentSessionTitle({ title }, 10)
     expect(result.length).toBeLessThanOrEqual(10)
-    expect(result.endsWith("…")).toBe(true)
+    expect(result.endsWith("...")).toBe(true)
   })
 
   test("keeps short titles unchanged", () => {

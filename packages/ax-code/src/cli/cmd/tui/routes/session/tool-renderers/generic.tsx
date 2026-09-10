@@ -15,7 +15,7 @@ export function GenericTool(props: ToolProps<any>) {
   const overflow = createMemo(() => lines().length > maxLines)
   const limited = createMemo(() => {
     if (expanded() || !overflow()) return output()
-    return [...lines().slice(0, maxLines), "…"].join("\n")
+    return [...lines().slice(0, maxLines), "..."].join("\n")
   })
 
   return (

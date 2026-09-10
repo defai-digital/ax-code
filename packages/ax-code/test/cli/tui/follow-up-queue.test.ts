@@ -79,7 +79,7 @@ describe("follow-up-queue (pure)", () => {
 
   test("followUpPreview normalizes whitespace and stays compact", () => {
     expect(followUpPreview(item("1", "  inspect\n  the   queue  "))).toBe("inspect the queue")
-    expect(followUpPreview(item("1", "123456789"), 6)).toBe("12345…")
+    expect(followUpPreview(item("1", "123456789"), 6)).toBe("123...")
     expect(followUpPreview(makeFollowUp({ parts: [{ type: "file" }] }, "1", 1))).toBe("(empty message)")
   })
 })

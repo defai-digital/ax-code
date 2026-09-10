@@ -1392,7 +1392,7 @@ export function Prompt(props: PromptProps) {
                       if (expanded()) return view.text
                       const lines = [...view.previewLines]
                       if (view.hiddenLineCount > 0) {
-                        lines.push(`… ${view.hiddenLineCount} more line${view.hiddenLineCount === 1 ? "" : "s"}`)
+                        lines.push(`... ${view.hiddenLineCount} more line${view.hiddenLineCount === 1 ? "" : "s"}`)
                       }
                       return lines.join("\n")
                     })
