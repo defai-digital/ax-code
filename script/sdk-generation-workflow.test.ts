@@ -3,11 +3,16 @@ import { describe, expect, test } from "vitest"
 
 const workflow = readFileSync(".github/workflows/ax-code-ci.yml", "utf8")
 
+function workflowJob(source: string, name: string) {
+  return source.match(new RegExp(`^  ${name}:\\n[\\s\\S]*?(?=^  \\w[\\w-]*:|$(?![\\s\\S]))`, "m"))?.[0]
+}
+
 describe("SDK generation workflow policy", () => {
-  test("the deterministic job runs the full SDK generator", () => {
-    const deterministicJob = workflow.slice(workflow.indexOf("\n  deterministic:"), workflow.indexOf("\n  live:"))
-    expect(deterministicJob).toContain("pnpm --dir packages/sdk/js run build")
-    expect(deterministicJob).not.toContain("working-directory: packages/sdk/js\n        run: pnpm exec tsc")
+  test("the checks job runs the full SDK generator", () => {
+    const checksJob = workflowJob(workflow, "checks")
+    expect(checksJob).toBeDefined()
+    expect(checksJob).toContain("pnpm --dir packages/sdk/js run build")
+    expect(checksJob).not.toContain("working-directory: packages/sdk/js\n        run: pnpm exec tsc")
   })
 
   test("fails when committed OpenAPI or generated clients drift", () => {
@@ -30,7 +35,8 @@ describe("SDK generation workflow policy", () => {
   })
 
   test("the required deterministic job does not run V8 coverage", () => {
-    const deterministicJob = workflow.slice(workflow.indexOf("\n  deterministic:"), workflow.indexOf("\n  live:"))
+    const deterministicJob = workflowJob(workflow, "deterministic")
+    expect(deterministicJob).toBeDefined()
     expect(deterministicJob).toContain("pnpm --dir packages/ax-code run test:ci -- deterministic")
     expect(deterministicJob).not.toContain("--coverage")
     expect(deterministicJob).not.toContain("Download coverage baseline")

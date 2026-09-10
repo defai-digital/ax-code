@@ -5,6 +5,11 @@ import path from "node:path"
 const toolchain = readFileSync(".github/actions/setup-ax-code-toolchain/action.yml", "utf8")
 const release = readFileSync(".github/workflows/release.yml", "utf8")
 const ci = readFileSync(".github/workflows/ax-code-ci.yml", "utf8")
+const repoStructure = readFileSync(".github/workflows/repo-structure.yml", "utf8")
+
+function workflowJob(source: string, name: string) {
+  return source.match(new RegExp(`^  ${name}:\\n[\\s\\S]*?(?=^  \\w[\\w-]*:|$(?![\\s\\S]))`, "m"))?.[0]
+}
 
 function githubAutomationSources(directory = ".github"): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -16,8 +21,36 @@ function githubAutomationSources(directory = ".github"): string[] {
 }
 
 describe("CI workflow speed policy", () => {
+  test("repository script tests run once in repo-structure, not in ax-code CI", () => {
+    expect(ci).not.toContain("pnpm run test:scripts")
+    expect(repoStructure).toContain("pnpm run test:scripts")
+  })
+
+  test("deterministic tests split across four GitHub runners without in-process shards", () => {
+    const lane = workflowJob(ci, "deterministic")
+    expect(lane).toBeDefined()
+    expect(lane).toContain("timeout-minutes: 20")
+    expect(lane).toContain("shard: [1, 2, 3, 4]")
+    expect(lane).toContain("AX_TEST_SHARD_INDEX: ${{ matrix.shard }}")
+    expect(lane).toContain('AX_TEST_SHARD_COUNT: "4"')
+    expect(lane).toContain("test:ci -- deterministic --rerun-on-fail 0")
+    expect(lane).not.toContain("AX_TEST_SHARD_SIZE")
+    expect(lane).not.toContain("AX_TEST_MAX_WORKERS")
+    expect(lane).toContain("name: ax-code-deterministic-report-${{ matrix.shard }}")
+  })
+
+  test("SDK generation, typecheck, and scans stay off the deterministic test runners", () => {
+    const lane = workflowJob(ci, "checks")
+    expect(lane).toBeDefined()
+    expect(lane).toContain("pnpm --dir packages/sdk/js run build")
+    expect(lane).toContain("pnpm --dir packages/sdk/js test")
+    expect(lane).toContain("pnpm --dir packages/ax-code run typecheck")
+    expect(lane).toContain("pnpm run test:extracted-packages")
+    expect(lane).not.toContain("test:ci -- deterministic")
+  })
+
   test("runtime contracts run in a bounded lane with their own report and no retries", () => {
-    const lane = ci.match(/^  runtime-contract:\n[\s\S]*?(?=^  \w[\w-]*:|$(?![\s\S]))/m)?.[0]
+    const lane = workflowJob(ci, "runtime-contract")
     expect(lane).toBeDefined()
     expect(lane).toContain("timeout-minutes: 15")
     expect(lane).toContain('AX_TEST_MAX_WORKERS: "2"')

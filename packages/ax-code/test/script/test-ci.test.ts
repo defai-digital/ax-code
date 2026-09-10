@@ -8,7 +8,9 @@ import {
   mapWithConcurrency,
   num,
   parseJUnit,
+  pickMatrixShard,
   resolveCoverageEnabled,
+  resolveMatrixShard,
   resolveRerunOnFail,
   resolveShardConcurrency,
   resolveTestCIGroup,
@@ -47,6 +49,34 @@ describe("script.test-ci", () => {
   test("splits deterministic files into bounded sequential shards", () => {
     expect(shardFiles(["a", "b", "c", "d", "e"], 2)).toEqual([["a", "b"], ["c", "d"], ["e"]])
     expect(() => shardFiles(["a"], 0)).toThrow("Shard size must be a positive integer")
+  })
+
+  test("round-robin matrix shards partition files without overlap or omission", () => {
+    const files = ["a", "b", "c", "d", "e"]
+    const shards = [1, 2, 3, 4].map((index) => pickMatrixShard(files, index, 4))
+    expect(shards).toEqual([["a", "e"], ["b"], ["c"], ["d"]])
+    expect(shards.flat().sort()).toEqual(files)
+    expect(pickMatrixShard([], 1, 4)).toEqual([])
+    expect(() => pickMatrixShard(files, 0, 4)).toThrow("Matrix shard index must be between 1 and 4: 0")
+    expect(() => pickMatrixShard(files, 1, 0)).toThrow("Matrix shard count must be a positive integer: 0")
+  })
+
+  test("reads GitHub matrix shard env only when both values are present", () => {
+    expect(resolveMatrixShard({ indexValue: undefined, countValue: undefined })).toBeUndefined()
+    expect(resolveMatrixShard({ indexValue: "", countValue: "" })).toBeUndefined()
+    expect(resolveMatrixShard({ indexValue: "2", countValue: "4" })).toEqual({ index: 2, count: 4 })
+    expect(() => resolveMatrixShard({ indexValue: "1", countValue: undefined })).toThrow(
+      "AX_TEST_SHARD_INDEX and AX_TEST_SHARD_COUNT must be set together",
+    )
+    expect(() => resolveMatrixShard({ indexValue: undefined, countValue: "4" })).toThrow(
+      "AX_TEST_SHARD_INDEX and AX_TEST_SHARD_COUNT must be set together",
+    )
+    expect(() => resolveMatrixShard({ indexValue: "0", countValue: "4" })).toThrow(
+      "Invalid value for AX_TEST_SHARD_INDEX: 0",
+    )
+    expect(() => resolveMatrixShard({ indexValue: "1", countValue: "0" })).toThrow(
+      "Invalid value for AX_TEST_SHARD_COUNT: 0",
+    )
   })
 
   test("skips V8 coverage on GitHub Actions unless AX_TEST_COVERAGE=1", () => {

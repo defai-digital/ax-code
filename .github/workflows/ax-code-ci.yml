@@ -86,8 +86,10 @@ jobs:
           AX_TEST_FILES: test/cli/bootstrap/windows-console.test.ts,test/cli/tui/process-wire.test.ts,test/snapshot/windows-paths.test.ts,test/snapshot/literal-revert.test.ts,test/session/redo-files.test.ts,test/worktree/remove-recovery.test.ts,test/script/source-launcher.test.ts
         run: pnpm exec vitest run --retry=0
 
-  deterministic:
+  checks:
+    name: SDK, typecheck, and scans
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       AX_CODE_DISABLE_SHARE: "true"
     steps:
@@ -140,9 +142,6 @@ jobs:
       - name: Test SDK
         run: pnpm --dir packages/sdk/js test
 
-      - name: Test repository scripts
-        run: pnpm run test:scripts
-
       - name: Test extracted core packages
         run: pnpm run test:extracted-packages
 
@@ -151,6 +150,36 @@ jobs:
 
       - name: Typecheck ax-code
         run: pnpm --dir packages/ax-code run typecheck
+
+  deterministic:
+    name: deterministic (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      AX_CODE_DISABLE_SHARE: "true"
+      AX_TEST_SHARD_INDEX: ${{ matrix.shard }}
+      AX_TEST_SHARD_COUNT: "4"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Ax-code JS toolchain
+        uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "24"
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile SDK
+        run: pnpm --dir packages/sdk/js exec tsc
+
+      - name: Build Plugin
+        run: pnpm --dir packages/plugin run build
 
       - name: Run deterministic ax-code tests
         shell: bash
@@ -161,18 +190,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # PRs keep the default Vitest worker cap and a single process so
-          # feedback stays close to local `test:ci -- deterministic`.
-          # Post-merge pushes still shard (heap), but no longer pay for V8
-          # coverage in this required job. Coverage remains a local
-          # `test:ci` coverage run or a follow-up workflow.
-          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            export NODE_OPTIONS="--max-old-space-size=6144"
-            export AX_TEST_MAX_WORKERS="2"
-            export AX_TEST_SHARD_SIZE="25"
-          fi
-
-          # Preserve the first complete result instead of repeating every shard.
+          # Four GitHub runners split the suite with round-robin
+          # AX_TEST_SHARD_INDEX. Keep each runner as a single Vitest process;
+          # coverage remains a local AX_TEST_COVERAGE=1 run.
           pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 0
 
       - name: Summarize ax-code risk map
@@ -183,7 +203,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ax-code-deterministic-report
+          name: ax-code-deterministic-report-${{ matrix.shard }}
           path: |
             .internal/reports/testing/junit/*.xml
             .internal/reports/testing/test-risk.md

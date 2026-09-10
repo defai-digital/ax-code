@@ -89,6 +89,34 @@ export function shardFiles(files: string[], size: number) {
   return shards
 }
 
+export function resolveMatrixShard(input: { indexValue: string | undefined; countValue: string | undefined }) {
+  const hasIndex = input.indexValue != null && input.indexValue !== ""
+  const hasCount = input.countValue != null && input.countValue !== ""
+  if (!hasIndex && !hasCount) return
+  if (!hasIndex || !hasCount) {
+    throw new Error("AX_TEST_SHARD_INDEX and AX_TEST_SHARD_COUNT must be set together")
+  }
+  const count = Number.parseInt(input.countValue!, 10)
+  const index = Number.parseInt(input.indexValue!, 10)
+  if (!Number.isSafeInteger(count) || count < 1) {
+    throw new Error(`Invalid value for AX_TEST_SHARD_COUNT: ${input.countValue}`)
+  }
+  if (!Number.isSafeInteger(index) || index < 1 || index > count) {
+    throw new Error(`Invalid value for AX_TEST_SHARD_INDEX: ${input.indexValue}`)
+  }
+  return { index, count }
+}
+
+export function pickMatrixShard<T>(files: T[], index: number, count: number) {
+  if (!Number.isSafeInteger(count) || count < 1) {
+    throw new Error(`Matrix shard count must be a positive integer: ${count}`)
+  }
+  if (!Number.isSafeInteger(index) || index < 1 || index > count) {
+    throw new Error(`Matrix shard index must be between 1 and ${count}: ${index}`)
+  }
+  return files.filter((_, fileIndex) => fileIndex % count === index - 1)
+}
+
 export function resolveCoverageEnabled(input: {
   coverageFlag: boolean
   githubActions: string | undefined
@@ -384,7 +412,15 @@ async function main() {
 
   const all = await list()
   check(all)
-  const files = pick(all, group)
+  const matrix = resolveMatrixShard({
+    indexValue: process.env.AX_TEST_SHARD_INDEX,
+    countValue: process.env.AX_TEST_SHARD_COUNT,
+  })
+  let files = pick(all, group)
+  if (matrix) {
+    files = pickMatrixShard(files, matrix.index, matrix.count)
+    console.log(`Using GitHub matrix shard ${matrix.index}/${matrix.count}: ${files.length} files`)
+  }
   if (files.length === 0) {
     console.log(`No tests in group: ${group}`)
     return
