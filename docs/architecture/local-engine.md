@@ -33,8 +33,8 @@ AX Code does not link the AX Engine SDK in-process. AX Engine owns model
 execution, and AX Code owns the client-side process lifecycle. Host eligibility,
 model preparation, and live tool-calling checks still apply.
 
-Cold startup has a 240-second readiness limit. Loading large model weights
-from a network-mounted Hugging Face cache can approach or exceed this limit.
+Cold startup has a 240-second readiness limit. Startup time depends on model
+size, storage throughput and available memory.
 An exhausted startup stops the turn with the server log and model path;
 AX Code does not automatically restart another cold load or switch providers.
 Resolve the reported issue before retrying explicitly.
@@ -44,29 +44,14 @@ or cancelling the initiating turn does not stop the ready engine. Cancelling
 while startup is still in progress terminates that attempt and removes its
 process record. Use **Stop local runtime** to stop a resident engine explicitly.
 
-Use a local SSD cache when cold-load latency is a problem. AX Code resolves
-the Hugging Face cache in this order: `HF_HUB_CACHE`, `HF_HOME/hub`,
-`XDG_CACHE_HOME/huggingface/hub`, then `~/.cache/huggingface/hub`. To use a local
-cache for a new AX Code process, for example:
-
-```sh
-HF_HUB_CACHE="$HOME/.cache/huggingface/hub" ax-code
-```
-
-Ensure that location is on local storage. Changing the variable does not move
-existing weights or override an explicitly configured or already prepared model
-path. Stop the existing runtime before changing its prepared model. To prepare
-Qwen 3.8 in the selected cache explicitly:
-
-```sh
-HF_HUB_CACHE="$HOME/.cache/huggingface/hub" ax-code providers ax-engine prepare \
-  --model qwen3.8-27b-axq-6bit --download
-```
-
-The preparation result reports the resolved model path. Verify it points to
-local storage and update any explicit model-path override before starting a
-new AX Code process with the same cache setting. Allow sufficient disk space
-for the model; AX Code does not automatically copy weights from a network cache.
+AX Code follows the standard Hugging Face cache location and respects the
+user's storage selection, including local disks, SMB and NFS mounts. Cache
+resolution is `HF_HUB_CACHE`, then `HF_HOME/hub`, then
+`XDG_CACHE_HOME/huggingface/hub`, then `~/.cache/huggingface/hub`.
+An explicitly configured or already prepared model path takes precedence over
+cache discovery. AX Code does not relocate weights or override these choices
+based on storage type. Startup diagnostics report the actual model path so
+users can investigate availability and read performance in their chosen storage.
 
 For an existing engine, AX Code makes up to three health probes, each limited to two seconds
 and separated by 250 milliseconds, before restarting an unresponsive process.

@@ -818,8 +818,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
           : `ax-engine server did not become ready within ${(options.readyTimeoutMs ?? 240_000) / 1000} seconds`
       const guidance =
         `Model path: ${options.modelPath}\n` +
-        "Startup was not retried automatically. Check the server log and available memory; " +
-        "if model weights are on network storage, prepare them in a local SSD Hugging Face cache. " +
+        "Startup was not retried automatically. Check the server log, available memory, " +
+        "and read access to the configured model path. " +
         "Resolve the startup issue, then retry explicitly."
       throw new AxEngineStartupError({
         code,

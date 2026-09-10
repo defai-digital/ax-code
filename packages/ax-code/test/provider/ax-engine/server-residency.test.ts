@@ -123,7 +123,7 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
       expect(failure.data.reason).toBe(mode === "exit" ? "process-exited" : "timeout")
       expect(failure.message).toContain("Startup was not retried automatically")
       expect(failure.message).toContain(f.input.modelPath)
-      expect(failure.message).toContain("local SSD")
+      expect(failure.message).toContain("read access to the configured model path")
       expect(f.children).toHaveLength(1)
       await expect(f.children[0].exited).resolves.toBeTypeOf("number")
       await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
