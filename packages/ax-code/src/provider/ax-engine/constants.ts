@@ -291,6 +291,7 @@ export const AX_ENGINE_ERROR = {
   DownloadFailed: "AX_ENGINE_DOWNLOAD_FAILED",
   ServerStartFailed: "AX_ENGINE_SERVER_START_FAILED",
   ServerHealthFailed: "AX_ENGINE_SERVER_HEALTH_FAILED",
+  SetupTimeout: "AX_ENGINE_SETUP_TIMEOUT",
   ToolcallUnsupported: "AX_ENGINE_TOOLCALL_UNSUPPORTED",
   ModelUnsupported: "AX_ENGINE_MODEL_UNSUPPORTED",
   CatalogUnavailable: "AX_ENGINE_CATALOG_UNAVAILABLE",

@@ -39,6 +39,7 @@ import { LongAgentContextPacker } from "@/context/long-agent-packer"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { resolveAxEngineSetup } from "@/provider/ax-engine/setup"
 import { attachThinkTagStream } from "@/provider/think-tags"
 import { isKnownCliProviderID } from "@/provider/cli/ids"
 import { isRetiredProviderID } from "@/provider/retired-providers"
@@ -103,7 +104,6 @@ export namespace LLM {
   const STREAM_ERROR = Symbol("ax-code.llm.streamError")
   const STREAM_TIMING = Symbol("ax-code.llm.streamTiming")
   const DEFAULT_SETUP_TIMEOUT_MS = 90_000
-  const LOCAL_ENGINE_SETUP_TIMEOUT_MS = 300_000
 
   // The AI SDK reports stream errors through the `onError` callback WITHOUT
   // throwing, so a stream that errors mid-flight still completes its async
@@ -153,17 +153,20 @@ export namespace LLM {
     // 90s default: getLanguage() may call getSDK() with its own 60s install
     // timeout. Local ax-engine gets a wider envelope because startup can queue
     // behind a cross-process model load before it can report its own error.
-    const setupTimeoutMs =
-      input.model.providerID === "ax-engine" ? LOCAL_ENGINE_SETUP_TIMEOUT_MS : DEFAULT_SETUP_TIMEOUT_MS
-    const [language, cfg, provider] = await withTimeout(
+    const loadSetup = (signal: AbortSignal) =>
       Promise.all([
-        Provider.getLanguage(input.model, { signal: input.abort }),
+        Provider.getLanguage(input.model, { signal }),
         input.config ?? Config.get(),
         Provider.getProvider(input.model.providerID),
-      ]),
-      setupTimeoutMs,
-      `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
-    )
+      ])
+    const [language, cfg, provider] =
+      input.model.providerID === AX_ENGINE_PROVIDER_ID
+        ? await resolveAxEngineSetup({ modelID: input.model.id, signal: input.abort }, loadSetup)
+        : await withTimeout(
+            loadSetup(input.abort),
+            DEFAULT_SETUP_TIMEOUT_MS,
+            `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
+          )
 
     const reasoningPolicyDecision = ReasoningPolicy.decide({
       small: input.small,

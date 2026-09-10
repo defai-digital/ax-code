@@ -22,10 +22,15 @@ const fallbackModel = {
 }
 
 describe("prompt loop error transitions", () => {
-  test.each(["timeout", "process-exited"] as const)(
+  test.each(["timeout", "process-exited", "setup-timeout"] as const)(
     "a %s during managed startup survives serialization and stops both retry layers",
     async (reason) => {
-      const code = reason === "timeout" ? AX_ENGINE_ERROR.ServerHealthFailed : AX_ENGINE_ERROR.ServerStartFailed
+      const code =
+        reason === "setup-timeout"
+          ? AX_ENGINE_ERROR.SetupTimeout
+          : reason === "timeout"
+            ? AX_ENGINE_ERROR.ServerHealthFailed
+            : AX_ENGINE_ERROR.ServerStartFailed
       const startup = new AxEngineStartupError({ code, reason, message: `${code}: startup failed; inspect server log` })
       const currentModel = { providerID: ProviderID.make("ax-engine"), modelID: ModelID.make("qwen3.8-27b-axq-6bit") }
       for (const original of [startup, startup.toObject()]) {

@@ -9,6 +9,7 @@ import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { ensureServer, isServerReady, stopServer } from "../../../src/provider/ax-engine/server"
 import type { AxEngineServerOptions } from "../../../src/provider/ax-engine/server"
 import { AxEngineStartupError } from "../../../src/provider/ax-engine/errors"
+import { resolveAxEngineSetup } from "../../../src/provider/ax-engine/setup"
 
 async function fixture(mode: "ready" | "unready" | "exit" = "ready") {
   const tmp = await tmpdir()
@@ -65,6 +66,104 @@ http.createServer((req, res) => {
 // Managed process identity currently uses Unix ps; these fixtures exercise
 // real subprocesses and HTTP without loading weights or touching host state.
 describe.skipIf(process.platform === "win32")("managed engine residency", () => {
+  test("the outer setup timeout cleans up a still-starting engine", async () => {
+    await using f = await fixture("unready")
+    const caller = new AbortController()
+    await expect(
+      resolveAxEngineSetup({ modelID: f.input.modelID, signal: caller.signal, timeoutMs: 500 }, (signal) =>
+        ensureServer({ ...f.input, signal }),
+      ),
+    ).rejects.toMatchObject({ name: "AxEngineStartupError", data: { reason: "setup-timeout" } })
+    expect(f.children).toHaveLength(1)
+    await vi.waitFor(async () => {
+      expect(f.children[0].exitCode !== null || f.children[0].signalCode !== null).toBe(true)
+      await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+    })
+    expect(caller.signal.aborted).toBe(false)
+  })
+
+  test("cancelling capability discovery preserves an engine that already became ready", async () => {
+    await using f = await fixture()
+    const caller = new AbortController()
+    const ready = Promise.withResolvers<Awaited<ReturnType<typeof ensureServer>>>()
+    const discovery = Promise.withResolvers<void>()
+    const pending = resolveAxEngineSetup({ modelID: f.input.modelID, signal: caller.signal }, async (signal) => {
+      const state = await ensureServer({ ...f.input, signal })
+      ready.resolve(state)
+      await discovery.promise
+      return state
+    }).catch((error: unknown) => error)
+    const state = await ready.promise
+    const reason = new DOMException("Cancelled capability discovery", "AbortError")
+    caller.abort(reason)
+    expect(await pending).toBe(reason)
+    discovery.resolve()
+    expect(await isServerReady(state.baseURL)).toBe(true)
+    expect((await Filesystem.readJson(AxEnginePaths.serverState)).pid).toBe(state.pid)
+  })
+
+  test("the readiness deadline interrupts an in-flight health probe", async () => {
+    await using f = await fixture()
+    let aborted = false
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init!.signal!.addEventListener(
+          "abort",
+          () => {
+            aborted = true
+            reject(init!.signal!.reason)
+          },
+          { once: true },
+        )
+      })
+    })
+    const started = performance.now()
+    await expect(ensureServer({ ...f.input, readyTimeoutMs: 50 })).rejects.toMatchObject({
+      name: "AxEngineStartupError",
+      data: { reason: "timeout" },
+    })
+    expect(aborted).toBe(true)
+    expect(performance.now() - started).toBeLessThan(1_500)
+    await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+  })
+
+  test("a health response after the readiness deadline is not accepted", async () => {
+    await using f = await fixture()
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      return Response.json({ data: [] })
+    })
+    const result = await ensureServer({ ...f.input, readyTimeoutMs: 50 }).catch((error: unknown) => error)
+    expect(result).toMatchObject({ name: "AxEngineStartupError", data: { reason: "timeout" } })
+    await expect(f.children[0].exited).resolves.toBeTypeOf("number")
+    await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+  })
+
+  test.each(["health response", "ready-state write"])(
+    "an engine exiting during %s is not handed off",
+    async (phase) => {
+      await using f = await fixture()
+      if (phase === "health response") {
+        const fetch = globalThis.fetch
+        vi.spyOn(globalThis, "fetch").mockImplementation(async (...args) => {
+          const response = await fetch(...args)
+          if (response.ok) await Process.killProcessTree(f.children[0])
+          return response
+        })
+      } else {
+        const write = Filesystem.writeJson
+        let writes = 0
+        vi.spyOn(Filesystem, "writeJson").mockImplementation(async (file, content) => {
+          await write(file, content)
+          if (file === AxEnginePaths.serverState && ++writes === 2) await Process.killProcessTree(f.children[0])
+        })
+      }
+      const result = await ensureServer(f.input).catch((error: unknown) => error)
+      expect(result).toMatchObject({ name: "AxEngineStartupError", data: { reason: "process-exited" } })
+      await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+    },
+  )
+
   test("cancellation while preparing the log does not launch a process", async () => {
     await using f = await fixture()
     const controller = new AbortController()

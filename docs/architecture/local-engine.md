@@ -38,6 +38,12 @@ size, storage throughput and available memory.
 An exhausted startup stops the turn with the server log and model path;
 AX Code does not automatically restart another cold load or switch providers.
 Resolve the reported issue before retrying explicitly.
+The model setup envelope, including lifecycle-lock waiting and capability
+discovery, is limited to 300 seconds. Expiry cancels pending setup and stops
+automatic retries. Cancelling a request also stops waiting immediately, even
+when a setup dependency has not yet responded. Health replies arriving after
+the readiness deadline, or after the owned process exits, cannot establish
+readiness.
 
 Once ready, the engine stays resident across conversation turns. Completing
 or cancelling the initiating turn does not stop the ready engine. Cancelling

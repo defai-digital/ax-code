@@ -354,7 +354,10 @@ async function waitForReady(
   // envelope specifically to cover this — keep this default comfortably under
   // that so a slow-but-successful start isn't cut off here first, before the
   // outer envelope ever gets a chance to matter.
-  const deadline = Date.now() + (options.timeoutMs ?? 240_000)
+  const timeoutMs = options.timeoutMs ?? 240_000
+  const deadline = Date.now() + timeoutMs
+  const deadlineSignal = AbortSignal.timeout(timeoutMs)
+  const signal = options.signal ? AbortSignal.any([options.signal, deadlineSignal]) : deadlineSignal
   // Detached/unref'd children do not update exitCode reliably on every
   // supported Node release. Process.spawn's exited promise is driven by the
   // child "exit" event, so track it as an authoritative second signal.
@@ -371,18 +374,22 @@ async function waitForReady(
   while (Date.now() < deadline) {
     if (options.signal?.aborted) return { ready: false, reason: "aborted" }
     if (processExited()) return { ready: false, reason: "process-exited" }
-    if (await isServerReady(baseURL, options.signal, options.apiKey)) return { ready: true }
+    const ready = await isServerReady(baseURL, signal, options.apiKey)
+    if (options.signal?.aborted) return { ready: false, reason: "aborted" }
     // A child can exit while the final health probe is waiting on its own
     // timeout. Re-check before classifying the overall wait as a health
     // timeout; otherwise fast startup failures race with the deadline and are
     // intermittently reported as AX_ENGINE_SERVER_HEALTH_FAILED.
     if (processExited()) return { ready: false, reason: "process-exited" }
+    if (deadlineSignal.aborted || Date.now() >= deadline) break
+    if (ready) return { ready: true }
     const remaining = deadline - Date.now()
     if (remaining <= 0) break
     try {
-      await delay(Math.min(500, remaining), undefined, { signal: options.signal })
+      await delay(Math.min(500, remaining), undefined, { signal })
     } catch (error) {
       if (options.signal?.aborted) return { ready: false, reason: "aborted" }
+      if (deadlineSignal.aborted) break
       throw error
     }
   }
@@ -796,6 +803,24 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     mtpMode,
     startedAt: Date.now(),
   }
+  const startupFailure = async (reason: "process-exited" | "timeout") => {
+    const logExcerpt = await readServerLogExcerpt(serverLogStart)
+    const code = reason === "process-exited" ? AX_ENGINE_ERROR.ServerStartFailed : AX_ENGINE_ERROR.ServerHealthFailed
+    const message =
+      reason === "process-exited"
+        ? "ax-engine server exited before becoming ready"
+        : `ax-engine server did not become ready within ${(options.readyTimeoutMs ?? 240_000) / 1000} seconds`
+    const guidance =
+      `Model path: ${options.modelPath}\n` +
+      "Startup was not retried automatically. Check the server log, available memory, " +
+      "and read access to the configured model path. " +
+      "Resolve the startup issue, then retry explicitly."
+    return new AxEngineStartupError({
+      code,
+      reason,
+      message: `${formatServerStartupFailure({ code, origin, message, logExcerpt })}\n${guidance}`,
+    })
+  }
   try {
     await writeServerState(state)
     options.signal?.throwIfAborted()
@@ -809,28 +834,13 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     if (!ready.ready) {
       // An aborted wait always has an aborted caller signal, checked above.
       if (ready.reason === "aborted") throw new DOMException("Startup cancelled", "AbortError")
-      const logExcerpt = await readServerLogExcerpt(serverLogStart)
-      const code =
-        ready.reason === "process-exited" ? AX_ENGINE_ERROR.ServerStartFailed : AX_ENGINE_ERROR.ServerHealthFailed
-      const message =
-        ready.reason === "process-exited"
-          ? "ax-engine server exited before becoming ready"
-          : `ax-engine server did not become ready within ${(options.readyTimeoutMs ?? 240_000) / 1000} seconds`
-      const guidance =
-        `Model path: ${options.modelPath}\n` +
-        "Startup was not retried automatically. Check the server log, available memory, " +
-        "and read access to the configured model path. " +
-        "Resolve the startup issue, then retry explicitly."
-      throw new AxEngineStartupError({
-        code,
-        reason: ready.reason,
-        message: `${formatServerStartupFailure({ code, origin, message, logExcerpt })}\n${guidance}`,
-      })
+      throw await startupFailure(ready.reason)
     }
 
     const readyState: AxEngineServerState = { ...state, lastHealthAt: Date.now() }
     await writeServerState(readyState)
     options.signal?.throwIfAborted()
+    if (processHasExited(proc)) throw await startupFailure("process-exited")
     // Ownership transfers to the managed lifecycle while holding serverLock.
     // No caller abort listener remains attached to this resident process.
     return readyState

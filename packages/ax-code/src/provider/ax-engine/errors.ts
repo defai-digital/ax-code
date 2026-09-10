@@ -8,7 +8,7 @@ export const AxEngineStartupError = NamedError.create(
   "AxEngineStartupError",
   z.object({
     message: z.string(),
-    code: z.enum([AX_ENGINE_ERROR.ServerStartFailed, AX_ENGINE_ERROR.ServerHealthFailed]),
-    reason: z.enum(["process-exited", "timeout"]),
+    code: z.enum([AX_ENGINE_ERROR.ServerStartFailed, AX_ENGINE_ERROR.ServerHealthFailed, AX_ENGINE_ERROR.SetupTimeout]),
+    reason: z.enum(["process-exited", "timeout", "setup-timeout"]),
   }),
 )
