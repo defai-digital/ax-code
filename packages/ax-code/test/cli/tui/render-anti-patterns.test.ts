@@ -119,7 +119,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(loader).toContain('["solid-js/web",')
   })
 
-  test("keeps release dependency install from running optional native lifecycle scripts", async () => {
+  test("installs dependencies without lifecycle scripts and requires a working release PTY", async () => {
     const build = await fs.readFile(BUILD_NODE_TUI_SRC, "utf8")
 
     expect(build).toContain('copyTuiDistPackage(tuiSourceDir, path.join(outRoot, "node_modules"))')
@@ -136,9 +136,10 @@ describe("AX Code TUI stability guardrails", () => {
     expect(build).toContain('runNpm(["rebuild", "node-pty-prebuilt-multiarch"], gypEnv)')
     expect(build).toContain("resolveLegacyNodeGypPython()")
     expect(build).toContain("gypEnv.npm_config_target")
-    expect(build).toContain('spawnSync(distributionNode, ["-e", "require(process.argv[1])", ptyDir]')
-    expect(build).toContain("bundledNode ? bundledNodeRuntime?.version")
-    expect(build).toContain("node-pty build failed")
+    expect(build).toContain('spawnSync(ptyCheckNode, [path.join(dir, "..", "..", "script", "verify-pty.cjs"), ptyDir]')
+    expect(build).toContain('bundledNodeRuntime ? path.join(bundledNodeDir, "bin", bundledNodeName) : process.execPath')
+    expect(build).toContain('"node-pty native addon build failed"')
+    expect(build).toContain("if (release) throw new Error(message)")
     expect(build).toContain("windowsNodeLauncherScript()")
     expect(windowsNodeLauncherScript()).toContain("switched terminal code page")
   })

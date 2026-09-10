@@ -234,7 +234,7 @@ describe("distribution support guardrails", () => {
     expect(job.indexOf("Notarize macOS CLI archive")).toBeLessThan(job.indexOf("Upload build artifacts"))
   })
 
-  test("release build jobs do not let optional native postinstall scripts block artifacts", async () => {
+  test("release builds defer native lifecycle scripts to the required runtime build", async () => {
     const text = await readFile(releaseWorkflow, "utf-8")
     const validateJob = text.match(/\n  validate:[\s\S]*?(?=\n  build:|$)/)
     const buildJob = text.match(/\n  build:[\s\S]*?(?=\n  publish:|$)/)
@@ -244,7 +244,7 @@ describe("distribution support guardrails", () => {
     expect(validateJob![0]).toContain("pnpm install --frozen-lockfile")
     expect(validateJob![0]).not.toContain("pnpm install --frozen-lockfile --ignore-scripts")
     expect(buildJob![0]).toContain("pnpm install --frozen-lockfile --ignore-scripts")
-    expect(buildJob![0]).toContain("node-pty rebuild as optional")
+    expect(buildJob![0]).toContain("build-args: --release --arch")
     expect(buildJob![0].indexOf("pnpm install --frozen-lockfile --ignore-scripts")).toBeLessThan(
       buildJob![0].indexOf("Build SDK"),
     )

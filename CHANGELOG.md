@@ -19,6 +19,7 @@ changes belong to AX Coder.
 
 ### Changed
 
+- Report the first complete main CI result without automatically repeating every deterministic test shard.
 - Prepare and verify the pinned native TUI dependency before CI workers start, use the isolated cache offline, and retain accurate per-shard diagnostics.
 
 ## [7.15.1] - 2026-09-09

@@ -172,7 +172,8 @@ jobs:
             export AX_TEST_SHARD_SIZE="25"
           fi
 
-          pnpm --dir packages/ax-code run test:ci -- deterministic
+          # Preserve the first complete result instead of repeating every shard.
+          pnpm --dir packages/ax-code run test:ci -- deterministic --rerun-on-fail 0
 
       - name: Summarize ax-code risk map
         if: always()
