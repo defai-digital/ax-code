@@ -183,9 +183,20 @@ function dispatchHeadlessProjectionEvent<
       }
       setStore(
         produce((draft) => {
+          const messageSessionID =
+            input.event.type === "message.updated" ? input.event.properties.info.sessionID : undefined
           effects = applyHeadlessProjectionEvent(draft, input.event, {
             autonomous: input.autonomous && input.autoReplyRequests === true,
-            maxSessionMessages: input.maxSessionMessages,
+            // Keep the recovered undo window until the revert is cleared.
+            maxSessionMessages:
+              messageSessionID &&
+              draft.session.some(
+                (session) =>
+                  session.id === messageSessionID &&
+                  !!(session as { revert?: { messageID?: string } }).revert?.messageID,
+              )
+                ? Math.max(input.maxSessionMessages, (draft.message[messageSessionID]?.length ?? 0) + 1)
+                : input.maxSessionMessages,
           }).effects
         }),
       )

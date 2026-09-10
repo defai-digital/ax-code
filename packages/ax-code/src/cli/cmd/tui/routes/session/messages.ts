@@ -47,7 +47,7 @@ export function undoMessageID(messages: Message[], revert: string | undefined) {
   // Use array index rather than lexicographic comparison on ID strings,
   // matching the approach in revert.ts which is resilient to ID format changes.
   const revertIndex = messages.findIndex((m) => m.id === revert)
-  if (revertIndex === -1) return messages.findLast((message) => message.role === "user")?.id
+  if (revertIndex === -1) return
   return messages.slice(0, revertIndex).findLast((message) => message.role === "user")?.id
 }
 
@@ -55,7 +55,8 @@ export function redoMessageID(messages: Message[], revert: string | undefined) {
   if (!revert) return
   // Use array index rather than lexicographic comparison on ID strings.
   const revertIndex = messages.findIndex((m) => m.id === revert)
-  if (revertIndex === -1) return
+  // null means unknown history, distinct from a known final redo boundary.
+  if (revertIndex === -1) return null
   return messages.slice(revertIndex + 1).find((message) => message.role === "user")?.id
 }
 

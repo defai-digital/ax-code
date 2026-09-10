@@ -6,7 +6,7 @@ import {
 } from "../../../src/cli/cmd/tui/context/sync-store-event"
 import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
 
-type Session = { id: string }
+type Session = { id: string; revert?: { messageID: string } }
 type Todo = { id: string }
 type Diff = { path: string }
 type Status =
@@ -61,6 +61,70 @@ function createTestStore() {
 }
 
 describe("tui sync store event", () => {
+  test("live updates retain recovered undo history, then resume the normal cap after restore", () => {
+    const [store, setStore] = createTestStore()
+    const messages = Array.from({ length: 350 }, (_, i) => ({
+      id: `msg_${String(i).padStart(4, "0")}`,
+      sessionID: "ses_1",
+    }))
+    setStore("session", [{ id: "ses_1", revert: { messageID: messages[48].id } }])
+    setStore("message", "ses_1", messages)
+    const update = () =>
+      dispatchStoreBackedSyncEvent<
+        Session,
+        Todo,
+        Diff,
+        Status,
+        Message,
+        Part,
+        SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+      >({
+        event: { type: "message.updated", properties: { info: messages[349] } },
+        autonomous: false,
+        setStore,
+        clearSessionSyncState: () => {},
+        replyPermission: () => {},
+        replyQuestion: () => {},
+        syncMcpStatus: () => {},
+        syncLspStatus: () => {},
+        syncDebugEngine: () => {},
+        bootstrap: () => {},
+        onWarn: () => {},
+        maxSessionMessages: 100,
+      })
+    update()
+    expect(store.message.ses_1).toHaveLength(350)
+    expect(store.message.ses_1[48].id).toBe(messages[48].id)
+    const original = store.session[0]
+    dispatchStoreBackedSyncEvent<
+      Session,
+      Todo,
+      Diff,
+      Status,
+      Message,
+      Part,
+      SyncEventStoreState<Session, Todo, Diff, Status, Message, Part>
+    >({
+      event: JSON.parse(
+        JSON.stringify({ type: "session.updated", properties: { info: { id: "ses_1", revert: undefined } } }),
+      ),
+      autonomous: false,
+      setStore,
+      clearSessionSyncState: () => {},
+      replyPermission: () => {},
+      replyQuestion: () => {},
+      syncMcpStatus: () => {},
+      syncLspStatus: () => {},
+      syncDebugEngine: () => {},
+      bootstrap: () => {},
+      onWarn: () => {},
+      maxSessionMessages: 100,
+    })
+    expect(store.session[0]).toBe(original)
+    expect(store.session[0].revert).toBeUndefined()
+    update()
+    expect(store.message.ses_1).toHaveLength(100)
+  })
   test("stores non-autonomous permission requests in the permission bucket", () => {
     const [store, setStore] = createTestStore()
     const replies: string[] = []

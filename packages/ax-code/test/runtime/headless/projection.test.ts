@@ -5,7 +5,7 @@ import {
   runtimeProbeKeysForEvent,
 } from "../../../src/runtime/headless"
 
-type Session = { id: string }
+type Session = { id: string; revert?: { messageID: string }; share?: { url: string } }
 type Todo = { id: string }
 type Diff = { path: string }
 type Status = { type: "idle" | "busy" }
@@ -20,6 +20,25 @@ type Part = {
 type TaskQueueItem = { id: string; sessionID?: string; status: "queued" | "running" | "completed" }
 
 describe("headless projection", () => {
+  test("serialized complete session snapshots clear omitted fields and preserve identity", () => {
+    const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
+    applyHeadlessProjectionEvent(state, {
+      type: "session.updated",
+      properties: { info: { id: "ses_1", revert: { messageID: "old" }, share: { url: "url" } } },
+    })
+    const original = state.session[0]
+    applyHeadlessProjectionEvent(
+      state,
+      JSON.parse(
+        JSON.stringify({
+          type: "session.updated",
+          properties: { info: { id: "ses_1", revert: undefined, share: undefined } },
+        }),
+      ),
+    )
+    expect(state.session[0]).toBe(original)
+    expect(state.session[0]).toEqual({ id: "ses_1" })
+  })
   test("tracks stream health from control events and fixture state", () => {
     const fixture = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>({
       streamHealth: "fixture",

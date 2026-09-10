@@ -50,6 +50,9 @@ export function DialogConfirm(props: DialogConfirmProps) {
 
   useKeyboard((evt) => {
     if (evt.name === "return") {
+      // Consume Enter before clearing the modal can refocus the prompt.
+      evt.preventDefault()
+      evt.stopPropagation()
       if (store.active === "confirm") {
         runDialogConfirmAction(() => props.onConfirm?.(), `Failed to confirm ${props.title.toLowerCase()}`)
       }
