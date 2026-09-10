@@ -2,157 +2,57 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-06
+Last reviewed: 2026-09-10
 Owner: ax-code runtime
 
-AX Code can use AX Engine as a local provider on eligible Apple Silicon Macs. This page explains the
-model-selection policy for the built-in `ax-engine` provider: which local models are surfaced, why the
-default is conservative, and how to choose a model by memory budget.
+AX Code offers three model repositories through **AX Engine (Local)** on eligible Apple Silicon Macs:
 
-Integration shape (sidecar HTTP, not in-process SDK): see
-[Local Engine Architecture](../architecture/local-engine.md).
+| Model                       | Hugging Face repository                                                                                             | AX Code selection                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Ornith 1.5 9B AXQ 6-bit MTP | [AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP](https://huggingface.co/AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP) | Pinned `AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP@<commit>` |
+| Qwen3.8 27B AXQ 6-bit MTP   | [AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP](https://huggingface.co/AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP)     | `qwen3.8-27b-axq-6bit`                                         |
+| Qwen3-Coder-Next AXQ 6-bit  | [AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit](https://huggingface.co/AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit)   | `qwen3-coder-next-axq-6bit`                                    |
 
-AX Code includes three recommended AutomatosX AXQ 6-bit models and additional MLX candidates filtered
-through its product model catalog. A candidate must identify a supported conversational source model.
-Native execution and structured tool calling are checked by AX Engine when the model starts.
+Other repositories and quantizations, including Ornith 1.0 35B, are excluded from managed local selection. Each repository appears once. Configured aliases and older cached revisions do not add choices after discovery. Qwen3.8 27B remains the default. Other providers and the existing separately configured loopback attach interface retain their behavior.
 
-## Single source of truth
-
-| Layer                                                                                                                | Role                                                                                                      |
-| -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| [`packages/ax-code/src/provider/ax-engine/constants.ts`](../../packages/ax-code/src/provider/ax-engine/constants.ts) | Stable recommended aliases, their package definitions, and protocol defaults                              |
-| `packages/ax-code/src/provider/ax-engine/hub-catalog.ts`                                                             | Bundled and refreshed AutomatosX metadata, filtered through AX Code's product policy                      |
-| `GET /provider/ax-engine/models`                                                                                     | Serves that catalog from the **running ax-code process** (includes `catalog.source` + `catalog.modelIDs`) |
-| Desktop Models UI                                                                                                    | Displays whatever the live API returns — it does not embed a second model list                            |
-
-If an external GUI shows an old list, its managed session is almost always spawning an older installed CLI
-(Homebrew/PATH) rather than this checkout. In AX Coder development, override `AX_CODE_BINARY` or
-`settings.axCodeBinary` when you intentionally want this source runtime.
-
-## Discover and prepare additional models
-
-List candidates and their local state, or explicitly refresh public Hub metadata:
+## Inspect the available models
 
 ```bash
 ax-code providers ax-engine models --json
 ax-code providers ax-engine models --refresh --json
 ```
 
-The bundled catalog works offline. Refreshing reads metadata without downloading weights or starting a
-server. The JSON response includes `discovery.decisions`, with a reason for each accepted, excluded, or
-unrecognized package. ASR, embeddings, and reward-only models are excluded from the coding-agent picker.
-Multimodal conversational models can qualify through their text path; image support requires a live check.
+Refreshing reads Hugging Face metadata without downloading weights or starting a model. The bundled metadata works offline and supplements selected repositories missing from older caches. Present revisions are not silently replaced with a different bundled revision. Selection still requires valid source metadata; the repository restriction does not establish native capability.
 
-Copy an exact model ID from the catalog and prepare it:
+`GET /provider/ax-engine/models` returns the running CLI's catalog, including each model's exact ID, repository, quantization, local state, memory/disk estimates, and verification status. An external GUI uses this runtime API. If it shows an older list, check the CLI it launches and its version. AX Coder development can select a source runtime with `AX_CODE_BINARY` or `settings.axCodeBinary`.
+
+## Prepare a selected model
+
+Copy the exact model ID from the catalog. For Ornith 1.5 9B, retain its 40-character commit:
 
 ```bash
 ax-code providers ax-engine prepare \
-  --model 'AutomatosX/<repository>@<40-character-commit>' \
+  --model 'AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP@<40-character-commit>' \
   --quantization mlx --download --start
 ```
 
-`mlx` means the exact published artifact at its existing precision. It does not requantize weights.
-Pinned downloads require AX Engine 6.13.1 or later. The original three IDs continue to use `mlx6bit`.
-Unknown IDs and mismatched quantization selectors return an error instead of switching models.
+`mlx` selects that exact published artifact; it does not requantize weights. Pinned downloads require AX Engine 6.13.1 or later. The two Qwen aliases retain `mlx6bit`:
 
-Additional candidates start with at most 32,768 context tokens and an 8,192-token output budget, bounded
-by package metadata. Resource estimates include weights, sidecars, KV cache, and runtime headroom. They
-are estimates rather than certified memory requirements. A `verification-required` state means weights
-are prepared but native capabilities have not yet been checked for the active server. Cloud tool-call,
-reasoning, context, vision, and MTP capabilities are not automatically transferred to a local package.
-`verified` confirms the active engine's advertised text and tool contract; it does not certify model
-quality or a successful multi-turn coding workflow for every package.
+```bash
+ax-code providers ax-engine prepare \
+  --model qwen3.8-27b-axq-6bit --quantization mlx6bit --download --start
+```
 
-Prepared revisions remain selectable after catalog refreshes. Refreshing never moves an existing model
-selection to another commit. Attached servers continue to supply their own live model catalog.
+Excluded models fail new prepare, download, and managed activation requests before starting work. Existing model records remain available for status and cleanup; the old Ornith ID is never redirected to Ornith 1.5 9B. Removing an option does not delete its weights or stop an existing server.
 
-## Selection Criteria
+## Memory and runtime verification
 
-AX Code ranks local AX Engine models by practical agent usability, not by a single benchmark:
+The existing Qwen3.8 27B managed budget remains 65,536 context tokens and 16,384 output tokens, with a 64 GiB memory requirement. Qwen3-Coder-Next retains 32,768 context tokens and 16,384 output tokens, with a 96 GiB requirement.
 
-1. **Offline coding quality** - patch planning, code editing, repository reasoning, and tool-use reliability.
-2. **Reasoning headroom** - ability to maintain longer multi-step work without drifting.
-3. **Local fit** - unified-memory pressure, disk footprint, cold-start cost, and decode comfort on Apple Silicon.
-4. **Tool workflow compatibility** - OpenAI-compatible structured tool calling and AX Code session behavior.
-5. **Operational default safety** - a default should work for broad daily coding, not only benchmark runs.
+Ornith 1.5 9B uses the pinned-artifact policy: at most 32,768 context tokens and 8,192 output tokens, bounded by package metadata. Its memory estimate includes weights, sidecars, KV cache, buffers, and host reserve. Use the live catalog's fit result for the current machine. These estimates are not hardware or model-quality certification.
 
-## Built-In Model Order
+Before managed activation, AX Code checks the active AX Engine model's text and structured tool contract. A `verification-required` state means preparation is complete but that live contract has not been established. Repository names or MTP sidecars alone do not prove reasoning, vision, MTP acceleration, or multi-turn coding quality.
 
-| Rank | AX Code model id            | Model                      | Local role                   | Catalog limits (context / output) |
-| ---: | --------------------------- | -------------------------- | ---------------------------- | --------------------------------: |
-|    1 | `qwen3.8-27b-axq-6bit`      | Qwen3.8-27B AXQ 6-bit      | Default daily driver         |                   65,536 / 16,384 |
-|    2 | `ornith-35b-axq-6bit`       | Ornith-1.0-35B AXQ 6-bit   | Long-context reasoning model |                  262,144 / 32,000 |
-|    3 | `qwen3-coder-next-axq-6bit` | Qwen3-Coder-Next AXQ 6-bit | Large coding specialist      |                   32,768 / 16,384 |
+Session compaction uses the active model's context/output budgets and reserves input headroom. It does not transfer the removed Ornith 35B model's 256K policy to Ornith 1.5 9B.
 
-The managed context policy is deliberately model-specific: 64K for Qwen3.8-27B, the full 256K window for
-Ornith-1.0-35B, and a memory-safe 32K window for Qwen3-Coder-Next. AX Code does not normalize these local
-limits to a shared cloud-provider context tier.
-
-`qwen3.8-27b-axq-6bit` is the default. Its packaged AXQuant MTP snapshot is the smallest current built-in
-download (about 19.4 GiB), and the catalog reserves a 16,384-token output budget inside its 65,536-token window.
-
-Ornith-1.0-35B is the reasoning and long-context choice. Qwen3-Coder-Next is the largest coding-specialist
-artifact and requires the 96 GB memory tier, so neither replaces Qwen3.8-27B as the broad default.
-
-## Compaction policy
-
-AX Code derives compaction from the active AX Engine model card. It first reserves the model's full output
-allowance inside the context window, then keeps 10% of the remaining input capacity as safety headroom. Prompt
-preflight uses the same budget before a request is sent, and provider-reported usage can schedule compaction after
-a completed turn. A provider context-overflow response is the final fallback: AX Code compacts and retries with a
-loop guard.
-
-| Model                      | Context | Output allowance | Input cap | 10% safety | Normal trigger | Super-Long trigger |
-| -------------------------- | ------: | ---------------: | --------: | ---------: | -------------: | -----------------: |
-| Qwen3.8-27B AXQ 6-bit      |  65,536 |           16,384 |    49,152 |      4,916 |         44,236 |             33,177 |
-| Ornith-1.0-35B AXQ 6-bit   | 262,144 |           32,000 |   230,144 |     23,015 |        207,129 |            155,347 |
-| Qwen3-Coder-Next AXQ 6-bit |  32,768 |           16,384 |    16,384 |      1,639 |         14,745 |             11,059 |
-
-Normal sessions compact at the listed usable-input boundary. Unattended Super-Long runs compact at 75% of that
-boundary because long local prompts increase every turn's latency and KV-cache pressure. `/compact` remains
-available for an earlier manual checkpoint, and `compaction.reserved` in `ax-code.json` can replace the 10% safety
-value when a deployment needs more headroom.
-
-Ornith's 128,000-token long-agent context-pack budget is separate from session compaction. It limits how much
-retrieved evidence one Super-Long planning pass can inject, leaving space for system instructions, tools, session
-history, and output; it does not reduce Ornith's 256K model window to 128K.
-
-## Acquisition and acceleration
-
-All built-in models use direct Hugging Face downloads via `ax-engine download`:
-
-- `qwen3.8-27b-axq-6bit` — [AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP](https://huggingface.co/AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP)
-  (native `model-manifest.json` plus `axquant_mtp_sidecar_manifest.json`)
-- `ornith-35b-axq-6bit` — [AutomatosX/AX-Ornith-1.0-35B-MLX-AXQ-6bit](https://huggingface.co/AutomatosX/AX-Ornith-1.0-35B-MLX-AXQ-6bit)
-  (direct decode; ax-engine emits the native manifest after download)
-- `qwen3-coder-next-axq-6bit` — [AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit](https://huggingface.co/AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit)
-  (direct decode; ax-engine emits the native manifest after download)
-
-At runtime the policy is automatic: a complete package with a valid assistant/sidecar uses MTP, while a complete
-base snapshot without that marker remains runnable through direct decode. Standalone n-gram drafting is disabled
-in the AX Code-managed server; it is independent from packaged MTP.
-
-## Choose By Memory
-
-These recommendations assume local AX Code usage through the built-in `ax-engine` provider. The current built-in
-quantization is `mlx6bit`; lower-bit upstream deployments may have different memory requirements.
-
-| Unified memory | Best built-in choice        | Second choice          | Notes                                                                                    |
-| -------------: | --------------------------- | ---------------------- | ---------------------------------------------------------------------------------------- |
-|       24-48 GB | Hosted provider             | None                   | The current built-in catalog has a 64 GB minimum; no small local fallback is advertised. |
-|          64 GB | `qwen3.8-27b-axq-6bit`      | `ornith-35b-axq-6bit`  | Use the default MTP model, or Ornith when its larger context is the priority.            |
-|         96 GB+ | `qwen3-coder-next-axq-6bit` | `qwen3.8-27b-axq-6bit` | Use the larger coding specialist when its 80 GiB disk reserve is acceptable.             |
-
-## Practical Defaults
-
-- Use **Qwen3.8-27B AXQ 6-bit** when you have 64 GB+ unified memory and want the default local daily driver.
-- Use **Ornith-1.0-35B AXQ 6-bit** when long context and native reasoning matter more than packaged MTP.
-- Use **Qwen3-Coder-Next AXQ 6-bit** on 96 GB+ machines when coding specialization matters more than context length.
-- Prefer hosted providers or an OpenAI-compatible provider gateway on unsupported Macs, Windows, or machines that
-  cannot keep the selected model resident comfortably. AX Code servers are local-only.
-
-## References
-
-- [AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP on Hugging Face](https://huggingface.co/AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP)
-- [AX-Ornith-1.0-35B-MLX-AXQ-6bit on Hugging Face](https://huggingface.co/AutomatosX/AX-Ornith-1.0-35B-MLX-AXQ-6bit)
-- [AX-Qwen3-Coder-Next-MLX-AXQ-6bit on Hugging Face](https://huggingface.co/AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit)
+See [Local Engine Architecture](../architecture/local-engine.md) for lifecycle and transport details.

@@ -31,6 +31,7 @@ import {
 } from "./model-card"
 import { axEngineHubCatalog, resolveAxEngineModelDefinition } from "./hub-catalog"
 import type { AxEngineModelDefinition } from "./constants"
+import { axEngineLocalRepository, requireAxEngineLocalModel, selectAxEngineLocalModels } from "./local-models"
 
 // Reclaim legacy managed copies once per process. The loader runs whenever the
 // provider list is resolved; the guard keeps the (potentially large) directory
@@ -116,6 +117,7 @@ function applyLiveContract(model: Provider.Model, contract: AxEngineLiveModelCon
 
 async function ensureManagedReady(provider: Provider.Info, options: AxEngineModelOptions = {}, signal?: AbortSignal) {
   const modelID = normalizeModelID(options.modelID)
+  requireAxEngineLocalModel(modelID)
   const quantization = normalizeQuantization(options.quantization, modelID)
   const definition = await resolveAxEngineModelDefinition(modelID, { signal })
   const apiModelID = definition.apiModelID
@@ -335,11 +337,14 @@ export function axEngineLoader(): CustomLoader {
           return models
         }
 
-        for (const modelID of AX_ENGINE_MODEL_IDS) {
-          const model = modelFromDefinition(AX_ENGINE_MODEL_DEFINITIONS[modelID])
-          models[model.id] = model
-        }
-        for (const definition of (await axEngineHubCatalog.inspect()).definitions) {
+        const definitions = selectAxEngineLocalModels(
+          [
+            ...AX_ENGINE_MODEL_IDS.map((id) => AX_ENGINE_MODEL_DEFINITIONS[id]),
+            ...(await axEngineHubCatalog.inspect()).definitions,
+          ],
+          (model) => model.id,
+        )
+        for (const definition of definitions) {
           const model = modelFromDefinition(definition)
           models[model.id] = model
         }
@@ -368,9 +373,15 @@ export function axEngineLoader(): CustomLoader {
           return sdk.languageModel(apiModelID)
         }
 
+        requireAxEngineLocalModel(modelID)
         const selectedOptions = {
           ...options,
           modelID: normalizeModelID(options?.modelID ?? modelID),
+        }
+        if (axEngineLocalRepository(selectedOptions.modelID) !== axEngineLocalRepository(modelID)) {
+          throw new Error(
+            `${AX_ENGINE_ERROR.ModelUnsupported}: configured model target differs from the selected model`,
+          )
         }
         const contract = await ensureManagedReady(runtimeProvider, selectedOptions, context?.signal)
         const apiModelID = contract.id

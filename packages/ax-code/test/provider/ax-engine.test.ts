@@ -1297,15 +1297,11 @@ describe("ax-engine provider integration", () => {
     }
   })
 
-  test("built-in models declare all ax-engine models as experimental local models", async () => {
+  test("built-in models expose only selected stable local aliases", async () => {
     const provider = (await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]
     expect(provider).toBeDefined()
-    expect(Object.keys(provider.models)).toEqual([
-      "qwen3.8-27b-axq-6bit",
-      "ornith-35b-axq-6bit",
-      "qwen3-coder-next-axq-6bit",
-    ])
-    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 262_144, 32_768])
+    expect(Object.keys(provider.models)).toEqual(["qwen3.8-27b-axq-6bit", "qwen3-coder-next-axq-6bit"])
+    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 32_768])
     expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3.8-27B AXQ 6-bit (Local MLX Auto)",
       tool_call: true,
@@ -1318,20 +1314,7 @@ describe("ax-engine provider integration", () => {
       status: "beta",
       experimental: { localRuntime: "ax-engine" },
     })
-    expect(provider.models[AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]).toMatchObject({
-      name: "Ornith-1.0-35B AXQ 6-bit (Local MLX)",
-      family: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
-      reasoning: true,
-      tool_call: true,
-      limit: { context: 262_144, input: 230_144, output: 32_000 },
-      options: {
-        modelID: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
-        quantization: "mlx6bit",
-        minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-      },
-      status: "beta",
-      experimental: { localRuntime: "ax-engine" },
-    })
+    expect(provider.models[AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]).toBeUndefined()
     expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3-Coder-Next AXQ 6-bit (Local MLX)",
       tool_call: true,

@@ -12,7 +12,7 @@ import { HubCatalog, hubModelID } from "../../../src/provider/ax-engine/hub-mode
 import snapshot from "../../../src/provider/ax-engine/hub-catalog-snapshot.json"
 
 const model = HubCatalog.parse(snapshot).models.find(
-  (entry) => entry.id === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
+  (entry) => entry.id === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
 )!
 const id = hubModelID(model)
 const other = "f".repeat(40)

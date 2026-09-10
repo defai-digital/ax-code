@@ -20,6 +20,7 @@ import {
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
 import { AxEnginePaths } from "./paths"
 import { resolveAxEngineModelDefinition } from "./hub-catalog"
+import { requireAxEngineLocalModel } from "./local-models"
 import { getDependencyStatus, pinnedDownloadVersionBlocker } from "./dependency"
 import { axEngineDownloadEnv } from "./python"
 import {
@@ -740,6 +741,7 @@ export async function downloadModel(input: {
 }): Promise<AxEnginePrepareState> {
   input.signal?.throwIfAborted()
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
+  requireAxEngineLocalModel(modelID)
   const definition = await resolveAxEngineModelDefinition(modelID, { signal: input.signal, persist: true })
   if (definition.revision) {
     const version = input.binaryVersion ?? (await getDependencyStatus({ binaryPath: input.binaryPath })).version

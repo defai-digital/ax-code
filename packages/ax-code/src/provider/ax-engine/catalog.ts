@@ -15,6 +15,7 @@ import { getServerStatus, type AxEngineServerRuntimeStatus } from "./server"
 import { axEngineHubCatalog } from "./hub-catalog"
 import { fetchAxEngineModelContracts } from "./model-card"
 import type { HubModelDecision } from "./hub-model"
+import { axEngineLocalRepository, selectAxEngineLocalModels } from "./local-models"
 
 export const AxEngineModelFitState = z.enum([
   "ready",
@@ -216,7 +217,10 @@ export async function getAxEngineModelsCatalog(
   const activeJobs = selectCurrentAxEngineModelJobs(jobs)
   const models: AxEngineModelCatalogEntry[] = []
 
-  const definitions = [...AX_ENGINE_MODEL_IDS.map((id) => AX_ENGINE_MODEL_DEFINITIONS[id]), ...hub.definitions]
+  const definitions = selectAxEngineLocalModels(
+    [...AX_ENGINE_MODEL_IDS.map((id) => AX_ENGINE_MODEL_DEFINITIONS[id]), ...hub.definitions],
+    (model) => model.id,
+  )
   const live =
     server.ready && server.state
       ? await fetchAxEngineModelContracts({ baseURL: server.state.baseURL, signal: options.signal }).catch(() => [])
@@ -310,7 +314,11 @@ export async function getAxEngineModelsCatalog(
       source: hub.source,
       fetchedAt: hub.catalog.fetchedAt,
       warnings: hub.warnings,
-      decisions: hub.decisions,
+      decisions: hub.decisions.map((decision) =>
+        axEngineLocalRepository(decision.id)
+          ? decision
+          : { ...decision, policy: "excluded", reason: "Not included in AX Engine local model selection" },
+      ),
     },
   }
 }

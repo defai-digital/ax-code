@@ -53,6 +53,7 @@ import { BusEvent } from "../bus/bus-event"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform"
 import { resolveAxEngineConnectMode } from "./ax-engine/connection"
+import { axEngineLocalRepository, selectAxEngineLocalModels } from "./ax-engine/local-models"
 import { isRetiredProviderID } from "./retired-providers"
 import { isGenericCliFallbackModel } from "./cli/ids"
 import { latestAnthropicFamilyModels } from "./anthropic-families"
@@ -376,6 +377,7 @@ export namespace Provider {
     }
 
     function applyModelFilters(providerID: ProviderID, provider: Info) {
+      const managedAxEngine = providerID === AX_ENGINE_PROVIDER_ID && !axEngineAttached
       if (providerID === "anthropic") {
         const keep = new Set<string>(latestAnthropicFamilyModels(provider.models).map((model) => model.id))
         for (const modelID of Object.keys(provider.models)) {
@@ -389,6 +391,16 @@ export namespace Provider {
       }
       const configProvider = config.provider?.[providerID]
       for (const [modelID, model] of Object.entries(provider.models)) {
+        const localRepository = managedAxEngine ? axEngineLocalRepository(modelID) : undefined
+        if (
+          managedAxEngine &&
+          (!localRepository ||
+            axEngineLocalRepository(model.api.id) !== localRepository ||
+            (model.options.modelID !== undefined && axEngineLocalRepository(model.options.modelID) !== localRepository))
+        ) {
+          delete provider.models[modelID]
+          continue
+        }
         const supportModelID = model.api.id ?? model.id ?? modelID
         model.api = {
           ...model.api,
@@ -427,6 +439,14 @@ export namespace Provider {
             (v) => omit(v, ["disabled"]),
           )
         }
+      }
+      if (managedAxEngine) {
+        provider.models = Object.fromEntries(
+          selectAxEngineLocalModels(Object.values(provider.models), (model) => model.id).map((model) => [
+            model.id,
+            model,
+          ]),
+        )
       }
     }
 
@@ -682,6 +702,11 @@ export namespace Provider {
               10_000,
               `discovery loader '${id}' timed out`,
             )
+            if (providerID === AX_ENGINE_PROVIDER_ID && !axEngineAttached) {
+              // The managed catalog owns its three choices. Configured aliases
+              // and old pinned revisions must not survive a completed refresh.
+              providers[providerID].models = {}
+            }
             for (const [modelID, model] of Object.entries(discovered)) {
               providers[providerID].models[modelID] = model
             }

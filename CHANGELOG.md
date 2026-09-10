@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.4] - 2026-09-10
+
+### Changed
+
+- Limit managed AX Engine local selection to Ornith 1.5 9B AXQ 6-bit MTP, Qwen3.8 27B AXQ 6-bit MTP, and Qwen3-Coder-Next AXQ 6-bit. Keep the existing Qwen aliases and expose Ornith through its pinned Hub artifact.
+
+### Fixed
+
+- Prevent excluded models, configured aliases, and duplicate cached revisions from reappearing in local model selection or bypassing the restriction through prepare, download, or activation commands.
+- Keep newly selected bundled model metadata discoverable and resolvable offline when an older cached catalog does not contain the repository.
+
 ## [7.15.3] - 2026-09-10
 
 ### Fixed

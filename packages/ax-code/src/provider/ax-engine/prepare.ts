@@ -7,6 +7,7 @@ import { resolveAxEngineModelDefinition } from "./hub-catalog"
 import { fetchAxEngineModelContracts, requireAxEngineCodingContract } from "./model-card"
 import { AxEnginePlatformEligibility, requirePlatformEligibility } from "./platform"
 import { AxEngineServerState, ensureServer } from "./server"
+import { requireAxEngineLocalModel } from "./local-models"
 
 export const AxEnginePrepareResult = z.object({
   eligibility: AxEnginePlatformEligibility,
@@ -60,6 +61,7 @@ export async function prepareAxEngine(
   const startServer = runtime.ensureServer ?? ensureServer
 
   input.signal?.throwIfAborted()
+  requireAxEngineLocalModel(input.modelID)
   const definition = await resolveAxEngineModelDefinition(input.modelID, { signal: input.signal, persist: true })
   const eligibility = await requireEligibility()
   input.signal?.throwIfAborted()

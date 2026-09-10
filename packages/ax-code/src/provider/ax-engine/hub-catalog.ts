@@ -15,6 +15,7 @@ import type { AxEngineModelDefinition, AxEngineModelID } from "./constants"
 import { AxEnginePaths } from "./paths"
 import { HubCatalog, HubModel, evaluateHubModel, hubModelDefinition, hubModelID, hubTextConfig } from "./hub-model"
 import bundled from "./hub-catalog-snapshot.json"
+import { AX_ENGINE_LOCAL_REPOSITORIES } from "./local-models"
 
 export const AxEngineCatalogError = NamedError.create("AxEngineCatalogError", z.object({ message: z.string() }))
 const MAX_JSON_BYTES = 8 * 1024 * 1024
@@ -212,6 +213,12 @@ export function createHubCatalogStore(input: {
     const view = options.refresh ? await refresh(options) : await load()
     const catalog = await productCatalog()
     const models = new Map(view.catalog.models.map((model) => [hubModelID(model), model]))
+    // Older caches may predate a selected repository. Supplement only absent
+    // repositories; never replace a present revision or bypass source admission.
+    for (const model of HubCatalog.parse(input.bundled).models) {
+      if (!AX_ENGINE_LOCAL_REPOSITORIES.some((repo) => repo === model.id)) continue
+      if (![...models.values()].some((entry) => entry.id === model.id)) models.set(hubModelID(model), model)
+    }
     const warnings = [...view.warnings]
     try {
       for (const raw of (await input.pinnedModels?.()) ?? []) {
@@ -257,6 +264,7 @@ export function createHubCatalogStore(input: {
           throw catalogError(`Pinned metadata is invalid: ${NamedError.message(error)}`)
       }
       if (model && hubModelID(model) !== id) throw catalogError("Pinned metadata identity mismatch")
+      model ??= HubCatalog.parse(input.bundled).models.find((entry) => hubModelID(entry) === id)
     }
     const catalog = await productCatalog()
     if (

@@ -6,6 +6,7 @@ import { resolveAxEngineModelDefinition } from "./hub-catalog"
 import { completeProgress, indeterminateProgress, type AxEngineDownloadProgress } from "./download-progress"
 import { downloadModel, getDiskStatus, normalizeQuantization } from "./model-cache"
 import { requirePlatformEligibility } from "./platform"
+import { requireAxEngineLocalModel } from "./local-models"
 
 export type AxEngineModelJobStatus = "queued" | "running" | "complete" | "failed" | "cancelled"
 
@@ -73,6 +74,7 @@ export async function startDownloadJob(
   if (!isAxEngineModelID(input.modelID)) {
     throw new Error(`${AX_ENGINE_ERROR.DownloadFailed}: unknown AX Engine model`)
   }
+  requireAxEngineLocalModel(input.modelID)
   const quantization = normalizeQuantization(input.quantization, input.modelID)
   const key = jobKey(input.modelID, quantization)
   const existing = jobs.get(key)

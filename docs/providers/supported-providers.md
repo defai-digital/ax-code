@@ -166,17 +166,17 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes exactly three curated AutomatosX AXQ 6-bit MLX packs. Qwen3.8-27B includes an AXQuant MTP sidecar; Ornith and Qwen3-Coder-Next use direct decode.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes exactly three curated AutomatosX AXQ 6-bit MLX packs. Ornith 1.5 9B and Qwen3.8 27B packages include MTP sidecars; native capabilities are checked when the model starts.
 
-| Provider id | Model id                    | Display name                           | Context | Output |
-| ----------- | --------------------------- | -------------------------------------- | ------: | -----: |
-| `ax-engine` | `qwen3.8-27b-axq-6bit`      | Qwen3.8-27B AXQ 6-bit (Local MLX Auto) |  65,536 | 16,384 |
-| `ax-engine` | `ornith-35b-axq-6bit`       | Ornith-1.0-35B AXQ 6-bit (Local MLX)   | 262,144 | 32,000 |
-| `ax-engine` | `qwen3-coder-next-axq-6bit` | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  32,768 | 16,384 |
+| Provider id | Model id                                                | Display name                           | Context | Output |
+| ----------- | ------------------------------------------------------- | -------------------------------------- | ------: | -----: |
+| `ax-engine` | `qwen3.8-27b-axq-6bit`                                  | Qwen3.8-27B AXQ 6-bit (Local MLX Auto) |  65,536 | 16,384 |
+| `ax-engine` | `AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP@<commit>` | Ornith 1.5 9B AXQ 6-bit MTP            |  32,768 |  8,192 |
+| `ax-engine` | `qwen3-coder-next-axq-6bit`                             | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  32,768 | 16,384 |
 
-The default local model is `qwen3.8-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for ranking, memory, and disk guidance.
+The default local model is `qwen3.8-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for the exact selected repositories, memory, and disk guidance.
 
-For a configured local AX Engine server, `/v1/models` is authoritative: AX Code discovers the live model IDs, context/output limits, modalities, and structured tool-call support. A model that does not advertise structured tool calling is not used for coding-agent requests.
+For the existing separately configured loopback attach interface, `/v1/models` is authoritative: AX Code discovers the live model IDs, context/output limits, modalities, and structured tool-call support. A model that does not advertise structured tool calling is not used for coding-agent requests.
 
 AX Engine uses the compact `core` tool profile by default (`bash`, file discovery/read/edit/write, and skills). Set `provider.ax-engine.options.toolProfile` to `full` only for a custom deployment with enough context for the complete tool registry.
 

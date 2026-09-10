@@ -18,6 +18,7 @@ import {
   AX_ENGINE_PROVIDER_ID,
 } from "./ax-engine/constants"
 import { DEDICATED_PRIVATE_GPU_VENDORS } from "./private-gpu/presets"
+import { selectAxEngineLocalModels } from "./ax-engine/local-models"
 import type { AxEngineBuiltinModelID } from "./ax-engine/constants"
 import fs from "fs/promises"
 import { isRetiredProviderID } from "./retired-providers"
@@ -135,7 +136,12 @@ export namespace ModelsDev {
     npm: "@ai-sdk/openai-compatible",
     api: `http://127.0.0.1:${AX_ENGINE_DEFAULT_PORT}/v1`,
     name: AX_ENGINE_DISPLAY_NAME,
-    models: Object.fromEntries(AX_ENGINE_MODEL_IDS.map((modelID) => [modelID, builtinAxEngineModel(modelID)])),
+    models: Object.fromEntries(
+      selectAxEngineLocalModels(AX_ENGINE_MODEL_IDS, (id) => id).map((modelID) => [
+        modelID,
+        builtinAxEngineModel(modelID),
+      ]),
+    ),
   }
 
   function builtinDedicatedPrivateGpuProvider(vendor: (typeof DEDICATED_PRIVATE_GPU_VENDORS)[number]): Provider {
