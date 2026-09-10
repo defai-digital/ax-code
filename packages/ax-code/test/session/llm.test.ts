@@ -574,6 +574,103 @@ describe("session.llm.stream", () => {
     })
   })
 
+  test.each([
+    { title: "default identity penalty", repetitionPenalty: undefined, expected: 1.0 },
+    { title: "configured penalty", repetitionPenalty: 1.03, expected: 1.03 },
+  ])("sends AX Engine $title on chat completions", async ({ repetitionPenalty, expected }) => {
+    const providerID = "ax-engine"
+    const modelID = "qwen3.8-27b-axq-6bit"
+    const modelsResponse = () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: modelID,
+              capabilities: {
+                temperature: true,
+                toolcall: true,
+                input: { text: true },
+                output: { text: true },
+              },
+              ax_engine: { openai_tool_calling_supported: true, coding_supported: true },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )
+    for (let i = 0; i < 6; i++) waitRequest("/models", modelsResponse())
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  connectionMode: "attach",
+                  apiKey: "local",
+                  baseURL: `${state.server.url.origin}/v1`,
+                  ...(repetitionPenalty === undefined ? {} : { repetition_penalty: repetitionPenalty }),
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        const sessionID = SessionID.make("session-ax-engine-mtp")
+        const agent = {
+          name: "build",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: MessageID.make("user-1"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          system: ["You are a helpful assistant."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "Hello" }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {
+        }
+
+        const body = (await request).body
+        expect(body.model).toBe(modelID)
+        expect(body.temperature).toBe(0.55)
+        expect(body.top_p).toBe(1)
+        expect(body.repetition_penalty).toBe(expected)
+      },
+    })
+  })
+
   test("keeps tools enabled by prompt permissions", async () => {
     const providerID = "alibaba-coding-plan"
     const modelID = "qwen3.6-plus"

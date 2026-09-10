@@ -4,7 +4,16 @@ import path from "node:path"
 import { tmpdir } from "../../fixture/fixture"
 import { Process } from "../../../src/util/process"
 import { Filesystem } from "../../../src/util/filesystem"
-import { AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../../src/provider/ax-engine/constants"
+import {
+  AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES,
+  AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES,
+  AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
+  AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+  AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV,
+  AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV,
+  AX_MLX_PREFIX_CACHE_DIR_ENV,
+  AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV,
+} from "../../../src/provider/ax-engine/constants"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { ensureServer, isServerReady, stopServer } from "../../../src/provider/ax-engine/server"
 import type { AxEngineServerOptions } from "../../../src/provider/ax-engine/server"
@@ -38,10 +47,14 @@ http.createServer((req, res) => {
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`
   await fs.writeFile(binary, `#!/bin/sh\nexec ${quote(process.execPath)} ${quote(script)} "$@"\n`, { mode: 0o755 })
   const children: ReturnType<typeof Process.spawn>[] = []
+  const spawned: Array<{ cmd: string[]; env?: NodeJS.ProcessEnv | null }> = []
   const spawn = Process.spawn
   vi.spyOn(Process, "spawn").mockImplementation((cmd, options) => {
     const child = spawn(cmd, options)
-    if (cmd[0] === binary) children.push(child)
+    if (cmd[0] === binary) {
+      children.push(child)
+      spawned.push({ cmd, env: options?.env })
+    }
     return child
   })
   return {
@@ -54,6 +67,7 @@ http.createServer((req, res) => {
       readyTimeoutMs: 5_000,
     } satisfies AxEngineServerOptions,
     children,
+    spawned,
     async [Symbol.asyncDispose]() {
       vi.restoreAllMocks()
       for (const child of children) await Process.killProcessTree(child)
@@ -197,6 +211,44 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
     await expect(f.children[0].exited).resolves.toBeTypeOf("number")
     await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
     expect(await isServerReady(first.baseURL)).toBe(false)
+  })
+
+  test("managed spawn injects 8 GiB prefix-cache budgets", async () => {
+    await using f = await fixture()
+    const state = await ensureServer(f.input)
+    expect(f.spawned[0]?.env?.[AX_MLX_PREFIX_CACHE_DIR_ENV]).toBe(AxEnginePaths.prefixCache)
+    expect(f.spawned[0]?.env?.[AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV]).toBe(String(AX_ENGINE_PREFIX_CACHE_MAX_BYTES))
+    expect(f.spawned[0]?.env?.[AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV]).toBe(
+      String(AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES),
+    )
+    expect(f.spawned[0]?.env?.[AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV]).toBe(
+      String(AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES),
+    )
+    expect(state.prefixCacheDir).toBe(AxEnginePaths.prefixCache)
+    expect(state.prefixCacheMaxBytes).toBe(AX_ENGINE_PREFIX_CACHE_MAX_BYTES)
+    expect((await Filesystem.readJson(AxEnginePaths.serverState)).prefixCacheMaxBytes).toBe(
+      AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
+    )
+    await stopServer()
+  })
+
+  test("changing the prefix-cache budget relaunches the managed server", async () => {
+    await using f = await fixture()
+    const first = await ensureServer(f.input)
+    const previous = process.env[AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV]
+    process.env[AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV] = "0"
+    try {
+      const second = await ensureServer(f.input)
+      expect(second.pid).not.toBe(first.pid)
+      expect(f.children).toHaveLength(2)
+      await expect(f.children[0].exited).resolves.toBeTypeOf("number")
+      expect(f.spawned[1]?.env?.[AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV]).toBe("0")
+      expect(second.prefixCacheMaxBytes).toBe(0)
+    } finally {
+      if (previous === undefined) delete process.env[AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV]
+      else process.env[AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV] = previous
+      await stopServer()
+    }
   })
 
   test("cancelling cold startup reaps the owned process and removes its provisional record", async () => {

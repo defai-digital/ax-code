@@ -291,7 +291,7 @@ export namespace LLM {
     const { promptCacheMode: promptCacheModeOption, ...modelOptions } = input.model.options ?? {}
     const promptCacheModeOverride = promptCacheModeOption
     const base = input.small
-      ? ProviderTransform.smallOptions(input.model)
+      ? ProviderTransform.smallOptions(input.model, provider?.options ?? {})
       : ProviderTransform.options({
           model: input.model,
           sessionID: input.sessionID,

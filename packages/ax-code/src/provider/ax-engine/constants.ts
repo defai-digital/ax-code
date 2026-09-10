@@ -43,10 +43,68 @@ export const AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES = 96 * 1024 ** 3
 export const AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS = 1
 export const AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV = "AX_ENGINE_MAX_CONCURRENT_REQUESTS"
 
+// Managed MLX prefix-cache ceilings. Engine L1 defaults to 512 MiB and disk
+// entries default to min(512 MiB, disk_max/4), which rejects a 25k-token
+// hybrid 27B snapshot (~1.7 GiB) and a 64k window (~4.3 GiB). 8 GiB admits
+// those prefixes on the 64 GiB+ hosts the catalog already recommends. These
+// are capacity limits, not eager allocations. Explicit env 0 disables a tier.
+export const AX_ENGINE_PREFIX_CACHE_MAX_BYTES = 8 * 1024 ** 3
+export const AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES = AX_ENGINE_PREFIX_CACHE_MAX_BYTES
+export const AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES = AX_ENGINE_PREFIX_CACHE_MAX_BYTES
+export const AX_MLX_PREFIX_CACHE_DIR_ENV = "AX_MLX_PREFIX_CACHE_DIR"
+export const AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV = "AX_MLX_PREFIX_CACHE_MAX_BYTES"
+export const AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV = "AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES"
+export const AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV = "AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES"
+
+export type AxEnginePrefixCacheLaunchConfig = {
+  dir: string
+  maxBytes: number
+  diskMaxBytes: number
+  diskMaxEntryBytes: number
+}
+
 function parseMaxConcurrentRequests(value: unknown): number | undefined {
   const parsed = typeof value === "string" && value.trim() ? Number(value.trim()) : value
   if (typeof parsed !== "number" || !Number.isInteger(parsed) || parsed < 1) return undefined
   return parsed
+}
+
+function parseNonNegativeInt(value: unknown): number | undefined {
+  const raw = typeof value === "string" ? value.trim() : value
+  const parsed = typeof raw === "string" && raw ? Number(raw) : raw
+  if (typeof parsed !== "number" || !Number.isInteger(parsed) || parsed < 0) return undefined
+  return parsed
+}
+
+function envValue(env: NodeJS.Dict<string> | undefined, name: string) {
+  return env?.[name]
+}
+
+export function resolveAxEnginePrefixCacheLaunchConfig(input: {
+  defaultDir: string
+  env?: NodeJS.Dict<string>
+}): AxEnginePrefixCacheLaunchConfig {
+  const env = input.env ?? process.env
+  const dir = envValue(env, AX_MLX_PREFIX_CACHE_DIR_ENV)?.trim() || input.defaultDir
+  return {
+    dir,
+    maxBytes: parseNonNegativeInt(envValue(env, AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV)) ?? AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
+    diskMaxBytes:
+      parseNonNegativeInt(envValue(env, AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV)) ??
+      AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES,
+    diskMaxEntryBytes:
+      parseNonNegativeInt(envValue(env, AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV)) ??
+      AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES,
+  }
+}
+
+export function axEnginePrefixCacheEnv(config: AxEnginePrefixCacheLaunchConfig): Record<string, string> {
+  return {
+    [AX_MLX_PREFIX_CACHE_DIR_ENV]: config.dir,
+    [AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV]: String(config.maxBytes),
+    [AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV]: String(config.diskMaxBytes),
+    [AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV]: String(config.diskMaxEntryBytes),
+  }
 }
 
 export function resolveAxEngineMaxConcurrentRequests(options: Record<string, unknown> = {}) {

@@ -18,7 +18,10 @@ import {
   AX_ENGINE_MTP_MODE,
   AxEngineModelIDSchema,
   AX_ENGINE_SPECULATION_PROFILE,
+  axEnginePrefixCacheEnv,
   resolveAxEngineApiKey,
+  resolveAxEnginePrefixCacheLaunchConfig,
+  type AxEnginePrefixCacheLaunchConfig,
 } from "./constants"
 import type { AxEngineModelID } from "./constants"
 import { AxEnginePaths } from "./paths"
@@ -39,6 +42,10 @@ export const AxEngineServerState = z.object({
   maxConcurrentRequests: z.number().int().positive().optional(),
   speculationProfile: z.string().optional(),
   mtpMode: z.string().optional(),
+  prefixCacheDir: z.string().optional(),
+  prefixCacheMaxBytes: z.number().int().nonnegative().optional(),
+  prefixCacheDiskMaxBytes: z.number().int().nonnegative().optional(),
+  prefixCacheDiskMaxEntryBytes: z.number().int().nonnegative().optional(),
   startedAt: z.number(),
   lastHealthAt: z.number().optional(),
 })
@@ -548,7 +555,21 @@ export async function getServerStatus(apiKey = resolveAxEngineApiKey()): Promise
 // shared start; distinct models still serialize on the cross-process file lock.
 const inflightEnsure = new Map<string, Promise<AxEngineServerState>>()
 
+function prefixCacheLaunchConfig(): AxEnginePrefixCacheLaunchConfig {
+  return resolveAxEnginePrefixCacheLaunchConfig({ defaultDir: AxEnginePaths.prefixCache })
+}
+
+function prefixCacheMatches(existing: AxEngineServerState | undefined, prefixCache: AxEnginePrefixCacheLaunchConfig) {
+  return (
+    existing?.prefixCacheDir === prefixCache.dir &&
+    existing?.prefixCacheMaxBytes === prefixCache.maxBytes &&
+    existing?.prefixCacheDiskMaxBytes === prefixCache.diskMaxBytes &&
+    existing?.prefixCacheDiskMaxEntryBytes === prefixCache.diskMaxEntryBytes
+  )
+}
+
 function ensureServerKey(options: AxEngineServerOptions): string {
+  const prefixCache = prefixCacheLaunchConfig()
   return JSON.stringify([
     options.binaryPath,
     options.modelID,
@@ -561,6 +582,10 @@ function ensureServerKey(options: AxEngineServerOptions): string {
     options.binaryVersion ?? "",
     options.speculationProfile ?? "",
     options.mtpMode ?? "",
+    prefixCache.dir,
+    prefixCache.maxBytes,
+    prefixCache.diskMaxBytes,
+    prefixCache.diskMaxEntryBytes,
     options.baseURL ?? "",
     options.preferredPort,
     options.readyTimeoutMs,
@@ -635,6 +660,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
   const speculationMatches = existing?.speculationProfile === speculationProfile
   const mtpModeMatches = existing?.mtpMode === mtpMode
+  const prefixCache = prefixCacheLaunchConfig()
+  const prefixCacheConfigMatches = prefixCacheMatches(existing, prefixCache)
   if (existing) {
     const alive = await serverProcessAlive(existing)
     const ready = alive && (await existingServerReady(existing, options.signal, options.apiKey))
@@ -647,7 +674,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         maxOutputTokensFlagMatches &&
         maxConcurrentRequestsMatches &&
         speculationMatches &&
-        mtpModeMatches
+        mtpModeMatches &&
+        prefixCacheConfigMatches
       ) {
         if (
           existing.modelID === options.modelID &&
@@ -675,6 +703,10 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             maxConcurrentRequests,
             speculationProfile,
             mtpMode,
+            prefixCacheDir: prefixCache.dir,
+            prefixCacheMaxBytes: prefixCache.maxBytes,
+            prefixCacheDiskMaxBytes: prefixCache.diskMaxBytes,
+            prefixCacheDiskMaxEntryBytes: prefixCache.diskMaxEntryBytes,
             lastHealthAt: Date.now(),
           }
           await writeServerState(nextState)
@@ -702,6 +734,9 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             !speculationMatches
               ? `speculationProfile: ${existing.speculationProfile} -> ${speculationProfile}`
               : undefined,
+            !prefixCacheConfigMatches
+              ? `prefixCache: ${existing.prefixCacheDir}@${existing.prefixCacheMaxBytes}/${existing.prefixCacheDiskMaxBytes}/${existing.prefixCacheDiskMaxEntryBytes} -> ${prefixCache.dir}@${prefixCache.maxBytes}/${prefixCache.diskMaxBytes}/${prefixCache.diskMaxEntryBytes}`
+              : undefined,
             !mtpModeMatches ? `mtpMode: ${existing.mtpMode} -> ${mtpMode}` : undefined,
           ].filter(Boolean),
         })
@@ -723,7 +758,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   options.signal?.throwIfAborted()
   await fs.mkdir(AxEnginePaths.state, { recursive: true })
   await fs.mkdir(AxEnginePaths.log, { recursive: true })
-  await fs.mkdir(AxEnginePaths.prefixCache, { recursive: true })
+  await fs.mkdir(prefixCache.dir, { recursive: true })
 
   const baseURL = options.baseURL?.replace(/\/+$/, "")
   const port = baseURL
@@ -750,6 +785,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     maxConcurrentRequests,
     speculationProfile,
     mtpMode,
+    prefixCacheDir: prefixCache.dir,
+    prefixCacheMaxBytes: prefixCache.maxBytes,
   })
   let proc: ReturnType<typeof Process.spawn>
   try {
@@ -772,7 +809,9 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
           // Durable L2 prefix cache: hot-swaps and restarts discard the
           // in-memory store; without this, switching back to a 27B model
           // re-prefills the full conversation (~40k tokens at ~170 tok/s).
-          AX_MLX_PREFIX_CACHE_DIR: AxEnginePaths.prefixCache,
+          // Byte ceilings default to 8 GiB so a 25k/64k hybrid 27B snapshot
+          // is admitted; explicit AX_MLX_PREFIX_CACHE_* env values win.
+          ...axEnginePrefixCacheEnv(prefixCache),
         },
       },
     )
@@ -801,6 +840,10 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     maxConcurrentRequests,
     speculationProfile,
     mtpMode,
+    prefixCacheDir: prefixCache.dir,
+    prefixCacheMaxBytes: prefixCache.maxBytes,
+    prefixCacheDiskMaxBytes: prefixCache.diskMaxBytes,
+    prefixCacheDiskMaxEntryBytes: prefixCache.diskMaxEntryBytes,
     startedAt: Date.now(),
   }
   const startupFailure = async (reason: "process-exited" | "timeout") => {

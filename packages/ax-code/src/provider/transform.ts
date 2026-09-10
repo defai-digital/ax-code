@@ -1096,7 +1096,22 @@ export namespace ProviderTransform {
       }
     }
 
+    if (input.model.providerID === AX_ENGINE_PROVIDER_ID) {
+      Object.assign(result, axEngineSamplingOptions(input.providerOptions))
+    }
+
     return result
+  }
+
+  // AX Engine's OpenAI path injects repetition_penalty 1.1 for sampled Qwen,
+  // which marks the request as using logits processors and forces MTP
+  // DirectFallback. Identity penalty keeps exact MTP eligible at the existing
+  // Qwen 0.55 / top_p 1 profile. Explicit provider options win.
+  function axEngineSamplingOptions(providerOptions?: Record<string, any>) {
+    const configured = providerOptions?.repetition_penalty
+    return {
+      repetition_penalty: typeof configured === "number" && Number.isFinite(configured) ? configured : 1.0,
+    }
   }
 
   function isAlibabaQwenPlanModel(model: Provider.Model): boolean {
@@ -1162,13 +1177,16 @@ export namespace ProviderTransform {
     return result
   }
 
-  export function smallOptions(model: Provider.Model) {
+  export function smallOptions(model: Provider.Model, providerOptions?: Record<string, any>) {
     if (isOrnithFamily(model) || model.providerID === AX_ENGINE_PROVIDER_ID) {
       // AX Engine and Ornith (local 35B or PAI 397B) expose Qwen's
       // chat-template switch. Auxiliary and response-only turns do not
       // benefit from a long hidden reasoning pass, so prefill the closed
       // thinking block and generate the answer directly.
-      return { chat_template_kwargs: { enable_thinking: false } }
+      return {
+        chat_template_kwargs: { enable_thinking: false },
+        ...(model.providerID === AX_ENGINE_PROVIDER_ID ? axEngineSamplingOptions(providerOptions) : {}),
+      }
     }
     if (model.providerID === "google") {
       return { thinkingConfig: { thinkingLevel: "minimal" } }

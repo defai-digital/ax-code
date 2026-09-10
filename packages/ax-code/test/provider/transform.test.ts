@@ -2605,6 +2605,70 @@ describe("ProviderTransform family matching", () => {
   })
 })
 
+describe("ProviderTransform.options - AX Engine MTP sampling", () => {
+  function createAxEngineModel() {
+    return {
+      id: "qwen3.8-27b-axq-6bit",
+      providerID: ProviderID.make("ax-engine"),
+      api: {
+        id: "qwen3.8-27b-axq-6bit",
+        url: "http://127.0.0.1:31418/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      family: "qwen",
+      capabilities: { temperature: true, reasoning: false },
+      limit: { context: 65_536, output: 16_384 },
+    } as any
+  }
+
+  function createCloudQwenModel() {
+    return {
+      id: "qwen3.8-max",
+      providerID: ProviderID.make("alibaba-token-plan"),
+      api: {
+        id: "qwen3.8-max",
+        url: "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      family: "qwen",
+      capabilities: { temperature: true, reasoning: true },
+      limit: { context: 200_000, output: 65_536 },
+    } as any
+  }
+
+  test("keeps Qwen 0.55/1 sampling and sends identity repetition penalty", () => {
+    const model = createAxEngineModel()
+    expect(ProviderTransform.temperature(model)).toBe(0.55)
+    expect(ProviderTransform.topP(model)).toBe(1)
+    expect(ProviderTransform.options({ model, sessionID: "ses_test", providerOptions: {} })).toMatchObject({
+      repetition_penalty: 1.0,
+    })
+  })
+
+  test("lets an explicit AX Engine repetition penalty win", () => {
+    const model = createAxEngineModel()
+    expect(
+      ProviderTransform.options({
+        model,
+        sessionID: "ses_test",
+        providerOptions: { repetition_penalty: 1.03 },
+      }).repetition_penalty,
+    ).toBe(1.03)
+    expect(ProviderTransform.smallOptions(model, { repetition_penalty: 1.03 })).toMatchObject({
+      repetition_penalty: 1.03,
+    })
+  })
+
+  test("does not send a repetition-penalty extension on cloud Qwen", () => {
+    const model = createCloudQwenModel()
+    expect(ProviderTransform.temperature(model)).toBe(0.55)
+    expect(
+      ProviderTransform.options({ model, sessionID: "ses_test", providerOptions: {} }).repetition_penalty,
+    ).toBeUndefined()
+    expect(ProviderTransform.smallOptions(model)).not.toHaveProperty("repetition_penalty")
+  })
+})
+
 describe("ProviderTransform.maxOutputTokens", () => {
   test("caps Alibaba Token Plan requests to avoid over-allocating short-window quota", () => {
     const model = {
@@ -3178,12 +3242,16 @@ describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
 
   test("disables AX Engine chat-template thinking for small response-only turns", () => {
     const result = ProviderTransform.smallOptions(createModel("ax-engine", "qwen3.8-27b-axq-6bit", true))
-    expect(result).toEqual({ chat_template_kwargs: { enable_thinking: false } })
+    expect(result).toEqual({
+      chat_template_kwargs: { enable_thinking: false },
+      repetition_penalty: 1.0,
+    })
   })
 
   test("disables Ornith chat-template thinking on local and PAI title calls", () => {
     expect(ProviderTransform.smallOptions(createModel("ax-engine", "ornith-35b-axq-6bit", true))).toEqual({
       chat_template_kwargs: { enable_thinking: false },
+      repetition_penalty: 1.0,
     })
     expect(ProviderTransform.smallOptions(createModel("alibaba-pai", "Ornith-1.0-397B-FP8", true))).toEqual({
       chat_template_kwargs: { enable_thinking: false },

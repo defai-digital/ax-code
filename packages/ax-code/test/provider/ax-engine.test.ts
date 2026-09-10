@@ -52,6 +52,14 @@ import {
   resolveDownloadDestination,
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
+  resolveAxEnginePrefixCacheLaunchConfig,
+  AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
+  AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES,
+  AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES,
+  AX_MLX_PREFIX_CACHE_DIR_ENV,
+  AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV,
+  AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV,
+  AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV,
   selectCurrentAxEngineModelJobs,
   type AxEngineModelJobSummary,
 } from "../../src/provider/ax-engine"
@@ -1074,6 +1082,57 @@ describe("resolveAxEngineMaxConcurrentRequests", () => {
       if (previous === undefined) delete process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS
       else process.env.AX_ENGINE_MAX_CONCURRENT_REQUESTS = previous
     }
+  })
+})
+
+describe("resolveAxEnginePrefixCacheLaunchConfig", () => {
+  const defaultDir = "/tmp/ax-engine-prefix-cache"
+
+  test("defaults to the 8 GiB managed ceilings", () => {
+    expect(resolveAxEnginePrefixCacheLaunchConfig({ defaultDir, env: {} })).toEqual({
+      dir: defaultDir,
+      maxBytes: AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
+      diskMaxBytes: AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES,
+      diskMaxEntryBytes: AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES,
+    })
+    expect(AX_ENGINE_PREFIX_CACHE_MAX_BYTES).toBe(8 * 1024 ** 3)
+  })
+
+  test("lets valid environment overrides including 0 win independently", () => {
+    expect(
+      resolveAxEnginePrefixCacheLaunchConfig({
+        defaultDir,
+        env: {
+          [AX_MLX_PREFIX_CACHE_DIR_ENV]: "/custom/cache",
+          [AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV]: "0",
+          [AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV]: "1024",
+          [AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV]: "512",
+        },
+      }),
+    ).toEqual({
+      dir: "/custom/cache",
+      maxBytes: 0,
+      diskMaxBytes: 1024,
+      diskMaxEntryBytes: 512,
+    })
+  })
+
+  test("ignores invalid environment values", () => {
+    expect(
+      resolveAxEnginePrefixCacheLaunchConfig({
+        defaultDir,
+        env: {
+          [AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV]: "nope",
+          [AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV]: "1.5",
+          [AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV]: "-1",
+        },
+      }),
+    ).toEqual({
+      dir: defaultDir,
+      maxBytes: AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
+      diskMaxBytes: AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES,
+      diskMaxEntryBytes: AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES,
+    })
   })
 })
 
