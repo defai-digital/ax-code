@@ -7,6 +7,9 @@ import { isLoopbackBaseURL } from "../../src/session/prompt-provider-fallback"
 import { SessionID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import { APICallError } from "ai"
+import { AxEngineStartupError } from "../../src/provider/ax-engine/errors"
+import { AX_ENGINE_ERROR } from "../../src/provider/ax-engine/constants"
+import { SessionRetry } from "../../src/session/retry"
 
 const primaryModel = {
   providerID: "primary" as ProviderID,
@@ -19,6 +22,40 @@ const fallbackModel = {
 }
 
 describe("prompt loop error transitions", () => {
+  test.each(["timeout", "process-exited"] as const)(
+    "a %s during managed startup survives serialization and stops both retry layers",
+    async (reason) => {
+      const code = reason === "timeout" ? AX_ENGINE_ERROR.ServerHealthFailed : AX_ENGINE_ERROR.ServerStartFailed
+      const startup = new AxEngineStartupError({ code, reason, message: `${code}: startup failed; inspect server log` })
+      const currentModel = { providerID: ProviderID.make("ax-engine"), modelID: ModelID.make("qwen3.8-27b-axq-6bit") }
+      for (const original of [startup, startup.toObject()]) {
+        const error = MessageV2.fromError(original, { providerID: currentModel.providerID })
+        const persisted = MessageV2.APIError.Schema.parse(error)
+        expect(persisted.data).toEqual({
+          message: startup.message,
+          isRetryable: false,
+          metadata: { errorCode: code, startupReason: reason },
+        })
+        expect(SessionRetry.retryable(persisted)).toBeUndefined()
+        const published: string[] = []
+        const result = await handlePromptLoopError(
+          { sessionID: SessionID.descending(), currentModel, error: persisted, consecutiveErrors: 1, step: 1 },
+          {
+            async findFallback() {
+              throw new Error("Startup failure must not select another provider")
+            },
+            warn() {},
+            publishError(input) {
+              published.push(input.message)
+            },
+          },
+        )
+        expect(result).toEqual({ action: "stop", reason: "error", consecutiveErrors: 1 })
+        expect(published).toEqual([startup.message])
+      }
+    },
+  )
+
   test.each(["grok-4.6", "kimi-k3", "openai/gpt-oss-20b"])(
     "upstream permission denial identifies model %s and request ID",
     async (modelID) => {

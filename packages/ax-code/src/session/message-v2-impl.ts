@@ -10,6 +10,7 @@ import { Database, NotFoundError, and, desc, eq, gt, inArray, lt, or } from "@/s
 import { MessageTable, PartTable, SessionTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { ProviderError } from "@/provider/error"
+import { AxEngineStartupError } from "@/provider/ax-engine/errors"
 import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
 import { isRecord } from "@/util/record"
@@ -1284,6 +1285,12 @@ export namespace MessageV2 {
 
   export function fromError(e: unknown, ctx: { providerID: ProviderID }): NonNullable<Assistant["error"]> {
     switch (true) {
+      case AxEngineStartupError.isInstance(e):
+        return new MessageV2.APIError({
+          message: e.data.message,
+          isRetryable: false,
+          metadata: { errorCode: e.data.code, startupReason: e.data.reason },
+        }).toObject()
       case e instanceof DOMException && e.name === "AbortError":
         return new MessageV2.AbortedError(
           { message: e.message },

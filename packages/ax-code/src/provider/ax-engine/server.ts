@@ -22,6 +22,7 @@ import {
 } from "./constants"
 import type { AxEngineModelID } from "./constants"
 import { AxEnginePaths } from "./paths"
+import { AxEngineStartupError } from "./errors"
 
 export const AxEngineServerState = z.object({
   pid: z.number().int().positive(),
@@ -378,7 +379,12 @@ async function waitForReady(
     if (processExited()) return { ready: false, reason: "process-exited" }
     const remaining = deadline - Date.now()
     if (remaining <= 0) break
-    await new Promise((resolve) => setTimeout(resolve, Math.min(500, remaining)))
+    try {
+      await delay(Math.min(500, remaining), undefined, { signal: options.signal })
+    } catch (error) {
+      if (options.signal?.aborted) return { ready: false, reason: "aborted" }
+      throw error
+    }
   }
   if (options.signal?.aborted) return { ready: false, reason: "aborted" }
   if (processExited()) return { ready: false, reason: "process-exited" }
@@ -740,13 +746,16 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   })
   let proc: ReturnType<typeof Process.spawn>
   try {
+    options.signal?.throwIfAborted()
     proc = Process.spawn(
       [options.binaryPath, "serve", options.modelPath, "--port", String(port), "--", ...serverArgs],
       {
         stdout: logFile.fd,
         stderr: logFile.fd,
         detached: true,
-        abort: options.signal,
+        // The caller owns startup only. Binding its signal to the resident
+        // child would kill a ready engine during normal prompt-loop cleanup.
+        // The guarded readiness phase below reaps failed/cancelled starts.
         // The native server reads AX_ENGINE_API_KEY when --api-key is omitted.
         // Inject the resolved provider value so configured credentials and
         // client probes always agree without exposing the secret in `ps`.
@@ -787,31 +796,53 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     mtpMode,
     startedAt: Date.now(),
   }
-  await writeServerState(state)
+  try {
+    await writeServerState(state)
+    options.signal?.throwIfAborted()
+    const ready = await waitForReady(resolvedBaseURL, {
+      signal: options.signal,
+      process: proc,
+      timeoutMs: options.readyTimeoutMs,
+      apiKey: options.apiKey,
+    })
+    options.signal?.throwIfAborted()
+    if (!ready.ready) {
+      // An aborted wait always has an aborted caller signal, checked above.
+      if (ready.reason === "aborted") throw new DOMException("Startup cancelled", "AbortError")
+      const logExcerpt = await readServerLogExcerpt(serverLogStart)
+      const code =
+        ready.reason === "process-exited" ? AX_ENGINE_ERROR.ServerStartFailed : AX_ENGINE_ERROR.ServerHealthFailed
+      const message =
+        ready.reason === "process-exited"
+          ? "ax-engine server exited before becoming ready"
+          : `ax-engine server did not become ready within ${(options.readyTimeoutMs ?? 240_000) / 1000} seconds`
+      const guidance =
+        `Model path: ${options.modelPath}\n` +
+        "Startup was not retried automatically. Check the server log and available memory; " +
+        "if model weights are on network storage, prepare them in a local SSD Hugging Face cache. " +
+        "Resolve the startup issue, then retry explicitly."
+      throw new AxEngineStartupError({
+        code,
+        reason: ready.reason,
+        message: `${formatServerStartupFailure({ code, origin, message, logExcerpt })}\n${guidance}`,
+      })
+    }
 
-  const ready = await waitForReady(resolvedBaseURL, {
-    signal: options.signal,
-    process: proc,
-    timeoutMs: options.readyTimeoutMs,
-    apiKey: options.apiKey,
-  })
-  if (!ready.ready) {
-    await Process.killProcessTree(proc).catch(() => undefined)
-    await removeServerState()
-    if (ready.reason === "aborted") options.signal?.throwIfAborted()
-    const logExcerpt = await readServerLogExcerpt(serverLogStart)
-    const code =
-      ready.reason === "process-exited" ? AX_ENGINE_ERROR.ServerStartFailed : AX_ENGINE_ERROR.ServerHealthFailed
-    const message =
-      ready.reason === "process-exited"
-        ? "ax-engine server exited before becoming ready"
-        : "ax-engine server did not become ready"
-    throw new Error(formatServerStartupFailure({ code, origin, message, logExcerpt }))
+    const readyState: AxEngineServerState = { ...state, lastHealthAt: Date.now() }
+    await writeServerState(readyState)
+    options.signal?.throwIfAborted()
+    // Ownership transfers to the managed lifecycle while holding serverLock.
+    // No caller abort listener remains attached to this resident process.
+    return readyState
+  } catch (error) {
+    await Process.killProcessTree(proc).catch((cleanupError) => {
+      log.warn("failed to terminate ax-engine startup process", { pid: proc.pid, error: cleanupError })
+    })
+    // Preserve discoverability if termination failed; a future lifecycle
+    // operation must still be able to reclaim the recorded process.
+    if (!pidLive(proc.pid!)) await removeServerState()
+    throw error
   }
-
-  const readyState: AxEngineServerState = { ...state, lastHealthAt: Date.now() }
-  await writeServerState(readyState)
-  return readyState
 }
 
 export async function stopServer() {
