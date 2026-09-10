@@ -4,11 +4,15 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
+import { powershellEnvironment } from "../packages/ax-code/src/util/powershell-env"
 
 const root = path.resolve(import.meta.dirname, "..")
 const powershell = process.env.AX_TEST_POWERSHELL ?? (process.platform === "win32" ? "powershell.exe" : "pwsh")
 const powershellAvailable =
-  spawnSync(powershell, ["-NoProfile", "-NonInteractive", "-Command", "exit 0"], { timeout: 30_000 }).status === 0
+  spawnSync(powershell, ["-NoProfile", "-NonInteractive", "-Command", "exit 0"], {
+    timeout: 30_000,
+    env: powershellEnvironment(powershell),
+  }).status === 0
 if (process.platform === "win32" && !powershellAvailable) throw new Error("Windows installer requires PowerShell")
 
 async function transfer(
@@ -98,14 +102,14 @@ Write-Output "DOWNLOAD_COMPLETED"
     const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
       const child = spawn(command, args, {
         timeout: 20_000,
-        env: {
+        env: powershellEnvironment(command, {
           ...process.env,
           AX_TEST_URL: url,
           AX_TEST_OUTPUT: output,
           AX_TEST_ARCHIVE: archive === "progress" ? archive : archive ? "1" : "0",
           AX_TEST_INSTALLER: path.join(root, "install.ps1"),
           TMPDIR: directory,
-        },
+        }),
         stdio: ["ignore", "pipe", "pipe"],
       })
       let stdout = ""

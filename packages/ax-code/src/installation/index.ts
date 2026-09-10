@@ -16,6 +16,7 @@ import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
 import { Process } from "../util/process"
+import { powershellEnvironment } from "../util/powershell-env"
 import { whichAll } from "../util/which"
 import { parseJsonResult } from "../util/json-value"
 
@@ -166,7 +167,7 @@ export namespace Installation {
   async function runCommand(cmd: string[], opts: RunOptions = {}): Promise<CommandResult> {
     const proc = Process.spawn(cmd, {
       cwd: opts.cwd,
-      env: opts.env ? { ...process.env, ...opts.env } : undefined,
+      env: powershellEnvironment(cmd[0], { ...process.env, ...opts.env }),
       stdin: opts.input ? "pipe" : "ignore",
       stdout: "pipe",
       stderr: "pipe",

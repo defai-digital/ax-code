@@ -1,5 +1,6 @@
 import path from "path"
 import { Process } from "./process"
+import { powershellEnvironment } from "./powershell-env"
 
 export namespace Archive {
   export async function extractZip(zipPath: string, destDir: string) {
@@ -12,8 +13,10 @@ export namespace Archive {
       const winZipPath = psQuote(path.resolve(zipPath))
       const winDestDir = psQuote(path.resolve(destDir))
       // $global:ProgressPreference suppresses PowerShell's blue progress bar popup
-      const cmd = `$global:ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path '${winZipPath}' -DestinationPath '${winDestDir}' -Force`
-      await Process.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd])
+      const cmd = `$global:ProgressPreference = 'SilentlyContinue'; Expand-Archive -LiteralPath '${winZipPath}' -DestinationPath '${winDestDir}' -Force`
+      await Process.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd], {
+        env: powershellEnvironment("powershell"),
+      })
       return
     }
 

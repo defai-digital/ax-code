@@ -7,6 +7,7 @@ on:
       - install.ps1
       - script/install-powershell.test.ts
       - script/install-download.test.ts
+      - packages/ax-code/src/util/powershell-env.ts
       - .github/scripts/assert-windows-runtime.ps1
       - .github/workflows/install-matrix-smoke.yml
       - .github/workflows/windows-installer-qualification.yml
@@ -15,6 +16,7 @@ on:
       - install.ps1
       - script/install-powershell.test.ts
       - script/install-download.test.ts
+      - packages/ax-code/src/util/powershell-env.ts
       - .github/scripts/assert-windows-runtime.ps1
       - .github/workflows/install-matrix-smoke.yml
       - .github/workflows/windows-installer-qualification.yml

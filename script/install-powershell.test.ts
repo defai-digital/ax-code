@@ -4,11 +4,13 @@ import os from "node:os"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
 import { windowsNodeLauncherScript } from "../packages/ax-code/script/node-launcher"
+import { powershellEnvironment } from "../packages/ax-code/src/util/powershell-env"
 
 const installer = path.resolve(import.meta.dirname, "../install.ps1")
 const powershell = process.env.AX_TEST_POWERSHELL ?? (process.platform === "win32" ? "powershell.exe" : "pwsh")
 const available =
   spawnSync(powershell, ["-NoProfile", "-NonInteractive", "-Command", "exit 0"], {
+    env: powershellEnvironment(powershell),
     // Windows on Arm may cold-start the emulated Windows PowerShell host
     // slowly enough to exceed the default command-probe budget.
     timeout: 30_000,
@@ -103,13 +105,13 @@ ${body}
     const result = spawnSync(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-File", script], {
       encoding: "utf8",
       timeout: 20_000,
-      env: {
+      env: powershellEnvironment(powershell, {
         ...process.env,
         AX_TEST_INSTALLER: installer,
         AX_TEST_ROOT: root,
         AX_TEST_NODE: process.execPath,
         AX_TEST_RUNTIME_PROBE: path.resolve(import.meta.dirname, "../.github/scripts/assert-windows-runtime.ps1"),
-      },
+      }),
     })
     expect(result.error).toBeUndefined()
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
