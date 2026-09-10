@@ -16,6 +16,8 @@ changes belong to AX Coder.
 
 - Prevent excluded models, configured aliases, and duplicate cached revisions from reappearing in local model selection or bypassing the restriction through prepare, download, or activation commands.
 - Keep newly selected bundled model metadata discoverable and resolvable offline when an older cached catalog does not contain the repository.
+- Keep a healthy managed AX Engine process resident across session turns, reap failed or cancelled startup processes, and prevent automatic retries from repeating exhausted model startup.
+- Update the model-route regression contract and observe concurrent snapshot failures immediately, then verify that completed writes are fully captured.
 
 ## [7.15.3] - 2026-09-10
 

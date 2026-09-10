@@ -998,14 +998,20 @@ test("concurrent file operations during patch", async () => {
         }
       })()
 
-      // Get patch while files are being created
-      const patchPromise = Snapshot.patch(before!)
+      // Git may reject a file that changes during staging. Observe both
+      // operations immediately and drain the writer before disposing the fixture.
+      const [created, captured] = await Promise.allSettled([createPromise, Snapshot.patch(before!)])
+      expect(created.status).toBe("fulfilled")
+      if (captured.status === "rejected") {
+        expect(captured.reason).toBeInstanceOf(Error)
+        expect(captured.reason.message).toMatch(/^Snapshot staging failed: git add exited with code 128$/)
+      }
 
-      await createPromise
-      const patch = await patchPromise
-
-      // Should capture some or all of the concurrent files
-      expect(patch.files.length).toBeGreaterThanOrEqual(0)
+      // Stable files must all be captured, including any missed during creation.
+      const patch = await Snapshot.patch(before!)
+      for (let i = 0; i < 10; i++) {
+        expect(patch.files).toContain(fwd(tmp.path, `concurrent${i}.txt`))
+      }
     },
   })
 })
