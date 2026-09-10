@@ -275,5 +275,11 @@ jobs:
       - name: Install source launcher
         run: AX_CODE_BIN_DIR="$GITHUB_WORKSPACE/.tmp/tui-smoke-bin" pnpm run setup:cli -- --source
 
+      - name: Test Node 26 launcher admission and literal paths
+        working-directory: packages/ax-code
+        env:
+          AX_TEST_FILES: test/script/node-launcher.test.ts,test/script/source-launcher.test.ts
+        run: pnpm exec vitest run --retry=0
+
       - name: TUI startup smoke
         run: pnpm --dir packages/ax-code run tui:startup-smoke -- --bin "$GITHUB_WORKSPACE/.tmp/tui-smoke-bin/ax-code"
