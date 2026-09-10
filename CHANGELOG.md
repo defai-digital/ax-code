@@ -18,6 +18,7 @@ changes belong to AX Coder.
 - Keep newly selected bundled model metadata discoverable and resolvable offline when an older cached catalog does not contain the repository.
 - Keep a healthy managed AX Engine process resident across session turns, reap failed or cancelled startup processes, and prevent automatic retries from repeating exhausted model startup.
 - Update the model-route regression contract and observe concurrent snapshot failures immediately, then verify that completed writes are fully captured.
+- Bind release workflow monitoring to the remote tag's commit and exclude earlier runs when creating a candidate, so an older cancelled workflow cannot be mistaken for the new release.
 
 ## [7.15.3] - 2026-09-10
 

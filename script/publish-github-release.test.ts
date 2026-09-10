@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
+import childProcess from "child_process"
 import fs from "fs"
 import path from "path"
 import {
@@ -17,9 +18,61 @@ import {
   selectWorkflowRunID,
   trackedInternalPrivacyIssue,
   workflowRunListArgs,
+  watchReleaseWorkflow,
 } from "./publish-github-release"
 
 describe("publish-github-release helpers", () => {
+  test("does not watch a release when the remote tag commit is missing", () => {
+    const options = parsePublishGithubReleaseArgs(["--version", "5.10.1", "--existing-tag"])
+    const spawn = vi.spyOn(childProcess, "spawnSync").mockReturnValue({
+      pid: 1,
+      output: [null, "", ""],
+      stdout: "",
+      stderr: "",
+      status: 0,
+      signal: null,
+    })
+    try {
+      expect(() => watchReleaseWorkflow(options)).toThrow("Cannot resolve the remote commit")
+      expect(spawn).toHaveBeenCalledTimes(1)
+      expect(spawn.mock.calls[0][0]).toBe("git")
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test.each(["annotated", "lightweight"])(
+    "watches the remote %s tag commit instead of an older cancelled candidate",
+    (kind) => {
+      const commit = "b".repeat(40)
+      const options = parsePublishGithubReleaseArgs(["--version", "5.10.1", "--existing-tag"])
+      const watched: string[] = []
+      const spawn = vi.spyOn(childProcess, "spawnSync").mockImplementation((command, args) => {
+        const argv = args as string[]
+        let stdout = ""
+        if (command === "git" && argv[0] === "ls-remote") {
+          stdout =
+            kind === "annotated"
+              ? `${"a".repeat(40)}\trefs/tags/v5.10.1\n${commit}\trefs/tags/v5.10.1^{}\n`
+              : `${commit}\trefs/tags/v5.10.1\n`
+        } else if (command === "gh" && argv[1] === "list") {
+          // GitHub can still return the older cancelled run while the new
+          // candidate is being indexed unless its commit is part of the query.
+          stdout = argv[argv.indexOf("--commit") + 1] === commit ? "200\n" : "100\n"
+        } else if (command === "gh" && argv[1] === "watch") {
+          watched.push(argv[2])
+        } else throw new Error(`Unexpected command: ${command} ${argv.join(" ")}`)
+        return { pid: 1, output: [null, stdout, ""], stdout, stderr: "", status: 0, signal: null }
+      })
+      try {
+        watchReleaseWorkflow(options)
+        expect(watched).toEqual(["200"])
+      } finally {
+        spawn.mockRestore()
+      }
+    },
+  )
+
   test("keeps the workflow as sole signer and independently verifies its assets", () => {
     const source = fs.readFileSync(path.join(import.meta.dirname, "publish-github-release.ts"), "utf8")
 

@@ -353,6 +353,27 @@ function watchWorkflow(workflow: string, query: WorkflowRunQuery, label: string,
   run("gh", ["run", "watch", runID, "--repo", options.repo, "--exit-status"], { dryRun: options.dryRun })
 }
 
+export function watchReleaseWorkflow(options: PublishGithubReleaseOptions, excludeRunIDs?: ReadonlySet<string>) {
+  const ref = `refs/tags/${options.tag}`
+  const output = run("git", ["ls-remote", "--exit-code", "origin", ref, `${ref}^{}`], {
+    capture: true,
+    dryRun: options.dryRun,
+  })
+  const refs = new Map(
+    output.split(/\r?\n/).map((line) => {
+      const [sha, name] = line.trim().split(/\s+/)
+      return [name, sha]
+    }),
+  )
+  // Annotated tags identify an object distinct from the commit used by Actions.
+  // Resolve origin's peeled commit even when --existing-tag has no local ref.
+  const commit = options.dryRun ? "<tag-commit>" : (refs.get(`${ref}^{}`) ?? refs.get(ref) ?? "")
+  if (!options.dryRun && !/^[a-f0-9]{40}$/i.test(commit)) {
+    throw new Error(`Cannot resolve the remote commit for release tag ${options.tag}`)
+  }
+  watchWorkflow("release.yml", { branch: options.tag, commit, event: "push", excludeRunIDs }, "release", options)
+}
+
 function releaseAssetDir(options: PublishGithubReleaseOptions) {
   if (options.assetDir) {
     fs.mkdirSync(options.assetDir, { recursive: true })
@@ -463,14 +484,15 @@ async function main() {
   )
   ensurePreflight(options)
   tagExists(options.tag, options)
+  const previousReleaseRunIDs =
+    !options.existingTag && !options.skipReleaseWatch
+      ? new Set(workflowRunIDs("release.yml", { branch: options.tag, event: "push" }, options))
+      : undefined
   createAndPushTag(options)
   if (options.skipReleaseWatch) {
     console.log("Skipping release workflow watch")
   } else {
-    // A tag push is exposed as headBranch=<tag> by GitHub Actions. Filtering by
-    // both the tag and push event prevents the previous release run from being
-    // selected while the new run is still being created.
-    watchWorkflow("release.yml", { branch: options.tag, event: "push" }, "release", options)
+    watchReleaseWorkflow(options, previousReleaseRunIDs)
   }
 
   const assetDir = releaseAssetDir(options)
