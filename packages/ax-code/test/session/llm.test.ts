@@ -1323,6 +1323,80 @@ describe("session.llm.stream", () => {
   })
 })
 
+async function streamAxTrustHeaderCase(input: {
+  providerID: string
+  sessionID: string
+  axTrust?: boolean
+  management?: "ax-trust" | "custom-api"
+}): Promise<Capture> {
+  const modelID = "openai/gpt-5.2"
+  const request = waitRequest(
+    "/chat/completions",
+    new Response(createChatStream("Hello"), {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+  )
+
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "ax-code.json"),
+        JSON.stringify({
+          $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+          enabled_providers: [input.providerID],
+          provider: {
+            [input.providerID]: {
+              ...(input.management ? { management: input.management } : {}),
+              options: {
+                apiKey: "test-openrouter-key",
+                baseURL: `${state.server.url.origin}/v1`,
+                ...(input.axTrust === undefined ? {} : { axTrust: input.axTrust }),
+              },
+              models: { [modelID]: {} },
+            },
+          },
+        }),
+      )
+    },
+  })
+
+  return await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const resolved = await Provider.getModel(ProviderID.make(input.providerID), ModelID.make(modelID))
+      const sessionID = SessionID.make(input.sessionID)
+      const user = {
+        id: MessageID.make("user-axtrust-case"),
+        sessionID,
+        role: "user",
+        time: { created: Date.now() },
+        agent: "test",
+        model: { providerID: ProviderID.make(input.providerID), modelID: resolved.id },
+      } satisfies MessageV2.User
+      const agent = {
+        name: "test",
+        mode: "primary",
+        options: {},
+        permission: [{ permission: "*", pattern: "*", action: "allow" }],
+      } satisfies Agent.Info
+      const stream = await LLM.stream({
+        user,
+        sessionID,
+        model: resolved,
+        agent,
+        system: ["You are a helpful assistant."],
+        abort: new AbortController().signal,
+        messages: [{ role: "user", content: "Hello" }],
+        tools: {},
+      })
+      for await (const _ of stream.fullStream) {
+      }
+      return await request
+    },
+  })
+}
+
 describe("session.llm.stream - AX Trust prompt-cache header", () => {
   test("sends X-AX-Prompt-Cache-Key with the session ID when axTrust is enabled", async () => {
     const providerID = "openrouter"
@@ -1476,6 +1550,42 @@ describe("session.llm.stream - AX Trust prompt-cache header", () => {
         expect(capture.headers.get("Authorization")).toBe("Bearer test-openrouter-key")
       },
     })
+  })
+
+  test("sends X-AX-Prompt-Cache-Key for an AX Trust provider ID without axTrust option", async () => {
+    const capture = await streamAxTrustHeaderCase({
+      providerID: "ax-trust-defai-digital",
+      sessionID: "session-axtrust-id-default",
+    })
+    expect(capture.headers.get("X-AX-Prompt-Cache-Key")).toBe("session-axtrust-id-default")
+    expect(capture.body.prompt_cache_key).toBeUndefined()
+    expect(capture.body.promptCacheKey).toBeUndefined()
+  })
+
+  test("sends X-AX-Prompt-Cache-Key when management is ax-trust", async () => {
+    const capture = await streamAxTrustHeaderCase({
+      providerID: "defai-01-ax-trust-com",
+      sessionID: "session-axtrust-management-default",
+      management: "ax-trust",
+    })
+    expect(capture.headers.get("X-AX-Prompt-Cache-Key")).toBe("session-axtrust-management-default")
+  })
+
+  test("omits X-AX-Prompt-Cache-Key when an AX Trust provider opts out", async () => {
+    const capture = await streamAxTrustHeaderCase({
+      providerID: "ax-trust-defai-digital",
+      sessionID: "session-axtrust-id-off",
+      axTrust: false,
+    })
+    expect(capture.headers.get("X-AX-Prompt-Cache-Key")).toBeNull()
+  })
+
+  test("omits X-AX-Prompt-Cache-Key for a generic provider without axTrust", async () => {
+    const capture = await streamAxTrustHeaderCase({
+      providerID: "openrouter",
+      sessionID: "session-axtrust-generic-default",
+    })
+    expect(capture.headers.get("X-AX-Prompt-Cache-Key")).toBeNull()
   })
 })
 

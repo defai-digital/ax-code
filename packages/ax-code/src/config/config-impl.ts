@@ -134,6 +134,7 @@ export namespace Config {
         delete provider.api
         delete provider.npm
         delete provider.env
+        delete provider.management
         if (isRecord(provider.options)) {
           provider.options = Object.fromEntries(
             Object.entries(provider.options).filter(([key]) =>

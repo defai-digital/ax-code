@@ -147,6 +147,7 @@ Reconnecting an existing URL preserves its provider ID, models, and saved key
 when the token is left blank. The provider remains in AX Trust even with a
 custom name. Legacy `ax-trust` and `ax-trust-*` IDs also appear in this category.
 AX Trust continues to own gateway policy, approvals, and audit.
+AX Code sends a session affinity header on these connections by default.
 
 ## CLI Providers
 

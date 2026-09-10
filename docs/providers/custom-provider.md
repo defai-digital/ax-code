@@ -20,7 +20,10 @@ API key. The editor discovers model IDs and metadata and stores credentials in
 encrypted auth storage. It can also accept explicit model IDs if discovery
 is unavailable. Reconnecting a saved URL retains its provider ID and key when
 the token is left blank. AX Trust connections keep their category after edits
-and model refreshes.
+and model refreshes. AX Code sends `X-AX-Prompt-Cache-Key` with the session ID
+on those connections so the gateway can keep a session on one eligible account;
+set `provider.<id>.options.axTrust` to `false` to disable it. This header is
+not forwarded upstream and is not a body `prompt_cache_key`.
 
 ## How a provider is resolved
 

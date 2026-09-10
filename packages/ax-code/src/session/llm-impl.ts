@@ -42,6 +42,7 @@ import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { attachThinkTagStream } from "@/provider/think-tags"
 import { isKnownCliProviderID } from "@/provider/cli/ids"
 import { isRetiredProviderID } from "@/provider/retired-providers"
+import { applyAxTrustPromptCacheHeader, shouldSendAxTrustPromptCacheKey } from "@/provider/ax-trust-cache"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 import { RequestProvenance } from "./request-provenance"
@@ -523,16 +524,18 @@ export namespace LLM {
       ...input.model.headers,
       ...headers,
     }
-    // AX Trust gateways key prompt-cache affinity on the session. The header
-    // is sent only on the explicit provider opt-in (provider.options.axTrust
-    // === true); opting out leaves the headers above untouched. This path
-    // never synthesizes a body-level prompt_cache_key/promptCacheKey — the
-    // body cache key stays governed by ProviderTransform.options.
-    if (provider.options?.["axTrust"] === true) {
-      for (const name of Object.keys(requestHeaders)) {
-        if (name.toLowerCase() === "x-ax-prompt-cache-key") delete requestHeaders[name]
-      }
-      requestHeaders["X-AX-Prompt-Cache-Key"] = input.sessionID
+    // AX Trust connections send a gateway-only session affinity header by
+    // default. options.axTrust === false opts out; === true opts a non-AX-Trust
+    // provider in. This path never synthesizes a body-level prompt_cache_key.
+    const configProvider = cfg.provider?.[input.model.providerID]
+    if (
+      shouldSendAxTrustPromptCacheKey({
+        providerID: input.model.providerID,
+        management: configProvider?.management,
+        axTrust: provider.options?.["axTrust"] ?? configProvider?.options?.["axTrust"],
+      })
+    ) {
+      requestHeaders = applyAxTrustPromptCacheHeader(requestHeaders, input.sessionID)
     }
     const streamErrorHolder: { error?: unknown } = {}
     // Stream watchdog: providers can either stop producing chunks without

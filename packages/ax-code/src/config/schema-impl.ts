@@ -578,6 +578,12 @@ export const Provider = ModelsDev.Provider.partial()
         baseURL: z.string().optional(),
         enterpriseUrl: z.string().optional().describe("GitHub Enterprise URL for copilot authentication"),
         setCacheKey: z.boolean().optional().describe("Enable promptCacheKey for this provider (default false)"),
+        axTrust: z
+          .boolean()
+          .optional()
+          .describe(
+            "Send X-AX-Prompt-Cache-Key for AX Trust session affinity. AX Trust connections send it by default; set false to disable. Other providers send it only when true.",
+          ),
         timeout: z
           .union([
             PositiveInteger.describe(
