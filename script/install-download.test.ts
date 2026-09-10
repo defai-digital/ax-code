@@ -12,7 +12,7 @@ const powershellAvailable =
 if (process.platform === "win32" && !powershellAvailable) throw new Error("Windows installer requires PowerShell")
 
 async function transfer(
-  runtime: "bash" | "powershell",
+  runtime: "bash" | "powershell" | "powershell-legacy",
   statuses: number[],
   signatureValid = true,
   archive: boolean | "progress" = false,
@@ -76,6 +76,14 @@ foreach ($statement in $ast.EndBlock.Statements) {
   }
 }
 $App = "ax-code"
+${
+  runtime === "powershell-legacy"
+    ? `function Invoke-WebRequest {
+  param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing, [int]$TimeoutSec, $Headers, $ErrorAction)
+  Invoke-LegacyReleaseDownload -Uri $Uri -OutFile $OutFile
+}`
+    : ""
+}
 $AxCodeMinisignPublicKey = "fixture"
 function Test-SkipMinisignVerify { return $false }
 function Get-MinisignCommand { return "Confirm-FixtureSignature" }
@@ -120,7 +128,7 @@ Write-Output "DOWNLOAD_COMPLETED"
   }
 }
 
-for (const runtime of ["bash", "powershell"] as const) {
+for (const runtime of ["bash", "powershell", "powershell-legacy"] as const) {
   const available = runtime === "bash" ? process.platform !== "win32" : powershellAvailable
   describe.skipIf(!available)(`${runtime} installer downloads`, () => {
     test.each([500, 503, 429])("recovers from transient HTTP %s without retaining its error body", async (status) => {

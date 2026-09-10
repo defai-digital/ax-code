@@ -121,6 +121,29 @@ ${body}
 }
 
 describe.skipIf(!available)("PowerShell runtime installation", () => {
+  test("installs a release archive with literal brackets in its filename", async () => {
+    await runInstaller(`
+New-PreviousInstall
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$script:FixtureArchive = Join-Path $env:AX_TEST_ROOT "signed [fixture].zip"
+[System.IO.Compression.ZipFile]::CreateFromDirectory($Source, $script:FixtureArchive)
+function Assert-MinisignAvailable {}
+function Resolve-ReleaseDownload {
+  return @{ Version = "9.9.9"; FileName = "release [1].zip"; Url = "https://example.invalid/release.zip" }
+}
+function Invoke-ReleaseDownload {
+  param([string]$Uri, [string]$OutFile)
+  [System.IO.File]::Copy($script:FixtureArchive, $OutFile, $true)
+}
+function Verify-DownloadedArchive {
+  param([string]$ArchivePath, [string]$SignatureUrl, [string]$SignaturePath)
+  Assert-Equal (Get-FileHash -LiteralPath $ArchivePath).Hash (Get-FileHash -LiteralPath $script:FixtureArchive).Hash
+}
+Assert-Equal (Install-FromRelease) "9.9.9"
+Assert-InstalledBundle
+`)
+  })
+
   const moveErrors = [
     { name: "sharing lock", exception: '[System.IO.IOException]::new("Simulated sharing violation", -2147024864)' },
     { name: "access denial", exception: '[System.UnauthorizedAccessException]::new("Simulated access denial")' },

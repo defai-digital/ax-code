@@ -66,6 +66,32 @@ function Write-Warn([string]$Message) {
   Write-Warning $Message
 }
 
+function Invoke-LegacyReleaseDownload {
+  param([string]$Uri, [string]$OutFile)
+
+  # Windows PowerShell 5.1's OutFile resolves wildcard provider paths, and
+  # escaping them can instead write literal backticks. Stream directly to a
+  # .NET file path, retaining normal proxy, TLS and HTTP status validation.
+  $request = [System.Net.HttpWebRequest]::Create($Uri)
+  $request.UserAgent = "$App-installer"
+  $request.Timeout = 300000
+  $request.ReadWriteTimeout = 300000
+  $response = $null
+  $inputStream = $null
+  $outputStream = $null
+  try {
+    $response = $request.GetResponse()
+    $inputStream = $response.GetResponseStream()
+    $outputStream = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write)
+    $inputStream.CopyTo($outputStream)
+  } finally {
+    if ($outputStream) { $outputStream.Dispose() }
+    if ($inputStream) { $inputStream.Dispose() }
+    if ($response) { $response.Dispose() }
+    $request.Abort()
+  }
+}
+
 function Invoke-ReleaseDownload {
   param(
     [Parameter(Mandatory = $true)][string]$Uri,
@@ -74,20 +100,21 @@ function Invoke-ReleaseDownload {
 
   # Windows PowerShell 5.1 has no MaximumRetryCount parameter. Retry only
   # transient download failures, before any signature check or runtime move.
-  # Its OutFile also expands provider wildcards; PowerShell 7 uses a literal
-  # path. Preserve brackets in user/temp directories on both implementations.
-  $downloadPath = if ($PSVersionTable.PSVersion.Major -le 5) {
-    [System.Management.Automation.WildcardPattern]::Escape($OutFile)
-  } else {
-    $OutFile
-  }
   for ($attempt = 1; $attempt -le 4; $attempt++) {
     try {
-      Invoke-WebRequest -Uri $Uri -OutFile $downloadPath -UseBasicParsing -TimeoutSec 300 `
-        -Headers @{ "User-Agent" = "$App-installer" } -ErrorAction Stop
+      if ($PSVersionTable.PSVersion.Major -le 5) {
+        Invoke-LegacyReleaseDownload -Uri $Uri -OutFile $OutFile
+      } else {
+        Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec 300 `
+          -Headers @{ "User-Agent" = "$App-installer" } -ErrorAction Stop
+      }
       return
     } catch {
       $failure = $_.Exception
+      # .NET method invocation wraps the original WebException in PowerShell.
+      while ($failure.InnerException -and $failure -isnot [System.Net.WebException]) {
+        $failure = $failure.InnerException
+      }
       $status = if ($failure.Response) { [int]$failure.Response.StatusCode } else { 0 }
       $transient = $status -in @(408, 429, 500, 502, 503, 504)
       if ($failure -is [System.Net.WebException]) {
@@ -98,6 +125,7 @@ function Invoke-ReleaseDownload {
           [System.Net.WebExceptionStatus]::ReceiveFailure,
           [System.Net.WebExceptionStatus]::NameResolutionFailure
         )
+        if ($failure.Response) { $failure.Response.Close() }
       }
       if ($attempt -eq 4 -or -not $transient) { throw }
       # Never retain a partial/error response as the next attempt's payload.
@@ -248,15 +276,15 @@ function Install-MinisignBootstrap {
       throw "minisign bootstrap SHA-256 mismatch. expected $MinisignZipSha256, got $hash"
     }
 
-    Expand-Archive -Path $zipPath -DestinationPath $tmpDir -Force
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $tmpDir -Force
     $nativeDir = Get-MinisignNativeArchDir
-    $sourceExe = Get-ChildItem -Path $tmpDir -Filter "minisign.exe" -Recurse |
+    $sourceExe = Get-ChildItem -LiteralPath $tmpDir -Filter "minisign.exe" -Recurse |
       Where-Object { $_.FullName -match "[\\/]$nativeDir[\\/]minisign\.exe$" } |
       Select-Object -First 1
 
     if (-not $sourceExe) {
       # Fall back to any minisign.exe if layout changes slightly.
-      $sourceExe = Get-ChildItem -Path $tmpDir -Filter "minisign.exe" -Recurse | Select-Object -First 1
+      $sourceExe = Get-ChildItem -LiteralPath $tmpDir -Filter "minisign.exe" -Recurse | Select-Object -First 1
     }
     if (-not $sourceExe) {
       throw "minisign.exe not found after extracting $MinisignZipUrl"
@@ -541,8 +569,8 @@ function Install-FromRelease {
     Invoke-ReleaseDownload -Uri $release.Url -OutFile $archive
     Verify-DownloadedArchive -ArchivePath $archive -SignatureUrl "$($release.Url).minisig" -SignaturePath $signature
 
-    Expand-Archive -Path $archive -DestinationPath $tmpDir -Force
-    $launcher = Get-ChildItem -Path $tmpDir -Filter "ax-code.cmd" -Recurse | Select-Object -First 1
+    Expand-Archive -LiteralPath $archive -DestinationPath $tmpDir -Force
+    $launcher = Get-ChildItem -LiteralPath $tmpDir -Filter "ax-code.cmd" -Recurse | Select-Object -First 1
     if (-not $launcher) {
       throw "Downloaded archive did not contain ax-code.cmd"
     }
