@@ -66,6 +66,41 @@ function Write-Warn([string]$Message) {
   Write-Warning $Message
 }
 
+function Invoke-ReleaseDownload {
+  param(
+    [Parameter(Mandatory = $true)][string]$Uri,
+    [Parameter(Mandatory = $true)][string]$OutFile
+  )
+
+  # Windows PowerShell 5.1 has no MaximumRetryCount parameter. Retry only
+  # transient download failures, before any signature check or runtime move.
+  for ($attempt = 1; $attempt -le 4; $attempt++) {
+    try {
+      Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec 300 `
+        -Headers @{ "User-Agent" = "$App-installer" } -ErrorAction Stop
+      return
+    } catch {
+      $failure = $_.Exception
+      $status = if ($failure.Response) { [int]$failure.Response.StatusCode } else { 0 }
+      $transient = $status -in @(408, 429, 500, 502, 503, 504)
+      if ($failure -is [System.Net.WebException]) {
+        $transient = $transient -or $failure.Status -in @(
+          [System.Net.WebExceptionStatus]::Timeout,
+          [System.Net.WebExceptionStatus]::ConnectionClosed,
+          [System.Net.WebExceptionStatus]::ConnectFailure,
+          [System.Net.WebExceptionStatus]::ReceiveFailure,
+          [System.Net.WebExceptionStatus]::NameResolutionFailure
+        )
+      }
+      if ($attempt -eq 4 -or -not $transient) { throw }
+      # Never retain a partial/error response as the next attempt's payload.
+      Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+      Write-Warn "Release download failed temporarily; retrying ($attempt/3)."
+      Start-Sleep -Seconds 1
+    }
+  }
+}
+
 function Normalize-PathForCompare([string]$Path) {
   return $Path.TrimEnd([char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar))
 }
@@ -197,11 +232,9 @@ function Install-MinisignBootstrap {
 
   try {
     $zipPath = Join-Path $tmpDir "minisign-win64.zip"
-    Invoke-WebRequest `
+    Invoke-ReleaseDownload `
       -Uri $MinisignZipUrl `
-      -OutFile $zipPath `
-      -UseBasicParsing `
-      -Headers @{ "User-Agent" = "$App-installer" }
+      -OutFile $zipPath
 
     $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($hash -ne $MinisignZipSha256) {
@@ -281,11 +314,9 @@ function Verify-DownloadedArchive {
   }
 
   Write-Info "Verifying release signature"
-  Invoke-WebRequest `
+  Invoke-ReleaseDownload `
     -Uri $SignatureUrl `
-    -OutFile $SignaturePath `
-    -UseBasicParsing `
-    -Headers @{ "User-Agent" = "$App-installer" }
+    -OutFile $SignaturePath
 
   $previousErrorAction = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
@@ -500,7 +531,7 @@ function Install-FromRelease {
     $archive = Join-Path $tmpDir $release.FileName
     $signature = "$archive.minisig"
     Write-Info "Installing ax-code version: $($release.Version)"
-    Invoke-WebRequest -Uri $release.Url -OutFile $archive -UseBasicParsing -Headers @{ "User-Agent" = "$App-installer" }
+    Invoke-ReleaseDownload -Uri $release.Url -OutFile $archive
     Verify-DownloadedArchive -ArchivePath $archive -SignatureUrl "$($release.Url).minisig" -SignaturePath $signature
 
     Expand-Archive -Path $archive -DestinationPath $tmpDir -Force

@@ -56,6 +56,13 @@ sha256_file() {
     fi
 }
 
+download_file() {
+    # Retry only curl's transient transport/HTTP failures. Permanent HTTP
+    # errors and signature failures must still stop before extraction.
+    curl --fail --location --retry 3 --retry-delay 1 --retry-max-time 120 \
+        --connect-timeout 15 --max-time 300 "$@"
+}
+
 ensure_minisign_available() {
     if command -v minisign >/dev/null 2>&1; then
         return 0
@@ -91,7 +98,7 @@ ensure_minisign_available() {
     local tmp_dir
     tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/ax_code_minisign.XXXXXX")"
 
-    if ! curl -fsSL -o "$tmp_dir/$archive" "$url"; then
+    if ! download_file -sS -o "$tmp_dir/$archive" "$url"; then
         rm -rf "$tmp_dir"
         return 1
     fi
@@ -517,7 +524,7 @@ download_with_progress() {
     trap "trap - RETURN; rm -f \"$tracefile\"; printf '\033[?25h' >&4; exec 4>&-" RETURN
 
     (
-        curl --trace-ascii "$tracefile" -s -L -o "$output" "$url"
+        download_file --trace-ascii "$tracefile" -sS -o "$output" "$url"
     ) &
     local curl_pid=$!
 
@@ -548,8 +555,8 @@ download_with_progress() {
         done
     }
 
-    wait $curl_pid
-    local ret=$?
+    local ret=0
+    wait "$curl_pid" || ret=$?
     echo "" >&4
     return $ret
 }
@@ -559,9 +566,10 @@ download_and_install() {
     local tmp_dir="${TMPDIR:-/tmp}/ax_code_install_$$"
     mkdir -p "$tmp_dir"
 
-    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
-        # Fallback to standard curl on Windows, non-TTY environments, or if custom progress fails
-        curl -# -L -o "$tmp_dir/$filename" "$url"
+    if [[ "$os" == "windows" ]] || ! [ -t 2 ]; then
+        download_file -# -o "$tmp_dir/$filename" "$url"
+    else
+        download_with_progress "$url" "$tmp_dir/$filename"
     fi
 
     verify_downloaded_archive "$tmp_dir/$filename" "$url.minisig" "$tmp_dir/$filename.minisig"
@@ -602,7 +610,7 @@ verify_downloaded_archive() {
     fi
 
     print_message info "${MUTED}Verifying release signature${NC}"
-    curl -fsSL -o "$signature_path" "$signature_url"
+    download_file -sS -o "$signature_path" "$signature_url"
     minisign -Vm "$archive_path" -x "$signature_path" -P "$AX_CODE_MINISIGN_PUBLIC_KEY" >/dev/null
 }
 

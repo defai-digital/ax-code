@@ -6,6 +6,14 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.5] - 2026-09-10
+
+### Fixed
+
+- Retry transient release archive, signature, and signature-tool downloads up to three times on Unix and Windows. Reject HTTP error responses before verification or extraction, and retain signature failures as terminal errors.
+- Enforce AX Engine readiness and overall setup deadlines, cancel abandoned setup, and reject processes that exit during the final readiness handoff.
+- Preserve user-selected Hugging Face storage paths in startup diagnostics instead of suggesting an unsolicited model relocation.
+
 ## [7.15.4] - 2026-09-10
 
 ### Changed

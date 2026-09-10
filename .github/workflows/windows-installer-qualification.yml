@@ -6,6 +6,7 @@ on:
     paths:
       - install.ps1
       - script/install-powershell.test.ts
+      - script/install-download.test.ts
       - .github/scripts/assert-windows-runtime.ps1
       - .github/workflows/install-matrix-smoke.yml
       - .github/workflows/windows-installer-qualification.yml
@@ -13,6 +14,7 @@ on:
     paths:
       - install.ps1
       - script/install-powershell.test.ts
+      - script/install-download.test.ts
       - .github/scripts/assert-windows-runtime.ps1
       - .github/workflows/install-matrix-smoke.yml
       - .github/workflows/windows-installer-qualification.yml
@@ -57,7 +59,7 @@ jobs:
           checkout: "false"
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Test installer replacement and rollback
-        run: pnpm exec vitest run script/install-powershell.test.ts
+        run: pnpm exec vitest run script/install-powershell.test.ts script/install-download.test.ts
       - name: Test runtime probes with PowerShell 7
         env:
           AX_TEST_POWERSHELL: pwsh
