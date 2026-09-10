@@ -74,9 +74,16 @@ function Invoke-ReleaseDownload {
 
   # Windows PowerShell 5.1 has no MaximumRetryCount parameter. Retry only
   # transient download failures, before any signature check or runtime move.
+  # Its OutFile also expands provider wildcards; PowerShell 7 uses a literal
+  # path. Preserve brackets in user/temp directories on both implementations.
+  $downloadPath = if ($PSVersionTable.PSVersion.Major -le 5) {
+    [System.Management.Automation.WildcardPattern]::Escape($OutFile)
+  } else {
+    $OutFile
+  }
   for ($attempt = 1; $attempt -le 4; $attempt++) {
     try {
-      Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing -TimeoutSec 300 `
+      Invoke-WebRequest -Uri $Uri -OutFile $downloadPath -UseBasicParsing -TimeoutSec 300 `
         -Headers @{ "User-Agent" = "$App-installer" } -ErrorAction Stop
       return
     } catch {

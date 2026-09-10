@@ -30,6 +30,8 @@ async function transfer(
     if (!address || typeof address === "string") throw new Error("Missing fixture port")
     const url = `http://127.0.0.1:${address.port}/artifact`
     const output = path.join(directory, "payload [1]")
+    const neighbor = path.join(directory, "payload 1")
+    await writeFile(neighbor, "existing neighboring file")
     let command: string
     let args: string[]
     if (runtime === "bash") {
@@ -105,7 +107,12 @@ Write-Output "DOWNLOAD_COMPLETED"
       child.on("error", reject)
       child.on("close", (code) => resolve({ code, stdout, stderr }))
     })
-    return { ...result, requests, payload: await readFile(output, "utf8").catch(() => undefined) }
+    return {
+      ...result,
+      requests,
+      payload: await readFile(output, "utf8").catch(() => undefined),
+      neighbor: await readFile(neighbor, "utf8"),
+    }
   } finally {
     server.closeAllConnections()
     await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -121,6 +128,7 @@ for (const runtime of ["bash", "powershell"] as const) {
       expect(result.code, result.stderr).toBe(0)
       expect(result.requests).toBe(2)
       expect(result.payload).toBe("signed payload")
+      expect(result.neighbor).toBe("existing neighboring file")
       expect(result.stdout).toContain("DOWNLOAD_COMPLETED")
     })
 

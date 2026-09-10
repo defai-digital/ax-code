@@ -11,6 +11,7 @@ changes belong to AX Coder.
 ### Fixed
 
 - Retry transient release archive, signature, and signature-tool downloads up to three times on Unix and Windows. Reject HTTP error responses before verification or extraction, and retain signature failures as terminal errors.
+- Preserve literal brackets in download paths under Windows PowerShell 5.1 while retaining PowerShell 7 compatibility.
 - Enforce AX Engine readiness and overall setup deadlines, cancel abandoned setup, and reject processes that exit during the final readiness handoff.
 - Preserve user-selected Hugging Face storage paths in startup diagnostics instead of suggesting an unsolicited model relocation.
 
