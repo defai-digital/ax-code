@@ -295,6 +295,10 @@ export function createProcessWire(child: any, target: string): RpcWireTarget {
   // spawn failure where no exit event is guaranteed. The helper is idempotent.
   child.on?.("exit", notifyWireDeath)
   child.on?.("error", notifyWireDeath)
+  // EOF is permanent even if the backend stays alive. The data listener has
+  // already delivered complete frames before end; fail remaining requests.
+  child.stdout?.on("end", notifyWireDeath)
+  child.stdout?.on("close", notifyWireDeath)
   child.stdout?.on("error", (error: unknown) => {
     DiagnosticLog.recordProcess("tui.backendStdoutStreamError", { target, error })
     Log.Default.warn("TUI backend stdout stream error", {

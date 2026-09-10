@@ -188,7 +188,9 @@ export function applyHeadlessProjectionEvent<
 
     case "session.created":
     case "session.updated":
-      upsertByID(state.session, event.properties.info)
+      // Session events carry complete snapshots. JSON omits cleared optional
+      // fields (notably revert), so a patch merge would retain stale state.
+      upsertByID(state.session, event.properties.info, true)
       return { handled: true, effects }
 
     case "session.deleted":
@@ -335,10 +337,10 @@ function removeRequest<TRequest extends { id: string }>(
   target[sessionID] = (target[sessionID] ?? []).filter((request) => request.id !== requestID)
 }
 
-function upsertByID<T extends { id: string }>(list: T[], item: T) {
+function upsertByID<T extends { id: string }>(list: T[], item: T, complete = false) {
   const result = Binary.search(list, item.id, (entry) => entry.id)
   if (result.found) {
-    mergeSnapshotInPlace(list[result.index], item)
+    mergeSnapshotInPlace(list[result.index], item, complete)
     return
   }
   list.splice(result.index, 0, item)
@@ -352,7 +354,12 @@ function upsertByID<T extends { id: string }>(list: T[], item: T) {
 // re-lex every part-snapshot window (the "backend is running, screen looks
 // frozen" storm). Merging keeps the row mounted and lets fine-grained field
 // tracking update only what actually changed.
-function mergeSnapshotInPlace<T extends { id: string }>(existing: T, incoming: T) {
+function mergeSnapshotInPlace<T extends { id: string }>(existing: T, incoming: T, complete = false) {
+  if (complete) {
+    for (const key of Object.keys(existing) as Array<keyof T>) {
+      if (!Object.prototype.hasOwnProperty.call(incoming, key)) delete existing[key]
+    }
+  }
   for (const key of Object.keys(incoming) as Array<keyof T>) {
     existing[key] = incoming[key]
   }

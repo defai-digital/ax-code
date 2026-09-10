@@ -44,6 +44,8 @@ import { Header } from "./header"
 import { useDialog } from "../../ui/dialog"
 import { DialogPrompt } from "../../ui/dialog-prompt"
 import { DialogMessage } from "./dialog-message"
+import { DialogConfirm } from "@tui/ui/dialog-confirm"
+import { loadRevertHistory, mergeRevertHistory, MissingRevertMessageError } from "./revert-history"
 import { DialogActivity } from "./dialog-activity"
 import { DialogCapabilityCatalog } from "./dialog-capability-catalog"
 import { DialogTimeline } from "./dialog-timeline"
@@ -185,6 +187,86 @@ export function Session() {
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+  const [historyLoading, setHistoryLoading] = createSignal(false)
+  const [historyError, setHistoryError] = createSignal("")
+  let historyFlight: { key: string; controller: AbortController; promise: Promise<boolean> } | undefined
+  async function ensureRevertHistory() {
+    const sessionID = route.sessionID
+    const messageID = session()?.revert?.messageID
+    if (!messageID) return true
+    const index = messages().findIndex((message) => message.id === messageID)
+    if (index >= 0 && (undoMessageID(messages(), messageID) || !sync.data.message_truncated[sessionID])) return true
+    const key = `${sessionID}:${messageID}`
+    if (historyFlight?.key === key) return historyFlight.promise
+    historyFlight?.controller.abort()
+    const controller = new AbortController()
+    const client = sdk.client
+    const current = () =>
+      !controller.signal.aborted && route.sessionID === sessionID && session()?.revert?.messageID === messageID
+    setHistoryLoading(true)
+    setHistoryError("")
+    const promise = (async () => {
+      try {
+        const history = await loadRevertHistory({
+          messageID,
+          signal: controller.signal,
+          fetchPage: (before) =>
+            client.session.messages(
+              { sessionID, limit: MAX_SESSION_MESSAGES, before },
+              { throwOnError: true, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]) },
+            ),
+        })
+        if (!current()) return false
+        sync.set(
+          produce((draft) => {
+            mergeRevertHistory(draft, sessionID, history.messages)
+            draft.message_truncated[sessionID] = history.truncated
+          }),
+        )
+        return true
+      } catch (error) {
+        // A new prompt commits the undo: the deleted boundary can disappear
+        // before its session.updated event arrives. Confirm server state before
+        // presenting this normal transition as damaged history.
+        if (current() && error instanceof MissingRevertMessageError) {
+          try {
+            const result = await client.session.get(
+              { sessionID },
+              {
+                throwOnError: true,
+                signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+              },
+            )
+            if (!current()) return false
+            if (result.data && result.data.revert?.messageID !== messageID) {
+              sync.set(
+                produce((draft) => {
+                  const index = draft.session.findIndex((item) => item.id === sessionID)
+                  if (index >= 0) draft.session[index] = result.data!
+                }),
+              )
+              setHistoryError("")
+              return false
+            }
+          } catch (refreshError) {
+            if (current())
+              setHistoryError(sdkErrorMessage(refreshError, "Failed to refresh undo state. Retry history loading."))
+            return false
+          }
+        }
+        if (current()) setHistoryError(sdkErrorMessage(error, "History loading failed. Retry or use Restore all."))
+        return false
+      } finally {
+        if (historyFlight?.controller === controller) {
+          historyFlight = undefined
+          setHistoryLoading(false)
+        }
+      }
+    })()
+    historyFlight = { key, controller, promise }
+    return promise
+  }
+  onCleanup(() => historyFlight?.controller.abort())
   const queuedFollowUps = createMemo(() => followUpQueue(route.sessionID))
   // Extract task parts per-message with mapArray so a single streamed part
   // update only re-scans the one message whose parts changed, instead of
@@ -758,6 +840,49 @@ export function Session() {
   const command = useCommandDialog()
   command.register(() => [
     {
+      title: "Retry loading undo history",
+      value: "session.undo-history",
+      category: "Session",
+      enabled: !!session()?.revert?.messageID,
+      slash: { name: "undo-history" },
+      onSelect: async (dialog) => {
+        if (await ensureRevertHistory()) dialog.clear()
+      },
+    },
+    {
+      title: "Restore all reverted messages and files",
+      value: "session.restore-all",
+      category: "Session",
+      enabled: !!session()?.revert?.messageID,
+      slash: { name: "restore-all" },
+      onSelect: async () => {
+        const sessionID = route.sessionID
+        const boundary = session()?.revert?.messageID
+        if (!boundary) return
+        const ok = await DialogConfirm.show(
+          dialog,
+          "Restore all",
+          "Restore all reverted messages and file changes in this session?",
+        )
+        if (!ok || route.sessionID !== sessionID || session()?.revert?.messageID !== boundary) return
+        try {
+          const result = await sdk.client.session.unrevert({ sessionID }, { throwOnError: true })
+          if (route.sessionID !== sessionID) return
+          sync.set(
+            produce((draft) => {
+              const index = draft.session.findIndex((item) => item.id === sessionID)
+              if (index >= 0 && result.data) draft.session[index] = result.data
+            }),
+          )
+          setHistoryError("")
+          prompt.set({ input: "", parts: [] })
+          toBottom()
+        } catch (error) {
+          toast.show({ message: sdkErrorMessage(error, "Failed to restore all messages and files"), variant: "error" })
+        }
+      },
+    },
+    {
       title: subagentPanelCollapsed() ? "Expand active agents" : "Collapse active agents",
       value: "session.subagents.toggle",
       category: "Session",
@@ -1061,7 +1186,7 @@ export function Session() {
       value: "session.undo",
       keybind: "messages_undo",
       category: "Session",
-      enabled: !!undoMessageID(messages(), session()?.revert?.messageID),
+      enabled: !!session()?.revert?.messageID || !!undoMessageID(messages(), undefined),
       slash: {
         name: "undo",
       },
@@ -1077,6 +1202,7 @@ export function Session() {
         // while the abort is in flight, silently undoing whatever session
         // they've switched to instead of the one they asked to undo.
         const sessionID = route.sessionID
+        if (!(await ensureRevertHistory()) || route.sessionID !== sessionID) return
         const messageID = undoMessageID(messages(), session()?.revert?.messageID)
         if (!messageID) {
           dialog.clear()
@@ -1125,7 +1251,16 @@ export function Session() {
         // calls must check the result — a failed unrevert or revert would
         // otherwise fall through to the success path and clear the typed
         // prompt / close the dialog while the server never changed.
+        const sessionID = route.sessionID
+        if (!(await ensureRevertHistory()) || route.sessionID !== sessionID) return
         const messageID = redoMessageID(messages(), session()?.revert?.messageID)
+        if (messageID === null) {
+          toast.show({
+            message: "The undo point is outside the loaded history. Redo cannot safely choose a turn.",
+            variant: "error",
+          })
+          return
+        }
         if (!messageID) {
           const result = await sdk.client.session.unrevert({
             sessionID: route.sessionID,
@@ -1225,6 +1360,26 @@ export function Session() {
 
   const revertInfo = createMemo(() => session()?.revert)
   const revertMessageID = createMemo(() => revertInfo()?.messageID)
+  const missingRevertHistory = createMemo(
+    () => !!revertMessageID() && !messages().some((message) => message.id === revertMessageID()),
+  )
+  let historyContextKey = ""
+  createEffect(
+    on(
+      () => `${route.sessionID}:${revertMessageID() ?? ""}:${missingRevertHistory()}`,
+      () => {
+        const key = `${route.sessionID}:${revertMessageID() ?? ""}`
+        if (key !== historyContextKey) {
+          historyContextKey = key
+          historyFlight?.controller.abort()
+          historyFlight = undefined
+          setHistoryLoading(false)
+          setHistoryError("")
+        }
+        if (missingRevertHistory()) void ensureRevertHistory()
+      },
+    ),
+  )
 
   const revert = createMemo(() => revertState(revertInfo(), messages()))
   const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID()))
@@ -1420,7 +1575,22 @@ export function Session() {
               <Show when={sync.data.message_truncated[route.sessionID]}>
                 <box paddingLeft={2} paddingBottom={1}>
                   <text fg={theme.textMuted}>
-                    ▲ Showing the most recent {MAX_SESSION_MESSAGES} messages — earlier history is not loaded
+                    ▲ Showing the most recent {messages().length} messages — earlier history is not loaded
+                  </text>
+                </box>
+              </Show>
+              <Show when={missingRevertHistory() || historyLoading() || historyError()}>
+                <box paddingLeft={2} paddingBottom={1}>
+                  <text fg={theme.warning}>
+                    {historyLoading()
+                      ? "Loading history for Undo / Restore..."
+                      : historyError() || "Older history is needed for Undo / Restore."}
+                  </text>
+                  <text fg={theme.text} onMouseUp={() => void ensureRevertHistory()}>
+                    Retry history loading: /undo-history
+                  </text>
+                  <text fg={theme.text} onMouseUp={() => command.trigger("session.restore-all")}>
+                    Restore all reverted messages and files: /restore-all
                   </text>
                 </box>
               </Show>

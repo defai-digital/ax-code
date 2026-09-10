@@ -16,6 +16,24 @@ import { Filesystem } from "../util/filesystem"
 
 export namespace SessionRevert {
   const log = Log.create({ service: "session.revert" })
+  const operations = new Map<string, Promise<void>>()
+
+  async function serialized<T>(run: () => Promise<T>): Promise<T> {
+    const resolved = path.resolve(Instance.worktree)
+    const key = process.platform === "win32" ? resolved.toLowerCase() : resolved
+    const previous = operations.get(key) ?? Promise.resolve()
+    const result = previous.then(run)
+    const tail = result.then(
+      () => {},
+      () => {},
+    )
+    operations.set(key, tail)
+    try {
+      return await result
+    } finally {
+      if (operations.get(key) === tail) operations.delete(key)
+    }
+  }
 
   export const RevertInput = z.object({
     sessionID: SessionID.zod,
@@ -229,6 +247,10 @@ export namespace SessionRevert {
   }
 
   export async function preview(input: RevertInput): Promise<PreviewResult> {
+    return serialized(() => previewUnlocked(input))
+  }
+
+  async function previewUnlocked(input: RevertInput): Promise<PreviewResult> {
     const planned = await plan(input)
     const diffs = await Snapshot.previewRevert(planned.patches)
     const changedFiles = new Set(diffs.map((diff) => diff.file))
@@ -242,6 +264,10 @@ export namespace SessionRevert {
   }
 
   export async function revert(input: RevertInput) {
+    return serialized(() => revertUnlocked(input))
+  }
+
+  async function revertUnlocked(input: RevertInput) {
     const planned = await plan(input)
     const before = await Snapshot.track()
     planned.revert.snapshot = planned.session.revert?.snapshot ?? before
@@ -291,6 +317,10 @@ export namespace SessionRevert {
   }
 
   export async function unrevert(input: { sessionID: SessionID }) {
+    return serialized(() => unrevertUnlocked(input))
+  }
+
+  async function unrevertUnlocked(input: { sessionID: SessionID }) {
     log.info("unreverting", input)
     const scope = await workspaceScope(input.sessionID)
     assertIdle(scope.sessions)
@@ -323,6 +353,10 @@ export namespace SessionRevert {
   }
 
   export async function cleanup(session: Session.Info) {
+    return serialized(async () => cleanupUnlocked(await Session.get(session.id)))
+  }
+
+  async function cleanupUnlocked(session: Session.Info) {
     if (!session.revert) return
     const sessionID = session.id
     const msgs = await Session.messages({ sessionID })

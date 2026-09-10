@@ -58,7 +58,9 @@ export function revertedMessages(messages: Message[], messageID?: string) {
 export function hiddenMessageIDs(messages: Message[], messageID?: string): Set<string> {
   if (!messageID) return new Set()
   const idx = messages.findIndex((m) => m.id === messageID)
-  if (idx === -1) return new Set()
+  // A missing boundary is an incomplete history window, not proof that the
+  // loaded messages are visible. Do not redisplay potentially undone content.
+  if (idx === -1) return new Set(messages.map((message) => message.id))
   const ids = new Set<string>()
   for (let i = idx; i < messages.length; i++) {
     ids.add(messages[i].id)

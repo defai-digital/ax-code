@@ -426,6 +426,7 @@ export function Prompt(props: PromptProps) {
   // fire-and-forget, so a dropped rejection lands on the process-level
   // unhandledRejection path. Surface submission failures as a toast instead.
   function submitSafely() {
+    if (dialog.stack.length > 0) return
     void submit().catch((error) => {
       log.warn("tui.prompt.submit: rejected", { error })
       toast.show({ variant: "error", message: "Failed to submit prompt" })
@@ -436,6 +437,7 @@ export function Prompt(props: PromptProps) {
 
   useKeyboard((evt) => {
     if (evt.defaultPrevented) return
+    if (dialog.stack.length > 0) return
     if (!isRenderableAlive(input) || !input.focused) return
     if (!isPromptSubmitKey(evt)) return
     log.info("tui.prompt.useKeyboard: submit key detected", { keyName: evt.name })
