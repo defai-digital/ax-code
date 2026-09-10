@@ -84426,7 +84426,7 @@
           "field": "reasoning_content"
         },
         "temperature": true,
-        "release_date": "2026-08-21",
+        "release_date": "2026-09-10",
         "modalities": {
           "input": ["text", "image"],
           "output": ["text"]
@@ -84434,23 +84434,22 @@
         "limit": {
           "context": 1000000,
           "output": 384000
-        },
-        "status": "beta"
+        }
       },
       "deepseek-v4-flash": {
         "id": "deepseek-v4-flash",
         "name": "DeepSeek V4 Flash",
         "family": "deepseek-flash",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "tool_call": true,
         "interleaved": {
           "field": "reasoning_content"
         },
         "temperature": true,
-        "release_date": "2026-07-31",
+        "release_date": "2026-09-10",
         "modalities": {
-          "input": ["text"],
+          "input": ["text", "image"],
           "output": ["text"]
         },
         "limit": {
@@ -84478,6 +84477,27 @@
           "context": 1000000,
           "output": 384000
         }
+      },
+      "deepseek-flash": {
+        "attachment": true,
+        "family": "deepseek-flash",
+        "id": "deepseek-flash",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": ["text", "image"],
+          "output": ["text"]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },

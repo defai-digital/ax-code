@@ -40,7 +40,8 @@ async function removeProviderAuth(provider: string) {
   if (isDedicatedPrivateGpuProviderID(provider)) {
     await disconnectPrivateGpu(provider)
   } else {
-    await Auth.remove(provider)
+    const { CustomApiProvider } = await import("../../provider/custom-api-provider")
+    if (!(await CustomApiProvider.removeIfManaged(provider))) await Auth.remove(provider)
   }
   const { Provider } = await import("../../provider/provider")
   await Provider.invalidate().catch(() => {})
@@ -847,8 +848,11 @@ export const ProvidersLogoutCommand = cmd({
     // exactly the ones a user wants to log out of, so offer them for removal
     // instead of claiming no credential exists.
     const undecryptable = (await Auth.decryptionFailures()).filter((id) => !credentials.some(([key]) => key === id))
+    const { CustomApiProvider } = await import("../../provider/custom-api-provider")
+    const known = new Set([...credentials.map(([key]) => key), ...undecryptable])
+    const managedOrphans = (await CustomApiProvider.managedProviderIDs()).filter((id) => !known.has(id))
     prompts.intro("Remove credential")
-    if (credentials.length === 0 && undecryptable.length === 0) {
+    if (credentials.length === 0 && undecryptable.length === 0 && managedOrphans.length === 0) {
       prompts.log.error("No credentials found")
       return
     }
@@ -857,7 +861,7 @@ export const ProvidersLogoutCommand = cmd({
     let providerID: string
     if (requestedProvider) {
       const match = credentials.find(([key]) => key === requestedProvider)
-      if (!match && !undecryptable.includes(requestedProvider)) {
+      if (!match && !undecryptable.includes(requestedProvider) && !managedOrphans.includes(requestedProvider)) {
         prompts.log.error(`No credential found for ${requestedProvider}`)
         return
       }
@@ -884,6 +888,10 @@ export const ProvidersLogoutCommand = cmd({
               (database[key]?.name || key) +
               UI.Style.TEXT_DIM +
               (isRetiredProviderID(key) ? " (retired — remove)" : " (undecryptable)"),
+            value: key,
+          })),
+          ...managedOrphans.map((key) => ({
+            label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (endpoint, no credential)",
             value: key,
           })),
         ],

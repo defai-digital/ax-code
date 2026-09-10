@@ -158,6 +158,47 @@ describe("managed custom API provider routes", () => {
     expect(loopback.status).toBe(200)
   })
 
+  test("DELETE /auth removes AX Trust endpoint metadata, not just the token", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const query = `directory=${encodeURIComponent(tmp.path)}`
+    const app = Server.Default()
+
+    const create = await app.request(`/provider/custom/company-gateway?${query}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(providerBody({ management: "ax-trust" })),
+    })
+    expect(create.status).toBe(200)
+    expect((await Config.getGlobal()).provider?.["company-gateway"]?.management).toBe("ax-trust")
+    expect(await Auth.get("company-gateway")).toEqual({ type: "api", key: "test-token" })
+
+    const remove = await app.request(`/auth/company-gateway?${query}`, { method: "DELETE" })
+    expect(remove.status).toBe(200)
+    expect(await remove.json()).toBe(true)
+    expect((await Config.getGlobal()).provider?.["company-gateway"]).toBeUndefined()
+    expect(await Auth.get("company-gateway")).toBeUndefined()
+  })
+
+  test("DELETE /auth still clears leftover AX Trust config after the token is already gone", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const query = `directory=${encodeURIComponent(tmp.path)}`
+    const app = Server.Default()
+
+    const create = await app.request(`/provider/custom/company-gateway?${query}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(providerBody({ management: "ax-trust" })),
+    })
+    expect(create.status).toBe(200)
+    await Auth.remove("company-gateway")
+    expect(await Auth.get("company-gateway")).toBeUndefined()
+    expect((await Config.getGlobal()).provider?.["company-gateway"]?.management).toBe("ax-trust")
+
+    const remove = await app.request(`/auth/company-gateway?${query}`, { method: "DELETE" })
+    expect(remove.status).toBe(200)
+    expect((await Config.getGlobal()).provider?.["company-gateway"]).toBeUndefined()
+  })
+
   test("rejects built-in IDs, embedded URL credentials, duplicate models, and unsafe limits", async () => {
     await using tmp = await tmpdir({ git: true })
     const query = `directory=${encodeURIComponent(tmp.path)}`

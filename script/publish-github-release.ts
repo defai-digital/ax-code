@@ -6,6 +6,7 @@ import path from "path"
 import { parseArgs } from "util"
 import { AX_CODE_MINISIGN_PUBLIC_KEY_FILE, expandHome } from "./sign-release-assets"
 import { unapprovedTrackedInternalPaths } from "./repository-policy"
+import { downloadVerifiedReleaseAssets, parseReleaseDownloadAssets } from "./download-release-assets"
 
 export const ROOT = path.resolve(import.meta.dirname, "..")
 
@@ -404,11 +405,26 @@ function signableAssetPaths(assetDir: string) {
   return [...expectedReleaseArchives(), ...expectedReleaseInstallerAssets()].map((name) => path.join(assetDir, name))
 }
 
-function downloadReleaseAssets(options: PublishGithubReleaseOptions, assetDir: string) {
-  run("gh", ["release", "download", options.tag, "--repo", options.repo, "--dir", assetDir, "--clobber"], {
+export async function downloadReleaseAssets(options: PublishGithubReleaseOptions, assetDir: string) {
+  const metadata = run("gh", ["api", `repos/${options.repo}/releases/tags/${encodeURIComponent(options.tag)}`], {
+    capture: true,
     dryRun: options.dryRun,
   })
   if (options.dryRun) return
+  const assets = parseReleaseDownloadAssets(metadata, options.tag)
+  const missingMetadata = missingReleaseAssets(assets.map((asset) => asset.name))
+  if (missingMetadata.length > 0)
+    throw new Error(`GitHub release ${options.tag} is missing assets: ${missingMetadata.join(", ")}`)
+  const privateRepo = run("gh", ["api", `repos/${options.repo}`, "--jq", ".private"], { capture: true })
+  if (privateRepo !== "true" && privateRepo !== "false")
+    throw new Error("Cannot determine release repository visibility")
+  if (privateRepo === "true") {
+    // Preserve gh's authenticated private-asset transport. Public CDN requests
+    // deliberately carry no GitHub credentials, including across redirects.
+    run("gh", ["release", "download", options.tag, "--repo", options.repo, "--dir", assetDir, "--clobber"])
+  } else {
+    await downloadVerifiedReleaseAssets(assets, assetDir)
+  }
   const missing = missingReleaseAssets(fs.readdirSync(assetDir))
   if (missing.length > 0) throw new Error(`Downloaded release is missing expected assets: ${missing.join(", ")}`)
 }
@@ -497,7 +513,7 @@ async function main() {
 
   const assetDir = releaseAssetDir(options)
   console.log(`Using release asset directory: ${assetDir}`)
-  downloadReleaseAssets(options, assetDir)
+  await downloadReleaseAssets(options, assetDir)
   verifyDownloadedReleaseAssets(options, assetDir)
   requireReleaseAssets(options)
   dispatchInstallSmoke(options)

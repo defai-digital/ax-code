@@ -452,29 +452,44 @@ export async function refreshCustomApiProviderModels(
   )
 }
 
+export type CustomApiProviderManagementAction = "use" | "update" | "refresh" | "disable" | "delete"
+
+export function customApiProviderManagementOptions(provider: CustomApiProviderView): Array<{
+  title: string
+  value: CustomApiProviderManagementAction
+  description?: string
+}> {
+  return [
+    { title: "Select a model", value: "use" },
+    { title: "Update provider", value: "update", description: provider.baseURL },
+    {
+      title: "Refresh models",
+      value: "refresh",
+      description: "Reload model IDs, limits, and capabilities from GET /models",
+    },
+    {
+      title: "Disable",
+      value: "disable",
+      description: "Turn off temporarily — keeps credentials and endpoint",
+    },
+    {
+      title: "Delete provider",
+      value: "delete",
+      description: "Remove endpoint metadata and encrypted token",
+    },
+  ]
+}
+
 export function customApiProviderManagementMenu(input: {
   dialog: DialogContext
   provider: CustomApiProviderView
-}): Promise<"use" | "update" | "refresh" | "delete" | null> {
+}): Promise<CustomApiProviderManagementAction | null> {
   return new Promise((resolve) => {
     input.dialog.replace(
       () => (
         <DialogSelect
           title={`${input.provider.name} — ${input.provider.management === "ax-trust" || isAxTrustProviderID(input.provider.providerID) ? "AX Trust" : "custom API"}`}
-          options={[
-            { title: "Select a model", value: "use" as const },
-            { title: "Update provider", value: "update" as const, description: input.provider.baseURL },
-            {
-              title: "Refresh models",
-              value: "refresh" as const,
-              description: "Reload model IDs, limits, and capabilities from GET /models",
-            },
-            {
-              title: "Delete provider",
-              value: "delete" as const,
-              description: "Remove endpoint metadata and encrypted token",
-            },
-          ]}
+          options={customApiProviderManagementOptions(input.provider)}
           onSelect={(option) => resolve(option.value)}
         />
       ),

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import {
+  clarifyRequestedLanguage,
   CONVERSATION_SYSTEM_PROMPT,
   detectTurnExecutionProfile,
   RESPONSE_ONLY_SYSTEM_PROMPT,
@@ -202,6 +203,8 @@ describe("response-only turn execution profile", () => {
   test("uses an explicit compact system contract", () => {
     expect(RESPONSE_ONLY_SYSTEM_PROMPT).toContain("immediately preceding assistant answer")
     expect(RESPONSE_ONLY_SYSTEM_PROMPT).toContain("Do not inspect the workspace")
+    expect(RESPONSE_ONLY_SYSTEM_PROMPT).toContain("Traditional Chinese")
+    expect(RESPONSE_ONLY_SYSTEM_PROMPT).toContain("\u7e41\u9ad4\u4e2d\u6587")
     expect(RESPONSE_ONLY_SYSTEM_PROMPT).toContain("Return only the transformed answer")
   })
 })
@@ -209,6 +212,12 @@ describe("response-only turn execution profile", () => {
 describe("direct conversation turn execution profile", () => {
   test.each([
     ["tell me a story about Japan", "new-story", 1],
+    ["tell me a story of japan, in t. chinese", "new-story", 1],
+    ["i want a vietnam love story", "new-story", 1],
+    ["tell me a vietnam love story", "new-story", 1],
+    ["give me a short story about Hanoi", "new-story", 1],
+    ["can you tell me a story about Vietnam", "new-story", 1],
+    ["\u6211\u60f3\u8981\u4e00\u500b\u8d8a\u5357\u611b\u60c5\u6545\u4e8b", "new-story", 1],
     ["another new story set in Beijing", "new-story", 1],
     ["continue the story", "continue-story", 2],
   ])("matches the reproduced story prompt: %s", (text, intent, requestMessages) => {
@@ -251,6 +260,43 @@ describe("direct conversation turn execution profile", () => {
     expect(CONVERSATION_SYSTEM_PROMPT).toContain("Answer the user's clear creative request directly")
     expect(CONVERSATION_SYSTEM_PROMPT).toContain("Do not inspect the workspace")
     expect(CONVERSATION_SYSTEM_PROMPT).toContain("ask a clarifying question")
+    expect(CONVERSATION_SYSTEM_PROMPT).toContain("Follow the user's requested language")
+    expect(CONVERSATION_SYSTEM_PROMPT).toContain("Traditional Chinese")
+    expect(CONVERSATION_SYSTEM_PROMPT).toContain("\u7e41\u9ad4\u4e2d\u6587")
     expect(CONVERSATION_SYSTEM_PROMPT).toContain("target 250 to 400 words")
+  })
+
+  test("expands t. chinese on the provider payload without rewriting stored user text", () => {
+    expect(clarifyRequestedLanguage("tell me a story of japan, in t. chinese")).toBe(
+      "tell me a story of japan, in Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)",
+    )
+    expect(clarifyRequestedLanguage("please tell me in trad. chinese")).toBe(
+      "please tell me in Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)",
+    )
+    expect(clarifyRequestedLanguage("Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)")).toBe(
+      "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)",
+    )
+
+    const profile = detect("tell me a story of japan, in t. chinese")
+    expect(profile.kind).toBe("conversation")
+    if (profile.kind !== "conversation") throw new Error("expected conversation profile")
+    const sent = profile.requestMessages[0]?.parts.find((part) => part.type === "text")
+    expect(sent && "text" in sent ? sent.text : "").toContain("Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)")
+    expect(sent && "text" in sent ? sent.text : "").not.toMatch(/\bt\. chinese\b/i)
+  })
+
+  test.each([
+    'tell me a story titled "Traditional Chinese"',
+    'tell me a story titled "in t. chinese"',
+    "tell me a story about T. Chinese",
+  ])("preserves names and quoted story text: %s", (request) => {
+    expect(clarifyRequestedLanguage(request)).toBe(request)
+  })
+
+  test("clarifies the requested language outside a quoted title only once", () => {
+    const request = 'tell me a story titled "in t. chinese" in t. chinese'
+    const clarified = 'tell me a story titled "in t. chinese" in Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)'
+    expect(clarifyRequestedLanguage(request)).toBe(clarified)
+    expect(clarifyRequestedLanguage(clarified)).toBe(clarified)
   })
 })

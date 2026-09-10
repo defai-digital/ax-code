@@ -6,6 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.6] - 2026-09-10
+
+### Fixed
+
+- Download public release assets in bounded, retried ranges, verify their complete SHA-256 digests, and reuse verified files. Preserve existing files until replacements pass verification and retain authenticated downloads for private repositories.
+- Reserve AX Engine output capacity when enforcing the context limit, distinguish the early compaction threshold from the hard input limit, and omit tool schemas for models without tool-call support.
+- Refresh connected AX Trust model catalogs in the background, reject incomplete discovery responses, and retain saved models on discovery failure. Use exact model metadata to fill missing capabilities and limits.
+- Remove managed provider configuration and credentials together on disconnect, including orphaned configurations. Keep disabling a provider reversible and fit all five provider actions in short terminal windows.
+- Route standalone story requests directly and clarify requested Chinese language variants without rewriting quoted titles, names, or stored user messages.
+
 ## [7.15.5] - 2026-09-10
 
 ### Fixed

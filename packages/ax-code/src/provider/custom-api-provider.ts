@@ -276,49 +276,71 @@ export namespace CustomApiProvider {
     return { context, output }
   }
 
-  export function discoveredModel(id: string, name?: string, raw?: Record<string, unknown>): Model {
+  export function discoveredModel(
+    id: string,
+    name?: string,
+    raw?: Record<string, unknown>,
+    fallback?: ModelsDev.Model,
+  ): Model {
     const payload = payloadLimits(raw)
     const inherited = inheritCustomApiModelLimit({
       modelID: id,
       limit: {
-        context: payload.context,
-        output: payload.output,
+        context: payload.context ?? fallback?.limit.context,
+        output: payload.output ?? fallback?.limit.output,
       },
     })
     const caps = findRegisteredModelCapabilities(id)
     const capabilities = isRecord(raw?.capabilities) ? raw.capabilities : undefined
     return {
       id,
-      name: name || id,
+      name: name && name !== id ? name : fallback?.name || name || id,
       contextWindow: inherited.context,
       outputLimit: inherited.output,
-      toolCall: typeof capabilities?.toolcall === "boolean" ? capabilities.toolcall : true,
+      toolCall: typeof capabilities?.toolcall === "boolean" ? capabilities.toolcall : (fallback?.tool_call ?? true),
       reasoning:
         typeof capabilities?.reasoning === "boolean"
           ? capabilities.reasoning
-          : caps
-            ? caps.thinking !== "blocked"
-            : false,
-      attachment: typeof capabilities?.attachment === "boolean" ? capabilities.attachment : false,
-      temperature: typeof capabilities?.temperature === "boolean" ? capabilities.temperature : true,
+          : (fallback?.reasoning ?? (caps ? caps.thinking !== "blocked" : false)),
+      attachment:
+        typeof capabilities?.attachment === "boolean"
+          ? capabilities.attachment
+          : (fallback?.modalities?.input.includes("image") ?? false),
+      temperature:
+        typeof capabilities?.temperature === "boolean" ? capabilities.temperature : (fallback?.temperature ?? true),
     }
   }
 
-  export function parseDiscoveredModels(payload: unknown): Model[] {
+  export function parseDiscoveredModels(
+    payload: unknown,
+    requireComplete = false,
+    fallbackModels?: Record<string, ModelsDev.Model>,
+  ): Model[] {
     if (!isRecord(payload) || !Array.isArray(payload.data)) return []
+    if (requireComplete && payload.data.length > 4096)
+      throw new Error({ message: "Model discovery exceeded the 4096-row limit" })
     const models: Model[] = []
     const seen = new Set<string>()
     for (const raw of payload.data) {
-      if (!isRecord(raw) || typeof raw.id !== "string") continue
+      if (!isRecord(raw) || typeof raw.id !== "string") {
+        if (requireComplete) throw new Error({ message: "Model discovery returned an invalid model row" })
+        continue
+      }
       const id = raw.id.trim()
-      if (!id || seen.has(id) || /\s/u.test(id) || id.length > 256) continue
+      if (!id || /\s/u.test(id) || id.length > 256) {
+        if (requireComplete) throw new Error({ message: "Model discovery returned an invalid model ID" })
+        continue
+      }
+      if (seen.has(id)) continue
       // Gateways list embedding / rerank / speech models on the same
       // endpoint; they cannot drive a coding turn.
       if (isNonChatModelID(id)) continue
       seen.add(id)
       const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim().slice(0, 120) : id
-      models.push(discoveredModel(id, name, raw))
-      if (models.length >= 128) break
+      const model = discoveredModel(id, name, raw, fallbackModels?.[id])
+      if (requireComplete) Model.parse(model)
+      models.push(model)
+      if (!requireComplete && models.length >= 128) break
     }
     return models
   }
@@ -339,6 +361,8 @@ export namespace CustomApiProvider {
     apiKey: string
     timeoutMs?: number
     fetcher?: typeof fetch
+    requireComplete?: boolean
+    fallbackModels?: Record<string, ModelsDev.Model>
   }): Promise<Model[]> {
     const token = input.apiKey.trim()
     if (!token) throw new Error({ message: "API token is required to discover models" })
@@ -350,6 +374,7 @@ export namespace CustomApiProvider {
       response = await fetcher(url, {
         method: "GET",
         headers: authorizationHeaders(token),
+        redirect: "error",
         signal: AbortSignal.timeout(input.timeoutMs ?? DISCOVERY_TIMEOUT_MS),
       })
     } catch (cause) {
@@ -368,7 +393,7 @@ export namespace CustomApiProvider {
     } catch {
       throw new Error({ message: `GET ${url} returned invalid JSON` })
     }
-    const models = parseDiscoveredModels(payload)
+    const models = parseDiscoveredModels(payload, input.requireComplete, input.fallbackModels)
     if (models.length === 0) throw new Error({ message: `GET ${url} returned no models` })
     return models
   }
@@ -528,5 +553,27 @@ export namespace CustomApiProvider {
       throw cause
     }
     return true
+  }
+
+  /**
+   * Disconnect a managed custom API / AX Trust provider. Returns false when the
+   * ID is not a managed editor provider so callers can fall through to
+   * credential-only Auth.remove. Auth.remove alone leaves endpoint metadata and
+   * saved models in global config, so the provider stays listed and selectable.
+   */
+  export async function removeIfManaged(rawProviderID: string): Promise<boolean> {
+    const parsed = ProviderID.safeParse(rawProviderID)
+    if (!parsed.success) return false
+    const globalConfig = await Config.getGlobal()
+    if (!isManaged(globalConfig.provider?.[parsed.data])) return false
+    return remove(parsed.data)
+  }
+
+  /** Managed custom/AX Trust provider IDs that still have global config. */
+  export async function managedProviderIDs(): Promise<string[]> {
+    const globalConfig = await Config.getGlobal()
+    return Object.entries(globalConfig.provider ?? {})
+      .filter(([, provider]) => isManaged(provider))
+      .map(([providerID]) => providerID)
   }
 }

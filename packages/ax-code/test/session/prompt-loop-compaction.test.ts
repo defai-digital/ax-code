@@ -66,6 +66,31 @@ afterEach(() => {
 })
 
 describe("session.prompt preflight compaction", () => {
+  test.each([
+    { input: undefined, reserved: 1_000 },
+    { input: 4_000, reserved: 1_000 },
+    { input: undefined, reserved: 0 },
+    { input: 4_000, reserved: 0 },
+  ])("preserves AX Engine output capacity with %j", async ({ input, reserved }) => {
+    budgetSpy = vi
+      .spyOn(SessionCompaction, "budget")
+      .mockResolvedValue({ cap: 4_000, reserved, usable: 4_000 - reserved })
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    const result = await maybeSchedulePreflightCompaction({
+      sessionID: "ses_test" as any,
+      agent: "build",
+      agentInfo: agent,
+      userModel,
+      model: { ...model, providerID: "ax-engine" as any, limit: { context: 4_000, output: 1_000, input } },
+      userParts: [{ type: "text", text: "Hello" } as any],
+      system: ["x".repeat(14_000)],
+      requestMessages: [{ role: "user", content: "Hello" }],
+      omitToolSchemas: true,
+    })
+    expect(result).toMatchObject({ action: "block", usableTokens: 3_000 })
+    expect(createSpy).not.toHaveBeenCalled()
+  })
+
   test("counts registry tool schemas toward the budget when history is large enough for compaction to help", async () => {
     // A moderate tool schema (~120 tokens) plus a large message history: tool
     // schemas alone fit comfortably under budget, so compacting the history
@@ -148,6 +173,75 @@ describe("session.prompt preflight compaction", () => {
       expect(scheduled.fixedTokens).toBeGreaterThanOrEqual(scheduled.usableTokens)
       expect(scheduled.compactableHistoryTokens).toBeLessThan(512)
     }
+    expect(createSpy).not.toHaveBeenCalled()
+  })
+
+  test("sends a tiny request that exceeds the compaction trigger but still fits the input cap", async () => {
+    // Compaction `usable` is a 90% trigger, not the provider input window.
+    // Ornith 9B in a large project reproduced ~23066 fixed tokens vs ~22118
+    // usable vs ~24576 cap; blocking at usable aborted a request the model
+    // could still accept.
+    budgetSpy = vi
+      .spyOn(SessionCompaction, "budget")
+      .mockResolvedValue({ cap: 24_576, reserved: 2_458, usable: 22_118 })
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    toolsSpy = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "core_tool",
+        description: "Tool with a schema that lands between usable and cap",
+        parameters: z.object({
+          payload: z.string().describe("x".repeat(88_000)),
+        }),
+        execute: async () => ({ title: "", metadata: {}, output: "" }),
+      },
+    ] as any)
+
+    const scheduled = await maybeSchedulePreflightCompaction({
+      sessionID: "ses_test" as any,
+      agent: "build",
+      agentInfo: agent,
+      userModel,
+      model,
+      userParts: [{ type: "text", text: "i want a vietnam love story" } as any],
+      system: ["x".repeat(4_000)],
+      requestMessages: [{ role: "user", content: "i want a vietnam love story" }],
+    })
+
+    expect(scheduled).toEqual({ action: "continue" })
+    expect(createSpy).not.toHaveBeenCalled()
+  })
+
+  test("omits tool schemas when the model cannot call tools", async () => {
+    budgetSpy = vi.spyOn(SessionCompaction, "budget").mockResolvedValue({ cap: 2_000, reserved: 0, usable: 2_000 })
+    createSpy = vi.spyOn(SessionCompaction, "create").mockResolvedValue({} as any)
+    toolsSpy = vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "large_tool",
+        description: "Tool with a large provider schema",
+        parameters: z.object({
+          payload: z.string().describe("x".repeat(12_000)),
+        }),
+        execute: async () => ({ title: "", metadata: {}, output: "" }),
+      },
+    ] as any)
+
+    const noTools = {
+      ...model,
+      capabilities: { ...model.capabilities, toolcall: false },
+    }
+    const scheduled = await maybeSchedulePreflightCompaction({
+      sessionID: "ses_test" as any,
+      agent: "build",
+      agentInfo: agent,
+      userModel,
+      model: noTools,
+      userParts: [{ type: "text", text: "small request" } as any],
+      system: ["small system"],
+      requestMessages: [{ role: "user", content: "small request" }],
+    })
+
+    expect(scheduled).toEqual({ action: "continue" })
+    expect(toolsSpy).not.toHaveBeenCalled()
     expect(createSpy).not.toHaveBeenCalled()
   })
 

@@ -2180,7 +2180,8 @@ test("getSmallModel derives from family metadata when no hardcoded list matches"
     fn: async () => {
       const model = await Provider.getSmallModel(ProviderID.make("deepseek"))
       expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("deepseek-v4-flash")
+      // The current first-party Flash ID sorts ahead of its legacy V4 aliases.
+      expect(String(model?.id)).toBe("deepseek-flash")
     },
   })
 })

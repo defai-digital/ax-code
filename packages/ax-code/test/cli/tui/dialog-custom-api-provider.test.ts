@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import { CustomApiProvider } from "../../../src/provider/custom-api-provider"
 import {
   customApiConnectKeepsSavedToken,
+  customApiProviderManagementOptions,
   findCustomApiProviderByBaseURL,
   isManagedCustomApiProviderConfig,
   parseCustomApiProviderModelIDs,
@@ -64,6 +65,21 @@ describe("custom API provider TUI helpers", () => {
     expect(isManagedCustomApiProviderConfig({ provider: { gateway: { management: "ax-trust" } } }, "gateway")).toBe(
       true,
     )
+  })
+
+  test("AX Trust management menu can disable or delete the saved endpoint", () => {
+    const options = customApiProviderManagementOptions({
+      management: "ax-trust",
+      providerID: "ax-trust-defai-digital",
+      name: "ax-trust.defai.digital",
+      protocol: "openai-compatible",
+      baseURL: "https://defai-01.ax-trust.com/v1",
+      hasApiKey: false,
+      models: [],
+    })
+    expect(options.map((option) => option.value)).toEqual(["use", "update", "refresh", "disable", "delete"])
+    expect(options.find((option) => option.value === "disable")?.description).toContain("keeps credentials")
+    expect(options.find((option) => option.value === "delete")?.description).toContain("encrypted token")
   })
 })
 

@@ -25,6 +25,23 @@ on those connections so the gateway can keep a session on one eligible account;
 set `provider.<id>.options.axTrust` to `false` to disable it. This header is
 not forwarded upstream and is not a body `prompt_cache_key`.
 
+Connected AX Trust providers refresh their model lists in the background on
+startup. AX Code calls the configured endpoint's `GET /models` with the existing
+credential and updates model names, context/output limits, reasoning, tool
+calling, temperature support, and image support. Image-capable models display
+the vision marker in `/models`, including gateway aliases when AX Trust
+advertises their image support. The TUI updates when discovery completes.
+For exact first-party DeepSeek model IDs, missing metadata is filled from the
+bundled models.dev catalog. Explicit gateway capability flags and limits take
+precedence; unknown aliases do not inherit capabilities by name similarity.
+
+A successful refresh replaces the runtime list, removing models no longer
+advertised by the gateway, and still applies configured allow/block lists.
+Timeouts, errors, empty or invalid responses retain the saved list and log a
+discovery failure. Startup does not wait for the network. This refresh does not
+rewrite provider configuration or credentials; the saved configuration remains
+the startup fallback. Ordinary custom API providers retain manual refresh.
+
 ## How a provider is resolved
 
 For each request AX Code needs three things from a provider entry:

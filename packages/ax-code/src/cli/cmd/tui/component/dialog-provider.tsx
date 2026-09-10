@@ -456,6 +456,18 @@ export function createDialogProviderOptions() {
                     await openModelDialogForProvider(saved.providerID, saved.name)
                     return
                   }
+                  if (action === "disable") {
+                    await setProviderDisabled({
+                      sdk,
+                      sync,
+                      toast,
+                      dialog,
+                      providerID: existing.providerID,
+                      providerName: existing.name,
+                      disabled: true,
+                    })
+                    return
+                  }
                   if (!(await confirmCustomApiProviderDelete({ dialog, provider: existing }))) return
                   await deleteCustomApiProvider(sdk, existing.providerID)
                   await sync.bootstrap()

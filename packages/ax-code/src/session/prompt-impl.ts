@@ -1129,7 +1129,9 @@ export namespace SessionPrompt {
       // budget the same way — `tools: {}` means "no overrides" (all tools
       // still counted), not "zero tools".
       const omitToolSchemas =
-        Boolean(textOnlyProfile) || ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
+        Boolean(textOnlyProfile) ||
+        model.capabilities.toolcall === false ||
+        ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
       const preflightCompaction = await NativePerf.runAsync("session.preflight", undefined, () =>
         maybeSchedulePreflightCompaction({
           sessionID,

@@ -31,6 +31,7 @@ export const RESPONSE_ONLY_SYSTEM_PROMPT = [
   "This turn only transforms the immediately preceding assistant answer.",
   "Do not inspect the workspace, call tools, continue the coding task, or add new repository findings.",
   "Follow the user's requested language, length, tone, or format while preserving the answer's meaning and important caveats.",
+  "If they ask for Traditional Chinese (t. chinese, trad. chinese, \u7e41\u9ad4\u4e2d\u6587), write \u7e41\u9ad4\u4e2d\u6587, not Simplified Chinese.",
   "Return only the transformed answer.",
   "</response_only_turn>",
 ].join("\n")
@@ -39,6 +40,8 @@ export const CONVERSATION_SYSTEM_PROMPT = [
   "<direct_conversation_turn>",
   "Answer the user's clear creative request directly.",
   "Do not inspect the workspace, call tools, discuss the coding project, or ask a clarifying question.",
+  "Follow the user's requested language, length, tone, or format.",
+  "If they ask for Traditional Chinese (t. chinese, trad. chinese, \u7e41\u9ad4\u4e2d\u6587), write \u7e41\u9ad4\u4e2d\u6587, not Simplified Chinese.",
   "For a continuation, continue only the immediately preceding assistant response.",
   "Unless the user requests a specific length or more detail, keep the response concise and target 250 to 400 words.",
   "Return only the requested creative response.",
@@ -135,10 +138,24 @@ const STRUCTURED_FORMAT_SIGNAL = /\b(?:json|xml|yaml|csv|schema)\b/i
 const STORY_CONTEXT_REFERENCE =
   /\b(?:above|earlier|previous|same|discussed|mentioned|provided|given|attached|following|them|their|it|its|this|that|these|those|our)\b|(?:\u4e0a\u6587|\u4e0a\u9762|\u524d\u9762|\u4e4b\u524d|\u525b\u624d|\u521a\u624d|\u76f8\u540c|\u4e00\u6a23|\u4e00\u6837|\u9019|\u8fd9|\u90a3|\u4ed6\u5011|\u4ed6\u4eec)/i
 
+const STORY_NOUN = "(?:[a-z][a-z-]*\\s+){0,6}story"
+
 const NEW_STORY_PATTERNS = [
-  /^(?:please\s+)?(?:tell|write|create)\s+(?:me\s+)?(?:(?:a|an|another|one\s+more)\s+)?(?:new\s+)?(?:short\s+)?story(?:\s+[^\n]{1,160})?[.!?]*$/i,
+  new RegExp(
+    `^(?:please\\s+)?(?:tell|write|create)\\s+(?:me\\s+)?(?:(?:a|an|another|one\\s+more)\\s+)?(?:new\\s+)?(?:short\\s+)?${STORY_NOUN}(?:\\s+[^\\n]{1,160})?[.!?]*$`,
+    "i",
+  ),
   /^(?:please\s+)?(?:another|one\s+more)\s+(?:new\s+)?(?:short\s+)?story(?:\s+[^\n]{1,160})?[.!?]*$/i,
+  new RegExp(
+    `^(?:please\\s+)?(?:i\\s+(?:want|need)|i'?d\\s+like|give\\s+me)\\s+(?:(?:a|an|another|one\\s+more)\\s+)?(?:new\\s+)?(?:short\\s+)?${STORY_NOUN}(?:\\s+[^\\n]{1,120})?[.!?]*$`,
+    "i",
+  ),
+  new RegExp(
+    `^(?:please\\s+)?(?:can|could)\\s+you\\s+(?:please\\s+)?(?:tell|write|create)\\s+(?:me\\s+)?(?:(?:a|an|another|one\\s+more)\\s+)?(?:new\\s+)?(?:short\\s+)?${STORY_NOUN}(?:\\s+[^\\n]{1,160})?[.!?]*$`,
+    "i",
+  ),
   /^(?:請|请)?(?:再)?(?:講|讲|說|说|寫|写|創作|创作)(?:一個|一个|另一个|另一個|新的)?(?:短篇)?故事(?:[^\n]{0,120})?[。！？.!?]*$/,
+  /^(?:\u8acb|\u8bf7)?(?:\u6211\u60f3\u8981|\u6211\u8981|\u7d66\u6211|\u7ed9\u6211)(?:\u4e00\u500b|\u4e00\u4e2a|\u53e6\u4e00\u4e2a|\u53e6\u4e00\u500b|\u65b0\u7684)?(?:\u77ed\u7bc7)?(?:[^\n]{0,20})?\u6545\u4e8b(?:[^\n]{0,120})?[。！？.!?]*$/,
 ]
 
 const CONTINUE_STORY_PATTERNS = [
@@ -173,6 +190,34 @@ function conversationIntent(text: string): ConversationIntent | undefined {
   return undefined
 }
 
+const LANGUAGE_CLARIFICATIONS: Array<{ pattern: RegExp; replacement: string }> = [
+  {
+    pattern: /\btraditional\s+chinese\b(?!\s*\(\u7e41\u9ad4\u4e2d\u6587\))/gi,
+    replacement: "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)",
+  },
+  { pattern: /\btrad\.?\s+chinese\b/gi, replacement: "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)" },
+  { pattern: /\bt\.?\s*chinese\b/gi, replacement: "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)" },
+  {
+    pattern: /\bsimplified\s+chinese\b(?!\s*\(\u7b80\u4f53\u4e2d\u6587\))/gi,
+    replacement: "Simplified Chinese (\u7b80\u4f53\u4e2d\u6587)",
+  },
+]
+
+/** Expand language aliases on the provider payload only — never rewrite stored user text. */
+export function clarifyRequestedLanguage(text: string): string {
+  // Only expand explicit language directives, preserving quoted titles and names.
+  return text.replace(
+    /"(?:\\.|[^"\\])*"|(?<!\w)'(?:\\.|[^'\\])*'|`[^`]*`|\b(?:in|into|to)\s+(?:traditional\s+chinese|simplified\s+chinese|trad\.?\s+chinese|t\.?\s*chinese)\b(?:\s*\([^()\n]*\))?/gi,
+    (phrase) => {
+      if (/^["'`]/.test(phrase)) return phrase
+      for (const { pattern, replacement } of LANGUAGE_CLARIFICATIONS) {
+        phrase = phrase.replace(pattern, replacement)
+      }
+      return phrase
+    },
+  )
+}
+
 function projectTextMessage(message: MessageV2.WithParts): MessageV2.WithParts {
   return {
     info: { ...message.info },
@@ -182,6 +227,16 @@ function projectTextMessage(message: MessageV2.WithParts): MessageV2.WithParts {
           part.type === "text" && !part.ignored && !part.synthetic && part.text.trim().length > 0,
       )
       .map((part) => ({ ...part })),
+  }
+}
+
+function projectUserRequest(message: MessageV2.WithParts): MessageV2.WithParts {
+  const projected = projectTextMessage(message)
+  return {
+    ...projected,
+    parts: projected.parts.map((part) =>
+      part.type === "text" ? { ...part, text: clarifyRequestedLanguage(part.text) } : part,
+    ),
   }
 }
 
@@ -214,7 +269,7 @@ export function detectTurnExecutionProfile(input: {
   const conversation = conversationIntent(userText)
   if (!intent && !conversation) return defaultProfile("no_compact_text_intent")
 
-  const projectedUser = projectTextMessage(current)
+  const projectedUser = projectUserRequest(current)
   if (conversation === "new-story") {
     if (STORY_CONTEXT_REFERENCE.test(userText)) return defaultProfile("story_context_reference")
     return {

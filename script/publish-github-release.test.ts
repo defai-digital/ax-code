@@ -2,9 +2,11 @@ import { describe, expect, test, vi } from "vitest"
 import childProcess from "child_process"
 import fs from "fs"
 import path from "path"
+import os from "node:os"
 import {
   defaultInstallChannel,
   defaultTag,
+  downloadReleaseAssets,
   expectedReleaseArchives,
   expectedReleaseInstallerAssets,
   expectedReleaseInstallerSignatures,
@@ -22,6 +24,58 @@ import {
 } from "./publish-github-release"
 
 describe("publish-github-release helpers", () => {
+  test("retains authenticated gh downloads for private release repositories", async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ax-private-release-test-"))
+    const options = parsePublishGithubReleaseArgs(["--version", "5.10.1", "--repo", "owner/private"])
+    const names = [
+      ...expectedReleaseArchives(),
+      ...expectedReleaseSignatures(),
+      ...expectedReleaseInstallerAssets(),
+      ...expectedReleaseInstallerSignatures(),
+      ...expectedReleaseMetadataAssets(),
+    ]
+    const commands: string[][] = []
+    const spawn = vi.spyOn(childProcess, "spawnSync").mockImplementation((command, args) => {
+      const argv = args as string[]
+      commands.push([String(command), ...argv])
+      let stdout = ""
+      if (argv[0] === "api" && argv[1].includes("/releases/tags/")) {
+        stdout = JSON.stringify({
+          tag_name: options.tag,
+          draft: false,
+          assets: names.map((name) => ({
+            name,
+            size: 1,
+            digest: `sha256:${"a".repeat(64)}`,
+            browser_download_url: `https://github.com/owner/private/releases/download/${options.tag}/${name}`,
+          })),
+        })
+      } else if (argv[0] === "api") stdout = "true"
+      else if (argv[0] === "release" && argv[1] === "download") {
+        for (const name of names) fs.writeFileSync(path.join(directory, name), "x")
+      } else throw new Error("Unexpected private release command")
+      return { pid: 1, output: [null, stdout, ""], stdout, stderr: "", status: 0, signal: null }
+    })
+    try {
+      await downloadReleaseAssets(options, directory)
+      expect(commands.at(-1)).toEqual([
+        "gh",
+        "release",
+        "download",
+        options.tag,
+        "--repo",
+        "owner/private",
+        "--dir",
+        directory,
+        "--clobber",
+      ])
+    } finally {
+      spawn.mockRestore()
+      fs.rmSync(directory, { recursive: true, force: true })
+    }
+    // Signature verification remains a mandatory subsequent publisher step.
+  })
+
   test("does not watch a release when the remote tag commit is missing", () => {
     const options = parsePublishGithubReleaseArgs(["--version", "5.10.1", "--existing-tag"])
     const spawn = vi.spyOn(childProcess, "spawnSync").mockReturnValue({

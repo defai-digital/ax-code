@@ -20,14 +20,14 @@ describe("tui dialog overlay viewport", () => {
         terminalHeight: 16,
         chromeHeight: DIALOG_SELECT_CHROME_HEIGHT,
       }),
-    ).toBe(4)
+    ).toBe(5)
     expect(
       dialogOverlayVisibleBodyHeight({
         contentRows: 40,
         terminalHeight: 24,
         chromeHeight: DIALOG_SELECT_CHROME_HEIGHT,
       }),
-    ).toBe(12)
+    ).toBe(13)
     expect(
       dialogOverlayVisibleBodyHeight({
         contentRows: 40,

@@ -265,6 +265,8 @@ export namespace Server {
               await disconnectPrivateGpu(id)
               return
             }
+            const { CustomApiProvider } = await import("@/provider/custom-api-provider")
+            if (await CustomApiProvider.removeIfManaged(id)) return
             await Auth.remove(id)
           })
         }),

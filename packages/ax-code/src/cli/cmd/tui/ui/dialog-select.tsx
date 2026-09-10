@@ -540,10 +540,14 @@ function Option(props: {
       </Show>
       <text
         flexGrow={1}
+        height={1}
         fg={props.disabled ? theme.textMuted : props.active ? fg : props.current ? theme.primary : theme.text}
         attributes={props.active && !props.disabled ? TextAttributes.BOLD : undefined}
-        overflow="visible"
-        wrapMode="word"
+        // One painted row per option. Word-wrap made 4–5 provider actions look
+        // like three rows and hid the scrollbar (viewport height counted
+        // options, not wrapped lines).
+        overflow="hidden"
+        wrapMode="none"
         paddingLeft={3}
       >
         {Locale.truncate(props.title, 61)}

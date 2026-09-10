@@ -47,7 +47,7 @@ import {
   type CustomVarsLoader,
   type CustomDiscoverModels,
 } from "./loaders"
-import { LOCAL_LLM_PROVIDER_IDS } from "@/mode/provider-category"
+import { isAxTrustProviderID, LOCAL_LLM_PROVIDER_IDS } from "@/mode/provider-category"
 import { Bus } from "../bus"
 import { BusEvent } from "../bus/bus-event"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
@@ -60,6 +60,7 @@ import { latestAnthropicFamilyModels } from "./anthropic-families"
 import { isHiddenDeepseekLegacySku } from "./deepseek-catalog"
 import { ProviderSdkCompat } from "./sdk-compat"
 import { CustomApiProvider } from "./custom-api-provider"
+import { discoverAxTrustModels } from "./ax-trust-discovery"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -665,6 +666,22 @@ export namespace Provider {
       mergeProvider(providerID, partial)
     }
 
+    const authoritativeDiscovery = new Set<string>()
+    for (const [id, configured] of configProviders) {
+      const providerID = ProviderID.make(id)
+      if (!isProviderAllowed(providerID)) continue
+      if (configured.management !== "ax-trust" && !isAxTrustProviderID(id)) continue
+      const provider = providers[providerID]
+      if (!provider) continue
+      const baseURL = provider.options.baseURL ?? configured.api
+      const apiKey = authString(provider.options.apiKey) ?? authString(provider.key)
+      const npm = configured.npm ?? "@ai-sdk/openai-compatible"
+      if (typeof baseURL !== "string" || !apiKey) continue
+      if (npm !== "@ai-sdk/openai-compatible" && npm !== "@ai-sdk/anthropic") continue
+      discoveryLoaders[providerID] = (current) => discoverAxTrustModels(current, { baseURL, apiKey, npm })
+      authoritativeDiscovery.add(providerID)
+    }
+
     for (const [id, provider] of Object.entries(providers)) {
       const providerID = ProviderID.make(id)
       if (!isProviderAllowed(providerID)) {
@@ -702,9 +719,9 @@ export namespace Provider {
               10_000,
               `discovery loader '${id}' timed out`,
             )
-            if (providerID === AX_ENGINE_PROVIDER_ID && !axEngineAttached) {
-              // The managed catalog owns its three choices. Configured aliases
-              // and old pinned revisions must not survive a completed refresh.
+            if (authoritativeDiscovery.has(providerID) || (providerID === AX_ENGINE_PROVIDER_ID && !axEngineAttached)) {
+              // Authoritative catalogs replace saved membership only after a
+              // complete successful response. Failed refreshes retain fallback models.
               providers[providerID].models = {}
             }
             for (const [modelID, model] of Object.entries(discovered)) {

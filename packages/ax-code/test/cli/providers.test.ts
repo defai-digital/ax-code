@@ -337,6 +337,40 @@ describe("providers command", () => {
     }
   })
 
+  test("providers logout removes leftover AX Trust endpoint config after the token is gone", async () => {
+    const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
+    const outroSpy = vi.spyOn(prompts, "outro").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})
+    const invalidateSpy = vi.spyOn(Provider, "invalidate").mockResolvedValue()
+    const providerID = "company-gateway"
+
+    try {
+      await Config.setGlobalProvider(providerID, {
+        management: "ax-trust",
+        name: "Company Gateway",
+        npm: "@ai-sdk/openai-compatible",
+        options: { baseURL: "https://api.example.com/v1" },
+        models: {},
+      })
+      await Auth.remove(providerID).catch(() => undefined)
+      expect(await Auth.get(providerID)).toBeUndefined()
+      expect((await Config.getGlobal()).provider?.[providerID]?.management).toBe("ax-trust")
+
+      await ProvidersLogoutCommand.handler({ provider: providerID } as any)
+
+      expect(errorSpy).not.toHaveBeenCalledWith(`No credential found for ${providerID}`)
+      expect((await Config.getGlobal()).provider?.[providerID]).toBeUndefined()
+      expect(outroSpy).toHaveBeenCalledWith("Logout successful")
+    } finally {
+      await Config.removeGlobalProvider(providerID).catch(() => undefined)
+      await Auth.remove(providerID).catch(() => undefined)
+      introSpy.mockRestore()
+      outroSpy.mockRestore()
+      errorSpy.mockRestore()
+      invalidateSpy.mockRestore()
+    }
+  })
+
   test("providers logout fails fast in non-interactive mode without provider", async () => {
     const introSpy = vi.spyOn(prompts, "intro").mockImplementation(() => {})
     const errorSpy = vi.spyOn(prompts.log, "error").mockImplementation(() => {})

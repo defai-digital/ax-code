@@ -176,6 +176,7 @@ export async function maybeSchedulePreflightCompaction(input: {
     return { action: "continue" }
   }
 
+  const omitToolSchemas = Boolean(input.omitToolSchemas) || input.model.capabilities.toolcall === false
   const messageTokens = estimateRequestTokens({ system: input.system, messages: input.requestMessages })
   const fixedSystemTokens = estimateRequestTokens({ system: input.system, messages: [] })
   const toolSchemaTokens = await estimateRegistryToolSchemaTokens({
@@ -183,22 +184,35 @@ export async function maybeSchedulePreflightCompaction(input: {
     model: input.model,
     tools: input.tools,
     sessionPermission: input.sessionPermission,
-    omitToolSchemas: input.omitToolSchemas,
+    omitToolSchemas,
   })
   const estimatedTokens = messageTokens + toolSchemaTokens
-  if (estimatedTokens < tokenBudget.usable) return { action: "continue" }
+  // Legacy AX Engine cards may expose only total context/output. Its hard
+  // admission includes the requested output, even when compaction reserves
+  // are overridden or an input limit is incorrectly larger than this bound.
+  const inputCap =
+    input.model.providerID === "ax-engine"
+      ? Math.min(tokenBudget.cap, Math.max(0, input.model.limit.context - input.model.limit.output))
+      : tokenBudget.cap
+  if (estimatedTokens < Math.min(tokenBudget.usable, inputCap)) return { action: "continue" }
 
   const lastRequestMessage = input.requestMessages.at(-1)
   const compactableMessages =
     lastRequestMessage?.role === "user" ? input.requestMessages.slice(0, -1) : input.requestMessages
   const compactableHistoryTokens = estimateRequestTokens({ system: [], messages: compactableMessages })
   const fixedTokens = fixedSystemTokens + toolSchemaTokens
+  const historyTooSmall = compactableHistoryTokens < MIN_COMPACTABLE_HISTORY_TOKENS
+  // `usable` is the 90% compaction trigger. The provider can still accept a
+  // request up to `cap` (the declared input window). Blocking at `usable` made
+  // tiny AX Engine sessions fail when core prompt+tools sat between those two
+  // numbers (~23k fixed vs ~22k usable vs ~24.5k cap on Ornith 9B).
+  const fitsInWindow = estimatedTokens < inputCap && fixedTokens < inputCap
 
   // Compaction can only shrink prior message history. It cannot reduce the
-  // system prompt, tool schemas, or current user turn. Block before the
-  // provider call when fixed overhead cannot fit or the conversation is too
-  // small for compaction to materially help.
-  if (fixedTokens >= tokenBudget.usable || compactableHistoryTokens < MIN_COMPACTABLE_HISTORY_TOKENS) {
+  // system prompt, tool schemas, or current user turn. Block only when the
+  // request cannot fit the model's actual input window; otherwise send a
+  // still-fitting tiny request or compact a large history.
+  if (!fitsInWindow && (fixedTokens >= inputCap || historyTooSmall)) {
     log.info("blocking futile preflight compaction", {
       sessionID: input.sessionID,
       fixedSystemTokens,
@@ -206,19 +220,32 @@ export async function maybeSchedulePreflightCompaction(input: {
       fixedTokens,
       compactableHistoryTokens,
       usableTokens: tokenBudget.usable,
+      capTokens: inputCap,
     })
     return {
       action: "block",
       message: fixedBudgetMessage({
         model: input.model,
         fixedTokens,
-        usableTokens: tokenBudget.usable,
+        usableTokens: inputCap,
         compactableHistoryTokens,
       }),
       fixedTokens,
-      usableTokens: tokenBudget.usable,
+      usableTokens: inputCap,
       compactableHistoryTokens,
     }
+  }
+
+  if (historyTooSmall) {
+    log.info("sending over-trigger request that still fits the input window", {
+      sessionID: input.sessionID,
+      estimatedTokens,
+      fixedTokens,
+      compactableHistoryTokens,
+      usableTokens: tokenBudget.usable,
+      capTokens: tokenBudget.cap,
+    })
+    return { action: "continue" }
   }
 
   log.info("prompt preflight scheduled compaction", {
@@ -229,6 +256,7 @@ export async function maybeSchedulePreflightCompaction(input: {
     messageTokens,
     toolSchemaTokens,
     usableTokens: tokenBudget.usable,
+    capTokens: tokenBudget.cap,
     modelID: input.model.id,
     providerID: input.model.providerID,
   })

@@ -4,7 +4,8 @@
  * Select lists used to cap at `floor(terminalHeight / 2) - 6`, which left only
  * two option rows in a typical 16-line split pane. Overlay placement is now a
  * one-row margin with vertical centering: short confirms stay balanced, and
- * long lists (/connect, models, help) use the remaining height.
+ * long lists (/connect, models, help) use the remaining height. A 16-line pane
+ * must still fit a five-option provider action menu; overflow shows a scrollbar.
  */
 
 export const DIALOG_OVERLAY_VERTICAL_MARGIN = 1
@@ -15,7 +16,7 @@ export const DIALOG_SELECT_CHROME_HEIGHT = 8
 /** Title, borders, padding, and gap around the help body. */
 export const DIALOG_HELP_CHROME_HEIGHT = 5
 
-export const DIALOG_OVERLAY_BOTTOM_SAFE_MARGIN = 2
+export const DIALOG_OVERLAY_BOTTOM_SAFE_MARGIN = 1
 
 export function dialogOverlayMaxHeight(terminalHeight: number): number {
   const height = Math.max(1, Math.floor(terminalHeight))

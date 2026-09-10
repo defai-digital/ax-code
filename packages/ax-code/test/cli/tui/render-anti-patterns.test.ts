@@ -1197,8 +1197,9 @@ describe("AX Code TUI stability guardrails", () => {
     expect(dialogSelect).toContain("onSubmit={confirmSelected}")
     expect(dialogSelect).toContain('keyBindings={[{ name: "return", action: "submit" }]}')
     expect(dialogSelect).toContain("confirmInFlight")
-    expect(dialogSelect).toContain('overflow="visible"')
-    expect(dialogSelect).toContain('wrapMode="word"')
+    expect(dialogSelect).toContain("height={1}")
+    expect(dialogSelect).toContain('overflow="hidden"')
+    expect(dialogSelect).toContain('wrapMode="none"')
     expect(dialogSelect).not.toContain("setTimeout(")
   })
 
