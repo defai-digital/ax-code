@@ -1,8 +1,7 @@
 diff --git a/scripts/install.js b/scripts/install.js
-index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..f919d490b0afee45ceac758a3c14aa1d0cf0eb6c 100644
 --- a/scripts/install.js
 +++ b/scripts/install.js
-@@ -8,9 +8,37 @@ const gypArgs = ['rebuild'];
+@@ -8,9 +8,41 @@
  if (process.env.NODE_PTY_DEBUG) {
    gypArgs.push('--debug');
  }
@@ -10,6 +9,10 @@ index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..f919d490b0afee45ceac758a3c14aa1d
 +const isWindows = os.platform() === 'win32';
 +const env = { ...process.env };
 +if (isWindows) {
++  // Override Node's build configuration after node-gyp imports config.gypi.
++  // GYP_DEFINES alone cannot replace these non-default variables.
++  gypArgs.push('--enable-lto=false', '--enable-thin-lto=false', '--lto-jobs=0');
++
 +  for (const name of [
 +    'CFLAGS',
 +    'CXXFLAGS',
@@ -40,5 +43,52 @@ index d88b7f108b4a1a3429bf50d72884f9a5a84158f4..f919d490b0afee45ceac758a3c14aa1d
 +  shell: isWindows,
 +  env
  });
- 
+
  gypProcess.on('exit', function (code) {
+diff --git a/src/win/conpty.cc b/src/win/conpty.cc
+--- a/src/win/conpty.cc
++++ b/src/win/conpty.cc
+@@ -32,11 +32,12 @@
+   ProcThreadAttributeValue(22, FALSE, TRUE, FALSE)
+
+ typedef VOID* HPCON;
+-typedef HRESULT (__stdcall *PFNCREATEPSEUDOCONSOLE)(COORD c, HANDLE hIn, HANDLE hOut, DWORD dwFlags, HPCON* phpcon);
+-typedef HRESULT (__stdcall *PFNRESIZEPSEUDOCONSOLE)(HPCON hpc, COORD newSize);
+-typedef void (__stdcall *PFNCLOSEPSEUDOCONSOLE)(HPCON hpc);
+-
+ #endif
++
++// These private function pointer types are also needed with modern SDKs.
++typedef HRESULT (__stdcall *AxCreatePseudoConsoleFn)(COORD c, HANDLE hIn, HANDLE hOut, DWORD dwFlags, HPCON* phpcon);
++typedef HRESULT (__stdcall *AxResizePseudoConsoleFn)(HPCON hpc, COORD newSize);
++typedef void (__stdcall *AxClosePseudoConsoleFn)(HPCON hpc);
+
+ struct pty_baton {
+   int id;
+@@ -123,7 +124,7 @@
+   bool fLoadedDll = hLibrary != nullptr;
+   if (fLoadedDll)
+   {
+-    PFNCREATEPSEUDOCONSOLE const pfnCreate = (PFNCREATEPSEUDOCONSOLE)GetProcAddress((HMODULE)hLibrary, "CreatePseudoConsole");
++    AxCreatePseudoConsoleFn const pfnCreate = (AxCreatePseudoConsoleFn)GetProcAddress((HMODULE)hLibrary, "CreatePseudoConsole");
+     if (pfnCreate)
+     {
+       if (phPC == NULL || phInput == NULL || phOutput == NULL)
+@@ -400,7 +401,7 @@
+   bool fLoadedDll = hLibrary != nullptr;
+   if (fLoadedDll)
+   {
+-    PFNRESIZEPSEUDOCONSOLE const pfnResizePseudoConsole = (PFNRESIZEPSEUDOCONSOLE)GetProcAddress((HMODULE)hLibrary, "ResizePseudoConsole");
++    AxResizePseudoConsoleFn const pfnResizePseudoConsole = (AxResizePseudoConsoleFn)GetProcAddress((HMODULE)hLibrary, "ResizePseudoConsole");
+     if (pfnResizePseudoConsole)
+     {
+       COORD size = {cols, rows};
+@@ -428,7 +429,7 @@
+   bool fLoadedDll = hLibrary != nullptr;
+   if (fLoadedDll)
+   {
+-    PFNCLOSEPSEUDOCONSOLE const pfnClosePseudoConsole = (PFNCLOSEPSEUDOCONSOLE)GetProcAddress((HMODULE)hLibrary, "ClosePseudoConsole");
++    AxClosePseudoConsoleFn const pfnClosePseudoConsole = (AxClosePseudoConsoleFn)GetProcAddress((HMODULE)hLibrary, "ClosePseudoConsole");
+     if (pfnClosePseudoConsole)
+     {
+       pfnClosePseudoConsole(handle->hpc);

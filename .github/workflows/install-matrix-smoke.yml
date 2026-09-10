@@ -149,6 +149,12 @@ jobs:
             || (echo "FAIL: macOS installer backend did not return rpc health result" && exit 1)
           echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "macos" backend
 
+      - name: Smoke - installed PTY input, output, resize, and exit
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        timeout-minutes: 1
+        run: '"$HOME/.ax-code/node/bin/node" script/verify-pty.cjs "$HOME/.ax-code/node_modules/node-pty-prebuilt-multiarch"'
+
   homebrew:
     name: macos-latest / homebrew
     runs-on: macos-latest
@@ -265,6 +271,12 @@ jobs:
           echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
             || (echo "FAIL: Homebrew installed backend did not return rpc health result" && exit 1)
           echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "homebrew" backend
+
+      - name: Smoke - installed PTY input, output, resize, and exit
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        timeout-minutes: 1
+        run: '"$(brew --prefix node)/bin/node" script/verify-pty.cjs "$(brew --prefix ax-code)/libexec/node_modules/node-pty-prebuilt-multiarch"'
 
   windows:
     name: ${{ matrix.label }} / windows
@@ -400,6 +412,14 @@ jobs:
           $Launcher = (Get-Command ax-code -ErrorAction Stop).Source
           & .github/scripts/assert-windows-runtime.ps1 -Launcher $Launcher -Backend -Version $Version
 
+      - name: Smoke - installed Windows PTY input, output, resize, and exit
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: pwsh
+        timeout-minutes: 1
+        run: |
+          & "$HOME\.ax-code\node\bin\node.exe" script/verify-pty.cjs "$HOME\.ax-code\node_modules\node-pty-prebuilt-multiarch"
+          if ($LASTEXITCODE -ne 0) { throw "Installed Windows PTY verification failed" }
+
   linux:
     name: ${{ matrix.label }} / linux
     strategy:
@@ -490,3 +510,9 @@ jobs:
           echo "$OUTPUT" | grep -E '"type":"rpc.result".*"id":1' \
             || (echo "FAIL: Linux installed backend did not return rpc health result" && exit 1)
           echo "$OUTPUT" | bash .github/scripts/assert-runtime-mode.sh "linux" backend
+
+      - name: Smoke - installed PTY input, output, resize, and exit
+        if: ${{ steps.channel.outputs.enabled == 'true' }}
+        shell: bash
+        timeout-minutes: 1
+        run: '"$HOME/.ax-code/node/bin/node" script/verify-pty.cjs "$HOME/.ax-code/node_modules/node-pty-prebuilt-multiarch"'

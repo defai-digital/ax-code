@@ -220,9 +220,8 @@ jobs:
           checkout: "false"
 
       # The build matrix later installs dist runtime dependencies with
-      # lifecycle scripts disabled and treats node-pty rebuild as optional.
-      # Keep root install the same way here so Windows releases are not blocked
-      # by optional native postinstall fallout under new Node/toolchain pairs.
+      # lifecycle scripts disabled. PTY is rebuilt and exercised later using
+      # the bundled Node runtime; a failed release PTY check is fatal.
       - run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Test installer replacement and rollback

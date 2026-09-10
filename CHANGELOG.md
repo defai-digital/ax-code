@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.2] - 2026-09-09
+
+### Fixed
+
+- Restore Windows PTY builds with modern SDKs and Node 26 by keeping private ConPTY function types available and overriding inherited LLVM LTO options for MSVC.
+- Require real PTY input, output, resize, and successful exit during release packaging and after installation on every supported platform.
+- Use ASCII alternatives for ambiguous-width TUI glyphs and update truncation budgets to prevent layout drift in CJK terminals.
+- Preserve failed test-shard exits when no JUnit error was recorded, even if output mentions a harmless interruption.
+
+### Changed
+
+- Prepare and verify the pinned native TUI dependency before CI workers start, use the isolated cache offline, and retain accurate per-shard diagnostics.
+
 ## [7.15.1] - 2026-09-09
 
 ### Fixed

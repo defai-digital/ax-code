@@ -465,20 +465,28 @@ if (fs.existsSync(ptyDir) && !fs.existsSync(path.join(ptyDir, "build", "Release"
     console.log(`Targeting bundled Node ${bundledNodeRuntime.version} (${arch}) for node-pty`)
   }
   const gyp = runNpm(["rebuild", "node-pty-prebuilt-multiarch"], gypEnv)
-  let ptyReady = gyp.status === 0 && fs.existsSync(ptyAddon)
-  if (ptyReady && bundledNodeRuntime) {
-    const distributionNode = path.join(bundledNodeDir, "bin", bundledNodeName)
-    const loadCheck = spawnSync(distributionNode, ["-e", "require(process.argv[1])", ptyDir], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 10_000,
-    })
-    ptyReady = loadCheck.status === 0
-    if (!ptyReady && loadCheck.stderr) console.warn(String(loadCheck.stderr).trim())
+  if (gyp.status !== 0 || !fs.existsSync(ptyAddon)) {
+    const message = "node-pty native addon build failed"
+    if (release) throw new Error(message)
+    console.warn(message)
   }
-  if (!ptyReady) {
-    console.warn("node-pty build failed — terminal feature will be unavailable")
-  }
+}
+// Windows loads ConPTY lazily at spawn, so require() alone cannot establish
+// that the shipped terminal works. Check existing builds as well as rebuilds.
+const ptyCheckNode = bundledNodeRuntime ? path.join(bundledNodeDir, "bin", bundledNodeName) : process.execPath
+const ptyCheck = spawnSync(ptyCheckNode, [path.join(dir, "..", "..", "script", "verify-pty.cjs"), ptyDir], {
+  encoding: "utf8",
+  stdio: ["ignore", "pipe", "pipe"],
+  timeout: 25_000,
+})
+if (ptyCheck.status !== 0) {
+  const detail =
+    ptyCheck.error?.message || ptyCheck.stderr.trim() || `exit=${ptyCheck.status}, signal=${ptyCheck.signal}`
+  const message = `Bundled PTY verification failed: ${detail}`
+  if (release) throw new Error(message)
+  console.warn(message)
+} else {
+  console.log(`Bundled PTY input/output/exit verified: ${ptyCheck.stdout.trim()}`)
 }
 
 // Ship the @ax-code napi addons (workspace packages, not on npm) + their .node.

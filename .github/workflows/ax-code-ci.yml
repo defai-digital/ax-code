@@ -67,9 +67,16 @@ jobs:
         with:
           checkout: "false"
           node-version: "26"
-      # Match the Windows release lane: these Git tests do not need optional native builds.
+      # Install deterministically, then qualify PTY on each native architecture.
       - name: Install deps
         run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build Windows PTY native addons
+        run: pnpm --dir packages/ax-code rebuild node-pty-prebuilt-multiarch
+      - name: Verify Windows PTY build configuration
+        run: node .github/scripts/assert-windows-pty-build.cjs
+      - name: Test native PTY input, output, resize, and exit
+        timeout-minutes: 1
+        run: node script/verify-pty.cjs packages/ax-code/node_modules/node-pty-prebuilt-multiarch
       - name: Build SDK runtime exports
         working-directory: packages/sdk/js
         run: pnpm exec tsc
