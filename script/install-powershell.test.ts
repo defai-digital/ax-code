@@ -150,12 +150,20 @@ Assert-InstalledBundle
     { name: "sharing lock", exception: '[System.IO.IOException]::new("Simulated sharing violation", -2147024864)' },
     { name: "access denial", exception: '[System.UnauthorizedAccessException]::new("Simulated access denial")' },
   ]
-  test.each(moveErrors.flatMap((error) => ["backup", "activation", "rollback"].map((phase) => ({ ...error, phase }))))(
-    "tolerates a transient $name during $phase",
-    async ({ phase, exception }) => {
+  const transientMoves = moveErrors.flatMap((error) =>
+    ["backup", "activation", "rollback"].map((phase) => ({ ...error, phase, extraNativeLocks: 0 })),
+  )
+  transientMoves.push({ ...moveErrors[1]!, phase: "rollback", extraNativeLocks: 3 })
+  test.each(transientMoves)(
+    "tolerates a transient $name during $phase with $extraNativeLocks extra native locks",
+    async ({ phase, exception, extraNativeLocks }) => {
       await runInstaller(`
 New-PreviousInstall
 $script:locks = 0
+$script:injectedLocks = 0
+$script:nativeFailures = 0
+$script:simulatedNativeFailures = 0
+$script:successfulMoves = 0
 $script:rollingBack = $false
 if ("${phase}" -eq "rollback") {
   function Verify-InstalledRuntime { $script:rollingBack = $true; throw "Simulated final check failure" }
@@ -172,9 +180,19 @@ function Move-RuntimeItem {
   }
   if ($target) {
     $script:locks++
-    if ($script:locks -le 2) { throw ${exception} }
+    if ($script:locks -le 2) { $script:injectedLocks++; throw ${exception} }
   }
-  & $script:OriginalRuntimeMove @PSBoundParameters
+  try {
+    if ($target -and $script:simulatedNativeFailures -lt ${extraNativeLocks}) {
+      $script:simulatedNativeFailures++
+      throw [System.IO.IOException]::new("Simulated additional native sharing violation", -2147024864)
+    }
+    & $script:OriginalRuntimeMove @PSBoundParameters
+  } catch {
+    if ($target) { $script:nativeFailures++ }
+    throw
+  }
+  if ($target) { $script:successfulMoves++ }
 }
 if ("${phase}" -eq "rollback") {
   $failure = $null
@@ -185,7 +203,14 @@ if ("${phase}" -eq "rollback") {
   Install-NodeBundleTree $Source
   Assert-InstalledBundle
 }
-Assert-Equal $script:locks 3
+# Real Windows execution/antivirus locks can add legitimate native retries
+# after the two injected failures. Account for every attempt without relaxing
+# the production retry limit or the requirement for exactly one successful move.
+Assert-Equal $script:injectedLocks 2
+Assert-Equal $script:simulatedNativeFailures ${extraNativeLocks}
+Assert-Equal $script:successfulMoves 1
+Assert-Equal $script:locks (3 + $script:nativeFailures)
+if ($script:locks -gt 10) { throw "Runtime move exceeded its ten-attempt limit" }
 `)
     },
   )
