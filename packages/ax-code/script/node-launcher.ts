@@ -65,6 +65,19 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
       exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
     fi
   fi
+  # Relocation can fail at code-signing or dynamic-library admission. Probe
+  # before starting application work, so a fallback never replays a command.
+  # Preload hooks belong to the application, not to this startup probe.
+  if ! NODE_OPTIONS= "$node_bin" -e '
+    const { spawnSync } = require("node:child_process");
+    const result = spawnSync(process.argv[1], ["-p", "process.version"], {
+      encoding: "utf8", timeout: 5000, killSignal: "SIGKILL", maxBuffer: 4096,
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+    process.exit(result.status === 0 && result.stdout === process.version + "\\n" ? 0 : 1);
+  ' "$branded" >/dev/null 2>&1; then
+    exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
+  fi
   exec "$branded" ${NODE_LAUNCH_ARGS} "$@"
 }`
 

@@ -45004,6 +45004,10 @@
                 "description": "Enable promptCacheKey for this provider (default false)",
                 "type": "boolean"
               },
+              "axTrust": {
+                "description": "Send X-AX-Prompt-Cache-Key for AX Trust session affinity. AX Trust connections send it by default; set false to disable. Other providers send it only when true.",
+                "type": "boolean"
+              },
               "timeout": {
                 "anyOf": [
                   {

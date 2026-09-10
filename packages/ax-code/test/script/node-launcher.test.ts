@@ -14,6 +14,70 @@ afterEach(async () => {
 })
 
 describe("Unix node launcher", () => {
+  test.skipIf(process.platform === "win32")(
+    "does not replay application work or run preload hooks during admission",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-once-"))
+      temporaryRoots.push(root)
+      const preload = path.join(root, "preload.cjs")
+      const marker = path.join(root, "preload-calls")
+      const launcher = path.join(root, "launcher")
+      await writeFile(preload, `require("node:fs").appendFileSync(${JSON.stringify(marker)}, "once\\n")\n`)
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node "$1" -e 'process.stdout.write("application"); process.exitCode = 37'\n`,
+        { mode: 0o755 },
+      )
+      const failure = await execFileAsync(launcher, [process.execPath], {
+        env: {
+          ...process.env,
+          XDG_CACHE_HOME: path.join(root, "cache"),
+          NODE_OPTIONS: `--require=${JSON.stringify(preload)}`,
+        },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+      expect(failure).toMatchObject({ code: 37, stdout: "application", signal: null })
+      expect(await readFile(marker, "utf8")).toBe("once\n")
+    },
+  )
+
+  test.skipIf(process.platform === "win32")(
+    "falls back before application execution when branding is rejected",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-rejected-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const calls = path.join(root, "calls")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          'case "$0" in */AX-Code) kill -KILL "$$" ;; esac',
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `printf '%s\\n' "$*" >> ${quote(calls)}`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} "$@"\n`,
+        { mode: 0o755 },
+      )
+      const failure = await execFileAsync(launcher, ["application", "literal argument"], {
+        env: { ...process.env, XDG_CACHE_HOME: path.join(root, "cache") },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+      expect(failure).toMatchObject({ code: 37, signal: null })
+      expect(await readFile(calls, "utf8")).toBe(
+        "--experimental-ffi --disable-warning=ExperimentalWarning application literal argument\n",
+      )
+    },
+  )
+
   test("resolves the bundle root when invoked through an rbenv-style symlink", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-launcher-"))
     temporaryRoots.push(root)

@@ -46,31 +46,38 @@ export function sourceLauncherScript(input: SourceLauncherInput): string {
   const loader = joiner.join(root, "script", "solid-loader.mjs")
   const nodeFfiRunner = joiner.join(root, "script", "node-ffi-runner.mjs")
   if (input.windows) {
+    if (/[\r\n"]/.test(root)) throw new Error("Invalid Windows source checkout path")
+    const literal = (value: string) => value.replaceAll("%", "%%")
     return `@echo off
-set "AX_CODE_SOURCE_CWD=${cwdPath}"
-set "AX_CODE_SOURCE_ENTRY=${entry}"
-set "AX_CODE_SOURCE_LOADER=${loader}"
-set "AX_CODE_SOURCE_NODE_FFI_RUNNER=${nodeFfiRunner}"
+setlocal DisableDelayedExpansion
+set "ERRORLEVEL="
+${WINDOWS_UTF8_WARNING}set "AX_CODE_SOURCE_CWD=${literal(cwdPath)}"
+set "AX_CODE_SOURCE_ENTRY=${literal(entry)}"
+set "AX_CODE_SOURCE_LOADER=${literal(loader)}"
+set "AX_CODE_SOURCE_NODE_FFI_RUNNER=${literal(nodeFfiRunner)}"
 if not exist "%AX_CODE_SOURCE_CWD%\\" (
-  echo ax-code source launcher points at a missing checkout: %AX_CODE_SOURCE_CWD% 1>&2
+  echo ax-code source launcher points at a missing checkout: "%AX_CODE_SOURCE_CWD%" 1>&2
   echo Install the packaged runtime instead: curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" ^| bash 1>&2
   exit /b 127
 )
 if not exist "%AX_CODE_SOURCE_NODE_FFI_RUNNER%" (
-  echo ax-code source launcher points at a missing node:ffi runner: %AX_CODE_SOURCE_NODE_FFI_RUNNER% 1>&2
+  echo ax-code source launcher points at a missing node:ffi runner: "%AX_CODE_SOURCE_NODE_FFI_RUNNER%" 1>&2
   echo Reinstall the source launcher from the current checkout. 1>&2
   exit /b 127
 )
-set AX_CODE_ORIGINAL_CWD=%CD%
-${WINDOWS_UTF8_WARNING}cd /d "%AX_CODE_SOURCE_CWD%"
+set "AX_CODE_ORIGINAL_CWD=%CD%"
+cd /d "%AX_CODE_SOURCE_CWD%"
+if errorlevel 1 exit /b 1
 node "%AX_CODE_SOURCE_NODE_FFI_RUNNER%" --import tsx --import "%AX_CODE_SOURCE_LOADER%" --conditions=node "%AX_CODE_SOURCE_ENTRY%" %*
+exit /b %ERRORLEVEL%
 `
   }
+  const literal = (value: string) => value.replace(/[\\"$`]/g, "\\$&")
   return `#!/bin/sh
-AX_CODE_SOURCE_CWD="${cwdPath}"
-AX_CODE_SOURCE_ENTRY="${entry}"
-AX_CODE_SOURCE_LOADER="${loader}"
-AX_CODE_SOURCE_NODE_FFI_RUNNER="${nodeFfiRunner}"
+AX_CODE_SOURCE_CWD="${literal(cwdPath)}"
+AX_CODE_SOURCE_ENTRY="${literal(entry)}"
+AX_CODE_SOURCE_LOADER="${literal(loader)}"
+AX_CODE_SOURCE_NODE_FFI_RUNNER="${literal(nodeFfiRunner)}"
 if [ ! -d "$AX_CODE_SOURCE_CWD" ]; then
   echo "ax-code source launcher points at a missing checkout: $AX_CODE_SOURCE_CWD" >&2
   echo 'Install the packaged runtime instead: curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash' >&2

@@ -6,6 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.3] - 2026-09-10
+
+### Fixed
+
+- Check that the branded Unix Node runtime starts before executing application work, and fall back to the original runtime if code-signing or dynamic-library admission fails. The bounded probe does not run preload hooks or replay failed application commands.
+- Preserve literal shell metacharacters in source checkout paths and caller directories. Windows source launchers disable delayed expansion, escape literal percent signs, initialize UTF-8 before reading paths, and preserve application exit codes.
+- Regenerate SDK configuration types for the AX Trust session affinity option.
+
+### Changed
+
+- Send the session affinity header automatically for AX Trust connections, preserving the explicit opt-out and untrusted-project configuration boundaries.
+
 ## [7.15.2] - 2026-09-09
 
 ### Fixed

@@ -1,7 +1,65 @@
 import { describe, expect, test } from "vitest"
 import { sourceLauncherScript } from "../../script/source-launcher"
+import { execFile } from "node:child_process"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
+import path from "node:path"
+import { promisify } from "node:util"
+import { tmpdir } from "../fixture/fixture"
+
+const execFileAsync = promisify(execFile)
 
 describe("script.source-launcher", () => {
+  test("executes from literal checkout paths and preserves the caller directory", async () => {
+    await using tmp = await tmpdir()
+    const windows = process.platform === "win32"
+    const root = path.join(
+      tmp.path,
+      windows
+        ? "%AX_SOURCE_EXPANSION% & checkout! (literal)"
+        : "checkout-'quoted'-$AX_SOURCE_EXPANSION-`printf expanded`-$(printf changed)",
+    )
+    const project = path.join(tmp.path, "caller & project! (literal)")
+    const packageDir = path.join(root, "packages", "ax-code")
+    const runner = path.join(root, "script", "node-ffi-runner.mjs")
+    const output = path.join(tmp.path, "result.json")
+    const launcher = path.join(tmp.path, windows ? "source.cmd" : "source")
+    await Promise.all([
+      mkdir(packageDir, { recursive: true }),
+      mkdir(path.dirname(runner), { recursive: true }),
+      mkdir(project),
+    ])
+    await writeFile(
+      runner,
+      'import fs from "node:fs"; fs.writeFileSync(process.env.AX_SOURCE_TEST_OUTPUT, JSON.stringify({cwd:process.cwd(), original:process.env.AX_CODE_ORIGINAL_CWD, args:process.argv.slice(2)})); process.exitCode = 37;\n',
+    )
+    await writeFile(launcher, sourceLauncherScript({ root, windows }), { mode: 0o755 })
+    const env = {
+      ...process.env,
+      PATH: path.dirname(process.execPath) + path.delimiter + process.env.PATH,
+      AX_SOURCE_EXPANSION: "unexpected",
+      AX_SOURCE_TEST_OUTPUT: output,
+      ERRORLEVEL: "0",
+    }
+    const failure = await execFileAsync(
+      windows ? "cmd.exe" : launcher,
+      windows ? ["/d", "/v:on", "/s", "/c", `""${launcher}" "literal argument""`] : ["literal argument"],
+      { cwd: project, env, timeout: 10_000, ...(windows ? { windowsVerbatimArguments: true } : {}) },
+    ).catch((error: unknown) => error)
+    expect(failure).toMatchObject({ code: 37 })
+    const result = JSON.parse(await readFile(output, "utf8"))
+    expect(result.cwd).toBe(packageDir)
+    expect(result.original).toBe(project)
+    expect(result.args).toEqual([
+      "--import",
+      "tsx",
+      "--import",
+      path.join(root, "script", "solid-loader.mjs"),
+      "--conditions=node",
+      path.join(root, "packages", "ax-code", "src", "index-node-tui.ts"),
+      "literal argument",
+    ])
+  })
+
   test("unix launcher delegates verified process branding to the Node FFI runner", () => {
     const out = sourceLauncherScript({ root: "/repo", windows: false })
     expect(out).toContain('AX_CODE_SOURCE_CWD="/repo/packages/ax-code"')
@@ -18,7 +76,7 @@ describe("script.source-launcher", () => {
   test("windows launcher uses the .cmd shape and captures CD", () => {
     const out = sourceLauncherScript({ root: "C:\\repo", windows: true })
     expect(out).toContain("@echo off")
-    expect(out).toContain("set AX_CODE_ORIGINAL_CWD=%CD%")
+    expect(out).toContain('set "AX_CODE_ORIGINAL_CWD=%CD%"')
     expect(out).toContain('set "AX_CODE_SOURCE_CWD=C:\\repo\\packages\\ax-code"')
     expect(out).toContain('set "AX_CODE_SOURCE_ENTRY=C:\\repo\\packages\\ax-code\\src\\index-node-tui.ts"')
     expect(out).toContain('set "AX_CODE_SOURCE_NODE_FFI_RUNNER=C:\\repo\\script\\node-ffi-runner.mjs"')

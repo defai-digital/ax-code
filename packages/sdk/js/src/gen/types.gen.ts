@@ -3134,6 +3134,10 @@ export type ProviderConfig = {
      * Enable promptCacheKey for this provider (default false)
      */
     setCacheKey?: boolean
+    /**
+     * Send X-AX-Prompt-Cache-Key for AX Trust session affinity. AX Trust connections send it by default; set false to disable. Other providers send it only when true.
+     */
+    axTrust?: boolean
     timeout?: number | false
     /**
      * Timeout in milliseconds between streamed SSE chunks for this provider. If no chunk arrives within this window, the request is aborted.
