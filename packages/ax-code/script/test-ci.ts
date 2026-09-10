@@ -172,10 +172,10 @@ export async function parseJUnit(file: string, output = "") {
   const time = Number.parseFloat(data.time ?? "") || 0
   const ignored =
     failureCount === 0 &&
-    errorCount <= 1 &&
+    errorCount === 1 &&
     combinedText.includes(harmlessEffectInterrupt) &&
     errorTags.every((tag) => tag.includes(harmlessEffectInterrupt))
-      ? errorCount || 1
+      ? 1
       : 0
   return { tests, failures: Math.max(0, failures - ignored), skipped, time, ignored }
 }

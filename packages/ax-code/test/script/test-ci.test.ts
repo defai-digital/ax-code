@@ -182,6 +182,28 @@ describe("script.test-ci", () => {
     expect(result.ignored).toBe(0)
   })
 
+  test("does not ignore a shard whose junit has no error entries", async () => {
+    await using tmp = await tmpdir()
+    const junit = path.join(tmp.path, "report.xml")
+    await writeFile(
+      junit,
+      [
+        `<testsuite tests="1" failures="0" errors="0" skipped="0" time="0.50">`,
+        `<testcase classname="x" name="ok">`,
+        `</testcase>`,
+        `</testsuite>`,
+      ].join("\n"),
+    )
+
+    // The harmless-fiber phrase in captured output must not manufacture an
+    // "ignored" error when the JUnit recorded none. Otherwise run() maps a
+    // nonzero process exit with zero test failures to success, hiding a real
+    // shard crash from CI.
+    const result = await parseJUnit(junit, "All fibers interrupted without error")
+
+    expect(result.ignored).toBe(0)
+  })
+
   test("renders one-run summary output without rerun sections", () => {
     const summary = renderSummaryText("deterministic", [
       {
