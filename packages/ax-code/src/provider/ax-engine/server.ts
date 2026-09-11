@@ -16,6 +16,9 @@ import {
   AX_ENGINE_ERROR,
   AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION,
   AX_ENGINE_MTP_MODE,
+  AX_ENGINE_READY_TIMEOUT_MS,
+  AX_ENGINE_SERVER_LOCK_STALE_MS,
+  AX_ENGINE_SERVER_LOCK_TIMEOUT_MS,
   AxEngineModelIDSchema,
   AX_ENGINE_SPECULATION_PROFILE,
   axEnginePrefixCacheEnv,
@@ -104,7 +107,7 @@ export type AxEngineServerOptions = {
   mtpMode?: string
   apiKey?: string
   signal?: AbortSignal
-  /** Override for the readiness wait (default 240s); primarily a test seam. */
+  /** Override for the readiness wait (default AX_ENGINE_READY_TIMEOUT_MS); primarily a test seam. */
   readyTimeoutMs?: number
 }
 
@@ -360,11 +363,9 @@ async function waitForReady(
 ): Promise<WaitForReadyResult> {
   // Cold-loading a local model (mmap + weight load + first-token warmup for a
   // 12B-35B param model) can legitimately take minutes, not seconds.
-  // session/llm-impl.ts gives the ax-engine provider a 300s outer setup
-  // envelope specifically to cover this — keep this default comfortably under
-  // that so a slow-but-successful start isn't cut off here first, before the
-  // outer envelope ever gets a chance to matter.
-  const timeoutMs = options.timeoutMs ?? 240_000
+  // resolveAxEngineSetup's outer envelope must stay above this default so a
+  // slow-but-successful start is not cancelled there first.
+  const timeoutMs = options.timeoutMs ?? AX_ENGINE_READY_TIMEOUT_MS
   const deadline = Date.now() + timeoutMs
   const deadlineSignal = AbortSignal.timeout(timeoutMs)
   const signal = options.signal ? AbortSignal.any([options.signal, deadlineSignal]) : deadlineSignal
@@ -618,17 +619,17 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
 
 async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEngineServerState> {
   // Held across the entire cold start: health retries and process recovery,
-  // then spawn + up to 240s readiness wait, or up to 120s model reload.
-  // Wait well past that worst case so a cross-process start (e.g. the desktop server alongside a
-  // CLI) queues instead of failing while the first holder is still legitimately
-  // loading the model; a dead holder is still reclaimed immediately via the
-  // staleMs / pid-liveness checks inside FileLock. Previously this was 180_000,
-  // shorter than waitForReady's 240_000 — any second caller queued behind a
-  // slow cold load would hit "timed out waiting for file lock" well before the
-  // first start ever finished, surfacing as "start never works".
+  // then spawn + up to AX_ENGINE_READY_TIMEOUT_MS of readiness wait, or up to
+  // 120s model reload. Wait well past that worst case so a cross-process start
+  // (e.g. the desktop server alongside a CLI) queues instead of failing while
+  // the first holder is still legitimately loading the model; a dead holder is
+  // still reclaimed immediately via the staleMs / pid-liveness checks inside
+  // FileLock. Previously this wait was shorter than waitForReady — any second
+  // caller queued behind a slow cold load would hit "timed out waiting for
+  // file lock" well before the first start ever finished.
   using _ = await FileLock.acquire(AxEnginePaths.serverLock, {
-    timeoutMs: 280_000,
-    staleMs: 5 * 60_000,
+    timeoutMs: AX_ENGINE_SERVER_LOCK_TIMEOUT_MS,
+    staleMs: AX_ENGINE_SERVER_LOCK_STALE_MS,
     signal: options.signal,
   })
   options.signal?.throwIfAborted()
@@ -863,7 +864,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     const message =
       reason === "process-exited"
         ? "ax-engine server exited before becoming ready"
-        : `ax-engine server did not become ready within ${(options.readyTimeoutMs ?? 240_000) / 1000} seconds`
+        : `ax-engine server did not become ready within ${(options.readyTimeoutMs ?? AX_ENGINE_READY_TIMEOUT_MS) / 1000} seconds`
     const guidance =
       `Model path: ${options.modelPath}\n` +
       "Startup was not retried automatically. Check the server log, available memory, " +
@@ -912,11 +913,14 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
 export async function stopServer() {
   // staleMs must tolerate the longest legitimate serverLock hold: FileLock
   // steals by lockfile age using the *acquirer's* staleMs, and a cold start
-  // legitimately holds this lock for up to ~240s of readiness waiting. The
-  // previous 60s here let a concurrent stop steal the lock and delete
-  // server.json out from under a still-loading start. Dead holders are
-  // reclaimed immediately via FileLock's pid-liveness check regardless.
-  using _ = await FileLock.acquire(AxEnginePaths.serverLock, { timeoutMs: 10_000, staleMs: 5 * 60_000 })
+  // legitimately holds this lock for up to AX_ENGINE_READY_TIMEOUT_MS of
+  // readiness waiting. A shorter stale window lets a concurrent stop steal
+  // the lock and delete server.json out from under a still-loading start.
+  // Dead holders are reclaimed immediately via FileLock's pid-liveness check.
+  using _ = await FileLock.acquire(AxEnginePaths.serverLock, {
+    timeoutMs: 10_000,
+    staleMs: AX_ENGINE_SERVER_LOCK_STALE_MS,
+  })
   const stateResult = await readServerState()
   if (stateResult.error) {
     throw new Error(`${AX_ENGINE_ERROR.ServerHealthFailed}: failed to read server state`)

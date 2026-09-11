@@ -6,6 +6,7 @@ import { ProviderID, ModelID } from "../../src/provider/schema"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionRetry } from "../../src/session/retry"
+import { AX_ENGINE_SETUP_TIMEOUT_MS } from "../../src/provider/ax-engine/constants"
 import { resolveAxEngineSetup } from "../../src/provider/ax-engine/setup"
 
 afterEach(() => {
@@ -78,7 +79,7 @@ function setup() {
 test("the outer local setup timeout cancels background startup and remains non-retryable", async () => {
   const f = setup()
   const signal = await f.entered.promise
-  await vi.advanceTimersByTimeAsync(300_001)
+  await vi.advanceTimersByTimeAsync(AX_ENGINE_SETUP_TIMEOUT_MS + 1)
   const result = await f.pending
   const aborted = signal.aborted
   // Settle the abandoned loader even when testing the pre-fix implementation.

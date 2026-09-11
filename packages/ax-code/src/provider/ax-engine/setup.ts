@@ -1,4 +1,4 @@
-import { AX_ENGINE_ERROR } from "./constants"
+import { AX_ENGINE_ERROR, AX_ENGINE_SETUP_TIMEOUT_MS } from "./constants"
 import { AxEngineStartupError } from "./errors"
 
 /** Own cancellation across lock waiting, startup and capability discovery. */
@@ -7,7 +7,7 @@ export async function resolveAxEngineSetup<T>(
   load: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
   input.signal.throwIfAborted()
-  const timeoutMs = input.timeoutMs ?? 300_000
+  const timeoutMs = input.timeoutMs ?? AX_ENGINE_SETUP_TIMEOUT_MS
   const deadline = Date.now() + timeoutMs
   const timeout = new AxEngineStartupError({
     code: AX_ENGINE_ERROR.SetupTimeout,

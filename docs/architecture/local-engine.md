@@ -33,13 +33,13 @@ AX Code does not link the AX Engine SDK in-process. AX Engine owns model
 execution, and AX Code owns the client-side process lifecycle. Host eligibility,
 model preparation, and live tool-calling checks still apply.
 
-Cold startup has a 240-second readiness limit. Startup time depends on model
+Cold startup has a 600-second readiness limit. Startup time depends on model
 size, storage throughput and available memory.
 An exhausted startup stops the turn with the server log and model path;
 AX Code does not automatically restart another cold load or switch providers.
 Resolve the reported issue before retrying explicitly.
 The model setup envelope, including lifecycle-lock waiting and capability
-discovery, is limited to 300 seconds. Expiry cancels pending setup and stops
+discovery, is limited to 660 seconds. Expiry cancels pending setup and stops
 automatic retries. Cancelling a request also stops waiting immediately, even
 when a setup dependency has not yet responded. Health replies arriving after
 the readiness deadline, or after the owned process exits, cannot establish

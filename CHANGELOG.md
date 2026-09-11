@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Give managed AX Engine cold starts 600 seconds to become ready, and keep the setup envelope and lifecycle lock above that so a slow SMB/NFS model load is not cancelled by a shorter sibling deadline.
+
 ## [7.15.10] - 2026-09-11
 
 ### Added

@@ -43,6 +43,16 @@ export const AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES = 96 * 1024 ** 3
 export const AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS = 1
 export const AX_ENGINE_MAX_CONCURRENT_REQUESTS_ENV = "AX_ENGINE_MAX_CONCURRENT_REQUESTS"
 
+// Cold-start health wait. Loading a 27B–35B MLX model from local disk or a
+// network mount (SMB/NFS) can take several minutes of mmap + weight load +
+// first-token warmup. The outer setup envelope and server-lock budgets below
+// must stay strictly larger so a slow-but-successful start is not cancelled
+// by a shorter sibling deadline first.
+export const AX_ENGINE_READY_TIMEOUT_MS = 600_000
+export const AX_ENGINE_SERVER_LOCK_TIMEOUT_MS = 640_000
+export const AX_ENGINE_SERVER_LOCK_STALE_MS = 11 * 60_000
+export const AX_ENGINE_SETUP_TIMEOUT_MS = 660_000
+
 // Managed MLX prefix-cache ceilings. Engine L1 defaults to 512 MiB and disk
 // entries default to min(512 MiB, disk_max/4), which rejects a 25k-token
 // hybrid 27B snapshot (~1.7 GiB) and a 64k window (~4.3 GiB). 8 GiB admits
