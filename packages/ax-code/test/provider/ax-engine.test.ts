@@ -53,6 +53,8 @@ import {
   resolveAxEngineApiKey,
   resolveAxEngineMaxConcurrentRequests,
   resolveAxEnginePrefixCacheLaunchConfig,
+  axEngineQwen38ExactMtpEnv,
+  AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV,
   AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
   AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES,
   AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES,
@@ -1132,6 +1134,26 @@ describe("resolveAxEnginePrefixCacheLaunchConfig", () => {
       maxBytes: AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
       diskMaxBytes: AX_ENGINE_PREFIX_CACHE_DISK_MAX_BYTES,
       diskMaxEntryBytes: AX_ENGINE_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES,
+    })
+  })
+})
+
+describe("axEngineQwen38ExactMtpEnv", () => {
+  test("injects the Tier 2 exact MTP profile only for Qwen3.8 27B", () => {
+    expect(axEngineQwen38ExactMtpEnv("ornith-35b-axq-6bit", {})).toEqual({})
+    expect(axEngineQwen38ExactMtpEnv(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, {})).toEqual(
+      AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV,
+    )
+  })
+
+  test("lets explicit environment overrides win", () => {
+    expect(
+      axEngineQwen38ExactMtpEnv(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, {
+        AX_MLX_MTP_ASYNC_DRAFT: "0",
+      }),
+    ).toMatchObject({
+      AX_MLX_QWEN_LINEAR_MTP_EXACT: "1",
+      AX_MLX_MTP_ASYNC_DRAFT: "0",
     })
   })
 })

@@ -19,6 +19,8 @@ import {
   AxEngineModelIDSchema,
   AX_ENGINE_SPECULATION_PROFILE,
   axEnginePrefixCacheEnv,
+  axEngineQwen38ExactMtpEnv,
+  qwen38ExactMtpProfileFingerprint,
   resolveAxEngineApiKey,
   resolveAxEnginePrefixCacheLaunchConfig,
   type AxEnginePrefixCacheLaunchConfig,
@@ -46,6 +48,7 @@ export const AxEngineServerState = z.object({
   prefixCacheMaxBytes: z.number().int().nonnegative().optional(),
   prefixCacheDiskMaxBytes: z.number().int().nonnegative().optional(),
   prefixCacheDiskMaxEntryBytes: z.number().int().nonnegative().optional(),
+  qwen38ExactMtpProfile: z.string().optional(),
   startedAt: z.number(),
   lastHealthAt: z.number().optional(),
 })
@@ -582,6 +585,7 @@ function ensureServerKey(options: AxEngineServerOptions): string {
     options.binaryVersion ?? "",
     options.speculationProfile ?? "",
     options.mtpMode ?? "",
+    qwen38ExactMtpProfileFingerprint(options.modelID),
     prefixCache.dir,
     prefixCache.maxBytes,
     prefixCache.diskMaxBytes,
@@ -662,6 +666,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const mtpModeMatches = existing?.mtpMode === mtpMode
   const prefixCache = prefixCacheLaunchConfig()
   const prefixCacheConfigMatches = prefixCacheMatches(existing, prefixCache)
+  const qwen38ExactMtpProfile = qwen38ExactMtpProfileFingerprint(options.modelID)
+  const qwen38ExactMtpMatches = (existing?.qwen38ExactMtpProfile ?? "") === qwen38ExactMtpProfile
   if (existing) {
     const alive = await serverProcessAlive(existing)
     const ready = alive && (await existingServerReady(existing, options.signal, options.apiKey))
@@ -675,7 +681,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         maxConcurrentRequestsMatches &&
         speculationMatches &&
         mtpModeMatches &&
-        prefixCacheConfigMatches
+        prefixCacheConfigMatches &&
+        qwen38ExactMtpMatches
       ) {
         if (
           existing.modelID === options.modelID &&
@@ -707,6 +714,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             prefixCacheMaxBytes: prefixCache.maxBytes,
             prefixCacheDiskMaxBytes: prefixCache.diskMaxBytes,
             prefixCacheDiskMaxEntryBytes: prefixCache.diskMaxEntryBytes,
+            qwen38ExactMtpProfile,
             lastHealthAt: Date.now(),
           }
           await writeServerState(nextState)
@@ -738,6 +746,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
               ? `prefixCache: ${existing.prefixCacheDir}@${existing.prefixCacheMaxBytes}/${existing.prefixCacheDiskMaxBytes}/${existing.prefixCacheDiskMaxEntryBytes} -> ${prefixCache.dir}@${prefixCache.maxBytes}/${prefixCache.diskMaxBytes}/${prefixCache.diskMaxEntryBytes}`
               : undefined,
             !mtpModeMatches ? `mtpMode: ${existing.mtpMode} -> ${mtpMode}` : undefined,
+            !qwen38ExactMtpMatches ? "qwen38ExactMtpProfile changed" : undefined,
           ].filter(Boolean),
         })
         await terminateServerProcess(existing)
@@ -812,6 +821,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
           // Byte ceilings default to 8 GiB so a 25k/64k hybrid 27B snapshot
           // is admitted; explicit AX_MLX_PREFIX_CACHE_* env values win.
           ...axEnginePrefixCacheEnv(prefixCache),
+          ...axEngineQwen38ExactMtpEnv(options.modelID),
         },
       },
     )
@@ -844,6 +854,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     prefixCacheMaxBytes: prefixCache.maxBytes,
     prefixCacheDiskMaxBytes: prefixCache.diskMaxBytes,
     prefixCacheDiskMaxEntryBytes: prefixCache.diskMaxEntryBytes,
+    qwen38ExactMtpProfile,
     startedAt: Date.now(),
   }
   const startupFailure = async (reason: "process-exited" | "timeout") => {

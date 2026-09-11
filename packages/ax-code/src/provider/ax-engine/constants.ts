@@ -107,6 +107,39 @@ export function axEnginePrefixCacheEnv(config: AxEnginePrefixCacheLaunchConfig):
   }
 }
 
+// Qwen3.8-27B AXQ 6-bit MTP Tier 2 authorizing profile (AXQuant cert 2026-08-14).
+// Product chat without this profile is not a speedup claim; these knobs are the
+// exact-MTP + async-draft contract that measured ≥1.20× on M3 Max.
+export const AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV: Record<string, string> = {
+  AX_MLX_QWEN_LINEAR_MTP_EXACT: "1",
+  AX_MLX_QWEN_LINEAR_MTP_CERTIFICATION_CANDIDATE: "1",
+  AX_MLX_MTP_LINEAR_EXACT_REPLAY: "0",
+  AX_MLX_MTP_ASYNC_DRAFT: "1",
+  AX_MLX_MTP_VERIFY_SUBMIT_LAYERS: "8",
+  AX_MLX_PIPELINE_GRANULARITY: "layer",
+  AX_MLX_MTP_MIN_REMAINING_TOKENS: "0",
+}
+
+export function axEngineQwen38ExactMtpEnv(
+  modelID: string,
+  env: NodeJS.Dict<string> = process.env,
+): Record<string, string> {
+  if (modelID !== AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID) return {}
+  const resolved: Record<string, string> = {}
+  for (const [key, fallback] of Object.entries(AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV)) {
+    const override = env[key]?.trim()
+    resolved[key] = override || fallback
+  }
+  return resolved
+}
+
+export function qwen38ExactMtpProfileFingerprint(modelID: string, env: NodeJS.Dict<string> = process.env): string {
+  return Object.entries(axEngineQwen38ExactMtpEnv(modelID, env))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("\n")
+}
+
 export function resolveAxEngineMaxConcurrentRequests(options: Record<string, unknown> = {}) {
   return (
     parseMaxConcurrentRequests(options.maxConcurrentRequests) ??

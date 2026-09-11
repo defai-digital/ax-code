@@ -6,6 +6,7 @@ import { Process } from "../../../src/util/process"
 import { FileLock } from "../../../src/util/filelock"
 import {
   AX_ENGINE_DEFAULT_MODEL_ID,
+  qwen38ExactMtpProfileFingerprint,
   resolveAxEnginePrefixCacheLaunchConfig,
 } from "../../../src/provider/ax-engine/constants"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
@@ -58,6 +59,7 @@ async function isolate(dir: string) {
     prefixCacheMaxBytes: prefixCache.maxBytes,
     prefixCacheDiskMaxBytes: prefixCache.diskMaxBytes,
     prefixCacheDiskMaxEntryBytes: prefixCache.diskMaxEntryBytes,
+    qwen38ExactMtpProfile: qwen38ExactMtpProfileFingerprint(AX_ENGINE_DEFAULT_MODEL_ID),
     pid: process.pid,
     port: 31418,
     baseURL: "http://127.0.0.1:31418/v1",

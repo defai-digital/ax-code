@@ -11,6 +11,7 @@ import {
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
   AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES_ENV,
   AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES_ENV,
+  AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV,
   AX_MLX_PREFIX_CACHE_DIR_ENV,
   AX_MLX_PREFIX_CACHE_MAX_BYTES_ENV,
 } from "../../../src/provider/ax-engine/constants"
@@ -229,6 +230,23 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
     expect((await Filesystem.readJson(AxEnginePaths.serverState)).prefixCacheMaxBytes).toBe(
       AX_ENGINE_PREFIX_CACHE_MAX_BYTES,
     )
+    for (const [key, value] of Object.entries(AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV)) {
+      expect(f.spawned[0]?.env?.[key]).toBe(value)
+    }
+    expect(state.qwen38ExactMtpProfile).toContain("AX_MLX_QWEN_LINEAR_MTP_EXACT=1")
+    await stopServer()
+  })
+
+  test("Qwen3.8 managed spawn injects the Tier 2 exact MTP profile", async () => {
+    await using f = await fixture()
+    const state = await ensureServer(f.input)
+    expect(f.spawned[0]?.env?.AX_MLX_QWEN_LINEAR_MTP_EXACT).toBe("1")
+    expect(f.spawned[0]?.env?.AX_MLX_QWEN_LINEAR_MTP_CERTIFICATION_CANDIDATE).toBe("1")
+    expect(f.spawned[0]?.env?.AX_MLX_MTP_ASYNC_DRAFT).toBe("1")
+    expect(f.spawned[0]?.env?.AX_MLX_MTP_VERIFY_SUBMIT_LAYERS).toBe("8")
+    expect(f.spawned[0]?.env?.AX_MLX_PIPELINE_GRANULARITY).toBe("layer")
+    expect(f.spawned[0]?.env?.AX_MLX_MTP_MIN_REMAINING_TOKENS).toBe("0")
+    expect(state.qwen38ExactMtpProfile).toContain("AX_MLX_MTP_ASYNC_DRAFT=1")
     await stopServer()
   })
 
