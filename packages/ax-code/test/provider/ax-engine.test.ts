@@ -1139,6 +1139,21 @@ describe("resolveAxEnginePrefixCacheLaunchConfig", () => {
 })
 
 describe("axEngineQwen38ExactMtpEnv", () => {
+  test("applies the same profile to a pinned Qwen artifact as its stable alias", () => {
+    const pinned = `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`
+    expect(axEngineQwen38ExactMtpEnv(pinned, {})).toEqual(
+      axEngineQwen38ExactMtpEnv(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, {}),
+    )
+  })
+
+  test.each([
+    "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@main",
+    `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"a".repeat(40)}`,
+    `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit@${"a".repeat(40)}`,
+  ])("does not apply the profile to a different or unpinned artifact: %s", (modelID) => {
+    expect(axEngineQwen38ExactMtpEnv(modelID, {})).toEqual({})
+  })
+
   test("injects the Tier 2 exact MTP profile only for Qwen3.8 27B", () => {
     expect(axEngineQwen38ExactMtpEnv("ornith-35b-axq-6bit", {})).toEqual({})
     expect(axEngineQwen38ExactMtpEnv(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, {})).toEqual(

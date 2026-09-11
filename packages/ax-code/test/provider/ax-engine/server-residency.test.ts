@@ -237,9 +237,13 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
     await stopServer()
   })
 
-  test("Qwen3.8 managed spawn injects the Tier 2 exact MTP profile", async () => {
+  test.each([
+    AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+    `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}` as const,
+  ])("Qwen3.8 managed spawn injects the exact MTP profile for %s", async (modelID) => {
     await using f = await fixture()
-    const state = await ensureServer(f.input)
+    const input = { ...f.input, modelID }
+    const state = await ensureServer(input)
     expect(f.spawned[0]?.env?.AX_MLX_QWEN_LINEAR_MTP_EXACT).toBe("1")
     expect(f.spawned[0]?.env?.AX_MLX_QWEN_LINEAR_MTP_CERTIFICATION_CANDIDATE).toBe("1")
     expect(f.spawned[0]?.env?.AX_MLX_MTP_ASYNC_DRAFT).toBe("1")
@@ -247,7 +251,20 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
     expect(f.spawned[0]?.env?.AX_MLX_PIPELINE_GRANULARITY).toBe("layer")
     expect(f.spawned[0]?.env?.AX_MLX_MTP_MIN_REMAINING_TOKENS).toBe("0")
     expect(state.qwen38ExactMtpProfile).toContain("AX_MLX_MTP_ASYNC_DRAFT=1")
-    await stopServer()
+    expect((await ensureServer(input)).pid).toBe(state.pid)
+    const previous = process.env.AX_MLX_MTP_ASYNC_DRAFT
+    process.env.AX_MLX_MTP_ASYNC_DRAFT = "0"
+    try {
+      const restarted = await ensureServer(input)
+      expect(restarted.pid).not.toBe(state.pid)
+      expect(f.spawned[1]?.env?.AX_MLX_MTP_ASYNC_DRAFT).toBe("0")
+      expect(restarted.qwen38ExactMtpProfile).toContain("AX_MLX_MTP_ASYNC_DRAFT=0")
+      await expect(f.children[0].exited).resolves.toBeTypeOf("number")
+    } finally {
+      if (previous === undefined) delete process.env.AX_MLX_MTP_ASYNC_DRAFT
+      else process.env.AX_MLX_MTP_ASYNC_DRAFT = previous
+      await stopServer()
+    }
   })
 
   test("changing the prefix-cache budget relaunches the managed server", async () => {

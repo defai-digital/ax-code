@@ -124,7 +124,10 @@ export function axEngineQwen38ExactMtpEnv(
   modelID: string,
   env: NodeJS.Dict<string> = process.env,
 ): Record<string, string> {
-  if (modelID !== AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID) return {}
+  if (!isAxEngineModelID(modelID)) return {}
+  const repo = axEngineHubReference(modelID)?.repoID
+  const expectedRepo = AX_ENGINE_MODEL_DEFINITIONS[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID].quantizations.mlx6bit?.hfRepo
+  if (modelID !== AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID && repo !== expectedRepo) return {}
   const resolved: Record<string, string> = {}
   for (const [key, fallback] of Object.entries(AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV)) {
     const override = env[key]?.trim()
