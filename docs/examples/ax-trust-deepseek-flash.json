@@ -1,0 +1,17 @@
+{
+  "provider": {
+    "ax-trust": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://defai-01.ax-trust.com/v1",
+        "apiKey": "{env:AX_TRUST_API_KEY}"
+      },
+      "models": {
+        "deepseek-v4-flash": {
+          "id": "deepseek-flash",
+          "name": "DeepSeek V4 Flash"
+        }
+      }
+    }
+  }
+}
