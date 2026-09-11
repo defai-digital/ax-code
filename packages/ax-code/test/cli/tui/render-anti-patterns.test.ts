@@ -508,7 +508,11 @@ describe("AX Code TUI stability guardrails", () => {
     // from its value), so collapse whitespace before substring assertions.
     const collapsed = session.replace(/\s+/g, " ")
 
-    expect(collapsed).toContain("enabled: !!undoMessageID(messages(), session()?.revert?.messageID),")
+    // An unloaded undo boundary must remain actionable so history can be fetched.
+    expect(collapsed).toContain("enabled: !!session()?.revert?.messageID || !!undoMessageID(messages(), undefined),")
+    expect(
+      collapsed.match(/if \(!\(await ensureRevertHistory\(\)\) \|\| route.sessionID !== sessionID\) return/g),
+    ).toHaveLength(2)
     expect(collapsed).toContain('log.warn("session rollback abort failed"')
     // The v2 SDK client resolves `{error}` instead of rejecting, so the
     // rollback abort guard surfaces failures from the resolved result (the

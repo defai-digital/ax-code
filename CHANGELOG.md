@@ -6,7 +6,7 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-## [7.15.7] - 2026-09-10
+## [7.15.8] - 2026-09-10
 
 ### Fixed
 
@@ -16,6 +16,7 @@ changes belong to AX Coder.
 - Preserve MTP sampling defaults and admit long prefixes within the managed AX Engine context contract.
 - Account for additional native Windows sharing failures in installer rollback tests without weakening restoration checks.
 - Document the exact AX Trust DeepSeek Flash model mapping for custom providers.
+- Keep undo-history guard tests aligned with recoverable pagination and prevent AX Engine observation fixtures from terminating their own test workers.
 
 ## [7.15.6] - 2026-09-10
 

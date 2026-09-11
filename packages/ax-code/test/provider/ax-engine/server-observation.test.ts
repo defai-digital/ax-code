@@ -1,23 +1,39 @@
-import { afterEach, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { tmpdir } from "../../fixture/fixture"
 import { Process } from "../../../src/util/process"
 import { FileLock } from "../../../src/util/filelock"
-import { AX_ENGINE_DEFAULT_MODEL_ID } from "../../../src/provider/ax-engine/constants"
+import {
+  AX_ENGINE_DEFAULT_MODEL_ID,
+  resolveAxEnginePrefixCacheLaunchConfig,
+} from "../../../src/provider/ax-engine/constants"
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { ensureServer, getServerStatus, type AxEngineServerState } from "../../../src/provider/ax-engine/server"
 
 const originalPaths = { ...AxEnginePaths }
+const originalKill = process.kill.bind(process)
+
+beforeEach(() => {
+  // Observation fixtures borrow this worker PID only for read-only liveness.
+  // A launch-contract regression must fail assertions, never kill the worker.
+  vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+    if (signal === 0) return originalKill(pid, signal)
+    throw new Error("Observation fixtures must not signal live processes")
+  })
+})
 
 function processResult(text: string): Process.TextResult {
   return { code: 0, text, stdout: Buffer.from(text), stderr: Buffer.alloc(0) }
 }
 
 afterEach(() => {
+  const signals = vi.mocked(process.kill).mock.calls.filter(([, signal]) => signal !== 0)
   Object.assign(AxEnginePaths, originalPaths)
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  expect(signals).toEqual([])
 })
 
 async function isolate(dir: string) {
@@ -29,7 +45,19 @@ async function isolate(dir: string) {
     serverLog: path.join(dir, "server.log"),
     prefixCache: path.join(dir, "prefix-cache"),
   })
+  for (const name of [
+    "AX_MLX_PREFIX_CACHE_DIR",
+    "AX_MLX_PREFIX_CACHE_MAX_BYTES",
+    "AX_MLX_PREFIX_CACHE_DISK_MAX_BYTES",
+    "AX_MLX_PREFIX_CACHE_DISK_MAX_ENTRY_BYTES",
+  ])
+    vi.stubEnv(name, undefined)
+  const prefixCache = resolveAxEnginePrefixCacheLaunchConfig({ defaultDir: AxEnginePaths.prefixCache })
   const state: AxEngineServerState = {
+    prefixCacheDir: prefixCache.dir,
+    prefixCacheMaxBytes: prefixCache.maxBytes,
+    prefixCacheDiskMaxBytes: prefixCache.diskMaxBytes,
+    prefixCacheDiskMaxEntryBytes: prefixCache.diskMaxEntryBytes,
     pid: process.pid,
     port: 31418,
     baseURL: "http://127.0.0.1:31418/v1",
