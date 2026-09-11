@@ -7,7 +7,13 @@ import type { Shape } from "../project/instance"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { git } from "../util/git"
-import { parseLsTreePath, parseLsTreeSize, parseNameStatusLine, parseNumstatLine } from "../util/git-output"
+import {
+  parseLsTreePath,
+  parseLsTreeSize,
+  parseNameStatusLine,
+  parseNumstatLine,
+  type NumstatEntry,
+} from "../util/git-output"
 import { Log } from "../util/log"
 import { KeyedSerialQueue, work } from "../util/queue"
 import { NamedError } from "@ax-code/util/error"
@@ -918,8 +924,8 @@ export namespace Snapshot {
 
     const diffs = new Map<string, FileDiff>()
     for (const [hash, files] of filesByHash) {
-      for (const diff of await diffFull(hash, currentHash)) {
-        if (files.has(diff.file)) diffs.set(`${hash}\0${diff.file}`, diff)
+      for (const diff of await diffFull(hash, currentHash, [...files])) {
+        diffs.set(`${hash}\0${diff.file}`, diff)
       }
     }
     return [...baselines.values()].flatMap((item) => {
@@ -954,57 +960,72 @@ export namespace Snapshot {
     })
   }
 
-  export async function diffFull(from: string, to: string) {
+  export async function diffFull(from: string, to: string, files?: string[]) {
     const current = await state()
     return withOperationLock(current, async () => {
       if (!valid(from) || !valid(to)) return []
 
       const result: Snapshot.FileDiff[] = []
       const status = new Map<string, "added" | "deleted" | "modified">()
+      const pathspecs =
+        files === undefined ? ["."] : [...new Set(files.map((file) => file.replaceAll("\\", "/")).filter(Boolean))]
+      if (pathspecs.length === 0) return []
+      // Whole-tree diffs must not be scoped to current.directory (see add()).
+      // Callers that already know the files (previewRevert) pass a pathspec so
+      // git does not re-walk the rest of the tree.
+      const flags = files === undefined ? quote : [...quote, "--literal-pathspecs"]
 
-      // Diff the whole worktree — see add() for why this must not be scoped
-      // to current.directory.
-      const statuses = await runGit(
-        [...quote, ...args(current, ["diff", "--no-ext-diff", "--name-status", "--no-renames", from, to, "--", "."])],
-        { cwd: current.worktree },
-      )
-      if (statuses.code !== 0) {
-        log.error("failed to get snapshot name-status diff", {
-          from,
-          to,
-          exitCode: statuses.code,
-          stderr: statuses.stderr,
-        })
-        throw new Error(`Snapshot diff failed: name-status exited with code ${statuses.code}`)
+      const entries: NumstatEntry[] = []
+      for (let offset = 0; offset < pathspecs.length; offset += revertPathBatch) {
+        const chunk = pathspecs.slice(offset, offset + revertPathBatch)
+        const statuses = await runGit(
+          [
+            ...flags,
+            ...args(current, ["diff", "--no-ext-diff", "--name-status", "--no-renames", from, to, "--", ...chunk]),
+          ],
+          { cwd: current.worktree },
+        )
+        if (statuses.code !== 0) {
+          log.error("failed to get snapshot name-status diff", {
+            from,
+            to,
+            exitCode: statuses.code,
+            stderr: statuses.stderr,
+          })
+          throw new Error(`Snapshot diff failed: name-status exited with code ${statuses.code}`)
+        }
+
+        for (const line of statuses.text.split("\n")) {
+          if (!line) continue
+          const parsed = parseNameStatusLine(line)
+          if (!parsed) continue
+          const { code, file } = parsed
+          status.set(file, code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified")
+        }
+
+        const numstat = await runGit(
+          [
+            ...flags,
+            ...args(current, ["diff", "--no-ext-diff", "--no-renames", "--numstat", from, to, "--", ...chunk]),
+          ],
+          { cwd: current.worktree },
+        )
+        if (numstat.code !== 0) {
+          log.error("failed to get snapshot numstat diff", {
+            from,
+            to,
+            exitCode: numstat.code,
+            stderr: numstat.stderr,
+          })
+          throw new Error(`Snapshot diff failed: numstat exited with code ${numstat.code}`)
+        }
+
+        for (const line of numstat.text.split("\n")) {
+          if (!line) continue
+          const parsed = parseNumstatLine(line)
+          if (parsed) entries.push(parsed)
+        }
       }
-
-      for (const line of statuses.text.split("\n")) {
-        if (!line) continue
-        const parsed = parseNameStatusLine(line)
-        if (!parsed) continue
-        const { code, file } = parsed
-        status.set(file, code.startsWith("A") ? "added" : code.startsWith("D") ? "deleted" : "modified")
-      }
-
-      const numstat = await runGit(
-        [...quote, ...args(current, ["diff", "--no-ext-diff", "--no-renames", "--numstat", from, to, "--", "."])],
-        { cwd: current.worktree },
-      )
-      if (numstat.code !== 0) {
-        log.error("failed to get snapshot numstat diff", {
-          from,
-          to,
-          exitCode: numstat.code,
-          stderr: numstat.stderr,
-        })
-        throw new Error(`Snapshot diff failed: numstat exited with code ${numstat.code}`)
-      }
-
-      const entries = numstat.text.split("\n").flatMap((line) => {
-        if (!line) return []
-        const parsed = parseNumstatLine(line)
-        return parsed ? [parsed] : []
-      })
       // Per-file content fetches are read-only git calls against the snapshot
       // gitdir, so they are safe to parallelize; bound the concurrency to
       // keep the subprocess count contained. Results are written back at

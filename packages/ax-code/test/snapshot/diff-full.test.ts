@@ -82,3 +82,27 @@ test("diffFull fetches per-file content with bounded concurrency", async () => {
     },
   })
 })
+
+test("previewRevert diffs only the requested files", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const keep = path.join(tmp.path, "keep.txt")
+      const other = path.join(tmp.path, "other.txt")
+      await fs.writeFile(keep, "keep v1\n")
+      await fs.writeFile(other, "other v1\n")
+      const baseline = await Snapshot.track()
+      expect(baseline).toBeDefined()
+      await fs.writeFile(keep, "keep v2\n")
+      await fs.writeFile(other, "other v2\n")
+      const git = vi.spyOn(Git, "git")
+      const diffs = await Snapshot.previewRevert([{ hash: baseline!, files: [keep] }])
+      expect(diffs.map((item) => item.file)).toEqual(["keep.txt"])
+      const treeDiffs = git.mock.calls.filter(([args]) => args.includes("--name-status") || args.includes("--numstat"))
+      expect(treeDiffs.length).toBeGreaterThan(0)
+      expect(treeDiffs.every(([args]) => args.includes("keep.txt"))).toBe(true)
+      expect(treeDiffs.some(([args]) => args.includes("other.txt") || args.at(-1) === ".")).toBe(false)
+    },
+  })
+})
