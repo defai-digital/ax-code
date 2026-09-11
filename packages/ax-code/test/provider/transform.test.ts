@@ -560,6 +560,33 @@ describe("ProviderTransform.message - applyCaching", () => {
     expect(result[1].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" })
   })
 
+  test("stamps openaiCompatible cache_control on AX Trust Claude routes", () => {
+    const result = ProviderTransform.message(
+      [
+        { role: "system", content: "You are a coding agent." },
+        { role: "user", content: "count loc" },
+      ] as any,
+      {
+        id: "anthropic/claude-opus-5",
+        providerID: ProviderID.make("defai-01-ax-trust-com"),
+        api: {
+          id: "anthropic/claude-opus-5",
+          url: "https://defai-01.ax-trust.com/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        capabilities: mkClaude().capabilities,
+        limit: mkClaude().limit,
+        status: "active",
+        options: {},
+        headers: {},
+      } as any,
+      {},
+    )
+    expect(result[0].providerOptions?.openaiCompatible?.cache_control).toEqual({ type: "ephemeral" })
+    expect(result[1].providerOptions?.openaiCompatible?.cache_control).toEqual({ type: "ephemeral" })
+    expect(result[0].providerOptions?.anthropic?.cacheControl).toEqual({ type: "ephemeral" })
+  })
+
   test("stamps openaiCompatible cache_control on alibaba-pai messages", () => {
     const result = ProviderTransform.message(
       [

@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.10] - 2026-09-11
+
+### Added
+
+- Show Council agreement, member status and Arena rankings directly in tool transcripts using their recorded metadata.
+
+### Fixed
+
+- Preserve distinct Council and Arena members whose names become identical after removing provider prefixes or truncating labels. Count unique full identities before limiting displayed rankings.
+- Reset the active agent when starting a new chat or deleting the current session, preventing an automatically selected specialist's model from carrying over.
+- Preserve explicitly assigned agents in foreground and parallel subtasks, including retry continuations.
+- Cover AX Trust Claude cache markers through the OpenAI-compatible request transport with regression tests.
+
 ## [7.15.9] - 2026-09-11
 
 ### Changed

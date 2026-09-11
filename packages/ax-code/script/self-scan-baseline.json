@@ -1023,9 +1023,9 @@
           "summary": "map_growth:unbounded_growth"
         },
         {
-          "fingerprint": "79b15a191526bbc1426df1a775ec53714017c09384a2c6d921ea76dad7951657",
+          "fingerprint": "c7983020098648075bd7c21c8f7ae0c333c5796ab38d3bb47fd502554e1b73f4",
           "file": "src/cli/cmd/tui/app-commands.ts",
-          "line": 129,
+          "line": 131,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"

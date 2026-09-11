@@ -194,3 +194,23 @@ describe("arenaView", () => {
     }
   })
 })
+
+describe("ensemble member identity", () => {
+  test("preserves distinct providers and long names that share a display label", () => {
+    const ids = ["first/model", "second/model", `provider/${"a".repeat(40)}1`, `provider/${"a".repeat(40)}2`]
+    const council = councilView({ status: "ok", memberIds: ids })
+    const arena = arenaView({ status: "ok", rankedIds: ids })
+    expect(council.roster).toHaveLength(4)
+    expect(arena.ranked).toHaveLength(4)
+    expect(arena.rankedLabel).toBe("4 contestants")
+    expect(arena.rankedOverflow).toBe(0)
+  })
+
+  test("deduplicates identical full IDs before counting and applying the cap", () => {
+    const ids = ["first/model", "first/model", "second/model"]
+    expect(councilView({ status: "ok", memberIds: ids }).roster).toHaveLength(2)
+    const arena = arenaView({ status: "ok", rankedIds: ids })
+    expect(arena.ranked).toHaveLength(2)
+    expect(arena.rankedLabel).toBe("2 contestants")
+  })
+})

@@ -168,7 +168,7 @@ export function councilView(metadata: unknown, _input?: unknown): CouncilView {
     chips = [{ label: "single answer", count: chips[0]!.count, tone: "muted" }]
   }
 
-  const roster = capList([...new Set(stringList(metadata, "memberIds").map(memberLabel))], MAX_ROSTER)
+  const roster = capList([...new Set(stringList(metadata, "memberIds"))].map(memberLabel), MAX_ROSTER)
 
   // Root causes first: why members were skipped, then why the run was capped.
   const notes = uniqueNonEmpty([...stringList(metadata, "selectionErrors"), ...stringList(metadata, "budgetReasons")])
@@ -223,8 +223,9 @@ export function arenaView(metadata: unknown, _input?: unknown): ArenaView {
 
   // Count the real contestants before the display cap: capList's trailing
   // "+N more" sentinel must never inflate the count or be numbered as a rank.
-  const rankedIds = stringList(metadata, "rankedIds")
-  const uniqueRanked = [...new Set(rankedIds.map(memberLabel))]
+  // Identity must be compared before provider removal and display truncation.
+  const rankedIds = [...new Set(stringList(metadata, "rankedIds"))]
+  const uniqueRanked = rankedIds.map(memberLabel)
   const ranked = uniqueRanked.slice(0, MAX_RANKED)
   const rankedOverflow = uniqueRanked.length - ranked.length
   const rankedLabel = rankedIds.length > 0 ? `${rankedIds.length} contestant${rankedIds.length === 1 ? "" : "s"}` : null
