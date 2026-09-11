@@ -90,7 +90,7 @@ import {
 } from "./last-input-view-model"
 import { RevertNotice } from "./revert-notice"
 import { IdleRecap } from "./idle-recap"
-import { revertState, hiddenMessageIDs } from "./revert"
+import { revertState, hiddenMessageIDs, visibleParts } from "./revert"
 import { displayCommands } from "./display-commands"
 import { sdkErrorMessage } from "./sdk-error-message"
 import { AssistantMessage, QueuedFollowUps, RouteIndicator, UserMessage } from "./transcript"
@@ -773,7 +773,11 @@ export function Session() {
   let searchIndex = -1
 
   function searchMessageText(messageID: string) {
-    const parts = sync.data.part[messageID] ?? []
+    const revert = session()?.revert
+    const parts = visibleParts(
+      sync.data.part[messageID] ?? [],
+      messageID === revert?.messageID ? revert.partID : undefined,
+    )
     return parts.reduce((agg, part) => {
       if (part.type === "text" && !part.synthetic && !part.ignored) {
         agg += part.text
@@ -1360,6 +1364,7 @@ export function Session() {
 
   const revertInfo = createMemo(() => session()?.revert)
   const revertMessageID = createMemo(() => revertInfo()?.messageID)
+  const revertPartID = createMemo(() => revertInfo()?.partID)
   const missingRevertHistory = createMemo(
     () => !!revertMessageID() && !messages().some((message) => message.id === revertMessageID()),
   )
@@ -1382,7 +1387,7 @@ export function Session() {
   )
 
   const revert = createMemo(() => revertState(revertInfo(), messages()))
-  const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID()))
+  const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID(), revertPartID()))
   const pinnedInputCandidate = createMemo(() =>
     selectPinnedInputCandidate({
       messages: messages(),
@@ -1598,9 +1603,38 @@ export function Session() {
                 {(message, index) => (
                   <Switch>
                     <Match when={message.id === revert()?.messageID}>
-                      <Show when={revert()}>
-                        {(state) => <RevertNotice count={state().reverted.length} files={state().diffFiles} />}
-                      </Show>
+                      <>
+                        <Show when={revertPartID() && message.role === "user"}>
+                          <UserMessage
+                            index={index()}
+                            onMouseUp={() => {
+                              if (renderer.getSelection()?.getSelectedText()) return
+                              dialog.replace(() => (
+                                <DialogMessage
+                                  messageID={message.id}
+                                  sessionID={route.sessionID}
+                                  setPrompt={(promptInfo) => prompt.set(promptInfo)}
+                                />
+                              ))
+                            }}
+                            message={message as UserMessageInfo}
+                            parts={visibleParts(sync.data.part[message.id] ?? [], revertPartID())}
+                            pending={pending()}
+                          />
+                        </Show>
+                        <Show when={revertPartID() && message.role === "assistant"}>
+                          <Show when={!recoveredAssistantIDs().has(message.id)}>
+                            <AssistantMessage
+                              last={lastAssistant()?.id === message.id}
+                              message={message as AssistantMessageInfo}
+                              parts={visibleParts(sync.data.part[message.id] ?? [], revertPartID())}
+                            />
+                          </Show>
+                        </Show>
+                        <Show when={revert()}>
+                          {(state) => <RevertNotice count={state().reverted.length} files={state().diffFiles} />}
+                        </Show>
+                      </>
                     </Match>
                     <Match when={revert()?.messageID && hiddenIDs().has(message.id)}>
                       <></>

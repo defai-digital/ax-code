@@ -8,7 +8,7 @@ import {
   MissingRevertMessageError,
 } from "../../../src/cli/cmd/tui/routes/session/revert-history"
 import { undoMessageID, redoMessageID } from "../../../src/cli/cmd/tui/routes/session/messages"
-import { hiddenMessageIDs } from "../../../src/cli/cmd/tui/routes/session/revert"
+import { hiddenMessageIDs, visibleParts } from "../../../src/cli/cmd/tui/routes/session/revert"
 
 const history = Array.from({ length: 350 }, (_, index) => ({
   info: { id: `msg_${String(index).padStart(4, "0")}`, role: index % 2 ? "assistant" : "user" },
@@ -405,5 +405,26 @@ describe("recover undo history", () => {
     expect(await loader.ensureRevertHistory()).toBe(true)
     expect(state.message.session).toHaveLength(350)
     expect(loader.historyError()).toBe("")
+  })
+})
+
+describe("part-level revert visibility", () => {
+  const messages = [
+    { id: "user_1", role: "user" },
+    { id: "asst_1", role: "assistant" },
+    { id: "user_2", role: "user" },
+    { id: "asst_2", role: "assistant" },
+  ]
+  const parts = [{ id: "part_keep" }, { id: "part_hide" }, { id: "part_later" }]
+
+  test("keeps the boundary message visible and hides only later turns", () => {
+    expect(hiddenMessageIDs(messages, "asst_1")).toEqual(new Set(["asst_1", "user_2", "asst_2"]))
+    expect(hiddenMessageIDs(messages, "asst_1", "part_hide")).toEqual(new Set(["user_2", "asst_2"]))
+  })
+
+  test("hides parts at and after the boundary part", () => {
+    expect(visibleParts(parts, "part_hide").map((part) => part.id)).toEqual(["part_keep"])
+    expect(visibleParts(parts, "missing")).toEqual([])
+    expect(visibleParts(parts).map((part) => part.id)).toEqual(["part_keep", "part_hide", "part_later"])
   })
 })

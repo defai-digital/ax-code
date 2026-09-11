@@ -55,17 +55,26 @@ export function revertedMessages(messages: Message[], messageID?: string) {
   return messages.slice(idx).filter((item) => item.role === "user")
 }
 
-export function hiddenMessageIDs(messages: Message[], messageID?: string): Set<string> {
+export function hiddenMessageIDs(messages: Message[], messageID?: string, partID?: string): Set<string> {
   if (!messageID) return new Set()
   const idx = messages.findIndex((m) => m.id === messageID)
   // A missing boundary is an incomplete history window, not proof that the
   // loaded messages are visible. Do not redisplay potentially undone content.
   if (idx === -1) return new Set(messages.map((message) => message.id))
+  // A part-level revert keeps the boundary message; only later messages hide.
+  const start = partID ? idx + 1 : idx
   const ids = new Set<string>()
-  for (let i = idx; i < messages.length; i++) {
+  for (let i = start; i < messages.length; i++) {
     ids.add(messages[i].id)
   }
   return ids
+}
+
+export function visibleParts<T extends { id: string }>(parts: T[], partID?: string): T[] {
+  if (!partID) return parts
+  const idx = parts.findIndex((part) => part.id === partID)
+  if (idx === -1) return []
+  return parts.slice(0, idx)
 }
 
 export function revertState(info: Info | undefined, messages: Message[]) {
