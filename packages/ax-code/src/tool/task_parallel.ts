@@ -187,6 +187,7 @@ async function runOneTask(input: {
         sessionID: session.id,
         model,
         agent: agent.name,
+        agentRouting: "preserve",
         tools: taskTools,
         parts: promptParts,
       }),
@@ -204,6 +205,7 @@ async function runOneTask(input: {
             sessionID: session.id,
             model,
             agent: agent.name,
+            agentRouting: "preserve",
             tools: { ...taskTools, task: false, task_parallel: false },
             parts: [
               {

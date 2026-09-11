@@ -1054,4 +1054,91 @@ describe("tool.task", () => {
       },
     })
   })
+
+  test("foreground subagent prompts preserve the requested agent when the prompt mentions a bug", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        let calls = 0
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          calls++
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+            },
+            parts: calls === 1 ? [] : [{ type: "text", text: "no bugs found" }],
+          } as any
+        }) as any)
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "Hunt bug in search",
+              prompt: "find the bug in search.ts",
+              subagent_type: "explore",
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          expect(promptSpy).toHaveBeenCalledTimes(2)
+          for (const [input] of promptSpy.mock.calls) {
+            expect(input).toMatchObject({
+              agent: "explore",
+              agentRouting: "preserve",
+            })
+          }
+          expect(result.output).toContain("no bugs found")
+        } finally {
+          promptSpy.mockRestore()
+        }
+      },
+    })
+  })
 })

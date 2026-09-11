@@ -460,6 +460,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
               providerID: model.providerID,
             },
             agent: agent.name,
+            agentRouting: "preserve",
             tools: taskTools,
             parts: promptParts,
           }),
@@ -482,6 +483,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
                   providerID: model.providerID,
                 },
                 agent: agent.name,
+                agentRouting: "preserve",
                 tools: {
                   ...taskTools,
                   task: false,

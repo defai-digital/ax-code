@@ -17,6 +17,7 @@ import {
   solidStoreRecordPatch,
   rememberRecentModel,
   resolveCurrentAgent,
+  defaultVisibleAgentName,
   resolvePinnedModelPreference,
 } from "../../../src/cli/cmd/tui/context/local-util"
 
@@ -55,6 +56,18 @@ describe("tui local agent selection", () => {
       name: "build",
       displayName: "Build",
     })
+  })
+
+  test("new-chat default prefers the configured primary agent over a leftover specialist", () => {
+    const agents = [{ name: "build" }, { name: "debug" }, { name: "plan" }]
+    expect(defaultVisibleAgentName(agents, "build")).toBe("build")
+    expect(defaultVisibleAgentName(agents, "debug")).toBe("debug")
+    expect(defaultVisibleAgentName(agents)).toBe("build")
+  })
+
+  test("new-chat default ignores a configured agent that is not visible", () => {
+    expect(defaultVisibleAgentName([{ name: "build" }, { name: "plan" }], "explore")).toBe("build")
+    expect(defaultVisibleAgentName([], "build")).toBeUndefined()
   })
 })
 

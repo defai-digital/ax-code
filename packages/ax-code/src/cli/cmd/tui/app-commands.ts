@@ -126,7 +126,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
       onSelect: () => {
         // New chat always starts in Agent work mode (not sticky council/arena).
+        // Drop an auto-routed specialist (debug/plan/…) so Home does not
+        // inherit that agent's model pin on the next submit.
         kv.set("work_mode", WorkMode.DEFAULT)
+        local.agent.resetToDefault()
         const current = promptRef.current
         // Don't require focus - if there's any text, preserve it
         const currentPrompt = current?.current?.input ? current.current : undefined

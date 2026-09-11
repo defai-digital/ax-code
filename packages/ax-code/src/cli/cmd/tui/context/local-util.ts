@@ -74,6 +74,15 @@ export function resolveCurrentAgent<
   } as T
 }
 
+/** Configured default when it is still visible, else the first listed primary agent. */
+export function defaultVisibleAgentName(
+  agents: readonly { name: string }[],
+  configuredDefault?: string,
+): string | undefined {
+  if (configuredDefault && agents.some((agent) => agent.name === configuredDefault)) return configuredDefault
+  return agents[0]?.name
+}
+
 export function normalizeModelVariantStore(input: unknown): Record<string, string | undefined> {
   if (!input || typeof input !== "object" || Array.isArray(input)) return {}
   return Object.fromEntries(

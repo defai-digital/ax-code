@@ -38,6 +38,7 @@ import {
   solidStoreRecordPatch,
   rememberRecentModel as rememberRecentModelEntry,
   resolveCurrentAgent,
+  defaultVisibleAgentName,
   type ModelPreferenceStatus,
   type SessionModelPreferenceStore,
 } from "./local-util"
@@ -120,6 +121,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
               message: `Agent not found: ${name}`,
               duration: 3000,
             })
+          setAgentStore("current", name)
+        },
+        resetToDefault() {
+          const name = defaultVisibleAgentName(agents(), sync.data.config.default_agent)
+          if (!name) return
           setAgentStore("current", name)
         },
         move(direction: 1 | -1) {
