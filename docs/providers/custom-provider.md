@@ -98,8 +98,7 @@ existing local selection is `ax-trust/deepseek-v4-flash`. Keep the local key
 and set `provider.ax-trust.models.deepseek-v4-flash.id` to `deepseek-flash`.
 AX Code then sends the gateway ID in API requests.
 
-See the [AX Trust DeepSeek Flash configuration example](../examples/ax-trust-deepseek-flash.json)
-and [incident report](../reports/2026-09-10-ax-trust-deepseek-model-id.md).
+See the [AX Trust DeepSeek Flash configuration example](../examples/ax-trust-deepseek-flash.json).
 Merge the relevant provider fields into your existing configuration, preserving
 other models and their capability settings. The example uses
 `{env:AX_TRUST_API_KEY}`; set that environment variable before starting AX Code,
