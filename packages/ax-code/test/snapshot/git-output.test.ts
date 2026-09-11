@@ -100,3 +100,12 @@ test("parseLsTreePath reads the path from an ls-tree record", () => {
   expect(parseLsTreePath('100644 blob 1111111111111111111111111111111111111111\t"route[1].txt"')).toBe("route[1].txt")
   expect(parseLsTreePath("malformed")).toBeUndefined()
 })
+
+test.each(['"quoted"', '"escaped\\tname"', "tab\tname", "line\nname"])(
+  "parseLsTreePath preserves the raw NUL-delimited path %s",
+  (file) => {
+    expect(
+      parseLsTreePath(`100644 blob 1111111111111111111111111111111111111111\t${file}`, { nulDelimited: true }),
+    ).toBe(file)
+  },
+)

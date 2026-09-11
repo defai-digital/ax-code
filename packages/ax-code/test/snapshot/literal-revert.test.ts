@@ -61,7 +61,7 @@ test("reverting a newly added wildcard path removes it without checking out a ne
   })
 })
 
-test.skipIf(process.platform === "win32").each([":(glob)*.txt", "odd*name?.txt"])(
+test.skipIf(process.platform === "win32").each([":(glob)*.txt", "odd*name?.txt", '"quoted"', '"escaped\\tname"'])(
   "reverting the Unix path %s treats it literally",
   async (name) => {
     await using tmp = await tmpdir({ git: true })
@@ -77,7 +77,10 @@ test.skipIf(process.platform === "win32").each([":(glob)*.txt", "odd*name?.txt"]
         await fs.writeFile(target, "target after\n")
         await fs.writeFile(neighbor, "manual neighbor edit\n")
 
-        await Snapshot.revert([{ hash: baseline!, files: [target] }])
+        expect((await Snapshot.patch(baseline!)).files).toContain(target)
+        const patches = [{ hash: baseline!, files: [target] }]
+        expect((await Snapshot.previewRevert(patches)).map((diff) => diff.file)).toEqual([name])
+        await Snapshot.revert(patches)
 
         expect(await fs.readFile(target, "utf8")).toBe("target before\n")
         expect(await fs.readFile(neighbor, "utf8")).toBe("manual neighbor edit\n")

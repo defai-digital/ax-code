@@ -110,6 +110,11 @@ export function parseLsTreeSize(line: string): number | undefined {
   return parseCount(raw)
 }
 
-export function parseLsTreePath(line: string): string | undefined {
-  return splitPair(line)?.[1]
+export function parseLsTreePath(line: string, options?: { nulDelimited: boolean }): string | undefined {
+  // Git -z emits raw filenames, including literal quotes and backslashes.
+  // Only newline-delimited output uses Git's quoted-path encoding.
+  if (!options?.nulDelimited) return splitPair(line)?.[1]
+  const separator = line.indexOf("\t")
+  if (separator < 0) return undefined
+  return line.slice(separator + 1) || undefined
 }

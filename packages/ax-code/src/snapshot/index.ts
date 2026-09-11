@@ -601,7 +601,7 @@ export namespace Snapshot {
         files: result.text
           .split("\0")
           .filter(Boolean)
-          .map((item) => path.join(current.worktree, item).replaceAll("\\", "/")),
+          .map((item) => path.join(current.worktree, item).split(path.sep).join("/")),
       }
     })
   }
@@ -807,13 +807,13 @@ export namespace Snapshot {
           }
           const present = new Set<string>()
           for (const record of tree.text.split("\0")) {
-            const file = parseLsTreePath(record)
-            if (file) present.add(file.replaceAll("\\", "/"))
+            const file = parseLsTreePath(record, { nulDelimited: true })
+            if (file) present.add(file)
           }
           const restore: typeof chunk = []
           const missing: typeof chunk = []
           for (let index = 0; index < chunk.length; index++) {
-            const rel = rels[index]!.replaceAll("\\", "/")
+            const rel = rels[index]!.split(path.sep).join("/")
             if (present.has(rel)) restore.push(chunk[index]!)
             else missing.push(chunk[index]!)
           }
@@ -907,7 +907,7 @@ export namespace Snapshot {
       if (!valid(item.hash)) continue
       for (const requestedFile of item.files) {
         const resolved = await revertPath(current, requestedFile, realWorktree)
-        const file = path.relative(current.worktree, resolved).replaceAll("\\", "/")
+        const file = path.relative(current.worktree, resolved).split(path.sep).join("/")
         if (!baselines.has(file)) baselines.set(file, { hash: item.hash, file })
       }
     }
@@ -968,7 +968,7 @@ export namespace Snapshot {
       const result: Snapshot.FileDiff[] = []
       const status = new Map<string, "added" | "deleted" | "modified">()
       const pathspecs =
-        files === undefined ? ["."] : [...new Set(files.map((file) => file.replaceAll("\\", "/")).filter(Boolean))]
+        files === undefined ? ["."] : [...new Set(files.map((file) => file.split(path.sep).join("/")).filter(Boolean))]
       if (pathspecs.length === 0) return []
       // Whole-tree diffs must not be scoped to current.directory (see add()).
       // Callers that already know the files (previewRevert) pass a pathspec so

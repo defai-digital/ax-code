@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.7] - 2026-09-10
+
+### Fixed
+
+- Preserve literal quotes and Unix backslashes throughout snapshot change detection, undo previews, and batch restoration, preventing existing files from being mistaken for newly added files and deleted.
+- Recover older undo boundaries from stored history, preserve streamed state while loading history, and keep unaffected message parts visible after a partial revert. Restore file state when sending after undo.
+- Batch snapshot restoration by baseline and limit undo previews to the requested files while retaining failure recovery.
+- Preserve MTP sampling defaults and admit long prefixes within the managed AX Engine context contract.
+- Account for additional native Windows sharing failures in installer rollback tests without weakening restoration checks.
+- Document the exact AX Trust DeepSeek Flash model mapping for custom providers.
+
 ## [7.15.6] - 2026-09-10
 
 ### Fixed
