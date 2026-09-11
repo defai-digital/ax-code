@@ -1210,6 +1210,37 @@ export namespace ProviderTransform {
     return {}
   }
 
+  /**
+   * Re-apply small-request thinking-off after model/agent/plugin option merges.
+   * Nested mergeDeep would otherwise keep `enable_thinking: true` or
+   * `preserve_thinking` from those layers on compact conversation turns.
+   */
+  export function applySmallOverrides(
+    model: Provider.Model,
+    options: Record<string, any>,
+    providerOptions?: Record<string, any>,
+  ): Record<string, any> {
+    const small: Record<string, any> = smallOptions(model, providerOptions)
+    if (Object.keys(small).length === 0) return options
+    const next: Record<string, any> = mergeDeep(options, small)
+    if (isRecord(small.chat_template_kwargs)) {
+      next.chat_template_kwargs = { ...small.chat_template_kwargs }
+    }
+    if (Object.prototype.hasOwnProperty.call(small, "enable_thinking")) {
+      next.enable_thinking = small.enable_thinking
+    }
+    if (isRecord(small.thinkingConfig)) {
+      next.thinkingConfig = { ...small.thinkingConfig }
+    }
+    if (isRecord(small.veniceParameters)) {
+      next.veniceParameters = {
+        ...(isRecord(next.veniceParameters) ? next.veniceParameters : {}),
+        ...small.veniceParameters,
+      }
+    }
+    return next
+  }
+
   export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
     const key = sdkKey(model.api.npm) ?? model.providerID
     return { [key]: options }

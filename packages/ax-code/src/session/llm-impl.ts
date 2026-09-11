@@ -298,15 +298,16 @@ export namespace LLM {
           providerOptions: provider?.options ?? {},
           longAgent: superLongEnabled && longAgentProfile.preserveThinkingEligible,
         })
+    const merged: Record<string, any> = pipe(
+      base,
+      mergeDeep(modelOptions),
+      mergeDeep(input.agent.options),
+      mergeDeep(variant),
+      mergeDeep(reasoningPolicyDecision.options),
+    )
     const options: Record<string, any> = ProviderTransform.sanitizeOptions(
       input.model,
-      pipe(
-        base,
-        mergeDeep(modelOptions),
-        mergeDeep(input.agent.options),
-        mergeDeep(variant),
-        mergeDeep(reasoningPolicyDecision.options),
-      ),
+      input.small ? ProviderTransform.applySmallOverrides(input.model, merged, provider?.options ?? {}) : merged,
     )
     // Phase 4: build and inject a long-agent context pack for Super-Long runs.
     // The token budget follows the model profile (wide for Qwen3.7-Max,
@@ -406,7 +407,12 @@ export namespace LLM {
         options,
       },
     )
-    const paramsOptions = ProviderTransform.sanitizeOptions(input.model, params.options)
+    const paramsOptions = ProviderTransform.sanitizeOptions(
+      input.model,
+      input.small
+        ? ProviderTransform.applySmallOverrides(input.model, params.options, provider?.options ?? {})
+        : params.options,
+    )
     const providerOptions = ProviderTransform.providerOptions(input.model, paramsOptions)
 
     const { headers } = await Plugin.trigger(

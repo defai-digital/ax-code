@@ -671,6 +671,101 @@ describe("session.llm.stream", () => {
     })
   })
 
+  test("disables AX Engine thinking on small compact-conversation requests", async () => {
+    const providerID = "ax-engine"
+    const modelID = "qwen3.8-27b-axq-6bit"
+    const modelsResponse = () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: modelID,
+              capabilities: {
+                temperature: true,
+                toolcall: true,
+                input: { text: true },
+                output: { text: true },
+              },
+              ax_engine: { openai_tool_calling_supported: true, coding_supported: true },
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      )
+    for (let i = 0; i < 6; i++) waitRequest("/models", modelsResponse())
+    const request = waitRequest(
+      "/chat/completions",
+      new Response(createChatStream("Hello"), {
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "ax-code.json"),
+          JSON.stringify({
+            $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+            enabled_providers: [providerID],
+            provider: {
+              [providerID]: {
+                options: {
+                  connectionMode: "attach",
+                  apiKey: "local",
+                  baseURL: `${state.server.url.origin}/v1`,
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await Provider.getModel(ProviderID.make(providerID), ModelID.make(modelID))
+        const sessionID = SessionID.make("session-ax-engine-small")
+        const agent = {
+          name: "build",
+          mode: "primary",
+          options: {
+            chat_template_kwargs: { enable_thinking: true, preserve_thinking: true },
+          },
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const user = {
+          id: MessageID.make("user-1"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: agent.name,
+          model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+        } satisfies MessageV2.User
+
+        const stream = await LLM.stream({
+          user,
+          sessionID,
+          model: resolved,
+          agent,
+          small: true,
+          system: ["Answer the user's clear creative request directly."],
+          abort: new AbortController().signal,
+          messages: [{ role: "user", content: "a vietnam ghost story, in t. chinese" }],
+          tools: {},
+        })
+        for await (const _ of stream.fullStream) {
+        }
+
+        const body = (await request).body
+        expect(body.model).toBe(modelID)
+        expect(body.chat_template_kwargs).toEqual({ enable_thinking: false })
+        expect(body.enable_thinking).toBeUndefined()
+      },
+    })
+  })
+
   test("keeps tools enabled by prompt permissions", async () => {
     const providerID = "alibaba-coding-plan"
     const modelID = "qwen3.6-plus"

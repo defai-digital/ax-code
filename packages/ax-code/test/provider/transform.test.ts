@@ -3248,6 +3248,27 @@ describe("ProviderTransform.smallOptions - Alibaba thinking models", () => {
     })
   })
 
+  test("applySmallOverrides wins over merged thinking-on kwargs", () => {
+    const model = createModel("ax-engine", "qwen3.8-27b-axq-6bit", true)
+    const result = ProviderTransform.applySmallOverrides(model, {
+      chat_template_kwargs: { enable_thinking: true, preserve_thinking: true },
+      enable_thinking: true,
+    })
+    expect(result.chat_template_kwargs).toEqual({ enable_thinking: false })
+    expect(result).not.toHaveProperty("preserve_thinking")
+    expect(result.repetition_penalty).toBe(1.0)
+  })
+
+  test("applySmallOverrides forces DashScope enable_thinking off after agent merges", () => {
+    const model = createModel("alibaba-token-plan")
+    const result = ProviderTransform.applySmallOverrides(model, {
+      enable_thinking: true,
+      thinking_budget: 8192,
+    })
+    expect(result.enable_thinking).toBe(false)
+    expect(result.thinking_budget).toBe(8192)
+  })
+
   test("disables Ornith chat-template thinking on local and PAI title calls", () => {
     expect(ProviderTransform.smallOptions(createModel("ax-engine", "ornith-35b-axq-6bit", true))).toEqual({
       chat_template_kwargs: { enable_thinking: false },
