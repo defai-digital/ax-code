@@ -144,7 +144,7 @@ async function runNative(
       Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      await runNativeWiki({ root: tmpPath, action: "update" })
+      await runNativeWiki({ root: tmpPath, action: "update", model: "groq/openai/gpt-oss-20b" })
     },
   })
   return { evidence }

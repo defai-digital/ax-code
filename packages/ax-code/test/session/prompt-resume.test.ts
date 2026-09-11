@@ -217,6 +217,7 @@ describe("session.prompt resume_existing", () => {
         const emitSpy = vi.spyOn(Recorder, "emit")
         try {
           const first = SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "start work" }],

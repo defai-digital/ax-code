@@ -30,7 +30,7 @@ async function endpoint(handler: http.RequestListener) {
 }
 
 const vision = {
-  id: "deepseek-v4-flash-vision-exp",
+  id: "fixture-vision",
   name: "Updated Flash Vision",
   limit: { context: 1_000_000, output: 384_000 },
   capabilities: { attachment: true, reasoning: true, toolcall: true, temperature: true },

@@ -191,7 +191,7 @@ describe("session.prompt missing file", () => {
       config: {
         agent: {
           build: {
-            model: "openai/gpt-5.2",
+            model: "openai/gpt-5.4",
           },
         },
       },
@@ -206,6 +206,7 @@ describe("session.prompt missing file", () => {
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
           agent: "build",
+          model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
           noReply: true,
           parts: [
             { type: "text", text: "please review @does-not-exist.ts" },
@@ -236,7 +237,7 @@ describe("session.prompt missing file", () => {
       config: {
         agent: {
           build: {
-            model: "openai/gpt-5.2",
+            model: "openai/gpt-5.4",
           },
         },
       },
@@ -251,6 +252,7 @@ describe("session.prompt missing file", () => {
         const msg = await SessionPrompt.prompt({
           sessionID: session.id,
           agent: "build",
+          model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
           noReply: true,
           parts: [
             {
@@ -345,6 +347,7 @@ describe("session.prompt missing file", () => {
 
             const msg = await SessionPrompt.prompt({
               sessionID: session.id,
+              model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
               noReply: true,
               parts: [
                 {
@@ -405,6 +408,7 @@ describe("session.prompt missing file", () => {
         try {
           const msg = await SessionPrompt.prompt({
             sessionID: session.id,
+            model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
             noReply: true,
             parts: [
               {
@@ -444,7 +448,7 @@ describe("session.prompt legacy tools compatibility", () => {
       config: {
         agent: {
           build: {
-            model: "openai/gpt-5.2",
+            model: "openai/gpt-5.4",
           },
         },
       },
@@ -459,6 +463,7 @@ describe("session.prompt legacy tools compatibility", () => {
           await SessionPrompt.prompt({
             sessionID: session.id,
             agent: "build",
+            model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
             noReply: true,
             tools: {
               question: true,
@@ -506,6 +511,7 @@ describe("session.prompt special characters", () => {
 
         const message = await SessionPrompt.prompt({
           sessionID: session.id,
+          model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
           parts,
           noReply: true,
         })
@@ -657,7 +663,7 @@ describe("session.prompt agent variant", () => {
         config: {
           agent: {
             build: {
-              model: "openai/gpt-5.2",
+              model: "openai/gpt-5.4",
               variant: "xhigh",
             },
           },
@@ -686,7 +692,7 @@ describe("session.prompt agent variant", () => {
             parts: [{ type: "text", text: "hello again" }],
           })
           if (match.info.role !== "user") throw new Error("expected user message")
-          expect(match.info.model).toEqual({ providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.2") })
+          expect(match.info.model).toEqual({ providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") })
           expect(match.info.variant).toBe("xhigh")
 
           const override = await SessionPrompt.prompt({
@@ -791,7 +797,7 @@ describe("session.prompt shell cleanup", () => {
       config: {
         agent: {
           build: {
-            model: "openai/gpt-5.2",
+            model: "openai/gpt-5.4",
           },
         },
       },
@@ -835,7 +841,7 @@ describe("session.prompt shell cleanup", () => {
             agent: "build",
             model: {
               providerID: ProviderID.make("openai"),
-              modelID: ModelID.make("gpt-5.2"),
+              modelID: ModelID.make("gpt-5.4"),
             },
             command: "echo shell-ok",
           })

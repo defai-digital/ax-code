@@ -812,6 +812,7 @@ describe("TaskQueue", () => {
             escalationPolicy: "deny",
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               agent: "build",
               parts: [{ type: "text", text: "Do not ask for isolation escalation." }],
             },
@@ -850,6 +851,7 @@ describe("TaskQueue", () => {
             maxParallel: 1,
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               parts: [{ type: "text", text: "First child." }],
             },
           },
@@ -863,6 +865,7 @@ describe("TaskQueue", () => {
             maxParallel: 1,
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               parts: [{ type: "text", text: "Second child." }],
             },
           },
@@ -891,6 +894,7 @@ describe("TaskQueue", () => {
           payload: {
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               parts: [{ type: "text", text: "First prompt." }],
             },
           },
@@ -902,6 +906,7 @@ describe("TaskQueue", () => {
           payload: {
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               parts: [{ type: "text", text: "Second prompt." }],
             },
           },
@@ -934,6 +939,7 @@ describe("TaskQueue", () => {
             maxParallel: 1,
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               parts: [{ type: "text", text: "First child." }],
             },
           },
@@ -947,6 +953,7 @@ describe("TaskQueue", () => {
             maxParallel: 1,
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               parts: [{ type: "text", text: "Second child." }],
             },
           },
@@ -979,6 +986,7 @@ describe("TaskQueue", () => {
             maxParallel: 1,
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               parts: [{ type: "text", text: "First child." }],
             },
           },
@@ -992,6 +1000,7 @@ describe("TaskQueue", () => {
             maxParallel: 1,
             body: {
               noReply: true,
+              model: { providerID: "openai", modelID: "gpt-5.4" },
               parts: [{ type: "text", text: "Second child." }],
             },
           },
@@ -1354,6 +1363,7 @@ function pacedWorkflowPayload(input: {
     budgetSlice: input.budgetSlice ?? { maxTotalTokens: 10 },
     body: {
       noReply: true,
+      model: { providerID: "openai", modelID: "gpt-5.4" },
       parts: [{ type: "text", text: "Run paced workflow child." }],
     },
   }

@@ -14,7 +14,7 @@ describe("prompt user message helpers", () => {
       config: {
         agent: {
           build: {
-            model: "openai/gpt-5.2",
+            model: "openai/gpt-5.4",
           },
         },
       },
@@ -29,7 +29,7 @@ describe("prompt user message helpers", () => {
           agent: "build",
           model: {
             providerID: "openai" as any,
-            modelID: "gpt-5.2" as any,
+            modelID: "gpt-5.4" as any,
           },
           parts: [{ type: "text", text: "start" }],
         })
@@ -47,7 +47,7 @@ describe("prompt user message helpers", () => {
           agent: "build",
           model: {
             providerID: "openai",
-            modelID: "gpt-5.2",
+            modelID: "gpt-5.4",
           },
         })
         expect(users[1]!.parts).toEqual([expect.objectContaining({ type: "text", text: "continue" })])
@@ -62,6 +62,8 @@ describe("prompt user message agent model fallback", () => {
       git: true,
       config: {
         disabled_providers: ["deepseek"],
+        model: "openai/gpt-5.4",
+        provider: { openai: { options: { apiKey: "test-key" } } },
         agent: {
           build: {
             model: "deepseek/deepseek-v4-pro",

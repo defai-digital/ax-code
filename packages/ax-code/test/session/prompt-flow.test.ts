@@ -115,6 +115,7 @@ describe("session.prompt flow", () => {
         sessionID = session.id
 
         const msg = await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "say hello" }],
@@ -209,6 +210,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Fallback Notice Test" })
 
           const msg = await SessionPrompt.prompt({
+            model: { providerID: "subconscious" as any, modelID: "test-model" as any },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "say hello" }],
@@ -268,6 +270,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Autonomous Stop Test" })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "hello" }],
@@ -309,6 +312,7 @@ describe("session.prompt flow", () => {
         try {
           const session = await Session.create({ title: "Prompt Preflight Test" })
           const message = await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "x".repeat(PREFLIGHT_OVER_BUDGET_TEXT_CHARS) }],
@@ -389,6 +393,7 @@ describe("session.prompt flow", () => {
       fn: async () => {
         const session = await Session.create({ title: "Repeated Context Overflow Test" })
         await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "create a website" }],
@@ -451,6 +456,7 @@ describe("session.prompt flow", () => {
         const session = await Session.create({ title: "Deferred Auto Index Test" })
 
         await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "say hello" }],
@@ -514,6 +520,7 @@ describe("session.prompt flow", () => {
           })
 
           const msg = await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "continue the bug sweep" }],
@@ -615,6 +622,7 @@ describe("session.prompt flow", () => {
           })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "finish this task autonomously" }],
@@ -706,6 +714,7 @@ describe("session.prompt flow", () => {
           })
 
           const msg = await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "write the bug report" }],
@@ -790,6 +799,7 @@ describe("session.prompt flow", () => {
         const session = await Session.create({ title: "Prompt Tool Flow Test" })
 
         const msg = await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "inspect file" }],
@@ -889,6 +899,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Patch externalFiles Test" })
           try {
             await SessionPrompt.prompt({
+              model: { providerID: model.providerID, modelID: model.id },
               sessionID: session.id,
               agent: "build",
               parts: [{ type: "text", text: "edit files" }],
@@ -1027,6 +1038,7 @@ describe("session.prompt flow", () => {
         const session = await Session.create({ title: "Prompt Abort Flow Test" })
 
         const pending = SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "start work" }],
@@ -1047,6 +1059,7 @@ describe("session.prompt flow", () => {
         expect(stored[1]?.parts.some((part) => part.type === "text" && part.text.includes("partial answer"))).toBe(true)
 
         const recovered = await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "continue" }],
@@ -1129,6 +1142,7 @@ describe("session.prompt flow", () => {
         const session = await Session.create({ title: "Prompt Permission Flow Test" })
 
         const denied = await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "edit file" }],
@@ -1143,6 +1157,7 @@ describe("session.prompt flow", () => {
         expect(stored[1]?.parts.some((part) => part.type === "step-finish" && part.reason === "tool-calls")).toBe(true)
 
         const recovered = await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "continue without edit" }],
@@ -1214,6 +1229,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Completion Gate Test" })
 
           const msg = await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "run a subagent task" }],
@@ -1293,6 +1309,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Gate Exhausted Test" })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "run a subagent task" }],
@@ -1367,6 +1384,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Fake Tool Text Test" })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "create a coffee shop website and save it in this project" }],
@@ -1490,6 +1508,7 @@ describe("session.prompt flow", () => {
           })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "continue bug reporting" }],
@@ -1608,6 +1627,7 @@ describe("session.prompt flow", () => {
           })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "continue bug reporting" }],
@@ -1726,6 +1746,7 @@ describe("session.prompt flow", () => {
           })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "continue report writing" }],
@@ -1799,6 +1820,7 @@ describe("session.prompt flow", () => {
           })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "continue bug reporting" }],
@@ -1878,6 +1900,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Truncated Model Turn Test" })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "create a small website" }],
@@ -1958,6 +1981,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Repeated Truncated Output Test" })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "assess this project" }],
@@ -2032,6 +2056,7 @@ describe("session.prompt flow", () => {
         const session = await Session.create({ title: "Backstop Flow Test" })
 
         await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "work through a long tool-only task" }],
@@ -2103,6 +2128,7 @@ describe("session.prompt flow", () => {
         const session = await Session.create({ title: "Backstop Ignored Wrap-Up Test" })
 
         await SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: session.id,
           agent: "build",
           parts: [{ type: "text", text: "work through a long tool-only task" }],
@@ -2175,6 +2201,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Backstop Resume Flow Test" })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "work through a long tool-only task" }],
@@ -2252,6 +2279,7 @@ describe("session.prompt flow", () => {
           const session = await Session.create({ title: "Backstop Resume Completion Test" })
 
           await SessionPrompt.prompt({
+            model: { providerID: model.providerID, modelID: model.id },
             sessionID: session.id,
             agent: "build",
             parts: [{ type: "text", text: "work through a long tool-only task" }],

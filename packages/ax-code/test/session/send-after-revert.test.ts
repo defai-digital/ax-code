@@ -1,3 +1,4 @@
+import { ProviderID, ModelID } from "../../src/provider/schema"
 import { expect, test } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
@@ -9,7 +10,7 @@ import { hiddenMessageIDs } from "../../src/cli/cmd/tui/routes/session/revert"
 import { tmpdir } from "../fixture/fixture"
 
 test("real new prompt after revert clears serialized UI undo state and keeps the new message visible", async () => {
-  await using tmp = await tmpdir({ git: true, config: { agent: { build: { model: "openai/gpt-5.2" } } } })
+  await using tmp = await tmpdir({ git: true, config: { agent: { build: { model: "openai/gpt-5.4" } } } })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -24,7 +25,13 @@ test("real new prompt after revert clears serialized UI undo state and keeps the
       const stop = Bus.subscribeAll((event) => applyHeadlessProjectionEvent(state, JSON.parse(JSON.stringify(event))))
       const session = await Session.create({})
       const prompt = (text: string) =>
-        SessionPrompt.prompt({ sessionID: session.id, agent: "build", noReply: true, parts: [{ type: "text", text }] })
+        SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          noReply: true,
+          model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
+          parts: [{ type: "text", text }],
+        })
       try {
         const kept = await prompt("kept")
         const discarded = await prompt("discarded")

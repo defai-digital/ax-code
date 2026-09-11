@@ -173,7 +173,10 @@ beforeEach(() => {
   vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
 })
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
+})
 
 afterAll(() => {
   globalThis.fetch = originalFetch
@@ -220,10 +223,25 @@ async function loadFixture(providerID: string, modelID: string) {
   if (!provider && !fallbackProvider) {
     throw new Error(`Missing provider in fixture: ${providerID}`)
   }
-  const model = provider?.models[modelID] ?? fallbackProvider?.models[modelID]
+  const model =
+    provider?.models[modelID] ??
+    fallbackProvider?.models[modelID] ??
+    (providerID === "openrouter" && modelID === "openai/gpt-5.4"
+      ? { ...fallback.openai.models["gpt-5.4"], id: modelID }
+      : undefined)
   if (!model) {
     throw new Error(`Missing model in fixture: ${modelID}`)
   }
+  // Keep transport tests independent of the rotating picker catalog while
+  // still applying production model-support filtering to the fixture.
+  const catalog = await ModelsDev.get()
+  vi.spyOn(ModelsDev, "get").mockResolvedValue({
+    ...catalog,
+    [providerID]: {
+      ...(provider ?? fallbackProvider!),
+      models: { ...catalog[providerID]?.models, [modelID]: model },
+    },
+  })
   return { provider: provider ?? fallbackProvider!, model }
 }
 
@@ -252,7 +270,7 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 describe("session.llm.stream", () => {
   test("sends OpenRouter headers and strips generic reasoningEffort parameters", async () => {
     const providerID = "openrouter"
-    const modelID = "openai/gpt-5.2"
+    const modelID = "openai/gpt-5.4"
     const fixture = await loadFixture(providerID, modelID)
 
     const request = waitRequest(
@@ -442,7 +460,7 @@ describe("session.llm.stream", () => {
 
   test("sends Alibaba token-plan-safe OpenAI-compatible parameters", async () => {
     const providerID = "alibaba-token-plan"
-    const modelID = "qwen3.6-plus"
+    const modelID = "qwen3.8-max"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
 
@@ -485,8 +503,7 @@ describe("session.llm.stream", () => {
                   apiKey: "test-key",
                   baseURL: `${state.server.url.origin}/v1`,
                 },
-                // qwen3.6-plus is filtered from the Token Plan catalog; inject it
-                // as a custom model so Provider.getModel can resolve it.
+                // Pin the model metadata for this transport fixture.
                 models: { [modelID]: fixture.model },
               },
             },
@@ -559,13 +576,12 @@ describe("session.llm.stream", () => {
         expect(maxTokens).toBe(expectedMaxTokens)
 
         // Token Plan runs on the OpenAI-compat endpoint and uses DashScope's
-        // documented enable_thinking + thinking_budget pair (commit 54f168d5);
-        // the Anthropic-shaped `thinking` block is stripped. Budget is
-        // sanitized down to maxOutputTokens (4096 — the Alibaba short-window
-        // cap) even though the agent config requested 8192.
+        // enable_thinking + thinking_budget pair; the Anthropic-shaped
+        // thinking block is stripped and the current Max profile pins
+        // the thinking budget to 16384 despite plugin overrides.
         expect(body.thinking).toBeUndefined()
         expect(body.enable_thinking).toBe(true)
-        expect(body.thinking_budget).toBe(4096)
+        expect(body.thinking_budget).toBe(16384)
         expect(body.reasoning).toBeUndefined()
         expect(body.reasoningEffort).toBeUndefined()
         expect(body.reasoning_effort).toBeUndefined()
@@ -768,7 +784,7 @@ describe("session.llm.stream", () => {
 
   test("keeps tools enabled by prompt permissions", async () => {
     const providerID = "alibaba-coding-plan"
-    const modelID = "qwen3.6-plus"
+    const modelID = "qwen3-coder-plus"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
 
@@ -852,7 +868,7 @@ describe("session.llm.stream", () => {
 
   test("omits tool schemas for models that do not support tool calling", async () => {
     const providerID = "alibaba-coding-plan"
-    const modelID = "qwen3.6-plus"
+    const modelID = "qwen3-coder-plus"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
 
@@ -942,7 +958,7 @@ describe("session.llm.stream", () => {
 
   test("omits tool schemas when tool choice is none", async () => {
     const providerID = "alibaba-coding-plan"
-    const modelID = "qwen3.6-plus"
+    const modelID = "qwen3-coder-plus"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
 
@@ -1026,7 +1042,7 @@ describe("session.llm.stream", () => {
 
   test("sends required StructuredOutput tool schema for json_schema output", async () => {
     const providerID = "alibaba-coding-plan"
-    const modelID = "qwen3.6-plus"
+    const modelID = "qwen3-coder-plus"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
 
@@ -1124,7 +1140,7 @@ describe("session.llm.stream", () => {
     "normalizes interleaved reasoning into provider request payload",
     async () => {
       const providerID = "zhipuai"
-      const modelID = "glm-5"
+      const modelID = "glm-5.3"
       const fixture = await loadFixture(providerID, modelID)
       const model = fixture.model
 
@@ -1228,7 +1244,7 @@ describe("session.llm.stream", () => {
     "adds noop tool for LiteLLM-compatible histories with prior tool calls",
     async () => {
       const providerID = "alibaba-coding-plan"
-      const modelID = "qwen3.6-plus"
+      const modelID = "qwen3-coder-plus"
       const fixture = await loadFixture(providerID, modelID)
       const model = fixture.model
 
@@ -1325,7 +1341,7 @@ describe("session.llm.stream", () => {
 
   test("sends Google API payload for Gemini models", async () => {
     const providerID = "google"
-    const modelID = "gemini-3-flash-preview"
+    const modelID = "gemini-3.8-flash"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
     const pathSuffix = `/v1beta/models/${model.id}:streamGenerateContent`
@@ -1424,7 +1440,7 @@ describe("session.llm.stream", () => {
 
   test("uses minimal Gemini thinking config for small-model requests", async () => {
     const providerID = "google"
-    const modelID = "gemini-3.1-pro-preview"
+    const modelID = "gemini-3.8-flash"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
     const pathSuffix = `/v1beta/models/${model.id}:streamGenerateContent`
@@ -1521,7 +1537,7 @@ async function streamAxTrustHeaderCase(input: {
   axTrust?: boolean
   management?: "ax-trust" | "custom-api"
 }): Promise<Capture> {
-  const modelID = "openai/gpt-5.2"
+  const modelID = "openai/gpt-5.4"
   const request = waitRequest(
     "/chat/completions",
     new Response(createChatStream("Hello"), {
@@ -1592,7 +1608,7 @@ async function streamAxTrustHeaderCase(input: {
 describe("session.llm.stream - AX Trust prompt-cache header", () => {
   test("sends X-AX-Prompt-Cache-Key with the session ID when axTrust is enabled", async () => {
     const providerID = "openrouter"
-    const modelID = "openai/gpt-5.2"
+    const modelID = "openai/gpt-5.4"
 
     const request = waitRequest(
       "/chat/completions",
@@ -1672,7 +1688,8 @@ describe("session.llm.stream - AX Trust prompt-cache header", () => {
 
   test("omits X-AX-Prompt-Cache-Key when axTrust is not enabled", async () => {
     const providerID = "openrouter"
-    const modelID = "openai/gpt-5.2"
+    const modelID = "openai/gpt-5.4"
+    await loadFixture(providerID, modelID)
 
     const request = waitRequest(
       "/chat/completions",
@@ -1871,7 +1888,7 @@ describe("session.llm.stream - model promptCacheMode override", () => {
     modelOptions: Record<string, unknown> | undefined,
     sessionIDRaw: string,
     providerID = "deepseek",
-    modelID = "deepseek-v4-flash",
+    modelID = "deepseek-flash",
   ): Promise<Capture> {
     const request = waitRequest(
       "/chat/completions",
@@ -2277,7 +2294,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
   test("non-Qwen model with Super-Long enabled does not emit preserve_thinking", async () => {
     process.env.AX_CODE_SUPER_LONG = "1"
     const providerID = "alibaba-coding-plan"
-    const modelID = "qwen3.6-plus"
+    const modelID = "qwen3-coder-plus"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
 
@@ -2340,9 +2357,9 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
         }
 
         const capture = await request
-        // qwen3.6-plus has preserveThinkingEligible=false via defaultLongAgentProfile
+        // qwen3-coder-plus has preserveThinkingEligible=false via defaultLongAgentProfile
         expect(capture.body.preserve_thinking).toBeUndefined()
-        expect(capture.body.enable_thinking).toBe(true)
+        expect(capture.body.enable_thinking).toBeUndefined()
       },
     })
   })
@@ -2431,7 +2448,7 @@ describe("session.llm.stream - Phase 1 long-agent profile wiring", () => {
   test("non-Qwen model with Super-Long enabled still injects verification reminder and context pack", async () => {
     process.env.AX_CODE_SUPER_LONG = "1"
     const providerID = "alibaba-coding-plan"
-    const modelID = "qwen3.6-plus"
+    const modelID = "qwen3-coder-plus"
     const fixture = await loadFixture(providerID, modelID)
     const model = fixture.model
 

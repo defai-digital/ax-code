@@ -94,6 +94,7 @@ describe("background subagent control", () => {
         await TaskQueue.setStatus({ id: queued.id, status: "running" })
 
         const pending = SessionPrompt.prompt({
+          model: { providerID: model.providerID, modelID: model.id },
           sessionID: child.id,
           agent: "explore",
           parts: [{ type: "text", text: "find auth" }],

@@ -1,3 +1,4 @@
+import { ProviderID, ModelID } from "../../src/provider/schema"
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import path from "path"
 import { writeFile } from "node:fs/promises"
@@ -66,7 +67,7 @@ describe("storage transfer", () => {
       config: {
         agent: {
           build: {
-            model: "openai/gpt-5.2",
+            model: "openai/gpt-5.4",
           },
         },
       },
@@ -81,6 +82,7 @@ describe("storage transfer", () => {
           sessionID: session.id,
           agent: "build",
           noReply: true,
+          model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
           parts: [{ type: "text", text: "build a dashboard app" }],
         })
 
@@ -89,6 +91,7 @@ describe("storage transfer", () => {
           sessionID: session.id,
           agent: "build",
           noReply: true,
+          model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
           parts: [{ type: "text", text: "profile the dashboard performance and find the bottleneck" }],
         })
         Recorder.end(session.id)
@@ -132,7 +135,7 @@ describe("storage transfer", () => {
       config: {
         agent: {
           build: {
-            model: "openai/gpt-5.2",
+            model: "openai/gpt-5.4",
           },
         },
       },
@@ -147,6 +150,7 @@ describe("storage transfer", () => {
           sessionID: session.id,
           agent: "build",
           noReply: true,
+          model: { providerID: ProviderID.make("openai"), modelID: ModelID.make("gpt-5.4") },
           parts: [{ type: "text", text: "preserve nested transfer parent" }],
         })
 
