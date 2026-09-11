@@ -1,9 +1,14 @@
 import fs from "node:fs/promises"
 import path from "node:path"
-import { expect, test } from "vitest"
+import { afterEach, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Snapshot } from "../../src/snapshot"
+import * as Git from "../../src/util/git"
 import { tmpdir } from "../fixture/fixture"
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 test.each([
   ["route[1].txt", "route1.txt"],
@@ -103,6 +108,26 @@ test("a mixed patch restores existing literal paths and removes added paths with
       const tracked = await Snapshot.track()
       expect(tracked).toBeDefined()
       expect((await Snapshot.patch(tracked!)).files).toEqual([])
+    },
+  })
+})
+
+test("reverting many files uses one checkout per snapshot hash", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const files = Array.from({ length: 8 }, (_, index) => path.join(tmp.path, `file-${index}.txt`))
+      for (const file of files) await fs.writeFile(file, "before\n")
+      const baseline = await Snapshot.track()
+      expect(baseline).toBeDefined()
+      for (const file of files) await fs.writeFile(file, "after\n")
+      const git = vi.spyOn(Git, "git")
+      await Snapshot.revert([{ hash: baseline!, files }])
+      const checkouts = git.mock.calls.filter(([args]) => args.includes("checkout"))
+      expect(checkouts).toHaveLength(1)
+      expect(checkouts[0]?.[0].includes("--literal-pathspecs")).toBe(true)
+      for (const file of files) expect(await fs.readFile(file, "utf8")).toBe("before\n")
     },
   })
 })

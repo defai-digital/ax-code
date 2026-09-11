@@ -109,3 +109,7 @@ export function parseLsTreeSize(line: string): number | undefined {
 
   return parseCount(raw)
 }
+
+export function parseLsTreePath(line: string): string | undefined {
+  return splitPair(line)?.[1]
+}

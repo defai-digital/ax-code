@@ -7,7 +7,7 @@ import type { Shape } from "../project/instance"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { git } from "../util/git"
-import { parseLsTreeSize, parseNameStatusLine, parseNumstatLine } from "../util/git-output"
+import { parseLsTreePath, parseLsTreeSize, parseNameStatusLine, parseNumstatLine } from "../util/git-output"
 import { Log } from "../util/log"
 import { KeyedSerialQueue, work } from "../util/queue"
 import { NamedError } from "@ax-code/util/error"
@@ -51,6 +51,8 @@ export namespace Snapshot {
   const gitTimeoutMs = 300_000
   // `git gc` is the one legitimately long-running snapshot command.
   const gcTimeoutMs = 30 * 60 * 1000
+  // Bound checkout argv size. One git checkout per hash/chunk, not per file.
+  const revertPathBatch = 32
   const core = ["-c", "core.longpaths=true", "-c", "core.symlinks=true"]
   const cfg = ["-c", "core.autocrlf=false", ...core]
   const quote = [...cfg, "-c", "core.quotepath=false"]
@@ -165,14 +167,14 @@ export namespace Snapshot {
     await fs.rm(file, { force: true })
   }
 
-  async function revertPath(current: State, file: string) {
+  async function revertPath(current: State, file: string, realWorktree?: string) {
     const worktree = path.resolve(current.worktree)
     const resolved = path.resolve(worktree, file)
     if (resolved === worktree || !Filesystem.contains(worktree, resolved)) {
       throw new Error(`Snapshot revert path escapes the worktree: ${file}`)
     }
 
-    const realWorktree = await fs.realpath(worktree)
+    const resolvedWorktree = realWorktree ?? (await fs.realpath(worktree))
     let parent = path.dirname(resolved)
     while (Filesystem.contains(worktree, parent)) {
       const realParent = await fs.realpath(parent).catch((error) => {
@@ -180,7 +182,7 @@ export namespace Snapshot {
         throw error
       })
       if (realParent) {
-        if (!Filesystem.contains(realWorktree, realParent)) {
+        if (!Filesystem.contains(resolvedWorktree, realParent)) {
           throw new Error(`Snapshot revert path escapes the worktree through a symlink: ${file}`)
         }
         break
@@ -710,10 +712,11 @@ export namespace Snapshot {
     return withOperationLock(current, async () => {
       const seen = new Set<string>()
       const targets: Array<{ file: string; hash: string }> = []
+      const realWorktree = await fs.realpath(path.resolve(current.worktree))
       for (const item of patches) {
         if (!valid(item.hash)) continue
         for (const requestedFile of item.files) {
-          const file = await revertPath(current, requestedFile)
+          const file = await revertPath(current, requestedFile, realWorktree)
           if (seen.has(file)) continue
           seen.add(file)
           targets.push({ file, hash: item.hash })
@@ -781,11 +784,60 @@ export namespace Snapshot {
         }
       }
 
-      try {
-        for (const target of targets) {
-          applied.push(target)
-          await applyTarget(target)
+      const applyHashGroup = async (hash: string, group: typeof targets) => {
+        for (let offset = 0; offset < group.length; offset += revertPathBatch) {
+          const chunk = group.slice(offset, offset + revertPathBatch)
+          const rels = chunk.map((target) => path.relative(current.worktree, target.file))
+          const tree = await runGit(
+            [...core, "--literal-pathspecs", ...args(current, ["ls-tree", "-z", hash, "--", ...rels])],
+            { cwd: current.worktree },
+          )
+          if (tree.code !== 0) {
+            for (const target of chunk) {
+              applied.push(target)
+              await applyTarget(target)
+            }
+            continue
+          }
+          const present = new Set<string>()
+          for (const record of tree.text.split("\0")) {
+            const file = parseLsTreePath(record)
+            if (file) present.add(file.replaceAll("\\", "/"))
+          }
+          const restore: typeof chunk = []
+          const missing: typeof chunk = []
+          for (let index = 0; index < chunk.length; index++) {
+            const rel = rels[index]!.replaceAll("\\", "/")
+            if (present.has(rel)) restore.push(chunk[index]!)
+            else missing.push(chunk[index]!)
+          }
+          if (restore.length > 0) {
+            applied.push(...restore)
+            const restoreRels = restore.map((target) => path.relative(current.worktree, target.file))
+            const result = await runGit(
+              [...core, "--literal-pathspecs", ...args(current, ["checkout", hash, "--", ...restoreRels])],
+              { cwd: current.worktree },
+            )
+            if (result.code !== 0) {
+              for (const target of restore) await applyTarget(target)
+            }
+          }
+          for (const target of missing) {
+            applied.push(target)
+            log.info("file did not exist in snapshot, deleting", target)
+            await remove(target.file)
+          }
         }
+      }
+
+      try {
+        const byHash = new Map<string, typeof targets>()
+        for (const target of targets) {
+          const group = byHash.get(target.hash)
+          if (group) group.push(target)
+          else byHash.set(target.hash, [target])
+        }
+        for (const [hash, group] of byHash) await applyHashGroup(hash, group)
       } catch (error) {
         const rollback = await runGit([...core, ...args(current, ["read-tree", rollbackTree])], {
           cwd: current.worktree,
@@ -842,10 +894,13 @@ export namespace Snapshot {
   export async function previewRevert(patches: Patch[]) {
     const current = await state()
     const baselines = new Map<string, { hash: string; file: string }>()
+    const realWorktree = patches.some((item) => valid(item.hash) && item.files.length > 0)
+      ? await fs.realpath(path.resolve(current.worktree))
+      : undefined
     for (const item of patches) {
       if (!valid(item.hash)) continue
       for (const requestedFile of item.files) {
-        const resolved = await revertPath(current, requestedFile)
+        const resolved = await revertPath(current, requestedFile, realWorktree)
         const file = path.relative(current.worktree, resolved).replaceAll("\\", "/")
         if (!baselines.has(file)) baselines.set(file, { hash: item.hash, file })
       }

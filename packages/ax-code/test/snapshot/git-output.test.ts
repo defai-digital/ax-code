@@ -3,6 +3,7 @@ import {
   decodeGitQuotedPathLiteral,
   decodeGitQuotedPath,
   parseGitQuotedPathLiteral,
+  parseLsTreePath,
   parseLsTreeSize,
   parseNameStatusLine,
   parseNumstatLine,
@@ -92,4 +93,10 @@ test("parseLsTreeSize reads file sizes from ls-tree metadata", () => {
   expect(parseLsTreeSize("100644 blob 1111111111111111111111111111111111111111 42bytes\tsrc/index.ts")).toBeUndefined()
   expect(parseLsTreeSize("100644 blob 1111111111111111111111111111111111111111 -1\tsrc/index.ts")).toBeUndefined()
   expect(parseLsTreeSize("malformed")).toBeUndefined()
+})
+
+test("parseLsTreePath reads the path from an ls-tree record", () => {
+  expect(parseLsTreePath("100644 blob 1111111111111111111111111111111111111111\tsrc/index.ts")).toBe("src/index.ts")
+  expect(parseLsTreePath('100644 blob 1111111111111111111111111111111111111111\t"route[1].txt"')).toBe("route[1].txt")
+  expect(parseLsTreePath("malformed")).toBeUndefined()
 })
