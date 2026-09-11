@@ -17862,6 +17862,149 @@
         "hidden_size": 4096
       },
       "provenanceBase": "ornith-ai/Ornith-1.5-9B"
+    },
+    {
+      "id": "AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-6bit-MTP",
+      "sha": "22cbca366b6b4f767bb7e71f9e6105f932878f42",
+      "pipeline_tag": "text-generation",
+      "library_name": "mlx",
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5_moe",
+        "apple-silicon",
+        "quantized",
+        "mixed-precision",
+        "axquant",
+        "axq",
+        "development",
+        "qwen3.5-moe",
+        "6bit",
+        "6-bit",
+        "mtp",
+        "vision",
+        "text-generation",
+        "conversational",
+        "base_model:ornith-ai/Ornith-1.5-35B-A3B",
+        "base_model:quantized:ornith-ai/Ornith-1.5-35B-A3B",
+        "license:apache-2.0",
+        "region:us"
+      ],
+      "cardData": {
+        "base_model": "ornith-ai/Ornith-1.5-35B-A3B",
+        "base_model_relation": "quantized",
+        "library_name": "mlx"
+      },
+      "siblings": [
+        {
+          "rfilename": ".gitattributes",
+          "size": 1570
+        },
+        {
+          "rfilename": "README.md",
+          "size": 8429
+        },
+        {
+          "rfilename": "ax_expert_stream.json",
+          "size": 98483
+        },
+        {
+          "rfilename": "axquant_manifest.json",
+          "size": 7473
+        },
+        {
+          "rfilename": "axquant_mtp_sidecar_manifest.json",
+          "size": 897
+        },
+        {
+          "rfilename": "axquant_plan.json",
+          "size": 1640920
+        },
+        {
+          "rfilename": "axquant_quantizer_execution.json",
+          "size": 124996
+        },
+        {
+          "rfilename": "axquant_runtime.json",
+          "size": 1764
+        },
+        {
+          "rfilename": "axquant_vision_sidecar_manifest.json",
+          "size": 902
+        },
+        {
+          "rfilename": "chat_template.jinja",
+          "size": 7536
+        },
+        {
+          "rfilename": "config.json",
+          "size": 139657
+        },
+        {
+          "rfilename": "generation_config.json",
+          "size": 202
+        },
+        {
+          "rfilename": "model-00001-of-00006.safetensors",
+          "size": 5351913817
+        },
+        {
+          "rfilename": "model-00002-of-00006.safetensors",
+          "size": 5225057945
+        },
+        {
+          "rfilename": "model-00003-of-00006.safetensors",
+          "size": 5250337786
+        },
+        {
+          "rfilename": "model-00004-of-00006.safetensors",
+          "size": 5250337630
+        },
+        {
+          "rfilename": "model-00005-of-00006.safetensors",
+          "size": 5219774260
+        },
+        {
+          "rfilename": "model-00006-of-00006.safetensors",
+          "size": 2602255617
+        },
+        {
+          "rfilename": "model.safetensors.index.json",
+          "size": 187109
+        },
+        {
+          "rfilename": "mtp.safetensors",
+          "size": 1689376152
+        },
+        {
+          "rfilename": "mtplx_runtime.json",
+          "size": 108
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "size": 19989325
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "size": 1161
+        },
+        {
+          "rfilename": "vision.safetensors",
+          "size": 893179624
+        }
+      ],
+      "config": {
+        "model_type": "qwen3_5_moe"
+      },
+      "textConfig": {
+        "max_position_embeddings": 262144,
+        "num_hidden_layers": 40,
+        "num_key_value_heads": 2,
+        "num_attention_heads": 16,
+        "head_dim": 256,
+        "hidden_size": 2048
+      },
+      "provenanceBase": "ornith-ai/Ornith-1.5-35B-A3B"
     }
   ]
 }

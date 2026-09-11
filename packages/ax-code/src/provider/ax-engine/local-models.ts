@@ -8,7 +8,7 @@ import {
 
 /** Managed local choices. Historical model IDs remain valid storage identities. */
 export const AX_ENGINE_LOCAL_REPOSITORIES = [
-  "AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP",
+  "AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-6bit-MTP",
   "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
   "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit",
 ] as const
@@ -24,7 +24,9 @@ export function axEngineLocalRepository(modelID: unknown): string | undefined {
 
 export function requireAxEngineLocalModel(modelID: unknown) {
   if (axEngineLocalRepository(modelID)) return
-  throw new Error(`${AX_ENGINE_ERROR.ModelUnsupported}: select one of the three supported AX Engine local models`)
+  throw new Error(
+    `${AX_ENGINE_ERROR.ModelUnsupported}: select one of the ${AX_ENGINE_LOCAL_REPOSITORIES.length} supported AX Engine local models`,
+  )
 }
 
 /** Prefer stable aliases; otherwise retain the inventory's first pinned revision. */

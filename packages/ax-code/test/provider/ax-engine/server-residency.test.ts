@@ -240,7 +240,7 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
   test.each([
     AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}` as const,
-  ])("Qwen3.8 managed spawn injects the exact MTP profile for %s", async (modelID) => {
+  ] as const)("Qwen3.8 managed spawn injects the exact MTP profile for %s", async (modelID) => {
     await using f = await fixture()
     const input = { ...f.input, modelID }
     const state = await ensureServer(input)

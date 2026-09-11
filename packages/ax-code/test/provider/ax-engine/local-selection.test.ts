@@ -23,7 +23,7 @@ import fs from "node:fs/promises"
 import path from "node:path"
 
 const repositories = [
-  "AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP",
+  "AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-6bit-MTP",
   "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
   "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit",
 ]
@@ -41,12 +41,15 @@ test("the managed model catalog offers exactly the three selected repositories",
     quantization: "mlx",
     estimatedResources: true,
     verification: "unverified",
+    contextTokens: 32_768,
+    outputTokens: 8_192,
   })
-  expect(result.models[0].id).toMatch(/^AutomatosX\/AX-Ornith-1\.5-9B-MLX-AXQ-6bit-MTP@[a-f0-9]{40}$/)
+  expect(result.models[0].id).toMatch(/^AutomatosX\/AX-Ornith-1\.5-35B-A3B-MLX-AXQ-6bit-MTP@[a-f0-9]{40}$/)
 })
 
 const excludedModels: AxEngineModelID[] = [
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+  `AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
   `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"a".repeat(40)}`,
 ]
 
@@ -74,9 +77,18 @@ test.each(repositories)("selected repository %s passes preparation admission", a
   expect(requireEligibility).toHaveBeenCalledOnce()
 })
 
+test("selected Ornith 35B reaches the pinned-download runtime version gate", async () => {
+  const model = HubCatalog.parse(snapshot).models.find((entry) => entry.id === repositories[0])!
+  await expect(
+    downloadModel({ modelID: hubModelID(model), binaryPath: "/never-start", binaryVersion: "6.13.0" }),
+  ).rejects.toThrow("AX_ENGINE_VERSION_UNSUPPORTED")
+})
+
 test.each([
   "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
   "AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-MXFP4-MTP",
+  "AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP",
+  "AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-4bit-MTP",
   "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit",
 ])("blocks direct downloading of excluded pack %s before metadata or subprocess work", async (repo) => {
   const resolve = vi.spyOn(axEngineHubCatalog, "resolve")
@@ -121,6 +133,7 @@ test("managed provider discovery replaces stale configured models with exactly t
           options: { connectionMode: "managed" },
           models: {
             [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: { name: "Removed model" },
+            [`AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`]: { name: "Removed 9B model" },
             [`${repositories[0]}@${"a".repeat(40)}`]: { name: "Old configured revision" },
             alternate: { id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, name: "Duplicate alias" },
             [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: {
@@ -146,25 +159,24 @@ test("managed provider discovery replaces stale configured models with exactly t
   })
 })
 
-test("managed activation cannot use an excluded model or a redirected configured target", async () => {
+test.each(excludedModels)("managed activation cannot use excluded %s or a redirected target", async (modelID) => {
   const provider = Provider.fromModelsDevProvider((await ModelsDev.get())["ax-engine"])!
   provider.options = { connectionMode: "managed" }
   const loader = (await axEngineLoader()(provider))!
   const languageModel = vi.fn()
-  await expect(loader.getModel!({ languageModel }, AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID)).rejects.toThrow(
-    "AX_ENGINE_MODEL_UNSUPPORTED",
-  )
+  await expect(loader.getModel!({ languageModel }, modelID)).rejects.toThrow("AX_ENGINE_MODEL_UNSUPPORTED")
   await expect(
     loader.getModel!({ languageModel }, AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, {
-      modelID: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+      modelID,
     }),
   ).rejects.toThrow("AX_ENGINE_MODEL_UNSUPPORTED")
   expect(languageModel).not.toHaveBeenCalled()
 })
 
-test("excluded historical metadata remains readable for status and cleanup", async () => {
-  const old = HubCatalog.parse(snapshot).models.find(
-    (model) => model.id === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
-  )!
-  expect((await axEngineHubCatalog.resolve(hubModelID(old), { offline: true })).revision).toBe(old.sha)
-})
+test.each(["AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP", "AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP"])(
+  "excluded %s metadata remains readable for status and cleanup",
+  async (repo) => {
+    const old = HubCatalog.parse(snapshot).models.find((model) => model.id === repo)!
+    expect((await axEngineHubCatalog.resolve(hubModelID(old), { offline: true })).revision).toBe(old.sha)
+  },
+)

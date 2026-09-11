@@ -6,6 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.9] - 2026-09-11
+
+### Changed
+
+- Replace the managed local Ornith 1.5 9B selection with Ornith 1.5 35B A3B AXQ 6-bit MTP, keeping the two existing Qwen choices and pinned artifact identities. Historical records remain readable for status and cleanup.
+
+### Fixed
+
+- Apply the Qwen3.8 exact-MTP launch profile consistently to both the stable alias and pinned references to the same repository. Respect environment overrides and restart managed servers when the profile changes.
+
 ## [7.15.8] - 2026-09-10
 
 ### Fixed
