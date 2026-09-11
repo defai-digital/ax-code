@@ -213,6 +213,9 @@ describe("direct conversation turn execution profile", () => {
   test.each([
     ["tell me a story about Japan", "new-story", 1],
     ["tell me a story of japan, in t. chinese", "new-story", 1],
+    ["tell me a love story in japanse", "new-story", 1],
+    ["tell me a ghost story, in t. chinese", "new-story", 1],
+    ["a vietnam ghost story, in t. chinese", "new-story", 1],
     ["i want a vietnam love story", "new-story", 1],
     ["tell me a vietnam love story", "new-story", 1],
     ["give me a short story about Hanoi", "new-story", 1],
@@ -239,11 +242,22 @@ describe("direct conversation turn execution profile", () => {
     "continue the migration",
     "go on with the investigation",
     "Tell me a story based on the above",
+    "tell me a story, based on the above",
     "Write a story using the characters we discussed earlier",
     "Another story with the same constraints",
     "Tell me a story about them",
+    "a story about them",
   ])("rejects repository work or requests outside the narrow creative contract: %s", (text) => {
     expect(detect(text).kind).toBe("default")
+  })
+
+  test("classifies a first-turn story request without prior assistant history", () => {
+    const user = userMessage("tell me a love story in japanse")
+    expect(detectTurnExecutionProfile({ messages: [user], currentUser: user.info })).toMatchObject({
+      kind: "conversation",
+      intent: "new-story",
+      reason: "self_contained_story_request",
+    })
   })
 
   test("requires completed assistant text for continuation", () => {
@@ -283,6 +297,14 @@ describe("direct conversation turn execution profile", () => {
     const sent = profile.requestMessages[0]?.parts.find((part) => part.type === "text")
     expect(sent && "text" in sent ? sent.text : "").toContain("Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)")
     expect(sent && "text" in sent ? sent.text : "").not.toMatch(/\bt\. chinese\b/i)
+
+    const followUp = detect("a vietnam ghost story, in t. chinese")
+    expect(followUp.kind).toBe("conversation")
+    if (followUp.kind !== "conversation") throw new Error("expected conversation profile")
+    const followUpText = followUp.requestMessages[0]?.parts.find((part) => part.type === "text")
+    expect(followUpText && "text" in followUpText ? followUpText.text : "").toContain(
+      "Traditional Chinese (\u7e41\u9ad4\u4e2d\u6587)",
+    )
   })
 
   test.each([
