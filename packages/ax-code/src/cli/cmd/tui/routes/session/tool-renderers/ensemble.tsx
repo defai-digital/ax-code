@@ -125,6 +125,9 @@ export function ArenaToolView(props: ToolProps<any>) {
                     </box>
                   )}
                 </For>
+                <Show when={view().rankedOverflow > 0}>
+                  <text fg={theme.textMuted}>{`+${view().rankedOverflow} more`}</text>
+                </Show>
               </box>
             </Show>
             <Show when={view().notes.length > 0}>

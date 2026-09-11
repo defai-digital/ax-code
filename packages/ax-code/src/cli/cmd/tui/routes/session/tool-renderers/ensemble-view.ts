@@ -40,6 +40,8 @@ export type ArenaView = {
   modeLabel: string | null
   strategyLabel: string | null
   ranked: string[]
+  /** Number of ranked entries hidden past the display cap (0 when all shown). */
+  rankedOverflow: number
   rankedLabel: string | null
   notes: string[]
 }
@@ -121,6 +123,7 @@ function degradedArena(): ArenaView {
     modeLabel: null,
     strategyLabel: null,
     ranked: [],
+    rankedOverflow: 0,
     rankedLabel: null,
     notes: [],
   }
@@ -218,8 +221,13 @@ export function arenaView(metadata: unknown, _input?: unknown): ArenaView {
   const strategy = stringField(metadata, "strategy")
   const strategyLabel = strategy ? (ARENA_STRATEGY[strategy] ?? strategy) : null
 
-  const ranked = capList([...new Set(stringList(metadata, "rankedIds").map(memberLabel))], MAX_RANKED)
-  const rankedLabel = ranked.length > 0 ? `${ranked.length} contestant${ranked.length === 1 ? "" : "s"}` : null
+  // Count the real contestants before the display cap: capList's trailing
+  // "+N more" sentinel must never inflate the count or be numbered as a rank.
+  const rankedIds = stringList(metadata, "rankedIds")
+  const uniqueRanked = [...new Set(rankedIds.map(memberLabel))]
+  const ranked = uniqueRanked.slice(0, MAX_RANKED)
+  const rankedOverflow = uniqueRanked.length - ranked.length
+  const rankedLabel = rankedIds.length > 0 ? `${rankedIds.length} contestant${rankedIds.length === 1 ? "" : "s"}` : null
 
   const errorCount = countField(metadata, "errorCount")
   const worktrees = stringList(metadata, "worktrees")
@@ -237,6 +245,7 @@ export function arenaView(metadata: unknown, _input?: unknown): ArenaView {
     modeLabel,
     strategyLabel,
     ranked,
+    rankedOverflow,
     rankedLabel,
     notes,
   }

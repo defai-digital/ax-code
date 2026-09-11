@@ -163,12 +163,20 @@ describe("arenaView", () => {
     expect(view.notes).toEqual(["skipped x", "2 member errors", "cap"])
   })
 
-  test("caps ranked ids and marks the remainder", () => {
+  test("caps ranked ids but reports the true contestant count", () => {
     const rankedIds = Array.from({ length: 8 }, (_, index) => `provider/model-${index}`)
     const view = arenaView({ status: "ok", rankedIds })
-    expect(view.ranked).toHaveLength(6)
-    expect(view.ranked.at(-1)).toBe("+3 more")
-    expect(view.rankedLabel).toBe("6 contestants")
+    // The display cap must not inflate the count or inject a numbered sentinel.
+    expect(view.ranked).toEqual(["model-0", "model-1", "model-2", "model-3", "model-4"])
+    expect(view.rankedOverflow).toBe(3)
+    expect(view.rankedLabel).toBe("8 contestants")
+  })
+
+  test("reports no overflow when every contestant fits", () => {
+    const view = arenaView({ status: "ok", rankedIds: ["a", "b"] })
+    expect(view.ranked).toEqual(["a", "b"])
+    expect(view.rankedOverflow).toBe(0)
+    expect(view.rankedLabel).toBe("2 contestants")
   })
 
   test("is defensive about non-object metadata and emits ASCII only", () => {
