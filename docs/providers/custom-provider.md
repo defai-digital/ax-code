@@ -87,8 +87,28 @@ Most aggregators (LiteLLM, one-api, new-api, free/self-hosted gateways) expose a
 ```
 
 - The key `"my-gateway"` is the provider id you select in `/connect` and `ax-code models`.
-- Each key under `models` must be the **exact model id the gateway expects** in the request body.
+- Each key under `models` is the local selection ID. Set the entry's `id` to the **exact model ID the gateway expects** when it differs from that key; otherwise the key is used for manually declared models without an existing catalog mapping.
 - Prefer `${ENV_VAR}` over a literal key so the secret stays out of committed config.
+
+### Gateway model aliases after changing endpoints
+
+Changing `options.baseURL` does not translate manually configured model IDs.
+For example, an AX Trust endpoint may advertise `deepseek-flash` while an
+existing local selection is `ax-trust/deepseek-v4-flash`. Keep the local key
+and set `provider.ax-trust.models.deepseek-v4-flash.id` to `deepseek-flash`.
+AX Code then sends the gateway ID in API requests.
+
+See the [AX Trust DeepSeek Flash configuration example](../examples/ax-trust-deepseek-flash.json)
+and [incident report](../reports/2026-09-10-ax-trust-deepseek-model-id.md).
+Merge the relevant provider fields into your existing configuration, preserving
+other models and their capability settings. The example uses
+`{env:AX_TRUST_API_KEY}`; set that environment variable before starting AX Code,
+or keep your existing credential configuration. Restart AX Code after editing.
+
+When diagnosing `403 model is not allowed`, compare the request's model ID
+with the endpoint's authenticated `GET /models` response. A successful model
+list request alone does not establish permission to run a model. If the exact
+ID still fails, check the gateway's key/model permissions.
 
 ## Anthropic-compatible gateway
 
