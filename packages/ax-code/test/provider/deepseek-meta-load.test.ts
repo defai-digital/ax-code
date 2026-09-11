@@ -29,7 +29,8 @@ describe("DeepSeek and Meta Muse Spark provider load", () => {
           const deepseek = list[ProviderID.make("deepseek")]!
           expect(deepseek.key).toBe("sk-test-deepseek")
           expect(deepseek.models["deepseek-v4-pro"]).toBeDefined()
-          expect(deepseek.models["deepseek-v4-flash"]).toBeDefined()
+          expect(deepseek.models["deepseek-flash"]).toBeDefined()
+          expect(deepseek.models["deepseek-v4-flash"]).toBeUndefined()
           expect(deepseek.models["deepseek-chat"]).toBeUndefined()
           expect(deepseek.models["deepseek-reasoner"]).toBeUndefined()
           expect(deepseek.models["deepseek-v4-pro"]!.api.npm).toBe("@ai-sdk/openai-compatible")
@@ -37,15 +38,15 @@ describe("DeepSeek and Meta Muse Spark provider load", () => {
 
           const meta = list[ProviderID.make("meta")]!
           expect(meta.key).toBe("sk-test-meta")
-          expect(meta.models["muse-spark-1.2"]).toBeDefined()
-          expect(meta.models["muse-spark-1.2"]!.api.npm).toBe("@ai-sdk/openai")
-          expect(meta.models["muse-spark-1.2"]!.api.url).toMatch(/api\.meta\.ai/)
+          expect(meta.models["muse-spark-1.3"]).toBeDefined()
+          expect(meta.models["muse-spark-1.3"]!.api.npm).toBe("@ai-sdk/openai")
+          expect(meta.models["muse-spark-1.3"]!.api.url).toMatch(/api\.meta\.ai/)
 
           // getModel should resolve without throw
           const dsModel = await Provider.getModel(ProviderID.make("deepseek"), ModelID.make("deepseek-v4-pro"))
           expect(dsModel.id).toBe("deepseek-v4-pro")
-          const metaModel = await Provider.getModel(ProviderID.make("meta"), ModelID.make("muse-spark-1.2"))
-          expect(metaModel.id).toBe("muse-spark-1.2")
+          const metaModel = await Provider.getModel(ProviderID.make("meta"), ModelID.make("muse-spark-1.3"))
+          expect(metaModel.id).toBe("muse-spark-1.3")
         },
       })
     } finally {

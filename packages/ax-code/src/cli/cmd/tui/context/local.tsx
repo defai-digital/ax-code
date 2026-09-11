@@ -44,7 +44,7 @@ import {
 } from "./local-util"
 import { Log } from "@/util/log"
 import { modelDisplayInfo } from "@tui/component/model-vision-label"
-import { modelSelectableForProvider } from "@/provider/model-selectability"
+import { pickImplicitDefaultModel } from "@/provider/implicit-default"
 import { readOptionalJsonState } from "@tui/util/optional-json-state"
 
 const log = Log.create({ service: "tui.local" })
@@ -339,16 +339,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
           }
         }
 
-        const provider = sync.data.provider[0]
-        if (!provider) return undefined
-        const defaultModel = sync.data.provider_default[provider.id]
-        const defaultInfo = defaultModel ? provider.models[defaultModel] : undefined
-        const firstModel = Object.values(provider.models).find((item) => modelSelectableForProvider(provider.id, item))
-        const model = modelSelectableForProvider(provider.id, defaultInfo) ? defaultModel : firstModel?.id
-        if (!model) return undefined
+        const implicit = pickImplicitDefaultModel(sync.data.provider)
+        if (!implicit) return undefined
         return {
-          providerID: provider.id,
-          modelID: model,
+          providerID: implicit.providerID,
+          modelID: implicit.modelID,
         }
       })
 

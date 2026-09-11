@@ -113,9 +113,11 @@ describe("update-models script", () => {
     expect(data.groq?.env).toEqual(["GROQ_API_KEY"])
     expect(data.groq?.api).toBe("https://api.groq.com/openai/v1")
     expect(data.groq?.npm).toBe("@ai-sdk/openai-compatible")
-    // Groq's models table caps qwen3.6-27b completion at 16 384 tokens.
-    expect(data.groq?.models?.["qwen/qwen3.6-27b"]?.limit).toEqual({ context: 131_072, output: 16_384 })
-    expect(data.groq?.models?.["qwen/qwen3.6-27b"]?.modalities?.input).toEqual(["text", "image"])
+    // Groq's models table caps qwen3.8-27b completion at 16 384 tokens.
+    expect(data.groq?.models?.["qwen/qwen3.8-27b"]?.limit).toEqual({ context: 131_042, output: 16_384 })
+    expect(data.groq?.models?.["qwen/qwen3.8-27b"]?.modalities?.input).toEqual(["text", "image"])
+    expect(data.groq?.models?.["qwen/qwen3.6-27b"]).toBeUndefined()
+    expect(data.groq?.models?.["openai/gpt-oss-safeguard-20b"]).toBeUndefined()
     expect(data.groq?.models?.["openai/gpt-oss-120b"]?.limit).toEqual({ context: 131_072, output: 65_536 })
     expect(data.groq?.models?.["openai/gpt-oss-120b"]?.tool_call).toBe(true)
     expect(data.openrouter?.name).toBe("OpenRouter")
@@ -127,24 +129,21 @@ describe("update-models script", () => {
       "X-Title": "AX Code",
     })
     expect(Object.keys(data.openrouter?.models ?? {})).toEqual([
-      "openai/gpt-5.2-codex",
-      "openai/gpt-5.2",
       "anthropic/claude-fable-5",
       "anthropic/claude-sonnet-4.6",
       "moonshotai/kimi-k2.7-code",
       "qwen/qwen3-coder-plus",
       "qwen/qwen3-coder-flash",
-      "google/gemini-3.5-flash",
       "qwen/qwen3.7-plus",
       "x-ai/grok-4.5",
-      "z-ai/glm-5.2",
+      "google/gemini-3.8-flash",
     ])
-    expect(data.openrouter?.models?.["openai/gpt-5.2-codex"]?.tool_call).toBe(true)
+    expect(data.openrouter?.models?.["qwen/qwen3-coder-flash"]?.tool_call).toBe(true)
     expect(data.openrouter?.models?.["qwen/qwen3-coder-flash"]?.limit).toEqual({
       context: 1_000_000,
       output: 65_536,
     })
-    expect(data.openrouter?.models?.["google/gemini-3.5-flash"]?.modalities?.input).toEqual([
+    expect(data.openrouter?.models?.["google/gemini-3.8-flash"]?.modalities?.input).toEqual([
       "text",
       "image",
       "audio",
@@ -242,7 +241,7 @@ describe("update-models script", () => {
     expect(data.chutes?.models?.["zai-org/glm-5.2-tee"]).toBeDefined()
   })
 
-  test("injects documented GLM-4.7 models on the appropriate Z.AI APIs", async () => {
+  test("keeps GLM 5.3+ on Z.AI APIs and drops older GLM SKUs", async () => {
     await using tmp = await tmpdir()
     const fixturePath = path.join(tmp.path, "models-fixture.json")
     const snapshotPath = path.join(tmp.path, "models-snapshot.json")
@@ -314,15 +313,15 @@ describe("update-models script", () => {
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
     expect(data.zai?.name).toBe("Z.AI")
     expect(data.zai?.api).toBe("https://api.z.ai/api/paas/v4")
-    expect(data.zai?.models?.["glm-4.7-flash"]?.name).toBe("GLM-4.7-Flash (Free)")
+    expect(data.zai?.models?.["glm-5.3"]).toBeDefined()
+    expect(data.zai?.models?.["glm-4.7-flash"]).toBeUndefined()
     expect(data.zai?.models?.["glm-4.5-flash"]).toBeUndefined()
-    expect(data.zai?.models?.["glm-5.2"]).toBeDefined()
-    expect(data.zai?.models?.["glm-4.7"]?.name).toBe("GLM-4.7")
-    expect(data.zhipuai?.models?.["glm-4.7-flash"]?.name).toBe("GLM-4.7-Flash (Free)")
-    // GLM-4.7 is included in every coding-plan tier (docs.z.ai/devpack/overview),
-    // so it is re-injected there without the "(Free)" tag; the free flash SKU
-    // stays PAYG-only.
-    expect(data["zai-coding-plan"]?.models?.["glm-4.7"]?.name).toBe("GLM-4.7")
+    expect(data.zai?.models?.["glm-5.2"]).toBeUndefined()
+    expect(data.zai?.models?.["glm-4.7"]).toBeUndefined()
+    expect(data.zhipuai?.models?.["glm-4.7-flash"]).toBeUndefined()
+    expect(data["zai-coding-plan"]?.models?.["glm-5.3"]).toBeDefined()
+    expect(data["zai-coding-plan"]?.models?.["glm-5.2"]).toBeUndefined()
+    expect(data["zai-coding-plan"]?.models?.["glm-4.7"]).toBeUndefined()
     expect(data["zai-coding-plan"]?.models?.["glm-4.7-flash"]).toBeUndefined()
   })
 
@@ -392,17 +391,13 @@ describe("update-models script", () => {
     expect(result.status).toBe(0)
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
     for (const id of ["minimax-coding-plan", "minimax-cn-coding-plan"]) {
-      expect(Object.keys(data[id]?.models ?? {}).sort()).toEqual([
-        "MiniMax-M2.7",
-        "MiniMax-M2.7-highspeed",
-        "MiniMax-M3",
-      ])
+      expect(Object.keys(data[id]?.models ?? {}).sort()).toEqual(["MiniMax-M2.7", "MiniMax-M3"])
     }
     // Display names follow the documented convention, not upstream's domains.
     expect(data["minimax-coding-plan"]?.name).toBe("MiniMax Token Plan")
     expect(data["minimax-cn-coding-plan"]?.name).toBe("MiniMax Token Plan (China)")
     expect(data.minimax?.models?.["MiniMax-M2"]).toBeDefined()
-    expect(data.minimax?.models?.["MiniMax-M2.5"]).toBeDefined()
+    expect(data.minimax?.models?.["MiniMax-M2.5"]).toBeUndefined()
     expect(data.minimax?.models?.["MiniMax-M2.7"]).toBeDefined()
   })
 
@@ -457,7 +452,7 @@ describe("update-models script", () => {
     expect(result.status).toBe(0)
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
     for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn"]) {
-      expect(data[id]?.models?.["MiniMax-M2.5"]).toBeDefined()
+      expect(data[id]?.models?.["MiniMax-M2.5"]).toBeUndefined()
       expect(data[id]?.models?.["glm-5"]).toBeDefined()
     }
     for (const id of ["alibaba-token-plan", "alibaba-token-plan-cn"]) {
@@ -515,7 +510,7 @@ describe("update-models script", () => {
     expect(result.status).toBe(0)
     const data = JSON.parse(await readFile(snapshotPath, "utf-8"))
     expect(data.deepseek?.models?.["deepseek-v4-pro"]).toBeDefined()
-    expect(data.deepseek?.models?.["deepseek-v4-flash"]).toBeDefined()
+    expect(data.deepseek?.models?.["deepseek-v4-flash"]).toBeUndefined()
     expect(data.deepseek?.models?.["deepseek-chat"]).toBeUndefined()
     expect(data.deepseek?.models?.["deepseek-reasoner"]).toBeUndefined()
   })

@@ -326,7 +326,7 @@ export function createDialogProviderOptions() {
       if (providerID !== "ax-engine" && available && Object.keys(available.models).length > 0) {
         const existing = sync.data.provider.filter((item) => item.id !== providerID)
         sync.set("provider", [...existing, available])
-        sync.set("provider_default", providerID, data.default[providerID] ?? Object.keys(available.models)[0] ?? "")
+        sync.set("provider_default", providerID, data.default[providerID] ?? "")
         sync.set("provider_loaded", true)
         sync.set("provider_failed", false)
         provider = available
@@ -357,7 +357,7 @@ export function createDialogProviderOptions() {
       if (available && Object.keys(available.models).length > 0) {
         const existing = sync.data.provider.filter((item) => item.id !== providerID)
         sync.set("provider", [...existing, available])
-        sync.set("provider_default", providerID, data.default[providerID] ?? Object.keys(available.models)[0] ?? "")
+        sync.set("provider_default", providerID, data.default[providerID] ?? "")
         sync.set("provider_loaded", true)
         sync.set("provider_failed", false)
         provider = available

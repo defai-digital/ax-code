@@ -20,6 +20,8 @@ import {
 } from "@/mode/provider-category"
 export { AX_TRUST_PROVIDER_OPTION_ID, CUSTOM_API_PROVIDER_OPTION_ID } from "@/mode/provider-category"
 import { modelSelectableForProvider, providerModelSelectable } from "@/provider/model-selectability"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { defaultModelIDForProvider } from "@/provider/implicit-default"
 import { isRecord } from "@/util/record"
 import type { ProviderListResponse } from "@ax-code/sdk/v2"
 
@@ -261,6 +263,13 @@ export function selectableProviderDefaultModelID(input: {
   models: Record<string, SelectableProviderModel>
   defaultModel?: string
 }) {
+  if (input.providerID === AX_ENGINE_PROVIDER_ID) {
+    const defaultInfo = input.defaultModel ? input.models[input.defaultModel] : undefined
+    if (input.defaultModel && modelSelectableForProvider(input.providerID, defaultInfo)) return input.defaultModel
+    return undefined
+  }
+  const preferred = defaultModelIDForProvider(input.providerID, input.models)
+  if (preferred) return preferred
   const defaultInfo = input.defaultModel ? input.models[input.defaultModel] : undefined
   if (input.defaultModel && modelSelectableForProvider(input.providerID, defaultInfo)) return input.defaultModel
   return Object.values(input.models).find((model) => modelSelectableForProvider(input.providerID, model))?.id

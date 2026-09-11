@@ -41,6 +41,11 @@ import { levenshtein } from "@/util/levenshtein"
 import { isModelSupportedForProvider } from "./model-support"
 import { isNonChatModelID, modelSelectableForProvider, sameSkuOnConnectedProvider } from "./model-selectability"
 import {
+  defaultModelIDForProvider,
+  IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE,
+  pickImplicitDefaultModel,
+} from "./implicit-default"
+import {
   CUSTOM_LOADERS,
   type CustomModelLoader,
   type CustomModelLoaderContext,
@@ -1455,34 +1460,30 @@ export namespace Provider {
       // that convention.
       const familyPick = pickSmallFromFamily(provider)
       if (familyPick) return familyPick
-      let priority = ["gemini-3-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
+      let priority = ["gemini-3.8-flash", "gemini-flash", "llama-3.1-8b", "llama3-8b"]
       if (providerID.startsWith("zai") || providerID.startsWith("zhipuai")) {
-        // Coding-plan catalogs have no glm-4.7-flash; the base glm-4.7 is
-        // included in every plan tier and is their cheapest aux lane. zhipuai
-        // (bigmodel.cn) shares the GLM catalog but does not start with "zai" —
-        // without this, zhipuai-coding-plan (glm-4.7 only, family "glm", no
-        // tier suffix) fell through to the gemini/llama default list and
-        // returned undefined.
-        priority = ["glm-4.7-flash", "glm-4.7", "glm-5.2", "glm-5"]
+        // Coding-plan catalogs start at GLM-5.3; prefer the flash SKU for aux
+        // calls, then the 1M variant, then the base flagship. zhipuai
+        // (bigmodel.cn) shares the GLM catalog but does not start with "zai".
+        priority = ["glm-5.3-flash", "glm-5.3", "glm-5.3[1m]"]
       }
       if (providerID.startsWith("minimax")) {
         // Only the MiniMax Token Plan (subscription) is supported; its
-        // catalogs start at M2.7, so prefer the highspeed SKU for aux calls.
-        priority = ["MiniMax-M2.7-highspeed", "MiniMax-M2.7"]
+        // catalogs start at M2.7 after the highspeed SKU was filtered out.
+        priority = ["MiniMax-M2.7", "MiniMax-M3"]
       }
       if (providerID.startsWith("alibaba")) {
-        priority = ["qwen3.8-flash", "qwen3.6-flash", "qwen3.6-plus"]
+        priority = ["qwen3.8-flash", "qwen3.7-plus"]
       }
       if (providerID === "openrouter") {
-        priority = ["qwen/qwen3-coder-flash", "google/gemini-3.5-flash", "qwen/qwen3.7-plus"]
+        priority = ["qwen/qwen3-coder-flash", "google/gemini-3.8-flash", "qwen/qwen3.7-plus"]
       }
       // UnoRouter and Hugging Face were missing — the default gemini/llama
-      // list never matched their catalogs (unorouter's "gemini-3.5-flash"
-      // doesn't substring-match "gemini-3-flash"; HF ids are repo-prefixed),
-      // so getSmallModel returned undefined: auto-route's LLM tier silently
+      // list never matched their catalogs (HF ids are repo-prefixed), so
+      // getSmallModel returned undefined: auto-route's LLM tier silently
       // disabled and title/summary aux calls billed the full main model.
       if (providerID === "unorouter") {
-        priority = ["gemini-3.5-flash", "deepseek-v4-flash", "glm-5.2"]
+        priority = ["gemini-3.8-flash", "deepseek-v4-flash", "glm-5.2"]
       }
       if (providerID === "huggingface") {
         priority = ["Qwen/Qwen3.5-9B", "Qwen/Qwen3.6-27B", "google/gemma-4-26B-A4B-it"]
@@ -1538,6 +1539,10 @@ export namespace Provider {
   // (`kimi-cli`) and the model resolved from the CLI's own settings
   // (`kimi-code/k3`). Prefer that resolved model when it exists.
   const MODEL_ID_PRIORITY = ["gpt-5", "claude-sonnet-4"]
+
+  export function defaultModelID(providerID: string, models: Record<string, Model>) {
+    return defaultModelIDForProvider(providerID, models)
+  }
 
   export function sort<T extends { id: string; providerID?: string }>(models: T[]) {
     return sortBy(
@@ -1642,40 +1647,18 @@ export namespace Provider {
       if (resolved) return resolved
     }
 
-    const providers = await list()
-    for (const provider of Object.values(providers)) {
-      if (cfg.provider && !Object.keys(cfg.provider).includes(provider.id)) continue
-      const [model] = sort(
-        Object.values(provider.models).filter((item) => modelSelectableForProvider(provider.id, item)),
-      )
-      if (!model) continue
-      return {
-        providerID: provider.id,
-        modelID: model.id,
-      }
-    }
-
-    const disabled = new Set(cfg.disabled_providers ?? [])
-    const enabled = cfg.enabled_providers ? new Set(cfg.enabled_providers) : undefined
-    const fallbacks = Object.values(await ModelsDev.get()).filter((item) => {
-      const id = ProviderID.make(item.id)
-      if (enabled && !enabled.has(id)) return false
-      if (disabled.has(id)) return false
-      if (cfg.provider && !Object.keys(cfg.provider).includes(item.id)) return false
+    const providers = Object.values(await list()).filter((provider) => {
+      if (cfg.provider && !Object.keys(cfg.provider).includes(provider.id)) return false
       return true
     })
-    if (fallbacks.length === 0) throw new Error("no providers found")
-    for (const fallback of fallbacks) {
-      const [model] = sort(
-        Object.values(fallback.models).filter((item) => modelSelectableForProvider(fallback.id, item)),
-      )
-      if (!model) continue
+    const implicit = pickImplicitDefaultModel(providers)
+    if (implicit) {
       return {
-        providerID: ProviderID.make(fallback.id),
-        modelID: ModelID.make(model.id),
+        providerID: ProviderID.make(implicit.providerID),
+        modelID: ModelID.make(implicit.modelID),
       }
     }
-    throw new Error("no models found")
+    throw new Error(IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE)
   }
 
   export function parseModel(model: string | { providerID?: unknown; modelID?: unknown; id?: unknown }) {

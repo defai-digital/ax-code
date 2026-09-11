@@ -46,25 +46,53 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("huggingface", "Qwen/Qwen3.6-27B")).toBe(true)
   })
 
-  test("keeps Gemini filtering scoped to Google providers", () => {
-    expect(isModelSupportedForProvider("google", "gemini-3-pro")).toBe(true)
+  test("keeps Gemini filtering scoped to 3.8+ and non-Gemini Google models", () => {
+    expect(isModelSupportedForProvider("google", "gemini-3.8-flash")).toBe(true)
+    expect(isModelSupportedForProvider("google", "gemini-3-pro")).toBe(false)
+    expect(isModelSupportedForProvider("google", "gemini-3.5-flash")).toBe(false)
     expect(isModelSupportedForProvider("google-vertex", "Gemini 2.5 Pro")).toBe(false)
     expect(isModelSupportedForProvider("google", "imagen-4")).toBe(true)
+    expect(isModelSupportedForProvider("openrouter", "google/gemini-3.5-flash")).toBe(false)
   })
 
-  test("matches Gemini 3 regardless of separator style", () => {
-    expect(isModelSupportedForProvider("google", "gemini_3_pro")).toBe(true)
-    expect(isModelSupportedForProvider("google", "gemini 3 pro")).toBe(true)
+  test("matches Gemini 3.8 regardless of separator style", () => {
+    expect(isModelSupportedForProvider("google", "gemini_3_8_flash")).toBe(true)
+    expect(isModelSupportedForProvider("google", "gemini 3.8 flash")).toBe(true)
     expect(isModelSupportedForProvider("google-vertex", "gemini_2.5_pro")).toBe(false)
-    expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 3 Pro Preview" })).toBe(true)
-    expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 2.5 Pro" })).toBe(false)
+    expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 3.8 Flash" })).toBe(true)
+    expect(isModelSupportedForProvider("google", "models/preview-latest", { name: "Gemini 3 Pro Preview" })).toBe(false)
+  })
+
+  test("hides DeepSeek V4 Flash Vision Exp and Muse Spark below 1.3", () => {
+    expect(isModelSupportedForProvider("deepseek", "deepseek-v4-flash-vision-exp")).toBe(false)
+    expect(isModelSupportedForProvider("huggingface", "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp")).toBe(false)
+    expect(isModelSupportedForProvider("deepseek", "deepseek-v4-flash")).toBe(false)
+    expect(isModelSupportedForProvider("deepseek", "deepseek-flash")).toBe(true)
+    expect(isModelSupportedForProvider("openrouter", "openai/gpt-5.2")).toBe(false)
+    expect(isModelSupportedForProvider("openrouter", "openai/gpt-5.2-codex")).toBe(false)
+    expect(isModelSupportedForProvider("openrouter", "z-ai/glm-5.2")).toBe(false)
+    expect(isModelSupportedForProvider("alibaba-coding-plan", "MiniMax-M2.5")).toBe(false)
+    expect(isModelSupportedForProvider("zai-coding-plan", "glm-5.3-highspeed")).toBe(false)
+    expect(isModelSupportedForProvider("meta", "muse-spark-1.2")).toBe(false)
+    expect(isModelSupportedForProvider("meta", "muse-spark-1.2-contributor")).toBe(false)
+    expect(isModelSupportedForProvider("meta", "muse-spark-1.3")).toBe(true)
+    expect(isModelSupportedForProvider("meta", "muse-spark-1.3-contributor")).toBe(true)
+  })
+
+  test("keeps Groq on the chat allowlist", () => {
+    expect(isModelSupportedForProvider("groq", "qwen/qwen3.8-27b")).toBe(true)
+    expect(isModelSupportedForProvider("groq", "openai/gpt-oss-120b")).toBe(true)
+    expect(isModelSupportedForProvider("groq", "my-groq-alias")).toBe(true)
+    expect(isModelSupportedForProvider("groq", "qwen/qwen3.6-27b")).toBe(false)
+    expect(isModelSupportedForProvider("groq", "openai/gpt-oss-safeguard-20b")).toBe(false)
   })
 
   test("applies OpenAI and GLM provider filters from model probes", () => {
     expect(isModelSupportedForProvider("openai", "gpt-4.1")).toBe(true)
     expect(isModelSupportedForProvider("openai", "gpt-3.5")).toBe(false)
-    expect(isModelSupportedForProvider("zai", "glm-5.2")).toBe(true)
-    expect(isModelSupportedForProvider("zai", "glm-5")).toBe(true)
+    expect(isModelSupportedForProvider("zai", "glm-5.3")).toBe(true)
+    expect(isModelSupportedForProvider("zai", "glm-5.2")).toBe(false)
+    expect(isModelSupportedForProvider("zai", "glm-5")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5.1")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5.1[1m]")).toBe(false)
     expect(isModelSupportedForProvider("zai", "zai-org/glm-5.1-tee")).toBe(false)
@@ -74,37 +102,20 @@ describe("isModelSupportedForProvider", () => {
     expect(isModelSupportedForProvider("zai", "glm-5-turbo")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-5.10")).toBe(true)
     expect(isModelSupportedForProvider("zhipuai", "glm-4.5")).toBe(false)
-    expect(isModelSupportedForProvider("zai", "glm-4.7-flash")).toBe(true)
-    expect(isModelSupportedForProvider("zhipuai", "glm-4.7-flash")).toBe(true)
+    expect(isModelSupportedForProvider("zai", "glm-4.7-flash")).toBe(false)
+    expect(isModelSupportedForProvider("zhipuai", "glm-4.7-flash")).toBe(false)
     expect(isModelSupportedForProvider("zai", "glm-4.7-flashx")).toBe(false)
-    expect(isModelSupportedForProvider("zai", "glm-4.7")).toBe(true)
-    expect(isModelSupportedForProvider("zhipuai", "glm-4.7")).toBe(true)
+    expect(isModelSupportedForProvider("zai", "glm-4.7")).toBe(false)
+    expect(isModelSupportedForProvider("zhipuai", "glm-4.7")).toBe(false)
   })
 
   test("GLM real-catalog text SKUs are offered", () => {
     // Every GLM SKU currently in models-snapshot.json that should reach the picker.
-    for (const id of [
-      "glm-5",
-      "glm-5-2",
-      "glm-5.2",
-      "glm-5.2[1m]",
-      "glm5.2",
-      "glm-5.2-fast",
-      "glm-5.2-nitro",
-      "glm-5.2-flex",
-      "glm-5.2-fp4",
-      "glm-5.2-caveman",
-      "glm-5.2-honey",
-      "glm-5.2-ponytail",
-      "glm-5.2-short",
-      "glm-5-free",
-      "glm-5.2:free",
-      "glm-5.2@eu",
-      "glm5.2-fast",
-      "glm-4.7",
-      "glm-4.7-flash",
-    ]) {
+    for (const id of ["glm-5.3", "glm-5.3[1m]", "glm-5.3-flash", "glm5.3", "glm-5.3-fast", "glm-5.10"]) {
       expect(isModelSupportedForProvider("zai", id)).toBe(true)
+    }
+    for (const id of ["glm-5", "glm-5.2", "glm-5.2[1m]", "glm-5.3-highspeed", "glm-4.7", "glm-4.7-flash"]) {
+      expect(isModelSupportedForProvider("zai", id)).toBe(false)
     }
   })
 

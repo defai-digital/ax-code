@@ -74,16 +74,14 @@ test("GroqCloud provider exposes documented Qwen and GPT-OSS models", async () =
       const groq = providers[ProviderID.make("groq")]
 
       expect(groq?.name).toBe("GroqCloud")
-      expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]?.api.url).toBe("https://api.groq.com/openai/v1")
-      // 16,384 is Groq's documented max completion for qwen3.6-27b
-      // (https://console.groq.com/docs/models) — not 32,768.
-      expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]?.limit).toEqual({ context: 131_072, output: 16_384 })
+      expect(groq?.models[ModelID.make("qwen/qwen3.8-27b")]?.api.url).toBe("https://api.groq.com/openai/v1")
+      // 16,384 is Groq's documented max completion for qwen3.8-27b
+      // (https://console.groq.com/docs/model/qwen/qwen3.8-27b) — not 32,768.
+      expect(groq?.models[ModelID.make("qwen/qwen3.8-27b")]?.limit).toEqual({ context: 131_042, output: 16_384 })
+      expect(groq?.models[ModelID.make("qwen/qwen3.6-27b")]).toBeUndefined()
       expect(groq?.models[ModelID.make("openai/gpt-oss-120b")]?.limit).toEqual({ context: 131_072, output: 65_536 })
       expect(groq?.models[ModelID.make("openai/gpt-oss-20b")]?.limit).toEqual({ context: 131_072, output: 65_536 })
-      expect(groq?.models[ModelID.make("openai/gpt-oss-safeguard-20b")]?.limit).toEqual({
-        context: 131_072,
-        output: 65_536,
-      })
+      expect(groq?.models[ModelID.make("openai/gpt-oss-safeguard-20b")]).toBeUndefined()
       // Non-chat and non-allowlisted SKUs never reach the provider catalog.
       expect(groq?.models[ModelID.make("whisper-large-v3")]).toBeUndefined()
       expect(groq?.models[ModelID.make("groq/compound")]).toBeUndefined()
@@ -106,22 +104,18 @@ test("Zhipu general API exposes current GLM flagships and hides legacy SKUs", as
       expect(zhipuai?.name).toBeDefined()
       expect(zhipuai?.models[ModelID.make("glm-5.3")]?.api.url).toBe("https://open.bigmodel.cn/api/paas/v4")
       expect(zhipuai?.models[ModelID.make("glm-5.3")]?.limit).toEqual({ context: 1_000_000, output: 131_072 })
-      expect(zhipuai?.models[ModelID.make("glm-5.2")]?.limit).toEqual({ context: 1_000_000, output: 131_072 })
+      expect(zhipuai?.models[ModelID.make("glm-5.2")]).toBeUndefined()
       // glm-5.1 is hidden by the global GLM filters; other 4.x SKUs drop.
       expect(zhipuai?.models[ModelID.make("glm-5.1")]).toBeUndefined()
-      // These PAYG SKUs are the documented GLM-4 exceptions on the general API;
-      // only the Flash variant is free.
-      expect(zhipuai?.models[ModelID.make("glm-4.7")]?.name).toBe("GLM-4.7")
-      expect(zhipuai?.models[ModelID.make("glm-4.7")]?.limit).toEqual({ context: 204_800, output: 131_072 })
-      expect(zhipuai?.models[ModelID.make("glm-4.7-flash")]?.name).toBe("GLM-4.7-Flash (Free)")
-      expect(zhipuai?.models[ModelID.make("glm-4.7-flash")]?.limit).toEqual({ context: 200_000, output: 131_072 })
+      expect(zhipuai?.models[ModelID.make("glm-4.7")]).toBeUndefined()
+      expect(zhipuai?.models[ModelID.make("glm-4.7-flash")]).toBeUndefined()
       // [1m] variants stay scoped to the coding endpoints.
       expect(zhipuai?.models[ModelID.make("glm-5.2[1m]")]).toBeUndefined()
     },
   })
 })
 
-test("Z.AI general API exposes the GLM-4.7 series and current flagships", async () => {
+test("Z.AI general API exposes GLM-5.3 and hides older GLM SKUs", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
     directory: tmp.path,
@@ -133,13 +127,10 @@ test("Z.AI general API exposes the GLM-4.7 series and current flagships", async 
       const zai = providers[ProviderID.make("zai")]
 
       expect(zai?.name).toBe("Z.AI")
-      expect(zai?.models[ModelID.make("glm-4.7-flash")]?.name).toBe("GLM-4.7-Flash (Free)")
-      expect(zai?.models[ModelID.make("glm-4.7-flash")]?.api.url).toBe("https://api.z.ai/api/paas/v4")
-      expect(zai?.models[ModelID.make("glm-4.7-flash")]?.limit).toEqual({ context: 200_000, output: 131_072 })
       expect(zai?.models[ModelID.make("glm-5.3")]?.api.url).toBe("https://api.z.ai/api/paas/v4")
-      expect(zai?.models[ModelID.make("glm-4.7")]?.name).toBe("GLM-4.7")
-      expect(zai?.models[ModelID.make("glm-4.7")]?.api.url).toBe("https://api.z.ai/api/paas/v4")
-      expect(zai?.models[ModelID.make("glm-4.7")]?.limit).toEqual({ context: 204_800, output: 131_072 })
+      expect(zai?.models[ModelID.make("glm-4.7-flash")]).toBeUndefined()
+      expect(zai?.models[ModelID.make("glm-4.7")]).toBeUndefined()
+      expect(zai?.models[ModelID.make("glm-5.2")]).toBeUndefined()
       expect(zai?.models[ModelID.make("glm-4.5-flash")]).toBeUndefined()
     },
   })
@@ -185,7 +176,7 @@ test("MiniMax Token Plan providers use the Anthropic endpoint and expose M3", as
       expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.url).toBe("https://api.minimax.io/anthropic/v1")
       expect(intl?.models[ModelID.make("MiniMax-M3")]?.api.npm).toBe("@ai-sdk/anthropic")
       expect(intl?.models[ModelID.make("MiniMax-M2.7")]).toBeDefined()
-      expect(intl?.models[ModelID.make("MiniMax-M2.7-highspeed")]).toBeDefined()
+      expect(intl?.models[ModelID.make("MiniMax-M2.7-highspeed")]).toBeUndefined()
       expect(intl?.models[ModelID.make("MiniMax-M2")]).toBeUndefined()
       expect(intl?.models[ModelID.make("MiniMax-M2.1")]).toBeUndefined()
       expect(intl?.models[ModelID.make("MiniMax-M2.5")]).toBeUndefined()
@@ -217,9 +208,10 @@ test("OpenRouter provider preserves OpenAI-compatible options and curated tool m
         "HTTP-Referer": "https://github.com/defai-digital/ax-code",
         "X-Title": "AX Code",
       })
-      expect(openrouter?.models[ModelID.make("openai/gpt-5.2")]?.api.url).toBe("https://openrouter.ai/api/v1")
-      expect(openrouter?.models[ModelID.make("openai/gpt-5.2")]?.capabilities.toolcall).toBe(true)
-      expect(openrouter?.models[ModelID.make("z-ai/glm-5.2")]?.limit.context).toBe(1_048_576)
+      expect(openrouter?.models[ModelID.make("qwen/qwen3.7-plus")]?.api.url).toBe("https://openrouter.ai/api/v1")
+      expect(openrouter?.models[ModelID.make("qwen/qwen3.7-plus")]?.capabilities.toolcall).toBe(true)
+      expect(openrouter?.models[ModelID.make("openai/gpt-5.2")]).toBeUndefined()
+      expect(openrouter?.models[ModelID.make("z-ai/glm-5.2")]).toBeUndefined()
     },
   })
 })
@@ -790,7 +782,7 @@ test("model whitelist filters models for provider", async () => {
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
             groq: {
-              whitelist: ["qwen/qwen3.6-27b"],
+              whitelist: ["qwen/qwen3.8-27b"],
             },
           },
         }),
@@ -806,7 +798,7 @@ test("model whitelist filters models for provider", async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.make("groq")]).toBeDefined()
       const models = Object.keys(providers[ProviderID.make("groq")].models)
-      expect(models).toContain("qwen/qwen3.6-27b")
+      expect(models).toContain("qwen/qwen3.8-27b")
       expect(models.length).toBe(1)
     },
   })
@@ -823,7 +815,7 @@ test("model blacklist excludes specific models", async () => {
             groq: {
               // Blacklisting every curated Groq model drops the provider.
               blacklist: [
-                "qwen/qwen3.6-27b",
+                "qwen/qwen3.8-27b",
                 "openai/gpt-oss-120b",
                 "openai/gpt-oss-20b",
                 "openai/gpt-oss-safeguard-20b",
@@ -857,7 +849,7 @@ test("custom model alias via config", async () => {
             groq: {
               models: {
                 "my-alias": {
-                  id: "qwen/qwen3.6-27b",
+                  id: "qwen/qwen3.8-27b",
                   name: "My Custom Alias",
                 },
               },
@@ -975,10 +967,10 @@ test("getModel returns model for valid provider/model", async () => {
       Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.6-27b"))
+      const model = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.8-27b"))
       expect(model).toBeDefined()
       expect(String(model.providerID)).toBe("groq")
-      expect(String(model.id)).toBe("qwen/qwen3.6-27b")
+      expect(String(model.id)).toBe("qwen/qwen3.8-27b")
       const language = await Provider.getLanguage(model)
       expect(language).toBeDefined()
     },
@@ -1054,9 +1046,9 @@ test("getLanguage throws ModelNotFoundError when the model provider is missing",
 })
 
 test("parseModel correctly parses provider/model string", () => {
-  const result = Provider.parseModel("groq/qwen/qwen3.6-27b")
+  const result = Provider.parseModel("groq/qwen/qwen3.8-27b")
   expect(String(result.providerID)).toBe("groq")
-  expect(String(result.modelID)).toBe("qwen/qwen3.6-27b")
+  expect(String(result.modelID)).toBe("qwen/qwen3.8-27b")
 })
 
 test("parseModel handles model IDs with slashes", () => {
@@ -1110,12 +1102,12 @@ test("defaultModel returns first available model when no config set", async () =
   await Instance.provide({
     directory: tmp.path,
     init: async () => {
-      Env.set("GROQ_API_KEY", "test-api-key")
+      Env.set("DEEPSEEK_API_KEY", "test-deepseek")
     },
     fn: async () => {
       const model = await Provider.defaultModel()
-      expect(model.providerID).toBeDefined()
-      expect(model.modelID).toBeDefined()
+      expect(String(model.providerID)).toBe("deepseek")
+      expect(String(model.modelID)).toBe("deepseek-flash")
     },
   })
 })
@@ -1127,7 +1119,7 @@ test("defaultModel respects config model setting", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          model: "groq/qwen/qwen3.6-27b",
+          model: "groq/qwen/qwen3.8-27b",
         }),
       )
     },
@@ -1140,7 +1132,7 @@ test("defaultModel respects config model setting", async () => {
     fn: async () => {
       const model = await Provider.defaultModel()
       expect(String(model.providerID)).toBe("groq")
-      expect(String(model.modelID)).toBe("qwen/qwen3.6-27b")
+      expect(String(model.modelID)).toBe("qwen/qwen3.8-27b")
     },
   })
 })
@@ -1234,8 +1226,8 @@ test("defaultModel skips configured providers with no selectable models", async 
               baseURL: "https://tool.example/v1",
             },
             models: {
-              "tool-model": {
-                name: "Tool Model",
+              "glm-5.3-flash": {
+                name: "GLM-5.3-Flash",
                 tool_call: true,
                 limit: { context: 128000, output: 4096 },
               },
@@ -1250,7 +1242,7 @@ test("defaultModel skips configured providers with no selectable models", async 
       fn: async () => {
         const model = await Provider.defaultModel()
         expect(String(model.providerID)).toBe("tool-provider")
-        expect(String(model.modelID)).toBe("tool-model")
+        expect(String(model.modelID)).toBe("glm-5.3-flash")
       },
     })
   } finally {
@@ -1281,8 +1273,8 @@ test("defaultModel treats a missing recent-model store as empty state", async ()
               baseURL: "https://custom.openai.com/v1",
             },
             models: {
-              "tool-model": {
-                name: "Tool Model",
+              "deepseek-flash": {
+                name: "DeepSeek V4.1 Flash",
                 tool_call: true,
                 limit: { context: 128000, output: 4096 },
               },
@@ -1297,7 +1289,7 @@ test("defaultModel treats a missing recent-model store as empty state", async ()
       fn: async () => {
         const model = await Provider.defaultModel()
         expect(String(model.providerID)).toBe("custom-openai")
-        expect(String(model.modelID)).toBe("tool-model")
+        expect(String(model.modelID)).toBe("deepseek-flash")
       },
     })
   } finally {
@@ -1571,7 +1563,7 @@ test("model options are merged from existing model", async () => {
           provider: {
             groq: {
               models: {
-                "qwen/qwen3.6-27b": {
+                "qwen/qwen3.8-27b": {
                   options: {
                     customOption: "custom-value",
                   },
@@ -1590,7 +1582,7 @@ test("model options are merged from existing model", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.make("groq")].models["qwen/qwen3.6-27b"]
+      const model = providers[ProviderID.make("groq")].models["qwen/qwen3.8-27b"]
       expect(model.options.customOption).toBe("custom-value")
     },
   })
@@ -1641,10 +1633,10 @@ test("closest finds model by partial match", async () => {
       Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const result = await Provider.closest(ProviderID.make("groq"), ["qwen/qwen3.6-27b"])
+      const result = await Provider.closest(ProviderID.make("groq"), ["qwen/qwen3.8-27b"])
       expect(result).toBeDefined()
       expect(String(result?.providerID)).toBe("groq")
-      expect(String(result?.modelID)).toContain("qwen/qwen3.6-27b")
+      expect(String(result?.modelID)).toContain("qwen/qwen3.8-27b")
     },
   })
 })
@@ -1680,7 +1672,7 @@ test("getModel uses realIdByKey for aliased models", async () => {
             groq: {
               models: {
                 "my-gpt4o": {
-                  id: "qwen/qwen3.6-27b",
+                  id: "qwen/qwen3.8-27b",
                   name: "My GPT-4o Alias",
                 },
               },
@@ -1867,7 +1859,7 @@ test("model inherits properties from existing database model", async () => {
           provider: {
             groq: {
               models: {
-                "qwen/qwen3.6-27b": {
+                "qwen/qwen3.8-27b": {
                   name: "Custom Name for GPT-4o",
                 },
               },
@@ -1884,7 +1876,7 @@ test("model inherits properties from existing database model", async () => {
     },
     fn: async () => {
       const providers = await Provider.list()
-      const model = providers[ProviderID.make("groq")].models["qwen/qwen3.6-27b"]
+      const model = providers[ProviderID.make("groq")].models["qwen/qwen3.8-27b"]
       expect(model.name).toBe("Custom Name for GPT-4o")
       expect(model.capabilities.toolcall).toBe(true)
       expect(model.limit.context).toBeGreaterThan(0)
@@ -1950,7 +1942,7 @@ test("whitelist and blacklist can be combined", async () => {
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           provider: {
             groq: {
-              whitelist: ["qwen/qwen3.6-27b", "openai/gpt-oss-120b"],
+              whitelist: ["qwen/qwen3.8-27b", "openai/gpt-oss-120b"],
               blacklist: ["openai/gpt-oss-120b"],
             },
           },
@@ -1967,7 +1959,7 @@ test("whitelist and blacklist can be combined", async () => {
       const providers = await Provider.list()
       expect(providers[ProviderID.make("groq")]).toBeDefined()
       const models = Object.keys(providers[ProviderID.make("groq")].models)
-      expect(models).toContain("qwen/qwen3.6-27b")
+      expect(models).toContain("qwen/qwen3.8-27b")
       expect(models).not.toContain("openai/gpt-oss-120b")
       expect(models.length).toBe(1)
     },
@@ -2035,7 +2027,7 @@ test("getSmallModel returns appropriate small model", async () => {
   })
 })
 
-test("getSmallModel uses MiniMax Token Plan highspeed after the M2.7 floor", async () => {
+test("getSmallModel uses MiniMax Token Plan M2.7 after the highspeed SKU was filtered", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2054,7 +2046,7 @@ test("getSmallModel uses MiniMax Token Plan highspeed after the M2.7 floor", asy
     fn: async () => {
       const model = await Provider.getSmallModel(ProviderID.make("minimax-coding-plan"))
       expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("MiniMax-M2.7-highspeed")
+      expect(String(model?.id)).toBe("MiniMax-M2.7")
     },
   })
 })
@@ -2116,7 +2108,7 @@ test("getSmallModel respects config small_model override", async () => {
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          small_model: "groq/qwen/qwen3.6-27b",
+          small_model: "groq/qwen/qwen3.8-27b",
         }),
       )
     },
@@ -2130,7 +2122,7 @@ test("getSmallModel respects config small_model override", async () => {
       const model = await Provider.getSmallModel(ProviderID.make("groq"))
       expect(model).toBeDefined()
       expect(String(model?.providerID)).toBe("groq")
-      expect(String(model?.id)).toBe("qwen/qwen3.6-27b")
+      expect(String(model?.id)).toBe("qwen/qwen3.8-27b")
     },
   })
 })
@@ -2194,6 +2186,22 @@ test('getSmallModel prefers "flash-lite" over "flash" when both exist', async ()
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
           enabled_providers: ["venice"],
+          provider: {
+            venice: {
+              models: {
+                "gemini-3.8-flash": {
+                  family: "gemini-flash",
+                  provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
+                  limit: { context: 1_048_576, output: 65_536 },
+                },
+                "gemini-3.8-flash-lite": {
+                  family: "gemini-flash-lite",
+                  provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
+                  limit: { context: 1_048_576, output: 65_536 },
+                },
+              },
+            },
+          },
         }),
       )
     },
@@ -2206,7 +2214,7 @@ test('getSmallModel prefers "flash-lite" over "flash" when both exist', async ()
     fn: async () => {
       const model = await Provider.getSmallModel(ProviderID.make("venice"))
       expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("gemini-3-5-flash-lite")
+      expect(String(model?.id)).toBe("gemini-3.8-flash-lite")
     },
   })
 })
@@ -2238,7 +2246,7 @@ test("getSmallModel excludes family matches that cannot drive the agent loop", a
   })
 })
 
-test("getSmallModel picks the free glm-4.7-flash for zai", async () => {
+test("getSmallModel picks glm-5.3-flash for zai", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2258,12 +2266,12 @@ test("getSmallModel picks the free glm-4.7-flash for zai", async () => {
     fn: async () => {
       const model = await Provider.getSmallModel(ProviderID.make("zai"))
       expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("glm-4.7-flash")
+      expect(String(model?.id)).toBe("glm-5.3-flash")
     },
   })
 })
 
-test("getSmallModel picks the plan-included glm-4.7 for zhipuai-coding-plan", async () => {
+test("getSmallModel picks glm-5.3-flash for zhipuai-coding-plan", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2285,7 +2293,7 @@ test("getSmallModel picks the plan-included glm-4.7 for zhipuai-coding-plan", as
       // priority list must match — "zhipuai" does not start with "zai".
       const model = await Provider.getSmallModel(ProviderID.make("zhipuai-coding-plan"))
       expect(model).toBeDefined()
-      expect(String(model?.id)).toBe("glm-4.7")
+      expect(String(model?.id)).toBe("glm-5.3-flash")
     },
   })
 })
@@ -2321,6 +2329,10 @@ test("config-defined Z.AI Coding Plan models filter unsupported GLM variants", a
                   provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
                   limit: { context: 200000, output: 131072 },
                 },
+                "glm-5.3": {
+                  provider: { npm: "@ai-sdk/openai-compatible", api: "https://example.com" },
+                  limit: { context: 1000000, output: 131072 },
+                },
               },
             },
           },
@@ -2339,7 +2351,8 @@ test("config-defined Z.AI Coding Plan models filter unsupported GLM variants", a
       // Selected GLM 5 SKUs are hidden from the picker.
       expect(zai.models["glm-5-turbo"]).toBeUndefined()
       expect(zai.models["glm-5.1"]).toBeUndefined()
-      expect(zai.models["glm-5"]).toBeDefined()
+      expect(zai.models["glm-5"]).toBeUndefined()
+      expect(zai.models["glm-5.3"]).toBeDefined()
     },
   })
 })
@@ -2363,14 +2376,13 @@ test("bundled Z.AI coding plan providers expose GLM flagship and long-context va
     },
     fn: async () => {
       const providers = await Provider.list()
-      const expected = ["glm-5.2", "glm-5.2[1m]", "glm-4.7"]
+      const expected = ["glm-5.3", "glm-5.3[1m]"]
       // The "[1m]" suffix is a client-side context-window selector; the z.ai API
       // only accepts the bare model name, so api.id must drop the suffix while
-      // the lookup id keeps it. glm-4.7 is plan-included on every coding tier.
+      // the lookup id keeps it.
       const expectedApiID: Record<string, string> = {
-        "glm-5.2": "glm-5.2",
-        "glm-5.2[1m]": "glm-5.2",
-        "glm-4.7": "glm-4.7",
+        "glm-5.3": "glm-5.3",
+        "glm-5.3[1m]": "glm-5.3",
       }
 
       for (const providerID of ["zai-coding-plan", "zhipuai-coding-plan"]) {
@@ -2387,7 +2399,7 @@ test("bundled Z.AI coding plan providers expose GLM flagship and long-context va
   })
 })
 
-test("google provider only exposes Gemini 3 or later models", async () => {
+test("google provider only exposes Gemini 3.8 or later models", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2412,11 +2424,13 @@ test("google provider only exposes Gemini 3 or later models", async () => {
       expect(ids.length).toBeGreaterThan(0)
       expect(ids.some((id) => id.includes("gemini-2"))).toBe(false)
       expect(ids.some((id) => id.includes("gemini-1"))).toBe(false)
+      expect(ids.some((id) => /gemini-3(?:[.-][0-7]\b|[.-]flash\b|$)/.test(id))).toBe(false)
+      expect(ids.some((id) => id.includes("gemini-3.8"))).toBe(true)
     },
   })
 })
 
-test("getSmallModel prefers a Gemini 3 model for google", async () => {
+test("getSmallModel prefers a Gemini 3.8 model for google", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await fs.writeFile(
@@ -2436,7 +2450,7 @@ test("getSmallModel prefers a Gemini 3 model for google", async () => {
     fn: async () => {
       const model = await Provider.getSmallModel(ProviderID.google)
       expect(model).toBeDefined()
-      expect(String(model?.id)).toContain("gemini-3")
+      expect(String(model?.id)).toContain("gemini-3.8")
     },
   })
 })
@@ -2526,9 +2540,9 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
                   id: "my-spaced-glm-vision-alias",
                   name: "GLM 5 V Turbo",
                 },
-                "glm-5": {
-                  id: "glm-5",
-                  name: "GLM-5",
+                "glm-5.3": {
+                  id: "glm-5.3",
+                  name: "GLM-5.3",
                 },
               },
             },
@@ -2549,7 +2563,7 @@ test("provider list filters GPT-5.5 from configured provider models", async () =
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["glm-5v-turbo"]).toBeUndefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-glm-vision-alias"]).toBeUndefined()
       expect(providers[ProviderID.make("zai-coding-plan")]?.models["my-spaced-glm-vision-alias"]).toBeUndefined()
-      expect(providers[ProviderID.make("zai-coding-plan")]?.models["glm-5"]).toBeDefined()
+      expect(providers[ProviderID.make("zai-coding-plan")]?.models["glm-5.3"]).toBeDefined()
     },
   })
 })
@@ -2691,20 +2705,10 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       // coding plans carry the qwen3.x-plus/coder SKUs plus glm-5/MiniMax,
       // token plans carry curated Qwen + image models (DeepSeek/GLM/MiniMax/
       // Kimi, qwen3.6-plus/qwen3.7-max, and preview SKUs are hidden).
-      const expectedCodingPlanModels = [
-        "MiniMax-M2.5",
-        "glm-5",
-        "qwen3-coder-next",
-        "qwen3-coder-plus",
-        "qwen3-max-2026-01-23",
-        "qwen3.5-plus",
-        "qwen3.6-plus",
-        "qwen3.7-plus",
-      ]
+      const expectedCodingPlanModels = ["glm-5", "qwen3-coder-next", "qwen3-coder-plus", "qwen3.7-plus"]
       const expectedTokenPlanModels = [
         "qwen-image-2.0",
         "qwen-image-2.0-pro",
-        "qwen3.6-flash",
         "qwen3.7-plus",
         "qwen3.8-flash",
         "qwen3.8-max",
@@ -2722,8 +2726,8 @@ test("Alibaba providers keep coding plan and token plan endpoints separate", asy
       expect(tokenPlan.models["qwen3.8-max-preview"]).toBeUndefined()
       expect(codingPlan.models["qwen3.8-flash"]).toBeUndefined()
       expect(codingPlan.models["qwen3.8-max"]).toBeUndefined()
-      expect(codingPlan.models["qwen3.6-plus"].api.url).toBe("https://coding-intl.dashscope.aliyuncs.com/v1")
-      expect(codingPlanCn.models["qwen3.6-plus"].api.url).toBe("https://coding.dashscope.aliyuncs.com/v1")
+      expect(codingPlan.models["qwen3.7-plus"].api.url).toBe("https://coding-intl.dashscope.aliyuncs.com/v1")
+      expect(codingPlanCn.models["qwen3.7-plus"].api.url).toBe("https://coding.dashscope.aliyuncs.com/v1")
       expect(tokenPlan.models["qwen3.7-plus"].api.url).toBe(
         "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
       )
@@ -2815,7 +2819,7 @@ test("model alias name defaults to alias key when id differs", async () => {
             groq: {
               models: {
                 gpt4: {
-                  id: "qwen/qwen3.6-27b",
+                  id: "qwen/qwen3.8-27b",
                   // no name specified - should default to "gpt4" (the key)
                 },
               },
@@ -3174,8 +3178,8 @@ test("getModel returns consistent results", async () => {
       Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model1 = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.6-27b"))
-      const model2 = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.6-27b"))
+      const model1 = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.8-27b"))
+      const model2 = await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.8-27b"))
       expect(model1.providerID).toEqual(model2.providerID)
       expect(model1.id).toEqual(model2.id)
       expect(model1).toEqual(model2)
@@ -3236,7 +3240,7 @@ test("ModelNotFoundError includes suggestions for typos", async () => {
     },
     fn: async () => {
       try {
-        await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.6-27")) // incomplete model id
+        await Provider.getModel(ProviderID.make("groq"), ModelID.make("qwen/qwen3.8-27")) // incomplete model id
         expect(true).toBe(false) // Should not reach here
       } catch (e: any) {
         expect(e.data.suggestions).toBeDefined()
@@ -3264,7 +3268,7 @@ test("ModelNotFoundError for provider includes suggestions", async () => {
     },
     fn: async () => {
       try {
-        await Provider.getModel(ProviderID.make("grq"), ModelID.make("qwen/qwen3.6-27b")) // typo: grq → groq
+        await Provider.getModel(ProviderID.make("grq"), ModelID.make("qwen/qwen3.8-27b")) // typo: grq → groq
         expect(true).toBe(false) // Should not reach here
       } catch (e: any) {
         expect(e.data.suggestions).toBeDefined()
@@ -3359,9 +3363,9 @@ test("closest checks multiple query terms in order", async () => {
     },
     fn: async () => {
       // First term won't match, second will
-      const result = await Provider.closest(ProviderID.make("groq"), ["nonexistent", "qwen/qwen3.6-27b"])
+      const result = await Provider.closest(ProviderID.make("groq"), ["nonexistent", "qwen/qwen3.8-27b"])
       expect(result).toBeDefined()
-      expect(result?.modelID).toContain("qwen/qwen3.6-27b")
+      expect(result?.modelID).toContain("qwen/qwen3.8-27b")
     },
   })
 })
@@ -3853,8 +3857,8 @@ test("Google Vertex: retains baseURL for custom proxy", async () => {
               api: "https://my-proxy.com/v1",
               env: ["GOOGLE_APPLICATION_CREDENTIALS"], // Mock env var requirement
               models: {
-                "gemini-pro": {
-                  name: "Gemini Pro",
+                "gemini-3.8-flash": {
+                  name: "Gemini 3.8 Flash",
                   tool_call: true,
                 },
               },
@@ -4056,9 +4060,7 @@ test("defaultModel falls back when the configured model's provider is disabled",
       Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      const model = await Provider.defaultModel()
-      expect(String(model.providerID)).toBe("groq")
-      expect(model.modelID).toBeTruthy()
+      await expect(Provider.defaultModel()).rejects.toThrow(/No default model is available/)
     },
   })
 })
@@ -4240,7 +4242,7 @@ test("getSmallModel follows small_model to the connected provider serving the sa
         path.join(dir, "ax-code.json"),
         JSON.stringify({
           $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-          small_model: "deepseek/deepseek-v4-flash",
+          small_model: "deepseek/deepseek-v4-pro",
           disabled_providers: ["deepseek"],
           provider: {
             "127-0-0-1": {
@@ -4250,9 +4252,9 @@ test("getSmallModel follows small_model to the connected provider serving the sa
               api: "http://127.0.0.1:8080/v1",
               env: [],
               models: {
-                "deepseek-v4-flash": {
-                  id: "deepseek-v4-flash",
-                  name: "DeepSeek V4 Flash",
+                "deepseek-v4-pro": {
+                  id: "deepseek-v4-pro",
+                  name: "DeepSeek V4 Pro",
                   tool_call: true,
                   limit: { context: 128_000, output: 16_384 },
                 },
@@ -4272,7 +4274,7 @@ test("getSmallModel follows small_model to the connected provider serving the sa
     fn: async () => {
       const model = await Provider.getSmallModel(ProviderID.make("groq"))
       expect(String(model?.providerID)).toBe("127-0-0-1")
-      expect(String(model?.id)).toBe("deepseek-v4-flash")
+      expect(String(model?.id)).toBe("deepseek-v4-pro")
     },
   })
 })

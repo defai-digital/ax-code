@@ -6,9 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.11] - 2026-09-11
+
 ### Changed
 
 - Give managed AX Engine cold starts 600 seconds to become ready, and keep the setup envelope and lifecycle lock above that so a slow SMB/NFS model load is not cancelled by a shorter sibling deadline.
+
+- Refresh the supported model catalog and keep CLI, TUI and HTTP default-model selection aligned. Preserve explicit model choices and require explicit AX Engine selection.
+
+### Fixed
+
+- Remove real backoff waits from deliberately permanent-failure PowerShell fixtures while asserting the exact delay sequence, ten-attempt limit and preserved recovery files. Native sharing-error tests retain their real delays, preventing the simulated denial case from consuming the Windows ARM64 process deadline.
 
 ## [7.15.10] - 2026-09-11
 

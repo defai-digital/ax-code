@@ -220,6 +220,19 @@ if ($script:locks -gt 10) { throw "Runtime move exceeded its ten-attempt limit" 
 New-PreviousInstall
 $script:attempts = 0
 $script:rollingBack = $false
+$script:retryDelays = [System.Collections.Generic.List[int]]::new()
+function Start-Sleep {
+  param([int]$Milliseconds)
+  # Only the deliberately permanent failure uses a virtual clock. Native
+  # sharing failures during initial installation retain their real backoff.
+  if ($script:rollingBack -and $script:attempts -gt 0) {
+    $script:retryDelays.Add($Milliseconds)
+    return
+  }
+  Microsoft.PowerShell.Utility\\Start-Sleep -Milliseconds $Milliseconds
+}
+Start-Sleep -Milliseconds 0
+Assert-Equal $script:retryDelays.Count 0
 function Verify-InstalledRuntime { $script:rollingBack = $true; throw "Simulated final check failure" }
 function Move-RuntimeItem {
   [CmdletBinding()]
@@ -234,6 +247,7 @@ $failure = $null
 try { Install-NodeBundleTree $Source } catch { $failure = $_ }
 if ($failure -notmatch "Recovery files remain at") { throw "Expected recovery path: $failure" }
 Assert-Equal $script:attempts 10
+Assert-Equal ($script:retryDelays -join ",") "200,400,800,1600,2000,2000,2000,2000,2000"
 $backup = Get-ChildItem -LiteralPath $env:AX_TEST_ROOT -Directory -Force | Where-Object { $_.Name -like ".ax-code-install-*" }
 Assert-Equal (Get-Content -LiteralPath (Join-Path $backup.FullName "previous/node/bin/node.exe") -Raw) "previous"
 `)

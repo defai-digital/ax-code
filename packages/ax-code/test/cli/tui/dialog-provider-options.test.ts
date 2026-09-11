@@ -434,7 +434,57 @@ describe("provider dialog options", () => {
           small: { id: "small", capabilities: { toolcall: true } },
         },
       }),
-    ).toBe("small")
+    ).toBeUndefined()
+  })
+
+  test("does not auto-select an AX Engine model", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "ax-engine",
+        models: {
+          "qwen3.8-27b-axq-6bit": { id: "qwen3.8-27b-axq-6bit", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBeUndefined()
+  })
+
+  test("defaults Z.AI to glm-5.3-flash", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "zai",
+        defaultModel: "glm-5.3",
+        models: {
+          "glm-5.3": { id: "glm-5.3", capabilities: { toolcall: true } },
+          "glm-5.3-flash": { id: "glm-5.3-flash", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("glm-5.3-flash")
+  })
+
+  test("defaults Groq to openai/gpt-oss-20b", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "groq",
+        defaultModel: "qwen/qwen3.8-27b",
+        models: {
+          "openai/gpt-oss-20b": { id: "openai/gpt-oss-20b", capabilities: { toolcall: true } },
+          "qwen/qwen3.8-27b": { id: "qwen/qwen3.8-27b", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("openai/gpt-oss-20b")
+  })
+
+  test("defaults Alibaba Coding Plan to qwen3-coder-plus", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "alibaba-coding-plan",
+        defaultModel: "qwen3.7-plus",
+        models: {
+          "qwen3-coder-plus": { id: "qwen3-coder-plus", capabilities: { toolcall: true } },
+          "qwen3.7-plus": { id: "qwen3.7-plus", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("qwen3-coder-plus")
   })
 
   test("returns undefined when no provider model is selectable", () => {

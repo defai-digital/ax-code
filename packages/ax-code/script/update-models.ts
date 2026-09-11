@@ -15,6 +15,11 @@ import { fileURLToPath } from "url"
 import { readJson, writeText } from "./fs-compat"
 import { cloneJsonValue, formatModelsSnapshot, modelsSnapshotChanged, RETIRED_PROVIDER_IDS } from "./models-snapshot"
 import { isHiddenDeepseekLegacySku } from "../src/provider/deepseek-catalog"
+import {
+  GROQ_CHAT_MODEL_ALLOWLIST,
+  isHiddenCatalogSku,
+  isModelSupportedForProvider,
+} from "../src/provider/model-support"
 
 const dir = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const snapshotPath = process.env.AX_CODE_MODELS_SNAPSHOT_PATH || path.join(dir, "src/provider/models-snapshot.json")
@@ -222,11 +227,11 @@ for (const id of [
 //   - Grok: only grok-4.5 (plus official aliases grok-4.5-latest / grok-build-latest).
 //     All other Grok variants (4.3, Build 0.1, code-fast, 4.2/4.1, betas) drop.
 //   - GLM (Z.AI): only non-vision selected v5+ SKUs (glm-5.1, glm-5.1[1m],
-//     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop), except glm-4.7
-//     and glm-4.7-flash, which are re-injected after this filter — both on the
-//     zai / zhipuai general APIs, and the base model on the coding-plan
-//     endpoints.
-//   - Gemini: only v3+ (Gemini 1.x/2.x drops from ax-code's model picker).
+//     glm-5-turbo, glm-5v, and every glm-4.x / glm-3.x drop). Z.AI / Zhipu
+//     providers then raise the floor to GLM 5.3.
+//   - Gemini: only 3.8+ (Gemini 1.x/2.x/3.0–3.7 drop from ax-code's picker).
+//   - Muse Spark: only 1.3+.
+//   - DeepSeek: drop the V4 Flash Vision Exp SKU.
 //   - GPT-5.5: hidden from API/provider model pickers; use Codex CLI default instead.
 //
 // To extend: add another entry to UNSUPPORTED_PROBES.
@@ -294,29 +299,40 @@ function isUnsupportedModel(m: RawModel): boolean {
   if (probes.some(isHiddenGlmProbe)) return true
   if (probes.some((p) => p.includes("glm-5v") || p.includes("glm5v"))) return true
   if (probes.some((p) => /\bglm-[0-4]\b/.test(p))) return true
-  // Gemini: drop any Gemini generation before 3.
-  if (probes.some((p) => /\bgemini-[12](?:\.|-)/.test(p))) return true
+  // Gemini: drop any Gemini generation before 3.8.
+  if (probes.some((p) => p.includes("gemini"))) {
+    const versions = probes
+      .map((p) => {
+        const withMinor = p.match(/(?:^|[^a-z0-9])gemini-?(\d+)[.-](\d+)/)
+        if (withMinor) return { major: Number.parseInt(withMinor[1], 10), minor: Number.parseInt(withMinor[2], 10) }
+        const majorOnly = p.match(/(?:^|[^a-z0-9])gemini-?(\d+)(?:$|[^0-9.])/)
+        if (majorOnly && majorOnly[1].length === 1) {
+          return { major: Number.parseInt(majorOnly[1], 10), minor: 0 }
+        }
+      })
+      .filter((v): v is { major: number; minor: number } => v !== undefined)
+    const best = versions.reduce<{ major: number; minor: number } | undefined>(
+      (acc, v) => (!acc || v.major > acc.major || (v.major === acc.major && v.minor > acc.minor) ? v : acc),
+      undefined,
+    )
+    if (!best || best.major < 3 || (best.major === 3 && best.minor < 8)) return true
+  }
+  // Muse Spark: drop anything older than 1.3.
+  {
+    const versions = probes
+      .map((p) => p.match(/(?:^|[^a-z0-9])muse-spark-(\d+)\.(\d+)/))
+      .filter((m): m is RegExpMatchArray => m !== null)
+      .map((m) => ({ major: Number.parseInt(m[1], 10), minor: Number.parseInt(m[2], 10) }))
+    if (versions.some((v) => v.major < 1 || (v.major === 1 && v.minor < 3))) return true
+  }
+  // DeepSeek V4 Flash Vision Exp cannot drive the text agent loop.
+  if (probes.some((p) => p.includes("flash-vision-exp") || p.includes("flashvisionexp"))) return true
+  if (isHiddenCatalogSku(m.id ?? "", m)) return true
   // GPT-5.5: do not expose via API/provider pickers; Codex CLI owns the default model choice.
   if (probes.some((p) => p.includes("gpt-5.5") || p.includes("gpt-5-5") || p.includes("gpt55"))) return true
   return false
 }
-// GLM-4.7-Flash (free) and GLM-4.7 (paid) are documented PAYG text SKUs on the
-// Z.AI / Zhipu general APIs; GLM-4.7 is also served on the coding-plan
-// endpoints (https://docs.z.ai/devpack/overview: "All plans support ...
-// GLM-4.7"). The global GLM-4.x filter drops them; stash the upstream metadata
-// so we can re-inject flash on the PAYG providers only and the base model on
-// both.
 const GLM_PAYG_PROVIDER_IDS = ["zai", "zhipuai"] as const
-const glm47FlashSources: Record<string, RawModel> = {}
-const glm47Sources: Record<string, RawModel> = {}
-for (const providerID of GLM_PAYG_PROVIDER_IDS) {
-  const flash = fetched[providerID]?.models?.["glm-4.7-flash"] as RawModel | undefined
-  if (flash) glm47FlashSources[providerID] = cloneJsonValue(flash)
-}
-for (const providerID of [...GLM_PAYG_PROVIDER_IDS, "zai-coding-plan", "zhipuai-coding-plan"]) {
-  const base = fetched[providerID]?.models?.["glm-4.7"] as RawModel | undefined
-  if (base) glm47Sources[providerID] = cloneJsonValue(base)
-}
 for (const [, provider] of Object.entries(fetched) as Array<[string, { models?: Record<string, RawModel> }]>) {
   if (!provider.models) continue
   for (const [mid, model] of Object.entries(provider.models)) {
@@ -411,15 +427,48 @@ function openRouterModel(input: {
 // When models.dev lags or the allowlist filters everything out, fall back to
 // the inline docs-backed definitions so the provider never regresses to zero
 // models.
-const GROQ_CHAT_MODEL_ALLOWLIST = new Set<string>([
-  "qwen/qwen3.6-27b",
-  "openai/gpt-oss-120b",
-  "openai/gpt-oss-20b",
-  "openai/gpt-oss-safeguard-20b",
-])
 {
+  const groqFallback: Record<string, RawModel> = {
+    "qwen/qwen3.8-27b": groqModel({
+      id: "qwen/qwen3.8-27b",
+      name: "Qwen/Qwen3.8-27B",
+      family: "qwen",
+      attachment: true,
+      reasoning: true,
+      structuredOutput: false,
+      context: 131_042,
+      output: 16_384,
+      releaseDate: "2026-08-14",
+      inputModalities: ["text", "image"],
+    }),
+    "openai/gpt-oss-120b": groqModel({
+      id: "openai/gpt-oss-120b",
+      name: "GPT OSS 120B",
+      family: "gpt-oss",
+      attachment: false,
+      reasoning: true,
+      structuredOutput: true,
+      context: 131_072,
+      output: 65_536,
+      releaseDate: "2025-08-05",
+    }),
+    "openai/gpt-oss-20b": groqModel({
+      id: "openai/gpt-oss-20b",
+      name: "GPT OSS 20B",
+      family: "gpt-oss",
+      attachment: false,
+      reasoning: true,
+      structuredOutput: true,
+      context: 131_072,
+      output: 65_536,
+      releaseDate: "2025-08-05",
+    }),
+  }
   const upstreamModels = (fetched["groq"]?.models ?? {}) as Record<string, RawModel>
-  const kept = Object.fromEntries(Object.entries(upstreamModels).filter(([mid]) => GROQ_CHAT_MODEL_ALLOWLIST.has(mid)))
+  const kept: Record<string, RawModel> = {}
+  for (const mid of GROQ_CHAT_MODEL_ALLOWLIST) {
+    kept[mid] = upstreamModels[mid] ?? groqFallback[mid]
+  }
   fetched["groq"] = {
     id: "groq",
     name: "GroqCloud",
@@ -427,58 +476,9 @@ const GROQ_CHAT_MODEL_ALLOWLIST = new Set<string>([
     npm: "@ai-sdk/openai-compatible",
     api: "https://api.groq.com/openai/v1",
     doc: "https://console.groq.com/docs/models",
-    // Docs-backed fallback: qwen3.6-27b caps at 16 384 completion tokens per
-    // the Groq models table — NOT the 32 768 an earlier revision carried.
-    models:
-      Object.keys(kept).length > 0
-        ? kept
-        : {
-            "qwen/qwen3.6-27b": groqModel({
-              id: "qwen/qwen3.6-27b",
-              name: "Qwen/Qwen3.6-27B",
-              family: "qwen",
-              attachment: true,
-              reasoning: true,
-              structuredOutput: false,
-              context: 131_072,
-              output: 16_384,
-              releaseDate: "2026-04-27",
-              inputModalities: ["text", "image"],
-            }),
-            "openai/gpt-oss-120b": groqModel({
-              id: "openai/gpt-oss-120b",
-              name: "GPT OSS 120B",
-              family: "gpt-oss",
-              attachment: false,
-              reasoning: true,
-              structuredOutput: true,
-              context: 131_072,
-              output: 65_536,
-              releaseDate: "2025-08-05",
-            }),
-            "openai/gpt-oss-20b": groqModel({
-              id: "openai/gpt-oss-20b",
-              name: "GPT OSS 20B",
-              family: "gpt-oss",
-              attachment: false,
-              reasoning: true,
-              structuredOutput: true,
-              context: 131_072,
-              output: 65_536,
-              releaseDate: "2025-08-05",
-            }),
-            "openai/gpt-oss-safeguard-20b": groqModel({
-              id: "openai/gpt-oss-safeguard-20b",
-              name: "Safety GPT OSS 20B",
-              family: "gpt-oss",
-              attachment: false,
-              reasoning: true,
-              structuredOutput: true,
-              context: 131_072,
-              output: 65_536,
-              releaseDate: "2025-10-29",
-            }),
-          },
+    // Docs-backed fallback: qwen3.8-27b caps at 16 384 completion tokens per
+    // the Groq models table (https://console.groq.com/docs/model/qwen/qwen3.8-27b).
+    models: kept,
   }
 }
 
@@ -501,30 +501,6 @@ fetched["openrouter"] = {
     },
   },
   models: {
-    "openai/gpt-5.2-codex": openRouterModel({
-      id: "openai/gpt-5.2-codex",
-      name: "OpenRouter: GPT-5.2-Codex",
-      family: "gpt",
-      attachment: true,
-      reasoning: true,
-      temperature: false,
-      context: 400_000,
-      output: 128_000,
-      releaseDate: "2026-01-14",
-      inputModalities: ["text", "image"],
-    }),
-    "openai/gpt-5.2": openRouterModel({
-      id: "openai/gpt-5.2",
-      name: "OpenRouter: GPT-5.2",
-      family: "gpt",
-      attachment: true,
-      reasoning: true,
-      temperature: false,
-      context: 400_000,
-      output: 128_000,
-      releaseDate: "2025-12-10",
-      inputModalities: ["text", "image", "pdf"],
-    }),
     "anthropic/claude-fable-5": openRouterModel({
       id: "anthropic/claude-fable-5",
       name: "OpenRouter: Claude Fable 5",
@@ -583,16 +559,16 @@ fetched["openrouter"] = {
       output: 65_536,
       releaseDate: "2025-09-17",
     }),
-    "google/gemini-3.5-flash": openRouterModel({
-      id: "google/gemini-3.5-flash",
-      name: "OpenRouter: Gemini 3.5 Flash",
+    "google/gemini-3.8-flash": openRouterModel({
+      id: "google/gemini-3.8-flash",
+      name: "OpenRouter: Gemini 3.8 Flash",
       family: "gemini",
       attachment: true,
       reasoning: true,
       temperature: true,
       context: 1_048_576,
       output: 65_536,
-      releaseDate: "2026-05-19",
+      releaseDate: "2026-08-01",
       inputModalities: ["text", "image", "audio", "video", "pdf"],
     }),
     "qwen/qwen3.7-plus": openRouterModel({
@@ -618,17 +594,6 @@ fetched["openrouter"] = {
       output: 500_000,
       releaseDate: "2026-07-08",
       inputModalities: ["text", "image", "pdf"],
-    }),
-    "z-ai/glm-5.2": openRouterModel({
-      id: "z-ai/glm-5.2",
-      name: "OpenRouter: GLM 5.2",
-      family: "glm",
-      attachment: false,
-      reasoning: true,
-      temperature: true,
-      context: 1_048_576,
-      output: 32_768,
-      releaseDate: "2026-06-16",
     }),
   },
 }
@@ -751,21 +716,17 @@ cloneProvider("alibaba-coding-plan-cn", "alibaba-token-plan-cn", {
 // exclusive and injected below because the coding-plan clone never carries
 // them.
 const alibabaCodingPlanModels = [
-  // Qwen text / reasoning (coding-plan exclusive coder SKUs)
+  // Qwen text / reasoning (coding-plan exclusive coder SKUs). Floor is
+  // qwen3.7-plus; older plus/max SKUs drop.
   "qwen3.7-plus",
-  "qwen3.6-plus",
-  "qwen3.5-plus",
-  "qwen3-max-2026-01-23",
   "qwen3-coder-next",
   "qwen3-coder-plus",
   // Third-party vendors aggregated under the Coding Plan
   "glm-5",
-  "MiniMax-M2.5",
 ]
 const alibabaTokenPlanModels = [
-  // Qwen text / reasoning
+  // Qwen text / reasoning. Floor is qwen3.7-plus; qwen3.6-flash drops.
   "qwen3.7-plus",
-  "qwen3.6-flash",
   // Qwen image generation
   "qwen-image-2.0",
   "qwen-image-2.0-pro",
@@ -1050,11 +1011,9 @@ function glmCodingModel(id: string, name: string, context: number, releaseDate: 
 const glmInjectedModels: Array<{ id: string; name: string; context: number; release: string }> = [
   // GLM-5.3 is the current coding-plan flagship (live for Max/Pro/Lite tiers
   // per https://docs.z.ai/devpack/latest-model); the [1m] suffix unlocks the
-  // documented 1M-token window the same way as glm-5.2[1m].
+  // documented 1M-token window. Older GLM SKUs are stripped below.
   { id: "glm-5.3", name: "GLM-5.3", context: 1000000, release: "2026-08-14" },
   { id: "glm-5.3[1m]", name: "GLM-5.3 (1M context)", context: 1000000, release: "2026-08-14" },
-  { id: "glm-5.2", name: "GLM-5.2", context: 200000, release: "2026-06-13" },
-  { id: "glm-5.2[1m]", name: "GLM-5.2 (1M context)", context: 1000000, release: "2026-06-13" },
 ]
 for (const providerID of GLM_CODING_PROVIDER_IDS) {
   const provider = fetched[providerID]
@@ -1073,13 +1032,8 @@ for (const providerID of GLM_CODING_PROVIDER_IDS) {
 }
 
 // General Z.AI / Zhipu PAYG APIs (api.z.ai/api/paas/v4 and
-// open.bigmodel.cn/api/paas/v4) get the current GLM flagships — GLM-5.3
-// shipped on the general PAYG API (listed on
-// https://docs.z.ai/guides/overview/pricing) around the coding-plan launch,
-// GLM-5.2 shortly before it. The [1m] long-context variants stay scoped to
-// the coding endpoints where the suffix is documented. Inject both
-// forward-looking until models.dev publishes them; prefer the upstream entry
-// once it does (upstream glm-5.2 already carries the 1M context).
+// open.bigmodel.cn/api/paas/v4) keep GLM-5.3+. The [1m] long-context
+// variants stay scoped to the coding endpoints where the suffix is documented.
 if (!fetched["zai"]) {
   fetched["zai"] = {
     id: "zai",
@@ -1097,103 +1051,11 @@ for (const providerID of GLM_PAYG_PROVIDER_IDS) {
   const models = (provider.models ?? {}) as Record<string, RawModel>
   const merged: Record<string, RawModel> = {
     "glm-5.3": models["glm-5.3"] ?? glmCodingModel("glm-5.3", "GLM-5.3", 1000000, "2026-08-14"),
-    "glm-5.2": models["glm-5.2"] ?? glmCodingModel("glm-5.2", "GLM-5.2", 1000000, "2026-06-13"),
   }
   for (const [mid, model] of Object.entries(models)) {
     if (!merged[mid]) merged[mid] = model
   }
   provider.models = merged
-}
-
-// GLM-4.7-Flash (free) and GLM-4.7 (paid) are Z.AI's documented PAYG text
-// models (200k / 128k, https://docs.z.ai/guides/overview/pricing). GLM-4.7 is
-// also included in every coding-plan tier (https://docs.z.ai/devpack/overview),
-// so the base model is re-injected on the coding-plan providers too; the flash
-// SKU stays PAYG-only. Prefer stashed upstream metadata; fall back to the
-// docs-backed template.
-function glm47Model(): RawModel {
-  return {
-    id: "glm-4.7",
-    name: "GLM-4.7",
-    description: "General-purpose GLM lane for balanced coding help and everyday automation",
-    family: "glm",
-    attachment: false,
-    reasoning: true,
-    reasoning_options: [{ type: "toggle" }],
-    tool_call: true,
-    interleaved: { field: "reasoning_content" },
-    structured_output: true,
-    temperature: true,
-    knowledge: "2025-04",
-    release_date: "2025-12-22",
-    last_updated: "2025-12-22",
-    modalities: { input: ["text"], output: ["text"] },
-    open_weights: true,
-    limit: { context: 200000, output: 131072 },
-  } as RawModel
-}
-function glm47FlashFreeModel(): RawModel {
-  return {
-    id: "glm-4.7-flash",
-    name: "GLM-4.7-Flash (Free)",
-    description: "Budget GLM lane for fast coding help, routing, and everyday automation",
-    family: "glm-flash",
-    attachment: false,
-    reasoning: true,
-    reasoning_options: [{ type: "toggle" }],
-    tool_call: true,
-    interleaved: { field: "reasoning_content" },
-    structured_output: true,
-    temperature: true,
-    knowledge: "2025-04",
-    release_date: "2026-01-19",
-    last_updated: "2026-01-19",
-    modalities: { input: ["text"], output: ["text"] },
-    open_weights: true,
-    limit: { context: 200000, output: 131072 },
-  } as RawModel
-}
-for (const providerID of GLM_PAYG_PROVIDER_IDS) {
-  const provider = fetched[providerID]
-  if (!provider) continue
-  const models = (provider.models ?? {}) as Record<string, RawModel>
-  const upstream = glm47FlashSources[providerID] ?? models["glm-4.7-flash"]
-  models["glm-4.7-flash"] = {
-    ...glm47FlashFreeModel(),
-    ...(upstream ?? {}),
-    id: "glm-4.7-flash",
-    name: "GLM-4.7-Flash (Free)",
-    tool_call: true,
-    structured_output: true,
-  } as RawModel
-  const glm47Upstream = glm47Sources[providerID] ?? models["glm-4.7"]
-  models["glm-4.7"] = {
-    ...glm47Model(),
-    ...(glm47Upstream ?? {}),
-    id: "glm-4.7",
-    name: "GLM-4.7",
-    tool_call: true,
-    structured_output: true,
-  } as RawModel
-  provider.models = models
-}
-// Coding-plan endpoints include GLM-4.7 in every tier (flash stays PAYG-only),
-// and it is a subscription model there — no "(Free)" tag.
-for (const providerID of GLM_CODING_PROVIDER_IDS) {
-  const provider = fetched[providerID]
-  if (!provider) continue
-  const models = (provider.models ?? {}) as Record<string, RawModel>
-  const glm47Upstream = glm47Sources[providerID] ?? models["glm-4.7"]
-  models["glm-4.7"] = {
-    ...glm47Model(),
-    ...(glm47Upstream ?? {}),
-    id: "glm-4.7",
-    name: "GLM-4.7",
-    description: "Plan-included GLM lane for balanced coding help and everyday automation",
-    tool_call: true,
-    structured_output: true,
-  } as RawModel
-  provider.models = models
 }
 
 // Strip cost fields from every model — cost telemetry is removed from
@@ -1246,7 +1108,7 @@ for (const [id, doc] of Object.entries(docOverrides)) {
 // these with input modalities ["text","image","video"] but attachment=false,
 // which leaves ax-code's picker refusing image uploads even though the upstream
 // API accepts them. Override here so the capability flag matches the modality.
-const alibabaAttachmentForceTrue = ["qwen3.7-plus", "qwen3.6-plus", "qwen3.5-plus"]
+const alibabaAttachmentForceTrue = ["qwen3.7-plus", "qwen3.8-max", "qwen3.8-flash"]
 for (const id of ["alibaba-coding-plan", "alibaba-coding-plan-cn", "alibaba-token-plan", "alibaba-token-plan-cn"]) {
   const models = fetched[id]?.models as Record<string, { attachment?: boolean }> | undefined
   if (!models) continue
@@ -1353,6 +1215,19 @@ for (const id of MINIMAX_PLAN_PROVIDER_IDS) {
   if (!models) continue
   for (const [mid, model] of Object.entries(models)) {
     if (isOlderThanMinimaxPlanFloor(model, mid)) delete models[mid]
+    const segment = mid.split("/").pop()?.toLowerCase()
+    if (segment === "minimax-m2.7-highspeed") delete models[mid]
+  }
+}
+
+// Final picker sanitizer: hide models the runtime would refuse anyway so the
+// committed snapshot matches `ax-code models`.
+for (const [providerID, provider] of Object.entries(fetched) as Array<
+  [string, { models?: Record<string, RawModel> }]
+>) {
+  if (!provider.models) continue
+  for (const [mid, model] of Object.entries(provider.models)) {
+    if (!isModelSupportedForProvider(providerID, mid, model)) delete provider.models[mid]
   }
 }
 
