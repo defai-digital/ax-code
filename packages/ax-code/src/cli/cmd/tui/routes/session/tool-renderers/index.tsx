@@ -4,6 +4,7 @@ import { CodeSearch, Glob, Grep, List, Skill, WebFetch, WebSearch } from "./basi
 import { RefactorPlan, RefactorApply, ImpactAnalyze, DedupScan } from "./dre"
 import { ApplyPatch, Bash, Edit, Write } from "./file-edits"
 import { GenericTool } from "./generic"
+import { ArenaToolView, CouncilToolView } from "./ensemble"
 import { BlockTool, InlineTool, type ToolProps } from "./primitives"
 import { Question, Read, TodoWrite } from "./session"
 import { Task } from "./task"
@@ -24,6 +25,8 @@ const TOOL_RENDERER_COMPONENTS: Record<SessionToolRendererKey, ToolRendererCompo
   write: (props) => <Write {...props} />,
   edit: (props) => <Edit {...props} />,
   task: (props) => <Task {...props} />,
+  council: (props) => <CouncilToolView {...props} />,
+  arena: (props) => <ArenaToolView {...props} />,
   apply_patch: (props) => <ApplyPatch {...props} />,
   todowrite: (props) => <TodoWrite {...props} />,
   question: (props) => <Question {...props} />,

@@ -24,6 +24,16 @@ describe("tui session tool rendering policy", () => {
     expect(isKnownSessionToolRenderer("custom_tool")).toBe(false)
   })
 
+  test("does not route the ensemble modes to the hidden generic renderer", () => {
+    // Regression guard: council/arena results must render through their own
+    // metadata-driven renderers, never GenericTool (whose output is hidden by
+    // default via generic_tool_output_visibility).
+    expect(sessionToolRendererKey("council")).toBe("council")
+    expect(sessionToolRendererKey("arena")).toBe("arena")
+    expect(isKnownSessionToolRenderer("council")).toBe(true)
+    expect(isKnownSessionToolRenderer("arena")).toBe(true)
+  })
+
   test("keeps coalesced tool labels stable", () => {
     expect(coalescedToolLabel("read", 3)).toBe("Read · 3 files")
     expect(coalescedToolLabel("list", 2)).toBe("List · 2 directories")
@@ -46,6 +56,8 @@ describe("tui session tool rendering policy", () => {
     for (const file of [
       "basic.tsx",
       "dre.tsx",
+      "ensemble.tsx",
+      "ensemble-view.ts",
       "file-edits.tsx",
       "generic.tsx",
       "index.tsx",

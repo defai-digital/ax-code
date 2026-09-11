@@ -10,6 +10,8 @@ export const SESSION_TOOL_RENDERER_KEYS = [
   "write",
   "edit",
   "task",
+  "council",
+  "arena",
   "apply_patch",
   "todowrite",
   "question",
