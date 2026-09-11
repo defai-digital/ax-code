@@ -485,7 +485,7 @@ describe("provider routes", () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { models: Array<{ id: string }> }
     expect(body.models.map((model) => model.id)).toEqual([
-      expect.stringMatching(/^AutomatosX\/AX-Ornith-1\.5-9B-MLX-AXQ-6bit-MTP@[a-f0-9]{40}$/),
+      expect.stringMatching(/^AutomatosX\/AX-Ornith-1\.5-35B-A3B-MLX-AXQ-6bit-MTP@[a-f0-9]{40}$/),
       "qwen3.8-27b-axq-6bit",
       "qwen3-coder-next-axq-6bit",
     ])

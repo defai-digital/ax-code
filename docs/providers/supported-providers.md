@@ -166,13 +166,13 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes exactly three curated AutomatosX AXQ 6-bit MLX packs. Ornith 1.5 9B and Qwen3.8 27B packages include MTP sidecars; native capabilities are checked when the model starts.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and exposes exactly three curated AutomatosX AXQ 6-bit MLX packs. Ornith 1.5 35B A3B and Qwen3.8 27B packages include MTP sidecars; native capabilities are checked when the model starts.
 
-| Provider id | Model id                                                | Display name                           | Context | Output |
-| ----------- | ------------------------------------------------------- | -------------------------------------- | ------: | -----: |
-| `ax-engine` | `qwen3.8-27b-axq-6bit`                                  | Qwen3.8-27B AXQ 6-bit (Local MLX Auto) |  65,536 | 16,384 |
-| `ax-engine` | `AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP@<commit>` | Ornith 1.5 9B AXQ 6-bit MTP            |  32,768 |  8,192 |
-| `ax-engine` | `qwen3-coder-next-axq-6bit`                             | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  32,768 | 16,384 |
+| Provider id | Model id                                                     | Display name                           | Context | Output |
+| ----------- | ------------------------------------------------------------ | -------------------------------------- | ------: | -----: |
+| `ax-engine` | `qwen3.8-27b-axq-6bit`                                       | Qwen3.8-27B AXQ 6-bit (Local MLX Auto) |  65,536 | 16,384 |
+| `ax-engine` | `AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-6bit-MTP@<commit>` | Ornith 1.5 35B A3B AXQ 6-bit MTP       |  32,768 |  8,192 |
+| `ax-engine` | `qwen3-coder-next-axq-6bit`                                  | Qwen3-Coder-Next AXQ 6-bit (Local MLX) |  32,768 | 16,384 |
 
 The default local model is `qwen3.8-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for the exact selected repositories, memory, and disk guidance.
 
