@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Record explicit `git config --file` write targets for benign keys so an out-of-workspace write hits workspace isolation and the external-directory prompt instead of running silently. Ordinary `git config user.email` writes to the workspace-internal `.git/config` are unchanged.
+
 ## [7.15.11] - 2026-09-11
 
 ### Changed

@@ -117,17 +117,25 @@ function gitConfigKey(args: string[]): string | undefined {
   return undefined
 }
 
-// The file a `git config` write lands in: --file <path>, or the worktree's
-// .git/config by default. --global/--system write outside the worktree and are
-// out of scope (isolation already guards external writes).
-function gitConfigWriteTarget(args: string[]): string | undefined {
+// The explicit --file <path> / -f <path> / --file=<path> target of a git
+// config invocation, if any. --global/--system are mutually exclusive with
+// --file and write outside the worktree; isolation already guards external
+// writes, so they are out of scope here.
+function gitConfigFileTarget(args: string[]): string | undefined {
   if (args.includes("--global") || args.includes("--system")) return undefined
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     if (arg === "--file" || arg === "-f") return args[i + 1]
     if (arg.startsWith("--file=")) return arg.slice("--file=".length)
   }
-  return path.join(".git", "config")
+  return undefined
+}
+
+// The file a `git config` write lands in: the explicit --file target, or the
+// worktree's .git/config by default. --global/--system write outside the
+// worktree and are out of scope (isolation already guards external writes).
+function gitConfigWriteTarget(args: string[]): string | undefined {
+  return gitConfigFileTarget(args) ?? path.join(".git", "config")
 }
 
 // Patterns that identify intentional (non-development) browser opens.
@@ -555,19 +563,28 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         if (gitConfigCall?.subcommand === "config") {
           // git config writes to .git/config (or --file <path>) internally,
           // not via a shell redirect, so the implicit destination is surfaced
-          // here. Only dangerous keys (hook injection, arbitrary command
-          // wrappers, protocol handlers) are treated as write targets — benign
-          // keys (user.email, user.name) stay untouched to avoid false
-          // positives, and reads (--get/--list/...) are skipped entirely.
+          // here. Dangerous keys (hook injection, arbitrary command wrappers,
+          // protocol handlers) record the effective target — including the
+          // implicit .git/config default — so protected-path and blast-radius
+          // checks apply. Reads (--get/--list/...) are skipped entirely.
+          // Every other non-read invocation still records an explicit
+          // --file/-f target: `git config --file=<outside> user.email x` is a
+          // real write outside the git-owned default and must hit the same
+          // isolation and external-directory checks as any redirect. The
+          // implicit .git/config default stays unrecorded for benign keys
+          // because it is workspace-internal and DEFAULT_PROTECTED —
+          // recording it would turn ordinary `git config user.email x` into
+          // a false-positive denial.
           // Use gitSubcommand (not args[0] === "config") so a leading git
           // global flag (`git -C dir config ...`, `git -c x=y config ...`)
           // doesn't let a dangerous write slip past this check — see
           // bash-destructive.ts.
           const rest = gitConfigCall.rest
           const isRead = rest.some((arg) => GIT_CONFIG_READ_FLAGS.has(arg))
-          const key = gitConfigKey(rest)
-          if (!isRead && key && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix))) {
-            const target = gitConfigWriteTarget(rest)
+          if (!isRead) {
+            const key = gitConfigKey(rest)
+            const dangerous = key !== undefined && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix))
+            const target = dangerous ? gitConfigWriteTarget(rest) : gitConfigFileTarget(rest)
             if (target) {
               const resolved = await recordResolvedPath(target)
               if (resolved) redirectWritePaths.add(resolved)

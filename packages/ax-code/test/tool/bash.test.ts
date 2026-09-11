@@ -754,6 +754,97 @@ describe("tool.bash isolation", () => {
     })
   })
 
+  test("rejects git config --file=<outside> write with a benign key", async () => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        const outsideFile = path.join(outerTmp.path, "exfil.cfg")
+        // A benign key (user.email) skips the dangerous-key recorder, but the
+        // explicit --file target is still a write outside the workspace and
+        // must hit the same boundary checks as a shell redirect.
+        await expect(
+          bash.execute(
+            {
+              command: `git config --file=${outsideFile} user.email "pwned@example.com"`,
+              description: "Attempt git config write outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+        // The denial must happen before the command runs.
+        await expect(fs.readFile(outsideFile, "utf8")).rejects.toThrow()
+      },
+    })
+  })
+
+  test("rejects git config --file <outside> write with a benign key", async () => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        const outsideFile = path.join(outerTmp.path, "exfil.cfg")
+        // Same vector with the space-separated --file form.
+        await expect(
+          bash.execute(
+            {
+              command: `git config --file ${outsideFile} user.email "pwned@example.com"`,
+              description: "Attempt git config write outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+        await expect(fs.readFile(outsideFile, "utf8")).rejects.toThrow()
+      },
+    })
+  })
+
+  test("allows benign git config writes to the default repo config", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        // False-positive guard: ordinary `git config user.email` writes the
+        // workspace-internal .git/config and must keep working.
+        const result = await bash.execute(
+          { command: `git config user.email test@example.com`, description: "Set repo email" },
+          testCtx,
+        )
+        expect(result.metadata.exit).toBe(0)
+      },
+    })
+  })
+
+  test("allows benign git config --file inside the workspace", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        // An explicit --file target inside the workspace is a normal,
+        // workspace-internal write and must not be denied.
+        const result = await bash.execute(
+          { command: `git config --file ./custom.cfg user.email test@example.com`, description: "Set custom config" },
+          testCtx,
+        )
+        expect(result.metadata.exit).toBe(0)
+      },
+    })
+  })
+
   test("allows in-workspace barewords that are not paths", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
