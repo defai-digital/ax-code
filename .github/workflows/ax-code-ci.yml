@@ -80,10 +80,10 @@ jobs:
       - name: Build SDK runtime exports
         working-directory: packages/sdk/js
         run: pnpm exec tsc
-      - name: Test native console, process framing, and Git recovery
+      - name: Test native console, process cleanup, framing, and Git recovery
         working-directory: packages/ax-code
         env:
-          AX_TEST_FILES: test/cli/bootstrap/windows-console.test.ts,test/cli/tui/process-wire.test.ts,test/snapshot/windows-paths.test.ts,test/snapshot/literal-revert.test.ts,test/session/redo-files.test.ts,test/worktree/remove-recovery.test.ts,test/script/source-launcher.test.ts
+          AX_TEST_FILES: test/tool/bash-process-cleanup.test.ts,test/tool/bash-process-cleanup-native.test.ts,test/cli/bootstrap/windows-console.test.ts,test/cli/tui/process-wire.test.ts,test/snapshot/windows-paths.test.ts,test/snapshot/literal-revert.test.ts,test/session/redo-files.test.ts,test/worktree/remove-recovery.test.ts,test/script/source-launcher.test.ts
         run: pnpm exec vitest run --retry=0
 
   checks:

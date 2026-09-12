@@ -39,6 +39,7 @@ import { BashNetworkHeuristics } from "./bash-network-heuristics"
 import { denyDestructiveInOpsStrict } from "./bash-strict"
 import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
+import { signalBashProcessTree } from "./bash-process-cleanup"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import { estimateAutonomousLineDelta } from "./file-content"
 import {
@@ -265,39 +266,11 @@ const CLEANUP_KILL_TIMEOUT_MS = 250
 const isBunRuntime = Boolean((process.versions as Record<string, string | undefined>).bun)
 const useSetsidProcessGroup = process.platform === "linux" && isBunRuntime
 
-// Track child process groups so we can clean them up if the parent
-// process exits unexpectedly (crash, SIGKILL, etc.). Without this,
+// Track child process roots so we can clean them up if the parent
+// process exits through its synchronous exit handler. Without this,
 // background commands can become orphans that keep running.
 const trackedPIDs = new Set<number>()
 const cleanupTimers = new Map<number, ReturnType<typeof setTimeout>>()
-
-const isPidError = (error: unknown): error is { code: string } => {
-  return error instanceof Error && "code" in error && typeof (error as { code: unknown }).code === "string"
-}
-
-const killProcessGroup = (pid: number, signal: NodeJS.Signals) => {
-  try {
-    process.kill(-pid, signal)
-    return true
-  } catch (error) {
-    if (isPidError(error) && error.code === "ESRCH") {
-      return false
-    }
-    log.warn("bash process group kill failed", { pid, signal, errorCode: isPidError(error) ? error.code : "unknown" })
-  }
-
-  try {
-    process.kill(pid, signal)
-    return true
-  } catch (error) {
-    if (isPidError(error) && error.code === "ESRCH") {
-      return false
-    }
-    log.warn("bash process kill failed", { pid, signal, errorCode: isPidError(error) ? error.code : "unknown" })
-  }
-
-  return false
-}
 
 const forgetTrackedPID = (pid: number) => {
   trackedPIDs.delete(pid)
@@ -309,7 +282,7 @@ const forgetTrackedPID = (pid: number) => {
 
 const cleanupDetachedProcess = (pid: number, hard = false) => {
   const signal = hard ? "SIGKILL" : "SIGTERM"
-  const terminated = killProcessGroup(pid, signal)
+  const terminated = signalBashProcessTree(pid, signal)
   if (!terminated) {
     forgetTrackedPID(pid)
     return

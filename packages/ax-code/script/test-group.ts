@@ -24,6 +24,7 @@ const e2e = new Set([
   // re-validation on Linux CI before returning to deterministic.
   "test/tool/bash.test.ts",
   "test/tool/bash-background.test.ts",
+  "test/tool/bash-process-cleanup-native.test.ts",
   // Same real-spawn rationale as bash.test.ts: exercises BashTool.execute end
   // to end (deny path, benign run, and the existing destructive ask flow).
   "test/tool/bash-strict-mode.test.ts",
@@ -87,6 +88,8 @@ const runtimeContract = new Set([
   "test/tool/batch.test.ts",
   "test/tool/bash.test.ts",
   "test/tool/bash-background.test.ts",
+  "test/tool/bash-process-cleanup.test.ts",
+  "test/tool/bash-process-cleanup-native.test.ts",
   "test/session/message-recovery.test.ts",
   "test/permission/next.test.ts",
   "test/tool/bash-strict-mode.test.ts",
