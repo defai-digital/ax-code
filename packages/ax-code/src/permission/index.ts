@@ -235,8 +235,8 @@ export namespace Permission {
   // but it must never silently grant mouse/keyboard control of the host desktop.
   export const NEVER_AUTONOMOUS_AUTOAPPROVE: ReadonlySet<string> = new Set(["computer"])
 
-  export function isInteractiveOnly(permission: string): boolean {
-    return INTERACTIVE_ONLY.has(permission)
+  export function isInteractiveOnly(permission: string, metadata?: Record<string, unknown>): boolean {
+    return INTERACTIVE_ONLY.has(permission) || metadata?.["requireInteractive"] === true
   }
 
   export function isNeverAutonomousAutoApprove(permission: string): boolean {
@@ -345,7 +345,7 @@ export namespace Permission {
           agent: input.agent,
         })
       }
-      if (rule.action === "allow" && !INTERACTIVE_ONLY.has(request.permission)) continue
+      if (rule.action === "allow" && !isInteractiveOnly(request.permission, request.metadata)) continue
       needsAsk = true
     }
 
@@ -367,7 +367,7 @@ export namespace Permission {
     // never-auto-approve set below still protects desktop control.
     if (
       ScopedFlag.autonomous() &&
-      !INTERACTIVE_ONLY.has(request.permission) &&
+      !isInteractiveOnly(request.permission, request.metadata) &&
       !NEVER_AUTONOMOUS_AUTOAPPROVE.has(request.permission)
     ) {
       const riskClass = classifyRisk(request.permission)
@@ -583,7 +583,7 @@ export namespace Permission {
       for (const [id, item] of pending.entries()) {
         if (item.info.sessionID !== existing.info.sessionID) continue
         const ok = item.info.patterns.every((pattern) => {
-          if (INTERACTIVE_ONLY.has(item.info.permission)) return false
+          if (isInteractiveOnly(item.info.permission, item.info.metadata)) return false
           return evaluate(item.info.permission, pattern, item.ruleset, approved).action === "allow"
         })
         if (!ok) continue

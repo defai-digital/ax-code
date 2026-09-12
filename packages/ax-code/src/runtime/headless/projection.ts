@@ -120,7 +120,7 @@ export function applyHeadlessProjectionEvent<
       // answer; the headless event projection must not bypass Permission.ask.
       if (
         options.autonomous &&
-        !Permission.isInteractiveOnly(event.properties.permission) &&
+        !Permission.isInteractiveOnly(event.properties.permission, event.properties.metadata) &&
         !Permission.isNeverAutonomousAutoApprove(event.properties.permission)
       ) {
         effects.push({ type: "permission.auto_reply", requestID: event.properties.id })

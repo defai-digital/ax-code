@@ -140,12 +140,14 @@ function gitConfigInvocation(args: string[]): {
   file?: string
   isRead: boolean
   wholeFile: boolean
+  unresolvedLocation: boolean
 } {
   const readActions = new Set(["--get", "--get-regexp", "--get-all", "--get-urlmatch", "--list", "-l"])
   const subcommands = new Set(["get", "list", "set", "unset", "rename-section", "remove-section", "edit"])
   let action = subcommands.has(args[0]) ? args[0] : undefined
   let wholeFile = action === "rename-section" || action === "remove-section" || action === "edit"
   let file: string | undefined
+  let unresolvedLocation = false
   let options = true
   const positional: string[] = []
   for (let i = action ? 1 : 0; i < args.length; i++) {
@@ -155,6 +157,8 @@ function gitConfigInvocation(args: string[]): {
       continue
     }
     if (options && arg.startsWith("-")) {
+      if (arg === "--local") continue
+      if (["--global", "--system", "--worktree"].includes(arg)) unresolvedLocation = true
       if (["--rename-section", "--remove-section", "--edit", "-e"].includes(arg)) wholeFile = true
       if (arg === "--file" || arg === "-f") file = args[++i]
       else if (arg.startsWith("--file=")) file = arg.slice(7)
@@ -174,6 +178,9 @@ function gitConfigInvocation(args: string[]): {
         ].includes(arg)
       )
         action = "set"
+      // Git accepts abbreviated long options. Unmodeled options cannot be
+      // assumed unrelated to the destination (for example --glob or --fi).
+      else unresolvedLocation = true
       continue
     }
     positional.push(arg)
@@ -183,6 +190,7 @@ function gitConfigInvocation(args: string[]): {
     value: positional[1],
     file,
     wholeFile,
+    unresolvedLocation,
     isRead: action === "get" || action === "list" || (!action && positional.length === 1),
   }
 }
@@ -445,6 +453,26 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       if (!tree) {
         throw new Error("Failed to parse command")
       }
+      // Admission and spawning must inspect the same plugin-adjusted environment.
+      const shellEnv = await Plugin.trigger(
+        "shell.env",
+        { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
+        { env: {} },
+      )
+      // Strip secrets from process.env before forwarding to the child.
+      // See Env.sanitize for the rationale — LLM-invoked shell commands
+      // must not see provider tokens, passwords, or other credentials
+      // held by the parent process.
+      const sanitizedEnv = Env.sanitize({
+        ...process.env,
+        ...shellEnv.env,
+      })
+      const gitRelocationEnvironment = ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_CONFIG"].some(
+        (name) => sanitizedEnv[name] !== undefined,
+      )
+      // Shell assignments and env wrappers may change Git's destination after
+      // this snapshot. Preserve their semantics and require interactive admission.
+      let shellEnvironmentChanges = tree.rootNode.descendantsOfType("variable_assignment").length > 0
       const directories = new Set<string>()
       if (!Instance.containsPath(cwd)) directories.add(cwd)
       const resolvedPaths = new Set<string>()
@@ -641,6 +669,14 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           const config = gitConfigInvocation(rest)
           const isRead = config.isRead
           if (!isRead) {
+            if (
+              config.unresolvedLocation ||
+              shellEnvironmentChanges ||
+              (config.file === undefined && gitRelocationEnvironment)
+            ) {
+              dynamicPathAccess = true
+              return
+            }
             // -C chdirs before anything else resolves, so it is the base for
             // relative --file targets AND the implicit default; --git-dir
             // replaces the .git directory for the implicit default.
@@ -674,12 +710,28 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             } else {
               // git folds each later -C relative to the previous one; resolve
               // the chain here so the effective base sits next to the
-              // workspace containment check that validates the resolved
+              // Instance.containsPath(absolute) below validates the resolved
               // target before any isolation or blast-radius recording.
               let base = cwd
               for (const part of cdParts) base = path.resolve(base, part)
-              const absolute =
+              let lexical =
                 explicitFile === undefined ? path.resolve(base, targetPath!, "config") : path.resolve(base, targetPath!)
+              // Before Instance.containsPath(absolute), inspect read-only Git metadata.
+              // A gitfile, absent .git directory, or commondir needs interactive
+              // admission because this parser cannot prove Git's discovery result.
+              if (explicitFile === undefined) {
+                const gitDirectory = path.dirname(lexical)
+                const directory = await fs.stat(gitDirectory).catch(() => undefined)
+                if (!directory?.isDirectory() || (await Filesystem.exists(path.join(gitDirectory, "commondir")))) {
+                  dynamicPathAccess = true
+                  return
+                }
+                // Resolve the existing directory even when config is absent;
+                // Instance.containsPath(absolute) must check where Git creates it.
+                lexical = path.join(await fs.realpath(gitDirectory), "config")
+              }
+              // Resolve before the benign-key exception, including symlinked .git.
+              const absolute = await fs.realpath(lexical).catch(() => lexical)
               if (explicitFile || dangerous || !Instance.containsPath(absolute)) {
                 const resolved = await recordResolvedPath(absolute)
                 if (resolved) redirectWritePaths.add(resolved)
@@ -744,7 +796,18 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // redirect, and network scanning as an unwrapped invocation —
         // mirroring how classifyDestructiveCommand already sees through
         // wrappers via findWrappedCommand.
-        const unwrappedCommand = findWrappedCommand(command.map(stripShellQuotes))
+        const normalizedCommand = command.map(stripShellQuotes)
+        const unwrappedCommand = findWrappedCommand(normalizedCommand)
+        const wrapperParts = unwrappedCommand
+          ? normalizedCommand.slice(0, normalizedCommand.length - unwrappedCommand.args.length - 1)
+          : []
+        const envWrapper = wrapperParts.findIndex((part) => path.basename(part) === "env")
+        if (
+          (envWrapper >= 0 && envWrapper < wrapperParts.length - 1) ||
+          ["export", "unset", "source", "."].includes(normalizedCommand[0])
+        ) {
+          shellEnvironmentChanges = true
+        }
         const scanParts = unwrappedCommand
           ? [unwrappedCommand.name, ...unwrappedCommand.args]
           : command.map(stripShellQuotes)
@@ -782,6 +845,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             const p = await parser()
             const innerTree = p.parse(innerCmd)
             if (innerTree) {
+              if (innerTree.rootNode.descendantsOfType("variable_assignment").length > 0) shellEnvironmentChanges = true
               for (const innerNode of innerTree.rootNode.descendantsOfType("command")) {
                 if (!innerNode) continue
                 const innerParts: string[] = []
@@ -796,6 +860,16 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 if (innerDestructiveReason) destructiveCommands.set(innerNode.text, innerDestructiveReason)
                 const normalizedInnerParts = innerParts.map(stripShellQuotes)
                 const innerCommand = findWrappedCommand(normalizedInnerParts)
+                const innerWrappers = innerCommand
+                  ? normalizedInnerParts.slice(0, normalizedInnerParts.length - innerCommand.args.length - 1)
+                  : []
+                const innerEnvWrapper = innerWrappers.findIndex((part) => path.basename(part) === "env")
+                if (
+                  (innerEnvWrapper >= 0 && innerEnvWrapper < innerWrappers.length - 1) ||
+                  ["export", "unset", "source", "."].includes(normalizedInnerParts[0])
+                ) {
+                  shellEnvironmentChanges = true
+                }
                 await recordInnerCommandPaths(
                   innerCommand ? [innerCommand.name, ...innerCommand.args] : normalizedInnerParts,
                 )
@@ -1123,19 +1197,6 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         })
       }
 
-      const shellEnv = await Plugin.trigger(
-        "shell.env",
-        { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
-        { env: {} },
-      )
-      // Strip secrets from process.env before forwarding to the child.
-      // See Env.sanitize for the rationale — LLM-invoked shell commands
-      // must not see provider tokens, passwords, or other credentials
-      // held by the parent process.
-      const sanitizedEnv = Env.sanitize({
-        ...process.env,
-        ...shellEnv.env,
-      })
       // Background shells keep stdin open ("pipe") so bash_input can write
       // to them later. Trade-off: a background command that reads stdin to
       // EOF now blocks until bash_input sends input/EOF or the shell exits,

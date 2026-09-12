@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { execFile } from "node:child_process"
@@ -12,6 +12,7 @@ import { Truncate } from "../../src/tool/truncate"
 import { Isolation } from "../../src/isolation"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { BlastRadius } from "../../src/session/blast-radius"
+import { Plugin } from "../../src/plugin"
 
 const execFileAsync = promisify(execFile)
 
@@ -1119,6 +1120,208 @@ describe("tool.bash isolation", () => {
           ),
         ).rejects.toThrow(/outside workspace boundary|protected/)
         expect(await fs.readFile(path.join(outerTmp.path, ".git", "config"), "utf8")).not.toContain("--git-dir")
+      },
+    })
+  })
+
+  test.each([
+    "global",
+    "abbreviated-global",
+    "abbreviated-file",
+    "system",
+    "inherited",
+    "inline",
+    "env",
+    "nested-env",
+    "worktree",
+  ])("requires interactive admission for unresolved Git config destination: %s", async (mode) => {
+    await using outside = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    const target = path.join(outside.path, "owned.cfg")
+    const name = ["global", "abbreviated-global"].includes(mode)
+      ? "GIT_CONFIG_GLOBAL"
+      : mode === "system"
+        ? "GIT_CONFIG_SYSTEM"
+        : "GIT_CONFIG"
+    const inherited = ["global", "abbreviated-global", "system", "inherited"].includes(mode)
+    const original = process.env[name]
+    if (inherited) process.env[name] = target
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const command =
+            mode === "abbreviated-global"
+              ? "git config --glob user.email escaped@example.test"
+              : mode === "abbreviated-file"
+                ? `git config --fi=${shellQuote(target)} user.email escaped@example.test`
+                : mode === "global" || mode === "system" || mode === "worktree"
+                  ? `git config --${mode} user.email escaped@example.test`
+                  : mode === "inline"
+                    ? `GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test`
+                    : mode === "env"
+                      ? `env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test`
+                      : mode === "nested-env"
+                        ? `sh -c "env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test"`
+                        : "git config user.email escaped@example.test"
+          const requests: PermissionRequest[] = []
+          const config = path.join(tmp.path, ".git", "config")
+          const before = await fs.readFile(config, "utf8")
+          await expect(
+            bash.execute(
+              { command, description: "Require config destination admission" },
+              {
+                ...ctx,
+                ask: async (request) => {
+                  requests.push(request)
+                  if (
+                    request.permission === "external_directory" &&
+                    request.metadata?.["requireInteractive"] === true
+                  ) {
+                    throw new Error("Fixture declined unresolved destination")
+                  }
+                },
+              },
+            ),
+          ).rejects.toThrow("Fixture declined unresolved destination")
+          expect(
+            requests.some((request) => request.permission === "external_directory" && request.always.length === 0),
+          ).toBe(true)
+          expect(await Filesystem.exists(target)).toBe(false)
+          expect(await fs.readFile(config, "utf8")).toBe(before)
+        },
+      })
+    } finally {
+      if (original === undefined) delete process.env[name]
+      else process.env[name] = original
+    }
+  })
+
+  test("checks plugin-adjusted Git environment before admission and preserves it after approval", async () => {
+    await using outside = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const target = path.join(outside.path, "plugin.cfg")
+        const trigger = vi.spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
+          if (name === "shell.env" && output && typeof output === "object")
+            Object.assign(output, { env: { GIT_CONFIG: target } })
+          return output
+        })
+        const command = "git config user.email approved@example.test"
+        let requested = false
+        try {
+          await expect(
+            bash.execute(
+              { command, description: "Check plugin environment" },
+              {
+                ...ctx,
+                ask: async (request) => {
+                  if (
+                    request.permission === "external_directory" &&
+                    request.metadata?.["requireInteractive"] === true
+                  ) {
+                    throw new Error("Fixture declined plugin destination")
+                  }
+                },
+              },
+            ),
+          ).rejects.toThrow("Fixture declined plugin destination")
+          expect(await Filesystem.exists(target)).toBe(false)
+          const result = await bash.execute(
+            { command, description: "Approve plugin destination" },
+            {
+              ...ctx,
+              ask: async (request) => {
+                if (request.permission === "external_directory" && request.metadata?.["requireInteractive"] === true)
+                  requested = true
+              },
+            },
+          )
+          expect(result.metadata.exit).toBe(0)
+          expect(requested).toBe(true)
+          expect(await fs.readFile(target, "utf8")).toContain("approved@example.test")
+          const requests: PermissionRequest[] = []
+          const read = await bash.execute(
+            { command: "git config --get user.email", description: "Read inherited config" },
+            {
+              ...ctx,
+              ask: async (request) => {
+                requests.push(request)
+              },
+            },
+          )
+          expect(read.metadata.exit).toBe(0)
+          expect(read.output).toContain("approved@example.test")
+          expect(requests.some((request) => request.metadata?.["requireInteractive"] === true)).toBe(false)
+        } finally {
+          trigger.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("requires interactive admission for a gitfile instead of guessing a config path", async () => {
+    await using outside = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const target = path.join(outside.path, ".git", "config")
+        const before = await fs.readFile(target, "utf8")
+        await fs.rm(path.join(tmp.path, ".git"), { recursive: true, force: true })
+        await fs.writeFile(path.join(tmp.path, ".git"), `gitdir: ${path.join(outside.path, ".git")}\n`)
+        await expect(
+          bash.execute(
+            { command: "git config user.email escaped@example.test", description: "Check gitfile destination" },
+            {
+              ...ctx,
+              ask: async (request) => {
+                if (request.permission === "external_directory" && request.metadata?.["requireInteractive"] === true) {
+                  throw new Error("Fixture declined gitfile destination")
+                }
+              },
+            },
+          ),
+        ).rejects.toThrow("Fixture declined gitfile destination")
+        expect(await fs.readFile(target, "utf8")).toBe(before)
+      },
+    })
+  })
+
+  test.each([false, true])("rejects linked Git config writes (missing config: %s)", async (missing) => {
+    await using outer = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const target = path.join(outer.path, ".git", "config")
+        const original = await fs.readFile(target, "utf8")
+        if (missing) await fs.unlink(target)
+        await fs.rm(path.join(tmp.path, ".git"), { recursive: true, force: true })
+        await fs.symlink(path.join(outer.path, ".git"), path.join(tmp.path, ".git"), "junction")
+        const isolation = Isolation.resolve(
+          { mode: "workspace-write", network: false, backend: "app" },
+          tmp.path,
+          tmp.path,
+        )
+        try {
+          await expect(
+            bash.execute(
+              { command: "git config user.email escaped@example.test", description: "Reject linked config escape" },
+              { ...ctx, extra: { isolation } },
+            ),
+          ).rejects.toThrow(/outside workspace boundary|protected/)
+          if (missing) expect(await Filesystem.exists(target)).toBe(false)
+          else expect(await fs.readFile(target, "utf8")).toBe(original)
+        } finally {
+          await fs.unlink(path.join(tmp.path, ".git"))
+        }
       },
     })
   })

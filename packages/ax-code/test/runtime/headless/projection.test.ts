@@ -125,14 +125,20 @@ describe("headless projection", () => {
   })
 
   test("never auto-replies human-confirmation permissions under autonomous mode", () => {
-    for (const permission of ["isolation_escalation", "bash_destructive", "computer", "webmcp"] as const) {
+    for (const permission of [
+      "isolation_escalation",
+      "bash_destructive",
+      "computer",
+      "webmcp",
+      "external_directory",
+    ] as const) {
       const state = createHeadlessProjectionState<Session, Todo, Diff, Status, Message, Part>()
       const request = {
         id: `perm_${permission}`,
         sessionID: "ses_1",
         permission,
         patterns: ["*"],
-        metadata: {},
+        metadata: permission === "external_directory" ? { requireInteractive: true } : {},
         always: [],
       }
 

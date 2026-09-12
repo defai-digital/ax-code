@@ -326,6 +326,43 @@ test("evaluate - broad ask rules can tighten an earlier explicit computer allow"
   expect(result.action).toBe("ask")
 })
 
+test.each(["wildcard", "autonomous"])(
+  "ask - request metadata requires interaction despite %s approval",
+  async (mode) => {
+    await using tmp = await tmpdir({ git: true })
+    vi.stubEnv("AX_CODE_AUTONOMOUS", mode === "autonomous" ? "true" : "false")
+    vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const requestID = PermissionID.make("per_metadata_interactive")
+        const request = Permission.ask({
+          id: requestID,
+          sessionID: SessionID.make("ses_metadata_interactive"),
+          permission: "external_directory",
+          patterns: ["git config --global user.email fixture@example.test"],
+          metadata: { requireInteractive: true },
+          always: [],
+          ruleset: mode === "wildcard" ? [{ permission: "*", pattern: "*", action: "allow" }] : [],
+        })
+        const result = request.then(
+          () => "allowed",
+          () => "rejected",
+        )
+        try {
+          await sleep(30)
+          expect((await Permission.list()).map((entry) => entry.id)).toContain(requestID)
+        } finally {
+          if ((await Permission.list()).some((entry) => entry.id === requestID)) {
+            await Permission.reply({ requestID, reply: "reject" })
+          }
+        }
+        expect(await result).toBe("rejected")
+      },
+    })
+  },
+)
+
 test("ask - interactive-only permissions still honor explicit deny rules", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
@@ -1439,7 +1476,7 @@ test("reply - always resolves matching pending requests in same session", async 
   })
 })
 
-test("reply - always does not resolve interactive-only pending requests", async () => {
+test.each([false, true])("reply - always does not resolve interactive requests (metadata: %s)", async (metadata) => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -1457,9 +1494,9 @@ test("reply - always does not resolve interactive-only pending requests", async 
       const interactive = Permission.ask({
         id: PermissionID.make("per_always_interactive"),
         sessionID: SessionID.make("session_interactive_only"),
-        permission: "isolation_escalation",
+        permission: metadata ? "bash" : "isolation_escalation",
         patterns: ["full-access"],
-        metadata: {},
+        metadata: metadata ? { requireInteractive: true } : {},
         always: [],
         ruleset: [],
       })
