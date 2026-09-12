@@ -137,16 +137,18 @@ function gitConfigFileTarget(args: string[]): string | undefined {
 // `--git-dir=<dir>` replaces the .git directory so the implicit target
 // becomes <dir>/config. Git requires the separate-argument form for -C and
 // accepts both forms for --git-dir. Multiple -C values fold (each later one
-// is interpreted relative to the previous, per git); the last --git-dir wins.
-function gitConfigLocationFlags(args: string[]): { cd?: string; gitDir?: string } {
-  let cd: string | undefined
+// is interpreted relative to the previous, per git), so every -C value is
+// collected in order and the caller resolves the chain; the last --git-dir
+// wins. Pure command-text parsing — no path resolution happens here.
+function gitConfigLocationFlags(args: string[]): { cdChain: string[]; gitDir?: string } {
+  const cdChain: string[] = []
   let gitDir: string | undefined
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     if (arg === undefined) continue
     if (arg === "-C") {
       const value = args[i + 1]
-      if (value !== undefined) cd = cd ? path.resolve(cd, value) : value
+      if (value !== undefined) cdChain.push(value)
       i++
       continue
     }
@@ -157,7 +159,7 @@ function gitConfigLocationFlags(args: string[]): { cd?: string; gitDir?: string 
     }
     if (arg.startsWith("--git-dir=")) gitDir = arg.slice("--git-dir=".length)
   }
-  return { cd, gitDir }
+  return { cdChain, gitDir }
 }
 
 // Patterns that identify intentional (non-development) browser opens.
@@ -614,32 +616,37 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             const key = gitConfigKey(rest)
             const dangerous = key !== undefined && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix))
             const implicit = location.gitDir
-              ? path.join(location.gitDir, "config")
-              : location.cd
-                ? path.join(location.cd, ".git", "config")
+              ? path.join(stripShellQuotes(location.gitDir), "config")
+              : location.cdChain.length > 0
+                ? path.join(stripShellQuotes(location.cdChain[location.cdChain.length - 1]!), ".git", "config")
                 : path.join(".git", "config")
             const target = stripShellQuotes(explicitFile ?? implicit)
-            const cdRaw = location.cd ? stripShellQuotes(location.cd) : undefined
-            const gitDirRaw = location.gitDir ? stripShellQuotes(location.gitDir) : undefined
-            const cdPath = cdRaw ? expandLeadingTilde(cdRaw) : undefined
-            const gitDirPath = gitDirRaw ? expandLeadingTilde(gitDirRaw) : undefined
             const targetPath = expandLeadingTilde(target)
-            // Unresolvable relocation or target values ($VAR, globs, ~user)
-            // cannot name a static write target — force the interactive
+            // Validate every -C value before resolving: dynamic ($VAR, globs)
+            // and ~user values cannot name a static base directory, so the
+            // effective write target is unknowable — force the interactive
             // external-directory ask instead of guessing, mirroring the
-            // generic arg scan's dynamicPathAccess handling. An absent flag
-            // is not unresolvable — only a present-but-dynamic value is.
-            const unresolvable =
-              (cdRaw !== undefined && cdPath === undefined) ||
-              (gitDirRaw !== undefined && gitDirPath === undefined) ||
-              targetPath === undefined ||
-              hasDynamicShellExpansion(target) ||
-              (cdRaw !== undefined && hasDynamicShellExpansion(cdRaw)) ||
-              (gitDirRaw !== undefined && hasDynamicShellExpansion(gitDirRaw))
+            // generic arg scan's dynamicPathAccess handling.
+            const cdParts: string[] = []
+            let cdUnresolvable = false
+            for (const raw of location.cdChain) {
+              const part = expandLeadingTilde(stripShellQuotes(raw))
+              if (part === undefined || hasDynamicShellExpansion(part)) {
+                cdUnresolvable = true
+                break
+              }
+              cdParts.push(part)
+            }
+            const unresolvable = targetPath === undefined || hasDynamicShellExpansion(target) || cdUnresolvable
             if (unresolvable) {
               dynamicPathAccess = true
             } else {
-              const base = cdPath ? path.resolve(cwd, cdPath) : cwd
+              // git folds each later -C relative to the previous one; resolve
+              // the chain here so the effective base sits next to the
+              // workspace containment check that validates the resolved
+              // target before any isolation or blast-radius recording.
+              let base = cwd
+              for (const part of cdParts) base = path.resolve(base, part)
               const absolute = path.resolve(base, targetPath!)
               if (explicitFile || dangerous || !Instance.containsPath(absolute)) {
                 const resolved = await recordResolvedPath(absolute)
