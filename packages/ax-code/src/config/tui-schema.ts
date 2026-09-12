@@ -30,6 +30,12 @@ export const TuiOptions = z.object({
         .min(1000)
         .optional()
         .describe("Idle delay before the recap is generated, in milliseconds (default 5000, min 1000)"),
+      pregenerate: z
+        .boolean()
+        .optional()
+        .describe(
+          "Start generating the recap inside the idle window so it can display at the delay mark (default true)",
+        ),
     })
     .optional()
     .describe("Idle recap settings"),

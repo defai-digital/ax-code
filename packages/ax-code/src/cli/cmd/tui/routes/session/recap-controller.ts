@@ -6,11 +6,17 @@ export type RecapSnapshot = {
   hasMessages: boolean
   enabled: boolean
   delayMs: number
+  pregenerate: boolean
   input: string
   autoScope: "turn" | "conversation"
 }
 
 type RecapView = { text?: string; loading?: boolean }
+
+/** Lead time before the idle delay mark at which an automatic recap starts
+ *  generating, so the banner can appear at the mark instead of one model
+ *  latency after it. */
+export const RECAP_PREGENERATE_LEAD_MS = 2_500
 
 /** Owns one presentation request; invalidation also rejects late successful responses. */
 export function createRecapController(host: {
@@ -25,29 +31,36 @@ export function createRecapController(host: {
   notify: (message: string) => void
 }) {
   let previous: RecapSnapshot | undefined
-  let cancelTimer: (() => void) | undefined
+  let cancelArm: (() => void) | undefined
+  let cancelReveal: (() => void) | undefined
   let active: { abort: AbortController; manual: boolean } | undefined
+  /** Pregenerated text held for the delay mark; undefined when nothing is held. */
+  let held: string | undefined
   let attempted = false
   let disposed = false
 
-  function cancelScheduled() {
-    cancelTimer?.()
-    cancelTimer = undefined
+  function cancelTimers() {
+    cancelArm?.()
+    cancelArm = undefined
+    cancelReveal?.()
+    cancelReveal = undefined
+    held = undefined
   }
 
   function invalidate() {
-    cancelScheduled()
+    cancelTimers()
     active?.abort.abort()
     active = undefined
     host.show({})
   }
 
   /** Typing or disabling pauses only the automatic lane: a pending schedule is
-   *  cancelled and an in-flight automatic request is aborted so the recap can
-   *  re-arm once the prompt clears. Manual requests and a displayed recap
-   *  survive — the banner clears on the next turn, not on keystrokes. */
+   *  cancelled, held pregenerated text is dropped, and an in-flight automatic
+   *  request is aborted so the recap can re-arm once the prompt clears. Manual
+   *  requests and a displayed recap survive — the banner clears on the next
+   *  turn, not on keystrokes. */
   function pauseAutomatic() {
-    cancelScheduled()
+    cancelTimers()
     if (active && !active.manual) {
       active.abort.abort()
       active = undefined
@@ -82,10 +95,22 @@ export function createRecapController(host: {
       !attempted &&
       !active
     ) {
-      cancelScheduled()
-      cancelTimer = host.schedule(() => {
-        cancelTimer = undefined
-        void request(false)
+      cancelArm?.()
+      cancelReveal?.()
+      const lead = next.pregenerate ? RECAP_PREGENERATE_LEAD_MS : 0
+      cancelArm = host.schedule(
+        () => {
+          cancelArm = undefined
+          void request(false)
+        },
+        Math.max(0, next.delayMs - lead),
+      )
+      cancelReveal = host.schedule(() => {
+        cancelReveal = undefined
+        if (held === undefined) return
+        const text = held
+        held = undefined
+        host.show({ text })
       }, next.delayMs)
     }
   }
@@ -100,9 +125,18 @@ export function createRecapController(host: {
     if (snapshot.status !== "idle" || snapshot.treeBusy)
       return notify("Wait for the current work to finish before requesting a recap.")
     if (!snapshot.hasMessages) return notify("There is no conversation history to recap.")
-    if (active) return notify("A conversation recap is already being generated.")
+    if (active?.manual) return notify("A conversation recap is already being generated.")
+    if (active && !manual) return
     if (!manual && (!snapshot.enabled || snapshot.input || attempted)) return
-    cancelScheduled()
+    // A manual request replaces an in-flight automatic pregeneration.
+    active?.abort.abort()
+    cancelArm?.()
+    cancelArm = undefined
+    if (manual) {
+      cancelReveal?.()
+      cancelReveal = undefined
+      held = undefined
+    }
     attempted = true
     const current = { abort: new AbortController(), manual }
     active = current
@@ -121,8 +155,11 @@ export function createRecapController(host: {
       } else if (!result.data?.text) {
         notify("No recap is available for this conversation or provider yet.")
         host.show({})
-      } else {
+      } else if (manual || cancelReveal === undefined) {
         host.show({ text: result.data.text })
+      } else {
+        // Reveal is still pending: hold the pregenerated text for the delay mark.
+        held = result.data.text
       }
     } catch {
       update()

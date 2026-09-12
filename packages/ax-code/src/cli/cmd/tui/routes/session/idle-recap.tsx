@@ -46,6 +46,7 @@ export function IdleRecap(props: { sessionID: string }) {
       hasMessages: messages.some((message) => message.role === "user"),
       enabled: tuiConfig?.idle_recap?.enabled ?? true,
       delayMs: Math.max(1_000, tuiConfig?.idle_recap?.delay_ms ?? 5_000),
+      pregenerate: tuiConfig?.idle_recap?.pregenerate ?? true,
       // store.prompt.input is a Solid store, so input edits re-run this memo
       // without a polling interval.
       input: promptRef.current?.current.input ?? "",

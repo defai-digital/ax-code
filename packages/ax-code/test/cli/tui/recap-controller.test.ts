@@ -3,7 +3,7 @@ import { createRecapController, type RecapSnapshot } from "../../../src/cli/cmd/
 
 afterEach(() => vi.useRealTimers())
 
-function setup() {
+function setup(initial: Partial<RecapSnapshot> = {}) {
   vi.useFakeTimers()
   const state: RecapSnapshot = {
     sessionID: "ses_a",
@@ -13,8 +13,10 @@ function setup() {
     hasMessages: true,
     enabled: true,
     delayMs: 5000,
+    pregenerate: false,
     input: "",
     autoScope: "turn",
+    ...initial,
   }
   const pending = Promise.withResolvers<{ data?: { text: string | null }; error?: unknown }>()
   const request = vi.fn().mockReturnValue(pending.promise)
@@ -259,6 +261,104 @@ describe("conversation recap lifecycle", () => {
     t.pending.resolve({ data: { text: "Requested recap" } })
     await done
     expect(t.show).toHaveBeenLastCalledWith({ text: "Requested recap" })
+    t.controller.dispose()
+  })
+})
+
+describe("idle recap pregeneration", () => {
+  test("generates inside the quiet window and reveals at the delay mark", async () => {
+    const t = setup({ pregenerate: true })
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(2499)
+    expect(t.request).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.request).toHaveBeenCalledOnce()
+    t.pending.resolve({ data: { text: "Early." } })
+    await vi.advanceTimersByTimeAsync(2499)
+    expect(t.show).not.toHaveBeenCalledWith({ text: "Early." })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Early." })
+    t.controller.dispose()
+  })
+
+  test("a pregeneration resolving after the delay mark shows immediately", async () => {
+    const t = setup({ pregenerate: true })
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(t.request).toHaveBeenCalledOnce()
+    expect(t.show).not.toHaveBeenCalledWith(expect.objectContaining({ text: expect.anything() }))
+    t.pending.resolve({ data: { text: "Late." } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Late." })
+    t.controller.dispose()
+  })
+
+  test("typing during the hold discards the pregenerated recap", async () => {
+    const t = setup({ pregenerate: true })
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(2500)
+    t.pending.resolve({ data: { text: "Held." } })
+    await vi.advanceTimersByTimeAsync(1000)
+    t.update({ input: "next" })
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(t.show).not.toHaveBeenCalledWith({ text: "Held." })
+    t.controller.dispose()
+  })
+
+  test("typing during pregeneration aborts the request and clearing re-arms it", async () => {
+    const t = setup({ pregenerate: true })
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(2500)
+    const signal = t.request.mock.calls[0][0].signal as AbortSignal
+    t.update({ input: "draft" })
+    expect(signal.aborted).toBe(true)
+    const second = Promise.withResolvers<{ data?: { text: string | null }; error?: unknown }>()
+    t.request.mockReturnValue(second.promise)
+    t.update({ input: "" })
+    await vi.advanceTimersByTimeAsync(2500)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    second.resolve({ data: { text: "Rearmed." } })
+    await vi.advanceTimersByTimeAsync(2499)
+    expect(t.show).not.toHaveBeenCalledWith({ text: "Rearmed." })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Rearmed." })
+    t.controller.dispose()
+  })
+
+  test("a manual request replaces an in-flight pregeneration and shows immediately", async () => {
+    const t = setup({ pregenerate: true })
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(2500)
+    const autoSignal = t.request.mock.calls[0][0].signal as AbortSignal
+    const manualCall = Promise.withResolvers<{ data?: { text: string | null }; error?: unknown }>()
+    t.request.mockReturnValue(manualCall.promise)
+    const done = t.controller.manual()
+    expect(autoSignal.aborted).toBe(true)
+    expect(t.request).toHaveBeenCalledTimes(2)
+    expect(t.request).toHaveBeenLastCalledWith(expect.objectContaining({ scope: "conversation" }))
+    manualCall.resolve({ data: { text: "Manual now." } })
+    await done
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Manual now." })
+    t.pending.resolve({ data: { text: "Stale auto." } })
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(t.show).not.toHaveBeenCalledWith({ text: "Stale auto." })
+    t.controller.dispose()
+  })
+
+  test("pregeneration stays silent when no recap is available", async () => {
+    const t = setup({ pregenerate: true })
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(2500)
+    t.pending.resolve({ data: { text: null } })
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(t.notify).not.toHaveBeenCalled()
+    expect(t.request).toHaveBeenCalledOnce()
     t.controller.dispose()
   })
 })
