@@ -835,7 +835,23 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           if (isShellWithC) {
             const cIdx = scanParts.indexOf("-c")
             if (cIdx >= 0 && cIdx + 1 < scanParts.length) {
-              innerCmd = decodeShellLiteral(rawScanParts[cIdx + 1] ?? "")
+              // scanParts (decoded words) and rawScanParts (raw words) can
+              // split differently when quote-sensitive wrapper skipping
+              // disagrees: `env "-u" NAME sh -c ...` sees through to sh on
+              // the decoded view but stops at the quoted flag on the raw
+              // view. Never index one view with an index from the other —
+              // that silently parses the wrong word as the inner command.
+              // Locate -c by decoded value in raw space, and fail closed
+              // when the two views disagree on the unwrapped command.
+              if (
+                (unwrappedCommand === undefined) !== (rawUnwrapped === undefined) ||
+                unwrappedCommand?.name !== rawUnwrapped?.name
+              ) {
+                dynamicPathAccess = true
+              }
+              const rawCIdx = rawScanParts.findIndex((word, index) => index > 0 && decodeShellLiteral(word) === "-c")
+              const rawArg = rawCIdx >= 0 ? rawScanParts[rawCIdx + 1] : undefined
+              innerCmd = rawArg === undefined ? undefined : decodeShellLiteral(rawArg)
               if (innerCmd === undefined) dynamicPathAccess = true
             }
           } else if (isEval) {

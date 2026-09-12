@@ -145,6 +145,60 @@ describe("ops.strict bash integration", () => {
     })
   })
 
+  test("strict on + quoted wrapper flag before sh -c: nested destructive inner is still denied", async () => {
+    // Quoted wrapper flags ("-u") defeat quote-sensitive wrapper skipping on
+    // the raw-word view while the decoded view sees through to sh. The -c
+    // argument must be located by decoded value in raw space (not by reusing
+    // the decoded index), and view disagreement must fail closed, or the
+    // nested destructive scan silently parses the wrong word.
+    // username keeps this test hermetic where os.userInfo() is unavailable.
+    await using tmp = await tmpdir({ git: true, config: { ops: { strict: true }, username: "test" } })
+    await withTrustedProjectConfig(() =>
+      Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const asks: PermissionRequest[] = []
+          await expect(
+            bash.execute(
+              {
+                command: `env "-u" AX_TEST_UNUSED_VAR sh -c "rm -rf ./nested-target && touch ./should-not-exist"`,
+                description: "Remove nested target",
+              },
+              makeCtx(asks),
+            ),
+          ).rejects.toBeInstanceOf(Permission.DeniedError)
+          expect(asks.map((ask) => ask.permission)).toEqual(["external_directory"])
+          await expect(fs.stat(path.join(tmp.path, "should-not-exist"))).rejects.toThrow()
+        },
+      }),
+    )
+  }, 30_000)
+
+  test("unwrapped sh -c keeps parsing the -c word as the inner command", async () => {
+    // Agreement-path guard for the raw/decoded -c lookup: with no wrapper,
+    // both views split identically, so the nested destructive scan must see
+    // the inner command exactly as before.
+    await using tmp = await tmpdir({ git: true, config: { username: "test" } })
+    await withTrustedProjectConfig(() =>
+      Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const asks: PermissionRequest[] = []
+          const result = await bash.execute(
+            { command: `sh -c "rm -rf ./agree-target"`, description: "Remove target" },
+            makeCtx(asks),
+          )
+          expect(result.metadata.exit).toBe(0)
+          const destructive = asks.filter((ask) => ask.permission === "bash_destructive")
+          expect(destructive).toHaveLength(1)
+          expect(destructive[0]!.patterns.join(" ")).toContain("rm -rf ./agree-target")
+        },
+      }),
+    )
+  }, 30_000)
+
   test("ops_apply does not consult the bash strict flag", async () => {
     const source = await fs.readFile(path.join(__dirname, "../../src/tool/ops_apply.ts"), "utf-8")
     expect(source).not.toContain("bash-strict")
