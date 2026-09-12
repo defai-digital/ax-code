@@ -1,5 +1,6 @@
 import z from "zod"
 import { spawn, type ChildProcess } from "child_process"
+import { StringDecoder } from "node:string_decoder"
 import { Tool } from "./tool"
 import path from "path"
 import DESCRIPTION from "./bash.txt"
@@ -47,7 +48,6 @@ import {
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
-  safeUtf8PrefixLength,
   staticallyCheckablePathArgs,
   staticallyCreatedPathArgs,
   stripShellQuotes,
@@ -1296,20 +1296,19 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         let lastPublishedBytes = -1
         let lastPublishedAt = 0
 
-        const append = (chunk: Buffer) => {
+        const stdoutDecoder = new StringDecoder("utf8")
+        const stderrDecoder = new StringDecoder("utf8")
+        const append = (chunk: Buffer, decoder: StringDecoder) => {
           const priorOutputBytes = outputBytes
           outputBytes += chunk.byteLength
           lastOutputAt = Date.now()
           if (priorOutputBytes < OUTPUT_HARD_CAP) {
             const remaining = OUTPUT_HARD_CAP - priorOutputBytes
-            if (chunk.byteLength <= remaining) {
-              const text = chunk.toString()
-              output += text
-            } else {
-              const safeRemaining = safeUtf8PrefixLength(chunk, remaining)
-              output += chunk.subarray(0, safeRemaining).toString() + "\n\n[output truncated at 10MB]"
-              truncated = true
-            }
+            output += decoder.write(chunk.subarray(0, remaining))
+          }
+          if (outputBytes > OUTPUT_HARD_CAP && !truncated) {
+            output += "\n\n[output truncated at 10MB]"
+            truncated = true
           }
           const outputMetadataBytes = Buffer.byteLength(output, "utf8")
           const isPastCap = outputMetadataBytes > MAX_METADATA_LENGTH
@@ -1321,8 +1320,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           lastPublishedAt = now
         }
 
-        proc.stdout?.on("data", append)
-        proc.stderr?.on("data", append)
+        const appendStdout = (chunk: Buffer) => append(chunk, stdoutDecoder)
+        const appendStderr = (chunk: Buffer) => append(chunk, stderrDecoder)
+        proc.stdout?.on("data", appendStdout)
+        proc.stderr?.on("data", appendStderr)
 
         const kill = async () => {
           if (killStartedAt !== undefined) return
@@ -1358,8 +1359,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           const cleanup = () => {
             clearTimeout(timeoutTimer)
             ctx.abort.removeEventListener("abort", abortHandler)
-            proc.stdout?.off("data", append)
-            proc.stderr?.off("data", append)
+            proc.stdout?.off("data", appendStdout)
+            proc.stderr?.off("data", appendStderr)
             if (proc.pid) forgetTrackedPID(proc.pid)
           }
 
@@ -1379,6 +1380,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
 
           proc.once("close", () => {
             cleanup()
+            // Flush tails only when output was retained in full. A hard-cap
+            // cutoff discards pending bytes instead of adding replacement text.
+            if (!truncated) output += stdoutDecoder.end() + stderrDecoder.end()
             resolve()
           })
 

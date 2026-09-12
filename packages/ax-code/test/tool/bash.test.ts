@@ -64,6 +64,101 @@ describe("tool.bash", () => {
     })
   })
 
+  test("preserves interleaved UTF-8 sequences split across foreground stream chunks", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "split-output.cjs"),
+          `
+const pause = () => new Promise((resolve) => setTimeout(resolve, 100))
+;(async () => {
+  process.stdout.write(Buffer.from([0xe2]))
+  await pause()
+  process.stderr.write(Buffer.from([0xf0, 0x9f]))
+  await pause()
+  process.stdout.write(Buffer.from([0x82, 0xac]))
+  await pause()
+  process.stderr.write(Buffer.from([0x99, 0x82]))
+})()
+`,
+        )
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          { command: `"${process.execPath}" split-output.cjs`, description: "Decode split output" },
+          ctx,
+        )
+        expect(result.metadata.exit).toBe(0)
+        expect(result.output).toBe(String.fromCodePoint(0x20ac, 0x1f642))
+        expect(result.metadata.hang.outputBytes).toBe(7)
+      },
+    })
+  })
+
+  test.each([
+    { partial: false, overflow: false },
+    { partial: false, overflow: true },
+    { partial: true, overflow: true },
+  ])("handles hard-cap output (partial=$partial, overflow=$overflow)", async ({ partial, overflow }) => {
+    const cap = 10 * 1024 * 1024
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(
+          path.join(dir, "capped-output.cjs"),
+          `
+const first = Buffer.alloc(${cap}, 0x61)
+${partial ? "first[first.length - 1] = 0xe2" : ""}
+process.stdout.write(first, () => {
+  ${overflow ? `setTimeout(() => process.stdout.write(Buffer.from(${partial ? "[0x82, 0xac]" : "[0x62]"})), 100)` : ""}
+})
+`,
+        )
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          { command: `"${process.execPath}" capped-output.cjs`, description: "Exercise hard output cap" },
+          ctx,
+        )
+        expect(result.metadata.exit).toBe(0)
+        expect(result.metadata.hang.outputTruncated).toBe(overflow)
+        expect(result.metadata.hang.outputBytes).toBe(cap + (overflow ? (partial ? 2 : 1) : 0))
+        expect("fullOutputPath" in result.metadata).toBe(true)
+        if (!("fullOutputPath" in result.metadata)) throw new Error("Missing saved output")
+        const output = await fs.readFile(result.metadata.fullOutputPath, "utf8")
+        expect(output).toBe("a".repeat(cap - (partial ? 1 : 0)) + (overflow ? "\n\n[output truncated at 10MB]" : ""))
+      },
+    })
+  })
+
+  test("flushes incomplete foreground UTF-8 at real EOF", async () => {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, "incomplete-output.cjs"), "process.stdout.write(Buffer.from([0xe2]))")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          { command: `"${process.execPath}" incomplete-output.cjs`, description: "Flush incomplete output" },
+          ctx,
+        )
+        expect(result.metadata.exit).toBe(0)
+        expect(result.output).toBe(String.fromCodePoint(0xfffd))
+        expect(result.metadata.hang.outputTruncated).toBe(false)
+      },
+    })
+  })
+
   test("returns structured hang metadata on timeout", async () => {
     await Instance.provide({
       directory: projectRoot,
