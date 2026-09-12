@@ -16,6 +16,7 @@ import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
 import { ModePolicy } from "../mode/policy"
 import { Provider } from "../provider/provider"
+import { stripThinkTags } from "../provider/think-tags"
 import { ProviderTransform } from "../provider/transform"
 import { Log } from "../util/log"
 import { parseJsonResult } from "../util/json-value"
@@ -323,8 +324,27 @@ async function runMember(input: {
           for await (const part of fallback.fullStream) {
             if (part.type === "error") throw part.error
           }
-          const validated = MemberOutputSchema.safeParse(parseJsonFromText(await fallback.text))
-          if (!validated.success) throw error
+          // MiniMax-M3 on vLLM/PAI writes `<mm:think>` reasoning into the text
+          // stream. The main prompt path splits those blocks out
+          // (attachThinkTagStream in session/llm-impl.ts), but these direct
+          // structured calls do not, so the JSON arrives behind a reasoning
+          // block whose own braces defeat the outermost-{...} extraction.
+          // Strip complete think-tag blocks before parsing.
+          const fallbackText = stripThinkTags((await fallback.text) ?? "")
+          const validated = MemberOutputSchema.safeParse(parseJsonFromText(fallbackText))
+          if (!validated.success) {
+            // Surface both stages plus a bounded tail instead of re-throwing
+            // the bare primary error: "could not parse the response" alone
+            // hides whether the member returned nothing, truncated, or a
+            // schema miss, and operators cannot diagnose it from the report.
+            const finishReason = await fallback.finishReason
+            throw new Error(
+              `council member produced neither a schema-valid object nor parseable json ` +
+                `(primary streamObject: ${FanOut.describeError(error)}; ` +
+                `fallback finishReason=${finishReason ?? "unknown"}, length=${fallbackText.length}, ` +
+                `snippet=${JSON.stringify(fallbackText.trim().slice(0, 500))})`,
+            )
+          }
           return validated.data
         }
       },

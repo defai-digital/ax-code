@@ -23,6 +23,9 @@ vi.mock("ai", () => ({
       get text() {
         return Promise.resolve(result.text)
       },
+      get finishReason() {
+        return Promise.resolve(result.finishReason)
+      },
     }
   },
 }))
@@ -238,17 +241,46 @@ describe("council member robustness", () => {
     expect(generateText).not.toHaveBeenCalled()
   })
 
-  test("member fails when the generateText fallback is also unparseable", async () => {
+  test("member fails when the generateText fallback is also unparseable and reports both stages", async () => {
     vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig())
     oneMember()
     vi.mocked(generateObject).mockRejectedValue(new Error("No object generated: could not parse the response."))
-    vi.mocked(generateText).mockResolvedValue({ text: "I cannot comply." } as any)
+    vi.mocked(generateText).mockResolvedValue({ text: "I cannot comply.", finishReason: "length" } as any)
 
     const tool = await CouncilTool.init()
     const result = await tool.execute({ question: "Review auth" }, ctx)
 
     expect(result.metadata.failedMembers).toBe(1)
     expect(result.metadata.successfulMembers).toBe(0)
+    // The bare primary error used to be re-thrown, hiding why the fallback
+    // failed. Both stages, the finish reason, and a bounded snippet must show.
+    expect(result.output).toContain("primary streamObject:")
+    expect(result.output).toContain("fallback finishReason=length")
+    expect(result.output).toContain("I cannot comply.")
+  })
+
+  // MiniMax-M3 on vLLM/PAI emits `<mm:think>` reasoning inside the text stream.
+  // Braces inside that reasoning defeat the outermost-{...} extraction when the
+  // block is not stripped first (the main prompt path strips it via
+  // attachThinkTagStream; this direct call did not).
+  test("streamed fallback strips MiniMax mm:think reasoning before parsing json", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig())
+    oneMember()
+    vi.mocked(generateObject).mockRejectedValue(new Error("No object generated: could not parse the response."))
+    vi.mocked(generateText).mockResolvedValue({
+      text:
+        '<mm:think>I must answer with json shaped like {"overall": string, "issues": []}</mm:think>\n' +
+        '{"overall":"recovered","issues":[{"severity":"high","category":"correctness","summary":"Tag-stripped JSON parsed"}]}',
+      finishReason: "stop",
+    } as any)
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(generateText).toHaveBeenCalledTimes(1)
+    expect(result.metadata.successfulMembers).toBe(1)
+    expect(result.metadata.failedMembers).toBe(0)
+    expect(result.output).toContain("Tag-stripped JSON parsed")
   })
 
   test("incompatible specificationVersion is reported as a provider package error", async () => {
