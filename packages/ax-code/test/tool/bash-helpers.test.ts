@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
+  decodeShellLiteral,
   expandLeadingTilde,
   hasDynamicRedirection,
   hasDynamicShellExpansion,
@@ -12,6 +13,27 @@ import {
   stripShellQuotes,
   truncateBashMetadata,
 } from "../../src/tool/bash-helpers"
+
+describe("decodeShellLiteral", () => {
+  test.each(["plain", "", "a'b", 'a"b', "a\\b", "$HOME", "`uname`", "line\nbreak", "[x] {y} ~z"])(
+    "decodes shell-quoted literal %j without evaluating it",
+    (value) => {
+      const quoted = `'${value.replaceAll("'", "'\\''")}'`
+      expect(decodeShellLiteral(quoted)).toBe(value)
+    },
+  )
+
+  test("preserves double-quoted backslashes except shell escapes", () => {
+    expect(decodeShellLiteral('"a\\qb\\$c\\`d\\"e\\\\f"')).toBe('a\\qb$c`d"e\\f')
+    expect(decodeShellLiteral("ab\\\ncd")).toBe("abcd")
+    expect(decodeShellLiteral("a\"b c\"'d'")).toBe("ab cd")
+  })
+
+  test.each(["$HOME", '"$HOME"', "`uname`", "$(uname)", "$'ansi'", "*.ts", "~/x", "a b", "a;b", "'open", "trailing\\"])(
+    "rejects unsupported or dynamic word %j",
+    (value) => expect(decodeShellLiteral(value)).toBeUndefined(),
+  )
+})
 
 describe("tool.bash helpers", () => {
   test("detects dynamic shell expansion", () => {

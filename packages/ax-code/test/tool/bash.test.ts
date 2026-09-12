@@ -1133,6 +1133,11 @@ describe("tool.bash isolation", () => {
     "inline",
     "env",
     "nested-env",
+    "nested-concatenation",
+    "wrapped-concatenation",
+    "quoted-option",
+    "eval-concatenation",
+    "dynamic-inner",
     "worktree",
   ])("requires interactive admission for unresolved Git config destination: %s", async (mode) => {
     await using outside = await tmpdir()
@@ -1162,9 +1167,19 @@ describe("tool.bash isolation", () => {
                     ? `GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test`
                     : mode === "env"
                       ? `env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test`
-                      : mode === "nested-env"
-                        ? `sh -c "env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test"`
-                        : "git config user.email escaped@example.test"
+                      : mode === "quoted-option"
+                        ? `sh '-''c' ${shellQuote(`env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test`)}`
+                        : mode === "wrapped-concatenation"
+                          ? `env sh -c ${shellQuote(`env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test`)}`
+                          : mode === "eval-concatenation"
+                            ? `eval ${shellQuote(`env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test`)}`
+                            : mode === "dynamic-inner"
+                              ? `sh -c "$(touch ${shellQuote(target)})"`
+                              : mode === "nested-concatenation"
+                                ? `sh -c ${shellQuote(`env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test`)}`
+                                : mode === "nested-env"
+                                  ? `sh -c "env GIT_CONFIG=${shellQuote(target)} git config user.email escaped@example.test"`
+                                  : "git config user.email escaped@example.test"
           const requests: PermissionRequest[] = []
           const config = path.join(tmp.path, ".git", "config")
           const before = await fs.readFile(config, "utf8")

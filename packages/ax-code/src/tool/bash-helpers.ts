@@ -14,6 +14,41 @@ export function stripShellQuotes(value: string) {
   return value.replace(/^"(.*)"$|^'(.*)'$/s, "$1$2")
 }
 
+/** Decode one literal POSIX shell word without evaluating expansions. */
+export function decodeShellLiteral(value: string): string | undefined {
+  if (!value || value.includes("\0")) return undefined
+  let quote: "single" | "double" | undefined
+  let result = ""
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i]!
+    if (quote === "single") {
+      if (char === "'") quote = undefined
+      else result += char
+      continue
+    }
+    if (char === "\\") {
+      const next = value[++i]
+      if (next === undefined) return undefined
+      if (next === "\n") continue
+      if (quote === "double" && !["$", "`", '"', "\\"].includes(next)) result += "\\"
+      result += next
+      continue
+    }
+    if (char === '"') {
+      quote = quote === "double" ? undefined : "double"
+      continue
+    }
+    if (quote === undefined && char === "'") {
+      quote = "single"
+      continue
+    }
+    if (char === "$" || char === "`") return undefined
+    if (quote === undefined && /[\s;|&<>()*?\[\]{}~]/.test(char)) return undefined
+    result += char
+  }
+  return quote === undefined ? result : undefined
+}
+
 /** Expand only the current user's POSIX home shorthand. `~user` requires a
  * shell/user database lookup and is therefore treated as dynamic. */
 export function expandLeadingTilde(value: string, home = os.homedir()): string | undefined {

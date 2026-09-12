@@ -46,6 +46,7 @@ import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
   expandLeadingTilde,
+  decodeShellLiteral,
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
@@ -485,6 +486,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // interactive-only bash_destructive ask below.
       const destructiveCommands = new Map<string, string>()
       let dynamicPathAccess = false
+      const decodeCommandParts = (parts: string[]) =>
+        parts.map((part) => {
+          const decoded = decodeShellLiteral(part)
+          if (decoded === undefined) dynamicPathAccess = true
+          return decoded ?? part
+        })
       // Set when any scanned command wraps network-capable interpreted code
       // (python -c 'urllib…') or enters another network namespace (docker
       // run / nsenter): the per-command-name network check cannot see those,
@@ -788,7 +795,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           command.push(child.text)
         }
 
-        const destructiveReason = classifyDestructiveCommand(command.map(stripShellQuotes))
+        const normalizedCommand = decodeCommandParts(command)
+        const destructiveReason = classifyDestructiveCommand(normalizedCommand)
         if (destructiveReason) destructiveCommands.set(commandText, destructiveReason)
 
         // Look through wrapper commands (sudo, env, nohup, xargs, ...) so a
@@ -796,7 +804,6 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         // redirect, and network scanning as an unwrapped invocation —
         // mirroring how classifyDestructiveCommand already sees through
         // wrappers via findWrappedCommand.
-        const normalizedCommand = command.map(stripShellQuotes)
         const unwrappedCommand = findWrappedCommand(normalizedCommand)
         const wrapperParts = unwrappedCommand
           ? normalizedCommand.slice(0, normalizedCommand.length - unwrappedCommand.args.length - 1)
@@ -808,9 +815,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         ) {
           shellEnvironmentChanges = true
         }
-        const scanParts = unwrappedCommand
-          ? [unwrappedCommand.name, ...unwrappedCommand.args]
-          : command.map(stripShellQuotes)
+        // Keep raw words for the shell's next parsing stage. Removing outer
+        // quotes first loses whether backslashes and quote fragments are literal.
+        const rawUnwrapped = findWrappedCommand(command)
+        const rawScanParts = rawUnwrapped ? [rawUnwrapped.name, ...rawUnwrapped.args] : command
+        const scanParts = unwrappedCommand ? [unwrappedCommand.name, ...unwrappedCommand.args] : normalizedCommand
 
         // Commands that wrap or delegate to other commands.
         // For shell invocations with -c, and eval, we parse the inner
@@ -826,13 +835,14 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           if (isShellWithC) {
             const cIdx = scanParts.indexOf("-c")
             if (cIdx >= 0 && cIdx + 1 < scanParts.length) {
-              // Strip surrounding quotes that tree-sitter may preserve
-              innerCmd = stripShellQuotes(scanParts[cIdx + 1])
+              innerCmd = decodeShellLiteral(rawScanParts[cIdx + 1] ?? "")
+              if (innerCmd === undefined) dynamicPathAccess = true
             }
           } else if (isEval) {
             // eval concatenates all its arguments into a single command
-            const evalArgs = scanParts.slice(1).map(stripShellQuotes)
-            if (evalArgs.length > 0) innerCmd = evalArgs.join(" ")
+            const evalArgs = rawScanParts.slice(1).map(decodeShellLiteral)
+            if (evalArgs.some((arg) => arg === undefined)) dynamicPathAccess = true
+            else if (evalArgs.length > 0) innerCmd = evalArgs.join(" ")
           }
 
           if (innerCmd) {
@@ -856,9 +866,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                     innerParts.push(c.text)
                   }
                 }
-                const innerDestructiveReason = classifyDestructiveCommand(innerParts.map(stripShellQuotes))
+                const normalizedInnerParts = decodeCommandParts(innerParts)
+                const innerDestructiveReason = classifyDestructiveCommand(normalizedInnerParts)
                 if (innerDestructiveReason) destructiveCommands.set(innerNode.text, innerDestructiveReason)
-                const normalizedInnerParts = innerParts.map(stripShellQuotes)
                 const innerCommand = findWrappedCommand(normalizedInnerParts)
                 const innerWrappers = innerCommand
                   ? normalizedInnerParts.slice(0, normalizedInnerParts.length - innerCommand.args.length - 1)
