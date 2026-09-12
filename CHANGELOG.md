@@ -6,6 +6,19 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.16.1] - 2026-09-12
+
+### Changed
+
+- Make scheduled task runs visible: toasts on fire/success/failure/skip, a `/schedule` dialog for status and history, and a notice when an automation run needs approval in another session. A one-time task stays active until a successful run, then retries under the existing backoff instead of vanishing on the first failure.
+- Show live Council/Arena availability on the mode chip and block submit when the mode cannot run, instead of silently falling back to a single agent.
+- Pregenerate idle recaps during the quiet window, keep the banner while typing, and wait until the whole session tree has settled.
+- Tighten TUI chrome to theme tokens, a shared 100ms pulse, CJK-safe ASCII gauges, a copyable sidebar session id, and a cycling AX-CODE busy indicator.
+
+### Fixed
+
+- Stop scheduled automation from creating a session and starting a prompt after the queue item has already timed out or been cancelled.
+
 ## [7.16.0] - 2026-09-12
 
 ### Changed

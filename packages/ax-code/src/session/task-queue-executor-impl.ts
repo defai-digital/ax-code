@@ -504,6 +504,14 @@ function isActiveQueueStatus(status: TaskQueue.Status) {
   return activeStatuses.includes(status as (typeof activeStatuses)[number])
 }
 
+async function requireActiveQueueItem(id: TaskQueueID) {
+  const current = await TaskQueue.get(id)
+  if (!isActiveQueueStatus(current.status)) {
+    throw new Error(`Scheduled automation stopped before execution (${current.status})`)
+  }
+  return current
+}
+
 function failureForQueueExecution(item: TaskQueue.Info, result: unknown): string | undefined {
   if (!item.sessionID) return undefined
   // Prompt failures are returned as assistant messages, not necessarily thrown
@@ -697,12 +705,26 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
 
         let sessionID = item.sessionID
         if (!sessionID) {
+          await requireActiveQueueItem(item.id)
           const { Session } = await import(".")
           const session = await Session.create({ title: item.title })
+          try {
+            await requireActiveQueueItem(item.id)
+          } catch (error) {
+            await Session.remove(session.id).catch((removeError) => {
+              log.warn("failed to discard cancelled scheduled session", {
+                taskID: item.id,
+                sessionID: session.id,
+                error: removeError,
+              })
+            })
+            throw error
+          }
+          await TaskQueue.attachSession(item.id, session.id)
           sessionID = session.id
-          await TaskQueue.attachSession(item.id, sessionID)
           item.sessionID = sessionID
         }
+        await requireActiveQueueItem(item.id)
         const body = promptBodyFromQueueItem(item)
         if (!body) throw new Error(`Scheduled task ${scheduledTaskID} has no executable prompt`)
         return SessionPrompt.prompt({ ...body, sessionID })

@@ -731,6 +731,51 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("does not start a session for scheduled automation after timeout cancellation", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const originalCreate = Session.create
+        let releaseCreate!: () => void
+        const blocked = new Promise<void>((resolve) => {
+          releaseCreate = resolve
+        })
+        const create = vi.spyOn(Session, "create").mockImplementation(async (input) => {
+          await blocked
+          return originalCreate(input)
+        })
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
+        const sessionsBefore = [...Session.list()].length
+        try {
+          const item = await TaskQueue.enqueue({
+            kind: "automation",
+            title: "Timed out scheduled prompt",
+            sourceTaskID: "sch_timeout_session",
+            payload: {
+              scheduledTaskID: "sch_timeout_session",
+              prompt: "Do not start after timeout.",
+            },
+            executionTimeoutMs: 1000,
+          })
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "failed")
+          releaseCreate()
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          const failed = await TaskQueue.get(item.id)
+          expect(failed.error).toContain("timed out")
+          expect(failed.sessionID).toBeUndefined()
+          expect(prompt).not.toHaveBeenCalled()
+          expect([...Session.list()].length).toBe(sessionsBefore)
+        } finally {
+          releaseCreate()
+          create.mockRestore()
+          prompt.mockRestore()
+        }
+      },
+    })
+  })
+
   test("does not admit a successor while timeout cancellation is pending", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
