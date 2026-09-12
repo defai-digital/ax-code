@@ -44,7 +44,7 @@ import { Clipboard } from "../../util/clipboard"
 import { TuiEvent } from "../../event"
 import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
-import { createColors, createFrames } from "../../ui/spinner.ts"
+import { AX_CODE_TITLE_SPINNER_FRAMES, AX_CODE_TITLE_SPINNER_INTERVAL_MS } from "@/util/terminal-title"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
@@ -930,25 +930,18 @@ export function Prompt(props: PromptProps) {
     return `Ask anything... "${PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]}"`
   })
 
-  const spinnerDef = createMemo(() => {
-    const color = local.agent.color(local.agent.current().name)
-    return {
-      frames: createFrames({
-        color,
-        style: "blocks",
-        inactiveFactor: 0.6,
-        // enableFading: false,
-        minAlpha: 0.3,
-      }),
-      color: createColors({
-        color,
-        style: "blocks",
-        inactiveFactor: 0.6,
-        // enableFading: false,
-        minAlpha: 0.3,
-      }),
-    }
-  })
+  // Footer busy liveness reuses the AX brand glyph from the terminal title: a
+  // 6x4 dot matrix that spells "AX-CODE" one glyph at a time. Sharing the frame
+  // set keeps the tab and the footer in sync and avoids a second, competing
+  // animation. The prior 8-cell bidirectional "Knight Rider" scanner was
+  // visually loud and used Ambiguous-width block glyphs (U+25A0) that drift
+  // CJK layouts; the waveform carried no information the label/elapsed/token
+  // text does not.
+  const spinnerDef = createMemo(() => ({
+    frames: [...AX_CODE_TITLE_SPINNER_FRAMES],
+    interval: AX_CODE_TITLE_SPINNER_INTERVAL_MS,
+    color: local.agent.color(local.agent.current().name),
+  }))
 
   // Context-window usage for the footer gauge (ADR-086). Undefined — and
   // therefore not rendered — unless auto-compaction is disabled: those
@@ -1497,7 +1490,11 @@ export function Prompt(props: PromptProps) {
                       </text>
                     }
                   >
-                    <AxTuiSpinner color={spinnerDef().color} frames={spinnerDef().frames} interval={160} />
+                    <AxTuiSpinner
+                      color={spinnerDef().color}
+                      frames={spinnerDef().frames}
+                      interval={spinnerDef().interval}
+                    />
                   </Show>
                   <Show when={busyStatus()?.stale}>
                     <text fg={theme.warning}>!</text>

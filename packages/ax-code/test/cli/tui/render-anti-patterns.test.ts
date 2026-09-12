@@ -246,7 +246,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("AX_CODE_TERMINAL_TITLE")
     expect(app).toContain("composeAxCodeTerminalTitle")
     expect(app).toContain("setTitleSpinnerFrame")
-    // Busy tabs prefix a 4x4 A-to-X morph, then AX-Code; do not resurrect
+    // Busy tabs prefix a 6x4 AX-CODE morph, then AX-Code; do not resurrect
     // the old session-title suffix.
     expect(app).not.toContain("TITLE_SPINNER_FRAMES")
     expect(app).not.toContain("AX Code | ")
@@ -1120,6 +1120,20 @@ describe("AX Code TUI stability guardrails", () => {
     expect(liveness).toContain("shouldUseTuiAnimations")
     expect(prompt).toContain("footerLivenessIndicator")
     expect(prompt).toContain('type === "native-spinner"')
+  })
+
+  test("reuses the terminal-title pixel matrix for the footer busy indicator", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+
+    // The footer busy glyph is the same AX brand 6x4 matrix as the terminal
+    // tab, so the two surfaces never show competing animations. The local
+    // 8-cell "Knight Rider" scanner (createFrames/createColors) and its
+    // Ambiguous-width block glyphs must not come back.
+    expect(prompt).toContain("AX_CODE_TITLE_SPINNER_FRAMES")
+    expect(prompt).toContain("AX_CODE_TITLE_SPINNER_INTERVAL_MS")
+    expect(prompt).not.toContain("createFrames")
+    expect(prompt).not.toContain("createColors")
+    expect(prompt).not.toContain("ui/spinner")
   })
 
   test("keeps session route view namespaces distinct from core session namespaces", async () => {
