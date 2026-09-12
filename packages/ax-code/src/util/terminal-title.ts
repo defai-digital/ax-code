@@ -13,33 +13,97 @@
 
 export const AX_CODE_TERMINAL_TITLE = "AX-Code"
 
-// Busy-tab activity glyph: a 4-column by 4-row dot matrix (two full 8-dot
-// braille cells). The pattern morphs the letter "A" into the letter "X"
-// (and back), one dot flip per frame, so a busy session quietly spells
-// out the AX-Code initial in the tab. Unlike Codex's perimeter 2x3 spinner.
-export const AX_CODE_TITLE_SPINNER_FRAMES = [
-  "⡮⢵", // A
-  "⡯⢵", //
-  "⡧⢵", //
-  "⡧⢽", //
-  "⡧⢼", //
-  "⡷⢼", //
-  "⡵⢼", //
-  "⡵⢾", //
-  "⡵⢮", //
-  "⡱⢮", //
-  "⡱⢎", // X
-  "⡱⢮", //
-  "⡵⢮", //
-  "⡵⢾", //
-  "⡵⢼", //
-  "⡷⢼", //
-  "⡧⢼", //
-  "⡧⢽", //
-  "⡧⢵", //
-  "⡯⢵", //
-] as const
-export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 140
+// Busy-tab activity glyph: a 6-column by 4-row dot matrix (three full 8-dot
+// braille cells). The pattern cycles through the letters of "AX-CODE" — one
+// glyph at a time, held for a few frames — and morphs between them one dot
+// flip per frame, so a busy session quietly spells out the brand in the tab
+// and in the footer. Unlike Codex's perimeter 2x3 spinner.
+const TITLE_GLYPH_ROWS = 4
+const TITLE_GLYPH_COLUMNS = 6
+
+// Glyphs drawn as #/. row-major in the 6x4 matrix. Four dot rows is the most
+// that fits a single terminal row (a braille cell is 2x4), so rounded letters
+// share strokes rather than getting a taller grid.
+const TITLE_GLYPH_A = [".####.", "#....#", "######", "#....#"]
+const TITLE_GLYPH_X = ["#....#", "..##..", "..##..", "#....#"]
+const TITLE_GLYPH_HYPHEN = ["......", "......", ".####.", "......"]
+const TITLE_GLYPH_C = [".####.", "#.....", "#.....", ".####."]
+const TITLE_GLYPH_O = [".####.", "#....#", "#....#", ".####."]
+const TITLE_GLYPH_D = ["#####.", "#....#", "#....#", "#####."]
+const TITLE_GLYPH_E = ["######", "#.....", "#####.", "######"]
+
+// "AX-CODE", one glyph per position, in reading order.
+const TITLE_GLYPH_WORD = [
+  TITLE_GLYPH_A,
+  TITLE_GLYPH_X,
+  TITLE_GLYPH_HYPHEN,
+  TITLE_GLYPH_C,
+  TITLE_GLYPH_O,
+  TITLE_GLYPH_D,
+  TITLE_GLYPH_E,
+]
+
+// Frames each glyph is held before the next morph begins.
+const TITLE_GLYPH_DWELL_FRAMES = 3
+
+// Braille dot bit for a (row, column-within-a-2x4-cell) coordinate.
+function brailleDotBit(row: number, column: number): number {
+  if (row === 3) return column === 0 ? 0x40 : 0x80
+  return (column === 0 ? 0x01 : 0x08) << row
+}
+
+function titleGlyphDots(rows: readonly string[]): Set<number> {
+  const dots = new Set<number>()
+  rows.forEach((row, r) => {
+    for (let c = 0; c < TITLE_GLYPH_COLUMNS; c++) {
+      if (row.charAt(c) === "#") dots.add(r * TITLE_GLYPH_COLUMNS + c)
+    }
+  })
+  return dots
+}
+
+function encodeTitleGlyph(dots: ReadonlySet<number>): string {
+  let glyph = ""
+  for (let cell = 0; cell < TITLE_GLYPH_COLUMNS / 2; cell++) {
+    let mask = 0
+    for (let r = 0; r < TITLE_GLYPH_ROWS; r++) {
+      for (let c = 0; c < 2; c++) {
+        if (dots.has(r * TITLE_GLYPH_COLUMNS + cell * 2 + c)) mask |= brailleDotBit(r, c)
+      }
+    }
+    glyph += String.fromCharCode(0x2800 + mask)
+  }
+  return glyph
+}
+
+// Frame path: hold each glyph, then morph to the next one dot at a time.
+// Consecutive frames differ by at most one dot, so the spelling reads as one
+// travelling change rather than a redraw. The last morph lands back on the
+// first glyph, so the cycle repeats seamlessly.
+function titleGlyphMorphFrames(): string[] {
+  const glyphs = TITLE_GLYPH_WORD.map(titleGlyphDots)
+  const frames: string[] = []
+  for (let i = 0; i < glyphs.length; i++) {
+    const current = glyphs[i]!
+    const next = glyphs[(i + 1) % glyphs.length]!
+    for (let hold = 0; hold < TITLE_GLYPH_DWELL_FRAMES; hold++) frames.push(encodeTitleGlyph(current))
+    const morph = new Set(current)
+    for (const dot of [...current].filter((dot) => !next.has(dot))) {
+      morph.delete(dot)
+      frames.push(encodeTitleGlyph(morph))
+    }
+    for (const dot of [...next].filter((dot) => !current.has(dot))) {
+      morph.add(dot)
+      frames.push(encodeTitleGlyph(morph))
+    }
+  }
+  return frames
+}
+
+export const AX_CODE_TITLE_SPINNER_FRAMES = titleGlyphMorphFrames()
+
+// 77 frames (7 glyphs x 3 dwell + 56 morphs) spell AX-CODE in ~5.4s.
+export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 70
 
 export function composeAxCodeTerminalTitle(input: { working: boolean; frame?: number }) {
   if (!input.working) return AX_CODE_TERMINAL_TITLE
