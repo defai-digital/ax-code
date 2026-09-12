@@ -344,6 +344,24 @@ export namespace Permission {
 
     if (!needsAsk) return
 
+    // ADR-098: a full-access sandbox has no filesystem boundary left to
+    // guard, so external_directory auto-approves in autonomous mode even
+    // when the caller marks the request interactive-only (unanalyzable
+    // dynamic shell paths — the marker forces a human decision about
+    // boundary crossings, and there is no boundary here). Explicit deny
+    // rules and the SafetyPolicy already ran above; supervised mode and
+    // every other interactive-only permission are unchanged.
+    if (ScopedFlag.autonomous() && request.permission === "external_directory") {
+      const isolationMode =
+        Flag.AX_CODE_ISOLATION_MODE ?? (await Config.get()).isolation?.mode ?? Isolation.DEFAULT_MODE
+      if (isolationMode === "full-access") {
+        log.info("autonomous auto-approve (external_directory, full-access sandbox)", {
+          patterns: request.patterns,
+        })
+        return
+      }
+    }
+
     // Autonomous mode: hybrid policy (ADR-004 / PRD v4.2.0).
     //   - SAFE permissions (read/glob/grep/list/...) auto-approve.
     //   - RISK permissions (edit/bash/webfetch/task/...)

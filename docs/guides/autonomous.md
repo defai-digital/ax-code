@@ -58,7 +58,7 @@ Autonomous mode uses a **hybrid deny-first policy** (ADR-004 / PRD v4.2.0). When
 - **RISK** permissions (edit, bash, external_directory, task, webfetch, websearch, codesearch, …) **fall through to the ruleset** — the agent's configured allow/deny rules still apply, and user-defined deny rules are always enforced. In `full-access` sandbox mode, RISK permissions are auto-approved after deny rules are evaluated.
 - **Unknown** permissions ask by default (`experimental.autonomous_strict_permission: false` preserves the legacy allow behavior).
 
-**Exceptions that are never auto-approved, even in autonomous mode:** `isolation_escalation` (sandbox override requests), `INTERACTIVE_ONLY` permissions, and the `NEVER_AUTONOMOUS_AUTOAPPROVE` set.
+**Exceptions that are never auto-approved, even in autonomous mode:** `isolation_escalation` (sandbox override requests), `INTERACTIVE_ONLY` permissions, and the `NEVER_AUTONOMOUS_AUTOAPPROVE` set. One narrowing (ADR-098): in `full-access` sandbox mode, `external_directory` requests marked interactive-only — bash commands whose paths cannot be statically verified because they use a glob, variable, or brace expansion — are also auto-approved, because a full-access sandbox has no filesystem boundary left to guard. Explicit deny rules still apply, and sandbox-on modes (`workspace-write`, `read-only`) keep the per-call prompt.
 
 **Non-overridable protected paths:** autonomous mode also refuses to write a fixed set of policy/control-plane paths — `ax-code.json`/`ax-code.jsonc`, `.ax-code/**`, `.git/config`, and `.git/refs/**` — so the agent cannot edit its own configuration, raise its own autonomy caps, or plant git hooks. Unlike the configurable blocked-path list, these cannot be removed by project or user config.
 

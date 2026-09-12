@@ -520,6 +520,26 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
     if (permission === "external_directory") {
       const meta = props.request.metadata ?? {}
+      const patterns = (props.request.patterns ?? []).filter((p): p is string => typeof p === "string")
+
+      // Dynamic shell paths (globs, variables, brace expansion) carry the
+      // whole command as the pattern — present it as a command to confirm,
+      // not as a directory. See ADR-098.
+      if (meta["reason"] === "dynamic shell path") {
+        return {
+          icon: "←",
+          title: "Run a command with paths ax-code can't verify",
+          body: (
+            <box paddingLeft={1} flexDirection="column" gap={1}>
+              <text fg={theme.textMuted}>
+                The command uses a variable or glob, so the paths it touches can't be checked ahead of time.
+              </text>
+              <For each={patterns}>{(p) => <text fg={theme.text}>{"- " + p}</text>}</For>
+            </box>
+          ),
+        }
+      }
+
       const parent = typeof meta["parentDir"] === "string" ? meta["parentDir"] : undefined
       const filepath = typeof meta["filepath"] === "string" ? meta["filepath"] : undefined
       const pattern = props.request.patterns?.[0]
@@ -528,7 +548,6 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
       const raw = parent ?? filepath ?? derived
       const dir = normalizePath(raw)
-      const patterns = (props.request.patterns ?? []).filter((p): p is string => typeof p === "string")
 
       return {
         icon: "←",

@@ -326,42 +326,111 @@ test("evaluate - broad ask rules can tighten an earlier explicit computer allow"
   expect(result.action).toBe("ask")
 })
 
-test.each(["wildcard", "autonomous"])(
-  "ask - request metadata requires interaction despite %s approval",
-  async (mode) => {
-    await using tmp = await tmpdir({ git: true })
-    vi.stubEnv("AX_CODE_AUTONOMOUS", mode === "autonomous" ? "true" : "false")
-    vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const requestID = PermissionID.make("per_metadata_interactive")
-        const request = Permission.ask({
-          id: requestID,
-          sessionID: SessionID.make("ses_metadata_interactive"),
-          permission: "external_directory",
-          patterns: ["git config --global user.email fixture@example.test"],
-          metadata: { requireInteractive: true },
-          always: [],
-          ruleset: mode === "wildcard" ? [{ permission: "*", pattern: "*", action: "allow" }] : [],
-        })
-        const result = request.then(
-          () => "allowed",
-          () => "rejected",
-        )
-        try {
-          await sleep(30)
-          expect((await Permission.list()).map((entry) => entry.id)).toContain(requestID)
-        } finally {
-          if ((await Permission.list()).some((entry) => entry.id === requestID)) {
-            await Permission.reply({ requestID, reply: "reject" })
-          }
+test("ask - supervised full-access still requires interaction despite wildcard approval", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.stubEnv("AX_CODE_AUTONOMOUS", "false")
+  vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requestID = PermissionID.make("per_metadata_interactive")
+      const request = Permission.ask({
+        id: requestID,
+        sessionID: SessionID.make("ses_metadata_interactive"),
+        permission: "external_directory",
+        patterns: ["git config --global user.email fixture@example.test"],
+        metadata: { requireInteractive: true },
+        always: [],
+        ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+      })
+      const result = request.then(
+        () => "allowed",
+        () => "rejected",
+      )
+      try {
+        await sleep(30)
+        expect((await Permission.list()).map((entry) => entry.id)).toContain(requestID)
+      } finally {
+        if ((await Permission.list()).some((entry) => entry.id === requestID)) {
+          await Permission.reply({ requestID, reply: "reject" })
         }
-        expect(await result).toBe("rejected")
-      },
-    })
-  },
-)
+      }
+      expect(await result).toBe("rejected")
+    },
+  })
+})
+
+// ADR-098: autonomous mode + full-access sandbox auto-approves
+// external_directory even when the caller marks the request interactive-only
+// (unanalyzable dynamic shell paths). A full-access sandbox has no
+// filesystem boundary left for the marker to guard.
+test("ask - autonomous full-access auto-approves interactive-only external_directory", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.stubEnv("AX_CODE_AUTONOMOUS", "true")
+  vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(
+        Permission.ask({
+          sessionID: SessionID.make("ses_autonomous_dynamic_path"),
+          permission: "external_directory",
+          patterns: ["ls packages/ax-code-tui/*.d.ts 2>/dev/null | head"],
+          metadata: { reason: "dynamic shell path", requireInteractive: true },
+          always: [],
+          ruleset: [],
+        }),
+      ).resolves.toBeUndefined()
+      expect(await Permission.list()).toHaveLength(0)
+    },
+  })
+})
+
+test("ask - autonomous workspace-write keeps interactive-only external_directory pending", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.stubEnv("AX_CODE_AUTONOMOUS", "true")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const requestID = PermissionID.make("per_autonomous_restricted_dynamic")
+      const request = Permission.ask({
+        id: requestID,
+        sessionID: SessionID.make("ses_autonomous_restricted_dynamic"),
+        permission: "external_directory",
+        patterns: ["ls packages/ax-code-tui/*.d.ts 2>/dev/null | head"],
+        metadata: { reason: "dynamic shell path", requireInteractive: true },
+        always: [],
+        ruleset: [],
+      })
+      const pending = await waitForPending(1)
+      expect(pending.map((entry) => entry.id)).toContain(requestID)
+      await Permission.reply({ requestID, reply: "reject" })
+      await expect(request).rejects.toBeInstanceOf(Permission.RejectedError)
+    },
+  })
+})
+
+test("ask - autonomous full-access preserves explicit external_directory deny rules", async () => {
+  await using tmp = await tmpdir({ git: true })
+  vi.stubEnv("AX_CODE_AUTONOMOUS", "true")
+  vi.stubEnv("AX_CODE_ISOLATION_MODE", "full-access")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await expect(
+        Permission.ask({
+          sessionID: SessionID.make("ses_autonomous_full_access_deny"),
+          permission: "external_directory",
+          patterns: ["ls packages/ax-code-tui/*.d.ts 2>/dev/null | head"],
+          metadata: { reason: "dynamic shell path", requireInteractive: true },
+          always: [],
+          ruleset: [{ permission: "external_directory", pattern: "*", action: "deny" }],
+        }),
+      ).rejects.toBeInstanceOf(Permission.DeniedError)
+      expect(await Permission.list()).toHaveLength(0)
+    },
+  })
+})
 
 test("ask - interactive-only permissions still honor explicit deny rules", async () => {
   await using tmp = await tmpdir({ git: true })
