@@ -65,7 +65,8 @@ export async function assertSymlinkInsideProject(target: string): Promise<void> 
   })
   if (lstat?.isSymbolicLink()) {
     const real = await fs.realpath(targetPath).catch(() => null)
-    if (!real) throw new File.AccessDeniedError({ message: "Access denied: symlink target is dangling or inaccessible" })
+    if (!real)
+      throw new File.AccessDeniedError({ message: "Access denied: symlink target is dangling or inaccessible" })
     if (!Filesystem.contains(projectRoot, real)) {
       throw new File.AccessDeniedError({ message: "Access denied: symlink target escapes project directory" })
     }

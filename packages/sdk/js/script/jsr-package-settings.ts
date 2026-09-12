@@ -123,7 +123,8 @@ async function authorize(): Promise<string> {
   const code = typeof auth.code === "string" ? auth.code : ""
   const exchangeToken = stringField(auth, "exchangeToken")
   const pollInterval = typeof auth.pollInterval === "number" ? auth.pollInterval : 2
-  const approveUrl = code && !verificationUrl.includes(code) ? `${verificationUrl}?code=${encodeURIComponent(code)}` : verificationUrl
+  const approveUrl =
+    code && !verificationUrl.includes(code) ? `${verificationUrl}?code=${encodeURIComponent(code)}` : verificationUrl
   console.log(`Approve JSR access: ${approveUrl}`)
   if (code) console.log(`Authorization code: ${code}`)
   openUrl(approveUrl)
