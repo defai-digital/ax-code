@@ -1553,6 +1553,10 @@ export function Session() {
                 paddingRight: showScrollbar() ? 1 : 0,
               }}
               verticalScrollbarOptions={{
+                // ax-tui derives the slider thickness from the scrollbar width
+                // clamped to 1..2 cells; pin it to 1 so the transcript bar is
+                // half its previous weight.
+                width: 1,
                 paddingLeft: 1,
                 visible: showScrollbar(),
                 trackOptions: {

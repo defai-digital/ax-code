@@ -381,7 +381,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             <box flexShrink={0} gap={1} paddingRight={1}>
               <box paddingRight={1}>
                 <text
-                  fg={theme.textMuted}
+                  fg={theme.warning}
                   wrapMode="none"
                   onMouseUp={() => {
                     void copySessionID(session().id)
