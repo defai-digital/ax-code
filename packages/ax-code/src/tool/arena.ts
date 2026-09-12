@@ -320,6 +320,8 @@ export const ArenaTool = Tool.define("arena", async () => {
         baseCommit = preflight.baseCommit
       }
 
+      // Display-only config path in disabled messages; not a filesystem open.
+      const projectConfigHint = path.join(Instance.directory, "ax-code.json")
       if (modes?.arena?.enabled !== true && args.enableIfDisabled !== true) {
         // Pure no-op path: report disabled without an approval prompt (ADR-097).
         const metadata: ArenaMetadata = {
@@ -333,7 +335,7 @@ export const ArenaTool = Tool.define("arena", async () => {
           title: "Arena disabled",
           output: EnsemblePreflight.arenaDisabledMessage({
             providers: providerSnap,
-            projectConfigHint: path.join(Instance.directory, "ax-code.json"),
+            projectConfigHint,
           }),
           metadata,
         }
@@ -376,7 +378,7 @@ export const ArenaTool = Tool.define("arena", async () => {
           title: "Arena disabled",
           output: EnsemblePreflight.arenaDisabledMessage({
             providers: providerSnap,
-            projectConfigHint: path.join(Instance.directory, "ax-code.json"),
+            projectConfigHint,
           }),
           metadata,
         }
