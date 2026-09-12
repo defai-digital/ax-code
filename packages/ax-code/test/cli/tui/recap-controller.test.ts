@@ -9,10 +9,12 @@ function setup() {
     sessionID: "ses_a",
     revision: "turn_1",
     status: "idle",
+    treeBusy: false,
     hasMessages: true,
     enabled: true,
     delayMs: 5000,
     input: "",
+    autoScope: "turn",
   }
   const pending = Promise.withResolvers<{ data?: { text: string | null }; error?: unknown }>()
   const request = vi.fn().mockReturnValue(pending.promise)
@@ -106,6 +108,96 @@ describe("conversation recap lifecycle", () => {
     t.controller.dispose()
   })
 
+  test("clearing the prompt re-arms the automatic recap with a fresh delay", async () => {
+    const t = setup()
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(1000)
+    t.update({ input: "draft" })
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(t.request).not.toHaveBeenCalled()
+    t.update({ input: "" })
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(t.request).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.request).toHaveBeenCalledOnce()
+    t.controller.dispose()
+  })
+
+  test("waits for the session tree to settle before scheduling", async () => {
+    const t = setup()
+    t.update({ status: "busy" })
+    t.update({ status: "idle", treeBusy: true })
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(t.request).not.toHaveBeenCalled()
+    t.update({ treeBusy: false })
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(t.request).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.request).toHaveBeenCalledOnce()
+    t.controller.dispose()
+  })
+
+  test("a subagent starting during the idle delay cancels the schedule", async () => {
+    const t = setup()
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(1000)
+    t.update({ treeBusy: true })
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(t.request).not.toHaveBeenCalled()
+    t.controller.dispose()
+  })
+
+  test("automatic recap uses the snapshot scope for subagent sessions", async () => {
+    const t = setup()
+    t.update({ autoScope: "conversation" })
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(t.request).toHaveBeenCalledWith(expect.objectContaining({ scope: "conversation" }))
+    t.controller.dispose()
+  })
+
+  test("a displayed recap persists while typing and clears on the next turn", async () => {
+    const t = setup()
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    await vi.advanceTimersByTimeAsync(5000)
+    t.pending.resolve({ data: { text: "Wrapped up." } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Wrapped up." })
+    t.show.mockClear()
+    t.update({ input: "next" })
+    expect(t.show).not.toHaveBeenCalled()
+    t.update({ status: "busy" })
+    expect(t.show).toHaveBeenCalledWith({})
+    t.controller.dispose()
+  })
+
+  test("typing does not abort an explicit manual request", async () => {
+    const t = setup()
+    t.update({ status: "busy" })
+    t.update({ status: "idle" })
+    const done = t.controller.manual()
+    const signal = t.request.mock.calls[0][0].signal as AbortSignal
+    t.update({ input: "next" })
+    expect(signal.aborted).toBe(false)
+    t.pending.resolve({ data: { text: "Kept." } })
+    await done
+    expect(t.show).toHaveBeenLastCalledWith({ text: "Kept." })
+    t.controller.dispose()
+  })
+
+  test("manual recap is rejected while the session tree is unsettled", async () => {
+    const t = setup()
+    t.update({ treeBusy: true })
+    await t.controller.manual()
+    expect(t.notify).toHaveBeenLastCalledWith("Wait for the current work to finish before requesting a recap.")
+    expect(t.request).not.toHaveBeenCalled()
+    t.controller.dispose()
+  })
+
   test("a completion update arriving after idle reschedules the pending recap", async () => {
     const t = setup()
     t.update({ status: "busy" })
@@ -155,7 +247,7 @@ describe("conversation recap lifecycle", () => {
     expect(t.notify).toHaveBeenLastCalledWith("There is no conversation history to recap.")
     t.update({ hasMessages: true, status: "busy" })
     await t.controller.manual()
-    expect(t.notify).toHaveBeenLastCalledWith("Wait for the current turn to finish before requesting a recap.")
+    expect(t.notify).toHaveBeenLastCalledWith("Wait for the current work to finish before requesting a recap.")
     expect(t.request).not.toHaveBeenCalled()
     t.controller.dispose()
   })

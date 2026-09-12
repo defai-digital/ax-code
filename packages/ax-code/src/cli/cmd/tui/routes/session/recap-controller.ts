@@ -2,10 +2,12 @@ export type RecapSnapshot = {
   sessionID: string
   revision: string
   status: string
+  treeBusy: boolean
   hasMessages: boolean
   enabled: boolean
   delayMs: number
   input: string
+  autoScope: "turn" | "conversation"
 }
 
 type RecapView = { text?: string; loading?: boolean }
@@ -40,28 +42,45 @@ export function createRecapController(host: {
     host.show({})
   }
 
+  /** Typing or disabling pauses only the automatic lane: a pending schedule is
+   *  cancelled and an in-flight automatic request is aborted so the recap can
+   *  re-arm once the prompt clears. Manual requests and a displayed recap
+   *  survive — the banner clears on the next turn, not on keystrokes. */
+  function pauseAutomatic() {
+    cancelScheduled()
+    if (active && !active.manual) {
+      active.abort.abort()
+      active = undefined
+      attempted = false
+    }
+  }
+
   function update() {
     if (disposed) return
     const next = host.snapshot()
     const old = previous
     previous = next
     if (!old) return
-    const wasScheduled = !!cancelTimer
+    // Subagents work in child sessions while the parent reports idle, so a
+    // finished process means the whole session tree has settled.
+    const finished = next.status === "idle" && !next.treeBusy
+    const wasFinished = old.status === "idle" && !old.treeBusy
     const changed = next.sessionID !== old.sessionID || next.revision !== old.revision
-    if (changed || next.status !== "idle") {
+    if (changed || !finished) {
       invalidate()
       attempted = false
-    } else if (next.input !== old.input || (!next.enabled && old.enabled && !active?.manual)) {
-      invalidate()
+    } else if ((next.input !== "" && next.input !== old.input) || (!next.enabled && old.enabled)) {
+      pauseAutomatic()
     }
     if (
       next.sessionID === old.sessionID &&
-      (old.status !== "idle" || (wasScheduled && changed)) &&
-      next.status === "idle" &&
+      finished &&
+      (!wasFinished || changed || (old.input !== "" && next.input === "")) &&
       next.enabled &&
       next.hasMessages &&
       !next.input &&
-      !attempted
+      !attempted &&
+      !active
     ) {
       cancelScheduled()
       cancelTimer = host.schedule(() => {
@@ -78,7 +97,8 @@ export function createRecapController(host: {
     const notify = (message: string) => {
       if (manual) host.notify(message)
     }
-    if (snapshot.status !== "idle") return notify("Wait for the current turn to finish before requesting a recap.")
+    if (snapshot.status !== "idle" || snapshot.treeBusy)
+      return notify("Wait for the current work to finish before requesting a recap.")
     if (!snapshot.hasMessages) return notify("There is no conversation history to recap.")
     if (active) return notify("A conversation recap is already being generated.")
     if (!manual && (!snapshot.enabled || snapshot.input || attempted)) return
@@ -90,7 +110,7 @@ export function createRecapController(host: {
     try {
       const result = await host.request({
         sessionID: snapshot.sessionID,
-        scope: manual ? "conversation" : "turn",
+        scope: manual ? "conversation" : snapshot.autoScope,
         signal: current.abort.signal,
       })
       update()

@@ -7,11 +7,12 @@ import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { useTuiConfig } from "@tui/context/tui-config"
 import { useToast } from "@tui/ui/toast"
-import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
-import { footerSessionStatusOrIdle } from "./footer-view-model"
-import { createRecapController } from "./recap-controller"
+import { scheduleTuiTimeout } from "@tui/util/timer"
+import { footerSessionStatusOrIdle, hasActiveSubagentInSessionTree } from "./footer-view-model"
+import { createRecapController, type RecapSnapshot } from "./recap-controller"
 
-/** Read-only catch-up, available manually on resumed sessions and automatically after a turn. */
+/** Read-only catch-up, available manually on resumed sessions and automatically
+ *  once the whole session tree (including subagent runs) has settled. */
 export function IdleRecap(props: { sessionID: string }) {
   const sync = useSync()
   const sdk = useSDK()
@@ -23,7 +24,7 @@ export function IdleRecap(props: { sessionID: string }) {
   const [recap, setRecap] = createSignal<string>()
   const [loading, setLoading] = createSignal(false)
 
-  const snapshot = createMemo(() => {
+  const snapshot = createMemo<RecapSnapshot>(() => {
     const session = sync.session.get(props.sessionID)
     const messages = (sync.data.message[props.sessionID] ?? []).filter(
       (message) =>
@@ -32,18 +33,28 @@ export function IdleRecap(props: { sessionID: string }) {
         (message.id === session.revert.messageID && !!session.revert.partID),
     )
     const last = messages.at(-1)
+    const subtree = sync.data.session.some((item) => item.parentID === props.sessionID)
     return {
       sessionID: props.sessionID,
       revision: `${messages.length}:${last?.id}:${last?.role === "assistant" ? last.time.completed : ""}:${session?.revert?.messageID}:${session?.revert?.partID}`,
       status: footerSessionStatusOrIdle(sync.data.session_status?.[props.sessionID]).type,
+      treeBusy: hasActiveSubagentInSessionTree({
+        sessions: sync.data.session,
+        statuses: sync.data.session_status,
+        parentSessionID: props.sessionID,
+      }),
       hasMessages: messages.some((message) => message.role === "user"),
       enabled: tuiConfig?.idle_recap?.enabled ?? true,
       delayMs: Math.max(1_000, tuiConfig?.idle_recap?.delay_ms ?? 5_000),
+      // store.prompt.input is a Solid store, so input edits re-run this memo
+      // without a polling interval.
+      input: promptRef.current?.current.input ?? "",
+      autoScope: subtree ? "conversation" : "turn",
     }
   })
 
   const controller = createRecapController({
-    snapshot: () => ({ ...snapshot(), input: promptRef.current?.current.input ?? "" }),
+    snapshot,
     request: ({ sessionID, scope, signal }) => sdk.client.session.recap({ sessionID, scope }, { signal }),
     schedule: (task, delayMs) => scheduleTuiTimeout(task, { name: "idle-recap", delayMs, unref: true }),
     show: (view) => {
@@ -56,16 +67,7 @@ export function IdleRecap(props: { sessionID: string }) {
     snapshot()
     controller.update()
   })
-  // Prompt input is imperative; observe edits even while a request is in flight.
-  const cancelPoll = scheduleTuiInterval(() => controller.update(), {
-    name: "idle-recap-input",
-    delayMs: 250,
-    unref: true,
-  })
-  onCleanup(() => {
-    cancelPoll()
-    controller.dispose()
-  })
+  onCleanup(() => controller.dispose())
 
   command.register(() => [
     {
