@@ -1,11 +1,13 @@
 import { describe, expect, test } from "vitest"
 import {
   countingProviders,
+  isWorkModeHintSeen,
   nextAvailableWorkMode,
   workModeAvailability,
   workModeChipView,
   workModeCycleToast,
   workModeHint,
+  withWorkModeHintSeen,
   type AvailabilityProvider,
 } from "../../../src/cli/cmd/tui/component/work-mode-availability"
 
@@ -161,6 +163,28 @@ describe("workModeHint", () => {
     expect(
       workModeHint("arena", { state: "unavailable", members: 0, reason: "off", detail: "Arena is off" }),
     ).toContain("submit is blocked")
+  })
+
+  test("available modes hide the hint after the mode has been explained", () => {
+    expect(workModeHint("council", { state: "available", members: 4 }, { explained: true })).toBeUndefined()
+    expect(workModeHint("arena", { state: "available", members: 2 }, { explained: true })).toBeUndefined()
+    expect(
+      workModeHint(
+        "council",
+        { state: "unavailable", members: 0, reason: "off", detail: "Council is off" },
+        { explained: true },
+      ),
+    ).toContain("submit is blocked")
+  })
+})
+
+describe("work-mode hint seen store", () => {
+  test("records and reads per-mode first-use flags", () => {
+    expect(isWorkModeHintSeen(undefined, "council")).toBe(false)
+    const seen = withWorkModeHintSeen(undefined, "council")
+    expect(isWorkModeHintSeen(seen, "council")).toBe(true)
+    expect(isWorkModeHintSeen(seen, "arena")).toBe(false)
+    expect(isWorkModeHintSeen(withWorkModeHintSeen(seen, "arena"), "arena")).toBe(true)
   })
 })
 

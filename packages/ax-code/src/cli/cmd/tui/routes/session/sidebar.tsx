@@ -57,7 +57,7 @@ import {
 
 const log = Log.create({ service: "tui.sidebar.queue" })
 
-const QUEUED_DELETE_ICON = "🗑️"
+const QUEUED_DELETE_ICON = "x"
 const QUEUED_DELETE_ICON_WIDTH = 2
 const QUEUED_SEND_ICON = "▸"
 const QUEUED_SEND_ICON_WIDTH = 2
@@ -423,7 +423,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       </Show>
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <Show when={mcpEntries().length <= 2 || expanded.mcp}>
                     <For each={mcpEntries()}>
                       {([key, item]) => (
@@ -467,7 +467,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       manage
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <For each={connectedProviders()}>
                     {(provider) => (
                       <box
@@ -547,7 +547,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       dashboard
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <Show when={sync.data.debugEngine.plans.length <= 2 || expanded.dre}>
                     {/* Graph readiness indicator */}
                     <box flexDirection="row" gap={1}>
@@ -668,7 +668,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <span style={{ fg: theme.textMuted }}> ({queued().length})</span>
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <Show when={queued().length <= 2 || expanded.queued}>
                     <For each={queued()}>
                       {(item) => (
@@ -726,7 +726,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       </Show>
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <Show when={todoRemaining() <= 2 || expanded.todo}>
                     <For each={todo()}>{(item) => <TodoItem status={item.status} content={item.content} />}</For>
                   </Show>
@@ -747,7 +747,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       view all
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <For each={sidebarQualityActions()}>
                     {(action) => (
                       <box
@@ -777,7 +777,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <b>Checks</b>
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <text fg={theme.textMuted} wrapMode="word">
                     {checksSummary()}
                   </text>
@@ -790,7 +790,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <b>Review</b>
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <text fg={theme.textMuted} wrapMode="word">
                     {reviewResultsSummary()}
                   </text>
@@ -803,7 +803,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <b>Hints</b>
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <text fg={theme.textMuted} wrapMode="word">
                     {decisionHintsSummary()}
                   </text>
@@ -816,7 +816,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <b>Cases</b>
                     </text>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <text fg={theme.textMuted} wrapMode="word">
                     {debugCasesSummary()}
                   </text>
@@ -839,7 +839,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       </text>
                     </box>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <Show when={workflowRuns().length <= 2 || expanded.workflows}>
                     <For each={workflowRuns()}>
                       {(run) => (
@@ -888,6 +888,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       view all
                     </text>
                   </box>
+                  {/* Activity has no panel background, so it keeps one rule as
+                      the only structural divider left in the sidebar. */}
                   <box border={["top"]} borderColor={theme.borderSubtle} />
                   <Show when={activity().length <= 2 || expanded.activity}>
                     <For each={activity()}>
@@ -950,7 +952,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       </text>
                     </box>
                   </box>
-                  <box border={["top"]} borderColor={theme.borderSubtle} />
+
                   <Show when={diff().length <= 2 || expanded.diff}>
                     <Show when={rollback().length > 0}>
                       <box flexDirection="row" gap={1}>

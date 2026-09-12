@@ -1,5 +1,4 @@
 import { createSignal, For, Show } from "solid-js"
-import { SplitBorder } from "@tui/component/border"
 import { useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { useDialog } from "../../ui/dialog"
@@ -31,9 +30,6 @@ export function RevertNotice(props: { count: number; files: DiffFile[] }) {
       onMouseUp={onClick}
       marginTop={1}
       flexShrink={0}
-      border={["left"]}
-      customBorderChars={SplitBorder.customBorderChars}
-      borderColor={theme.backgroundPanel}
     >
       <box
         paddingTop={1}

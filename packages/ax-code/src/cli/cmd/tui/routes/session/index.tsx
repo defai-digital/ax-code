@@ -75,7 +75,12 @@ import { QuestionPrompt } from "./question"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 import { autonomousActiveView } from "./autonomous-active"
-import { useAutonomousPulse } from "./autonomous-pulse"
+import {
+  AUTONOMOUS_CHROME_PULSE_MAX_ALPHA,
+  AUTONOMOUS_CHROME_PULSE_MIN_ALPHA,
+  pulseAlpha,
+  useAutonomousPulse,
+} from "./autonomous-pulse"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
 import { recoveredAssistantMessageIDs } from "./display"
 import { childAction, firstChildID, nextChildID } from "./child"
@@ -167,9 +172,11 @@ export function Session() {
     animationsEnabled: () => kv.get("animations_enabled", true),
   })
   const autonomousBorderColor = createMemo(() => {
-    const MIN_ALPHA = 0.45
-    const MAX_ALPHA = 1.0
-    const alpha = MIN_ALPHA + (MAX_ALPHA - MIN_ALPHA) * autonomousBorderPulse()
+    const alpha = pulseAlpha(
+      autonomousBorderPulse(),
+      AUTONOMOUS_CHROME_PULSE_MIN_ALPHA,
+      AUTONOMOUS_CHROME_PULSE_MAX_ALPHA,
+    )
     return tint(theme.background, theme.accent, alpha)
   })
   const qualityActions = createMemo(() =>

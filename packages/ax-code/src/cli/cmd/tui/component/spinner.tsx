@@ -29,7 +29,7 @@ export function Spinner(props: { children?: JSX.Element; color?: RGBA; fallbackP
       }
     >
       <box flexDirection="row" gap={1}>
-        <AxTuiSpinner frames={frames} interval={80} color={color()} />
+        <AxTuiSpinner frames={frames} interval={100} color={color()} />
         <Show when={props.children}>
           <text fg={color()}>{props.children}</text>
         </Show>

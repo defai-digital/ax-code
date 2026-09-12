@@ -635,13 +635,13 @@ describe("AX Code TUI stability guardrails", () => {
     expect(sidebar).not.toContain("./usage")
   })
 
-  test("keeps queued sidebar delete controls stable for wide emoji glyphs", async () => {
+  test("keeps queued sidebar delete controls stable for fixed-width glyphs", async () => {
     const sidebar = await fs.readFile(SIDEBAR_SRC, "utf8")
     const start = sidebar.indexOf("<For each={queued()}>")
     const end = sidebar.indexOf("<Show when={todoRemaining()", start)
     const queuedBlock = sidebar.slice(start, end)
 
-    expect(sidebar).toContain('const QUEUED_DELETE_ICON = "🗑️"')
+    expect(sidebar).toContain('const QUEUED_DELETE_ICON = "x"')
     expect(sidebar).toContain("const QUEUED_DELETE_ICON_WIDTH = 2")
     expect(queuedBlock).toContain("width={QUEUED_DELETE_ICON_WIDTH}")
     expect(queuedBlock).toContain("dropQueued(item.id)")

@@ -106,14 +106,14 @@ describe("gauge formatting", () => {
   test("fills proportionally and clamps", async () => {
     const { formatGauge } = await import("@/cli/cmd/tui/ui/primitives/format")
     expect(formatGauge(0)).toBe("-----")
-    expect(formatGauge(0.5)).toBe("###--")
-    expect(formatGauge(1)).toBe("#####")
-    expect(formatGauge(2)).toBe("#####")
+    expect(formatGauge(0.5)).toBe("===--")
+    expect(formatGauge(1)).toBe("=====")
+    expect(formatGauge(2)).toBe("=====")
   })
 
   test("non-zero ratio always shows at least one filled cell", async () => {
     const { formatGauge } = await import("@/cli/cmd/tui/ui/primitives/format")
-    expect(formatGauge(0.01)).toBe("#----")
+    expect(formatGauge(0.01)).toBe("=----")
   })
 })
 

@@ -5,7 +5,13 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { iife } from "@/util/iife"
 import { withTimeout } from "@/util/timeout"
 import { WorkMode } from "@/mode/work-mode"
-import { workModeAvailability, type AvailabilityProvider, type WorkModeConfig } from "../work-mode-availability"
+import {
+  WORK_MODE_HINT_SEEN_KEY,
+  workModeAvailability,
+  withWorkModeHintSeen,
+  type AvailabilityProvider,
+  type WorkModeConfig,
+} from "../work-mode-availability"
 import { providerModelKey, type ProviderModelKeyInput } from "@/provider/model-key"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { MessageID, PartID, SessionID } from "@/session/schema"
@@ -69,7 +75,10 @@ export type PromptSubmitHost = {
     }
     agent: { current: () => { name: string } }
   }
-  kv: { get: (key: string, fallback: string) => string }
+  kv: {
+    get: (key: string, fallback?: any) => any
+    set?: (key: string, value: any) => void
+  }
   command: { trySlash: (name: string) => boolean }
   sync: {
     data: {
@@ -277,6 +286,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         })
         return
       }
+      kv.set?.(WORK_MODE_HINT_SEEN_KEY, withWorkModeHintSeen(kv.get(WORK_MODE_HINT_SEEN_KEY), activeWorkMode))
     }
     const workRouted: WorkMode.Routed =
       currentMode === "shell" ? { kind: "prompt", text: inputText } : WorkMode.routeInput(activeWorkMode, inputText)

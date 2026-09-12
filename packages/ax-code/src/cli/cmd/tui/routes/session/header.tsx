@@ -12,7 +12,12 @@ import { useTerminalDimensions } from "ax-tui/solid"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
 import { autonomousActiveView, autonomousProgressLabel } from "./autonomous-active"
-import { useAutonomousPulse } from "./autonomous-pulse"
+import {
+  AUTONOMOUS_CHROME_PULSE_MAX_ALPHA,
+  AUTONOMOUS_CHROME_PULSE_MIN_ALPHA,
+  pulseAlpha,
+  useAutonomousPulse,
+} from "./autonomous-pulse"
 import { footerGoalChip, footerSessionStatusOrIdle } from "./footer-view-model"
 import { hasActiveGoalPlanner } from "./subagent-status-view"
 import { Spinner } from "../../component/spinner"
@@ -91,9 +96,7 @@ export function Header() {
     animationsEnabled: () => kv.get("animations_enabled", true),
   })
   const chipColor = createMemo(() => {
-    const MIN_ALPHA = 0.55
-    const MAX_ALPHA = 1.0
-    const alpha = MIN_ALPHA + (MAX_ALPHA - MIN_ALPHA) * chipPulse()
+    const alpha = pulseAlpha(chipPulse(), AUTONOMOUS_CHROME_PULSE_MIN_ALPHA, AUTONOMOUS_CHROME_PULSE_MAX_ALPHA)
     return tint(theme.background, theme.accent, alpha)
   })
   const goalChip = createMemo(() =>
@@ -222,7 +225,7 @@ export function Header() {
             <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
               <box flexDirection="column">
                 <Title session={session} />
-                <Show when={goalChip()}>
+                <Show when={goalChip() && !autonomous().active}>
                   <text fg={goalChipColor()}>{goalChip()?.label}</text>
                 </Show>
                 <Show when={Flag.AX_CODE_EXPERIMENTAL_WORKSPACES}>

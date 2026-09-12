@@ -12,14 +12,27 @@ import { scheduleTuiInterval } from "@tui/util/timer"
 // smoothly (a saw tooth feels twitchy in a terminal). Period and tick
 // are picked to be perceptibly alive without dominating attention:
 //   - PERIOD_MS = 1400  → roughly one human breath
-//   - TICK_MS   = 80    → 12.5 Hz, matches the existing Spinner cadence
+//   - TICK_MS   = 100   → 10 Hz, matches Spinner interval
 // Consumers that don't want / can't render animations (compiled binary
 // build, or user disabled `animations_enabled` in kv) get a constant
 // mid-phase so the static highlight still shows but does not pulse.
+//
+// Chrome (header chip, transcript border) and surface (assistant bubble
+// wash) share this timer but use different alpha ranges: a background
+// tint at chrome alphas would wash out the text.
 
 const PERIOD_MS = 1400
-const TICK_MS = 80
+const TICK_MS = 100
 const STATIC_PHASE = 0.5
+
+export const AUTONOMOUS_CHROME_PULSE_MIN_ALPHA = 0.55
+export const AUTONOMOUS_CHROME_PULSE_MAX_ALPHA = 1.0
+export const AUTONOMOUS_SURFACE_PULSE_MIN_ALPHA = 0.14
+export const AUTONOMOUS_SURFACE_PULSE_MAX_ALPHA = 0.3
+
+export function pulseAlpha(phase: number, min: number, max: number) {
+  return min + (max - min) * phase
+}
 
 const [phase, setPhase] = createSignal(STATIC_PHASE)
 let cancelTimer: (() => void) | undefined

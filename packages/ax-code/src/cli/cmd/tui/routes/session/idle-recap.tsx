@@ -1,5 +1,4 @@
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
-import { SplitBorder } from "@tui/component/border"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { usePromptRef } from "@tui/context/prompt"
 import { useSDK } from "@tui/context/sdk"
@@ -86,13 +85,7 @@ export function IdleRecap(props: { sessionID: string }) {
   return (
     <Show when={recap() || (loading() ? "Generating conversation recap..." : undefined)}>
       {(text) => (
-        <box
-          marginTop={1}
-          flexShrink={0}
-          border={["left"]}
-          customBorderChars={SplitBorder.customBorderChars}
-          borderColor={theme.backgroundPanel}
-        >
+        <box marginTop={1} flexShrink={0}>
           <box paddingTop={1} paddingBottom={1} paddingLeft={2} backgroundColor={theme.backgroundPanel}>
             <text fg={theme.textMuted} wrapMode="word">
               <span style={{ fg: theme.text, bold: true }}>Conversation recap</span>

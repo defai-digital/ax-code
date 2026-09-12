@@ -3,11 +3,16 @@ import { WorkMode } from "@/mode/work-mode"
 import { useSync } from "@tui/context/sync"
 import { useKV } from "@tui/context/kv"
 import { useTheme } from "@tui/context/theme"
-import { workModeAvailability, workModeHint } from "./work-mode-availability"
+import {
+  isWorkModeHintSeen,
+  WORK_MODE_HINT_SEEN_KEY,
+  workModeAvailability,
+  workModeHint,
+} from "./work-mode-availability"
 
-/** Persistent one-line work-mode hint above the prompt (ADR-097): says what a
- *  Council/Arena prompt will do — or why submit is blocked — before it is
- *  sent. Fully reactive, like the chip row. */
+/** One-line work-mode hint above the prompt (ADR-097): blocked/checking
+ *  always, available council/arena on first use only. The chip is the
+ *  persistent status once a mode has been submitted. */
 export function WorkModeNotice() {
   const sync = useSync()
   const kv = useKV()
@@ -20,7 +25,12 @@ export function WorkModeNotice() {
       providerLoaded: sync.data.provider_loaded,
       config: sync.data.config?.modes,
     })
-    return { hint: workModeHint(mode, availability), blocked: availability.state === "unavailable" }
+    return {
+      hint: workModeHint(mode, availability, {
+        explained: isWorkModeHintSeen(kv.get(WORK_MODE_HINT_SEEN_KEY), mode),
+      }),
+      blocked: availability.state === "unavailable",
+    }
   })
   return (
     <Show when={view().hint}>

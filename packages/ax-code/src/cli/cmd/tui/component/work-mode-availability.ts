@@ -110,12 +110,33 @@ export function workModeChipView(
   return { label: `${label} (${availability.reason})`, active: false }
 }
 
-/** Persistent one-line hint above the prompt; undefined for Agent mode. */
-export function workModeHint(mode: WorkMode.Id, availability: WorkModeAvailability): string | undefined {
+/** KV object recording which non-agent modes have already been submitted. */
+export const WORK_MODE_HINT_SEEN_KEY = "work_mode_hint_seen"
+
+export function isWorkModeHintSeen(store: unknown, mode: WorkMode.Id): boolean {
+  if (!store || typeof store !== "object") return false
+  return (store as Record<string, unknown>)[mode] === true
+}
+
+export function withWorkModeHintSeen(store: unknown, mode: WorkMode.Id): Record<string, boolean> {
+  const next = store && typeof store === "object" ? { ...(store as Record<string, boolean>) } : {}
+  next[mode] = true
+  return next
+}
+
+/** One-line hint above the prompt. Agent never shows one. Blocked and
+ *  checking modes always do. An available council/arena hint is first-use
+ *  only — after a successful submit the chip remains the persistent status. */
+export function workModeHint(
+  mode: WorkMode.Id,
+  availability: WorkModeAvailability,
+  options?: { explained?: boolean },
+): string | undefined {
   if (mode === "agent") return undefined
   const label = WorkMode.label(mode)
   if (availability.state === "checking") return `${label} mode · checking providers…`
   if (availability.state === "unavailable") return `${availability.detail} — submit is blocked`
+  if (options?.explained) return undefined
   if (mode === "council")
     return `Council mode · up to ${availability.members} reviewers · advisory · approval on first use`
   return `Arena mode · up to ${availability.members} contestants · plan or isolated implementation · approval on first use`

@@ -17,13 +17,9 @@ import { runMode, runModeLabel, type RunMode } from "./prompt/run-mode-view-mode
 import { footerToggleLabel } from "./prompt/footer-toggle"
 import { workModeAvailability, workModeChipView } from "./work-mode-availability"
 
-const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
-/** Work-mode chip backgrounds — fixed green/blue/purple, independent of the active palette. */
-const WORK_MODE_CHIP_BG: Record<WorkMode.Id, RGBA> = {
-  agent: RGBA.fromHex(WorkMode.chipColorHex("agent")),
-  council: RGBA.fromHex(WorkMode.chipColorHex("council")),
-  arena: RGBA.fromHex(WorkMode.chipColorHex("arena")),
-}
+// Chrome fills come from the active theme so chips follow the palette
+// instead of a hardcoded green/blue/purple/pink set. Labels distinguish
+// work modes; brand identity stays on the Home logo gradient.
 
 const SANDBOX_LABEL = "Sandbox"
 
@@ -107,7 +103,7 @@ export function ModeChips() {
         active: workModeView().active,
         activeFg: theme.text,
         inactiveFg: theme.textMuted,
-        background: WORK_MODE_CHIP_BG[chipWorkMode()],
+        background: theme.primary,
         onMouseUp: () => command.trigger("app.cycle.work_mode"),
       })}
       {modeChip({
@@ -115,7 +111,7 @@ export function ModeChips() {
         active: chipRunMode() !== "none",
         activeFg: theme.text,
         inactiveFg: theme.textMuted,
-        background: chipRunMode() === "super-long" ? SUPER_LONG_PINK : theme.warning,
+        background: theme.warning,
         onMouseUp: () => command.trigger("app.cycle.run_mode"),
       })}
       {modeChip({

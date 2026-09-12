@@ -56,7 +56,10 @@ function setup(input: {
       model: { current: () => model, variant: { current: () => undefined } },
       agent: { current: () => ({ name: "build" }) },
     },
-    kv: { get: () => input.workMode },
+    kv: {
+      get: (key: string, fallback?: unknown) => (key === "work_mode" ? input.workMode : fallback),
+      set: vi.fn(),
+    },
     command: { trySlash: vi.fn(() => false) },
     sync: {
       data: {
@@ -197,7 +200,14 @@ describe("prompt submission lifecycle", () => {
     expect(host.history.append).not.toHaveBeenCalled()
     expect(host.clearPromptDraft).not.toHaveBeenCalled()
     expect(host.toast.show).toHaveBeenCalledWith(expect.objectContaining({ variant: "warning" }))
+    expect(host.kv.set).not.toHaveBeenCalled()
     expect(controller.submitInFlight).toBe(false)
+  })
+
+  test("records first-use after a successful council submit", async () => {
+    const { controller, host } = setup({ mode: "normal", workMode: "council", text: "Review this change" })
+    await controller.submit()
+    expect(host.kv.set).toHaveBeenCalledWith("work_mode_hint_seen", expect.objectContaining({ council: true }))
   })
 
   test("keeps the controller's integration boundaries typed", () => {

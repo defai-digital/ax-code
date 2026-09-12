@@ -14,7 +14,12 @@ import { useKV } from "../../context/kv.tsx"
 import { useSync } from "@tui/context/sync"
 import { coalesceParts, type DisplayPart } from "./coalesce"
 import { autonomousActiveView, isAutonomousProducedMessage, isLiveAutonomousText } from "./autonomous-active"
-import { useAutonomousPulse } from "./autonomous-pulse"
+import {
+  AUTONOMOUS_SURFACE_PULSE_MAX_ALPHA,
+  AUTONOMOUS_SURFACE_PULSE_MIN_ALPHA,
+  pulseAlpha,
+  useAutonomousPulse,
+} from "./autonomous-pulse"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
 import { createStreamPaintThrottle } from "./stream-paint"
 import {
@@ -559,20 +564,15 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
   // Mutually exclusive — live wins while the turn is still running.
   const showStripe = createMemo(() => !isLiveAutonomous() && isAutonomousProduced())
   // Breathing pulse while the autonomous step is in flight. We blend
-  // theme.warning onto theme.background at an alpha that oscillates
-  // between PULSE_MIN_ALPHA and PULSE_MAX_ALPHA, so the highlight
-  // brightens and dims rather than staying flat. The midpoint matches
-  // the old static 0.22 so themes that worked before still read the
-  // same on average. When animations are disabled the hook returns a
-  // constant phase of 0.5 → midpoint alpha → behaves as the old static
-  // tint.
+  // theme.warning onto theme.background at the shared surface-pulse
+  // range so the highlight brightens and dims without washing out text.
+  // The midpoint matches the old static 0.22. When animations are
+  // disabled the hook returns a constant phase of 0.5 → midpoint alpha.
   const pulsePhase = useAutonomousPulse(isLiveAutonomous, {
     animationsEnabled: () => kv.get("animations_enabled", true),
   })
-  const PULSE_MIN_ALPHA = 0.14
-  const PULSE_MAX_ALPHA = 0.3
   const autonomousBg = createMemo(() => {
-    const alpha = PULSE_MIN_ALPHA + (PULSE_MAX_ALPHA - PULSE_MIN_ALPHA) * pulsePhase()
+    const alpha = pulseAlpha(pulsePhase(), AUTONOMOUS_SURFACE_PULSE_MIN_ALPHA, AUTONOMOUS_SURFACE_PULSE_MAX_ALPHA)
     return tint(theme.background, theme.warning, alpha)
   })
 
