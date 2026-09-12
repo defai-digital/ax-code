@@ -1264,6 +1264,58 @@ describe("tool.bash isolation", () => {
     }
   })
 
+  test("does not flag a quoted static path containing shell metacharacters as dynamic", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        await fs.writeFile(path.join(tmp.path, "report$v2.txt"), "static literal\n")
+        const requests: PermissionRequest[] = []
+        const result = await bash.execute(
+          { command: "cat 'report$v2.txt'", description: "Read quoted literal with dollar sign" },
+          {
+            ...ctx,
+            ask: async (request) => {
+              requests.push(request)
+            },
+          },
+        )
+        expect(result.metadata.exit).toBe(0)
+        expect(result.output).toContain("static literal")
+        expect(
+          requests.some(
+            (request) =>
+              request.permission === "external_directory" && request.metadata?.["requireInteractive"] === true,
+          ),
+        ).toBe(false)
+      },
+    })
+  })
+
+  test("still requires interactive admission for an unquoted dynamic path argument", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        await expect(
+          bash.execute(
+            { command: 'cat "$BASH_SWEEP_UNSET_VAR"', description: "Unquoted dynamic path" },
+            {
+              ...ctx,
+              ask: async (request) => {
+                if (request.permission === "external_directory" && request.metadata?.["requireInteractive"] === true) {
+                  throw new Error("Fixture declined dynamic path")
+                }
+              },
+            },
+          ),
+        ).rejects.toThrow("Fixture declined dynamic path")
+      },
+    })
+  })
+
   test("asks before writing a new file through a workspace symlink that escapes", async () => {
     await using outside = await tmpdir()
     await using tmp = await tmpdir({ git: true })

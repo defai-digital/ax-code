@@ -501,10 +501,14 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       let networkWrapperSuspect = false
       let foundCommands = false
 
-      const recordResolvedPath = async (raw: string) => {
+      // `decoded` marks a word already normalized by decodeShellLiteral.
+      // A `$`, backtick, or glob that survives decoding came from a quoted or
+      // escaped literal, so re-scanning the decoded value as dynamic would
+      // reject a fully static path that the decoder proved literal.
+      const recordResolvedPath = async (raw: string, decoded = false) => {
         const arg = stripShellQuotes(raw)
         if (!arg) return
-        if (hasDynamicShellExpansion(arg)) {
+        if (!decoded && hasDynamicShellExpansion(arg)) {
           dynamicPathAccess = true
           return
         }
@@ -524,7 +528,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         return normalized
       }
 
-      const recordInnerCommandPaths = async (parts: string[]) => {
+      const recordInnerCommandPaths = async (parts: string[], decoded = false) => {
         const name = parts[0]
         if (!name) return
         commandNames.add(name)
@@ -547,7 +551,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           let destResolved: string | undefined
           for (const arg of args) {
             if (arg.startsWith("-")) continue
-            const resolved = await recordResolvedPath(arg)
+            const resolved = await recordResolvedPath(arg, decoded)
             if (resolved) destResolved = resolved // last positional wins
           }
           if (destResolved) redirectWritePaths.add(destResolved)
@@ -556,7 +560,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         if (name === "tee") {
           for (const arg of args) {
             if (arg.startsWith("-")) continue
-            const resolved = await recordResolvedPath(arg)
+            const resolved = await recordResolvedPath(arg, decoded)
             if (resolved) redirectWritePaths.add(resolved)
           }
           return
@@ -564,7 +568,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         if (["cd", "rm", "mkdir", "touch", "chmod", "chown", "cat"].includes(name)) {
           for (const arg of args) {
             if (arg.startsWith("-") || (name === "chmod" && arg.startsWith("+"))) continue
-            await recordResolvedPath(arg)
+            await recordResolvedPath(arg, decoded)
           }
           return
         }
@@ -581,7 +585,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               arg === "-o" || arg === "--output" || arg === "--output-document" || (name === "wget" && arg === "-O")
             if (takesOutputValue) {
               const next = args[i + 1]
-              const output = next ? await recordResolvedPath(next) : undefined
+              const output = next ? await recordResolvedPath(next, decoded) : undefined
               if (output) redirectWritePaths.add(output)
               i++
               continue
@@ -592,7 +596,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             }
             const inline = arg.match(/^--(?:output|output-document)=(.+)$/)?.[1]
             if (inline) {
-              const output = await recordResolvedPath(inline)
+              const output = await recordResolvedPath(inline, decoded)
               if (output) redirectWritePaths.add(output)
             }
           }
@@ -605,7 +609,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               args.find((a) => a && /^[a-z][a-z0-9+.-]*:\/\//i.test(a)) ?? args.find((a) => a && !a.startsWith("-"))
             const basename = url?.split("/").pop()?.split("?")[0]
             if (basename) {
-              const output = await recordResolvedPath(basename)
+              const output = await recordResolvedPath(basename, decoded)
               if (output) redirectWritePaths.add(output)
             }
           }
@@ -616,7 +620,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           for (const arg of args) {
             const output = arg.match(/^of=(.+)$/)?.[1]
             if (output) {
-              const resolved = await recordResolvedPath(output)
+              const resolved = await recordResolvedPath(output, decoded)
               if (resolved) redirectWritePaths.add(resolved)
             }
           }
@@ -626,7 +630,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         if (["rsync", "scp"].includes(name)) {
           for (const arg of args) {
             if (arg.startsWith("-") || /^[^/][^:]*:/.test(arg)) continue
-            await recordResolvedPath(arg)
+            await recordResolvedPath(arg, decoded)
           }
           return
         }
@@ -646,7 +650,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               continue
             }
             if (arg.startsWith("-")) continue
-            await recordResolvedPath(arg)
+            await recordResolvedPath(arg, decoded)
             break
           }
           return
@@ -901,6 +905,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 }
                 await recordInnerCommandPaths(
                   innerCommand ? [innerCommand.name, ...innerCommand.args] : normalizedInnerParts,
+                  true,
                 )
               }
               // Inner-tree redirect targets: `bash -c "echo > /etc/x"` and
@@ -928,18 +933,18 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           if (!isShellWithC && !isEval) {
             for (const arg of scanParts.slice(1)) {
               if (arg.startsWith("-")) continue
-              await recordResolvedPath(arg)
+              await recordResolvedPath(arg, true)
             }
           }
         } else {
-          await recordInnerCommandPaths(scanParts)
+          await recordInnerCommandPaths(scanParts, true)
         }
 
         // not an exhaustive list, but covers most common cases
         if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(scanParts[0])) {
           for (const arg of scanParts.slice(1)) {
             if (arg.startsWith("-") || (scanParts[0] === "chmod" && arg.startsWith("+"))) continue
-            await recordResolvedPath(arg)
+            await recordResolvedPath(arg, true)
           }
         }
 
