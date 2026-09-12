@@ -86,6 +86,8 @@ import { formatTuiUpgradeCompleteMessage } from "./upgrade-check-view-model"
 import { parseJsonPayload } from "@/util/json-value"
 import { createTuiDialogLoaders } from "./tui-dialogs"
 import { appCommands, type AppCommandSandbox } from "./app-commands"
+import { MatrixRain } from "./component/matrix-rain"
+import { shouldAutoPlayMatrixRain } from "./component/matrix-rain-view-model"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -211,6 +213,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const exit = useExit()
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
+  // Short-lived ASCII digital-rain overlay. Manual preview is always
+  // available; the automatic trigger is opt-in via `matrix_rain_on_task_complete`.
+  const [matrixPlaying, setMatrixPlaying] = createSignal(false)
+  const playMatrixRain = () => setMatrixPlaying(true)
   let sessionRoutePromise: Promise<Component> | undefined
   let sessionRouteLoadFailed = false
 
@@ -829,6 +835,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       renderer,
       onSnapshot: props.onSnapshot,
       terminalSuspend,
+      playMatrixRain,
     }),
   )
 
@@ -966,6 +973,24 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         duration: warnings.length ? 15000 : 10000,
       })
     }),
+
+    // Opt-in flourish for durable automation finishing. Guarded so it never
+    // covers a dialog, a selection, or a run already on screen; the completion
+    // toast remains the primary signal.
+    sdk.event.on("scheduled.task.succeeded", () => {
+      if (
+        !shouldAutoPlayMatrixRain({
+          enabled: kv.get("matrix_rain_on_task_complete", false),
+          animationsEnabled: kv.get("animations_enabled", true),
+          alreadyPlaying: matrixPlaying(),
+          dialogOpen: dialog.stack.length > 0,
+          hasSelection: Boolean(renderer.getSelection()?.getSelectedText()),
+        })
+      ) {
+        return
+      }
+      playMatrixRain()
+    }),
   ]
   onCleanup(() => {
     updateHandlerDisposed = true
@@ -1004,6 +1029,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           </Show>
         </Match>
       </Switch>
+      <Show when={matrixPlaying()}>
+        <MatrixRain onDone={() => setMatrixPlaying(false)} />
+      </Show>
     </box>
   )
 }

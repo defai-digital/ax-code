@@ -59,6 +59,7 @@ export type AppCommandsInput = {
   renderer: any
   onSnapshot?: () => Promise<string[]>
   terminalSuspend: { suspend: (input: { suspend: () => void; resume: () => void }) => void }
+  playMatrixRain: () => void
 }
 
 export function appCommands(input: AppCommandsInput): CommandOption[] {
@@ -90,6 +91,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     renderer,
     onSnapshot,
     terminalSuspend,
+    playMatrixRain,
   } = input
 
   return [
@@ -563,6 +565,28 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       category: "System",
       onSelect: (dialog) => {
         kv.set("animations_enabled", !kv.get("animations_enabled", true))
+        dialog.clear()
+      },
+    },
+    {
+      title: "Play Matrix rain",
+      description: "Preview the ASCII digital-rain overlay for a few seconds",
+      value: "app.matrix.play",
+      category: "System",
+      onSelect: (dialog) => {
+        dialog.clear()
+        playMatrixRain()
+      },
+    },
+    {
+      title: kv.get("matrix_rain_on_task_complete", false)
+        ? "Disable Matrix rain on task completion"
+        : "Enable Matrix rain on task completion",
+      description: "Play the overlay once a scheduled task run completes",
+      value: "app.toggle.matrix_rain",
+      category: "System",
+      onSelect: (dialog) => {
+        kv.set("matrix_rain_on_task_complete", !kv.get("matrix_rain_on_task_complete", false))
         dialog.clear()
       },
     },
