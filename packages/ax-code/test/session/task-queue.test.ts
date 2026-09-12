@@ -6,6 +6,8 @@ import { Question } from "../../src/question"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
 import { SessionPrompt } from "../../src/session/prompt"
+import { createStoppedAssistantTextResponse } from "../../src/session/prompt-assistant-response"
+import { ModelID, ProviderID } from "../../src/provider/schema"
 import { MessageID, PartID, TaskQueueID } from "../../src/session/schema"
 import { TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
@@ -724,6 +726,249 @@ describe("TaskQueue", () => {
           prompt.mockRestore()
           cancel.mockRestore()
           await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("does not admit a successor while timeout cancellation is pending", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const stopRuns: Array<() => void> = []
+        let finishCancellation!: () => void
+        const cancellation = new Promise<void>((resolve) => {
+          finishCancellation = resolve
+        })
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
+          () =>
+            new Promise((_, reject) => {
+              stopRuns.push(() => reject(new Error("Fixture execution stopped")))
+            }),
+        )
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockReturnValue(cancellation)
+        let successor: TaskQueue.Info | undefined
+        try {
+          const first = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "prompt",
+            title: "Timed out predecessor",
+            payload: { text: "First" },
+            executionTimeoutMs: 1000,
+          })
+          await TaskQueueExecutor.start(first)
+          await waitForQueueStatus(first.id, "failed")
+          expect(cancel).toHaveBeenCalledWith(session.id)
+          successor = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "prompt",
+            title: "Successor",
+            payload: { text: "Second" },
+          })
+          const admitted = await TaskQueueExecutor.start(successor)
+          expect(admitted.status).toBe("waiting_for_idle")
+          expect(prompt).toHaveBeenCalledTimes(1)
+        } finally {
+          if (successor) await TaskQueue.setStatus({ id: successor.id, status: "cancelled" })
+          finishCancellation()
+          for (const stop of stopRuns) stop()
+          await new Promise((resolve) => setTimeout(resolve, 30))
+          prompt.mockRestore()
+          cancel.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test.each(["run-first", "cancel-first", "cancel-error"])(
+    "resumes only after both timeout operations settle: %s",
+    async (order) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const other = await Session.create({})
+          const result = await createStoppedAssistantTextResponse({
+            sessionID: session.id,
+            parent: {
+              id: MessageID.ascending(),
+              agent: "build",
+              model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test") },
+            },
+            text: "Late successful response",
+          })
+          let finishRun!: () => void
+          let finishCancel!: () => void
+          let failCancel!: () => void
+          const run = new Promise<typeof result>((resolve) => {
+            finishRun = () => resolve(result)
+          })
+          const cancellation = new Promise<void>((resolve, reject) => {
+            finishCancel = resolve
+            failCancel = () => reject(new Error("Fixture cancellation failed"))
+          })
+          const prompt = vi
+            .spyOn(SessionPrompt, "prompt")
+            .mockImplementationOnce(() => run)
+            .mockResolvedValue(result)
+          const cancel = vi.spyOn(SessionPrompt, "cancel").mockReturnValue(cancellation)
+          let successor: TaskQueue.Info | undefined
+          try {
+            const first = await TaskQueue.enqueue({
+              sessionID: session.id,
+              kind: "prompt",
+              title: "Predecessor",
+              payload: { text: "First" },
+              executionTimeoutMs: 1000,
+            })
+            await TaskQueueExecutor.start(first)
+            await waitForQueueStatus(first.id, "failed")
+            successor = await TaskQueue.enqueue({
+              sessionID: session.id,
+              kind: "prompt",
+              title: "Successor",
+              payload: { text: "Second" },
+            })
+            const waiting = await TaskQueueExecutor.start(successor)
+            expect(waiting.status).toBe("waiting_for_idle")
+            expect(waiting.error).toContain("cancellation to settle")
+            const independent = await TaskQueue.enqueue({
+              sessionID: other.id,
+              kind: "prompt",
+              title: "Independent",
+              payload: { text: "Other" },
+            })
+            await TaskQueueExecutor.start(independent)
+            await waitForQueueStatus(independent.id, "completed")
+            if (order === "run-first") finishRun()
+            else if (order === "cancel-error") failCancel()
+            else finishCancel()
+            await new Promise((resolve) => setTimeout(resolve, 30))
+            expect((await TaskQueueExecutor.start(successor)).status).toBe("waiting_for_idle")
+            expect(prompt).toHaveBeenCalledTimes(2)
+            finishRun()
+            finishCancel()
+            await waitForQueueStatus(successor.id, "completed")
+            expect((await TaskQueue.get(successor.id)).error).toBeUndefined()
+            expect((await TaskQueue.get(first.id)).status).toBe("failed")
+            expect((await TaskQueue.get(first.id)).error).toContain("timed out")
+            expect(prompt).toHaveBeenCalledTimes(3)
+          } finally {
+            if (successor && ["queued", "waiting_for_idle"].includes((await TaskQueue.get(successor.id)).status)) {
+              await TaskQueue.setStatus({ id: successor.id, status: "cancelled" })
+            }
+            finishRun()
+            finishCancel()
+            await new Promise((resolve) => setTimeout(resolve, 30))
+            prompt.mockRestore()
+            cancel.mockRestore()
+            await Session.remove(session.id)
+            await Session.remove(other.id)
+          }
+        },
+      })
+    },
+  )
+
+  test.each([1, 2, undefined])("keeps one workflow slot occupied during timeout cleanup: %s", async (maxParallel) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const firstSession = await Session.create({})
+        const secondSession = await Session.create({})
+        const result = await createStoppedAssistantTextResponse({
+          sessionID: firstSession.id,
+          parent: {
+            id: MessageID.ascending(),
+            agent: "build",
+            model: { providerID: ProviderID.make("test"), modelID: ModelID.make("test") },
+          },
+          text: "Settled response",
+        })
+        let finishRun!: () => void
+        let finishCancel!: () => void
+        const run = new Promise<typeof result>((resolve) => {
+          finishRun = () => resolve(result)
+        })
+        const cancellation = new Promise<void>((resolve) => {
+          finishCancel = resolve
+        })
+        const prompt = vi
+          .spyOn(SessionPrompt, "prompt")
+          .mockImplementationOnce(() => run)
+          .mockResolvedValue(result)
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockReturnValue(cancellation)
+        const workflowRun = await WorkflowRun.create({ spec: parseWorkflowSpecV1(WorkflowFixtureSpecs.noopDryRun) })
+        const phase = (await WorkflowRun.getDetail(workflowRun.id)).phases[0]!
+        await WorkflowRun.setStatus({ id: workflowRun.id, status: "running" })
+        await WorkflowRun.setPhaseStatus({ id: phase.id, status: "running" })
+        const firstChild = await WorkflowRun.appendChild({
+          runID: workflowRun.id,
+          phaseID: phase.id,
+          sessionID: firstSession.id,
+        })
+        const secondChild = await WorkflowRun.appendChild({
+          runID: workflowRun.id,
+          phaseID: phase.id,
+          sessionID: secondSession.id,
+        })
+        const workflow = { runID: workflowRun.id, phaseID: phase.id, specPhaseID: phase.specPhaseID }
+        let successor: TaskQueue.Info | undefined
+        try {
+          const first = await TaskQueue.enqueue({
+            sessionID: firstSession.id,
+            kind: "subagent",
+            title: "Timed out workflow child",
+            executionTimeoutMs: 1000,
+            payload: {
+              workflow: { ...workflow, childID: firstChild.id },
+              maxParallel,
+              body: { parts: [{ type: "text", text: "First child" }] },
+            },
+          })
+          await TaskQueueExecutor.start(first)
+          await waitForQueueStatus(first.id, "failed")
+          successor = await TaskQueue.enqueue({
+            sessionID: secondSession.id,
+            kind: "subagent",
+            title: "Next workflow child",
+            payload: {
+              workflow: { ...workflow, childID: secondChild.id },
+              maxParallel,
+              body: { parts: [{ type: "text", text: "Second child" }] },
+            },
+          })
+          const started = await TaskQueueExecutor.start(successor)
+          if (maxParallel === 1) {
+            expect(started.status).toBe("queued")
+            finishCancel()
+            await new Promise((resolve) => setTimeout(resolve, 30))
+            expect((await TaskQueueExecutor.start(successor)).status).toBe("queued")
+            expect(prompt).toHaveBeenCalledTimes(1)
+          } else {
+            await waitForQueueStatus(successor.id, "completed")
+            expect(prompt).toHaveBeenCalledTimes(2)
+          }
+          finishRun()
+          finishCancel()
+          await waitForQueueStatus(successor.id, "completed")
+          expect((await TaskQueue.get(first.id)).status).toBe("failed")
+        } finally {
+          if (successor && ["queued", "waiting_for_idle"].includes((await TaskQueue.get(successor.id)).status)) {
+            await TaskQueue.setStatus({ id: successor.id, status: "cancelled" })
+          }
+          finishRun()
+          finishCancel()
+          await new Promise((resolve) => setTimeout(resolve, 30))
+          prompt.mockRestore()
+          cancel.mockRestore()
+          await Session.remove(firstSession.id)
+          await Session.remove(secondSession.id)
         }
       },
     })

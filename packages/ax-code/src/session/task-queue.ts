@@ -918,6 +918,7 @@ export namespace TaskQueue {
         .update(TaskQueueTable)
         .set({
           status: "running",
+          error: null,
           time_updated: now,
           time_started: current.time.started ?? now,
           ...(ownerPayload ? { payload: ownerPayload } : {}),

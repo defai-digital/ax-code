@@ -54,6 +54,14 @@ const startLocks = Instance.state(
   },
 )
 
+const timeoutCleanup = Instance.state(
+  () => ({ pending: new Map<TaskQueueID, { key: string; item: TaskQueue.Info }>(), disposed: false }),
+  async (state) => {
+    state.disposed = true
+    state.pending.clear()
+  },
+)
+
 const blockObserverState = Instance.state(
   () => ({
     initialized: false,
@@ -116,6 +124,15 @@ export namespace TaskQueueExecutor {
       if (pacingWaitMs > 0) {
         scheduleWorkflowPacingRetry(latest, pacingWaitMs)
         return latest
+      }
+
+      // Recheck cleanup after asynchronous admission checks, immediately before claiming.
+      const keys = startLockKeys(latest, latestExecution)
+      if ([...timeoutCleanup().pending.values()].some((pending) => keys.includes(pending.key))) {
+        const error = "Waiting for a timed-out execution and its cancellation to settle."
+        return latest.status === "waiting_for_idle" && latest.error === error
+          ? latest
+          : TaskQueue.setStatus({ id: latest.id, status: "waiting_for_idle", error })
       }
 
       const running = await TaskQueue.claimForExecution(latest.id)
@@ -243,22 +260,43 @@ async function runWithExecutionWatchdog(item: TaskQueue.Info, execution: QueueEx
   const run = Promise.resolve().then(execution.run)
   const deadline = new Promise<never>((_, reject) => {
     timeout = setTimeout(() => {
-      const error = new Error(`Task queue execution timed out after ${timeoutMs} ms`)
+      const error = new Error(`Task queue execution timed out after ${timeoutMs} ms; cancellation requested.`)
       DiagnosticLog.recordProcess("server.taskQueueTaskTimedOut", {
         taskID: item.id,
         sessionID: item.sessionID,
         kind: item.kind,
         timeoutMs,
       })
-      const cancellation = execution.cancel ? execution.cancel() : cancelTimedOutExecution(item)
-      void cancellation.catch((cancelError) => {
-        log.warn("failed to cancel timed-out task queue execution", {
-          taskID: item.id,
-          sessionID: item.sessionID,
-          error: cancelError,
-        })
+      const cleanup = timeoutCleanup()
+      // Retain the session key (or the task itself for sessionless work).
+      // Workflow cleanup continues to occupy one phase slot, not every slot.
+      cleanup.pending.set(item.id, {
+        key: startLockKeys(item, execution).find((key) => !key.startsWith("workflow-phase:"))!,
+        item,
       })
+      // Reject first: synchronous cancellation can resolve the original run,
+      // but that late result must never win over the expired deadline.
       reject(error)
+      const cancellation = Promise.resolve()
+        .then(() => (execution.cancel ? execution.cancel() : cancelTimedOutExecution(item)))
+        .catch((error) => {
+          log.warn("failed to cancel timed-out task queue execution", {
+            taskID: item.id,
+            sessionID: item.sessionID,
+            error,
+          })
+          throw error
+        })
+      voidSafe(async () => {
+        await Promise.allSettled([run, cancellation])
+        if (cleanup.disposed) return
+        cleanup.pending.delete(item.id)
+        // Settled queue promises do not prove OS-level process quiescence.
+        // They do ensure this cancellation can no longer target a successor.
+        const current = await TaskQueue.get(item.id)
+        if (current.sessionID) await TaskQueueExecutor.drainNextForSession(current.sessionID)
+        await drainNextWorkflowPhaseItem(current)
+      }, "task-queue.timeout-cleanup")
     }, timeoutMs)
   })
 
@@ -336,14 +374,18 @@ async function shouldWaitForWorkflowPhaseSlot(item: TaskQueue.Info) {
   const maxParallel = workflowMaxParallel(item.payload)
   if (!workflow || maxParallel === undefined) return false
   const active = await activeWorkflowPhaseItems(workflow, item.id)
-  return active.length >= maxParallel
+  const pending = [...timeoutCleanup().pending.values()].filter(
+    ({ item: predecessor }) =>
+      sameWorkflowPhase(predecessor, workflow) && !active.some((entry) => entry.id === predecessor.id),
+  )
+  return active.length + pending.length >= maxParallel
 }
 
 async function drainNextWorkflowPhaseItem(item: TaskQueue.Info) {
   const workflow = workflowPayload(item)
   const maxParallel = workflowMaxParallel(item.payload)
   if (!workflow || maxParallel === undefined) return
-  if ((await activeWorkflowPhaseItems(workflow, item.id)).length >= maxParallel) return
+  if (await shouldWaitForWorkflowPhaseSlot(item)) return
 
   // Include waiting_for_idle items: a task that was blocked on idle when
   // start() ran stays in waiting_for_idle, invisible to a queued-only query.
