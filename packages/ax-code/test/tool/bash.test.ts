@@ -420,6 +420,43 @@ describe("tool.bash truncation", () => {
     })
   })
 
+  test.each(["git config set core.hooksPath ./evil-hooks", "git config -- core.hooksPath --get"])(
+    "blocks dangerous config writes with alternate syntax: %s",
+    async (command) => {
+      await using tmp = await tmpdir({ git: true })
+      await withAutonomous(async () => {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            const bash = await BashTool.init()
+            await expect(bash.execute({ command, description: "Reject hook injection" }, ctx)).rejects.toThrow(
+              /non-overridable protected path/,
+            )
+            expect(await fs.readFile(path.join(tmp.path, ".git", "config"), "utf8")).not.toContain("hooksPath")
+          },
+        })
+      })
+    },
+  )
+
+  test.each(["rename-section", "--rename-section"])("blocks config section injection with %s", async (action) => {
+    await using tmp = await tmpdir({ git: true })
+    await execFileAsync("git", ["-C", tmp.path, "config", "safe.hooksPath", "./evil-hooks"])
+    await withAutonomous(async () => {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(
+            bash.execute({ command: `git config ${action} safe core`, description: "Reject section injection" }, ctx),
+          ).rejects.toThrow(/non-overridable protected path/)
+          const result = await execFileAsync("git", ["-C", tmp.path, "config", "--get", "safe.hooksPath"])
+          expect(result.stdout.trim()).toBe("./evil-hooks")
+        },
+      })
+    })
+  })
+
   test("inner shell write redirect counts against autonomous blast radius", async () => {
     await using tmp = await tmpdir({ git: true })
     await withAutonomous(async () => {
@@ -811,6 +848,75 @@ describe("tool.bash isolation", () => {
     })
   })
 
+  test.each(["attached-file", "option-like-value"])("rejects external config write with %s", async (syntax) => {
+    await using outerTmp = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    const target = path.join(outerTmp.path, "outside.cfg")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const command =
+          syntax === "attached-file"
+            ? `git config -f${target} user.email escaped@example.com`
+            : `git config --file=${target} -- user.name --get`
+        await expect(
+          bash.execute({ command, description: "Reject external config write" }, { ...ctx, extra: { isolation } }),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+        await expect(fs.readFile(target, "utf8")).rejects.toThrow()
+      },
+    })
+  })
+
+  test.each(["--get user.email", "get user.email", "--list", "list", "-l", "user.email"])(
+    "allows external config reads with %s",
+    async (action) => {
+      await using outerTmp = await tmpdir()
+      await using tmp = await tmpdir({ git: true })
+      const target = path.join(outerTmp.path, "outside.cfg")
+      await fs.writeFile(target, "[user]\nemail = reader@example.com\n")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+          // Modern subcommands precede their options; legacy actions follow them.
+          const modern = action === "list" || action.startsWith("get ")
+          const command = modern
+            ? `git config ${action.split(" ")[0]} --file=${target} ${action.split(" ").slice(1).join(" ")}`
+            : `git config --file=${target} ${action}`
+          const result = await bash.execute(
+            { command, description: "Read external config" },
+            { ...ctx, extra: { isolation } },
+          )
+          expect(result.metadata.exit).toBe(0)
+          expect(result.output).toContain("reader@example.com")
+        },
+      })
+    },
+  )
+
+  test("does not interpret a config value as a global git-dir flag", async () => {
+    await using outerTmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const command = `git --git-dir=${outerTmp.path}/.git config -- user.name --git-dir=${tmp.path}/.git`
+        await expect(
+          bash.execute(
+            { command, description: "Reject config value relocation spoof" },
+            { ...ctx, extra: { isolation } },
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+        expect(await fs.readFile(path.join(outerTmp.path, ".git", "config"), "utf8")).not.toContain("--git-dir")
+      },
+    })
+  })
+
   test("allows benign git config writes to the default repo config", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -949,6 +1055,27 @@ describe("tool.bash isolation", () => {
       },
     })
   })
+
+  test.each(["-C sub -C ..", "-C sub -C '' -C .."])(
+    "allows benign git config writes after folding %s once",
+    async (flags) => {
+      await using tmp = await tmpdir({ git: true })
+      await fs.mkdir(path.join(tmp.path, "sub"))
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+          const result = await bash.execute(
+            { command: `git ${flags} config user.email folded@example.com`, description: "Set repo email after chdir" },
+            { ...ctx, extra: { isolation } },
+          )
+          expect(result.metadata.exit).toBe(0)
+          expect(await fs.readFile(path.join(tmp.path, ".git", "config"), "utf8")).toContain("folded@example.com")
+        },
+      })
+    },
+  )
 
   test("allows in-workspace barewords that are not paths", async () => {
     await using tmp = await tmpdir({ git: true })

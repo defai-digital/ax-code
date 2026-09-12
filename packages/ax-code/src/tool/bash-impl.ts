@@ -89,46 +89,52 @@ const DANGEROUS_GIT_CONFIG_KEYS = [
   "sequence.editor",
 ] as const
 
-// git config invocations that only read; these never write .git/config.
-const GIT_CONFIG_READ_FLAGS = new Set([
-  "--get",
-  "--get-regexp",
-  "--get-all",
-  "--get-urlmatch",
-  "--list",
-  "--name-only",
-  "--show-origin",
-  "--show-scope",
-  "--show-names",
-])
-
-// Extract the config key (first positional arg, skipping flags and the values
-// of --file/-f/--type/-t). Returns undefined when no key is present.
-function gitConfigKey(args: string[]): string | undefined {
-  for (let i = 0; i < args.length; i++) {
+// Parse config options once so option values and tokens after -- never act
+// as flags. Both legacy actions and the modern config subcommands are used.
+function gitConfigInvocation(args: string[]): { key?: string; file?: string; isRead: boolean; wholeFile: boolean } {
+  const readActions = new Set(["--get", "--get-regexp", "--get-all", "--get-urlmatch", "--list", "-l"])
+  const subcommands = new Set(["get", "list", "set", "unset", "rename-section", "remove-section", "edit"])
+  let action = subcommands.has(args[0]) ? args[0] : undefined
+  let wholeFile = action === "rename-section" || action === "remove-section" || action === "edit"
+  let file: string | undefined
+  let options = true
+  const positional: string[] = []
+  for (let i = action ? 1 : 0; i < args.length; i++) {
     const arg = args[i]
-    if (arg === "--file" || arg === "-f" || arg === "--type" || arg === "-t") {
-      i++ // skip the flag's value
+    if (options && arg === "--") {
+      options = false
       continue
     }
-    if (arg.startsWith("-")) continue
-    return arg.toLowerCase()
+    if (options && arg.startsWith("-")) {
+      if (["--rename-section", "--remove-section", "--edit", "-e"].includes(arg)) wholeFile = true
+      if (arg === "--file" || arg === "-f") file = args[++i]
+      else if (arg.startsWith("--file=")) file = arg.slice(7)
+      else if (arg.startsWith("-f")) file = arg.slice(2)
+      else if (["--type", "-t", "--default", "--value", "--comment"].includes(arg)) i++
+      else if (readActions.has(arg)) action = "get"
+      else if (
+        [
+          "--add",
+          "--replace-all",
+          "--unset",
+          "--unset-all",
+          "--rename-section",
+          "--remove-section",
+          "--edit",
+          "-e",
+        ].includes(arg)
+      )
+        action = "set"
+      continue
+    }
+    positional.push(arg)
   }
-  return undefined
-}
-
-// The explicit --file <path> / -f <path> / --file=<path> target of a git
-// config invocation, if any. --global/--system are mutually exclusive with
-// --file and write outside the worktree; isolation already guards external
-// writes, so they are out of scope here.
-function gitConfigFileTarget(args: string[]): string | undefined {
-  if (args.includes("--global") || args.includes("--system")) return undefined
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i]
-    if (arg === "--file" || arg === "-f") return args[i + 1]
-    if (arg.startsWith("--file=")) return arg.slice("--file=".length)
+  return {
+    key: positional[0]?.toLowerCase(),
+    file,
+    wholeFile,
+    isRead: action === "get" || action === "list" || (!action && positional.length === 1),
   }
-  return undefined
 }
 
 // git global flags that relocate where `git config` writes: `-C <dir>`
@@ -149,6 +155,10 @@ function gitConfigLocationFlags(args: string[]): { cdChain: string[]; gitDir?: s
     if (arg === "-C") {
       const value = args[i + 1]
       if (value !== undefined) cdChain.push(value)
+      i++
+      continue
+    }
+    if (arg === "-c" || arg === "--work-tree" || arg === "--namespace") {
       i++
       continue
     }
@@ -606,20 +616,22 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // doesn't let a dangerous write slip past this check — see
           // bash-destructive.ts.
           const rest = gitConfigCall.rest
-          const isRead = rest.some((arg) => GIT_CONFIG_READ_FLAGS.has(arg))
+          const config = gitConfigInvocation(rest)
+          const isRead = config.isRead
           if (!isRead) {
             // -C chdirs before anything else resolves, so it is the base for
             // relative --file targets AND the implicit default; --git-dir
             // replaces the .git directory for the implicit default.
-            const location = gitConfigLocationFlags(args)
-            const explicitFile = gitConfigFileTarget(rest)
-            const key = gitConfigKey(rest)
-            const dangerous = key !== undefined && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix))
+            const location = gitConfigLocationFlags(args.slice(0, args.length - rest.length - 1))
+            const explicitFile = config.file
+            const key = config.key
+            // Section moves and editor invocations can change arbitrary keys.
+            const dangerous =
+              config.wholeFile ||
+              (key !== undefined && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix)))
             const implicit = location.gitDir
               ? path.join(stripShellQuotes(location.gitDir), "config")
-              : location.cdChain.length > 0
-                ? path.join(stripShellQuotes(location.cdChain[location.cdChain.length - 1]!), ".git", "config")
-                : path.join(".git", "config")
+              : path.join(".git", "config")
             const target = stripShellQuotes(explicitFile ?? implicit)
             const targetPath = expandLeadingTilde(target)
             // Validate every -C value before resolving: dynamic ($VAR, globs)
