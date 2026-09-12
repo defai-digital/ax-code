@@ -131,11 +131,33 @@ function gitConfigFileTarget(args: string[]): string | undefined {
   return undefined
 }
 
-// The file a `git config` write lands in: the explicit --file target, or the
-// worktree's .git/config by default. --global/--system write outside the
-// worktree and are out of scope (isolation already guards external writes).
-function gitConfigWriteTarget(args: string[]): string | undefined {
-  return gitConfigFileTarget(args) ?? path.join(".git", "config")
+// git global flags that relocate where `git config` writes: `-C <dir>`
+// chdirs before every other path is resolved (including relative --file
+// targets and the implicit .git/config default), and `--git-dir <dir>` /
+// `--git-dir=<dir>` replaces the .git directory so the implicit target
+// becomes <dir>/config. Git requires the separate-argument form for -C and
+// accepts both forms for --git-dir. Multiple -C values fold (each later one
+// is interpreted relative to the previous, per git); the last --git-dir wins.
+function gitConfigLocationFlags(args: string[]): { cd?: string; gitDir?: string } {
+  let cd: string | undefined
+  let gitDir: string | undefined
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === undefined) continue
+    if (arg === "-C") {
+      const value = args[i + 1]
+      if (value !== undefined) cd = cd ? path.resolve(cd, value) : value
+      i++
+      continue
+    }
+    if (arg === "--git-dir") {
+      gitDir = args[i + 1]
+      i++
+      continue
+    }
+    if (arg.startsWith("--git-dir=")) gitDir = arg.slice("--git-dir=".length)
+  }
+  return { cd, gitDir }
 }
 
 // Patterns that identify intentional (non-development) browser opens.
@@ -567,14 +589,16 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // protocol handlers) record the effective target — including the
           // implicit .git/config default — so protected-path and blast-radius
           // checks apply. Reads (--get/--list/...) are skipped entirely.
-          // Every other non-read invocation still records an explicit
-          // --file/-f target: `git config --file=<outside> user.email x` is a
-          // real write outside the git-owned default and must hit the same
-          // isolation and external-directory checks as any redirect. The
-          // implicit .git/config default stays unrecorded for benign keys
-          // because it is workspace-internal and DEFAULT_PROTECTED —
-          // recording it would turn ordinary `git config user.email x` into
-          // a false-positive denial.
+          // Every other non-read invocation still records the effective write
+          // target: `git config --file=<outside> user.email x` and
+          // `git -C <outside> config user.email x` are real writes outside the
+          // git-owned default and must hit the same isolation and
+          // external-directory checks as any redirect. The implicit
+          // .git/config default stays unrecorded for benign keys when it is
+          // workspace-internal and DEFAULT_PROTECTED — recording it would
+          // turn ordinary `git config user.email x` into a false-positive
+          // denial — but a `-C <dir>` / --git-dir relocation that pushes the
+          // target outside the workspace is recorded and denied.
           // Use gitSubcommand (not args[0] === "config") so a leading git
           // global flag (`git -C dir config ...`, `git -c x=y config ...`)
           // doesn't let a dangerous write slip past this check — see
@@ -582,12 +606,45 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           const rest = gitConfigCall.rest
           const isRead = rest.some((arg) => GIT_CONFIG_READ_FLAGS.has(arg))
           if (!isRead) {
+            // -C chdirs before anything else resolves, so it is the base for
+            // relative --file targets AND the implicit default; --git-dir
+            // replaces the .git directory for the implicit default.
+            const location = gitConfigLocationFlags(args)
+            const explicitFile = gitConfigFileTarget(rest)
             const key = gitConfigKey(rest)
             const dangerous = key !== undefined && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix))
-            const target = dangerous ? gitConfigWriteTarget(rest) : gitConfigFileTarget(rest)
-            if (target) {
-              const resolved = await recordResolvedPath(target)
-              if (resolved) redirectWritePaths.add(resolved)
+            const implicit = location.gitDir
+              ? path.join(location.gitDir, "config")
+              : location.cd
+                ? path.join(location.cd, ".git", "config")
+                : path.join(".git", "config")
+            const target = stripShellQuotes(explicitFile ?? implicit)
+            const cdRaw = location.cd ? stripShellQuotes(location.cd) : undefined
+            const gitDirRaw = location.gitDir ? stripShellQuotes(location.gitDir) : undefined
+            const cdPath = cdRaw ? expandLeadingTilde(cdRaw) : undefined
+            const gitDirPath = gitDirRaw ? expandLeadingTilde(gitDirRaw) : undefined
+            const targetPath = expandLeadingTilde(target)
+            // Unresolvable relocation or target values ($VAR, globs, ~user)
+            // cannot name a static write target — force the interactive
+            // external-directory ask instead of guessing, mirroring the
+            // generic arg scan's dynamicPathAccess handling. An absent flag
+            // is not unresolvable — only a present-but-dynamic value is.
+            const unresolvable =
+              (cdRaw !== undefined && cdPath === undefined) ||
+              (gitDirRaw !== undefined && gitDirPath === undefined) ||
+              targetPath === undefined ||
+              hasDynamicShellExpansion(target) ||
+              (cdRaw !== undefined && hasDynamicShellExpansion(cdRaw)) ||
+              (gitDirRaw !== undefined && hasDynamicShellExpansion(gitDirRaw))
+            if (unresolvable) {
+              dynamicPathAccess = true
+            } else {
+              const base = cdPath ? path.resolve(cwd, cdPath) : cwd
+              const absolute = path.resolve(base, targetPath!)
+              if (explicitFile || dangerous || !Instance.containsPath(absolute)) {
+                const resolved = await recordResolvedPath(absolute)
+                if (resolved) redirectWritePaths.add(resolved)
+              }
             }
           }
           return

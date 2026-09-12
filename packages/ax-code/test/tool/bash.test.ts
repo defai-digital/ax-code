@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import { BashTool } from "../../src/tool/bash"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
@@ -10,6 +12,8 @@ import { Truncate } from "../../src/tool/truncate"
 import { Isolation } from "../../src/isolation"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { BlastRadius } from "../../src/session/blast-radius"
+
+const execFileAsync = promisify(execFile)
 
 const ctx = {
   sessionID: SessionID.make("ses_test"),
@@ -838,6 +842,107 @@ describe("tool.bash isolation", () => {
         // workspace-internal write and must not be denied.
         const result = await bash.execute(
           { command: `git config --file ./custom.cfg user.email test@example.com`, description: "Set custom config" },
+          testCtx,
+        )
+        expect(result.metadata.exit).toBe(0)
+      },
+    })
+  })
+
+  test("rejects git -C <outside> config benign-key write (silent relocation)", async () => {
+    await using outerTmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        // `git -C <dir>` chdirs before config resolution, so a benign key with
+        // no --file writes <dir>/.git/config outside the workspace. The -C
+        // value must reach the same boundary checks as an explicit --file.
+        await expect(
+          bash.execute(
+            {
+              command: `git -C ${outerTmp.path} config user.email "pwned@example.com"`,
+              description: "Attempt relocated git config write outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+        // The pre-existing repo config must not have gained the injected value.
+        const outsideConfig = await fs.readFile(path.join(outerTmp.path, ".git", "config"), "utf8")
+        expect(outsideConfig).not.toContain("pwned@example.com")
+      },
+    })
+  })
+
+  test("rejects git --git-dir=<outside> config benign-key write", async () => {
+    await using outerTmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        // --git-dir replaces the .git directory, so the implicit config target
+        // becomes <dir>/config outside the workspace.
+        await expect(
+          bash.execute(
+            {
+              command: `git --git-dir=${path.join(outerTmp.path, ".git")} config user.email "pwned@example.com"`,
+              description: "Attempt git-dir-relocated git config write outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+        const gitDirConfig = await fs.readFile(path.join(outerTmp.path, ".git", "config"), "utf8")
+        expect(gitDirConfig).not.toContain("pwned@example.com")
+      },
+    })
+  })
+
+  test("rejects git -C <outside> config --file=<relative> write", async () => {
+    await using outerTmp = await tmpdir({ git: true })
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        // A relative --file target is resolved against the -C directory, so
+        // the in-workspace-looking target actually lands outside.
+        await expect(
+          bash.execute(
+            {
+              command: `git -C ${outerTmp.path} config --file=rel.cfg user.email "pwned@example.com"`,
+              description: "Attempt -C-relocated --file write outside workspace",
+            },
+            testCtx,
+          ),
+        ).rejects.toThrow(/outside workspace boundary|protected/)
+        // The relative target must not have been created outside the workspace.
+        await expect(fs.readFile(path.join(outerTmp.path, "rel.cfg"), "utf8")).rejects.toThrow()
+      },
+    })
+  })
+
+  test("allows benign git -C <in-workspace> config writes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const isolation = Isolation.resolve({ mode: "workspace-write", network: false }, tmp.path, tmp.path)
+        const testCtx = { ...ctx, ask: async () => {}, extra: { isolation } }
+        // False-positive guard: a relocated config write that stays inside the
+        // workspace is workspace-internal and must keep working.
+        await fs.mkdir(path.join(tmp.path, "sub"))
+        await execFileAsync("git", ["init", path.join(tmp.path, "sub")])
+        const result = await bash.execute(
+          { command: `git -C ./sub config user.email test@example.com`, description: "Set sub repo email" },
           testCtx,
         )
         expect(result.metadata.exit).toBe(0)
