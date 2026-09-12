@@ -245,6 +245,18 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
+      title: "Scheduled tasks",
+      value: "scheduled.list",
+      category: "Agent",
+      slash: {
+        name: "schedule",
+        aliases: ["scheduled"],
+      },
+      onSelect: () => {
+        void dialogs.showScheduledTasksDialog()
+      },
+    },
+    {
       title: "Agent cycle",
       value: "agent.cycle",
       keybind: "agent_cycle",

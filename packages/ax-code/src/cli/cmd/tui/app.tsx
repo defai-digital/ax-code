@@ -52,6 +52,7 @@ import { runMode, runModeFlags, runModeTransition, type RunMode } from "./compon
 import { TuiConfigProvider, useTuiConfig } from "./context/tui-config"
 import { notifyTerminal } from "./util/terminal-notify"
 import { createTurnCompleteTracker } from "./util/turn-complete-tracker"
+import { createPendingRequestTracker, familySessionIDs, outsideFamilyRequests } from "./util/pending-request-notices"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
@@ -407,6 +408,40 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       for (const request of requests) {
         notifyTerminal({ title: "ax-code", body: "Question from agent", key: `question:${request.id}` })
       }
+    }
+  })
+
+  // In-TUI notice for requests the current route cannot answer: the session
+  // route renders permission/question prompts only for the open session's
+  // family, so a request from a top-level automation session (scheduled task,
+  // detached queue work) would otherwise park invisibly until the run times
+  // out (PRD-2026-09-12). Fire-once per request; opening the named session
+  // renders the pending prompt there.
+  const pendingRequests = createPendingRequestTracker()
+  createEffect(() => {
+    const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+    const family = familySessionIDs(sync.data.session, sessionID)
+    const outside = [
+      ...outsideFamilyRequests(sync.data.permission, family).map((request) => ({
+        ...request,
+        kind: "approval" as const,
+      })),
+      ...outsideFamilyRequests(sync.data.question, family).map((request) => ({
+        ...request,
+        kind: "question" as const,
+      })),
+    ]
+    for (const request of pendingRequests.update(outside)) {
+      const session = sync.session.get(request.sessionID)
+      const title = session && !SessionApi.isDefaultTitle(session.title) ? session.title : "another session"
+      toast.show({
+        message:
+          request.kind === "approval"
+            ? `Approval needed in "${title}" — open that session to answer`
+            : `Question from the agent in "${title}" — open that session to answer`,
+        variant: "warning",
+        duration: 8_000,
+      })
     }
   })
 

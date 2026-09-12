@@ -140,6 +140,16 @@ export function createTuiDialogLoaders(input: {
           return () => <DialogMcp />
         },
       }),
+    showScheduledTasksDialog: () =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load scheduled tasks dialog",
+        fail: "Failed to open scheduled tasks",
+        load: async () => {
+          const { DialogScheduledTask } = await import("@tui/component/dialog-scheduled-task")
+          return () => <DialogScheduledTask />
+        },
+      }),
     showStatusDialog: () =>
       replaceLazyDialog({
         ...host,

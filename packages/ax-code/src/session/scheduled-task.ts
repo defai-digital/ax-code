@@ -7,6 +7,7 @@ import { Instance } from "@/project/instance"
 import { ProjectID } from "@/project/schema"
 import { NotFoundError, and, asc, desc, eq, gt, lte, notInArray, sql } from "@/storage/db"
 import type { Database } from "@/storage/db"
+import { NotificationEvent } from "@/notification/events"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
@@ -48,6 +49,10 @@ export namespace ScheduledTask {
   // Capped below MISSED_RUN_GRACE_MS (minus poll latency) so a jitter-delayed
   // on-time fire can never be misclassified as missed.
   const JITTER_MAX_MS = 3 * 60 * 1_000
+  const TOAST_DURATION_MS = 8 * 1_000
+  // After an overlap skip, a one-time task re-arms for the next poll instead of
+  // being disabled: it is disabled only by successful completion (PRD-2026-09-12).
+  const ONESHOT_OVERLAP_RETRY_MS = MS_PER_MINUTE
 
   export const Status = z.enum(["active", "paused", "disabled"])
   export type Status = z.infer<typeof Status>
@@ -312,6 +317,19 @@ export namespace ScheduledTask {
     })
   }
 
+  // Lifecycle toasts are the primary user-facing signal that durable automation
+  // is doing something (PRD-2026-09-12): the scheduled.task.* bus events were
+  // previously never surfaced by any client, so a fire looked identical to
+  // nothing happening. A toast publish must never break scheduling — failures
+  // are logged and swallowed.
+  function toast(input: { title: string; message: string; variant: "info" | "success" | "warning" | "error" }) {
+    try {
+      Bus.publishDetached(NotificationEvent.ToastShow, { ...input, duration: TOAST_DURATION_MS })
+    } catch (error) {
+      log.warn("scheduled task toast publish failed", { error: toErrorMessage(error) })
+    }
+  }
+
   function publishCreated(task: Info) {
     Bus.publishDetached(Event.Created, { task })
   }
@@ -326,22 +344,49 @@ export namespace ScheduledTask {
 
   function publishFired(task: Info, run: RunInfo) {
     Bus.publishDetached(Event.Fired, { task, run })
+    // Manual run-now already gives the caller immediate feedback; toast only
+    // fires the user did not trigger by hand.
+    if (run.triggerType !== "scheduled") return
+    toast({
+      title: "Scheduled task started",
+      message: run.coalescedCount > 1 ? `${task.title} (covers ${run.coalescedCount} missed occurrences)` : task.title,
+      variant: "info",
+    })
   }
 
   function publishSucceeded(task: Info, run: RunInfo) {
     Bus.publishDetached(Event.Succeeded, { task, run })
+    toast({ title: "Scheduled task completed", message: task.title, variant: "success" })
   }
 
   function publishFailed(task: Info, run: RunInfo) {
     Bus.publishDetached(Event.Failed, { task, run })
+    toast({
+      title: run.status === "timeout" ? "Scheduled task timed out" : "Scheduled task failed",
+      message: run.error ? `${task.title}: ${run.error}` : task.title,
+      variant: "error",
+    })
   }
 
   function publishSkipped(task: Info, run: RunInfo) {
     Bus.publishDetached(Event.Skipped, { task, run })
+    toast({
+      title: "Scheduled task skipped",
+      message:
+        run.status === "skipped_overlap"
+          ? `${task.title}: previous run still in progress`
+          : `${task.title}: ${run.coalescedCount} missed occurrence(s) skipped after downtime`,
+      variant: "warning",
+    })
   }
 
   function publishFailedPersistently(task: Info) {
     Bus.publishDetached(Event.FailedPersistently, { task })
+    toast({
+      title: "Scheduled task paused",
+      message: `${task.title}: paused after repeated failures — review it with /schedule`,
+      variant: "error",
+    })
   }
 
   function assertProjectTask(task: Info) {
@@ -479,7 +524,13 @@ export namespace ScheduledTask {
     ) {
       throw new InvalidSchedule({
         resource: "status",
-        message: `This one-time task already ran${current.lastRunAt ? ` at ${new Date(current.lastRunAt).toISOString()}` : ""}; create a new task instead of resuming it.`,
+        // A paused one-time task was not delivered — it exhausted its failure
+        // retries, so resume must point at the retry path instead of claiming
+        // the task already ran.
+        message:
+          current.status === "paused"
+            ? `This one-time task was paused after repeated failures; trigger it with run-now to retry, or delete it and create a new task.`
+            : `This one-time task already ran${current.lastRunAt ? ` at ${new Date(current.lastRunAt).toISOString()}` : ""}; create a new task instead of resuming it.`,
       })
     }
     const nextSchedule = parsed.schedule ?? current.schedule
@@ -723,9 +774,13 @@ export namespace ScheduledTask {
       const claimed = db
         .update(ScheduledTaskTable)
         .set({
+          // A one-time task is NOT disabled at claim: it stays active with a
+          // null next_run_at (never due again) while the run executes, and is
+          // disabled only when a run completes successfully — a failed one-time
+          // reminder is retried under the failure policy instead of vanishing
+          // silently (PRD-2026-09-12).
           next_run_at: next ?? null,
           time_updated: now,
-          ...(task.schedule.type === "once" ? { status: "disabled" } : {}),
           last_run_at: now,
           error: null,
         })
@@ -786,11 +841,18 @@ export namespace ScheduledTask {
       const claimed = db
         .update(ScheduledTaskTable)
         .set({
-          next_run_at: next ?? null,
+          // A one-time occurrence skipped by the catch-up policy (missed_skip)
+          // is done: disable it rather than leave an active row with a null
+          // next_run_at (a zombie that never fires). An overlap skip only means
+          // another run is currently delivering the task, so re-arm the next
+          // poll instead — if that run fails, the failure policy still applies
+          // (PRD-2026-09-12).
+          next_run_at:
+            task.schedule.type === "once" && status === "skipped_overlap"
+              ? now + ONESHOT_OVERLAP_RETRY_MS
+              : (next ?? null),
           time_updated: now,
-          // A skipped one-time occurrence must not linger as an active row with a
-          // null next_run_at (a zombie that never fires); disable it like a claim.
-          ...(task.schedule.type === "once" ? { status: "disabled" } : {}),
+          ...(task.schedule.type === "once" && status === "missed_skip" ? { status: "disabled" as const } : {}),
         })
         .where(
           and(
@@ -1012,15 +1074,33 @@ export namespace ScheduledTask {
 
     // Guarded summary write: only update the task row if this queue id is still
     // the most recent one, so a late outcome from a superseded run cannot
-    // overwrite a newer run's state.
+    // overwrite a newer run's state. The pre-read happens inside the same store
+    // block so the one-shot disable decision and the write stay consistent.
     const task = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
       const conditions = [eq(ScheduledTaskTable.id, id)]
       if (queueID) conditions.push(eq(ScheduledTaskTable.last_queue_id, queueID))
+      const current = db
+        .select()
+        .from(ScheduledTaskTable)
+        .where(and(...conditions))
+        .get()
+      if (!current) return undefined
+      // A one-time task is disabled only by a successful run (PRD-2026-09-12).
+      // Failures keep it active so the failure policy below can retry it. A
+      // corrupt persisted schedule must not block the outcome write — only a
+      // row that provably parses as `once` is disabled here.
+      const currentSchedule = Schedule.safeParse(current.schedule)
+      const disableOneShot =
+        runStatus === "completed" &&
+        current.status !== "disabled" &&
+        currentSchedule.success &&
+        currentSchedule.data.type === "once"
       const row = db
         .update(ScheduledTaskTable)
         .set({
           error: status === "failed" ? errorMessage : null,
           time_updated: now,
+          ...(disableOneShot ? { status: "disabled" as const, next_run_at: null } : {}),
         })
         .where(and(...conditions))
         .returning()
@@ -1049,7 +1129,9 @@ export namespace ScheduledTask {
         if (runStatus === "completed") publishSucceeded(task, run)
         else if (runStatus === "failed" || runStatus === "timeout") publishFailed(task, { ...run, error: errorMessage })
       })
-      .catch(() => {})
+      .catch((error) => {
+        log.warn("scheduled task run event publish failed", { taskID: id, error: toErrorMessage(error) })
+      })
   }
 
   function isTimeoutError(error: unknown): boolean {

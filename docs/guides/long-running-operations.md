@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-07-27
+Last reviewed: 2026-09-12
 Owner: AX Code maintainers
 
 AX Code bounds one interactive Super-Long run at 72 hours. For operation over
@@ -108,6 +108,27 @@ On startup, AX Code resumes scheduled queue items and explicitly marked async
 items that were committed but had not started. Already-started prompt work is
 failed with a restart explanation so an operator can inspect side effects
 before retrying.
+
+## Seeing what scheduled tasks are doing
+
+Every scheduled-task occurrence is visible while it happens and auditable
+afterwards:
+
+- Starting, completing, failing, skipping, and persistent-failure auto-pauses
+  each raise an in-app notification naming the task.
+- The `/schedule` TUI command lists every task with its status, schedule, next
+  run time, and last error, and opens its recent run history. From there you
+  can pause, resume, run now, delete (press `ctrl+d` twice to confirm), and
+  jump to the session a run produced. The agent's `list_scheduled_tasks` and
+  `list_scheduled_task_runs` tools answer the same questions conversationally.
+- Each run executes in a new session titled with the task title, so results are
+  one session-list entry away even if a notification was missed.
+- If a run asks for a permission or question answer while you are viewing a
+  different conversation, a warning notice names the session that needs you;
+  opening that session shows the pending prompt.
+- A one-time task is disabled only after a successful run. A failed occurrence
+  retries with a bounded backoff, and repeated failures pause the task with a
+  notification — a reminder can no longer vanish silently.
 
 ## Operational checks
 

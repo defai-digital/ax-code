@@ -173,7 +173,12 @@ describe("scheduled task routes", () => {
           const refreshed = await ScheduledTask.get(task.id)
           expect(refreshed.lastRunAt).toBeGreaterThan(0)
           expect(refreshed.nextRunAt).toBeUndefined()
-          expect(refreshed.status).toBe("disabled")
+          // A claimed one-shot stays active while its run executes; only a
+          // successful outcome disables it (PRD-2026-09-12).
+          expect(refreshed.status).toBe("active")
+
+          await ScheduledTask.recordQueueOutcome(task.id, "completed", undefined, queueItem.id)
+          expect((await ScheduledTask.get(task.id)).status).toBe("disabled")
         } finally {
           start.mockRestore()
         }
@@ -587,7 +592,14 @@ describe("scheduled task routes", () => {
           })
           expect(refreshed.error).toContain("Workflow runtime is disabled")
           expect(refreshed.lastRunAt).toBeGreaterThan(0)
-          expect(refreshed.nextRunAt).toBeUndefined()
+          // A failed one-shot stays active and retries under the failure
+          // backoff instead of being disabled at claim (PRD-2026-09-12).
+          expect(refreshed.status).toBe("active")
+          const retrying = await waitForValue(async () => {
+            const candidate = await ScheduledTask.get(task.id)
+            return candidate.nextRunAt !== undefined ? candidate : undefined
+          })
+          expect(retrying.nextRunAt).toBeGreaterThan(Date.now())
         },
       })
     } finally {

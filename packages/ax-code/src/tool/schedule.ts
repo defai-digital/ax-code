@@ -97,8 +97,16 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
     "Create a durable scheduled task that runs a prompt in this project at a future time — one-time reminders " +
     '("remind me at 14:30 to check the deployment") or recurring checks ("every weekday at 9am, summarize CI failures"). ' +
     "Translate the user's natural-language time into the schedule parameter, using their timezone for daily/weekly/cron " +
-    "schedules and epoch milliseconds for one-time runs. Tasks persist in the project database and fire even after this " +
-    "conversation ends (while an ax-code backend for this project is running). Only create tasks the user asked for.",
+    "schedules and epoch milliseconds for one-time runs. Only create tasks the user asked for. " +
+    "After creating a task, ALWAYS tell the user: the task title and id, the next run time, and these facts — " +
+    "(1) tasks fire only while an ax-code backend for this project is running; closing the app pauses them, and " +
+    "missed occurrences catch up once (or are skipped) per the catch-up policy when a backend starts again; " +
+    "(2) when a task fires, a notification is shown and the prompt runs in a NEW separate session titled with the " +
+    "task title — the result does not appear in this conversation; " +
+    "(3) the user can review and manage tasks anytime with the /schedule command in the TUI; " +
+    "(4) a one-time reminder that fails is retried with backoff and paused after repeated failures, and the user " +
+    "is notified in each case. Timing is approximate: fires can be up to about a minute late (poll interval), " +
+    "plus a small anti-herd spread for recurring schedules.",
   parameters: z.object({
     title: z.string().min(1).max(200).describe("Short human-readable name shown in task lists."),
     prompt: z
