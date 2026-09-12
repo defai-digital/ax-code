@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest"
 import { AX_ENGINE_PROVIDER_ID } from "../../src/provider/ax-engine"
 import { ProviderID } from "../../src/provider/schema"
 import {
+  capTitleWords,
   cleanGeneratedTitle,
   fallbackTitleFromUserText,
   shouldSkipAutomaticTitle,
@@ -29,5 +30,29 @@ describe("session prompt title", () => {
     expect(fallbackTitleFromUserText("\n\n  hello world  \nmore")).toBe("hello world")
     expect(fallbackTitleFromUserText("a".repeat(100))).toBe("a".repeat(77) + "...")
     expect(fallbackTitleFromUserText("   \n  ")).toBeUndefined()
+  })
+
+  test("capTitleWords collapses whitespace and clamps to the 12-word budget", () => {
+    expect(capTitleWords("  fix   the  flaky test ")).toBe("fix the flaky test")
+    expect(capTitleWords("a b c", 2)).toBe("a b...")
+    const twelve = "one two three four five six seven eight nine ten eleven twelve"
+    expect(capTitleWords(twelve)).toBe(twelve)
+    expect(capTitleWords(`${twelve} thirteen`)).toBe(`${twelve}...`)
+  })
+
+  test("cleanGeneratedTitle clamps a long generated title to 12 words", () => {
+    const long = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen"
+    expect(cleanGeneratedTitle(long)).toBe("one two three four five six seven eight nine ten eleven twelve...")
+  })
+
+  test("fallbackTitleFromUserText summarizes the first sentence within 12 words", () => {
+    expect(
+      fallbackTitleFromUserText(
+        "the footer progress bar is not cool. also make the session id copyable and summarize the first prompt",
+      ),
+    ).toBe("the footer progress bar is not cool.")
+    expect(
+      fallbackTitleFromUserText("one two three four five six seven eight nine ten eleven twelve thirteen fourteen"),
+    ).toBe("one two three four five six seven eight nine ten eleven twelve...")
   })
 })

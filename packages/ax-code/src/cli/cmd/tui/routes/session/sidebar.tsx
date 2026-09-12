@@ -12,6 +12,7 @@ import { TodoItem } from "../../component/todo-item"
 import { useCommandDialog } from "../../component/dialog-command"
 import { useSDK } from "@tui/context/sdk"
 import { useToast } from "../../ui/toast"
+import { Clipboard } from "../../util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { EventQuery } from "@/replay/query"
@@ -208,6 +209,23 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     }
   }
 
+  // Clicking the session id copies it so it can be pasted into issues, logs,
+  // or `--session` flags without selecting the text by hand.
+  async function copySessionID(id: string) {
+    try {
+      await Clipboard.copy(id)
+      toast.show({ message: "Session ID copied to clipboard", variant: "success", duration: 1500 })
+    } catch (error) {
+      log.warn("copy session id failed", {
+        command: "tui.sidebar.session.copy",
+        status: "error",
+        sessionID: id,
+        error,
+      })
+      toast.show({ message: "Failed to copy session ID", variant: "error" })
+    }
+  }
+
   // Coarse refresh key for sidebar surfaces that read the session event log.
   // Changes only when the message count grows or the session status type
   // transitions (e.g. running -> idle), NOT on every streamed part update.
@@ -362,10 +380,18 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
           >
             <box flexShrink={0} gap={1} paddingRight={1}>
               <box paddingRight={1}>
+                <text
+                  fg={theme.textMuted}
+                  wrapMode="none"
+                  onMouseUp={() => {
+                    void copySessionID(session().id)
+                  }}
+                >
+                  {session().id}
+                </text>
                 <text fg={theme.text}>
                   <b>{session().title}</b>
                 </text>
-                <text fg={theme.textMuted}>{session().id}</text>
                 <Show when={sidebarStatusLabel()}>
                   {(label) => (
                     <text fg={theme.warning} wrapMode="none">

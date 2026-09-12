@@ -25,6 +25,16 @@ const TITLE_CONTEXT_MAX_CHARS = TITLE_CONTEXT_MAX_TOKENS * 4
 const TITLE_TIMEOUT_MS = 30_000
 const TITLE_MAX_LEN = 100
 const FALLBACK_TITLE_MAX_LEN = 80
+/** Titles are rendered in narrow TUI surfaces (sidebar, tab), so keep them to
+ *  a short, glanceable summary of the first prompt. */
+const TITLE_MAX_WORDS = 12
+
+/** Collapse whitespace and clamp a title to at most `maxWords` words. */
+export function capTitleWords(text: string, maxWords = TITLE_MAX_WORDS): string {
+  const words = text.replace(/\s+/g, " ").trim().split(" ").filter(Boolean)
+  if (words.length <= maxWords) return words.join(" ")
+  return `${words.slice(0, maxWords).join(" ")}...`
+}
 
 export function shouldSkipAutomaticTitle(input: { providerID: ProviderID }) {
   return input.providerID === AX_ENGINE_PROVIDER_ID
@@ -85,7 +95,8 @@ export function cleanGeneratedTitle(text: string): string | undefined {
     .find((candidate) => candidate.length > 0 && !/^(here'?s|the)\s+(a\s+)?title\b/i.test(candidate))
 
   if (!line) return undefined
-  return line.length > TITLE_MAX_LEN ? line.substring(0, TITLE_MAX_LEN - 3) + "..." : line
+  const capped = line.length > TITLE_MAX_LEN ? line.substring(0, TITLE_MAX_LEN - 3) + "..." : line
+  return capTitleWords(capped)
 }
 
 /** Deterministic fallback when the title model fails or returns empty text. */
@@ -97,7 +108,12 @@ export function fallbackTitleFromUserText(text: string): string | undefined {
   if (!line) return undefined
   const collapsed = line.replace(/\s+/g, " ").trim()
   if (!collapsed) return undefined
-  return collapsed.length > FALLBACK_TITLE_MAX_LEN ? collapsed.slice(0, FALLBACK_TITLE_MAX_LEN - 3) + "..." : collapsed
+  // Prefer the first sentence so the fallback reads as a summary of the first
+  // prompt rather than a mid-sentence cut, then clamp to the word budget
+  // shared with generated titles.
+  const firstSentence = (collapsed.match(/^[^.!?]*[.!?]?/)?.[0] ?? collapsed).trim() || collapsed
+  const summary = capTitleWords(firstSentence)
+  return summary.length > FALLBACK_TITLE_MAX_LEN ? summary.slice(0, FALLBACK_TITLE_MAX_LEN - 3) + "..." : summary
 }
 
 function firstUserText(contextMessages: MessageV2.WithParts[]): string {
@@ -187,7 +203,7 @@ export async function ensureTitle(input: {
         messages: [
           {
             role: "user",
-            content: "Generate a title for this conversation:\n",
+            content: `Generate a title for this conversation in at most ${TITLE_MAX_WORDS} words:\n`,
           },
           ...(hasOnlySubtaskParts
             ? [{ role: "user" as const, content: subtaskParts.map((p) => p.prompt).join("\n") }]
