@@ -181,3 +181,8 @@ export function shouldAutoPlayMatrixRain(input: {
   if (input.hasSelection) return false
   return shouldUseTuiAnimations({ userEnabled: input.animationsEnabled, runtime: input.runtime })
 }
+
+/** Stop a playing overlay if a dialog or selection appears after it started. */
+export function shouldStopMatrixRain(input: { dialogOpen: boolean; hasSelection: boolean }): boolean {
+  return input.dialogOpen || input.hasSelection
+}

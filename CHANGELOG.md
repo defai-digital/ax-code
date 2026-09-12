@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.16.2] - 2026-09-12
+
+### Added
+
+- Opt-in Matrix rain overlay when a scheduled task completes, plus a manual Play Matrix rain command.
+
+### Changed
+
+- Auto-approve `external_directory` in autonomous full-access mode so unanalyzable dynamic shell paths no longer prompt on every call when the sandbox is off.
+
+### Fixed
+
+- Arm idle recap on first observation of a settled session and when switching to one, so resume and session navigation get an automatic recap instead of waiting for another idle edge.
+- Dismiss the Matrix rain overlay if a dialog opens while it is playing.
+
 ## [7.16.1] - 2026-09-12
 
 ### Changed

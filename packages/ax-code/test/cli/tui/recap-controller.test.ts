@@ -18,8 +18,12 @@ function setup(initial: Partial<RecapSnapshot> = {}) {
     autoScope: "turn",
     ...initial,
   }
-  const pending = Promise.withResolvers<{ data?: { text: string | null }; error?: unknown }>()
-  const request = vi.fn().mockReturnValue(pending.promise)
+  const deferreds: Array<PromiseWithResolvers<{ data?: { text: string | null }; error?: unknown }>> = []
+  const request = vi.fn().mockImplementation(() => {
+    const pending = Promise.withResolvers<{ data?: { text: string | null }; error?: unknown }>()
+    deferreds.push(pending)
+    return pending.promise
+  })
   const show = vi.fn()
   const notify = vi.fn()
   const controller = createRecapController({
@@ -37,7 +41,16 @@ function setup(initial: Partial<RecapSnapshot> = {}) {
     Object.assign(state, next)
     controller.update()
   }
-  return { controller, request, show, notify, pending, update }
+  return {
+    controller,
+    request,
+    show,
+    notify,
+    get pending() {
+      return deferreds[0]!
+    },
+    update,
+  }
 }
 
 describe("conversation recap lifecycle", () => {
@@ -53,11 +66,28 @@ describe("conversation recap lifecycle", () => {
     t.controller.dispose()
   })
 
-  test("schedules only after completion and suppresses duplicate automatic requests", async () => {
+  test("arms automatic recap when first observing a settled idle session", async () => {
     const t = setup()
+    await vi.advanceTimersByTimeAsync(4999)
+    expect(t.request).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(t.request).toHaveBeenCalledWith(expect.objectContaining({ sessionID: "ses_a", scope: "turn" }))
+    t.controller.dispose()
+  })
+
+  test("arms automatic recap when navigating to a settled idle session", async () => {
+    const t = setup({ status: "busy" })
+    t.update({ status: "idle" })
+    t.update({ sessionID: "ses_b", revision: "turn_b" })
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(t.request).toHaveBeenCalledWith(expect.objectContaining({ sessionID: "ses_b" }))
+    t.controller.dispose()
+  })
+
+  test("schedules only after completion and suppresses duplicate automatic requests", async () => {
+    const t = setup({ status: "busy" })
     await vi.advanceTimersByTimeAsync(6000)
     expect(t.request).not.toHaveBeenCalled()
-    t.update({ status: "busy" })
     t.update({ status: "idle" })
     await vi.advanceTimersByTimeAsync(4999)
     expect(t.request).not.toHaveBeenCalled()

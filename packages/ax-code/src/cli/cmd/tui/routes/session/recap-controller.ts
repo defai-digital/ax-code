@@ -73,22 +73,25 @@ export function createRecapController(host: {
     const next = host.snapshot()
     const old = previous
     previous = next
-    if (!old) return
     // Subagents work in child sessions while the parent reports idle, so a
     // finished process means the whole session tree has settled.
     const finished = next.status === "idle" && !next.treeBusy
-    const wasFinished = old.status === "idle" && !old.treeBusy
-    const changed = next.sessionID !== old.sessionID || next.revision !== old.revision
-    if (changed || !finished) {
+    const wasFinished = old ? old.status === "idle" && !old.treeBusy : false
+    const sessionChanged = Boolean(old && next.sessionID !== old.sessionID)
+    const changed = sessionChanged || Boolean(old && next.revision !== old.revision)
+    if (old && (changed || !finished)) {
       invalidate()
       attempted = false
-    } else if ((next.input !== "" && next.input !== old.input) || (!next.enabled && old.enabled)) {
+    } else if (old && ((next.input !== "" && next.input !== old.input) || (!next.enabled && old.enabled))) {
       pauseAutomatic()
     }
+    // Arm on first observation of a settled session, on navigating to one,
+    // and on the existing idle-edge / revision / prompt-cleared paths
+    // (ADR-095). Requiring a same-session idle edge skipped resume and
+    // session switches: the first snapshot was stored and never armed.
     if (
-      next.sessionID === old.sessionID &&
       finished &&
-      (!wasFinished || changed || (old.input !== "" && next.input === "")) &&
+      (!old || sessionChanged || !wasFinished || changed || (old.input !== "" && next.input === "")) &&
       next.enabled &&
       next.hasMessages &&
       !next.input &&

@@ -10,6 +10,7 @@ import {
   createMatrixRain,
   matrixRainRows,
   shouldAutoPlayMatrixRain,
+  shouldStopMatrixRain,
   tickMatrixRain,
 } from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
 
@@ -192,5 +193,11 @@ describe("matrix rain auto-play gate", () => {
   test("honors the animation preference and the compiled-runtime policy", () => {
     expect(shouldAutoPlayMatrixRain({ ...base, animationsEnabled: false })).toBe(false)
     expect(shouldAutoPlayMatrixRain({ ...base, runtime: "compiled" })).toBe(false)
+  })
+
+  test("stops a playing overlay if a dialog or selection appears", () => {
+    expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: false })).toBe(false)
+    expect(shouldStopMatrixRain({ dialogOpen: true, hasSelection: false })).toBe(true)
+    expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: true })).toBe(true)
   })
 })

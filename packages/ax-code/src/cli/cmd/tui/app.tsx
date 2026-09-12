@@ -87,7 +87,7 @@ import { parseJsonPayload } from "@/util/json-value"
 import { createTuiDialogLoaders } from "./tui-dialogs"
 import { appCommands, type AppCommandSandbox } from "./app-commands"
 import { MatrixRain } from "./component/matrix-rain"
-import { shouldAutoPlayMatrixRain } from "./component/matrix-rain-view-model"
+import { shouldAutoPlayMatrixRain, shouldStopMatrixRain } from "./component/matrix-rain-view-model"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -217,6 +217,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // available; the automatic trigger is opt-in via `matrix_rain_on_task_complete`.
   const [matrixPlaying, setMatrixPlaying] = createSignal(false)
   const playMatrixRain = () => setMatrixPlaying(true)
+  createEffect(() => {
+    if (!matrixPlaying()) return
+    if (shouldStopMatrixRain({ dialogOpen: dialog.stack.length > 0, hasSelection: false })) {
+      setMatrixPlaying(false)
+    }
+  })
   let sessionRoutePromise: Promise<Component> | undefined
   let sessionRouteLoadFailed = false
 
