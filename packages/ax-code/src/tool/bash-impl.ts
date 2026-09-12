@@ -968,6 +968,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           assertStaticRedirectTarget(target)
           const literal = expandLeadingTilde(target, home)
           if (!literal) throw new Error("Dynamic redirection targets are not allowed")
+          // Instance.containsPath(normalized) below records outside-workspace
+          // redirect targets for the external-directory prompt; this join is not unsandboxed.
           const resolved = Isolation.resolveClosestExistingPath(path.resolve(cwd, literal))
           if (!resolved) continue
           const normalized =
