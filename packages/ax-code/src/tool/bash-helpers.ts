@@ -49,6 +49,12 @@ export function decodeShellLiteral(value: string): string | undefined {
   return quote === undefined ? result : undefined
 }
 
+/** Home directory the spawned shell will use for `~` expansion. */
+export function spawnHomeDirectory(env: NodeJS.Dict<string> = process.env): string {
+  const home = env.HOME || env.USERPROFILE
+  return home || os.homedir()
+}
+
 /** Expand only the current user's POSIX home shorthand. `~user` requires a
  * shell/user database lookup and is therefore treated as dynamic. */
 export function expandLeadingTilde(value: string, home = os.homedir()): string | undefined {

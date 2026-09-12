@@ -135,6 +135,9 @@ describe("isolation.assertWrite", () => {
       expect(() => Isolation.assertWrite(state, path.join(dir, "escape", "new.txt"), dir, dir)).toThrow(
         "Path is outside workspace boundary",
       )
+      expect(Isolation.resolveClosestExistingPath(path.join(dir, "escape", "new.txt"))).toBe(
+        path.join(await fs.realpath(outside), "new.txt"),
+      )
     },
   )
 })

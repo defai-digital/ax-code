@@ -1213,6 +1213,84 @@ describe("tool.bash isolation", () => {
     }
   })
 
+  test("expands tildes against plugin-adjusted HOME before admission", async () => {
+    await using outside = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    const originalHome = process.env.HOME
+    const originalProfile = process.env.USERPROFILE
+    process.env.HOME = tmp.path
+    process.env.USERPROFILE = tmp.path
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const stolen = path.join(outside.path, "plugin.cfg")
+          const decoy = path.join(tmp.path, "plugin.cfg")
+          const trigger = vi.spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
+            if (name === "shell.env" && output && typeof output === "object")
+              Object.assign(output, { env: { HOME: outside.path } })
+            return output
+          })
+          try {
+            await expect(
+              bash.execute(
+                {
+                  command: "git config --file ~/plugin.cfg user.email stolen@example.test",
+                  description: "Check plugin HOME tilde",
+                },
+                {
+                  ...ctx,
+                  ask: async (request) => {
+                    if (request.permission === "external_directory") {
+                      throw new Error("Fixture declined plugin HOME destination")
+                    }
+                  },
+                },
+              ),
+            ).rejects.toThrow("Fixture declined plugin HOME destination")
+            expect(await Filesystem.exists(stolen)).toBe(false)
+            expect(await Filesystem.exists(decoy)).toBe(false)
+          } finally {
+            trigger.mockRestore()
+          }
+        },
+      })
+    } finally {
+      if (originalHome === undefined) delete process.env.HOME
+      else process.env.HOME = originalHome
+      if (originalProfile === undefined) delete process.env.USERPROFILE
+      else process.env.USERPROFILE = originalProfile
+    }
+  })
+
+  test("asks before writing a new file through a workspace symlink that escapes", async () => {
+    await using outside = await tmpdir()
+    await using tmp = await tmpdir({ git: true })
+    await fs.symlink(outside.path, path.join(tmp.path, "escape"), process.platform === "win32" ? "junction" : "dir")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const target = path.join(outside.path, "stolen.txt")
+        await expect(
+          bash.execute(
+            { command: "printf stolen > escape/stolen.txt", description: "Write through escape symlink" },
+            {
+              ...ctx,
+              ask: async (request) => {
+                if (request.permission === "external_directory") {
+                  throw new Error("Fixture declined symlink destination")
+                }
+              },
+            },
+          ),
+        ).rejects.toThrow("Fixture declined symlink destination")
+        expect(await Filesystem.exists(target)).toBe(false)
+      },
+    })
+  })
+
   test("checks plugin-adjusted Git environment before admission and preserves it after approval", async () => {
     await using outside = await tmpdir()
     await using tmp = await tmpdir({ git: true })

@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vitest"
+import os from "os"
 import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
   decodeShellLiteral,
   expandLeadingTilde,
+  spawnHomeDirectory,
   hasDynamicRedirection,
   hasDynamicShellExpansion,
   isStaticPathArg,
@@ -59,6 +61,12 @@ describe("tool.bash helpers", () => {
     expect(expandLeadingTilde("~/outside.txt", "/home/alice")).toBe("/home/alice/outside.txt")
     expect(expandLeadingTilde("~bob/outside.txt", "/home/alice")).toBeUndefined()
     expect(expandLeadingTilde("relative.txt", "/home/alice")).toBe("relative.txt")
+  })
+
+  test("prefers spawn HOME then USERPROFILE for tilde expansion", () => {
+    expect(spawnHomeDirectory({ HOME: "/tmp/plugin-home", USERPROFILE: "C:\\Users\\alice" })).toBe("/tmp/plugin-home")
+    expect(spawnHomeDirectory({ USERPROFILE: "C:\\Users\\alice" })).toBe("C:\\Users\\alice")
+    expect(spawnHomeDirectory({ HOME: "", USERPROFILE: "" })).toBe(os.homedir())
   })
 
   test("treats globs and brace expansion as dynamic shell paths", () => {

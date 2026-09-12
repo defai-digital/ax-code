@@ -6,6 +6,29 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.16.0] - 2026-09-12
+
+### Changed
+
+- Upgrade ax-tui to 0.1.4.
+- Compact the goal planner rail: a single active child stays on one row, and the chip says Planning goal while the plan writer runs instead of Goal paused.
+- Bound alternating failed-mutation loops with `autonomy.stall.failed_mutation_attempts` (default 30) and expose `autonomy.stall.max_consecutive_errors` (default 3) through `/limits` and the autonomous guide.
+
+### Fixed
+
+- Expand bash `~` paths against the spawn `HOME` (including plugin `shell.env` overrides) so tilde admission matches the shell that will run.
+- Canonicalize new-file destinations through the closest existing ancestor so a workspace symlink that points outside the project requires an external-directory prompt instead of writing silently.
+- Locate nested `sh -c` payloads by decoded value in raw argument space so quote-sensitive wrappers cannot scan the wrapper instead of the inner command.
+- Decode static POSIX shell words before nested command admission, including concatenated quotes and quoted `-c`.
+- Require interactive admission for unresolved Git config destinations (`--global`, `--system`, inherited `GIT_CONFIG`, gitfiles) and honor `metadata.requireInteractive` on every approval path.
+- Guard executable Git configuration families and quoted inner-shell config writes.
+- Parse attached `-f` destinations, modern `git config set`, section mutation, and global location flags without treating flag-like values as scopes.
+- Align TUI persistent permission choices with backend interaction policy so Always is not offered for interactive-only requests.
+- Wait for timeout settlement before admitting queued successors, and keep workflow cleanup in one parallel slot.
+- Fix synchronous Windows bash process-tree cleanup.
+- Preserve UTF-8 across foreground stream chunks and mark exact-cap overflow.
+- Strip MiniMax `<mm:think>` reasoning from Council JSON fallback before parsing.
+
 ## [7.15.12] - 2026-09-11
 
 ### Fixed

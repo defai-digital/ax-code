@@ -65,7 +65,10 @@ export namespace Isolation {
     return Filesystem.resolve(filepath)
   }
 
-  function resolveClosestExistingPath(filepath: string) {
+  /** Canonicalize `filepath` by realpathing the closest existing ancestor.
+   * Missing suffix components are reattached so a new file through a
+   * workspace symlink is judged at the symlink target, not the lexical path. */
+  export function resolveClosestExistingPath(filepath: string) {
     const resolved = resolvePath(filepath)
     const suffix: string[] = []
     let current = resolved

@@ -46,6 +46,7 @@ import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
   expandLeadingTilde,
+  spawnHomeDirectory,
   decodeShellLiteral,
   hasDynamicRedirection,
   hasDynamicShellExpansion,
@@ -468,6 +469,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         ...process.env,
         ...shellEnv.env,
       })
+      const home = spawnHomeDirectory(sanitizedEnv)
       const gitRelocationEnvironment = ["GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_CONFIG"].some(
         (name) => sanitizedEnv[name] !== undefined,
       )
@@ -506,12 +508,12 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           dynamicPathAccess = true
           return
         }
-        const literal = expandLeadingTilde(arg)
+        const literal = expandLeadingTilde(arg, home)
         if (!literal) {
           dynamicPathAccess = true
           return
         }
-        const resolved = await fs.realpath(path.resolve(cwd, literal)).catch(() => path.resolve(cwd, literal))
+        const resolved = Isolation.resolveClosestExistingPath(path.resolve(cwd, literal))
         const normalized =
           process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
         resolvedPaths.add(normalized)
@@ -695,7 +697,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             // Keep the directory as raw input until the containment check;
             // append the implicit config filename only when resolving below.
             const target = stripShellQuotes(explicitFile ?? location.gitDir ?? ".git")
-            const targetPath = expandLeadingTilde(target)
+            const targetPath = expandLeadingTilde(target, home)
             // Validate every -C value before resolving: dynamic ($VAR, globs)
             // and ~user values cannot name a static base directory, so the
             // effective write target is unknowable — force the interactive
@@ -704,7 +706,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             const cdParts: string[] = []
             let cdUnresolvable = false
             for (const raw of location.cdChain) {
-              const part = expandLeadingTilde(stripShellQuotes(raw))
+              const part = expandLeadingTilde(stripShellQuotes(raw), home)
               if (part === undefined || hasDynamicShellExpansion(part)) {
                 cdUnresolvable = true
                 break
@@ -737,8 +739,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 // Instance.containsPath(absolute) must check where Git creates it.
                 lexical = path.join(await fs.realpath(gitDirectory), "config")
               }
-              // Resolve before the benign-key exception, including symlinked .git.
-              const absolute = await fs.realpath(lexical).catch(() => lexical)
+              // Resolve before the benign-key exception, including symlinked .git
+              // and new files created through a parent symlink.
+              const absolute = Isolation.resolveClosestExistingPath(lexical)
               if (explicitFile || dangerous || !Instance.containsPath(absolute)) {
                 const resolved = await recordResolvedPath(absolute)
                 if (resolved) redirectWritePaths.add(resolved)
@@ -963,9 +966,9 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // Skip command substitution / fd dup (&1 etc.) — opaque or non-path.
           if (!target || /^&/.test(target)) continue
           assertStaticRedirectTarget(target)
-          const literal = expandLeadingTilde(target)
+          const literal = expandLeadingTilde(target, home)
           if (!literal) throw new Error("Dynamic redirection targets are not allowed")
-          const resolved = await fs.realpath(path.resolve(cwd, literal)).catch(() => path.resolve(cwd, literal))
+          const resolved = Isolation.resolveClosestExistingPath(path.resolve(cwd, literal))
           if (!resolved) continue
           const normalized =
             process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
