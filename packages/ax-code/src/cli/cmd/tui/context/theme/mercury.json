@@ -37,10 +37,10 @@
     "neutral-000": "#ffffff",
     "neutral-150": "#ededf3",
 
-    "border-light": "#7073931a",
-    "border-light-subtle": "#7073930f",
-    "border-dark": "#b4b7c81f",
-    "border-dark-subtle": "#b4b7c814",
+    "border-light": "#f0f0f4",
+    "border-light-subtle": "#f7f7f9",
+    "border-dark": "#2a2a35",
+    "border-dark-subtle": "#23232e",
 
     "diff-added-light": "#1885541a",
     "diff-removed-light": "#d032751a",
