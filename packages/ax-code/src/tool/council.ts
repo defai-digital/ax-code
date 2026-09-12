@@ -440,16 +440,6 @@ export const CouncilTool = Tool.define("council", async () => {
     description: DESCRIPTION,
     parameters,
     async execute(args, ctx) {
-      await ctx.ask({
-        permission: "council",
-        patterns: ["*"],
-        always: ["*"],
-        metadata: {
-          question: args.question.slice(0, 200),
-          kind: args.kind ?? "review",
-        },
-      })
-
       // Re-read project config so mid-session ax-code.json edits apply.
       const cfg = await Config.getFresh()
       const modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
@@ -518,17 +508,21 @@ export const CouncilTool = Tool.define("council", async () => {
         members = members.slice(0, budgetCheck.allowedMembers)
       }
 
-      if (members.length === 0) {
+      if (members.length < 2) {
+        // Mirror the arena guard: a one-member "council" can never reach
+        // consensus, so report instead of burning a review call (ADR-097).
+        // Explicit same-gateway model pairs still count as two members.
+        const insufficient = members.length > 0
         const metadata: CouncilMetadata = {
-          status: "no_members",
-          totalMembers: 0,
+          status: insufficient ? "insufficient_members" : "no_members",
+          totalMembers: members.length,
           successfulMembers: 0,
           providerCount: providerSnap.count,
           providerIDs: providerSnap.ids,
           selectionErrors: resolution.rejected,
         }
         return {
-          title: "Council: no members",
+          title: insufficient ? "Council: need ≥2 members" : "Council: no members",
           output:
             EnsemblePreflight.councilInsufficientProvidersMessage(providerSnap) +
             (resolution.rejected.length
@@ -540,6 +534,18 @@ export const CouncilTool = Tool.define("council", async () => {
           metadata,
         }
       }
+
+      // Ask only once the council can actually run: preflight paths (disabled,
+      // rejected context, budget, no/insufficient members) never prompt (ADR-097).
+      await ctx.ask({
+        permission: "council",
+        patterns: ["*"],
+        always: ["*"],
+        metadata: {
+          question: args.question.slice(0, 200),
+          kind: args.kind ?? "review",
+        },
+      })
 
       const resolvedMembers: ResolvedMember[] = await Promise.all(
         members.map(async (member) => {

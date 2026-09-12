@@ -13,6 +13,7 @@ import { useTerminalDimensions } from "ax-tui/solid"
 import { useTheme } from "@tui/context/theme"
 import { Logo } from "../component/logo"
 import { ModeChips } from "../component/mode-chips"
+import { WorkModeNotice } from "../component/work-mode-notice"
 import { useCommandDialog } from "../component/dialog-command"
 import { recentSessions, recentSessionTitle } from "../component/session-picker-view-model"
 import { homeStatusBarLayout, homeStatusBarMcpWidth } from "./home-layout"
@@ -208,6 +209,7 @@ export function Home() {
         </Show>
         <box height={1} minHeight={0} flexShrink={1} />
         <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
+          <WorkModeNotice />
           <Prompt
             ref={(r) => {
               prompt = r

@@ -15,6 +15,7 @@ import { useKV } from "@tui/context/kv"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { runMode, runModeLabel, type RunMode } from "./prompt/run-mode-view-model"
 import { footerToggleLabel } from "./prompt/footer-toggle"
+import { workModeAvailability, workModeChipView } from "./work-mode-availability"
 
 const SUPER_LONG_PINK = RGBA.fromHex("#ff4db8")
 /** Work-mode chip backgrounds — fixed green/blue/purple, independent of the active palette. */
@@ -48,6 +49,20 @@ export function ModeChips() {
 
   const chipRunMode = createMemo(() => runMode({ autonomous: sync.data.autonomous, superLong: sync.data.superLong }))
   const chipWorkMode = createMemo(() => WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))
+  // Availability follows the reactive provider list and config: provider
+  // connect/disconnect, bootstrap, and new-session resets all update the chip
+  // with no manual refresh (ADR-097).
+  const workModeView = createMemo(() =>
+    workModeChipView(
+      chipWorkMode(),
+      workModeAvailability({
+        mode: chipWorkMode(),
+        providers: sync.data.provider,
+        providerLoaded: sync.data.provider_loaded,
+        config: sync.data.config?.modes,
+      }),
+    ),
+  )
 
   function modeChip(input: {
     label: string
@@ -86,9 +101,10 @@ export function ModeChips() {
   return (
     <box flexDirection="row" flexShrink={0}>
       {modeChip({
-        // One mode at a time; click cycles Agent → Council → Arena.
-        label: WorkMode.label(chipWorkMode()),
-        active: true,
+        // One mode at a time; click cycles to the next available mode.
+        // Unavailable modes render hollow with the reason in the label.
+        label: workModeView().label,
+        active: workModeView().active,
         activeFg: theme.text,
         inactiveFg: theme.textMuted,
         background: WORK_MODE_CHIP_BG[chipWorkMode()],

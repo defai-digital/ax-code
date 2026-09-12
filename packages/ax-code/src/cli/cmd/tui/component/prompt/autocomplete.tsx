@@ -507,7 +507,17 @@ export function Autocomplete(props: {
     // Builtin server-side prompt commands that should appear in "/" autocomplete.
     // Keep in sync with Command.Default in packages/ax-code/src/command/index.ts.
     // Client-only slashes (e.g. /model, /sessions) are registered separately via command.slashes().
-    const defaultCommandSlashAllowlist = new Set(["init", "review", "plan", "debug", "goal", "council", "verified-fix"])
+    const defaultCommandSlashAllowlist = new Set([
+      "init",
+      "review",
+      "plan",
+      "debug",
+      "goal",
+      "council",
+      "arena",
+      "mode",
+      "verified-fix",
+    ])
 
     // Collect slash names already registered client-side so we skip duplicates
     // from the server list. A duplicate would show two identical suggestions

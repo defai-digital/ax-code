@@ -58,6 +58,10 @@ describe("councilView", () => {
     })
     expect(councilView({ status: "budget_rejected" }).tone).toBe("error")
     expect(councilView({ status: "no_members" }).tone).toBe("error")
+    expect(councilView({ status: "insufficient_members" })).toMatchObject({
+      tone: "error",
+      statusLabel: "Need ≥2 members",
+    })
   })
 
   test("relabels a lone singleton as a single answer", () => {

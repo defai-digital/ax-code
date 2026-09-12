@@ -202,14 +202,14 @@ describe("council execute()", () => {
 })
 
 describe("council member robustness", () => {
-  const singleMemberConfig = (council: Record<string, unknown> = {}) =>
-    ({ modes: { council: { enabled: true, maxMembers: 1, debateRounds: 0, ...council } } }) as any
-  const oneMember = () =>
-    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a"]), rejected: [] })
+  const memberConfig = (council: Record<string, unknown> = {}) =>
+    ({ modes: { council: { enabled: true, maxMembers: 2, debateRounds: 0, ...council } } }) as any
+  const twoMembers = () =>
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
 
   test("generateObject schema failure falls back to generateText JSON", async () => {
-    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig())
-    oneMember()
+    vi.mocked(Config.getFresh).mockResolvedValue(memberConfig())
+    twoMembers()
     vi.mocked(generateObject).mockRejectedValue(new Error("No object generated: response did not match schema."))
     vi.mocked(generateText).mockResolvedValue({
       text: '```json\n{"overall":"recovered","issues":[{"severity":"HIGH","category":"security","summary":"Missing rate limit"}]}\n```',
@@ -218,8 +218,8 @@ describe("council member robustness", () => {
     const tool = await CouncilTool.init()
     const result = await tool.execute({ question: "Review auth" }, ctx)
 
-    expect(generateText).toHaveBeenCalledTimes(1)
-    expect(result.metadata.successfulMembers).toBe(1)
+    expect(generateText).toHaveBeenCalledTimes(2)
+    expect(result.metadata.successfulMembers).toBe(2)
     expect(result.metadata.failedMembers).toBe(0)
     // Severity normalization still applies to the fallback path.
     expect(result.output).toContain("[high]")
@@ -227,8 +227,8 @@ describe("council member robustness", () => {
   })
 
   test("stream error events cannot become successful member results", async () => {
-    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig())
-    oneMember()
+    vi.mocked(Config.getFresh).mockResolvedValue(memberConfig())
+    twoMembers()
     generateObject.mockResolvedValue({
       object: { overall: "partial", issues: [] },
       streamError: Object.assign(new Error(""), { name: "AI_APICallError", statusCode: 504 }),
@@ -237,20 +237,20 @@ describe("council member robustness", () => {
     const result = await tool.execute({ question: "Review auth" }, ctx)
     expect(result.metadata.successfulMembers).toBe(0)
     expect(result.output).toContain("HTTP 504")
-    expect(generateObject).toHaveBeenCalledTimes(2)
+    expect(generateObject).toHaveBeenCalledTimes(4)
     expect(generateText).not.toHaveBeenCalled()
   })
 
   test("member fails when the generateText fallback is also unparseable and reports both stages", async () => {
-    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig())
-    oneMember()
+    vi.mocked(Config.getFresh).mockResolvedValue(memberConfig())
+    twoMembers()
     vi.mocked(generateObject).mockRejectedValue(new Error("No object generated: could not parse the response."))
     vi.mocked(generateText).mockResolvedValue({ text: "I cannot comply.", finishReason: "length" } as any)
 
     const tool = await CouncilTool.init()
     const result = await tool.execute({ question: "Review auth" }, ctx)
 
-    expect(result.metadata.failedMembers).toBe(1)
+    expect(result.metadata.failedMembers).toBe(2)
     expect(result.metadata.successfulMembers).toBe(0)
     // The bare primary error used to be re-thrown, hiding why the fallback
     // failed. Both stages, the finish reason, and a bounded snippet must show.
@@ -264,8 +264,8 @@ describe("council member robustness", () => {
   // block is not stripped first (the main prompt path strips it via
   // attachThinkTagStream; this direct call did not).
   test("streamed fallback strips MiniMax mm:think reasoning before parsing json", async () => {
-    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig())
-    oneMember()
+    vi.mocked(Config.getFresh).mockResolvedValue(memberConfig())
+    twoMembers()
     vi.mocked(generateObject).mockRejectedValue(new Error("No object generated: could not parse the response."))
     vi.mocked(generateText).mockResolvedValue({
       text:
@@ -277,15 +277,15 @@ describe("council member robustness", () => {
     const tool = await CouncilTool.init()
     const result = await tool.execute({ question: "Review auth" }, ctx)
 
-    expect(generateText).toHaveBeenCalledTimes(1)
-    expect(result.metadata.successfulMembers).toBe(1)
+    expect(generateText).toHaveBeenCalledTimes(2)
+    expect(result.metadata.successfulMembers).toBe(2)
     expect(result.metadata.failedMembers).toBe(0)
     expect(result.output).toContain("Tag-stripped JSON parsed")
   })
 
   test("incompatible specificationVersion is reported as a provider package error", async () => {
-    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig())
-    oneMember()
+    vi.mocked(Config.getFresh).mockResolvedValue(memberConfig())
+    twoMembers()
     vi.mocked(generateObject).mockRejectedValue(
       new Error(
         'Unsupported model version v4 for provider "anthropic" and model "claude-sonnet-4-5". ' +
@@ -298,16 +298,16 @@ describe("council member robustness", () => {
 
     // The spec error must not trigger the JSON fallback.
     expect(generateText).not.toHaveBeenCalled()
-    expect(result.metadata.failedMembers).toBe(1)
+    expect(result.metadata.failedMembers).toBe(2)
     expect(result.output).toContain('provider package for "a" is incompatible with this ax-code build')
   })
 })
 
 describe("council timeout", () => {
-  const singleMemberConfig = (council: Record<string, unknown> = {}) =>
-    ({ modes: { council: { enabled: true, maxMembers: 1, debateRounds: 0, ...council } } }) as any
-  const oneMember = () =>
-    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a"]), rejected: [] })
+  const memberConfig = (council: Record<string, unknown> = {}) =>
+    ({ modes: { council: { enabled: true, maxMembers: 2, debateRounds: 0, ...council } } }) as any
+  const twoMembers = () =>
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
   // Hang until the member abort signal fires so the per-member timeout triggers.
   const hangUntilAbort = () =>
     vi.mocked(generateObject).mockImplementation(
@@ -322,14 +322,14 @@ describe("council timeout", () => {
   })
 
   test("timeout error directs the USER to raise modes.council.timeoutMs", async () => {
-    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig({ timeoutMs: 1 }))
-    oneMember()
+    vi.mocked(Config.getFresh).mockResolvedValue(memberConfig({ timeoutMs: 1 }))
+    twoMembers()
     hangUntilAbort()
 
     const tool = await CouncilTool.init()
     const result = await tool.execute({ question: "Review auth" }, ctx)
 
-    expect(result.metadata.failedMembers).toBe(1)
+    expect(result.metadata.failedMembers).toBe(2)
     expect(result.output).toContain("timeout: member exceeded 1ms")
     expect(result.output).toContain("Ask the USER to raise modes.council.timeoutMs")
     expect(result.output).toContain("modes.council.memberTimeoutMs")
@@ -337,28 +337,28 @@ describe("council timeout", () => {
   })
 
   test("reasoning members get a scaled timeout", async () => {
-    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig({ timeoutMs: 1 }))
-    oneMember()
+    vi.mocked(Config.getFresh).mockResolvedValue(memberConfig({ timeoutMs: 1 }))
+    twoMembers()
     vi.mocked(Provider.getModel).mockResolvedValue({ capabilities: { reasoning: true } } as any)
     hangUntilAbort()
 
     const tool = await CouncilTool.init()
     const result = await tool.execute({ question: "Review auth" }, ctx)
 
-    expect(result.metadata.failedMembers).toBe(1)
+    expect(result.metadata.failedMembers).toBe(2)
     expect(result.output).toContain(`timeout: member exceeded ${1 * DEFAULT_REASONING_TIMEOUT_SCALE}ms`)
   })
 
   test("memberTimeoutMs override beats the reasoning scale", async () => {
-    vi.mocked(Config.getFresh).mockResolvedValue(singleMemberConfig({ timeoutMs: 1, memberTimeoutMs: { "a/m": 42 } }))
-    oneMember()
+    vi.mocked(Config.getFresh).mockResolvedValue(memberConfig({ timeoutMs: 1, memberTimeoutMs: { "a/m": 42 } }))
+    twoMembers()
     vi.mocked(Provider.getModel).mockResolvedValue({ capabilities: { reasoning: true } } as any)
     hangUntilAbort()
 
     const tool = await CouncilTool.init()
     const result = await tool.execute({ question: "Review auth" }, ctx)
 
-    expect(result.metadata.failedMembers).toBe(1)
+    expect(result.metadata.failedMembers).toBe(2)
     expect(result.output).toContain("timeout: member exceeded 42ms")
   })
 })
@@ -508,5 +508,45 @@ describe("council request shaping", () => {
       expect(request.maxOutputTokens).toBeGreaterThan(0)
       expect(request.maxRetries).toBe(0)
     }
+  })
+})
+
+describe("council preflight approval boundaries", () => {
+  test("a single resolved member short-circuits without inference or approval", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { council: { enabled: true, maxMembers: 3 } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a"]), rejected: [] })
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(result.metadata.status).toBe("insufficient_members")
+    expect(result.metadata.totalMembers).toBe(1)
+    expect(result.title).toContain("≥2")
+    expect(generateObject).not.toHaveBeenCalled()
+    expect(generateText).not.toHaveBeenCalled()
+    expect(ctx.ask).not.toHaveBeenCalled()
+  })
+
+  test("disabled and empty preflight paths never ask for approval", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { council: { enabled: false } } } as any)
+    const tool = await CouncilTool.init()
+    const disabled = await tool.execute({ question: "Review auth" }, ctx)
+    expect(disabled.metadata.status).toBe("disabled")
+
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { council: { enabled: true, maxMembers: 3 } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: [], rejected: [] })
+    const empty = await tool.execute({ question: "Review auth" }, ctx)
+    expect(empty.metadata.status).toBe("no_members")
+    expect(ctx.ask).not.toHaveBeenCalled()
+  })
+
+  test("approval is requested once the council can actually run", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { council: { enabled: true, maxMembers: 3 } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+    generateObject.mockResolvedValue({ object: { overall: "ok", issues: [] } })
+
+    const tool = await CouncilTool.init()
+    await tool.execute({ question: "Review auth" }, ctx)
+    expect(ctx.ask).toHaveBeenCalledTimes(1)
   })
 })

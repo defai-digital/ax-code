@@ -274,13 +274,6 @@ export const ArenaTool = Tool.define("arena", async () => {
     description: DESCRIPTION,
     parameters,
     async execute(args, ctx) {
-      await ctx.ask({
-        permission: "arena",
-        patterns: ["*"],
-        always: ["*"],
-        metadata: { task: args.task.slice(0, 200), mode: args.mode ?? "plan" },
-      })
-
       // Re-read project config so mid-session ax-code.json edits apply (no restart).
       let cfg = await Config.getFresh()
       let modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
@@ -327,21 +320,48 @@ export const ArenaTool = Tool.define("arena", async () => {
         baseCommit = preflight.baseCommit
       }
 
-      if (modes?.arena?.enabled !== true) {
-        if (args.enableIfDisabled === true) {
-          await Config.update({
-            modes: {
-              arena: {
-                enabled: true,
-                maxContestants: modes?.arena?.maxContestants ?? DEFAULT_MAX,
-                strategy: args.strategy ?? modes?.arena?.strategy ?? "verify_first",
-              },
-            },
-          })
-          enabledThisCall = true
-          cfg = await Config.getFresh()
-          modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
+      if (modes?.arena?.enabled !== true && args.enableIfDisabled !== true) {
+        // Pure no-op path: report disabled without an approval prompt (ADR-097).
+        const metadata: ArenaMetadata = {
+          status: "disabled",
+          mode: arenaMode,
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+          suggestedTool,
         }
+        return {
+          title: "Arena disabled",
+          output: EnsemblePreflight.arenaDisabledMessage({
+            providers: providerSnap,
+            projectConfigHint: path.join(Instance.directory, "ax-code.json"),
+          }),
+          metadata,
+        }
+      }
+
+      // Ask before any mutation (the enableIfDisabled project-config write,
+      // implement worktrees) and before the fan-out (ADR-097).
+      await ctx.ask({
+        permission: "arena",
+        patterns: ["*"],
+        always: ["*"],
+        metadata: { task: args.task.slice(0, 200), mode: args.mode ?? "plan" },
+      })
+
+      if (modes?.arena?.enabled !== true) {
+        // args.enableIfDisabled === true: persist the opt-in, then continue.
+        await Config.update({
+          modes: {
+            arena: {
+              enabled: true,
+              maxContestants: modes?.arena?.maxContestants ?? DEFAULT_MAX,
+              strategy: args.strategy ?? modes?.arena?.strategy ?? "verify_first",
+            },
+          },
+        })
+        enabledThisCall = true
+        cfg = await Config.getFresh()
+        modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
       }
 
       if (modes?.arena?.enabled !== true) {

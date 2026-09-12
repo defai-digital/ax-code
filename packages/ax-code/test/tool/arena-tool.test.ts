@@ -231,3 +231,26 @@ describe("arena execute()", () => {
     expect(result.output).toContain("Errors")
   })
 })
+
+describe("arena approval boundaries", () => {
+  test("disabled arena reports without asking for approval", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { arena: { enabled: false } } } as any)
+
+    const tool = await ArenaTool.init()
+    const result = await tool.execute({ task: "Add rate limiting" }, ctx)
+
+    expect(result.metadata.status).toBe("disabled")
+    expect(ctx.ask).not.toHaveBeenCalled()
+  })
+
+  test("enabled arena asks once before the fan-out", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { arena: { enabled: true, maxContestants: 3 } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+    generateObject.mockResolvedValue({ object: mkProposal(3) })
+
+    const tool = await ArenaTool.init()
+    await tool.execute({ task: "Add rate limiting" }, ctx)
+
+    expect(ctx.ask).toHaveBeenCalledTimes(1)
+  })
+})

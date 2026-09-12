@@ -89,6 +89,7 @@ import {
   subagentPanelRows,
 } from "./last-input-view-model"
 import { RevertNotice } from "./revert-notice"
+import { WorkModeNotice } from "@tui/component/work-mode-notice"
 import { IdleRecap } from "./idle-recap"
 import { revertState, hiddenMessageIDs, visibleParts } from "./revert"
 import { displayCommands } from "./display-commands"
@@ -1687,6 +1688,9 @@ export function Session() {
               </Show>
               <Show when={!session()?.parentID}>
                 <IdleRecap sessionID={route.sessionID} />
+              </Show>
+              <Show when={!session()?.parentID}>
+                <WorkModeNotice />
               </Show>
               <Prompt
                 sidebarVisible={sidebarPanelVisible}

@@ -136,6 +136,7 @@ const COUNCIL_STATUS: Record<string, { label: string; tone: EnsembleTone }> = {
   context_rejected: { label: "Context too large", tone: "error" },
   budget_rejected: { label: "Budget exceeded", tone: "error" },
   no_members: { label: "No members available", tone: "error" },
+  insufficient_members: { label: "Need ≥2 members", tone: "error" },
 }
 
 const COUNCIL_CHIPS: Array<{ key: string; label: string; tone: EnsembleTone }> = [

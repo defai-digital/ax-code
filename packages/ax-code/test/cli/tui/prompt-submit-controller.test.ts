@@ -20,7 +20,19 @@ function session(id: string): Session {
   }
 }
 
-function setup(input: { mode: "normal" | "shell"; workMode: WorkMode.Id; text: string }) {
+function setup(input: {
+  mode: "normal" | "shell"
+  workMode: WorkMode.Id
+  text: string
+  providers?: unknown[]
+  providerLoaded?: boolean
+  config?: {
+    modes?: {
+      council?: { enabled?: boolean; maxMembers?: number }
+      arena?: { enabled?: boolean; maxContestants?: number }
+    }
+  }
+}) {
   const requests: Request[] = []
   let pending = false
   let draftSessionID: string | undefined
@@ -49,9 +61,13 @@ function setup(input: { mode: "normal" | "shell"; workMode: WorkMode.Id; text: s
     sync: {
       data: {
         command: [{ name: "council" }, { name: "arena" }],
-        provider: [],
-        provider_loaded: true,
+        provider: input.providers ?? [
+          { id: "p1", models: { m: { tool_call: true } } },
+          { id: "p2", models: { m: { tool_call: true } } },
+        ],
+        provider_loaded: input.providerLoaded ?? true,
         provider_failed: false,
+        config: input.config ?? { modes: { arena: { enabled: true } } },
       },
       set: vi.fn(),
     },
@@ -149,6 +165,41 @@ describe.each(WorkMode.ALL)("prompt submission in %s work mode", (workMode) => {
 })
 
 describe("prompt submission lifecycle", () => {
+  test.each([
+    {
+      name: "blocks a council submit with fewer than two providers and preserves the draft",
+      workMode: "council" as const,
+      providers: [{ id: "p1", models: { m: { tool_call: true } } }],
+    },
+    {
+      name: "blocks an arena submit while arena is disabled",
+      workMode: "arena" as const,
+      config: { modes: {} } as { modes?: { arena?: { enabled?: boolean } } },
+    },
+    {
+      name: "blocks while providers are still loading",
+      workMode: "council" as const,
+      providerLoaded: false,
+    },
+  ])("$name", async (scenario) => {
+    const { controller, host, requests } = setup({
+      mode: "normal",
+      workMode: scenario.workMode,
+      text: "Review this change",
+      providers: scenario.providers,
+      providerLoaded: scenario.providerLoaded,
+      config: scenario.config,
+    })
+
+    await controller.submit()
+
+    expect(requests).toHaveLength(0)
+    expect(host.history.append).not.toHaveBeenCalled()
+    expect(host.clearPromptDraft).not.toHaveBeenCalled()
+    expect(host.toast.show).toHaveBeenCalledWith(expect.objectContaining({ variant: "warning" }))
+    expect(controller.submitInFlight).toBe(false)
+  })
+
   test("keeps the controller's integration boundaries typed", () => {
     expectTypeOf<PromptSubmitHost["input"]>().not.toBeAny()
     expectTypeOf<PromptSubmitHost["local"]>().not.toBeAny()

@@ -2,7 +2,7 @@
 
 Status: Active  
 Scope: current-state  
-Last reviewed: 2026-08-28  
+Last reviewed: 2026-09-12  
 Owner: ax-code runtime
 
 AX Code can place work on local inference, hosted/CLI providers, or both (hybrid), and can fan out high-stakes work across multiple connected providers (council review and arena best-of-N). This page documents **shipped** behavior for those modes.
@@ -16,7 +16,7 @@ When behavior changes, verify against:
 - `packages/ax-code/src/tool/arena.ts` and `arena-implement.ts` — plan and implement arena
 - `packages/ax-code/src/session/prompt-routing.ts` — hybrid placement when `modes.default` is `hybrid`
 - `packages/ax-code/src/config/schema-impl.ts` — `modes` config schema
-- `packages/ax-code/src/command/template/{council,arena,mode}.txt` — `/council` is in the default slash menu; `/arena` and `/mode` remain typeable but are hidden from autocomplete
+- `packages/ax-code/src/command/template/{council,arena,mode}.txt` — `/council`, `/arena`, and `/mode` are all in the default slash menu
 
 ## Work mode selector (Agent | Council | Arena)
 
@@ -28,7 +28,9 @@ TUI and Desktop expose a **work mode** control for multi-model routing. Default 
 | **Council**         | `/council {your message}` multi-provider review |
 | **Arena**           | `/arena {your message}` multi-model best-of-N   |
 
-- **Desktop & TUI:** one toggle that shows only the **active** mode (`Agent`, `Council`, or `Arena`). Click to cycle Agent → Council → Arena → Agent. Default is **Agent**.
+- **Desktop & TUI:** one toggle that shows only the **active** mode (`Agent`, `Council`, or `Arena`). Click to cycle to the next **available** mode — unavailable modes are skipped and named with their reason in the toast. Default is **Agent**.
+- **Availability is visible on the chip (TUI):** an available council/arena shows the effective member count (`Council · 2`); an unavailable one renders hollow with a short reason (`Council (needs 2)`, `Arena (off)`). A mode is available when it is enabled in config, at least two connected providers have a selectable model, and the configured member cap is not 1. Chips update live as providers connect or disconnect.
+- **Pre-submit hint (TUI):** when council/arena is active, a one-line hint above the prompt states what the prompt will do (e.g. `Council mode · up to 2 reviewers · advisory · approval on first use`). Submitting while the selected mode is unavailable is **blocked** with the reason — the draft is kept and the prompt is never silently downgraded to a single-model run.
 - **Desktop:** composer toolbar chip (next to Manual/Autonomous).
 - **TUI:** chip in the start-screen bottom bar and in the session sidebar footer (click to cycle), or palette **Cycle work mode** / `/work-mode`.
 - Explicit `/commands` are never rewritten.
@@ -113,7 +115,7 @@ Local models and memory guidance: [AX Engine Model Selection](../providers/ax-en
 4. Optional **debate rounds**: anonymous (Chatham House) synthesis shared between rounds; no brand attribution. Debate is capped at three rounds and stops early on convergence.
 5. Returns an **advisory** markdown report. Does not edit files.
 
-Needs at least two successful members for meaningful consensus tiers; otherwise the report is marked incomplete.
+Needs at least two resolved members to run at all — fewer short-circuits with an "insufficient members" preflight before any approval prompt or model call (explicit same-gateway model pairs count as two). Meaningful consensus tiers still need at least two successful members; otherwise the report is marked incomplete.
 
 **Evidence admission.** Members receive only the supplied question and context. They do not inherit the calling
 session or read files from paths in the brief. Include the requirements, relevant diff, required original snippets,

@@ -5,6 +5,7 @@ import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { iife } from "@/util/iife"
 import { withTimeout } from "@/util/timeout"
 import { WorkMode } from "@/mode/work-mode"
+import { workModeAvailability, type AvailabilityProvider, type WorkModeConfig } from "../work-mode-availability"
 import { providerModelKey, type ProviderModelKeyInput } from "@/provider/model-key"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { MessageID, PartID, SessionID } from "@/session/schema"
@@ -76,6 +77,7 @@ export type PromptSubmitHost = {
       provider: readonly unknown[]
       provider_loaded: boolean
       provider_failed: boolean
+      config?: { modes?: WorkModeConfig } | undefined
     }
     set: (key: "session", update: (sessions: Session[]) => Session[]) => void
   }
@@ -251,6 +253,31 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     const currentMode = store.mode
     // Work modes remap normal prompts to slash commands; shell input must stay literal.
     const activeWorkMode = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
+    if (currentMode !== "shell" && activeWorkMode !== WorkMode.DEFAULT) {
+      // Never silently degrade multi-model intent: an unavailable mode blocks
+      // the submit with the reason and the fix, and the draft is preserved
+      // (ADR-097). The selected mode is kept, not force-reverted.
+      const availability = workModeAvailability({
+        mode: activeWorkMode,
+        providers: sync.data.provider as readonly AvailabilityProvider[],
+        providerLoaded: sync.data.provider_loaded,
+        config: sync.data.config?.modes,
+      })
+      if (availability.state !== "available") {
+        toast.show({
+          message:
+            availability.state === "checking"
+              ? `${WorkMode.label(activeWorkMode)} mode is still checking providers — try again in a moment`
+              : `${availability.detail} — prompt not sent`,
+          variant: "warning",
+        })
+        log.info("tui.prompt.submit: work mode unavailable", {
+          mode: activeWorkMode,
+          reason: availability.reason ?? "checking",
+        })
+        return
+      }
+    }
     const workRouted: WorkMode.Routed =
       currentMode === "shell" ? { kind: "prompt", text: inputText } : WorkMode.routeInput(activeWorkMode, inputText)
     const routedText =

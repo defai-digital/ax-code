@@ -10,6 +10,12 @@ import { clearTuiTerminalTitle } from "./renderer"
 import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 import { parseIsolationState } from "./context/sync-runtime-store"
 import { nextRunMode, runModeLabel, type RunMode } from "./component/prompt/run-mode-view-model"
+import {
+  nextAvailableWorkMode,
+  workModeAvailability,
+  workModeCycleToast,
+  type WorkModeConfig,
+} from "./component/work-mode-availability"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
 
@@ -600,21 +606,31 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: `Cycle work mode (current: ${WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))})`,
+      description:
+        "Agent: one agent · Council: multi-model advisory review (needs ≥2 providers) · Arena: best-of-N comparison (opt-in)",
       value: "app.cycle.work_mode",
       category: "Agent",
       slash: {
         name: "work-mode",
         aliases: ["workmode"],
-        hidden: true,
       },
       onSelect: (dialog) => {
         const current = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
-        const next = WorkMode.cycle(current)
+        // Cycle lands only on modes that can actually run right now; skipped
+        // modes are named with their reason in the toast (ADR-097).
+        const availability = (mode: WorkMode.Id) =>
+          workModeAvailability({
+            mode,
+            providers: sync.data.provider,
+            providerLoaded: sync.data.provider_loaded,
+            config: sync.data.config?.modes as WorkModeConfig | undefined,
+          })
+        const { next, skipped } = nextAvailableWorkMode(current, availability)
         kv.set("work_mode", next)
         toast.show({
-          message: `Work mode: ${WorkMode.label(next)}`,
+          message: workModeCycleToast(next, availability(next), skipped),
           variant: "info",
-          duration: 2500,
+          duration: 3500,
         })
         dialog.clear()
       },
