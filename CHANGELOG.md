@@ -6,7 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.15.12] - 2026-09-11
+
 ### Fixed
+
+- Record git `-C` and `--git-dir` relocations for `git config` writes so a benign-key write relocated outside the workspace (`git -C <outside> config user.email x`, `git --git-dir=<outside>/.git config ...`) is denied by workspace isolation and the external-directory prompt instead of running silently. Relative `--file` targets now resolve against the `-C` directory, and unresolvable relocation values fall back to the interactive prompt. Workspace-internal config writes are unchanged.
 
 - Record explicit `git config --file` write targets for benign keys so an out-of-workspace write hits workspace isolation and the external-directory prompt instead of running silently. Ordinary `git config user.email` writes to the workspace-internal `.git/config` are unchanged.
 
