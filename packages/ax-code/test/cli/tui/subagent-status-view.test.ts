@@ -1,11 +1,15 @@
 import { describe, expect, test } from "vitest"
 import {
   buildSubagentStatusView,
+  hasActiveGoalPlanner,
+  isGoalPlanning,
   mergeSubagentRollupTasks,
   queueItemsForSessionTree,
   queueStatusToTaskStatus,
   subagentPanelHeaderSummary,
   subagentPanelTitle,
+  subagentSoloDetails,
+  subagentSoloTitle,
   taskQueueItemsToRollupTasks,
 } from "../../../src/cli/cmd/tui/routes/session/subagent-status-view"
 
@@ -366,5 +370,92 @@ describe("subagentPanelHeaderSummary", () => {
 
   test("returns undefined when nothing is active", () => {
     expect(subagentPanelHeaderSummary({ running: 0, done: 1, failed: 0, total: 1, items: [] })).toBeUndefined()
+  })
+})
+
+describe("hasActiveGoalPlanner", () => {
+  const parent = "parent"
+  const writer = {
+    id: "plan",
+    parentID: parent,
+    title: "Goal plan writer",
+    agent: "goal-plan-writer" as const,
+  }
+
+  test("is true while the goal-plan-writer child is busy or retrying", () => {
+    expect(
+      hasActiveGoalPlanner({
+        parentSessionID: parent,
+        childSessions: [writer],
+        statuses: { plan: { type: "busy", waitState: "llm" } },
+      }),
+    ).toBe(true)
+    expect(
+      hasActiveGoalPlanner({
+        parentSessionID: parent,
+        childSessions: [writer],
+        statuses: { plan: { type: "retry", attempt: 1, message: "wait", next: 1 } },
+      }),
+    ).toBe(true)
+  })
+
+  test("is false once the writer child is idle (failed or finished)", () => {
+    expect(
+      hasActiveGoalPlanner({
+        parentSessionID: parent,
+        childSessions: [writer],
+        statuses: { plan: { type: "idle" } },
+      }),
+    ).toBe(false)
+  })
+
+  test("ignores non-planner children and writers of other parents", () => {
+    expect(
+      hasActiveGoalPlanner({
+        parentSessionID: parent,
+        childSessions: [{ id: "explore", parentID: parent, title: "Explore code", agent: "explore" }],
+        statuses: { explore: { type: "busy", waitState: "llm" } },
+      }),
+    ).toBe(false)
+    expect(
+      hasActiveGoalPlanner({
+        parentSessionID: parent,
+        childSessions: [{ ...writer, parentID: "other" }],
+        statuses: { plan: { type: "busy", waitState: "llm" } },
+      }),
+    ).toBe(false)
+  })
+
+  test("agrees with isGoalPlanning on the same inputs", () => {
+    const input = {
+      parentSessionID: parent,
+      tasks: [],
+      childSessions: [writer],
+      statuses: { plan: { type: "busy" as const, waitState: "llm" as const } },
+    }
+    expect(hasActiveGoalPlanner(input)).toBe(isGoalPlanning(buildSubagentStatusView(input)))
+  })
+})
+
+describe("subagentSoloTitle", () => {
+  test("replaces the planner's internal name and keeps other titles", () => {
+    const view = buildSubagentStatusView({
+      parentSessionID: "parent",
+      now: 65_000,
+      tasks: [],
+      childSessions: [
+        { id: "plan", parentID: "parent", title: "Goal plan writer", agent: "goal-plan-writer" },
+        { id: "explore", parentID: "parent", title: "Explore code", agent: "explore" },
+      ],
+      statuses: {
+        plan: { type: "busy", startedAt: 1_000, lastActivityAt: 60_000, waitState: "llm" },
+        explore: { type: "busy", waitState: "tool", activeTool: "read" },
+      },
+    })
+    const planner = view.items.find((item) => item.id === "plan")!
+    const explore = view.items.find((item) => item.id === "explore")!
+    expect(subagentSoloTitle(planner)).toBe("Planning goal")
+    expect(subagentSoloTitle(explore)).toBe("Explore code")
+    expect(subagentSoloDetails(planner)).toBe("Thinking - 1m04s")
   })
 })

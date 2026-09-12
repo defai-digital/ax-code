@@ -890,7 +890,7 @@ export function Session() {
       title: subagentPanelCollapsed() ? "Expand active agents" : "Collapse active agents",
       value: "session.subagents.toggle",
       category: "Session",
-      enabled: subagentTasks().running > 0,
+      enabled: subagentTasks().running > 1,
       onSelect: (dialog) => {
         setSubagentPanelCollapsed((value) => !value)
         dialog.clear()

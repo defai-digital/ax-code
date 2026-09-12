@@ -197,6 +197,24 @@ describe("derivePinnedInputBanner", () => {
     ).toEqual({ state: "hidden", reason: "insufficient-space" })
   })
 
+  test("shows the pinned input banner at heights the old four-row rail hid", () => {
+    const tight = {
+      candidate: ready,
+      autonomousActive: false,
+      contentColumns: 60,
+      terminalHeight: 30,
+      header: "session" as const,
+      previewVisibility: "offscreen" as const,
+    }
+    const compact = derivePinnedInputBanner({ ...tight, subagentRows: 1 })
+    expect(compact.state).toBe("visible")
+    if (compact.state === "visible") expect(compact.lineCount).toBe(1)
+    expect(derivePinnedInputBanner({ ...tight, subagentRows: 4 })).toEqual({
+      state: "hidden",
+      reason: "insufficient-space",
+    })
+  })
+
   test("hides pending and empty candidates", () => {
     expect(
       derivePinnedInputBanner({
@@ -249,9 +267,14 @@ describe("pinned input layout helpers", () => {
   })
 
   test("counts an expanded subagent rail including the overflow row", () => {
-    expect(subagentPanelRows({ terminalHeight: 60, activeCount: 20, collapsed: false })).toBe(9)
+    expect(subagentPanelRows({ terminalHeight: 60, activeCount: 20, collapsed: false })).toBe(10)
     expect(subagentPanelRows({ terminalHeight: 60, activeCount: 2, collapsed: true })).toBe(2)
     expect(subagentPanelRows({ terminalHeight: 60, activeCount: 0, collapsed: false })).toBe(0)
+  })
+
+  test("reserves a single row for a solo active child rail", () => {
+    expect(subagentPanelRows({ terminalHeight: 24, activeCount: 1, collapsed: false })).toBe(1)
+    expect(subagentPanelRows({ terminalHeight: 24, activeCount: 1, collapsed: true })).toBe(1)
   })
 
   test("reserves header, subagent, prompt, padding, and gaps", () => {

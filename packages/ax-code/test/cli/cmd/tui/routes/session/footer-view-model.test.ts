@@ -192,6 +192,56 @@ describe("footerGoalChip", () => {
       resumeHint: undefined,
     })
   })
+
+  test("presents a paused goal as planning while the plan writer is active", () => {
+    expect(
+      footerGoalChip({
+        planning: true,
+        goal: { objective: "continue with glm-5.3", status: "paused" },
+      }),
+    ).toEqual({
+      label: "Planning goal: continue with glm-5.3",
+      tone: "working",
+      resumeHint: undefined,
+    })
+  })
+
+  test("treats budget-limited replanning as working without a resume hint", () => {
+    const chip = footerGoalChip({
+      planning: true,
+      goal: {
+        objective: "finish the remaining work",
+        status: "budget_limited",
+        tokensUsed: 100,
+        tokenBudget: 100,
+        remainingTokens: 0,
+      },
+    })
+    expect(chip).toEqual({
+      label: "Planning goal: finish the remaining work - 100/100 tok",
+      tone: "working",
+      resumeHint: undefined,
+    })
+  })
+
+  test("ignores the planning flag for active and complete goals", () => {
+    expect(
+      footerGoalChip({
+        planning: true,
+        goal: { objective: "finish all phases", status: "active" },
+      }),
+    ).toEqual({
+      label: "Goal: finish all phases",
+      tone: "working",
+      resumeHint: undefined,
+    })
+    expect(
+      footerGoalChip({
+        planning: true,
+        goal: { objective: "ship the patch", status: "complete" },
+      })?.label,
+    ).toBe("Goal complete: ship the patch")
+  })
 })
 
 describe("footerSessionStatusOrIdle", () => {
@@ -322,7 +372,7 @@ describe("footerSubagentStatusView", () => {
     ).toBeUndefined()
   })
 
-  test("projects a single busy child into a working footer row", () => {
+  test("projects a single busy child as a locator-only footer row", () => {
     const view = footerSubagentStatusView({
       sessions: [parent, childA],
       statuses: {
@@ -338,7 +388,7 @@ describe("footerSubagentStatusView", () => {
       now,
     })
     expect(view).toEqual({
-      label: "Subagent: Running command - 30s",
+      label: "Subagent",
       stale: false,
       tone: "working",
       running: 1,
@@ -366,58 +416,39 @@ describe("footerSubagentStatusView", () => {
       parentSessionID: "ses_parent",
       now,
     })
-    // The child with the freshest activity represents the group.
-    expect(view?.label).toBe("2 subagents: Scanning files - 10s")
+    expect(view?.label).toBe("2 subagents")
     expect(view?.running).toBe(2)
     expect(view?.tone).toBe("working")
   })
 
-  test("surfaces the stale warning of the representative child", () => {
-    const view = footerSubagentStatusView({
-      sessions: [parent, childA],
-      statuses: {
-        ses_child_a: {
-          type: "busy",
-          waitState: "llm",
-          startedAt: now - 120_000,
-          lastActivityAt: now - 70_000,
+  test("keeps a working tone for stale or retrying children", () => {
+    expect(
+      footerSubagentStatusView({
+        sessions: [parent, childA],
+        statuses: {
+          ses_child_a: {
+            type: "busy",
+            waitState: "llm",
+            startedAt: now - 120_000,
+            lastActivityAt: now - 70_000,
+          },
         },
-      },
-      parentSessionID: "ses_parent",
-      now,
+        parentSessionID: "ses_parent",
+        now,
+      }),
+    ).toEqual({
+      label: "Subagent",
+      stale: false,
+      tone: "working",
+      running: 1,
     })
-    expect(view?.stale).toBe(true)
-    expect(view?.tone).toBe("warning")
-    expect(view?.label).toBe("Subagent: Still waiting for model - 2m")
-  })
-
-  test("shows the retry countdown when the child is retrying", () => {
-    const view = footerSubagentStatusView({
-      sessions: [parent, childA],
-      statuses: { ses_child_a: { type: "retry", attempt: 2, message: "boom", next: now + 5_000 } },
-      parentSessionID: "ses_parent",
-      now,
-    })
-    expect(view?.label).toBe("Subagent: Retrying in 5s")
-    expect(view?.tone).toBe("warning")
-  })
-
-  test("prefers a busy child over a retrying one as the representative", () => {
-    const view = footerSubagentStatusView({
-      sessions: [parent, childA, childB],
-      statuses: {
-        ses_child_a: { type: "retry", attempt: 1, message: "boom", next: now + 5_000 },
-        ses_child_b: {
-          type: "busy",
-          waitState: "llm",
-          startedAt: now - 8_000,
-          lastActivityAt: now - 2_000,
-        },
-      },
-      parentSessionID: "ses_parent",
-      now,
-    })
-    expect(view?.label).toBe("2 subagents: Thinking - 8s")
-    expect(view?.running).toBe(2)
+    expect(
+      footerSubagentStatusView({
+        sessions: [parent, childA],
+        statuses: { ses_child_a: { type: "retry", attempt: 2, message: "boom", next: now + 5_000 } },
+        parentSessionID: "ses_parent",
+        now,
+      })?.label,
+    ).toBe("Subagent")
   })
 })

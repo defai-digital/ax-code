@@ -206,11 +206,16 @@ export function footerGoalChip(input: {
   // surfaces (the sidebar goal row), where the chip itself is clickable and
   // the hint would force a second line.
   compact?: boolean
+  // The contract writer creates the goal as paused, then resumes it after the
+  // plan is written. While that child is actually working, present planning
+  // rather than a warning "Goal paused" chip that suggests /goal resume.
+  planning?: boolean
 }): FooterGoalChip | undefined {
   const goal = input.goal
   if (!goal) return
 
-  const status = goalStatusLabel(goal.status)
+  const planning = !!input.planning && (goal.status === "paused" || goal.status === "budget_limited")
+  const status = planning ? "Planning goal" : goalStatusLabel(goal.status)
   const objective = shortFooterText(goal.objective, input.maxObjective ?? 36)
   const tokens =
     goal.tokenBudget === undefined || goal.tokensUsed === undefined
@@ -218,15 +223,21 @@ export function footerGoalChip(input: {
       : ` - ${formatTokenCount(goal.tokensUsed)}/${formatTokenCount(goal.tokenBudget)}${input.compact ? "" : " tok"}`
   // Don't hint "/goal resume" once the token budget is exhausted — resuming
   // such a goal is refused server-side, so the hint would point at an action
-  // that errors. The goal can still be cleared or replaced.
+  // that errors. The goal can still be cleared or replaced. The same applies
+  // while the plan writer is running: resume is the wrong action.
   const budgetExhausted = goal.tokenBudget !== undefined && (goal.remainingTokens ?? 0) <= 0
   const resumeHint =
-    !input.compact && (goal.status === "paused" || goal.status === "blocked") && !budgetExhausted
+    !planning && !input.compact && (goal.status === "paused" || goal.status === "blocked") && !budgetExhausted
       ? "/goal resume"
       : undefined
   const resume = resumeHint ? ` - ${resumeHint}` : ""
-  const tone: FooterSessionStatusTone =
-    goal.status === "complete" ? "success" : goal.status === "active" ? "working" : "warning"
+  const tone: FooterSessionStatusTone = planning
+    ? "working"
+    : goal.status === "complete"
+      ? "success"
+      : goal.status === "active"
+        ? "working"
+        : "warning"
 
   return {
     label: `${status}: ${objective}${tokens}${resume}`,
@@ -361,44 +372,29 @@ export function hasActiveSubagentInSessionTree(input: {
   })
 }
 
-function subagentActivityTime(status: FooterSessionStatus) {
-  if (status.type === "busy") return status.lastActivityAt ?? status.startedAt ?? 0
-  if (status.type === "retry") return status.next
-  return 0
-}
-
 // While subagents work, the parent's own status stays "idle" and the footer
-// would otherwise render nothing — no spinner, no label, no elapsed time.
-// Project the most recently active child session into the same busy-style
-// footer view the parent's own status gets, prefixed with the subagent
-// count, so the footer keeps showing live progress for the whole tree.
+// would otherwise render nothing — no spinner, no label. Keep a locator so
+// the prompt row still looks live; activity, elapsed, and stale copy belong
+// on the top rail so they are not printed three times.
 export function footerSubagentStatusView(input: {
   sessions: readonly { id: string; parentID?: string }[]
   statuses?: Record<string, FooterSessionStatus | undefined>
   parentSessionID: string
   now?: number
 }): (FooterSessionStatusView & { running: number }) | undefined {
-  const now = input.now ?? Date.now()
-  const active: FooterSessionStatus[] = []
+  let running = 0
   for (const session of input.sessions) {
     if (session.parentID !== input.parentSessionID) continue
     const status = input.statuses?.[session.id]
     if (!status || status.type === "idle") continue
-    active.push(status)
+    running++
   }
-  if (active.length === 0) return undefined
+  if (running === 0) return undefined
 
-  // A busy child is more informative than a retrying one; within the busy
-  // group, the child with the freshest activity is the one the user is
-  // most likely watching.
-  const busy = active.filter((status) => status.type === "busy")
-  const representative =
-    busy.length > 0 ? busy.reduce((a, b) => (subagentActivityTime(a) >= subagentActivityTime(b) ? a : b)) : active[0]
-  const view = footerSessionStatusView({ status: representative, now })
-  const prefix = active.length === 1 ? "Subagent" : `${active.length} subagents`
   return {
-    ...view,
-    label: view.label ? `${prefix}: ${view.label}` : prefix,
-    running: active.length,
+    label: running === 1 ? "Subagent" : `${running} subagents`,
+    stale: false,
+    tone: "working",
+    running,
   }
 }

@@ -2,9 +2,10 @@
 // chip row shows work/run/sandbox state, but an active /goal — the thing the
 // agent is actually working toward — was only visible in the session header.
 // Rendered as its own row directly under the mode chips: plain accent text
-// while active, an inverted warning ("yellow") chip when paused / blocked /
-// budget-limited, and an inverted success chip when complete. Clicking opens
-// the goal dialog (the `session.goal` command).
+// while active or while the plan writer is running, an inverted warning
+// ("yellow") chip when paused / blocked / budget-limited with no writer, and
+// an inverted success chip when complete. Clicking opens the goal dialog
+// (the `session.goal` command).
 
 import { createMemo, Show } from "solid-js"
 import type { RGBA } from "ax-tui"
@@ -14,6 +15,7 @@ import { selectedForeground, useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { footerGoalChip } from "../routes/session/footer-view-model"
 import { computeSidebarWidth } from "../routes/session/layout"
+import { hasActiveGoalPlanner } from "../routes/session/subagent-status-view"
 import { footerToggleLabel } from "./prompt/footer-toggle"
 
 export function GoalChip(props: { sessionID: string }) {
@@ -26,8 +28,20 @@ export function GoalChip(props: { sessionID: string }) {
   // status word and token counters; the label wraps on the narrowest
   // sidebars rather than pushing the version row off screen.
   const maxObjective = createMemo(() => Math.max(10, computeSidebarWidth(dimensions().width) - 26))
+  const planning = createMemo(() =>
+    hasActiveGoalPlanner({
+      childSessions: sync.data.session,
+      statuses: sync.data.session_status,
+      parentSessionID: props.sessionID,
+    }),
+  )
   const chip = createMemo(() =>
-    footerGoalChip({ goal: sync.data.session_goal[props.sessionID], maxObjective: maxObjective(), compact: true }),
+    footerGoalChip({
+      goal: sync.data.session_goal[props.sessionID],
+      maxObjective: maxObjective(),
+      compact: true,
+      planning: planning(),
+    }),
   )
   // grok-build's scheme: active goals read as plain accent text; attention
   // states get an inverted chip so the row reads as a label, not prose.

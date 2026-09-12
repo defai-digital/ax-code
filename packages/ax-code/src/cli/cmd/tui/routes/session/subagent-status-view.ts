@@ -149,8 +149,8 @@ function activityLabel(input: {
 }
 
 export function buildSubagentStatusView(input: {
-  tasks: SubagentRollupTask[]
-  childSessions: SubagentRollupSession[]
+  tasks: readonly SubagentRollupTask[]
+  childSessions: readonly SubagentRollupSession[]
   statuses: Record<string, SubagentRollupStatus | undefined>
   parentSessionID: string
   now?: number
@@ -259,6 +259,36 @@ export function isGoalPlanner(item: SubagentStatusItem) {
 
 export function isGoalPlanning(view: SubagentStatusView) {
   return view.items.some((item) => item.active && isGoalPlanner(item))
+}
+
+export function hasActiveGoalPlanner(input: {
+  childSessions: readonly SubagentRollupSession[]
+  statuses: Record<string, SubagentRollupStatus | undefined>
+  parentSessionID: string
+}): boolean {
+  return isGoalPlanning(
+    buildSubagentStatusView({
+      tasks: [],
+      childSessions: input.childSessions,
+      statuses: input.statuses,
+      parentSessionID: input.parentSessionID,
+    }),
+  )
+}
+
+export function subagentSoloTitle(item: SubagentStatusItem) {
+  return isGoalPlanner(item) ? "Planning goal" : item.title
+}
+
+export function subagentSoloDetails(item: SubagentStatusItem, opts?: { includeModel?: boolean }) {
+  return [
+    item.activity,
+    item.elapsed,
+    item.stale ? "No recent updates" : undefined,
+    opts?.includeModel ? item.model : undefined,
+  ]
+    .filter(Boolean)
+    .join(" - ")
 }
 
 export function subagentPanelItems(view: SubagentStatusView) {

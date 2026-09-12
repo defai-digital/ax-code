@@ -1505,7 +1505,9 @@ export function Prompt(props: PromptProps) {
                 </box>
                 <box flexDirection="row" gap={1} flexShrink={0}>
                   <Show when={busyStatus()?.label}>
-                    <text fg={theme.warning}>{busyStatus()?.label}</text>
+                    <text fg={busyStatus()?.tone === "warning" ? theme.warning : theme.textMuted}>
+                      {busyStatus()?.label}
+                    </text>
                   </Show>
                   <Show when={tokenChipView()} keyed>
                     {(chip) => (

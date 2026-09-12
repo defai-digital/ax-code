@@ -14,6 +14,7 @@ import { computeSidebarWidth } from "./layout"
 import { autonomousActiveView, autonomousProgressLabel } from "./autonomous-active"
 import { useAutonomousPulse } from "./autonomous-pulse"
 import { footerGoalChip, footerSessionStatusOrIdle } from "./footer-view-model"
+import { hasActiveGoalPlanner } from "./subagent-status-view"
 import { Spinner } from "../../component/spinner"
 
 const SUBAGENT_PARENT_DOUBLE_CLICK_MS = 400
@@ -95,7 +96,17 @@ export function Header() {
     const alpha = MIN_ALPHA + (MAX_ALPHA - MIN_ALPHA) * chipPulse()
     return tint(theme.background, theme.accent, alpha)
   })
-  const goalChip = createMemo(() => footerGoalChip({ goal: sync.data.session_goal[route.sessionID], maxObjective: 48 }))
+  const goalChip = createMemo(() =>
+    footerGoalChip({
+      goal: sync.data.session_goal[route.sessionID],
+      maxObjective: 48,
+      planning: hasActiveGoalPlanner({
+        childSessions: sync.data.session,
+        statuses: sync.data.session_status,
+        parentSessionID: route.sessionID,
+      }),
+    }),
+  )
   const goalChipColor = createMemo(() => {
     switch (goalChip()?.tone) {
       case "success":

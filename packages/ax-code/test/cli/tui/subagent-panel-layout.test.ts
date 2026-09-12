@@ -11,22 +11,35 @@ import {
 } from "../../../src/cli/cmd/tui/routes/session/subagent-status-view"
 
 describe("active subagent visibility", () => {
-  test("keeps a status summary when collapsed and gives one active task two body rows", () => {
-    expect(subagentPanelLayout({ terminalHeight: 24, activeCount: 1, collapsed: true }).rows).toBe(2)
+  test("renders one active child as a single-row solo rail", () => {
     expect(subagentPanelLayout({ terminalHeight: 24, activeCount: 1, collapsed: false })).toEqual({
-      rows: 4,
+      mode: "solo",
+      rows: 1,
       visible: 1,
       hidden: 0,
     })
+    expect(subagentPanelLayout({ terminalHeight: 24, activeCount: 1, collapsed: true }).rows).toBe(1)
   })
   test("bounds the expanded panel and accounts for overflow and hidden state", () => {
     for (const terminalHeight of [16, 24, 40, 60, 100]) {
       const view = subagentPanelLayout({ terminalHeight, activeCount: 20, collapsed: false })
-      expect(view.rows).toBeLessThanOrEqual(Math.max(5, Math.min(10, Math.floor(terminalHeight * 0.25))))
+      expect(view.mode).toBe("list")
+      expect(view.rows).toBeLessThanOrEqual(Math.max(4, Math.min(10, Math.floor(terminalHeight * 0.25))))
       expect(view.visible + view.hidden).toBe(20)
-      expect(view.rows).toBe(2 + view.visible * 2 + 1)
+      expect(view.rows).toBe(1 + view.visible * 2 + 1)
     }
-    expect(subagentPanelLayout({ terminalHeight: 24, activeCount: 0, collapsed: false }).rows).toBe(0)
+    expect(subagentPanelLayout({ terminalHeight: 24, activeCount: 2, collapsed: true })).toEqual({
+      mode: "list",
+      rows: 2,
+      visible: 0,
+      hidden: 2,
+    })
+    expect(subagentPanelLayout({ terminalHeight: 24, activeCount: 0, collapsed: false })).toEqual({
+      mode: "off",
+      rows: 0,
+      visible: 0,
+      hidden: 0,
+    })
   })
   test("only new active children reopen a manually collapsed panel", () => {
     const previous = new Set(["a", "b"])
