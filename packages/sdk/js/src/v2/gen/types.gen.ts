@@ -524,6 +524,14 @@ export type Config = {
        * Final warning checkpoint before the hard stop (default max-5)
        */
       tool_only_final_nudge?: number
+      /**
+       * Segment-cumulative cap on failed mutating tool attempts (edit/write/multiedit/apply_patch/todowrite that errored). Reset by a successful mutation or a text finish. Bounds fail -> read -> fail loops that evade the consecutive all-error ladder (default 30).
+       */
+      failed_mutation_attempts?: number
+      /**
+       * Hard stop after this many consecutive provider/tool errors in the outer loop (default 3). Raise to tolerate flaky providers; lower for stricter failure handling.
+       */
+      max_consecutive_errors?: number
     }
   }
   /**

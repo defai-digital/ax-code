@@ -17,6 +17,8 @@ import {
   isNoProgressToolTurn,
   isFailedToolTurn,
   failedToolTurnDecision,
+  hasFailedMutationAttempt,
+  failedMutationBudgetDecision,
   isReadOnlyExplorationTurn,
   modelTurnFinished,
   ordinaryRunCeilingConvergenceDecision,
@@ -40,6 +42,7 @@ import {
   FAILED_TOOL_TURN_FORCE,
   FAILED_TOOL_TURN_NUDGE,
   MAX_FAILED_TOOL_TURNS,
+  MAX_FAILED_MUTATION_ATTEMPTS,
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
 } from "../../src/session/prompt-loop-config"
 
@@ -1111,6 +1114,44 @@ describe("failed tool turn fast ladder", () => {
     expect(failedToolTurnDecision({ consecutiveFailedToolTurns: 6, failedToolNudges: 2, ...config })).toEqual({
       action: "stop",
     })
+  })
+})
+
+describe("failed mutation attempt budget", () => {
+  test("flags a failed mutating attempt even when another tool succeeded in the turn", () => {
+    // The consecutive 3/4/5 ladder resets on this shape (not every tool errored),
+    // which is exactly the fail -> read -> fail loop the cumulative budget covers.
+    expect(
+      hasFailedMutationAttempt([
+        { type: "tool", tool: "edit", state: { status: "error" } },
+        { type: "tool", tool: "read", state: { status: "completed" } },
+      ]),
+    ).toBe(true)
+    expect(hasFailedMutationAttempt([{ type: "tool", tool: "write", state: { status: "error" } }])).toBe(true)
+  })
+
+  test("ignores read-only failures, successful mutations, and patches", () => {
+    expect(hasFailedMutationAttempt([{ type: "tool", tool: "bash", state: { status: "error" } }])).toBe(false)
+    expect(hasFailedMutationAttempt([{ type: "tool", tool: "read", state: { status: "error" } }])).toBe(false)
+    expect(hasFailedMutationAttempt([{ type: "tool", tool: "edit", state: { status: "completed" } }])).toBe(false)
+    expect(hasFailedMutationAttempt([{ type: "patch" }])).toBe(false)
+    expect(hasFailedMutationAttempt(undefined)).toBe(false)
+  })
+
+  test("stops only once the segment-cumulative budget is reached", () => {
+    const config = { maxAttempts: MAX_FAILED_MUTATION_ATTEMPTS }
+    expect(failedMutationBudgetDecision({ failedMutationAttempts: 0, ...config })).toEqual({ action: "ignore" })
+    expect(
+      failedMutationBudgetDecision({ failedMutationAttempts: MAX_FAILED_MUTATION_ATTEMPTS - 1, ...config }),
+    ).toEqual({ action: "ignore" })
+    expect(failedMutationBudgetDecision({ failedMutationAttempts: MAX_FAILED_MUTATION_ATTEMPTS, ...config })).toEqual({
+      action: "stop",
+    })
+  })
+
+  test("ships a generous segment budget well above the consecutive ladder", () => {
+    expect(MAX_FAILED_MUTATION_ATTEMPTS).toBe(30)
+    expect(MAX_FAILED_MUTATION_ATTEMPTS).toBeGreaterThan(MAX_FAILED_TOOL_TURNS)
   })
 })
 

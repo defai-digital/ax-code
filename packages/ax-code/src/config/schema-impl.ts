@@ -859,6 +859,15 @@ export const Info = z
             tool_only_final_nudge: PositiveInteger.optional().describe(
               "Final warning checkpoint before the hard stop (default max-5)",
             ),
+            failed_mutation_attempts: PositiveInteger.optional().describe(
+              "Segment-cumulative cap on failed mutating tool attempts (edit/write/multiedit/apply_patch/todowrite " +
+                "that errored). Reset by a successful mutation or a text finish. Bounds fail -> read -> fail loops " +
+                "that evade the consecutive all-error ladder (default 30).",
+            ),
+            max_consecutive_errors: PositiveInteger.optional().describe(
+              "Hard stop after this many consecutive provider/tool errors in the outer loop (default 3). " +
+                "Raise to tolerate flaky providers; lower for stricter failure handling.",
+            ),
           })
           .optional()
           .describe("Stall / loop breakers that are independent of workload step ceilings"),

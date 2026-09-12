@@ -338,6 +338,20 @@ export function isFailedToolTurn(parts: readonly ToolActivityPart[] | undefined)
   return tools.every((part) => part.state?.status === "error")
 }
 
+/**
+ * True when a turn attempted a mutating tool (edit, write, multiedit,
+ * apply_patch, todowrite) that ended in the "error" state. Distinct from
+ * `isFailedToolTurn`, which requires EVERY tool in the turn to error: a failed
+ * mutation interleaved with a successful read still resets the consecutive
+ * ladder, so it needs its own segment-cumulative budget to bound the loop.
+ */
+export function hasFailedMutationAttempt(parts: readonly ToolActivityPart[] | undefined): boolean {
+  if (!parts?.length) return false
+  return parts.some(
+    (part) => part.type === "tool" && MUTATING_PROGRESS_TOOLS.has(part.tool ?? "") && part.state?.status === "error",
+  )
+}
+
 function canonicalizePartInput(input: unknown): string {
   if (typeof input === "string") return input.length > 4096 ? input.slice(0, 4096) : input
   try {
@@ -523,6 +537,20 @@ export function failedToolTurnDecision(input: {
     return { action: "stop" }
   }
   return { action: "ignore" }
+}
+
+/**
+ * Segment-cumulative cap on failed mutation attempts. A single ceiling (no
+ * nudge ladder): the consecutive 3/4/5 ladder already issues nudges and forced
+ * text turns, so this only needs to guarantee eventual termination when that
+ * ladder is evaded by interleaved successful turns. Callers reset the counter
+ * on a successful mutation or a text finish.
+ */
+export function failedMutationBudgetDecision(input: {
+  failedMutationAttempts: number
+  maxAttempts: number
+}): { action: "ignore" } | { action: "stop" } {
+  return input.failedMutationAttempts >= input.maxAttempts ? { action: "stop" } : { action: "ignore" }
 }
 
 /** Absolute tool-calling cap: force a wrap-up, never a hard fail. */

@@ -138,7 +138,9 @@ Prefer the first-class **`autonomy`** object. Legacy `session.*` and `experiment
 | Lines-exempt paths         | Lockfiles + generated snapshots (`*.snap`, `*-snapshot.json`) | Globs that count toward the file cap but not the line cap | `autonomy.budget.changes.lines_exempt_paths`           | `experimental.autonomous_caps.linesExemptPaths` |
 | Per-tool flood caps        | e.g. bash 50, edit 100                                        | Calls per model turn                                      | `autonomy.budget.tool_calls.per_tool`                  | `experimental.autonomous_caps.perTool`          |
 | Tool-only streak breaker   | Nudge 15 · final ~30 · stop 35                                | Consecutive tool-only model finishes                      | `autonomy.stall.tool_only_*`                           | —                                               |
+| Failed-mutation budget     | 30 / segment                                                  | Mutating tool attempts that errored without a success     | `autonomy.stall.failed_mutation_attempts`              | —                                               |
 | Tool-call burst limiter    | 30 calls / 10s                                                | Rolling window per processor turn                         | `autonomy.budget.tool_calls.rate`                      | —                                               |
+| Consecutive error budget   | 3                                                             | Provider/tool errors in a row before the run gives up     | `autonomy.stall.max_consecutive_errors`                | —                                               |
 
 Binary files (`cp` of an executable, `curl -o` of a zip, and other non-text writes) still count toward the **file** cap, but they charge **zero lines**. The line cap measures textual change. Shell text writes keep the `ceil(size / 80)` estimate so a dense payload cannot evade the budget by having few newlines.
 
@@ -197,7 +199,9 @@ At a segment ceiling, AX Code auto-continues while the configured continuation b
     },
     "stall": {
       "tool_only_turns": 50,
-      "tool_only_nudge": 20
+      "tool_only_nudge": 20,
+      "failed_mutation_attempts": 30,
+      "max_consecutive_errors": 3
     }
   },
   "agent": {

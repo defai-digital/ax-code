@@ -4,13 +4,19 @@ import {
   AUTONOMOUS_MAX_STEPS,
   GLOBAL_STEP_LIMIT,
   GOAL_TOTAL_STEP_HEADROOM,
+  MAX_CONSECUTIVE_ERRORS,
 } from "../../src/constants/session"
 import {
   autonomyBudgetDiagnostics,
   formatAutonomyBudgetReport,
   resolveAutonomyBudget,
 } from "../../src/session/autonomy-budget"
-import { MAX_TOOL_ONLY_TURNS, TOOL_ONLY_TURN_NUDGE, promptLoopLimits } from "../../src/session/prompt-loop-config"
+import {
+  MAX_FAILED_MUTATION_ATTEMPTS,
+  MAX_TOOL_ONLY_TURNS,
+  TOOL_ONLY_TURN_NUDGE,
+  promptLoopLimits,
+} from "../../src/session/prompt-loop-config"
 
 describe("resolveAutonomyBudget", () => {
   test("ships standard defaults with no config", () => {
@@ -129,6 +135,30 @@ describe("resolveAutonomyBudget", () => {
     } as any)
     expect(b.modelTurnsPerSegment).toBe(200)
     expect(b.maxContinuations).toBe(1) // still from quick
+  })
+
+  test("autonomy.stall.failed_mutation_attempts overrides the default", () => {
+    const defaults = resolveAutonomyBudget({})
+    expect(defaults.failedMutationAttempts).toBe(MAX_FAILED_MUTATION_ATTEMPTS)
+    expect(defaults.sources).not.toContain("autonomy.stall.failed_mutation_attempts")
+
+    const overridden = resolveAutonomyBudget({
+      autonomy: { stall: { failed_mutation_attempts: 7 } },
+    } as any)
+    expect(overridden.failedMutationAttempts).toBe(7)
+    expect(overridden.sources).toContain("autonomy.stall.failed_mutation_attempts")
+  })
+
+  test("autonomy.stall.max_consecutive_errors overrides the default", () => {
+    const defaults = resolveAutonomyBudget({})
+    expect(defaults.maxConsecutiveErrors).toBe(MAX_CONSECUTIVE_ERRORS)
+    expect(defaults.sources).not.toContain("autonomy.stall.max_consecutive_errors")
+
+    const overridden = resolveAutonomyBudget({
+      autonomy: { stall: { max_consecutive_errors: 6 } },
+    } as any)
+    expect(overridden.maxConsecutiveErrors).toBe(6)
+    expect(overridden.sources).toContain("autonomy.stall.max_consecutive_errors")
   })
 })
 

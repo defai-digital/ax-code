@@ -8,10 +8,12 @@ import {
   AUTONOMOUS_PER_TOOL_MAX_CALLS,
   GLOBAL_STEP_LIMIT,
   GOAL_TOTAL_STEP_HEADROOM,
+  MAX_CONSECUTIVE_ERRORS,
   SUPER_LONG_TOTAL_STEP_HEADROOM,
 } from "@/constants/session"
 import {
   MAX_EMPTY_MODEL_TURN_RETRIES,
+  MAX_FAILED_MUTATION_ATTEMPTS,
   MAX_TOOL_ONLY_TURNS,
   MAX_TRUNCATED_MODEL_TURN_RETRIES,
   TOOL_ONLY_TURN_FINAL_NUDGE,
@@ -56,6 +58,10 @@ export interface ResolvedAutonomyBudget {
   toolCallRate: { count: number; windowSeconds: number }
   /** Tool-only streak circuit breaker. */
   toolOnly: { nudge: number; finalNudge: number; maxTurns: number }
+  /** Segment-cumulative failed-mutation attempt budget. */
+  failedMutationAttempts: number
+  /** Consecutive provider/tool errors before the run gives up. */
+  maxConsecutiveErrors: number
   /** Config keys that contributed non-default values (for /limits). */
   sources: string[]
 }
@@ -303,6 +309,25 @@ export function resolveAutonomyBudget(
     toolOnlyFinalNudge = Math.min(Math.max(toolOnlyFinalNudge, toolOnlyNudge), maxToolOnlyTurns)
   }
 
+  // --- failed-mutation attempt budget ---
+  // Segment-cumulative safety net that bounds fail -> read -> fail loops the
+  // consecutive 3/4/5 ladder cannot catch. Default; override via
+  // autonomy.stall.failed_mutation_attempts.
+  let failedMutationAttempts = MAX_FAILED_MUTATION_ATTEMPTS
+  if (stall?.failed_mutation_attempts !== undefined) {
+    failedMutationAttempts = stall.failed_mutation_attempts
+    sources.push("autonomy.stall.failed_mutation_attempts")
+  }
+
+  // --- consecutive error budget ---
+  // Hard stop after N consecutive provider/tool errors. Default; override via
+  // autonomy.stall.max_consecutive_errors.
+  let maxConsecutiveErrors = MAX_CONSECUTIVE_ERRORS
+  if (stall?.max_consecutive_errors !== undefined) {
+    maxConsecutiveErrors = stall.max_consecutive_errors
+    sources.push("autonomy.stall.max_consecutive_errors")
+  }
+
   return {
     profile,
     modelTurnsPerSegment: finitePositive(modelTurnsPerSegment, GLOBAL_STEP_LIMIT),
@@ -332,6 +357,8 @@ export function resolveAutonomyBudget(
       finalNudge: finitePositive(toolOnlyFinalNudge, TOOL_ONLY_TURN_FINAL_NUDGE),
       maxTurns: finitePositive(maxToolOnlyTurns, MAX_TOOL_ONLY_TURNS),
     },
+    failedMutationAttempts: finitePositive(failedMutationAttempts, MAX_FAILED_MUTATION_ATTEMPTS),
+    maxConsecutiveErrors: finitePositive(maxConsecutiveErrors, MAX_CONSECUTIVE_ERRORS),
     sources,
   }
 }
@@ -383,6 +410,8 @@ export function formatAutonomyBudgetReport(input: {
     "",
     "Stall breakers",
     `  tool-only nudge / final / max: ${b.toolOnly.nudge} / ${b.toolOnly.finalNudge} / ${b.toolOnly.maxTurns}`,
+    `  failed-mutation attempt budget: ${b.failedMutationAttempts}`,
+    `  consecutive error budget: ${b.maxConsecutiveErrors}`,
     "",
     "Config sources (non-default)",
     b.sources.length ? b.sources.map((s) => `  - ${s}`).join("\n") : "  (all shipped defaults)",

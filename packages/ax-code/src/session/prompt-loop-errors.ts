@@ -153,6 +153,8 @@ export async function handlePromptLoopError(
     consecutiveErrors: number
     step: number
     failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
+    /** Override for autonomy.stall.max_consecutive_errors; defaults to the shipped constant. */
+    maxConsecutiveErrors?: number
   },
   deps: PromptLoopErrorDeps = {},
 ): Promise<PromptLoopErrorResult> {
@@ -331,7 +333,7 @@ export async function handlePromptLoopError(
   }
   const errorDecision = consecutiveErrorDecision({
     consecutiveErrors: input.consecutiveErrors,
-    maxConsecutiveErrors: MAX_CONSECUTIVE_ERRORS,
+    maxConsecutiveErrors: input.maxConsecutiveErrors ?? MAX_CONSECUTIVE_ERRORS,
     step: input.step,
     errorMessage: terminalProviderErrorMessage(input.error),
     pendingTodoCount,
@@ -364,6 +366,8 @@ export async function resolvePromptLoopErrorTransition(
     fallbackModelOverride: MessageV2.User["model"] | undefined
     step: number
     failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
+    /** Override for autonomy.stall.max_consecutive_errors; defaults to the shipped constant. */
+    maxConsecutiveErrors?: number
   },
   deps: PromptLoopErrorTransitionDeps = {},
 ): Promise<PromptLoopErrorTransition> {
@@ -400,6 +404,7 @@ export async function resolvePromptLoopErrorTransition(
     consecutiveErrors: input.consecutiveErrors + 1,
     step: input.step,
     failedProviderIDs: input.failedProviderIDs,
+    maxConsecutiveErrors: input.maxConsecutiveErrors,
   })
 
   if (errorResult.action === "fallback") {

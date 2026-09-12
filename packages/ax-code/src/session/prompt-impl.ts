@@ -80,6 +80,8 @@ import {
   isNoProgressToolTurn,
   isFailedToolTurn,
   failedToolTurnDecision,
+  hasFailedMutationAttempt,
+  failedMutationBudgetDecision,
   toolCallingBackstopDecision,
   toolCallingBackstopWrapUp,
   toolOnlyStopMessage,
@@ -428,6 +430,8 @@ export namespace SessionPrompt {
     const toolOnlyNudgeThreshold = autonomyBudget.toolOnly.nudge
     const toolOnlyFinalNudgeThreshold = autonomyBudget.toolOnly.finalNudge
     const maxToolOnlyTurns = autonomyBudget.toolOnly.maxTurns
+    const maxFailedMutationAttempts = autonomyBudget.failedMutationAttempts
+    const maxConsecutiveErrors = autonomyBudget.maxConsecutiveErrors
     // One-shot guard for the goal ceiling-approach convergence warning: warn
     // once per goal (keyed by the goal's creation time, so a replacement goal
     // started later in the same run still gets its own warning), then let the
@@ -464,6 +468,12 @@ export namespace SessionPrompt {
     // completed tool or a non-tool-calls finish.
     let consecutiveFailedToolTurns = 0
     let failedToolNudges = 0
+    // Segment-cumulative failed MUTATION attempts (edit/write/... that ended in
+    // error). Unlike consecutiveFailedToolTurns, an interleaved successful read
+    // does not reset this budget — only a successful mutation or a text finish
+    // does — so fail -> read -> fail loops still terminate. Resets each
+    // continuation segment alongside the other loop counters.
+    let failedMutationAttempts = 0
     // How many times a FINAL / forced wrap-up has fired this run. Not reset
     // with the streak (#340): after two forced wrap-ups with no recent
     // mutations, the hard stop may fire. The first FINAL checkpoint is
@@ -559,6 +569,7 @@ export namespace SessionPrompt {
       toolOnlyNudges = 0
       consecutiveFailedToolTurns = 0
       failedToolNudges = 0
+      failedMutationAttempts = 0
       recentMutatingTurnsRemaining = 0
       consecutiveAxEngineReadOnlyTurns = 0
       axEngineReadOnlyNudged = false
@@ -1349,6 +1360,7 @@ export namespace SessionPrompt {
         toolOnlyNudges = 0
         consecutiveFailedToolTurns = 0
         failedToolNudges = 0
+        failedMutationAttempts = 0
         recentMutatingTurnsRemaining = 0
         consecutiveAxEngineReadOnlyTurns = 0
         axEngineReadOnlyNudged = false
@@ -1842,6 +1854,14 @@ export namespace SessionPrompt {
           consecutiveFailedToolTurns = 0
           failedToolNudges = 0
         }
+        // Segment-cumulative failed-mutation budget: a failed edit/write
+        // interleaved with a successful read resets the consecutive ladder
+        // above, so bound the total failed mutating attempts per segment.
+        if (isMutatingProgressTurn(currentParts)) {
+          failedMutationAttempts = 0
+        } else if (hasFailedMutationAttempt(currentParts)) {
+          failedMutationAttempts += 1
+        }
         const axEngineReadOnlyTurn =
           model.providerID === AX_ENGINE_PROVIDER_ID && isReadOnlyExplorationTurn(currentParts)
         if (axEngineReadOnlyTurn) {
@@ -1944,6 +1964,30 @@ export namespace SessionPrompt {
           reason = "stalled"
           break
         }
+        const failedMutationBudget = failedMutationBudgetDecision({
+          failedMutationAttempts,
+          maxAttempts: maxFailedMutationAttempts,
+        })
+        if (failedMutationBudget.action === "stop") {
+          log.warn("failed-mutation attempt budget exhausted", {
+            command: "session.prompt.loop",
+            status: "stopped",
+            errorCode: "FAILED_MUTATION_BUDGET",
+            sessionID,
+            failedMutationAttempts,
+            maxFailedMutationAttempts,
+          })
+          await publishPromptFailure({
+            sessionID,
+            assistant: processor.message,
+            message:
+              `Agent loop stopped after ${failedMutationAttempts} failed mutating tool attempts this segment ` +
+              `without a single successful edit/write. Inspect the recurring tool error (stale file context, ` +
+              `denied permission, or invalid input) before retrying.`,
+          })
+          reason = "stalled"
+          break
+        }
         const toolOnlyTransition = toolOnlyTurnDecision({
           consecutiveToolOnlyTurns,
           toolOnlyNudges,
@@ -2040,6 +2084,7 @@ export namespace SessionPrompt {
         fallbackModelOverride,
         step,
         failedProviderIDs: failedFallbackProviderIDs,
+        maxConsecutiveErrors,
       })
       consecutiveErrors = errorTransition.consecutiveErrors
       fallbackModelOverride = errorTransition.fallbackModelOverride

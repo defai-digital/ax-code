@@ -33,6 +33,16 @@ export const TOOL_ONLY_TURN_FINAL_NUDGE = MAX_TOOL_ONLY_TURNS - 5
 export const FAILED_TOOL_TURN_NUDGE = 3
 export const FAILED_TOOL_TURN_FORCE = 4
 export const MAX_FAILED_TOOL_TURNS = 5
+// Segment-cumulative safety net for failed MUTATION attempts (edit, write,
+// multiedit, apply_patch, todowrite). The consecutive 3/4/5 ladder above cannot
+// catch a model that interleaves one successful turn between failures: any turn
+// where not every tool errored resets `consecutiveFailedToolTurns`, so
+// fail-edit -> successful-read -> fail-edit -> ... never reaches the stop and
+// read-only interstitials carry no cumulative cap (only the 500/2000 turn
+// ceilings). A successful mutation or a text finish resets this budget, so
+// ordinary edit-retry work is unaffected; a model that fails this many mutating
+// attempts in one segment without a single success is stuck, not progressing.
+export const MAX_FAILED_MUTATION_ATTEMPTS = 30
 // Local MLX prefill makes every extra model/tool round comparatively
 // expensive. Still bound open-ended inspection, but allow a real evidence
 // window first: pure Q&A (LOC counts, greps) is read-only work and must not
