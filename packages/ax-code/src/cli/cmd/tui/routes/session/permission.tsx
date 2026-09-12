@@ -1,3 +1,4 @@
+import { canPersistPermission, canConfirmPersistentPermission } from "@/permission/interaction"
 import { createStore, produce } from "solid-js/store"
 import { createEffect, createMemo, For, Match, on, Show, Switch } from "solid-js"
 import { Portal, useKeyboard, useTerminalDimensions, type JSX } from "ax-tui/solid"
@@ -213,6 +214,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
   const toast = useToast()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
+    alwaysRequestID: undefined as string | undefined,
     // Latch so repeated clicks/Enter while a reply is in flight cannot send
     // duplicate replies for the same request. Pure transitions live in
     // permission-submit-latch.ts (ADR-047 / runtime-stability). See #241.
@@ -229,6 +231,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       (id) =>
         setStore({
           stage: "permission",
+          alwaysRequestID: undefined,
           // Always re-arm from a clean latch for the new request id so a
           // mid-flight previous reply cannot leave submitting=true.
           latch: createPermissionSubmitLatch(id),
@@ -281,11 +284,12 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
   const { theme } = useTheme()
 
-  // Interactive-only permissions (e.g. isolation_escalation) are never
-  // persisted, so offering "Allow always" is misleading. Hide it for those
-  // permission types. See #239.
-  const INTERACTIVE_ONLY_PERMISSIONS = new Set(["isolation_escalation", "webmcp"])
-  const allowAlwaysAvailable = createMemo(() => !INTERACTIVE_ONLY_PERMISSIONS.has(props.request.permission))
+  const allowAlwaysAvailable = createMemo(() => canPersistPermission(props.request))
+  createEffect(() => {
+    if (store.stage === "always" && !allowAlwaysAvailable()) {
+      setStore({ stage: "permission", alwaysRequestID: undefined })
+    }
+  })
   const baseOptions = createMemo(() => {
     const opts: Record<string, string> = { once: "Allow once", reject: "Reject" }
     if (allowAlwaysAvailable()) opts.always = "Allow always"
@@ -573,11 +577,13 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           body={
             <Switch>
               <Match when={props.request.always.length === 1 && props.request.always[0] === "*"}>
-                <TextBody title={"This will allow " + props.request.permission + " until ax-code is restarted."} />
+                <TextBody title={"This will allow future " + props.request.permission + " requests in this project."} />
               </Match>
               <Match when={true}>
                 <box paddingLeft={1} gap={1}>
-                  <text fg={theme.textMuted}>This will allow the following patterns until ax-code is restarted</text>
+                  <text fg={theme.textMuted}>
+                    This will allow future requests matching these patterns in this project
+                  </text>
                   <box>
                     <For each={props.request.always}>
                       {(pattern) => (
@@ -595,8 +601,10 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           options={{ confirm: "Confirm", cancel: "Cancel" }}
           escapeKey="cancel"
           onSelect={(option) => {
-            setStore("stage", "permission")
-            if (option === "cancel") return
+            const canConfirm =
+              option === "confirm" && canConfirmPersistentPermission(props.request, store.alwaysRequestID)
+            setStore({ stage: "permission", alwaysRequestID: undefined })
+            if (!canConfirm) return
             submitPermissionReply(
               () =>
                 sdk.client.permission.reply({
@@ -656,7 +664,8 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           fullscreen
           onSelect={(option) => {
             if (option === "always") {
-              setStore("stage", "always")
+              if (!allowAlwaysAvailable()) return
+              setStore({ stage: "always", alwaysRequestID: props.request.id })
               return
             }
             if (option === "reject") {

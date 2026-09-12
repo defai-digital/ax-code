@@ -1,3 +1,4 @@
+import { INTERACTIVE_ONLY_PERMISSIONS, isInteractivePermission } from "./interaction"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Config } from "@/config/config"
@@ -218,15 +219,7 @@ export namespace Permission {
   // auto-reply. This prevents agent default rules like
   // {permission:"*",action:"allow",pattern:"*"} and headless projection
   // from silently bypassing critical safety checks.
-  export const INTERACTIVE_ONLY: ReadonlySet<string> = new Set([
-    "isolation_escalation",
-    "bash_destructive",
-    // Cloud Operations approval gate (PRD-2026-09-04-cloud-operations-mode):
-    // approving a plan must never be pre-approved by wildcard rules.
-    "ops_approve",
-    // Page-defined tools are not trusted by a generic MCP wildcard grant.
-    "webmcp",
-  ])
+  export const INTERACTIVE_ONLY = INTERACTIVE_ONLY_PERMISSIONS
 
   export const EXACT_GRANT_ONLY_PERMISSIONS: ReadonlySet<string> = EXACT_GRANT_ONLY
 
@@ -236,7 +229,7 @@ export namespace Permission {
   export const NEVER_AUTONOMOUS_AUTOAPPROVE: ReadonlySet<string> = new Set(["computer"])
 
   export function isInteractiveOnly(permission: string, metadata?: Record<string, unknown>): boolean {
-    return INTERACTIVE_ONLY.has(permission) || metadata?.["requireInteractive"] === true
+    return isInteractivePermission(permission, metadata)
   }
 
   export function isNeverAutonomousAutoApprove(permission: string): boolean {
