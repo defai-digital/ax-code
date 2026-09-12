@@ -515,24 +515,135 @@ describe("tool.bash truncation", () => {
     })
   })
 
-  test.each(["git config set core.hooksPath ./evil-hooks", "git config -- core.hooksPath --get"])(
-    "blocks dangerous config writes with alternate syntax: %s",
-    async (command) => {
-      await using tmp = await tmpdir({ git: true })
-      await withAutonomous(async () => {
-        await Instance.provide({
-          directory: tmp.path,
-          fn: async () => {
-            const bash = await BashTool.init()
-            await expect(bash.execute({ command, description: "Reject hook injection" }, ctx)).rejects.toThrow(
-              /non-overridable protected path/,
-            )
-            expect(await fs.readFile(path.join(tmp.path, ".git", "config"), "utf8")).not.toContain("hooksPath")
-          },
-        })
+  test.each([
+    "git config set core.hooksPath ./evil-hooks",
+    "git config -- core.hooksPath --get",
+    `bash -c "git config 'core.hooksPath' ./evil-hooks"`,
+    `bash -c "'git' config core.hooksPath ./evil-hooks"`,
+    `bash -c "env git config core.hooksPath ./evil-hooks"`,
+  ])("blocks dangerous config writes with alternate syntax: %s", async (command) => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(bash.execute({ command, description: "Reject hook injection" }, ctx)).rejects.toThrow(
+            /non-overridable protected path/,
+          )
+          expect(await fs.readFile(path.join(tmp.path, ".git", "config"), "utf8")).not.toContain("hooksPath")
+        },
       })
-    },
-  )
+    })
+  })
+
+  test.each([
+    "credential.https://example.invalid.helper",
+    "CrEdEnTiAl.https://example.invalid.HeLpEr",
+    "diff.fixture.command",
+    "diff.fixture.textconv",
+    "merge.fixture.driver",
+    "difftool.fixture.cmd",
+    "difftool.fixture.path",
+    "mergetool.fixture.cmd",
+    "mergetool.fixture.path",
+    "browser.fixture.cmd",
+    "browser.fixture.path",
+    "man.fixture.cmd",
+    "man.fixture.path",
+    "guitool.fixture.cmd",
+    "trailer.fixture.cmd",
+    "trailer.fixture.command",
+    "gpg.ssh.program",
+    "gpg.ssh.defaultKeyCommand",
+    "core.askPass",
+    "core.gitProxy",
+    "core.alternateRefsCommand",
+    "interactive.diffFilter",
+    "sendemail.ccCmd",
+    "sendemail.toCmd",
+    "sendemail.headerCmd",
+    "sendemail.sendmailCmd",
+    "sendemail.fixture.sendmailCmd",
+    "remote.origin.uploadpack",
+    "remote.origin.receivepack",
+    "remote.origin.vcs",
+    "imap.tunnel",
+    "instaweb.httpd",
+  ])("blocks command-bearing Git config key %s", async (key) => {
+    await using tmp = await tmpdir({ git: true })
+    const configPath = path.join(tmp.path, ".git", "config")
+    const before = await fs.readFile(configPath, "utf8")
+    await withAutonomous(async () => {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          await expect(
+            bash.execute(
+              { command: `git config ${key} fixture-command`, description: "Reject executable configuration" },
+              ctx,
+            ),
+          ).rejects.toThrow(/non-overridable protected path/)
+          expect(await fs.readFile(configPath, "utf8")).toBe(before)
+        },
+      })
+    })
+  })
+
+  test.each([
+    "credential.https://example.invalid.username",
+    "diff.fixture.wordRegex",
+    "merge.fixture.name",
+    "trailer.fixture.key",
+    "remote.origin.url",
+  ])("allows non-executable Git config key %s", async (key) => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            { command: `git config ${key} fixture-value`, description: "Set ordinary configuration" },
+            ctx,
+          )
+          expect(result.metadata.exit).toBe(0)
+          const stored = await execFileAsync("git", ["-C", tmp.path, "config", "--get", key])
+          expect(stored.stdout.trim()).toBe("fixture-value")
+        },
+      })
+    })
+  })
+
+  test.each([
+    { args: "sendemail.smtpServer /tmp/fixture-sendmail", blocked: true },
+    { args: "set sendemail.fixture.smtpServer /tmp/fixture-sendmail", blocked: true },
+    { args: "--add sendemail.smtpServer /tmp/fixture-sendmail", blocked: true },
+    { args: "sendemail.smtpServer ~/fixture-sendmail", blocked: true },
+    { args: "sendemail.smtpServer smtp.example.invalid", blocked: false },
+    { args: "set sendemail.fixture.smtpServer smtp.example.invalid", blocked: false },
+    { args: "submodule.fixture.update '!printf fixture'", blocked: true },
+    { args: "set submodule.fixture.update '!printf fixture'", blocked: true },
+    { args: "submodule.fixture.update checkout", blocked: false },
+    { args: "set submodule.fixture.update rebase", blocked: false },
+  ])("guards value-dependent executable settings: $args", async ({ args, blocked }) => {
+    await using tmp = await tmpdir({ git: true })
+    await withAutonomous(async () => {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const run = bash.execute(
+            { command: `git config ${args}`, description: "Configure transport or update mode" },
+            ctx,
+          )
+          if (blocked) await expect(run).rejects.toThrow(/non-overridable protected path/)
+          else expect((await run).metadata.exit).toBe(0)
+        },
+      })
+    })
+  })
 
   test.each(["rename-section", "--rename-section"])("blocks config section injection with %s", async (action) => {
     await using tmp = await tmpdir({ git: true })

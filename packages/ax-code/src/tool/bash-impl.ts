@@ -67,7 +67,7 @@ const LOCAL_HTML_PATH_RE = /^(?!https?:\/\/).*\.html?(?:\s*$|#|\?)/i
 
 // git config keys that can execute code when set: hook injection, arbitrary
 // command wrappers, external protocol handlers, filter processes, pagers.
-// These are stable git keys, so a hardcoded allowlist is appropriate — mirrors
+// These are stable git keys, so an explicit guard list is appropriate — mirrors
 // Isolation.NETWORK_COMMANDS. Matching is case-insensitive (git normalizes key
 // case before lookup).
 const DANGEROUS_GIT_CONFIG_KEYS = [
@@ -89,9 +89,57 @@ const DANGEROUS_GIT_CONFIG_KEYS = [
   "sequence.editor",
 ] as const
 
+// Subsections contain caller-chosen names (including dotted URLs), so match
+// the executable field at the end instead of blocking every setting in a family.
+const DANGEROUS_GIT_CONFIG_PATTERNS = [
+  /^core\.(?:askpass|gitproxy|alternaterefscommand)$/,
+  /^interactive\.difffilter$/,
+  /^imap\.tunnel$/,
+  /^instaweb\.httpd$/,
+  /^gpg\.ssh\.defaultkeycommand$/,
+  /^credential\..+\.helper$/s,
+  /^diff\..+\.(?:command|textconv)$/s,
+  /^merge\..+\.driver$/s,
+  /^(?:difftool|mergetool|browser|man)\..+\.(?:cmd|path)$/s,
+  /^guitool\..+\.cmd$/s,
+  /^trailer\..+\.(?:cmd|command)$/s,
+  /^gpg\..+\.program$/s,
+  /^remote\..+\.(?:uploadpack|receivepack|vcs)$/s,
+  /^sendemail(?:\..+)?\.(?:cccmd|tocmd|headercmd|sendmailcmd)$/s,
+] as const
+
+const GIT_SENDMAIL_SERVER_KEY = /^sendemail(?:\..+)?\.smtpserver$/s
+const GIT_SUBMODULE_UPDATE_KEY = /^submodule\..+\.update$/s
+
+function isDangerousGitConfigKey(key: string, value?: string): boolean {
+  if (
+    DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix)) ||
+    DANGEROUS_GIT_CONFIG_PATTERNS.some((pattern) => pattern.test(key))
+  )
+    return true
+  if (value === undefined) return false
+  // These fields also accept ordinary hostnames or built-in update modes.
+  if (GIT_SENDMAIL_SERVER_KEY.test(key)) {
+    return (
+      path.posix.isAbsolute(value) ||
+      path.win32.isAbsolute(value) ||
+      value.startsWith("~") ||
+      hasDynamicShellExpansion(value)
+    )
+  }
+  if (GIT_SUBMODULE_UPDATE_KEY.test(key)) return value.startsWith("!") || hasDynamicShellExpansion(value)
+  return false
+}
+
 // Parse config options once so option values and tokens after -- never act
 // as flags. Both legacy actions and the modern config subcommands are used.
-function gitConfigInvocation(args: string[]): { key?: string; file?: string; isRead: boolean; wholeFile: boolean } {
+function gitConfigInvocation(args: string[]): {
+  key?: string
+  value?: string
+  file?: string
+  isRead: boolean
+  wholeFile: boolean
+} {
   const readActions = new Set(["--get", "--get-regexp", "--get-all", "--get-urlmatch", "--list", "-l"])
   const subcommands = new Set(["get", "list", "set", "unset", "rename-section", "remove-section", "edit"])
   let action = subcommands.has(args[0]) ? args[0] : undefined
@@ -131,6 +179,7 @@ function gitConfigInvocation(args: string[]): { key?: string; file?: string; isR
   }
   return {
     key: positional[0]?.toLowerCase(),
+    value: positional[1],
     file,
     wholeFile,
     isRead: action === "get" || action === "list" || (!action && positional.length === 1),
@@ -626,13 +675,10 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             const explicitFile = config.file
             const key = config.key
             // Section moves and editor invocations can change arbitrary keys.
-            const dangerous =
-              config.wholeFile ||
-              (key !== undefined && DANGEROUS_GIT_CONFIG_KEYS.some((prefix) => key.startsWith(prefix)))
-            const implicit = location.gitDir
-              ? path.join(stripShellQuotes(location.gitDir), "config")
-              : path.join(".git", "config")
-            const target = stripShellQuotes(explicitFile ?? implicit)
+            const dangerous = config.wholeFile || (key !== undefined && isDangerousGitConfigKey(key, config.value))
+            // Keep the directory as raw input until the containment check;
+            // append the implicit config filename only when resolving below.
+            const target = stripShellQuotes(explicitFile ?? location.gitDir ?? ".git")
             const targetPath = expandLeadingTilde(target)
             // Validate every -C value before resolving: dynamic ($VAR, globs)
             // and ~user values cannot name a static base directory, so the
@@ -659,7 +705,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               // target before any isolation or blast-radius recording.
               let base = cwd
               for (const part of cdParts) base = path.resolve(base, part)
-              const absolute = path.resolve(base, targetPath!)
+              const absolute =
+                explicitFile === undefined ? path.resolve(base, targetPath!, "config") : path.resolve(base, targetPath!)
               if (explicitFile || dangerous || !Instance.containsPath(absolute)) {
                 const resolved = await recordResolvedPath(absolute)
                 if (resolved) redirectWritePaths.add(resolved)
@@ -774,7 +821,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                 }
                 const innerDestructiveReason = classifyDestructiveCommand(innerParts.map(stripShellQuotes))
                 if (innerDestructiveReason) destructiveCommands.set(innerNode.text, innerDestructiveReason)
-                await recordInnerCommandPaths(innerParts)
+                const normalizedInnerParts = innerParts.map(stripShellQuotes)
+                const innerCommand = findWrappedCommand(normalizedInnerParts)
+                await recordInnerCommandPaths(
+                  innerCommand ? [innerCommand.name, ...innerCommand.args] : normalizedInnerParts,
+                )
               }
               // Inner-tree redirect targets: `bash -c "echo > /etc/x"` and
               // `eval "echo >> /etc/x"` would otherwise bypass the outer
