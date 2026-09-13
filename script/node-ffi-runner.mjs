@@ -168,6 +168,13 @@ if (process.platform !== "win32" && typeof process.execve === "function") {
   let solidLoader
   for (let i = 0; i < nodeOptionsFlags.length; i++) {
     const flag = nodeOptionsFlags[i]
+    if (flag.startsWith("--import=")) {
+      const value = flag.slice("--import=".length)
+      const specifier = toNodeOptionsImportSpecifier(value)
+      if (value.includes("solid-loader")) solidLoader = specifier
+      optionsFlags.push("--import", specifier)
+      continue
+    }
     if (flag === "--import" && i + 1 < nodeOptionsFlags.length) {
       const value = nodeOptionsFlags[i + 1]
       const specifier = toNodeOptionsImportSpecifier(value)
