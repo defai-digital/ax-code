@@ -1096,7 +1096,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             </text>
             <box flexShrink={0} flexDirection="row" gap={2}>
               <text fg={theme.textMuted}>
-                Sidebar <span style={{ fg: theme.text }}>/sidebar</span>
+                <span style={{ fg: theme.text }}>/sidebar</span>
               </text>
               <box flexShrink={0} onMouseUp={() => command.trigger("session.sidebar.width")}>
                 <text fg={theme.textMuted} selectable={false}>{`Width ${sidebarWidth()}`}</text>
