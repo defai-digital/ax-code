@@ -1,6 +1,14 @@
 import { useKV } from "@tui/context/kv"
-import { activeNavigationSessions, navigationFilter, visibleAfterNavigationClear } from "../navigation/navigation-model"
+import {
+  activeNavigationSessions,
+  confirmNavigationClear,
+  NAVIGATION_CLEAR_MESSAGE,
+  NAVIGATION_CLEAR_TITLE,
+  navigationFilter,
+  visibleAfterNavigationClear,
+} from "../navigation/navigation-model"
 import { useDialog } from "@tui/ui/dialog"
+import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
@@ -239,7 +247,14 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
               </box>
             )}
           </For>
-          <box onMouseUp={() => kv.set("navigation_cleared_at", Date.now())}>
+          <box
+            onMouseUp={() => {
+              void confirmNavigationClear({
+                ask: () => DialogConfirm.show(dialog, NAVIGATION_CLEAR_TITLE, NAVIGATION_CLEAR_MESSAGE),
+                apply: (at) => kv.set("navigation_cleared_at", at),
+              })
+            }}
+          >
             <text fg={theme.textMuted} selectable={false}>
               Clear
             </text>

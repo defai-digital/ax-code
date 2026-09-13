@@ -1,6 +1,8 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import {
   activeNavigationSessions,
+  confirmNavigationClear,
+  NAVIGATION_CLEAR_MESSAGE,
   projectLabel,
   navigationClearedAt,
   navigationFilter,
@@ -90,6 +92,16 @@ describe("navigation rail clear", () => {
         (session) => session.id,
       ),
     ).toEqual(["current"])
+  })
+  test("applies the cutoff only after confirmation", async () => {
+    const apply = vi.fn()
+    expect(await confirmNavigationClear({ ask: async () => undefined, apply, now: 99 })).toBe(false)
+    expect(await confirmNavigationClear({ ask: async () => false, apply, now: 99 })).toBe(false)
+    expect(apply).not.toHaveBeenCalled()
+    expect(await confirmNavigationClear({ ask: async () => true, apply, now: 99 })).toBe(true)
+    expect(apply).toHaveBeenCalledExactlyOnceWith(99)
+    expect(NAVIGATION_CLEAR_MESSAGE).toContain("clear the navigation bar history")
+    expect(NAVIGATION_CLEAR_MESSAGE).toContain("Are you sure")
   })
 })
 

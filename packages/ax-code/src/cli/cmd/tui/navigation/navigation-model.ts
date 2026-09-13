@@ -12,6 +12,22 @@ export function navigationClearedAt(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0
 }
 
+export const NAVIGATION_CLEAR_TITLE = "Clear navigation history"
+export const NAVIGATION_CLEAR_MESSAGE =
+  "This will clear the navigation bar history. Sessions are not deleted and remain available in /sessions. Are you sure?"
+
+/** Ask before hiding historical rows from the rail. Cancel leaves the list unchanged. */
+export async function confirmNavigationClear(input: {
+  ask: () => Promise<boolean | undefined>
+  apply: (at: number) => void
+  now?: number
+}) {
+  const ok = await input.ask()
+  if (!ok) return false
+  input.apply(input.now ?? Date.now())
+  return true
+}
+
 function addAncestorsAndDescendants<T extends { id: string; parentID?: string }>(
   sessions: readonly T[],
   keep: Set<string>,

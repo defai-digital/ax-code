@@ -12,6 +12,7 @@ const mocked = vi.hoisted(() => ({
   clear: vi.fn(),
   setSize: vi.fn(),
   reply: vi.fn(),
+  confirm: vi.fn(async (_dialog?: unknown, _title?: string, _message?: string): Promise<boolean | undefined> => true),
   connected: true,
   kv: {} as Record<string, unknown>,
   setKV: vi.fn(),
@@ -90,6 +91,11 @@ vi.mock("../../../src/cli/cmd/tui/component/dialog-command", () => ({
   useCommandDialog: () => ({ trigger: mocked.trigger }),
 }))
 vi.mock("@tui/ui/dialog", () => ({ useDialog: () => ({ clear: mocked.clear, setSize: mocked.setSize }) }))
+vi.mock("@tui/ui/dialog-confirm", () => ({
+  DialogConfirm: {
+    show: (dialog: unknown, title: string, message: string) => mocked.confirm(dialog, title, message),
+  },
+}))
 vi.mock("@tui/ui/dialog-select", () => ({ DialogSelect: () => undefined }))
 
 type Element = { type: unknown; props: Record<string, unknown> }
@@ -195,11 +201,17 @@ describe("session navigation callbacks", () => {
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
-  test("clears historical rows from the rail without deleting or opening sessions", () => {
+  test("clears historical rows from the rail without deleting or opening sessions", async () => {
     const props = navigationProps()
     const tree = mount(() => SessionNavigation(props))
     expect(text(tree)).toContain("Earlier session")
     click(tree, "Clear")
+    await Promise.resolve()
+    expect(mocked.confirm).toHaveBeenCalledWith(
+      expect.anything(),
+      "Clear navigation history",
+      expect.stringContaining("clear the navigation bar history"),
+    )
     expect(mocked.setKV).toHaveBeenCalledExactlyOnceWith("navigation_cleared_at", expect.any(Number))
     expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()
@@ -212,6 +224,18 @@ describe("session navigation callbacks", () => {
     expect(text(cleared)).not.toContain("Earlier session")
     expect(sessionPicker(false).options.map((option) => option.value)).toEqual(["root", "idle"])
     expect(sessionPicker(true).options.map((option) => option.value)).toEqual(["root", "child"])
+    expect(mocked.reply).not.toHaveBeenCalled()
+  })
+
+  test("keeps the rail list when the clear confirmation is cancelled", async () => {
+    mocked.confirm.mockResolvedValueOnce(false)
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    expect(text(tree)).toContain("Earlier session")
+    click(tree, "Clear")
+    await Promise.resolve()
+    expect(mocked.setKV).not.toHaveBeenCalled()
+    expect(text(tree)).toContain("Earlier session")
+    expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 

@@ -19,7 +19,13 @@ import {
 } from "./component/work-mode-availability"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
-import { navigationFilter } from "./navigation/navigation-model"
+import { DialogConfirm } from "@tui/ui/dialog-confirm"
+import {
+  confirmNavigationClear,
+  NAVIGATION_CLEAR_MESSAGE,
+  NAVIGATION_CLEAR_TITLE,
+  navigationFilter,
+} from "./navigation/navigation-model"
 import { NAVIGATION_DOCK_MIN_WIDTH } from "./navigation/navigation-layout"
 
 export type AppCommandSandbox = {
@@ -160,9 +166,11 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       value: "session.navigation.clear",
       category: "Session",
       slash: { name: "navigation-clear" },
-      onSelect: () => {
-        kv.set("navigation_cleared_at", Date.now())
-        dialog.clear()
+      onSelect: async () => {
+        await confirmNavigationClear({
+          ask: () => DialogConfirm.show(dialog, NAVIGATION_CLEAR_TITLE, NAVIGATION_CLEAR_MESSAGE),
+          apply: (at) => kv.set("navigation_cleared_at", at),
+        })
       },
     },
     {

@@ -4,10 +4,15 @@ import { useKV } from "@tui/context/kv"
 import { navigationPanelInnerWidth, navigationRailInnerWidth } from "../navigation/navigation-layout"
 import {
   activeNavigationSessions,
+  confirmNavigationClear,
+  NAVIGATION_CLEAR_MESSAGE,
+  NAVIGATION_CLEAR_TITLE,
   navigationFilter,
   projectLabel,
   visibleAfterNavigationClear,
 } from "../navigation/navigation-model"
+import { useDialog } from "@tui/ui/dialog"
+import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { useSync } from "@tui/context/sync"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
@@ -39,6 +44,7 @@ export function SessionNavigation(props: {
   const route = useRoute()
   const local = useLocal()
   const command = useCommandDialog()
+  const dialog = useDialog()
   const { theme } = useTheme()
   const expanded = () => props.expanded
   const setExpanded = (value: Parameters<Setter<ReadonlySet<string>>>[0]) => props.setExpanded(value)
@@ -85,6 +91,13 @@ export function SessionNavigation(props: {
   const slots = createMemo(() => new Map(local.session.slots().map((id, index) => [id, index + 1])))
   const innerWidth = () => navigationRailInnerWidth(props.width)
   const panelWidth = () => navigationPanelInnerWidth(props.width)
+
+  function clearNavigationList() {
+    void confirmNavigationClear({
+      ask: () => DialogConfirm.show(dialog, NAVIGATION_CLEAR_TITLE, NAVIGATION_CLEAR_MESSAGE),
+      apply: (at) => kv.set("navigation_cleared_at", at),
+    })
+  }
 
   return (
     <box
@@ -246,7 +259,7 @@ export function SessionNavigation(props: {
           <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.width")}>
             <text flexShrink={0} fg={theme.textMuted} selectable={false}>{`Width ${props.width}`}</text>
           </box>
-          <box flexShrink={0} onMouseUp={() => kv.set("navigation_cleared_at", Date.now())}>
+          <box flexShrink={0} onMouseUp={clearNavigationList}>
             <text flexShrink={0} fg={theme.textMuted} selectable={false}>
               Clear
             </text>
