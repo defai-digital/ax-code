@@ -4,7 +4,7 @@ import {
   projectLabel,
   navigationFilter,
 } from "../../../src/cli/cmd/tui/navigation/navigation-model"
-import { navigationLayout } from "../../../src/cli/cmd/tui/navigation/navigation-layout"
+import { NAVIGATION_CONTENT_MIN_WIDTH, navigationLayout } from "../../../src/cli/cmd/tui/navigation/navigation-layout"
 
 const sessions = [
   { id: "root", time: { updated: 1 } },
@@ -56,12 +56,12 @@ describe("preferred navigation width", () => {
   test.each([24, 30, 36])("preserves the content minimum with preferred width %i", (preferred) => {
     for (const width of [145, 146, 147, 150, 152, 158, 160, 200]) {
       const layout = navigationLayout(width, true, preferred)
-      expect(layout.railWidth).toBe(width < 146 ? 0 : Math.min(preferred, width - 122))
-      expect(layout.contentWidth).toBeGreaterThanOrEqual(122)
+      expect(layout.railWidth).toBe(width < 146 ? 0 : Math.min(preferred, width - NAVIGATION_CONTENT_MIN_WIDTH))
+      expect(layout.contentWidth).toBeGreaterThanOrEqual(NAVIGATION_CONTENT_MIN_WIDTH)
     }
     expect(navigationLayout(200, false, preferred)).toEqual({ railWidth: 0, contentWidth: 200 })
   })
   test.each([null, "36", NaN, Infinity, -30, 500, 25])("ignores malformed persisted width %s", (value) => {
-    expect(navigationLayout(160, true, value).railWidth).toBe(24)
+    expect(navigationLayout(160, true, value).railWidth).toBe(30)
   })
 })

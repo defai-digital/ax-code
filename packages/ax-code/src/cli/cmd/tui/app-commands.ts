@@ -156,7 +156,12 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Toggle session navigation",
+      title:
+        input.terminalWidth() < NAVIGATION_DOCK_MIN_WIDTH
+          ? "Open session navigation"
+          : kv.get("navigation_visible", true)
+            ? "Hide session navigation"
+            : "Show session navigation",
       value: "session.navigation",
       category: "Session",
       slash: { name: "navigation" },

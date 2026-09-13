@@ -1095,7 +1095,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               </Show>
             </text>
             <text fg={theme.textMuted}>
-              Sidebar <span style={{ fg: theme.text }}>/sidebar on</span>
+              Sidebar <span style={{ fg: theme.text }}>/sidebar to hide</span>
             </text>
             <ModeChips />
             <GoalChip sessionID={props.sessionID} />

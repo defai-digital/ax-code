@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest"
 import {
+  NAVIGATION_CONTENT_MIN_WIDTH,
+  NAVIGATION_RAIL_WIDTH,
   navigationLayout,
   navigationPanelInnerWidth,
   navigationRailInnerWidth,
@@ -17,7 +19,9 @@ const sessions = [
 describe("session navigation layout and entries", () => {
   test.each([50, 80, 120, 145, 146, 160, 200])("accounts for both docks at %i columns", (width) => {
     const layout = navigationLayout(width, true)
-    expect(layout.railWidth).toBe(width >= 146 ? 24 : 0)
+    expect(layout.railWidth).toBe(
+      width >= 146 ? Math.min(NAVIGATION_RAIL_WIDTH, width - NAVIGATION_CONTENT_MIN_WIDTH) : 0,
+    )
     expect(layout.contentWidth + layout.railWidth).toBe(width)
     const main = computeSessionMainPaneWidth({
       terminalWidth: layout.contentWidth,

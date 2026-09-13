@@ -1,5 +1,6 @@
-export const NAVIGATION_RAIL_WIDTH = 24
+export const NAVIGATION_RAIL_WIDTH = 30
 export const NAVIGATION_DOCK_MIN_WIDTH = 146
+export const NAVIGATION_CONTENT_MIN_WIDTH = 122
 export const NAVIGATION_WIDTHS = [24, 30, 36] as const
 
 export function navigationWidth(value: unknown): number {
@@ -23,7 +24,7 @@ export function navigationLayout(
 ) {
   const railWidth =
     enabled && terminalWidth >= NAVIGATION_DOCK_MIN_WIDTH
-      ? Math.min(navigationWidth(preferredWidth), terminalWidth - 122)
+      ? Math.min(navigationWidth(preferredWidth), terminalWidth - NAVIGATION_CONTENT_MIN_WIDTH)
       : 0
   return { railWidth, contentWidth: Math.max(0, terminalWidth - railWidth) }
 }

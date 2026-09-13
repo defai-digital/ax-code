@@ -212,12 +212,13 @@ and remembered. Use `/navigation-filter` to toggle it from the keyboard. During
 disconnection it shows cached sessions rather than inferring which sessions
 are active.
 
-Use `/navigation-width` or the sidebar Width action to choose 24, 30, or 36
-columns. The preference is remembered and shrinks automatically when needed
+Use `/navigation-width` or the navigation Width action to choose 24, 30, or 36
+columns (default 30). The preference is remembered and shrinks automatically when needed
 to preserve the main content. Use `/navigation` to hide or restore the left
-sidebar on wide terminals. On narrower terminals it opens a session-and-agent
+navigation rail on wide terminals. `/sidebar` hides or restores the right
+session sidebar the same way. On narrower terminals `/navigation` opens a session-and-agent
 picker instead. A visible Sessions bar provides the same action whenever the
-sidebar is absent. Its Pending action appears when known requests need input;
+navigation rail is absent. Its Pending action appears when known requests need input;
 an asterisk marks a cached count during disconnection. `/sessions`
 continues to open the normal session picker. `/attention` is available at every
 width. During disconnection, its list is labeled as cached; opening cached

@@ -13,6 +13,7 @@ changes belong to AX Coder.
 ### Changed
 
 - Align the left session navigation rail and compact Sessions bar with the right sidebar: carded Project and Across workspaces sections, subtler dividers, padded pending chips, and muted cached-state copy.
+- Default the left navigation rail to 30 columns (24/30/36 still selectable), slim the right session sidebar by four columns, and use `/navigation to hide` and `/sidebar to hide` for the same hide action.
 - Require Node.js 26 across the repo, SDK, and JSR publish manifests (was Node 24).
 
 ### Fixed
