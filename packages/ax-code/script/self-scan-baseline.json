@@ -1896,7 +1896,7 @@
       ]
     },
     "security_scan": {
-      "count": 475,
+      "count": 482,
       "findings": [
         {
           "fingerprint": "ac110f04260c483cf0241ca9c330315691931c3d5bbe4a4717f977b833cd5dae",
@@ -2979,9 +2979,33 @@
           "summary": "ssrf"
         },
         {
+          "fingerprint": "7f584ca74ec018fbea2a810e12580d4c2ec1893d82d1fda11a90d53f8a484dd4",
+          "file": "src/cli/cmd/uninstall.ts",
+          "line": 103,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "ad5621f161f6d92caa909fba94577ef4184ad66c14bf3faa7ce30de43ed9b027",
+          "file": "src/cli/cmd/uninstall.ts",
+          "line": 110,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "c879606c5ea0ec21a7ae3b39a9fd4d11a84921d47be615d852ad2d0a6783f0a3",
+          "file": "src/cli/cmd/uninstall.ts",
+          "line": 217,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
           "fingerprint": "3f8bd62281b3a29078da8bbabc82e429f4a5809a1667abf1868ff2a0c620e4e9",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 222,
+          "line": 238,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2989,7 +3013,7 @@
         {
           "fingerprint": "9c8c4c3a2c6c1da802e8561c944c0540773755064f61376b673bc49830445de8",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 225,
+          "line": 241,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2997,7 +3021,7 @@
         {
           "fingerprint": "03f875eb5fa53dd35aa3d361534c4a46ca7615c7d0cff39cca75ebf42c9b4f3f",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 227,
+          "line": 243,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3005,7 +3029,7 @@
         {
           "fingerprint": "424565005ad916e01325bf78e0f57d8be226623b205b9bd56a2e33720a895ca6",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 228,
+          "line": 244,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3013,7 +3037,7 @@
         {
           "fingerprint": "4ee83673efa341e992c96821ce6c5cd04ba9f3b3c561946717797cc5e663b298",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 229,
+          "line": 245,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3021,7 +3045,7 @@
         {
           "fingerprint": "1d7e497c3769ae16bd68a462db848f3147c6d2b8ddd35e0c239a87a4fcf1eb20",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 230,
+          "line": 246,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3029,7 +3053,7 @@
         {
           "fingerprint": "811002098c69ebb0fd2f55d8b296cc5a23c901b9ec242448235dcfa79afed74e",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 233,
+          "line": 249,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3037,7 +3061,7 @@
         {
           "fingerprint": "4e1b8a4ba973d8985eea6ce9fd8a7e5de2ee09f1b499398d5570408212612c63",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 234,
+          "line": 250,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3045,7 +3069,7 @@
         {
           "fingerprint": "677a009e9d2b9d175e53209214710cf457236191bec6eb87efcb96c39e5d5fce",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 235,
+          "line": 251,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3053,7 +3077,7 @@
         {
           "fingerprint": "0d6c2d4fcce3bef1aa4a5e1ce06430c6519d1f76f9c3465b004c6c03665829a1",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 236,
+          "line": 252,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3061,7 +3085,7 @@
         {
           "fingerprint": "3c7be4e5e09ed22af7a4c516b033409d3c8116cd152fe913a8cfdc83c22588ce",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 237,
+          "line": 253,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3069,7 +3093,7 @@
         {
           "fingerprint": "6077bc02516e291ecc1386b2f55dd1861ea621d00f17081fcad04335daa8d2e6",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 239,
+          "line": 255,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3077,7 +3101,7 @@
         {
           "fingerprint": "2fd0cc752f668b18f24d2d6dc2536a9979c9c99c2ebaff086fc2223e5de064d9",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 240,
+          "line": 256,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3085,7 +3109,7 @@
         {
           "fingerprint": "01ade0d051321aae808ca9d7193b9e0bc029fd54ff87bf0fe27b8e61df82081c",
           "file": "src/cli/cmd/uninstall.ts",
-          "line": 308,
+          "line": 324,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -3877,18 +3901,50 @@
         {
           "fingerprint": "2c12186089417cc07001e119503419e6c7d93085219f4dd8a05a263978f9d41a",
           "file": "src/installation/index.ts",
-          "line": 196,
+          "line": 197,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
         },
         {
-          "fingerprint": "5191931cb70c690da508f6fbb38994aff44b2b7aea830351e507db491d219e65",
+          "fingerprint": "8d01a0972e4da998668f7e7fd754ae5b2b1ce08a77ef8b5320e757b4105034e4",
           "file": "src/installation/index.ts",
-          "line": 244,
+          "line": 245,
           "severity": "high",
           "kind": "ssrf",
           "summary": "ssrf"
+        },
+        {
+          "fingerprint": "83f738b3072e0d2b73780af713012c9d8e5c0670a98c3dae19c95f442239e503",
+          "file": "src/installation/index.ts",
+          "line": 325,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "d380ccf1813d1bf3f07bfc9351bbd5577bfd51f6adfba5acddbb4bbe429c9418",
+          "file": "src/installation/index.ts",
+          "line": 330,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "7651ef15d685d1c2903ffda93ebd89e6fab1fb7737efb673df1240644b519da7",
+          "file": "src/installation/index.ts",
+          "line": 337,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "dedf8791e072847d2546efc746e0a7edc9156469f1a16f5097f12ccbfa514333",
+          "file": "src/installation/index.ts",
+          "line": 348,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
         },
         {
           "fingerprint": "f7570a651a968384c8615fbe5590b885d8da16bd93916442f33da20a83b099a2",
@@ -4325,7 +4381,7 @@
         {
           "fingerprint": "31cb6fa4037899eeb22532e19e28f8d9daea8faa3f85fb3eabdfe817acb6a8f4",
           "file": "src/provider/ax-engine/hub-catalog.ts",
-          "line": 304,
+          "line": 317,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5714,7 +5770,7 @@
         {
           "fingerprint": "2dc6a32acf679fbf89cfab7be966e727e66378b2455d6c119fa35f712dda17f6",
           "file": "src/provider/ax-engine/hub-catalog.ts",
-          "line": 33,
+          "line": 41,
           "severity": "high",
           "kind": "inline_secret_shape",
           "summary": "inline_secret_shape"
@@ -5970,7 +6026,7 @@
         {
           "fingerprint": "3a590c02dabd744b49ebc27744523595daac8b10d293fd2c2de0cab7f3d814cb",
           "file": "src/provider/ax-engine/hub-catalog.ts",
-          "line": 30,
+          "line": 38,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
@@ -5978,7 +6034,7 @@
         {
           "fingerprint": "d937225d351a9a7a32cf3f7208228c76f2948a9eafd5eb300415b8a5afeccc52",
           "file": "src/provider/ax-engine/hub-catalog.ts",
-          "line": 156,
+          "line": 164,
           "severity": "medium",
           "kind": "inline_url",
           "summary": "inline_url"
