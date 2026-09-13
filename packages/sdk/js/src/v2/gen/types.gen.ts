@@ -842,7 +842,7 @@ export type Config = {
      */
     arena?: {
       /**
-       * Enable arena multi-contestant mode tools. Default: false until Phase 2.
+       * Enable arena multi-contestant mode tools. Default: false; opt in per project.
        */
       enabled?: boolean
       /**
@@ -853,6 +853,20 @@ export type Config = {
        * Per-member timeout in ms for arena fan-out (falls back to council timeout, then 60000).
        */
       timeoutMs?: number
+      /**
+       * Timeout multiplier applied to contestants whose model declares reasoning capability (falls back to modes.council.reasoningTimeoutScale, then 3).
+       */
+      reasoningTimeoutScale?: number
+      /**
+       * Absolute per-contestant timeout overrides in ms, keyed by "providerID" or "providerID/modelID" (falls back to modes.council.memberTimeoutMs). Exact model keys win over provider-wide keys.
+       */
+      memberTimeoutMs?: {
+        [key: string]: number
+      }
+      /**
+       * Run one blinded rubric judge call to rank plan-mode proposals (default: true). The judge scores requirement coverage, feasibility, verification plan, and risk evidence; self-assessed risk remains display-only.
+       */
+      judge?: boolean
       /**
        * Ranking strategy for arena candidates. verify_first is the recommended default (never pure popularity).
        */
