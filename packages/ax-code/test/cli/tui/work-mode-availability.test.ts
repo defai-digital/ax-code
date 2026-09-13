@@ -5,8 +5,10 @@ import {
   nextAvailableWorkMode,
   workModeAvailability,
   workModeChipView,
+  workModeChipVisible,
   workModeCycleToast,
   workModeHint,
+  workModePickerOptions,
   withWorkModeHintSeen,
   type AvailabilityProvider,
 } from "../../../src/cli/cmd/tui/component/work-mode-availability"
@@ -115,6 +117,43 @@ describe("workModeAvailability", () => {
         config: { arena: { enabled: true } },
       }),
     ).toMatchObject({ state: "available", members: 2 })
+  })
+})
+
+describe("workModeChipVisible", () => {
+  test("hides the default Agent chip and shows armed ensemble modes", () => {
+    expect(workModeChipVisible("agent")).toBe(false)
+    expect(workModeChipVisible("council")).toBe(true)
+    expect(workModeChipVisible("arena")).toBe(true)
+  })
+})
+
+describe("workModePickerOptions", () => {
+  test("agent is always selectable; arena is disabled until enabled", () => {
+    const options = workModePickerOptions({ providers: twoProviders, providerLoaded: true })
+    expect(options.map((option) => option.value)).toEqual(["agent", "council", "arena"])
+    expect(options[0]).toMatchObject({ value: "agent", disabled: false })
+    expect(options[1]).toMatchObject({ value: "council", disabled: false })
+    expect(options[1].description).toContain("reviewers")
+    expect(options[1].description).toContain("advisory")
+    expect(options[2]).toMatchObject({ value: "arena", disabled: true })
+    expect(options[2].description).toContain("off")
+  })
+
+  test("enables arena when configured and names contestants", () => {
+    const options = workModePickerOptions({
+      providers: twoProviders,
+      providerLoaded: true,
+      config: { arena: { enabled: true } },
+    })
+    expect(options[2]).toMatchObject({ value: "arena", disabled: false })
+    expect(options[2].description).toContain("contestants")
+  })
+
+  test("disables council when fewer than two providers are connected", () => {
+    const options = workModePickerOptions({ providers: [provider("p1")], providerLoaded: true })
+    expect(options[1]).toMatchObject({ value: "council", disabled: true })
+    expect(options[1].description).toContain("1 connected")
   })
 })
 

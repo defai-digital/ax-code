@@ -95,6 +95,58 @@ export function workModeAvailability(input: {
   return { state: "available", members: Math.min(configuredCap, providers) }
 }
 
+/** Persistent chrome shows a work-mode chip only when a non-default mode is armed. */
+export function workModeChipVisible(mode: WorkMode.Id) {
+  return mode !== "agent"
+}
+
+export type WorkModePickerOption = {
+  value: WorkMode.Id
+  title: string
+  description: string
+  disabled: boolean
+}
+
+/** Explicit picker rows: Agent is always selectable; ensemble rows name cost and disable when they cannot run. */
+export function workModePickerOptions(input: {
+  providers: readonly AvailabilityProvider[]
+  providerLoaded: boolean
+  config?: WorkModeConfig
+}): WorkModePickerOption[] {
+  return WorkMode.ALL.map((mode) => {
+    const availability = workModeAvailability({
+      mode,
+      providers: input.providers,
+      providerLoaded: input.providerLoaded,
+      config: input.config,
+    })
+    if (mode === "agent") {
+      return {
+        value: mode,
+        title: "Agent",
+        description: "One agent · edits files · default",
+        disabled: false,
+      }
+    }
+    const role = mode === "council" ? "advisory, no file edits" : "plan or isolated worktrees"
+    const unit = mode === "council" ? "reviewers" : "contestants"
+    if (availability.state === "available") {
+      return {
+        value: mode,
+        title: WorkMode.label(mode),
+        description: `Up to ${availability.members} ${unit} · ${role}`,
+        disabled: false,
+      }
+    }
+    return {
+      value: mode,
+      title: WorkMode.label(mode),
+      description: availability.detail ?? (availability.state === "checking" ? "Checking providers…" : "Unavailable"),
+      disabled: true,
+    }
+  })
+}
+
 /** Chip presentation: label text plus whether the filled (active) style applies. */
 export function workModeChipView(
   mode: WorkMode.Id,

@@ -28,12 +28,12 @@ TUI and Desktop expose a **work mode** control for multi-model routing. Default 
 | **Council**         | `/council {your message}` multi-provider review |
 | **Arena**           | `/arena {your message}` multi-model best-of-N   |
 
-- **Desktop & TUI:** one toggle that shows only the **active** mode (`Agent`, `Council`, or `Arena`). Click to cycle to the next **available** mode — unavailable modes are skipped and named with their reason in the toast. Default is **Agent**.
-- **Availability is visible on the chip (TUI):** an available council/arena shows the effective member count (`Council · 2`); an unavailable one renders hollow with a short reason (`Council (needs 2)`, `Arena (off)`). A mode is available when it is enabled in config, at least two connected providers have a selectable model, and the configured member cap is not 1. Chips update live as providers connect or disconnect.
+- **TUI default chrome:** the footer does **not** show an Agent chip. Run mode and Sandbox stay. `/work-mode` (palette **Choose work mode**) opens an explicit picker: Agent, Council, and Arena, with cost/semantics on each row. Unavailable ensemble rows are disabled with the reason.
+- **Armed ensemble chrome:** after you pick Council or Arena, a chip appears (`Council · 2`, or hollow `Arena (off)` if it later becomes unavailable). Click the chip to return to Agent. New chats reset to Agent.
+- **Availability:** a mode is available when it is enabled in config, at least two connected providers have a selectable model, and the configured member cap is not 1. Chips and picker rows update live as providers connect or disconnect.
 - **Pre-submit hint (TUI):** a one-line hint above the prompt appears when council/arena is blocked or still checking, and on first use of an available mode (e.g. `Council mode · up to 2 reviewers · advisory · approval on first use`). After a successful submit in that mode the chip remains the status and the hint is hidden. Submitting while the selected mode is unavailable is **blocked** with the reason — the draft is kept and the prompt is never silently downgraded to a single-model run.
 - **Desktop:** composer toolbar chip (next to Manual/Autonomous).
-- **TUI:** chip in the start-screen bottom bar and in the session sidebar footer (click to cycle), or palette **Cycle work mode** / `/work-mode`.
-- Explicit `/commands` are never rewritten.
+- Explicit `/council` and `/arena` are never rewritten and remain the one-shot entry points.
 - Specialist agents (architect, security, …) stay on the separate agent picker.
 
 ## Placement modes at a glance

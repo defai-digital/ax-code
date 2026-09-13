@@ -11,12 +11,7 @@ import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 import { parseIsolationState } from "./context/sync-runtime-store"
 import { nextRunMode, runModeLabel, type RunMode } from "./component/prompt/run-mode-view-model"
 import { MATRIX_RAIN_ON_START_DEFAULT } from "./component/matrix-rain-view-model"
-import {
-  nextAvailableWorkMode,
-  workModeAvailability,
-  workModeCycleToast,
-  type WorkModeConfig,
-} from "./component/work-mode-availability"
+import { workModeCycleToast } from "./component/work-mode-availability"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
@@ -733,7 +728,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: `Cycle work mode (current: ${WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))})`,
+      title: `Choose work mode (current: ${WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))})`,
       description:
         "Agent: one agent · Council: multi-model advisory review (needs ≥2 providers) · Arena: best-of-N comparison (opt-in)",
       value: "app.cycle.work_mode",
@@ -742,23 +737,21 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         name: "work-mode",
         aliases: ["workmode"],
       },
+      onSelect: () => {
+        void dialogs.showWorkModeDialog()
+      },
+    },
+    {
+      title: "Return to Agent work mode",
+      value: "app.clear.work_mode",
+      category: "Agent",
+      hidden: WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)) === WorkMode.DEFAULT,
       onSelect: (dialog) => {
-        const current = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
-        // Cycle lands only on modes that can actually run right now; skipped
-        // modes are named with their reason in the toast (ADR-097).
-        const availability = (mode: WorkMode.Id) =>
-          workModeAvailability({
-            mode,
-            providers: sync.data.provider,
-            providerLoaded: sync.data.provider_loaded,
-            config: sync.data.config?.modes as WorkModeConfig | undefined,
-          })
-        const { next, skipped } = nextAvailableWorkMode(current, availability)
-        kv.set("work_mode", next)
+        kv.set("work_mode", WorkMode.DEFAULT)
         toast.show({
-          message: workModeCycleToast(next, availability(next), skipped),
+          message: workModeCycleToast("agent", { state: "available", members: 1 }, []),
           variant: "info",
-          duration: 3500,
+          duration: 2500,
         })
         dialog.clear()
       },

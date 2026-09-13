@@ -11,8 +11,8 @@ import {
 } from "./work-mode-availability"
 
 /** One-line work-mode hint above the prompt (ADR-097): blocked/checking
- *  always, available council/arena on first use only. The chip is the
- *  persistent status once a mode has been submitted. */
+ *  always, available council/arena on first use only. The footer chip appears
+ *  only while a non-Agent mode is armed. */
 export function WorkModeNotice() {
   const sync = useSync()
   const kv = useKV()

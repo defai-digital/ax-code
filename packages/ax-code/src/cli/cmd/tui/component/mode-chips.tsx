@@ -6,7 +6,7 @@
 // before any session exists, and the cycle/toggle commands are registered
 // app-wide, so the row is safe to render on every route.
 
-import { createMemo } from "solid-js"
+import { createMemo, Show } from "solid-js"
 import { RGBA } from "ax-tui"
 import { WorkMode } from "@/mode/work-mode"
 import { selectedForeground, useTheme } from "@tui/context/theme"
@@ -15,7 +15,7 @@ import { useKV } from "@tui/context/kv"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { runMode, runModeLabel, type RunMode } from "./prompt/run-mode-view-model"
 import { footerToggleLabel } from "./prompt/footer-toggle"
-import { workModeAvailability, workModeChipView } from "./work-mode-availability"
+import { workModeAvailability, workModeChipView, workModeChipVisible } from "./work-mode-availability"
 
 // Chrome fills come from the active theme so chips follow the palette
 // instead of a hardcoded green/blue/purple/pink set. Labels distinguish
@@ -28,13 +28,10 @@ export function modeChipWidth(label: string) {
   return footerToggleLabel(label, false).length
 }
 
-/** Total row width of the three chips in their current state. */
+/** Total row width of the visible chips in their current state. Agent has no work-mode chip. */
 export function modeChipsRowWidth(input: { workMode: WorkMode.Id; runMode: RunMode }) {
-  return (
-    modeChipWidth(WorkMode.label(input.workMode)) +
-    modeChipWidth(runModeLabel(input.runMode)) +
-    modeChipWidth(SANDBOX_LABEL)
-  )
+  const work = workModeChipVisible(input.workMode) ? modeChipWidth(WorkMode.label(input.workMode)) : 0
+  return work + modeChipWidth(runModeLabel(input.runMode)) + modeChipWidth(SANDBOX_LABEL)
 }
 
 export function ModeChips() {
@@ -96,16 +93,17 @@ export function ModeChips() {
 
   return (
     <box flexDirection="row" flexShrink={0}>
-      {modeChip({
-        // One mode at a time; click cycles to the next available mode.
-        // Unavailable modes render hollow with the reason in the label.
-        label: workModeView().label,
-        active: workModeView().active,
-        activeFg: theme.text,
-        inactiveFg: theme.textMuted,
-        background: theme.primary,
-        onMouseUp: () => command.trigger("app.cycle.work_mode"),
-      })}
+      <Show when={workModeChipVisible(chipWorkMode())}>
+        {modeChip({
+          // Armed ensemble mode only. Click returns to Agent; /work-mode opens the picker.
+          label: workModeView().label,
+          active: workModeView().active,
+          activeFg: theme.text,
+          inactiveFg: theme.textMuted,
+          background: theme.primary,
+          onMouseUp: () => command.trigger("app.clear.work_mode"),
+        })}
+      </Show>
       {modeChip({
         label: runModeLabel(chipRunMode()),
         active: chipRunMode() !== "none",

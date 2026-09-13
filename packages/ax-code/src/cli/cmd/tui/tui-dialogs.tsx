@@ -130,6 +130,16 @@ export function createTuiDialogLoaders(input: {
           return () => <DialogSidebarWidth />
         },
       }),
+    showWorkModeDialog: () =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load work mode dialog",
+        fail: "Failed to open work mode",
+        load: async () => {
+          const { DialogWorkMode } = await import("@tui/component/dialog-work-mode")
+          return () => <DialogWorkMode />
+        },
+      }),
     showNavigationInfo: (directory: string, title: string) =>
       DialogAlert.show(input.dialog, "Current project and session", `Project: ${directory}\n\nSession: ${title}`),
     showNavigationDialog: () =>
