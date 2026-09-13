@@ -12,6 +12,8 @@
 - `lazy` — memoizing thunk that retries after synchronous failure
 - `module` — Node module resolution helpers, including manifest-based entry resolution (`Module`)
 - `slug` — random adjective-noun slug generation (`Slug`)
+- `string-list` — array/iterable string helpers (`stringList`, `uniqueItems`, `uniqueStrings`, `uniqueSortedStrings`); shared by `ax-code-intel` and `ax-code-reason`
+- `unref-timeout` — unref'd `sleep`/`withTimeout` shared by `ax-code-intel` and `ax-code-reason`; deliberately separate from `packages/ax-code/src/util/timeout.ts`, whose timers stay ref'd
 
 ## Allowed Dependencies
 
