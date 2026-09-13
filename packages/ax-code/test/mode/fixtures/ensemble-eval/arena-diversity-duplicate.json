@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "kind": "arena-rank",
+  "name": "duplicate fingerprints lose to a novel patch at equal judge scores",
+  "strategy": "diversity",
+  "candidates": [
+    { "id": "c1", "verification": "unknown", "judgeScore": 30, "patchFingerprint": "fp-x" },
+    { "id": "c2", "verification": "unknown", "judgeScore": 30, "patchFingerprint": "fp-x" },
+    { "id": "c3", "verification": "unknown", "judgeScore": 30, "patchFingerprint": "fp-y" }
+  ],
+  "expect": { "order": ["c1", "c3", "c2"], "reasons": { "c3": "novel_fingerprint", "c2": "duplicate_fingerprint" } }
+}

@@ -131,6 +131,7 @@ describe("ModeMemory I/O (file-backed store)", () => {
       task: "Fix the XSS vulnerability in the auth handler",
       rankedIds: ["anthropic/claude-3-opus", "openai/gpt-4o", "google/gemini-pro"],
       failedIds: ["groq/llama-3"],
+      grounded: true,
     })
     const store = await ModeMemory.load()
     expect(store.outcomes.length).toBe(4)
@@ -145,6 +146,22 @@ describe("ModeMemory I/O (file-backed store)", () => {
     expect(store.outcomes[2]!.result).toBe("participate")
     // Failed → fail
     expect(store.outcomes[3]!.result).toBe("fail")
+  })
+
+  test("recordArenaRanking() with grounded: false records participate only (ADR-102)", async () => {
+    // A self-generated ranking (plan arena) is not ground truth — no win/place.
+    await ModeMemory.recordArenaRanking({
+      task: "Review the auth handler",
+      rankedIds: ["anthropic/claude-3-opus", "openai/gpt-4o"],
+      failedIds: ["groq/llama-3"],
+      grounded: false,
+    })
+    const store = await ModeMemory.load()
+    expect(store.outcomes.length).toBe(3)
+    expect(store.outcomes[0]!.result).toBe("participate")
+    expect(store.outcomes[1]!.result).toBe("participate")
+    expect(store.outcomes[2]!.result).toBe("fail")
+    expect(store.outcomes.every((o) => o.result !== "win" && o.result !== "place")).toBe(true)
   })
 
   test("recordCouncilParticipation() persists participate/fail per member", async () => {

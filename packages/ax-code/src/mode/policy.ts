@@ -23,6 +23,8 @@ export namespace ModePolicy {
       reasoningTimeoutScale?: number
       memberTimeoutMs?: Record<string, number>
       debateRounds?: number
+      chairman?: boolean
+      adaptive?: boolean
     }
     arena?: {
       enabled?: boolean
@@ -37,6 +39,7 @@ export namespace ModePolicy {
       maxEstimatedUsd?: number
       estimatedUsdPerMember?: number
     }
+    ensembleLedger?: boolean
   }
 
   export type ModeSignals = {

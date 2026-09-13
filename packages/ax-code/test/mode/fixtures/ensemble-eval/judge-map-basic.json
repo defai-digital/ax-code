@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "kind": "judge-map",
+  "name": "labels map back to members; unknown and duplicate labels are ignored",
+  "labels": { "A": "a/m", "B": "b/m" },
+  "output": {
+    "scores": [
+      { "candidate": "A", "requirementCoverage": 10, "feasibility": 10, "verificationPlan": 10, "riskEvidence": 10 },
+      { "candidate": "B", "requirementCoverage": 5, "feasibility": 5, "verificationPlan": 5, "riskEvidence": 5 },
+      { "candidate": "C", "requirementCoverage": 9, "feasibility": 9, "verificationPlan": 9, "riskEvidence": 9 },
+      { "candidate": "A", "requirementCoverage": 1, "feasibility": 1, "verificationPlan": 1, "riskEvidence": 1 }
+    ]
+  },
+  "expect": { "totals": { "a/m": 40, "b/m": 20 } }
+}

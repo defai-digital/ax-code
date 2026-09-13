@@ -573,3 +573,133 @@ describe("council preflight approval boundaries", () => {
     expect(ctx.ask).toHaveBeenCalledTimes(1)
   })
 })
+
+describe("council chairman (ADR-102)", () => {
+  const chairmanMemberConfig = (council: Record<string, unknown> = {}) =>
+    ({ modes: { council: { enabled: true, maxMembers: 2, debateRounds: 0, ...council } } }) as any
+  const twoMembers = () =>
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+  const sharedIssue = { severity: "high" as const, category: "security", summary: "Missing rate limit" }
+
+  test("chairman appends a blinded advisory synthesis when enabled", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(chairmanMemberConfig({ chairman: true }))
+    twoMembers()
+    generateObject.mockImplementation((request: any) => {
+      const system = request.messages[0].content as string
+      if (system.includes("chairman of a multi-model review council")) {
+        const user = request.messages[1].content as string
+        // Blinding: the chairman must not see member identities
+        expect(user).not.toContain("a/m")
+        expect(user).not.toContain("b/m")
+        return Promise.resolve({
+          object: {
+            verdict: "Ship after adding the missing rate limit",
+            recommendedActions: ["Add rate limit"],
+            dissent: [],
+          },
+        })
+      }
+      return Promise.resolve({ object: { overall: "ok", issues: [sharedIssue] } })
+    })
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(result.metadata.chairman).toBe("ok")
+    expect(result.output).toContain("## Chairman synthesis (advisory)")
+    expect(result.output).toContain("Ship after adding the missing rate limit")
+    expect(result.output).toContain("deterministic tiers above remain the primary output")
+    // 2 member calls + 1 chairman call
+    expect(generateObject).toHaveBeenCalledTimes(3)
+  })
+
+  test("chairman is off by default and the deterministic report is unchanged", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(chairmanMemberConfig())
+    twoMembers()
+    generateObject.mockResolvedValue({ object: { overall: "ok", issues: [sharedIssue] } } as any)
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(result.metadata.chairman).toBe("disabled")
+    expect(result.output).not.toContain("Chairman synthesis")
+    expect(generateObject).toHaveBeenCalledTimes(2)
+  })
+
+  test("a failed chairman keeps the deterministic report with a disclosure", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(chairmanMemberConfig({ chairman: true }))
+    twoMembers()
+    generateObject.mockImplementation((request: any) => {
+      const system = request.messages[0].content as string
+      if (system.includes("chairman of a multi-model review council")) {
+        return Promise.reject(new Error("chairman gateway 500"))
+      }
+      return Promise.resolve({ object: { overall: "ok", issues: [sharedIssue] } })
+    })
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(result.metadata.chairman).toBe("failed")
+    expect(result.metadata.chairmanError).toContain("500")
+    expect(result.output).toContain("Chairman unavailable")
+    expect(result.metadata.status).toBe("ok")
+    expect(result.metadata.consensusCount).toBe(1)
+  })
+})
+
+describe("council adaptive fan-out (ADR-102)", () => {
+  const adaptiveMemberConfig = (council: Record<string, unknown> = {}) =>
+    ({ modes: { council: { enabled: true, maxMembers: 3, debateRounds: 0, ...council } } }) as any
+
+  test("expands one member at a time on weak round-1 evidence", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(adaptiveMemberConfig({ adaptive: true }))
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b", "c"]), rejected: [] })
+    const issueX = { severity: "high" as const, category: "security", summary: "Missing rate limit" }
+    const issueY = { severity: "medium" as const, category: "correctness", summary: "Off-by-one in pagination" }
+    let call = 0
+    generateObject.mockImplementation(() => {
+      call++
+      // Round-1 pair: a flags X, b flags Y (full dissent). Expansion: c flags X.
+      const issues = call === 1 ? [issueX] : call === 2 ? [issueY] : [issueX]
+      return Promise.resolve({ object: { overall: "ok", issues } })
+    })
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(generateObject).toHaveBeenCalledTimes(3)
+    expect(result.metadata.adaptiveExpanded).toBe(1)
+    expect(result.output).toContain("Adaptive fan-out: started 2, expanded to 3 of 3")
+    // X now has 2/3 support → majority tier
+    expect(result.metadata.majorityCount).toBe(1)
+  })
+
+  test("does not expand when round-1 evidence is sufficient", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(adaptiveMemberConfig({ adaptive: true }))
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b", "c"]), rejected: [] })
+    generateObject.mockResolvedValue({
+      object: { overall: "ok", issues: [{ severity: "high", category: "security", summary: "Missing rate limit" }] },
+    } as any)
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    expect(result.metadata.adaptiveExpanded).toBe(0)
+    expect(result.output).toContain("no expansion")
+  })
+
+  test("fixed lane (default) runs the full resolved set", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(adaptiveMemberConfig())
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b", "c"]), rejected: [] })
+    generateObject.mockResolvedValue({ object: { overall: "ok", issues: [] } } as any)
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(generateObject).toHaveBeenCalledTimes(3)
+    expect(result.metadata.adaptiveExpanded).toBeUndefined()
+    expect(result.output).not.toContain("Adaptive fan-out")
+  })
+})

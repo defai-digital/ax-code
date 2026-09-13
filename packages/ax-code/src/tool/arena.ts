@@ -13,6 +13,7 @@ import { Arena } from "../mode/arena"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
 import { CouncilContext } from "../mode/council-context"
+import { EnsembleLedger } from "../mode/ensemble-ledger"
 import { EnsembleShared, isNonTransientMemberError } from "../mode/ensemble-shared"
 import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
@@ -139,6 +140,8 @@ async function runProposal(input: {
   memberOverrides?: Record<string, number>
   abort: AbortSignal
   retryOnce?: boolean
+  /** ADR-102: local call-ledger switch; phase is fixed to "plan". */
+  ledger?: { enabled: boolean }
 }): Promise<{
   member: EnsembleShared.MemberSpec
   proposal?: z.infer<typeof ProposalSchema>
@@ -170,12 +173,33 @@ async function runProposal(input: {
     reasoningScale: input.reasoningScale,
     memberOverrides: input.memberOverrides,
   })
+  // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
+  // uses response_format json_object.
+  const system = ensureJsonModeInstruction(`You are one independent contestant in a coding-agent arena.
+Propose a concrete implementation approach for the task. Do not write full source files.
+Focus on approach, ordered steps, and risks. Be specific to the context.
+Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not lower it by omitting risks.
+Return a json object with this shape: {"approach": string, "steps": string[], "risks": string[], "riskScore": number, "confidence": number (optional)}.`)
+  // ADR-099: context is admitted verbatim (or the call was rejected
+  // with context_rejected) — never silently sliced.
+  const user = [`Task: ${input.task}`, input.context ? `\nContext:\n${input.context}` : ""].filter(Boolean).join("\n")
+  const telemetry = input.ledger?.enabled
+    ? EnsembleLedger.telemetryFor<EnsembleShared.MemberSpec>({
+        enabled: true,
+        tool: "arena",
+        timeoutMs: memberTimeoutMs,
+        phase: "plan",
+        promptHash: createHash("sha256").update(`${system}\n\n${user}`).digest("hex"),
+        memberId: (m) => m.memberId,
+      })
+    : undefined
 
   const attemptProposal = async (): Promise<FanOut.MemberResult<z.infer<typeof ProposalSchema>>> => {
     const [result] = await FanOut.run({
       members: [input.member],
       timeoutMs: memberTimeoutMs,
       abort: input.abort,
+      telemetry,
       onMemberComplete: (completed, total, m) => {
         log.info("arena fan-out member done", {
           toolName: "arena",
@@ -193,24 +217,8 @@ async function runProposal(input: {
           abortSignal: signal,
           temperature: 0.3,
           messages: [
-            {
-              role: "system",
-              // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
-              // uses response_format json_object.
-              content: ensureJsonModeInstruction(`You are one independent contestant in a coding-agent arena.
-Propose a concrete implementation approach for the task. Do not write full source files.
-Focus on approach, ordered steps, and risks. Be specific to the context.
-Give an overall riskScore from 0 (low implementation risk) to 20 (high). Do not lower it by omitting risks.
-Return a json object with this shape: {"approach": string, "steps": string[], "risks": string[], "riskScore": number, "confidence": number (optional)}.`),
-            },
-            {
-              role: "user",
-              // ADR-099: context is admitted verbatim (or the call was rejected
-              // with context_rejected) — never silently sliced.
-              content: [`Task: ${input.task}`, input.context ? `\nContext:\n${input.context}` : ""]
-                .filter(Boolean)
-                .join("\n"),
-            },
+            { role: "system", content: system },
+            { role: "user", content: user },
           ],
         })
         for await (const part of result.fullStream) {
@@ -294,13 +302,7 @@ const JudgeOutputSchema = z.object({
   scores: z.array(JudgeScoreSchema).describe("Exactly one entry per candidate label; ties are allowed"),
 })
 
-export type JudgeDimensionScores = {
-  requirementCoverage: number
-  feasibility: number
-  verificationPlan: number
-  riskEvidence: number
-  total: number
-}
+export type JudgeDimensionScores = Arena.JudgeDimensionScores
 
 function candidateLabel(index: number): string {
   // A..Z for up to 26 candidates (arena hard max is 5).
@@ -316,6 +318,8 @@ async function runPlanJudge(input: {
   reasoningScale?: number
   memberOverrides?: Record<string, number>
   abort: AbortSignal
+  /** ADR-102: local call-ledger switch; phase is fixed to "judge". */
+  ledger?: { enabled: boolean }
 }): Promise<Map<string, JudgeDimensionScores>> {
   const model = await Provider.getModel(input.member.providerID, input.member.modelID)
   const language = await Provider.getLanguage(model)
@@ -357,11 +361,34 @@ async function runPlanJudge(input: {
     .filter((line) => line !== "")
     .join("\n")
 
+  // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
+  // uses response_format json_object.
+  const system = ensureJsonModeInstruction(`You are an independent judge in a coding-agent plan arena.
+Score each anonymized proposal on four dimensions from 0 (absent) to 10 (excellent):
+- requirementCoverage: how completely the approach addresses the stated task and context.
+- feasibility: how realistic the ordered steps are to implement correctly.
+- verificationPlan: how well the proposal makes its own correctness checkable (tests, validation).
+- riskEvidence: how concretely the stated risks are tied to this task rather than generic boilerplate.
+Candidate identities are hidden and order is randomized: do not infer origin, and do not reward style or verbosity.
+Score candidates independently; ties are allowed.
+Return a json object with this shape: {"scores": [{"candidate": "A", "requirementCoverage": number, "feasibility": number, "verificationPlan": number, "riskEvidence": number}]} with exactly one entry per candidate label.`)
+  const telemetry = input.ledger?.enabled
+    ? EnsembleLedger.telemetryFor<EnsembleShared.MemberSpec>({
+        enabled: true,
+        tool: "arena",
+        timeoutMs: memberTimeoutMs,
+        phase: "judge",
+        promptHash: createHash("sha256").update(`${system}\n\n${user}`).digest("hex"),
+        memberId: (m) => m.memberId,
+      })
+    : undefined
+
   const attempt = async (): Promise<z.infer<typeof JudgeOutputSchema>> => {
     const [result] = await FanOut.run({
       members: [input.member],
       timeoutMs: memberTimeoutMs,
       abort: input.abort,
+      telemetry,
       execute: async (_m, signal) => {
         const result = streamObject({
           model: language,
@@ -371,20 +398,7 @@ async function runPlanJudge(input: {
           abortSignal: signal,
           temperature: 0.1,
           messages: [
-            {
-              role: "system",
-              // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
-              // uses response_format json_object.
-              content: ensureJsonModeInstruction(`You are an independent judge in a coding-agent plan arena.
-Score each anonymized proposal on four dimensions from 0 (absent) to 10 (excellent):
-- requirementCoverage: how completely the approach addresses the stated task and context.
-- feasibility: how realistic the ordered steps are to implement correctly.
-- verificationPlan: how well the proposal makes its own correctness checkable (tests, validation).
-- riskEvidence: how concretely the stated risks are tied to this task rather than generic boilerplate.
-Candidate identities are hidden and order is randomized: do not infer origin, and do not reward style or verbosity.
-Score candidates independently; ties are allowed.
-Return a json object with this shape: {"scores": [{"candidate": "A", "requirementCoverage": number, "feasibility": number, "verificationPlan": number, "riskEvidence": number}]} with exactly one entry per candidate label.`),
-            },
+            { role: "system", content: system },
             { role: "user", content: user },
           ],
         })
@@ -409,24 +423,7 @@ Return a json object with this shape: {"scores": [{"candidate": "A", "requiremen
     output = await attempt()
   }
 
-  const scores = new Map<string, JudgeDimensionScores>()
-  for (const entry of output.scores) {
-    const memberId = memberIdByLabel.get(entry.candidate.trim())
-    if (!memberId || scores.has(memberId)) continue
-    const requirementCoverage = Math.round(entry.requirementCoverage)
-    const feasibility = Math.round(entry.feasibility)
-    const verificationPlan = Math.round(entry.verificationPlan)
-    const riskEvidence = Math.round(entry.riskEvidence)
-    scores.set(memberId, {
-      requirementCoverage,
-      feasibility,
-      verificationPlan,
-      riskEvidence,
-      total: requirementCoverage + feasibility + verificationPlan + riskEvidence,
-    })
-  }
-  if (scores.size === 0) throw new Error("judge returned no usable candidate scores")
-  return scores
+  return Arena.mapJudgeScores(output, memberIdByLabel)
 }
 
 type ArenaMetadata = {
@@ -556,6 +553,7 @@ export const ArenaTool = Tool.define("arena", async () => {
       // contestants run a full agent trajectory — price the documented
       // per-trajectory estimate, not one review call.
       const judgeEnabled = arenaMode === "plan" && modes?.arena?.judge !== false
+      const ledgerEnabled = modes?.ensembleLedger !== false
       const budgetCheck = Budget.check({
         kind: "arena",
         requestedMembers: args.providers?.length ?? maxContestants,
@@ -680,14 +678,18 @@ export const ArenaTool = Tool.define("arena", async () => {
           agentName,
           strategy,
           abort: ctx.abort,
+          ledgerEnabled,
         })
 
         const failedIds = impl.ranked.filter((result) => result.verification === "fail").map((result) => result.id)
         const verifiedCount = impl.ranked.filter((result) => result.verification === "pass").length
+        // Verification-linked ranking: real ground truth, so win/place may
+        // be recorded (ADR-102).
         void ModeMemory.recordArenaRanking({
           task: args.task,
           rankedIds: impl.ranked.filter((r) => r.verification === "pass").map((r) => r.id),
           failedIds,
+          grounded: true,
         }).catch(() => undefined)
 
         const metadata: ArenaMetadata = {
@@ -732,6 +734,7 @@ export const ArenaTool = Tool.define("arena", async () => {
             reasoningScale,
             memberOverrides,
             abort: ctx.abort,
+            ledger: { enabled: ledgerEnabled },
           })
           arenaCompleted++
           log.info("arena proposal progress", {
@@ -799,6 +802,7 @@ export const ArenaTool = Tool.define("arena", async () => {
             reasoningScale,
             memberOverrides,
             abort: ctx.abort,
+            ledger: { enabled: ledgerEnabled },
           })
           for (const [memberId, score] of judged) judgeById.set(memberId, score)
           judgeStatus = "ok"
@@ -851,10 +855,13 @@ export const ArenaTool = Tool.define("arena", async () => {
 
       const successfulCount = proposalById.size
       if (successfulCount >= 2) {
+        // ADR-102: plan rankings are self-generated (even judge-scored), not
+        // ground truth — record participation only, never win/place.
         void ModeMemory.recordArenaRanking({
           task: args.task,
           rankedIds: ranked.filter((r) => r.verification !== "fail").map((r) => r.id),
           failedIds,
+          grounded: false,
         }).catch(() => undefined)
       }
 

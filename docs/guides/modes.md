@@ -86,12 +86,13 @@ In `ax-code.json`:
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `modes.default`                     | `local` \| `cloud` \| `hybrid` \| `arena` \| `council`. Unset: hybrid when local fits the policy signals, else cloud for single-path defaults.                                    |
 | `modes.hybrid.*`                    | Local preference, high-complexity escalate to cloud, local provider id                                                                                                            |
-| `modes.council.*`                   | Enable, member cap, timeout, reasoning-model timeout scale, per-member timeout overrides, optional anonymous debate rounds (maximum 3)                                            |
+| `modes.council.*`                   | Enable, member cap, timeout, reasoning-model timeout scale, per-member timeout overrides, debate rounds, opt-in chairman / adaptive fan-out (both default off)                    |
 | `modes.arena.enabled`               | Must be `true` for the `arena` tool (default off). Mid-session edits are picked up on the next tool call (`Config.getFresh`). Or pass `enableIfDisabled: true` on the arena tool. |
 | `modes.arena.strategy`              | `verify_first` (recommended for implement), `diversity`, or `hybrid_score`                                                                                                        |
 | `modes.arena.reasoningTimeoutScale` | Timeout multiplier for contestants whose model declares reasoning capability (falls back to `modes.council.reasoningTimeoutScale`, then 3)                                        |
 | `modes.arena.memberTimeoutMs`       | Absolute per-contestant timeout overrides keyed by `"providerID"` or `"providerID/modelID"` (falls back to `modes.council.memberTimeoutMs`)                                       |
 | `modes.arena.judge`                 | Blinded rubric judge for plan mode (default: `true`)                                                                                                                              |
+| `modes.ensembleLedger`              | Local JSONL call ledger for ensemble generations (default: `true`; SHA-256 prompt hashes only, no bodies, no egress)                                                              |
 | `modes.budget.*`                    | Fail-closed cap on estimated USD for ensemble fan-out                                                                                                                             |
 
 ## Hybrid placement
@@ -157,6 +158,8 @@ model key wins over the provider-wide key, and either wins over the base/scale c
 
 `ax-code.json` is a protected config file — agents must ask the user to change it.
 
+**Optional lanes (default off).** `modes.council.chairman: true` appends one blinded chairman synthesis call after aggregation (and any debate rounds): the chairman receives anonymized findings only (tiers and support counts, never member identities) and returns a verdict, recommended actions, and dissent notes. Deterministic tiering remains the primary output; chairman failure is disclosed and non-fatal. `modes.council.adaptive: true` starts the fan-out with two members and expands one at a time up to `maxMembers` while round-1 coverage is below quorum or dissent is material; expansion triggers are harness-tunable constants.
+
 ### When to use
 
 - Architecture / security / design trade-offs
@@ -220,6 +223,7 @@ Naive majority vote on similar wrong patches is an anti-pattern (popularity trap
 - Council and plan-arena do not write files.
 - Implement arena writers are isolated in worktrees; a dirty primary worktree is rejected so uncommitted input cannot be silently omitted.
 - Ensemble fan-out multiplies provider egress and cost; use `modes.budget` and keep `maxMembers` / `maxContestants` small. Budget estimates price the worst case: council `2 × (debateRounds + 1)` calls per member (schema fallback + retry), plan arena 2 per contestant plus one flat judge call, implement arena a documented 12-call per-trajectory estimate.
+- A local-only ensemble call ledger (`ensemble-calls.jsonl` in the global state directory, 2 MB cap) records per-generation outcomes with SHA-256 prompt hashes — never prompt bodies, never credentials, no egress. Disable with `modes.ensembleLedger: false`.
 - Multi-model agreement is **evidence, not proof** — run tests before shipping.
 
 ## Related

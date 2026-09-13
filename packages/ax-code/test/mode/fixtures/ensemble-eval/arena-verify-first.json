@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "kind": "arena-rank",
+  "name": "verification pass beats a perfect judge score",
+  "strategy": "verify_first",
+  "candidates": [
+    { "id": "high-judge-unknown", "verification": "unknown", "judgeScore": 40 },
+    { "id": "pass-low", "verification": "pass", "riskScore": 18 }
+  ],
+  "expect": { "order": ["pass-low", "high-judge-unknown"], "top1": "pass-low" }
+}

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "kind": "arena-rank",
+  "name": "rubric total overrides self-assessed risk",
+  "strategy": "diversity",
+  "candidates": [
+    { "id": "low-self-risk", "verification": "unknown", "riskScore": 1, "judgeScore": 8 },
+    { "id": "high-self-risk", "verification": "unknown", "riskScore": 19, "judgeScore": 38 }
+  ],
+  "expect": {
+    "top1": "high-self-risk",
+    "scores": { "low-self-risk": 48, "high-self-risk": 78 },
+    "reasons": { "high-self-risk": "judge:38" }
+  }
+}

@@ -5,11 +5,13 @@
 
 import { streamObject, streamText } from "ai"
 import z from "zod"
+import { createHash } from "node:crypto"
 import { Config } from "../config/config"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
 import { CouncilContext } from "../mode/council-context"
 import { Debate } from "../mode/debate"
+import { EnsembleLedger } from "../mode/ensemble-ledger"
 import { EnsembleShared, isNonTransientMemberError } from "../mode/ensemble-shared"
 import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
@@ -224,6 +226,8 @@ async function runMember(input: {
   memberOverrides?: Record<string, number>
   abort: AbortSignal
   retryOnce?: boolean
+  /** ADR-102: local call-ledger switch + phase label; the hook and prompt hash are built here where the effective timeout and final prompt strings are known. */
+  ledger?: { enabled: boolean; phase: string }
 }): Promise<Council.CouncilMemberResult> {
   const { resolved, system, userParts, timeoutMs, abort, retryOnce = true } = input
   const { member } = resolved
@@ -258,6 +262,16 @@ async function runMember(input: {
     reasoningScale: input.reasoningScale,
     memberOverrides: input.memberOverrides,
   })
+  const telemetry = input.ledger?.enabled
+    ? EnsembleLedger.telemetryFor<EnsembleShared.MemberSpec>({
+        enabled: true,
+        tool: "council",
+        timeoutMs: memberTimeoutMs,
+        phase: input.ledger.phase,
+        promptHash: createHash("sha256").update(`${system}\n\n${userParts}`).digest("hex"),
+        memberId: (m) => m.memberId,
+      })
+    : undefined
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (abort.aborted) break
@@ -266,6 +280,7 @@ async function runMember(input: {
       members: [member],
       timeoutMs: memberTimeoutMs,
       abort,
+      telemetry,
       onMemberComplete: (completed, total, m) => {
         log.info("council fan-out member done", {
           toolName: "council",
@@ -417,6 +432,141 @@ async function runMember(input: {
   }
 }
 
+// ADR-102: opt-in blinded chairman (modes.council.chairman, default off).
+// One synthesis call over the anonymized, pre-aggregated findings — member
+// identities are never included. Deterministic tiering stays the primary
+// output; chairman text is appended and advisory.
+const ChairmanOutputSchema = z.object({
+  verdict: z.string().min(1).describe("Single consolidated verdict, at most 600 chars"),
+  recommendedActions: z
+    .array(z.string().min(1))
+    .describe("Ordered recommended actions, at most 8, each at most 300 chars"),
+  dissent: z.array(z.string().min(1)).describe("Unresolved disagreements to weigh, at most 6, each at most 300 chars"),
+})
+
+const CHAIRMAN_SYSTEM = `You are the chairman of a multi-model review council.
+You receive the council's anonymized, pre-aggregated findings (agreement tiers; member identities removed) for one question.
+Produce a single consolidated verdict and ordered recommended actions.
+Rules: the findings are evidence, not proof — do not overstate. Weigh consensus and majority above minority and singleton tiers.
+Do not invent new findings, and do not attribute findings to any model or vendor.
+Return a json object with this shape: {"verdict": string, "recommendedActions": string[], "dissent": string[]}.`
+
+function clampChairmanOutput(output: z.infer<typeof ChairmanOutputSchema>): z.infer<typeof ChairmanOutputSchema> {
+  return {
+    verdict: clampText(output.verdict, 600),
+    recommendedActions: output.recommendedActions.slice(0, 8).map((action) => clampText(action, 300)),
+    dissent: output.dissent.slice(0, 6).map((item) => clampText(item, 300)),
+  }
+}
+
+/** Anonymized findings text for the chairman: tiers and counts, no memberIds. */
+export function chairmanBrief(report: Council.CouncilReport): string {
+  const section = (title: string, items: Council.AggregatedIssue[]) => {
+    if (!items.length) return []
+    return [
+      `## ${title}`,
+      ...items.map(
+        (item) =>
+          `- [${item.severity}] ${item.category}${item.location ? ` @ ${item.location}` : ""}: ${item.summary} (${item.supportCount}/${item.totalMembers} members)` +
+          (item.suggestedFix ? ` Suggested: ${item.suggestedFix}` : ""),
+      ),
+    ]
+  }
+  return [
+    ...section("Consensus", report.consensus),
+    ...section("Majority", report.majority),
+    ...section("Minority observations", report.minority),
+    ...section("Singleton observations", report.singleton),
+  ].join("\n")
+}
+
+async function runChairman(input: {
+  resolved: ResolvedMember
+  user: string
+  timeoutMs: number
+  reasoningScale?: number
+  memberOverrides?: Record<string, number>
+  abort: AbortSignal
+  /** ADR-102: local call-ledger switch; phase is fixed to "chairman". */
+  ledger?: { enabled: boolean }
+}): Promise<z.infer<typeof ChairmanOutputSchema>> {
+  const { member } = input.resolved
+  if (!input.resolved.model) throw new Error(input.resolved.error ?? "Model resolution failed")
+  const model = input.resolved.model
+  const language = await Provider.getLanguage(model)
+  const memberTimeoutMs = resolveMemberTimeoutMs({
+    providerID: String(member.providerID),
+    modelID: String(member.modelID),
+    reasoning: model.capabilities?.reasoning,
+    baseTimeoutMs: input.timeoutMs,
+    reasoningScale: input.reasoningScale,
+    memberOverrides: input.memberOverrides,
+  })
+  const system = ensureJsonModeInstruction(CHAIRMAN_SYSTEM)
+  const telemetry = input.ledger?.enabled
+    ? EnsembleLedger.telemetryFor<EnsembleShared.MemberSpec>({
+        enabled: true,
+        tool: "council",
+        timeoutMs: memberTimeoutMs,
+        phase: "chairman",
+        promptHash: createHash("sha256").update(`${system}\n\n${input.user}`).digest("hex"),
+        memberId: (m) => m.memberId,
+      })
+    : undefined
+
+  const attempt = async (): Promise<z.infer<typeof ChairmanOutputSchema>> => {
+    const [result] = await FanOut.run({
+      members: [member],
+      timeoutMs: memberTimeoutMs,
+      abort: input.abort,
+      telemetry,
+      execute: async (_m, signal) => {
+        const r = streamObject({
+          model: language,
+          maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
+          schema: ChairmanOutputSchema,
+          maxRetries: 0,
+          abortSignal: signal,
+          temperature: 0.2,
+          messages: [
+            { role: "system", content: system },
+            { role: "user", content: input.user },
+          ],
+        })
+        for await (const part of r.fullStream) {
+          if (part.type === "error") throw part.error
+        }
+        return await r.object
+      },
+    })
+    if (result.error) throw new Error(result.error)
+    return result.result!
+  }
+
+  try {
+    return clampChairmanOutput(await attempt())
+  } catch (firstError) {
+    const message = firstError instanceof Error ? firstError.message : String(firstError)
+    if (message.startsWith("timeout:") || message.startsWith("aborted:") || isNonTransientMemberError(message)) {
+      throw firstError
+    }
+    return clampChairmanOutput(await attempt())
+  }
+}
+
+// ADR-102: adaptive fan-out triggers (modes.council.adaptive, default off).
+// Start with two members; expand one at a time while the evidence is weak.
+// These thresholds are deliberately conservative and harness-tunable — sweep
+// evidence for changing them lands through the normal PRD/ADR path.
+const ADAPTIVE_INITIAL_MEMBERS = 2
+
+/** Expand while coverage is below quorum, the fan-out is incomplete, or no consensus finding exists with material dissent. */
+export function adaptiveShouldExpand(report: Council.CouncilReport): boolean {
+  if (report.incomplete) return true
+  if (report.successfulMembers < report.quorum) return true
+  return report.consensus.length === 0 && report.minority.length + report.singleton.length >= 2
+}
+
 type CouncilMetadata = {
   status: string
   contextAdmission?: CouncilContext.Admission
@@ -430,6 +580,10 @@ type CouncilMetadata = {
   singletonCount?: number
   /** ADR-101: minimum successes before the consensus tier may fire. */
   quorum?: number
+  chairman?: "ok" | "failed" | "disabled" | "skipped"
+  chairmanError?: string
+  /** ADR-102: members added by the adaptive lane beyond the initial two. */
+  adaptiveExpanded?: number
   memberIds?: string[]
   debateRoundsRun?: number
   debateStopReason?: string
@@ -597,18 +751,23 @@ export const CouncilTool = Tool.define("council", async () => {
         }
       }
 
+      // ADR-102: the adaptive lane starts with two members and expands one at
+      // a time while round-1 evidence is weak; the fixed lane runs the full set.
+      const adaptive = modes?.council?.adaptive === true
+      const ledgerEnabled = modes?.ensembleLedger !== false
+      const initialMembers = adaptive ? resolvedMembers.slice(0, ADAPTIVE_INITIAL_MEMBERS) : resolvedMembers
       let councilCompleted = 0
-      let results = await Promise.all(
-        resolvedMembers.map(async (resolved) => {
-          const result = await runMember({
-            resolved,
-            system,
-            userParts,
-            timeoutMs,
-            reasoningScale,
-            memberOverrides,
-            abort: ctx.abort,
-          })
+      const runOne = (resolved: ResolvedMember) =>
+        runMember({
+          resolved,
+          system,
+          userParts,
+          timeoutMs,
+          reasoningScale,
+          memberOverrides,
+          abort: ctx.abort,
+          ledger: { enabled: ledgerEnabled, phase: "fanout" },
+        }).then((result) => {
           councilCompleted++
           log.info("council member progress", {
             toolName: "council",
@@ -617,10 +776,21 @@ export const CouncilTool = Tool.define("council", async () => {
             total: members.length,
           })
           return result
-        }),
-      )
+        })
+      let results = await Promise.all(initialMembers.map((resolved) => runOne(resolved)))
       ctx.abort.throwIfAborted()
       let report = Council.aggregateCouncil(results)
+      let adaptiveExpanded = 0
+      if (adaptive) {
+        for (let next = initialMembers.length; next < resolvedMembers.length && adaptiveShouldExpand(report); next++) {
+          log.info("council adaptive expansion", { toolName: "council", expandingTo: next + 1 })
+          const result = await runOne(resolvedMembers[next]!)
+          results = [...results, result]
+          adaptiveExpanded++
+          ctx.abort.throwIfAborted()
+          report = Council.aggregateCouncil(results)
+        }
+      }
       let debateRoundsRun = 0
       let debateStopReason = maxRounds > 0 ? "not_started" : "debate_disabled"
       const debateNotes: string[] = []
@@ -662,6 +832,7 @@ export const CouncilTool = Tool.define("council", async () => {
               memberOverrides,
               abort: ctx.abort,
               retryOnce: false,
+              ledger: { enabled: ledgerEnabled, phase: `debate-${round}` },
             }),
           ),
         )
@@ -671,6 +842,44 @@ export const CouncilTool = Tool.define("council", async () => {
         const postRound = Debate.shouldContinueDebate({ round, maxRounds, report })
         debateStopReason = postRound.reason
         if (!postRound.continue) break
+      }
+
+      // ADR-102: opt-in blinded chairman synthesis (modes.council.chairman).
+      // Runs after the final aggregation (and any debate rounds); an
+      // incomplete report has nothing worth synthesizing.
+      let chairmanStatus: "ok" | "failed" | "disabled" | "skipped" =
+        modes?.council?.chairman === true ? "skipped" : "disabled"
+      let chairmanError: string | undefined
+      let chairmanOutput: z.infer<typeof ChairmanOutputSchema> | undefined
+      if (modes?.council?.chairman === true && !report.incomplete) {
+        const chairmanUser =
+          CouncilContext.userPrompt({ kind, question: args.question, context: args.context }) +
+          `\n\nReport status: ${report.successfulMembers}/${report.totalMembers} members succeeded (quorum ${report.quorum}).\n\n` +
+          chairmanBrief(report)
+        if (!checkPrompt(chairmanUser).ok) {
+          chairmanStatus = "skipped"
+          chairmanError = "chairman prompt rejected by the input budget"
+        } else {
+          try {
+            chairmanOutput = await runChairman({
+              resolved: resolvedMembers[0]!,
+              user: chairmanUser,
+              timeoutMs,
+              reasoningScale,
+              memberOverrides,
+              abort: ctx.abort,
+              ledger: { enabled: ledgerEnabled },
+            })
+            chairmanStatus = "ok"
+          } catch (error) {
+            chairmanStatus = "failed"
+            chairmanError = error instanceof Error ? error.message : String(error)
+            log.warn("council chairman failed; deterministic report retained", {
+              toolName: "council",
+              error: chairmanError,
+            })
+          }
+        }
       }
 
       const markdown = Council.renderReportMarkdown(report, args.question)
@@ -705,6 +914,38 @@ export const CouncilTool = Tool.define("council", async () => {
       if (debateRoundsRun > 0) {
         parts.push("", `## Debate (${debateRoundsRun} round(s), stop: ${debateStopReason})`, ...debateNotes)
       }
+      if (chairmanStatus === "ok" && chairmanOutput) {
+        parts.push(
+          "",
+          "## Chairman synthesis (advisory)",
+          "",
+          `**Verdict:** ${chairmanOutput.verdict}`,
+          "",
+          "**Recommended actions:**",
+          ...chairmanOutput.recommendedActions.map((action) => `- ${action}`),
+          ...(chairmanOutput.dissent.length
+            ? ["", "**Dissent to weigh:**", ...chairmanOutput.dissent.map((item) => `- ${item}`)]
+            : []),
+          "",
+          `_Chairman: one synthesis call by ${resolvedMembers[0]!.member.memberId} over anonymized findings; the deterministic tiers above remain the primary output._`,
+        )
+      } else if (chairmanStatus === "failed") {
+        parts.push(
+          "",
+          `_Chairman unavailable (${chairmanError ?? "unknown"}); the deterministic tiers above are the complete output._`,
+        )
+      } else if (chairmanStatus === "skipped" && chairmanError) {
+        parts.push("", `_Chairman skipped: ${chairmanError}._`)
+      }
+      if (adaptive) {
+        const started = Math.min(ADAPTIVE_INITIAL_MEMBERS, resolvedMembers.length)
+        parts.push(
+          "",
+          adaptiveExpanded > 0
+            ? `_Adaptive fan-out: started ${started}, expanded to ${started + adaptiveExpanded} of ${resolvedMembers.length} members on weak round-1 evidence._`
+            : `_Adaptive fan-out: round-1 evidence was sufficient at ${results.length} members; no expansion._`,
+        )
+      }
       if (budgetCheck.reasons.length) {
         parts.push("", `_Budget: ${budgetCheck.reasons.join(", ")}_`)
       }
@@ -727,6 +968,9 @@ export const CouncilTool = Tool.define("council", async () => {
         minorityCount: report.minority.length,
         singletonCount: report.singleton.length,
         quorum: report.quorum,
+        chairman: chairmanStatus,
+        ...(chairmanError ? { chairmanError } : {}),
+        ...(adaptive ? { adaptiveExpanded } : {}),
         memberIds: results.map((r) => r.memberId),
         debateRoundsRun,
         debateStopReason,

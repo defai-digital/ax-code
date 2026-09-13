@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "kind": "council-aggregate",
+  "name": "named locations must agree for a merge",
+  "members": [
+    {
+      "memberId": "m1",
+      "issues": [
+        {
+          "memberId": "m1",
+          "severity": "high",
+          "category": "security",
+          "location": "src/auth.ts:12",
+          "summary": "Token is compared with a timing-unsafe equality check",
+          "suggestedFix": "Use a constant-time comparison"
+        }
+      ]
+    },
+    {
+      "memberId": "m2",
+      "issues": [
+        {
+          "memberId": "m2",
+          "severity": "high",
+          "category": "security",
+          "location": "src/session.ts:88",
+          "summary": "Token is compared with a timing-unsafe equality check",
+          "suggestedFix": "Use a constant-time comparison"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "quorum": 2,
+    "tiers": { "consensus": 0, "singleton": 2 },
+    "separate": [
+      {
+        "a": "Token is compared with a timing-unsafe equality check",
+        "b": "Token is compared with a timing-unsafe equality check"
+      }
+    ]
+  }
+}

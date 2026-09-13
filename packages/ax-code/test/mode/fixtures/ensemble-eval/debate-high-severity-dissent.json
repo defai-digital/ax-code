@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "kind": "debate-convergence",
+  "name": "high-severity dissent blocks convergence at the ratio threshold",
+  "members": [
+    {
+      "memberId": "m1",
+      "issues": [
+        { "memberId": "m1", "severity": "high", "category": "security", "summary": "Missing rate limit" },
+        { "memberId": "m1", "severity": "medium", "category": "correctness", "summary": "Off-by-one in pagination cursor" },
+        { "memberId": "m1", "severity": "medium", "category": "correctness", "summary": "Timeout not propagated to child call" },
+        { "memberId": "m1", "severity": "high", "category": "security", "summary": "Session cookie lacks SameSite attribute" }
+      ]
+    },
+    {
+      "memberId": "m2",
+      "issues": [
+        { "memberId": "m2", "severity": "high", "category": "security", "summary": "Missing rate limit" },
+        { "memberId": "m2", "severity": "medium", "category": "correctness", "summary": "Off-by-one in pagination cursor" },
+        { "memberId": "m2", "severity": "medium", "category": "correctness", "summary": "Timeout not propagated to child call" }
+      ]
+    },
+    {
+      "memberId": "m3",
+      "issues": [
+        { "memberId": "m3", "severity": "high", "category": "security", "summary": "Missing rate limit" },
+        { "memberId": "m3", "severity": "medium", "category": "correctness", "summary": "Off-by-one in pagination cursor" },
+        { "memberId": "m3", "severity": "medium", "category": "correctness", "summary": "Timeout not propagated to child call" }
+      ]
+    }
+  ],
+  "round": 1,
+  "maxRounds": 3,
+  "expect": { "continue": true, "reason": "continue:agreement=" }
+}

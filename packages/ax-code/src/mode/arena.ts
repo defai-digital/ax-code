@@ -143,6 +143,51 @@ export namespace Arena {
     return selected
   }
 
+  export type JudgeDimensionScores = {
+    requirementCoverage: number
+    feasibility: number
+    verificationPlan: number
+    riskEvidence: number
+    total: number
+  }
+
+  export type JudgeScoreEntry = {
+    candidate: string
+    requirementCoverage: number
+    feasibility: number
+    verificationPlan: number
+    riskEvidence: number
+  }
+
+  /**
+   * ADR-101/102: map blinded judge labels back to member ids. Unknown or
+   * duplicate labels are ignored; an empty map throws so the caller falls
+   * back with a disclosure. Pure — exercised by the eval harness.
+   */
+  export function mapJudgeScores(
+    output: { scores: readonly JudgeScoreEntry[] },
+    memberIdByLabel: ReadonlyMap<string, string>,
+  ): Map<string, JudgeDimensionScores> {
+    const scores = new Map<string, JudgeDimensionScores>()
+    for (const entry of output.scores) {
+      const memberId = memberIdByLabel.get(entry.candidate.trim())
+      if (!memberId || scores.has(memberId)) continue
+      const requirementCoverage = Math.round(entry.requirementCoverage)
+      const feasibility = Math.round(entry.feasibility)
+      const verificationPlan = Math.round(entry.verificationPlan)
+      const riskEvidence = Math.round(entry.riskEvidence)
+      scores.set(memberId, {
+        requirementCoverage,
+        feasibility,
+        verificationPlan,
+        riskEvidence,
+        total: requirementCoverage + feasibility + verificationPlan + riskEvidence,
+      })
+    }
+    if (scores.size === 0) throw new Error("judge returned no usable candidate scores")
+    return scores
+  }
+
   export function renderRankingMarkdown(ranked: readonly RankedCandidate[]): string {
     const lines = ["# Arena ranking", ""]
     if (!ranked.length) {

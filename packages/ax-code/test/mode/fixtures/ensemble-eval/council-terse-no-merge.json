@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "kind": "council-aggregate",
+  "name": "terse findings below the token floor never merge",
+  "members": [
+    {
+      "memberId": "m1",
+      "issues": [{ "memberId": "m1", "severity": "high", "category": "security", "summary": "SQL injection" }]
+    },
+    {
+      "memberId": "m2",
+      "issues": [{ "memberId": "m2", "severity": "high", "category": "security", "summary": "SQL injection risk" }]
+    }
+  ],
+  "expect": {
+    "quorum": 2,
+    "tiers": { "consensus": 0, "singleton": 2 },
+    "separate": [{ "a": "SQL injection", "b": "SQL injection risk" }]
+  }
+}

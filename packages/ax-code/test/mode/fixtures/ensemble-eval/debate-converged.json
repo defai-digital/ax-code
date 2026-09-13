@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "kind": "debate-convergence",
+  "name": "full agreement stops the debate as converged",
+  "members": [
+    { "memberId": "m1", "issues": [{ "memberId": "m1", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m2", "issues": [{ "memberId": "m2", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m3", "issues": [{ "memberId": "m3", "severity": "high", "category": "security", "summary": "Missing rate limit" }] }
+  ],
+  "round": 1,
+  "maxRounds": 3,
+  "expect": { "continue": false, "reason": "converged:" }
+}

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "kind": "council-aggregate",
+  "name": "half of attempted is not a majority",
+  "members": [
+    { "memberId": "m1", "issues": [{ "memberId": "m1", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m2", "issues": [{ "memberId": "m2", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m3", "issues": [{ "memberId": "m3", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m4", "issues": [] },
+    { "memberId": "m5", "error": "timeout: member exceeded 180000ms" },
+    { "memberId": "m6", "error": "timeout: member exceeded 180000ms" }
+  ],
+  "expect": {
+    "quorum": 4,
+    "tiers": { "consensus": 0, "majority": 0, "minority": 1, "singleton": 0 },
+    "findings": [{ "summary": "Missing rate limit", "tier": "minority", "supportCount": 3, "totalMembers": 6 }]
+  }
+}

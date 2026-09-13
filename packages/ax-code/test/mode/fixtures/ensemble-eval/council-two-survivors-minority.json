@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "kind": "council-aggregate",
+  "name": "two agreeing survivors of six are minority, not consensus",
+  "members": [
+    {
+      "memberId": "m1",
+      "issues": [
+        { "memberId": "m1", "severity": "high", "category": "security", "location": "a.ts:1", "summary": "Missing rate limit" }
+      ]
+    },
+    {
+      "memberId": "m2",
+      "issues": [
+        { "memberId": "m2", "severity": "high", "category": "security", "location": "a.ts:1", "summary": "Missing rate limit" }
+      ]
+    },
+    { "memberId": "m3", "error": "timeout: member exceeded 180000ms" },
+    { "memberId": "m4", "error": "timeout: member exceeded 180000ms" },
+    { "memberId": "m5", "error": "aborted: parent cancelled" },
+    { "memberId": "m6", "error": "HTTP 401 Unauthorized" }
+  ],
+  "expect": {
+    "quorum": 4,
+    "incomplete": false,
+    "tiers": { "consensus": 0, "majority": 0, "minority": 1, "singleton": 0 },
+    "findings": [{ "summary": "Missing rate limit", "tier": "minority", "supportCount": 2, "totalMembers": 6 }]
+  }
+}

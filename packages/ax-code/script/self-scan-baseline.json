@@ -1801,7 +1801,7 @@
         {
           "fingerprint": "21578e3f68b0454a3b268f87144771901cc18c03787b7f00836cde4310867373",
           "file": "src/tool/arena.ts",
-          "line": 783,
+          "line": 807,
           "severity": "medium",
           "kind": "map_growth:unbounded_growth",
           "summary": "map_growth:unbounded_growth"
@@ -1929,7 +1929,7 @@
       ]
     },
     "security_scan": {
-      "count": 468,
+      "count": 469,
       "findings": [
         {
           "fingerprint": "ac110f04260c483cf0241ca9c330315691931c3d5bbe4a4717f977b833cd5dae",
@@ -4132,6 +4132,14 @@
           "summary": "path_traversal"
         },
         {
+          "fingerprint": "097fdeba2d6a72308d5102246e1a9d86031bf4f4f070ec669967026be78e7122",
+          "file": "src/mode/ensemble-ledger.ts",
+          "line": 38,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
           "fingerprint": "2e589f132a10b2aa9d6c1366b65e61f2b74cbf231a92d70c2379ffe539a40f9b",
           "file": "src/mode/memory.ts",
           "line": 118,
@@ -5214,7 +5222,7 @@
         {
           "fingerprint": "ba091871090c63f660d8f997dd6bee00794d7a664a4ba8c05c16114f3e744b8b",
           "file": "src/tool/arena-implement.ts",
-          "line": 91,
+          "line": 92,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5222,7 +5230,7 @@
         {
           "fingerprint": "927d2772d22a1d2399a5c0cf9a36e465c4b4c61534097cdc24a586003be50348",
           "file": "src/tool/arena-implement.ts",
-          "line": 92,
+          "line": 93,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -5230,7 +5238,7 @@
         {
           "fingerprint": "105e51a059e55ba414c9ca7e1f9610ab9a41bc9d2f84db23f7178b2f503b9d88",
           "file": "src/tool/arena.ts",
-          "line": 444,
+          "line": 464,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"

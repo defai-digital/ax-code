@@ -44,10 +44,26 @@ export namespace FanOut {
     concurrency?: number
     /** Called after each member completes (success or failure) with progress info. */
     onMemberComplete?: (completed: number, total: number, member: T) => void
+    /** ADR-102: caller-owned per-member completion hook for the call ledger. */
+    telemetry?: (event: TelemetryEvent<T>) => void
   }
 
   export interface MemberResult<R> {
     result?: R
+    error?: string
+    /** Wall time of this member's attempt, measured inside the lifecycle. */
+    durationMs?: number
+  }
+
+  /**
+   * ADR-102: per-member completion event for the local ensemble call ledger.
+   * The callback is caller-owned so this utility stays free of storage and
+   * config dependencies.
+   */
+  export interface TelemetryEvent<T> {
+    member: T
+    outcome: "ok" | "timeout" | "aborted" | "error"
+    durationMs: number
     error?: string
   }
 
@@ -72,6 +88,21 @@ export namespace FanOut {
         const member = members[idx]
         results[idx] = await runOne(config, member)
         completed++
+        if (config.telemetry) {
+          const error = results[idx]!.error
+          config.telemetry({
+            member: member!,
+            outcome: error
+              ? error.startsWith("timeout:")
+                ? "timeout"
+                : error.startsWith("aborted:")
+                  ? "aborted"
+                  : "error"
+              : "ok",
+            durationMs: results[idx]!.durationMs ?? 0,
+            ...(error ? { error } : {}),
+          })
+        }
         onMemberComplete?.(completed, members.length, member)
       }
     }
@@ -84,6 +115,7 @@ export namespace FanOut {
 
   /** Run a single member with abort/timeout lifecycle. */
   async function runOne<T, R>(config: RunConfig<T, R>, member: T): Promise<MemberResult<R>> {
+    const started = Date.now()
     const localAbort = new AbortController()
     const onParentAbort = () => localAbort.abort(config.abort.reason)
     if (config.abort.aborted) {
@@ -112,16 +144,17 @@ export namespace FanOut {
       })
       const result = await Promise.race([execution, cancelled])
       localAbort.signal.throwIfAborted()
-      return { result }
+      return { result, durationMs: Date.now() - started }
     } catch (err) {
       const message = describeError(err)
+      const durationMs = Date.now() - started
       // A timer-fired abort and a parent-signal abort surface identically
       // (AbortError), but they mean different things to the caller: one is a
       // per-member timeout the user can raise via config, the other is a
       // deliberate cancellation. Label them distinctly so reports don't blame
       // "timeout" for a user-initiated abort (or vice versa).
-      if (timedOut) return { error: `timeout: member exceeded ${config.timeoutMs}ms` }
-      return { error: localAbort.signal.aborted ? `aborted: ${message}` : message }
+      if (timedOut) return { error: `timeout: member exceeded ${config.timeoutMs}ms`, durationMs }
+      return { error: localAbort.signal.aborted ? `aborted: ${message}` : message, durationMs }
     } finally {
       clearTimeout(timer)
       if (onAbort) localAbort.signal.removeEventListener("abort", onAbort)

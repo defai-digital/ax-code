@@ -226,7 +226,15 @@ export namespace Council {
     return "singleton"
   }
 
-  export function aggregateCouncil(members: readonly CouncilMemberResult[]): CouncilReport {
+  export type AggregateOptions = {
+    /** Harness sweep overrides (ADR-102); production uses the module constants. */
+    similarityThreshold?: number
+    similarityMinTokens?: number
+  }
+
+  export function aggregateCouncil(members: readonly CouncilMemberResult[], options?: AggregateOptions): CouncilReport {
+    const mergeThreshold = options?.similarityThreshold ?? SIMILARITY_MERGE_THRESHOLD
+    const mergeMinTokens = options?.similarityMinTokens ?? SIMILARITY_MIN_TOKENS
     const successful = members.filter((m) => !m.error)
     const failed = members.filter((m) => m.error)
     const total = successful.length
@@ -286,10 +294,10 @@ export namespace Council {
         for (let j = i + 1; j < scored.length; j++) {
           const a = scored[i]!
           const b = scored[j]!
-          if (a.tokens.size < SIMILARITY_MIN_TOKENS || b.tokens.size < SIMILARITY_MIN_TOKENS) continue
+          if (a.tokens.size < mergeMinTokens || b.tokens.size < mergeMinTokens) continue
           if (!locationsCompatible(a.bucket.location, b.bucket.location)) continue
           const score = tokenSimilarity(a.tokens, b.tokens)
-          if (score >= SIMILARITY_MERGE_THRESHOLD && score > bestScore) {
+          if (score >= mergeThreshold && score > bestScore) {
             bestScore = score
             bestI = i
             bestJ = j

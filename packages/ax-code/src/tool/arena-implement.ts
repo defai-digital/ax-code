@@ -10,6 +10,7 @@ import { Agent } from "../agent/agent"
 import { Instance } from "../project/instance"
 import { InstanceBootstrap } from "../project/bootstrap"
 import { ImplementArena } from "../mode/implement-arena"
+import { EnsembleLedger } from "../mode/ensemble-ledger"
 import type { Arena } from "../mode/arena"
 import { VerificationPolicy } from "../session/verification-policy"
 import { Session } from "../session"
@@ -646,6 +647,8 @@ export async function runImplementArena(input: {
   strategy: Arena.Strategy
   abort: AbortSignal
   timeoutMs?: number
+  /** ADR-102: local call-ledger switch; one record per contestant. */
+  ledgerEnabled?: boolean
 }): Promise<{
   ranked: ImplementArena.RankedImplement[]
   results: ImplementArena.ContestantResult[]
@@ -653,6 +656,7 @@ export async function runImplementArena(input: {
 }> {
   // Parallel contestants — each isolated in its own worktree + Instance context
   // Concurrency capped at 2 to reduce disk/memory pressure from parallel worktree operations.
+  const lifecycleTimeoutMs = (input.timeoutMs ?? IMPLEMENT_TIMEOUT_MS) + VERIFY_TIMEOUT_MS * 3 + 60_000
   const fanOutResults = await FanOut.run({
     members: input.members,
     concurrency: 2,
@@ -662,8 +666,19 @@ export async function runImplementArena(input: {
     // cleanup path, delete the already-committed snapshot — losing finished
     // work. Budget the full lifecycle so the outer timer never fires during
     // verification.
-    timeoutMs: (input.timeoutMs ?? IMPLEMENT_TIMEOUT_MS) + VERIFY_TIMEOUT_MS * 3 + 60_000,
+    timeoutMs: lifecycleTimeoutMs,
     abort: input.abort,
+    telemetry: EnsembleLedger.telemetryFor<ImplementMember>({
+      enabled: input.ledgerEnabled === true,
+      tool: "arena",
+      timeoutMs: lifecycleTimeoutMs,
+      phase: "implement",
+      // The contestant prompt is assembled per member from these exact parts.
+      promptHash: createHash("sha256")
+        .update(`implement\0${input.task}\0${input.context ?? ""}`)
+        .digest("hex"),
+      memberId: (member) => member.memberId,
+    }),
     execute: async (member, signal) => {
       return runImplementContestant({
         member,

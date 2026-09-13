@@ -155,6 +155,12 @@ export namespace ModeMemory {
     task: string
     rankedIds: string[] // provider/model
     failedIds?: string[]
+    /**
+     * ADR-102: only verification-linked rankings (implement arena) may
+     * record win/place. A self-generated ranking (plan arena) records
+     * participate — learning win/place from your own ordering is circular.
+     */
+    grounded: boolean
   }): Promise<void> {
     const taskClass = classifyTask(input.task)
     const at = Date.now()
@@ -163,7 +169,13 @@ export namespace ModeMemory {
       const [providerID, ...rest] = id.split("/")
       const modelID = rest.join("/") || "unknown"
       if (!providerID) return
-      const result: Outcome["result"] = index === 0 ? "win" : index === 1 ? "place" : "participate"
+      const result: Outcome["result"] = input.grounded
+        ? index === 0
+          ? "win"
+          : index === 1
+            ? "place"
+            : "participate"
+        : "participate"
       outcomes.push({ taskClass, providerID, modelID, result, at })
     })
     for (const id of input.failedIds ?? []) {

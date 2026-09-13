@@ -836,6 +836,14 @@ export type Config = {
        * Optional multi-round anonymous debate rounds (default: 0; Phase 3+).
        */
       debateRounds?: number
+      /**
+       * Append one blinded chairman synthesis call after aggregation (default: false). Deterministic tiering remains the primary output; the chairman receives anonymized findings only.
+       */
+      chairman?: boolean
+      /**
+       * Adaptive fan-out (default: false): start council with two members and expand one at a time up to maxMembers while coverage is below quorum or dissent is material. Expansion triggers are harness-tunable constants.
+       */
+      adaptive?: boolean
     }
     /**
      * Arena best-of-N implementation comparison settings
@@ -885,6 +893,10 @@ export type Config = {
        */
       estimatedUsdPerMember?: number
     }
+    /**
+     * Append per-generation records to the local ensemble call ledger (default: true). Local JSONL with SHA-256 prompt hashes only — no prompt bodies, no egress; operational debug data, not AX Telemetry.
+     */
+    ensembleLedger?: boolean
   }
   /**
    * Native source-backed AX Wiki. Complements structural ax-code index; does not replace code_intelligence.

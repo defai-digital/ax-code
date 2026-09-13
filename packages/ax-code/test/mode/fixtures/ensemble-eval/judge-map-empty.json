@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "kind": "judge-map",
+  "name": "no usable scores is an error",
+  "labels": { "A": "a/m" },
+  "output": {
+    "scores": [{ "candidate": "Z", "requirementCoverage": 5, "feasibility": 5, "verificationPlan": 5, "riskEvidence": 5 }]
+  },
+  "expect": { "error": "judge returned no usable candidate scores" }
+}

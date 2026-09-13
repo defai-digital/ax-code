@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "kind": "council-aggregate",
+  "name": "paraphrased findings with near-identical fixes merge",
+  "members": [
+    {
+      "memberId": "grok-build-cli/grok-4.6",
+      "providerID": "grok-build-cli",
+      "modelID": "grok-4.6",
+      "issues": [
+        {
+          "memberId": "grok-build-cli/grok-4.6",
+          "severity": "medium",
+          "category": "correctness",
+          "location": "src/util/list.ts:41",
+          "summary": "Set.add() result is checked for truthiness but add() returns the Set, so the guard never fires",
+          "suggestedFix": "Use Set.has() before Set.add() to detect duplicates"
+        }
+      ]
+    },
+    {
+      "memberId": "codex-cli/gpt-5.6",
+      "providerID": "codex-cli",
+      "modelID": "gpt-5.6",
+      "issues": [
+        {
+          "memberId": "codex-cli/gpt-5.6",
+          "severity": "medium",
+          "category": "correctness",
+          "location": "src/util/list.ts:41",
+          "summary": "Duplicate detection relies on the return value of Set.add(), which is always truthy",
+          "suggestedFix": "Use Set.has() before Set.add() to detect duplicates"
+        }
+      ]
+    }
+  ],
+  "expect": {
+    "quorum": 2,
+    "tiers": { "consensus": 1, "singleton": 0 },
+    "merged": [
+      {
+        "a": "Set.add() result is checked for truthiness but add() returns the Set, so the guard never fires",
+        "b": "Duplicate detection relies on the return value of Set.add(), which is always truthy"
+      }
+    ]
+  }
+}

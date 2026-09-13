@@ -6,6 +6,8 @@ Context is required evidence when supplied: at most 24000 UTF-16 code units, sen
 
 Optional anonymous debate rounds (`debateRounds` or `modes.council.debateRounds`) re-share Chatham-House synthesis without member identities. Debate is capped at three rounds, stops early on convergence, and is included in the budget estimate.
 
+Optional lanes, both default off: `modes.council.chairman: true` appends one blinded chairman synthesis after aggregation (anonymized findings only; deterministic tiers remain primary). `modes.council.adaptive: true` starts with two members and expands one at a time up to the cap while round-1 evidence is weak.
+
 Use for high-stakes architecture, security, code-quality ratings, or design trade-offs where multiple independent perspectives increase confidence. Advisory only — does not edit files.
 
 Prefer when:

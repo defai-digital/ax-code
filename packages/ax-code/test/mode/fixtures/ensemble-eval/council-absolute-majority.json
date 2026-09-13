@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "kind": "council-aggregate",
+  "name": "absolute majority of attempted members",
+  "members": [
+    { "memberId": "m1", "issues": [{ "memberId": "m1", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m2", "issues": [{ "memberId": "m2", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m3", "issues": [{ "memberId": "m3", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m4", "issues": [{ "memberId": "m4", "severity": "high", "category": "security", "summary": "Missing rate limit" }] },
+    { "memberId": "m5", "issues": [{ "memberId": "m5", "severity": "low", "category": "style", "summary": "Naming nit" }] },
+    { "memberId": "m6", "error": "timeout: member exceeded 180000ms" }
+  ],
+  "expect": {
+    "quorum": 4,
+    "tiers": { "consensus": 0, "majority": 1, "singleton": 1 },
+    "findings": [
+      { "summary": "Missing rate limit", "tier": "majority", "supportCount": 4, "totalMembers": 6 },
+      { "summary": "Naming nit", "tier": "singleton", "supportCount": 1 }
+    ]
+  }
+}

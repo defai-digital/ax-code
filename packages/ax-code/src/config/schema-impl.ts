@@ -1188,6 +1188,18 @@ export const Info = z
             debateRounds: NonNegativeInteger.optional().describe(
               "Optional multi-round anonymous debate rounds (default: 0; Phase 3+).",
             ),
+            chairman: z
+              .boolean()
+              .optional()
+              .describe(
+                "Append one blinded chairman synthesis call after aggregation (default: false). Deterministic tiering remains the primary output; the chairman receives anonymized findings only.",
+              ),
+            adaptive: z
+              .boolean()
+              .optional()
+              .describe(
+                "Adaptive fan-out (default: false): start council with two members and expand one at a time up to maxMembers while coverage is below quorum or dissent is material. Expansion triggers are harness-tunable constants.",
+              ),
           })
           .optional()
           .describe("Multi-provider council (advisory review / design) settings"),
@@ -1245,6 +1257,12 @@ export const Info = z
           })
           .optional()
           .describe("Ensemble cost budget controls"),
+        ensembleLedger: z
+          .boolean()
+          .optional()
+          .describe(
+            "Append per-generation records to the local ensemble call ledger (default: true). Local JSONL with SHA-256 prompt hashes only — no prompt bodies, no egress; operational debug data, not AX Telemetry.",
+          ),
       })
       .optional()
       .describe(
