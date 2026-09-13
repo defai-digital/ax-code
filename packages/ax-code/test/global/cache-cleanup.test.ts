@@ -14,5 +14,8 @@ test("cache version cleanup creates the cache directory before reading it", asyn
 })
 
 test("cache version cleanup preserves managed runtimes", () => {
-  expect(staleCacheEntries(["version", "skills", "ax-engine", "libexec", ".trash-123"])).toEqual(["version", "skills"])
+  expect(staleCacheEntries(["version", "skills", "ax-engine", "libexec", "evidence-v1", ".trash-123"])).toEqual([
+    "version",
+    "skills",
+  ])
 })

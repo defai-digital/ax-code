@@ -12,7 +12,13 @@ crate-type = ["cdylib", "rlib"]
 name = "ax-code-fs-bench"
 path = "examples/bench.rs"
 
+[features]
+default = ["evidence-cache"]
+evidence-cache = ["dep:rocksdb", "dep:sha2"]
+
 [dependencies]
+rocksdb = { version = "=0.24.0", optional = true, default-features = false, features = ["bindgen-runtime"] }
+sha2 = { workspace = true, optional = true }
 napi = { workspace = true }
 napi-derive = { workspace = true }
 serde = { workspace = true }

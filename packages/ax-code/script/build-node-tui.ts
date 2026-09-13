@@ -519,6 +519,21 @@ for (const [name, src] of nativePkgs) {
   shippedNative++
 }
 
+// A release must contain functioning persistent evidence support, not just a
+// package directory whose native loader silently falls back at runtime.
+if (release) {
+  const evidenceCheck = spawnSync(
+    ptyCheckNode,
+    [path.join(dir, "..", "..", "script", "verify-evidence-cache.cjs"), path.join(axScope, "fs")],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 25_000 },
+  )
+  if (evidenceCheck.status !== 0)
+    throw new Error(
+      `Bundled evidence cache verification failed: ${evidenceCheck.error?.message || evidenceCheck.stderr.trim() || evidenceCheck.status}`,
+    )
+  console.log(`Bundled evidence cache verified: ${evidenceCheck.stdout.trim()}`)
+}
+
 // macOS Gatekeeper rejects unsigned native code. Unlike the single Bun-SEA
 // binary, a node-bundled dist carries many native libraries (.node addons and
 // AX Code TUI's .dylib). Release CI passes AX_CODE_APPLE_CODESIGN_IDENTITY after

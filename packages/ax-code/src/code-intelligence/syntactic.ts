@@ -1,3 +1,6 @@
+import z from "zod"
+import { EvidenceCache } from "../evidence/cache"
+import { evidenceCacheMode } from "../evidence/mode"
 import { createRequire } from "node:module"
 import { lazy } from "@/util/lazy"
 import { Log } from "../util/log"
@@ -121,7 +124,46 @@ export namespace SyntacticExtractor {
     endPosition: { row: number; column: number }
   }
 
+  // Bump this identity whenever the extractor or bundled grammar contract changes.
+  const CACHE_VERSION = "syntactic-v1"
+  const CachedSymbols = z
+    .array(
+      z.object({
+        kind: z.enum([
+          "function",
+          "method",
+          "class",
+          "interface",
+          "type",
+          "variable",
+          "constant",
+          "module",
+          "parameter",
+          "enum",
+        ]),
+        name: z.string(),
+        qualified: z.string(),
+        startLine: z.number().int().min(0),
+        startChar: z.number().int().min(0),
+        endLine: z.number().int().min(0),
+        endChar: z.number().int().min(0),
+        signature: z.string().nullable(),
+      }),
+    )
+    .max(MAX_SYMBOLS_PER_FILE)
+
   export async function extract(lang: string, text: string): Promise<Symbol[] | undefined> {
+    if (evidenceCacheMode() === "off" || !supported(lang) || text.length > MAX_SOURCE_BYTES)
+      return extractFresh(lang, text)
+    const key = EvidenceCache.key(CACHE_VERSION, lang, GRAMMARS[lang], EvidenceCache.digest(text))
+    const cached = await EvidenceCache.get(key, CachedSymbols)
+    if (cached) return cached
+    const symbols = await extractFresh(lang, text)
+    if (symbols) await EvidenceCache.put(key, symbols)
+    return symbols
+  }
+
+  async function extractFresh(lang: string, text: string): Promise<Symbol[] | undefined> {
     if (!supported(lang)) return undefined
     if (text.length > MAX_SOURCE_BYTES) {
       log.info("skipping syntactic extraction, source too large", { lang, size: text.length })

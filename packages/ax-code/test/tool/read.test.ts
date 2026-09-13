@@ -306,7 +306,7 @@ describe("tool.read truncation", () => {
         const read = await ReadTool.init()
         const result = await read.execute({ filePath: path.join(tmp.path, "many-lines.txt"), limit: 10 }, ctx)
         expect(result.metadata.truncated).toBe(true)
-        expect(result.output).toContain("Showing lines 1-10 of 100")
+        expect(result.output).toContain("Showing lines 1-10. More lines remain; total not counted.")
         expect(result.output).toContain("Use offset=11")
         expect(result.output).toContain("line0")
         expect(result.output).toContain("line9")
@@ -375,8 +375,20 @@ describe("tool.read truncation", () => {
   })
 
   test("does not report byte-capped reads as offset-out-of-range", async () => {
-    const src = await readFile(path.join(import.meta.dirname, "../../src/tool/read.ts"), "utf-8")
-    expect(src).toContain("if (!truncatedByBytes && lines < offset")
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeFile(path.join(dir, "bytes.txt"), ("x".repeat(1900) + "\n").repeat(100))
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const read = await ReadTool.init()
+        const result = await read.execute({ filePath: path.join(tmp.path, "bytes.txt"), offset: 2 }, ctx)
+        expect(result.metadata.truncated).toBe(true)
+        expect(result.output).toContain("Output capped")
+      },
+    })
   })
 
   test("strips a UTF-8 BOM from the first line", async () => {
