@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep weekly schedules active across missing daylight-saving occurrences and preserve local daily/weekly wall-clock times instead of normalizing them into a different hour.
+
 ## [7.16.4] - 2026-09-13
 
 ### Added

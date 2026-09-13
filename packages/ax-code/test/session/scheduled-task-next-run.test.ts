@@ -75,6 +75,34 @@ describe("ScheduledTask.nextRunAt", () => {
     ).toBe(Date.UTC(2026, 10, 8, 6, 30, 0))
   })
 
+  test("weekly timezone schedules survive a missing occurrence more than eight days ahead", () => {
+    const afterPreviousRun = Date.UTC(2026, 2, 1, 7, 30)
+    expect(
+      ScheduledTask.nextRunAt(
+        { type: "weekly", day: 0, time: "02:30", timezone: "America/New_York" },
+        afterPreviousRun,
+      ),
+    ).toBe(Date.UTC(2026, 2, 15, 6, 30))
+  })
+
+  test("local schedules skip spring-forward gaps without shifting later wall times", () => {
+    const originalTZ = process.env.TZ
+    process.env.TZ = "America/New_York"
+    try {
+      const beforeGap = Date.UTC(2026, 2, 8, 6, 0)
+      expect(ScheduledTask.nextRunAt({ type: "daily", time: "02:30" }, beforeGap)).toBe(Date.UTC(2026, 2, 9, 6, 30))
+      expect(ScheduledTask.nextRunAt({ type: "weekly", day: 0, time: "02:30" }, beforeGap)).toBe(
+        Date.UTC(2026, 2, 15, 6, 30),
+      )
+      expect(ScheduledTask.nextRunAt({ type: "weekly", day: 1, time: "02:30" }, beforeGap)).toBe(
+        Date.UTC(2026, 2, 9, 6, 30),
+      )
+    } finally {
+      if (originalTZ === undefined) delete process.env.TZ
+      else process.env.TZ = originalTZ
+    }
+  })
+
   test("cron schedules honor local and explicit timezone fields", () => {
     const local = new Date(2026, 7, 20, 8, 0, 0).getTime()
     expect(ScheduledTask.nextRunAt({ type: "cron", expression: "15 9 * * *" }, local)).toBe(
