@@ -29,7 +29,7 @@ function taskSummary(task: ScheduledTask.Info) {
 }
 
 function taskOutput(task: ScheduledTask.Info) {
-  return JSON.stringify({ task: taskSummary(task) }, null, 2)
+  return JSON.stringify({ id: task.id, title: task.title, nextRunAt: task.nextRunAt, task: taskSummary(task) }, null, 2)
 }
 
 // InvalidSchedule is a NamedError: its .message is the error name, and the
@@ -98,6 +98,8 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
     '("remind me at 14:30 to check the deployment") or recurring checks ("every weekday at 9am, summarize CI failures"). ' +
     "Translate the user's natural-language time into the schedule parameter, using their timezone for daily/weekly/cron " +
     "schedules and epoch milliseconds for one-time runs. Only create tasks the user asked for. " +
+    "Never invent a task id. Real ids start with sch_. If this tool was not called successfully, say that no task was created. " +
+    "After a successful call, quote only the id, title, and nextRunAt from the tool output. " +
     "After creating a task, ALWAYS tell the user: the task title and id, the next run time, and these facts — " +
     "(1) tasks fire only while an ax-code backend for this project is running; closing the app pauses them, and " +
     "missed occurrences catch up once (or are skipped) per the catch-up policy when a backend starts again; " +
@@ -156,7 +158,7 @@ export const ScheduleTaskTool = Tool.define("schedule_task", {
 export const ListScheduledTasksTool = Tool.define("list_scheduled_tasks", {
   description:
     "List this project's scheduled tasks with status, schedule, next/last run time, and any last-run error. " +
-    "Use before creating a task the user may already have, and to find ids for manage_scheduled_task.",
+    "Use before creating a task the user may already have, before answering whether a task exists, and to find ids for manage_scheduled_task.",
   parameters: z.object({
     status: z.enum(["active", "paused", "disabled"]).optional().describe("Filter by status. Omit for all tasks."),
   }),

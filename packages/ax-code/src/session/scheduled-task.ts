@@ -332,6 +332,12 @@ export namespace ScheduledTask {
 
   function publishCreated(task: Info) {
     Bus.publishDetached(Event.Created, { task })
+    const when = task.nextRunAt !== undefined ? new Date(task.nextRunAt).toLocaleString() : undefined
+    toast({
+      title: "Scheduled task created",
+      message: when ? `${task.title} · next ${when} · /schedule` : `${task.title} · /schedule`,
+      variant: "info",
+    })
   }
 
   function publishUpdated(task: Info) {

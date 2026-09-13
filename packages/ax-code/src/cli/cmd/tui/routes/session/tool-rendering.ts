@@ -20,6 +20,7 @@ export const SESSION_TOOL_RENDERER_KEYS = [
   "refactor_apply",
   "impact_analyze",
   "dedup_scan",
+  "schedule_task",
   "generic",
 ] as const
 

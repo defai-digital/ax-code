@@ -8,6 +8,7 @@ import { ArenaToolView, CouncilToolView } from "./ensemble"
 import { BlockTool, InlineTool, type ToolProps } from "./primitives"
 import { Question, Read, TodoWrite } from "./session"
 import { Task } from "./task"
+import { ScheduleTask } from "./schedule"
 
 export { BlockTool, InlineTool, type ToolProps }
 
@@ -35,6 +36,7 @@ const TOOL_RENDERER_COMPONENTS: Record<SessionToolRendererKey, ToolRendererCompo
   refactor_apply: (props) => <RefactorApply {...props} />,
   impact_analyze: (props) => <ImpactAnalyze {...props} />,
   dedup_scan: (props) => <DedupScan {...props} />,
+  schedule_task: (props) => <ScheduleTask {...props} />,
   generic: (props) => <GenericTool {...props} />,
 }
 

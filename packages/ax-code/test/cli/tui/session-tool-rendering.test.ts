@@ -8,6 +8,7 @@ import {
   isKnownSessionToolRenderer,
   sessionToolRendererKey,
 } from "../../../src/cli/cmd/tui/routes/session/tool-rendering"
+import { scheduleTaskLine } from "../../../src/cli/cmd/tui/routes/session/tool-renderers/schedule-view"
 
 describe("tui session tool rendering policy", () => {
   test("maps every specialized renderer key to itself", () => {
@@ -22,6 +23,15 @@ describe("tui session tool rendering policy", () => {
     expect(sessionToolRendererKey("custom_tool")).toBe("generic")
     expect(sessionToolRendererKey("")).toBe("generic")
     expect(isKnownSessionToolRenderer("custom_tool")).toBe(false)
+  })
+
+  test("routes schedule_task to its receipt renderer", () => {
+    expect(sessionToolRendererKey("schedule_task")).toBe("schedule_task")
+    expect(isKnownSessionToolRenderer("schedule_task")).toBe(true)
+    expect(scheduleTaskLine({ running: true, title: "Tokyo weather" })).toBe("Scheduling Tokyo weather")
+    expect(scheduleTaskLine({ running: false, title: "Tokyo weather", id: "sch_test", nextRunAt: 1 })).toContain(
+      "Scheduled · Tokyo weather · sch_test · next ",
+    )
   })
 
   test("does not route the ensemble modes to the hidden generic renderer", () => {
@@ -64,6 +74,8 @@ describe("tui session tool rendering policy", () => {
       "primitives.tsx",
       "session.tsx",
       "task.tsx",
+      "schedule.tsx",
+      "schedule-view.ts",
     ]) {
       const text = await fs.readFile(path.join(root, file), "utf8")
       expect(text).not.toMatch(/from\s+["']\.\.\/index["']/)
