@@ -15,7 +15,7 @@ import { useToast } from "../ui/toast"
 import { createAbortableResourceFetcher } from "../util/abortable-resource"
 import { Log } from "@/util/log"
 import type { Session } from "@ax-code/sdk/v2"
-import { normalizeDialogSessions } from "./session-list-data"
+import { localWorkspaceDirectory, normalizeDialogSessions } from "./session-list-data"
 
 const log = Log.create({ service: "tui.dialog-session-list" })
 
@@ -128,7 +128,9 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
     if (results) return results
     if (props.workspaceID) return listed() ?? []
     if (props.localOnly)
-      return sync.data.session.filter((session) => session.directory === (sync.data.path.directory || sdk.directory))
+      return sync.data.session.filter(
+        (session) => session.directory === localWorkspaceDirectory(sdk.directory, sync.data.path.directory),
+      )
     return sync.data.session
   })
 
@@ -142,7 +144,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
         if (x.parentID !== undefined) return false
         if (props.workspaceID && listed()) return true
         if (props.workspaceID) return x.directory === props.workspaceID
-        if (props.localOnly) return x.directory === (sync.data.path.directory || sdk.directory)
+        if (props.localOnly) return x.directory === localWorkspaceDirectory(sdk.directory, sync.data.path.directory)
         return true
       })
       .toSorted((a: Session, b: Session) => b.time.updated - a.time.updated)

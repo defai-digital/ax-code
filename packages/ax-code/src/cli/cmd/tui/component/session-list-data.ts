@@ -14,3 +14,8 @@ function isRenderableSession(input: unknown): input is Session {
 export function normalizeDialogSessions(data: unknown): Session[] {
   return Array.isArray(data) ? data.filter(isRenderableSession) : []
 }
+
+/** Prefer the live SDK workspace; sync.path can still hold the original cwd. */
+export function localWorkspaceDirectory(sdkDirectory: string | undefined, pathDirectory: string | undefined) {
+  return sdkDirectory ?? pathDirectory
+}

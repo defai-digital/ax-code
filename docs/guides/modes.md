@@ -115,7 +115,7 @@ Local models and memory guidance: [AX Engine Model Selection](../providers/ax-en
 
 1. Selects diverse connected providers (family diversity — under an unrecognized multi-model gateway the family falls back to the model id; soft bias from outcome memory).
 2. Fans out a structured review or design prompt in parallel.
-3. Aggregates issues into **consensus** (unanimous among successful members at quorum — at least `max(2, ⌈2/3 × attempted⌉)` successes), strict **majority** (more than half of attempted members), **minority** (at least two), and **singleton** tiers. Findings disclose support against attempted members (`2/6`), and low-coverage reports state that consensus/majority labels are capped at minority.
+3. Aggregates issues into **consensus** (unanimous among successful members at quorum — at least `max(2, ⌈2/3 × attempted⌉)` successes), strict **majority** (more than half of attempted members), **minority** (at least two), and **singleton** tiers. Findings disclose support against attempted members (`2/6`), and low-coverage reports state that consensus labels require quorum.
 4. Optional **debate rounds**: anonymous (Chatham House) synthesis shared between rounds; no brand attribution. Debate is capped at three rounds and stops early on convergence.
 5. Returns an **advisory** markdown report. Does not edit files.
 

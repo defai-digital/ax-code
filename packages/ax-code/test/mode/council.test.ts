@@ -527,5 +527,23 @@ describe("Council quorum and coverage (ADR-101)", () => {
     expect(md).toContain("quorum 4")
     expect(md).toContain("Low coverage")
     expect(md).toContain("(2/6:")
+    expect(md).toContain("consensus labels require quorum")
+    expect(md).not.toContain("majority labels are capped at minority")
+  })
+
+  test("absolute majority of attempted members stays majority below quorum", () => {
+    const report = Council.aggregateCouncil([
+      member("m1"),
+      member("m2"),
+      member("m3"),
+      member("m4", { issues: 0, error: "timeout" }),
+      member("m5", { issues: 0, error: "timeout" }),
+    ])
+    expect(report.quorum).toBe(4)
+    expect(report.successfulMembers).toBe(3)
+    expect(report.majority).toHaveLength(1)
+    const md = Council.renderReportMarkdown(report)
+    expect(md).toContain("Low coverage")
+    expect(md).not.toContain("majority labels are capped at minority")
   })
 })

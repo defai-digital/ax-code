@@ -204,6 +204,23 @@ describe("prompt submission lifecycle", () => {
     expect(controller.submitInFlight).toBe(false)
   })
 
+  test("still dispatches local slash commands when council is unavailable", async () => {
+    const { controller, host, requests } = setup({
+      mode: "normal",
+      workMode: "council",
+      text: "/model",
+      providers: [{ id: "p1", models: { m: { tool_call: true } } }],
+    })
+    host.command.trySlash = vi.fn(() => true)
+
+    await controller.submit()
+
+    expect(host.command.trySlash).toHaveBeenCalledWith("model")
+    expect(host.clearPromptDraft).toHaveBeenCalled()
+    expect(requests).toHaveLength(0)
+    expect(host.toast.show).not.toHaveBeenCalled()
+  })
+
   test("records first-use after a successful council submit", async () => {
     const { controller, host } = setup({ mode: "normal", workMode: "council", text: "Review this change" })
     await controller.submit()

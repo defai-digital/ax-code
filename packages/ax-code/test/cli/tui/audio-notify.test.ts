@@ -100,13 +100,13 @@ describe("speechText", () => {
   })
 
   test("templates the session title", () => {
-    expect(speechText("complete", "fix the login bug")).toBe("Task complete: fix the login bug")
-    expect(speechText("complete")).toBe("Task complete")
+    expect(speechText("complete", "fix the login bug")).toBe("Session idle: fix the login bug")
+    expect(speechText("complete")).toBe("Session idle")
   })
 
   test("caps the session title at 80 code units before templating", () => {
     const title = "x".repeat(200)
-    expect(speechText("complete", title)).toBe(`Task complete: ${"x".repeat(80)}`)
+    expect(speechText("complete", title)).toBe(`Session idle: ${"x".repeat(80)}`)
   })
 
   test("always speaks the fixed error phrase", () => {
@@ -152,7 +152,7 @@ describe("backend probe", () => {
       settings: settings({ sound: "speak", events: { complete: true } }),
     })
     await settle()
-    expect(spawner.calls[0].cmd).toEqual(["say", "Task complete: fix the bug"])
+    expect(spawner.calls[0].cmd).toEqual(["say", "Session idle: fix the bug"])
   })
 
   test("darwin speak emits -v and -r only when configured", async () => {
@@ -215,6 +215,23 @@ describe("backend probe", () => {
       "-Command",
       `Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('Question: it''s "ready"')`,
     ])
+  })
+
+  test("win32 speak doubles Unicode single quotes that PowerShell treats as string delimiters", async () => {
+    const spawner = fakeSpawn()
+    const { instance } = notifier({
+      spawn: spawner.spawn,
+      platform: "win32",
+      available: ["powershell"],
+      existing: [WINDOWS_CHIME],
+    })
+    notify(instance, {
+      kind: "question",
+      source: "it\u2019s ready",
+      settings: settings({ sound: "speak" }),
+    })
+    await settle()
+    expect(spawner.calls[0].cmd.at(-1)).toContain("it''s ready")
   })
 
   test("win32 chime requires the wav file to exist", async () => {
@@ -328,12 +345,12 @@ describe("playback queue", () => {
     notify(instance, { kind: "complete", source: "two", settings: speak })
     await settle()
     expect(spawner.calls).toHaveLength(1)
-    expect(spawner.calls[0].cmd).toEqual(["say", "Task complete: one"])
+    expect(spawner.calls[0].cmd).toEqual(["say", "Session idle: one"])
 
     spawner.finish()
     await clock.advance(2_000)
     expect(spawner.calls).toHaveLength(2)
-    expect(spawner.calls[1].cmd).toEqual(["say", "Task complete: two"])
+    expect(spawner.calls[1].cmd).toEqual(["say", "Session idle: two"])
   })
 
   test("enforces a minimum 2s gap between play starts", async () => {

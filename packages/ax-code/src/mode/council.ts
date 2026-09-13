@@ -382,7 +382,7 @@ export namespace Council {
     if (!report.incomplete && report.successfulMembers < report.quorum) {
       lines.push(
         "",
-        `**Low coverage** — ${report.successfulMembers}/${report.totalMembers} succeeded (quorum ${report.quorum}); consensus and majority labels are capped at minority.`,
+        `**Low coverage** — ${report.successfulMembers}/${report.totalMembers} succeeded (quorum ${report.quorum}); consensus labels require quorum.`,
       )
     }
 

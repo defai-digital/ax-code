@@ -111,9 +111,22 @@ export function fallbackTitleFromUserText(text: string): string | undefined {
   // Prefer the first sentence so the fallback reads as a summary of the first
   // prompt rather than a mid-sentence cut, then clamp to the word budget
   // shared with generated titles.
-  const firstSentence = (collapsed.match(/^[^.!?]*[.!?]?/)?.[0] ?? collapsed).trim() || collapsed
+  const firstSentence = firstSentenceFrom(collapsed)
   const summary = capTitleWords(firstSentence)
   return summary.length > FALLBACK_TITLE_MAX_LEN ? summary.slice(0, FALLBACK_TITLE_MAX_LEN - 3) + "..." : summary
+}
+
+function firstSentenceFrom(text: string): string {
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch !== "." && ch !== "!" && ch !== "?") continue
+    const next = text[i + 1]
+    // Dots inside tokens (`read.ts`, `v1.2`, `.gitignore`) are not sentence ends.
+    if (next && !/\s/.test(next)) continue
+    if (ch === "." && i === 0) continue
+    return text.slice(0, i + 1)
+  }
+  return text
 }
 
 function firstUserText(contextMessages: MessageV2.WithParts[]): string {

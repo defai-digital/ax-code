@@ -262,7 +262,11 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     const currentMode = store.mode
     // Work modes remap normal prompts to slash commands; shell input must stay literal.
     const activeWorkMode = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
-    if (currentMode !== "shell" && activeWorkMode !== WorkMode.DEFAULT) {
+    const workRouted: WorkMode.Routed =
+      currentMode === "shell" ? { kind: "prompt", text: inputText } : WorkMode.routeInput(activeWorkMode, inputText)
+    // ADR-097 blocks unavailable council/arena *submits*, not local slash
+    // commands (`/model`, `/help`) that routeInput keeps as prompts.
+    if (currentMode !== "shell" && activeWorkMode !== WorkMode.DEFAULT && workRouted.kind === "command") {
       // Never silently degrade multi-model intent: an unavailable mode blocks
       // the submit with the reason and the fix, and the draft is preserved
       // (ADR-097). The selected mode is kept, not force-reverted.
@@ -288,8 +292,6 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       }
       kv.set?.(WORK_MODE_HINT_SEEN_KEY, withWorkModeHintSeen(kv.get(WORK_MODE_HINT_SEEN_KEY), activeWorkMode))
     }
-    const workRouted: WorkMode.Routed =
-      currentMode === "shell" ? { kind: "prompt", text: inputText } : WorkMode.routeInput(activeWorkMode, inputText)
     const routedText =
       workRouted.kind === "command" ? `/${workRouted.command} ${workRouted.arguments}`.trimEnd() : workRouted.text
     const firstLine = routedText.split("\n")[0]

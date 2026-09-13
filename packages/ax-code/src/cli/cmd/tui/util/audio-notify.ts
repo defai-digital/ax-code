@@ -94,7 +94,7 @@ export function speechText(kind: AudioEventKind, source?: string): string {
     case "question":
       return sanitizeSpeech(text ? `Question: ${text}` : "Question")
     case "complete":
-      return sanitizeSpeech(text ? `Task complete: ${text}` : "Task complete")
+      return sanitizeSpeech(text ? `Session idle: ${text}` : "Session idle")
   }
 }
 
@@ -102,7 +102,7 @@ export function speechText(kind: AudioEventKind, source?: string): string {
 // single quote. Speech text is already sanitized, so this is the sole
 // interpolation barrier needed.
 function powershellQuote(text: string) {
-  return `'${text.replace(/'/g, "''")}'`
+  return `'${text.replace(/['\u2018\u2019\u201A\u201B]/g, "''")}'`
 }
 
 function clampSpeakRate(rate: number) {

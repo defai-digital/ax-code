@@ -1951,6 +1951,51 @@ describe("tool.bash isolation", () => {
       })
     })
 
+    test("does not apply cd inside process substitution to later commands", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "a"))
+      await fs.mkdir(path.join(tmp.path, "b"))
+      await fs.writeFile(path.join(tmp.path, "a", "x"), "")
+      await fs.writeFile(path.join(tmp.path, "b", "y"), "")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: "diff <(cd a && ls) <(cd b && ls)",
+              description: "Compare listings from process substitutions",
+            },
+            ctx,
+          )
+          expect(result.output).toContain("x")
+          expect(result.output).toContain("y")
+        },
+      })
+    })
+
+    test("does not apply a conditional cd when resolving later paths", async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "build"))
+      await fs.mkdir(path.join(tmp.path, "dist"))
+      await fs.writeFile(path.join(tmp.path, "dist", "package.json"), "{}\n")
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const result = await bash.execute(
+            {
+              command: "cd missing 2>/dev/null || cd dist; cat package.json",
+              description: "Read package.json after a fallback cd",
+            },
+            ctx,
+          )
+          expect(result.metadata.exit).toBe(0)
+          expect(result.output).toContain("{}")
+        },
+      })
+    })
+
     test("rejects a missing path under a preceding cd target", async () => {
       await using tmp = await tmpdir()
       await fs.mkdir(path.join(tmp.path, "sub"))

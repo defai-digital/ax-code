@@ -1017,6 +1017,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // substitution, disables tracking entirely and every path resolves
       // against the base cwd (the previous behavior).
       const effectiveCwdAt = new Map<number, string>()
+      let cwdTrackingReliable = true
       {
         let effectiveCwd = cwd
         for (const node of tree.rootNode.descendantsOfType("command")) {
@@ -1033,13 +1034,29 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           if (parts.length === 0 || stripShellQuotes(parts[0]!) !== "cd") continue
           let nested = false
           for (let p = node.parent; p; p = p.parent) {
-            if (p.type === "subshell" || p.type === "command_substitution") {
+            if (
+              p.type === "subshell" ||
+              p.type === "command_substitution" ||
+              p.type === "process_substitution" ||
+              p.type === "function_definition"
+            ) {
               nested = true
               break
+            }
+            if (p.type === "list" || p.type === "pipeline") {
+              for (let i = 0; i < p.childCount; i++) {
+                const op = p.child(i)?.type
+                if (op === "||" || op === "|") {
+                  nested = true
+                  break
+                }
+              }
+              if (nested) break
             }
           }
           const target = parts.length === 2 && !parts[1]!.startsWith("-") ? isStaticPathArg(parts[1]!) : undefined
           if (nested || target === undefined) {
+            cwdTrackingReliable = false
             effectiveCwdAt.clear()
             break
           }
@@ -1090,7 +1107,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       }
 
       const missingPaths: string[] = []
-      for (const node of tree.rootNode.descendantsOfType("command")) {
+      for (const node of cwdTrackingReliable ? tree.rootNode.descendantsOfType("command") : []) {
         if (!node) continue
         const parts: string[] = []
         for (let i = 0; i < node.childCount; i++) {

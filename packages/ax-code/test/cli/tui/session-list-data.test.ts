@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { normalizeDialogSessions } from "../../../src/cli/cmd/tui/component/session-list-data"
+import { localWorkspaceDirectory, normalizeDialogSessions } from "../../../src/cli/cmd/tui/component/session-list-data"
 
 function session(id: string) {
   return {
@@ -21,6 +21,11 @@ describe("session list data", () => {
     expect(normalizeDialogSessions(undefined)).toEqual([])
     expect(normalizeDialogSessions(null)).toEqual([])
     expect(normalizeDialogSessions({ id: "ses_1" })).toEqual([])
+  })
+
+  test("prefers the live SDK workspace over a stale sync path directory", () => {
+    expect(localWorkspaceDirectory("/live/workspace", "/original/cwd")).toBe("/live/workspace")
+    expect(localWorkspaceDirectory(undefined, "/original/cwd")).toBe("/original/cwd")
   })
 
   test("drops session items that cannot be rendered safely", () => {

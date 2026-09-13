@@ -55,4 +55,13 @@ describe("session prompt title", () => {
       fallbackTitleFromUserText("one two three four five six seven eight nine ten eleven twelve thirteen fourteen"),
     ).toBe("one two three four five six seven eight nine ten eleven twelve...")
   })
+
+  test("fallbackTitleFromUserText does not treat dotted filenames or versions as sentence ends", () => {
+    expect(fallbackTitleFromUserText(".gitignore is missing dist")).toBe(".gitignore is missing dist")
+    expect(fallbackTitleFromUserText("Fix off-by-one in src/tool/read.ts line slicing")).toBe(
+      "Fix off-by-one in src/tool/read.ts line slicing",
+    )
+    expect(fallbackTitleFromUserText("Upgrade to v1.2 and rerun")).toBe("Upgrade to v1.2 and rerun")
+    expect(fallbackTitleFromUserText("Fix it. Then deploy the release")).toBe("Fix it.")
+  })
 })
