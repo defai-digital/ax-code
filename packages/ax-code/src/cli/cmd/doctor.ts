@@ -16,6 +16,7 @@ import { ModelsDev } from "../../provider/models"
 import { Log } from "../../util/log"
 import { Filesystem } from "../../util/filesystem"
 import { NativeAddon } from "../../native/addon"
+import { evidenceCacheMode } from "../../evidence/mode"
 import { Database } from "../../storage/db"
 import { getDoctorConfiguration, getConfiguredCredentialProviders } from "./doctor-config"
 import { Locale } from "@/util/locale"
@@ -38,6 +39,21 @@ import { whichAll } from "../../util/which"
 import { Process } from "../../util/process"
 
 type DoctorCheck = { name: string; status: "ok" | "warn" | "fail"; detail: string }
+
+export function getEvidenceCacheCheck(
+  mode = evidenceCacheMode(),
+  nativeAvailable = mode === "rocksdb" && typeof NativeAddon.fs()?.openEvidenceStore === "function",
+): DoctorCheck {
+  if (mode !== "rocksdb")
+    return { name: "Evidence cache", status: "ok", detail: mode === "off" ? "Disabled (off)" : "Memory only" }
+  return {
+    name: "Evidence cache",
+    status: nativeAvailable ? "ok" : "warn",
+    detail: nativeAvailable
+      ? "RocksDB preferred; native available. Project lock or I/O failures fall back to memory."
+      : "RocksDB preferred; native unavailable, using memory fallback. Rebuild or update the runtime.",
+  }
+}
 
 export function getRuntimeCheck(): DoctorCheck {
   return {
@@ -480,6 +496,7 @@ export const DoctorCommand: CommandModule = {
     ]
     const addonLoaded = new Map(addons.map((a) => [a.name, !!a.load()]))
     const installed = addons.filter((a) => addonLoaded.get(a.name)).map((a) => a.name)
+    checks.push(getEvidenceCacheCheck())
     checks.push({
       name: "Native addons",
       status: installed.length > 0 ? "ok" : "warn",

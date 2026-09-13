@@ -318,14 +318,17 @@ impl EvidenceStore {
 mod tests {
     use super::*;
     fn directory() -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
         let base = std::fs::canonicalize(std::env::temp_dir()).unwrap();
         base.join(format!(
-            "ax-evidence-{}-{}",
+            "ax-evidence-{}-{}-{}",
             std::process::id(),
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed)
         ))
     }
     #[test]

@@ -13,7 +13,7 @@ name = "ax-code-fs-bench"
 path = "examples/bench.rs"
 
 [features]
-default = []
+default = ["evidence-cache"]
 evidence-cache = ["dep:rocksdb", "dep:sha2"]
 
 [dependencies]

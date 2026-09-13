@@ -59,8 +59,8 @@ describe.runIf(process.env.AX_TEST_EVIDENCE_NATIVE === "1")("RocksDB native evid
     }
   })
 
-  test("actual read cache survives instance restart and a changed source cannot hit", async () => {
-    vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "rocksdb")
+  test("default read cache survives instance restart and a changed source cannot hit", async () => {
+    vi.stubEnv("AX_CODE_EVIDENCE_CACHE", undefined)
     await using tmp = await tmpdir({
       init: async (dir) => fs.writeFile(path.join(dir, "source.ts"), "export const one = 1\n"),
     })

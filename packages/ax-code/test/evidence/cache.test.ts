@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest"
 import z from "zod"
 import { EvidenceCache } from "../../src/evidence/cache"
+import { evidenceCacheMode } from "../../src/evidence/mode"
 import { NativeAddon } from "../../src/native/addon"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -9,6 +10,18 @@ afterEach(async () => {
   await Instance.disposeAll()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
+})
+
+test.each([
+  [undefined, "rocksdb"],
+  ["", "rocksdb"],
+  ["rocksdb", "rocksdb"],
+  ["memory", "memory"],
+  ["off", "off"],
+  ["invalid", "off"],
+] as const)("selector %s resolves to %s", (input, expected) => {
+  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", input)
+  expect(evidenceCacheMode()).toBe(expected)
 })
 
 test("memory cache validates shape, expires entries, bounds bytes and isolates projects", async () => {
@@ -53,7 +66,7 @@ test("absent or locked native store falls back; invalid/off mode never opens it"
         expect((await EvidenceCache.stats()).backend).toBe("off")
       }
       expect(loader).not.toHaveBeenCalled()
-      vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "rocksdb")
+      vi.stubEnv("AX_CODE_EVIDENCE_CACHE", undefined)
       await EvidenceCache.put(EvidenceCache.key("fallback"), "value")
       expect(await EvidenceCache.get(EvidenceCache.key("fallback"), z.string())).toBe("value")
       expect((await EvidenceCache.stats()).backend).toBe("memory")

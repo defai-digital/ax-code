@@ -11,6 +11,20 @@ import {
 const workflow = readFileSync(".github/workflows/release.yml", "utf8")
 
 describe("release asset workflow", () => {
+  test("builds default evidence support and verifies the packaged storage capability", () => {
+    const action = readFileSync(".github/actions/build-evidence-cache/action.yml", "utf8")
+    const build = readFileSync("packages/ax-code/script/build-node-tui.ts", "utf8")
+    const ci = readFileSync(".github/workflows/ax-code-ci.yml", "utf8")
+    expect(workflow).toContain("uses: ./.github/actions/build-evidence-cache")
+    expect(action).toContain("pnpm build:native fs")
+    expect(action).toContain("node script/verify-evidence-cache.cjs packages/ax-code-fs-native")
+    expect(build).toContain('path.join(axScope, "fs")')
+    expect(build).toContain("Bundled evidence cache verification failed")
+    expect(ci).toContain("uses: ./.github/actions/build-evidence-cache")
+    for (const runner of ["macos-latest", "ubuntu-24.04", "ubuntu-24.04-arm", "windows-2022", "windows-11-arm"])
+      expect(ci.slice(ci.indexOf("  evidence-native:"), ci.indexOf("  windows-snapshot:"))).toContain(runner)
+  })
+
   test("blocks release builds on dependency vulnerabilities even when main CI runs separately", () => {
     const validation = workflow.slice(workflow.indexOf("\n  validate:"), workflow.indexOf("\n  build:"))
     const install = validation.indexOf("pnpm install --frozen-lockfile")

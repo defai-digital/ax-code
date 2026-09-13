@@ -1,0 +1,29 @@
+name: Build evidence cache
+description: Build and verify the default RocksDB filesystem addon on a native runner
+runs:
+  using: composite
+  steps:
+    - name: Install Linux libclang
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends build-essential clang libclang-dev
+    - name: Prepare Rust toolchain
+      shell: bash
+      run: rustup toolchain install stable --profile minimal
+    - name: Locate Windows libclang
+      if: ${{ runner.os == 'Windows' }}
+      shell: pwsh
+      run: |
+        $clangBin = Split-Path (Get-Command clang.exe -ErrorAction Stop).Source
+        if (!(Test-Path (Join-Path $clangBin "libclang.dll"))) {
+          throw "The native evidence build requires libclang.dll beside clang.exe"
+        }
+        "LIBCLANG_PATH=$clangBin" >> $env:GITHUB_ENV
+    - name: Build default RocksDB evidence addon
+      shell: bash
+      run: pnpm build:native fs
+    - name: Verify native evidence persistence
+      shell: bash
+      run: node script/verify-evidence-cache.cjs packages/ax-code-fs-native

@@ -8,6 +8,7 @@ import {
   getIsolationPolicyCheck,
   getPathLauncherCheck,
   getRuntimeCheck,
+  getEvidenceCacheCheck,
   getServerExposureCheck,
   isHomebrewManagedPath,
 } from "../../src/cli/cmd/doctor"
@@ -69,6 +70,15 @@ describe("cli doctor native flag formatting", () => {
     expect(formatNativeFlag("NATIVE_FS", true)).toBe("NATIVE_FS=on")
     expect(formatNativeFlag("NATIVE_FS", false)).toBe("NATIVE_FS=on (addon missing — using TS fallback)")
   })
+})
+
+test("doctor distinguishes evidence cache capability from project ownership", () => {
+  expect(getEvidenceCacheCheck("rocksdb", true)).toMatchObject({ status: "ok" })
+  expect(getEvidenceCacheCheck("rocksdb", true).detail).toContain("Project lock or I/O failures")
+  expect(getEvidenceCacheCheck("rocksdb", false)).toMatchObject({ status: "warn" })
+  expect(getEvidenceCacheCheck("rocksdb", false).detail).toContain("memory fallback")
+  expect(getEvidenceCacheCheck("memory", false).detail).toBe("Memory only")
+  expect(getEvidenceCacheCheck("off", true).detail).toBe("Disabled (off)")
 })
 
 describe("cli doctor runtime check", () => {

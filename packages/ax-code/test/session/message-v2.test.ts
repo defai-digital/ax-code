@@ -1792,7 +1792,7 @@ test("projects only completed recipe selections while preserving interrupted and
 })
 
 test("evidence projection respects conversion cache, compaction and recipe-hidden children", async () => {
-  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "memory")
+  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", undefined)
   try {
     const output =
       "<path>/workspace/a.ts</path>\n<type>file</type>\n<content>" + "export const a = 1;\n".repeat(100) + "</content>"
@@ -1822,6 +1822,12 @@ test("evidence projection respects conversion cache, compaction and recipe-hidde
     const second = readMessage("msg_second", "call_second")
     const initial = await MessageV2.toModelMessages([first, second], model, { cache: true })
     expect(JSON.stringify(initial)).toContain("Exact read output is already visible")
+    expect(await MessageV2.toModelMessages([first, second], model, { cache: true })).toEqual(initial)
+    vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "off")
+    const disabled = JSON.stringify(await MessageV2.toModelMessages([first, second], model, { cache: true }))
+    expect(disabled).not.toContain("Exact read output is already visible")
+    expect(disabled.length).toBeGreaterThan(JSON.stringify(initial).length)
+    vi.stubEnv("AX_CODE_EVIDENCE_CACHE", undefined)
     expect(await MessageV2.toModelMessages([first, second], model, { cache: true })).toEqual(initial)
     const onlySecond = await MessageV2.toModelMessages([second], model, { cache: true })
     expect(JSON.stringify(onlySecond)).not.toContain("Exact read output is already visible")

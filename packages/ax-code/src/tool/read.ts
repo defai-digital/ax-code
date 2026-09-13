@@ -32,6 +32,7 @@ function readError(name: string, message: string, cause?: unknown) {
 
 function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
   const directory = Instance.directory
+  let cancelled = false
   const handle = (err: unknown) => {
     if (isHarmlessInterrupt(err)) return
     log.warn("opportunistic lsp warmup failed", {
@@ -41,29 +42,40 @@ function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
   }
 
   const task = Instance.bind(async () => {
-    if (signal?.aborted) return
+    if (cancelled || signal?.aborted) return
     // Skip deferred warmup if the project instance was already disposed.
     if (!Instance.list().includes(directory)) return
-    Promise.resolve()
+    await Promise.resolve()
       .then(async () => {
-        if (signal?.aborted) return
+        if (cancelled || signal?.aborted) return
         const available = await LSP.hasClients(filepath, { mode: "semantic" })
         if (!available) return
-        if (signal?.aborted) return
+        if (cancelled || signal?.aborted) return
         if (!Instance.list().includes(directory)) return
         await LSP.touchFile(filepath, false, { mode: "semantic" })
       })
       .catch(handle)
   })
   const cancel = () => {
+    cancelled = true
     clearTimeout(timer)
     signal?.removeEventListener("abort", cancel)
+    unsubscribe()
   }
   const timer = setTimeout(() => {
     signal?.removeEventListener("abort", cancel)
     if (signal?.aborted) return
-    void task()
+    void task().finally(unsubscribe).catch(handle)
   }, 0)
+  // Disposal may await native close while the instance is still listed. Stop
+  // background admission at lifecycle start, including disposeAll's later entries.
+  const unsubscribe = Instance.onLifecycle((event) => {
+    if (
+      event.kind === "dispose_all.start" ||
+      (event.directory === directory && (event.kind === "dispose.start" || event.kind === "reload.start"))
+    )
+      cancel()
+  })
   timer.unref?.()
   if (signal?.aborted) {
     cancel()

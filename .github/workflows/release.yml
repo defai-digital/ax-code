@@ -235,6 +235,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential python3
 
+      - name: Build and verify default evidence cache
+        uses: ./.github/actions/build-evidence-cache
+
       - name: Build SDK
         run: pnpm exec tsc
         working-directory: packages/sdk/js

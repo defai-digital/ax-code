@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/ax-code-ci.yml"
+      - ".github/actions/build-evidence-cache/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -23,6 +24,7 @@ on:
       - main
     paths:
       - ".github/workflows/ax-code-ci.yml"
+      - ".github/actions/build-evidence-cache/**"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -53,6 +55,24 @@ permissions:
   actions: read
 
 jobs:
+  evidence-native:
+    name: Default evidence cache (${{ matrix.os }})
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-24.04, ubuntu-24.04-arm, windows-2022, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: ./.github/actions/build-evidence-cache
+      - name: Test native evidence contracts
+        run: cargo test --manifest-path crates/Cargo.toml -p ax-code-fs --lib
+
   windows-snapshot:
     name: Windows runtime and recovery (${{ matrix.os }})
     strategy:
