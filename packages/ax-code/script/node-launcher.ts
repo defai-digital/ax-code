@@ -46,7 +46,10 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   esac
   if [ "$launch_modern" -eq 1 ]; then
     AX_CODE_LAUNCH_NODE_OPTIONS="\${NODE_OPTIONS-}"
-    NODE_OPTIONS="${NODE_LAUNCH_ARGS} --import \${entry}\${NODE_OPTIONS:+ \$NODE_OPTIONS}"
+    import_entry="\$entry"
+    encoded="\$("\$node_bin" -e 'process.stdout.write(require("url").pathToFileURL(process.argv[1]).href)' "\$entry" 2>/dev/null)" || encoded=""
+    [ -n "\$encoded" ] && import_entry="\$encoded"
+    NODE_OPTIONS="${NODE_LAUNCH_ARGS} --import \${import_entry}\${NODE_OPTIONS:+ \$NODE_OPTIONS}"
     export AX_CODE_LAUNCH_NODE_OPTIONS NODE_OPTIONS
     set -- /dev/null "$@"
   else

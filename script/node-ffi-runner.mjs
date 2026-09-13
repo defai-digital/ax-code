@@ -2,8 +2,12 @@
 import { spawn, spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
-import { pathToFileURL } from "node:url"
-import { prepareNodeArgs, splitNodeLaunchArgs } from "./node-ffi-runner-args.mjs"
+import {
+  partitionExecveFlags,
+  prepareNodeArgs,
+  splitNodeLaunchArgs,
+  toNodeOptionsImportSpecifier,
+} from "./node-ffi-runner-args.mjs"
 import {
   AX_CODE_SPAWN_ARGV0,
   axCodeJobTitleOsc,
@@ -139,18 +143,22 @@ const spawnOptions = brandedSpawnOptions(process.env)
 // flags and the entry move into NODE_OPTIONS (the entry loads via --import and
 // /dev/null fills the main-script slot). The entry restores the caller's
 // NODE_OPTIONS from AX_CODE_LAUNCH_NODE_OPTIONS before the CLI graph loads, so
-// spawned Node children never re-import the whole CLI. Import values that are
-// absolute paths become file URLs because NODE_OPTIONS tokenizes on spaces.
+// spawned Node children never re-import the whole CLI. Filesystem --import
+// values (absolute, ./relative, or cwd-relative like src/index-node-tui.ts)
+// become file URLs: Node would otherwise treat `src/foo.ts` as package `src`,
+// reject bare Windows paths, and split NODE_OPTIONS on spaces.
 if (process.platform !== "win32" && typeof process.execve === "function") {
   const { nodeFlags, entry, userArgs } = splitNodeLaunchArgs(launchArgs)
+  const { nodeOptionsFlags, argvFlags } = partitionExecveFlags(nodeFlags)
   const optionsFlags = []
   let solidLoader
-  for (let i = 0; i < nodeFlags.length; i++) {
-    const flag = nodeFlags[i]
-    if (flag === "--import" && i + 1 < nodeFlags.length) {
-      const value = nodeFlags[i + 1]
-      if (value.includes("solid-loader")) solidLoader = value
-      optionsFlags.push(flag, value.startsWith("/") ? pathToFileURL(value).href : value)
+  for (let i = 0; i < nodeOptionsFlags.length; i++) {
+    const flag = nodeOptionsFlags[i]
+    if (flag === "--import" && i + 1 < nodeOptionsFlags.length) {
+      const value = nodeOptionsFlags[i + 1]
+      const specifier = toNodeOptionsImportSpecifier(value)
+      if (value.includes("solid-loader")) solidLoader = specifier
+      optionsFlags.push(flag, specifier)
       i += 1
       continue
     }
@@ -158,11 +166,11 @@ if (process.platform !== "win32" && typeof process.execve === "function") {
   }
   const childEnv = { ...process.env, AX_CODE_LAUNCH_NODE_OPTIONS: process.env.NODE_OPTIONS ?? "" }
   const augmented = [...ffiArgs, ...optionsFlags]
-  if (entry) augmented.push("--import", entry.startsWith("/") ? pathToFileURL(entry).href : entry)
+  if (entry) augmented.push("--import", toNodeOptionsImportSpecifier(entry))
   if (process.env.NODE_OPTIONS) augmented.push(process.env.NODE_OPTIONS)
   childEnv.NODE_OPTIONS = augmented.join(" ")
   if (solidLoader) childEnv.AX_CODE_CLI_SOLID_LOADER = solidLoader
-  const childArgv = [AX_CODE_SPAWN_ARGV0, "/dev/null", ...userArgs]
+  const childArgv = [AX_CODE_SPAWN_ARGV0, ...argvFlags, "/dev/null", ...userArgs]
   try {
     process.execve(brandedPath, childArgv, childEnv)
   } catch (error) {

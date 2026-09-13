@@ -118,6 +118,49 @@ describe("Unix node launcher", () => {
     },
   )
 
+  test.skipIf(process.platform === "win32")(
+    "encodes absolute --import entries so # in the path is not a URL fragment",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-hash-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const calls = path.join(root, "calls")
+      const entryDir = path.join(root, "C#tools")
+      await mkdir(entryDir)
+      const entry = path.join(entryDir, "index-node-tui.js")
+      await writeFile(entry, "process.stdout.write('ok')\n")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `printf '%s\\n' "$*" >> ${quote(calls)}`,
+          `printf 'options=[%s]\\n' "$NODE_OPTIONS" >> ${quote(calls)}`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+        { mode: 0o755 },
+      )
+      const failure = await execFileAsync(launcher, ["--version"], {
+        env: { ...process.env, XDG_CACHE_HOME: path.join(root, "cache"), NODE_OPTIONS: "" },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+      expect(failure).toMatchObject({ code: 37, signal: null })
+      const log = await readFile(calls, "utf8")
+      expect(log).toContain("/dev/null --version")
+      expect(log).toContain("file://")
+      expect(log).toContain("%23")
+      expect(log).not.toMatch(/--import \/.*C#tools/)
+    },
+  )
+
   test("resolves the bundle root when invoked through an rbenv-style symlink", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-launcher-"))
     temporaryRoots.push(root)

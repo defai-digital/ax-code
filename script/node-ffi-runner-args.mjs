@@ -1,5 +1,6 @@
 import fs from "node:fs"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 
 const OPTIONAL_ENV_FILE_PREFIX = "--optional-env-file="
 
@@ -52,4 +53,57 @@ export function splitNodeLaunchArgs(args) {
   }
   const entry = args[index]
   return { nodeFlags, entry, userArgs: entry === undefined ? [] : args.slice(index + 1) }
+}
+
+const NODE_OPTIONS_FORBIDDEN_FLAGS = new Set(["--env-file", "--env-file-if-exists"])
+
+/**
+ * Split Node flags into those legal in NODE_OPTIONS versus those that must
+ * stay on argv. Node rejects `--env-file` / `--env-file-if-exists` in
+ * NODE_OPTIONS (`--env-file-if-exists= is not allowed in NODE_OPTIONS`).
+ */
+export function partitionExecveFlags(nodeFlags) {
+  const nodeOptionsFlags = []
+  const argvFlags = []
+  for (let i = 0; i < nodeFlags.length; i++) {
+    const flag = nodeFlags[i]
+    const name = flag.split("=")[0]
+    if (NODE_OPTIONS_FORBIDDEN_FLAGS.has(name)) {
+      argvFlags.push(flag)
+      if (!flag.includes("=") && i + 1 < nodeFlags.length && !String(nodeFlags[i + 1]).startsWith("-")) {
+        argvFlags.push(nodeFlags[i + 1])
+        i += 1
+      }
+      continue
+    }
+    nodeOptionsFlags.push(flag)
+  }
+  return { nodeOptionsFlags, argvFlags }
+}
+
+const FILE_IMPORT_EXTENSION = /\.[cm]?[jt]sx?$/i
+
+/**
+ * Convert a Node `--import` value for NODE_OPTIONS.
+ *
+ * Bare package names (`tsx`) stay packages. Filesystem paths must become
+ * `file://` URLs: Node treats `src/index.ts` as package `src` (ERR_MODULE_NOT_FOUND),
+ * rejects bare Windows absolute paths, and NODE_OPTIONS tokenizes on spaces.
+ */
+export function toNodeOptionsImportSpecifier(value, options = {}) {
+  const cwd = options.cwd ?? process.cwd()
+  const exists = options.exists ?? fs.existsSync
+  if (typeof value !== "string" || value.length === 0) return value
+  if (value.startsWith("file:")) return value
+
+  const absolute = path.isAbsolute(value)
+  const dottedRelative = value.startsWith(".")
+  const hasSeparator = value.includes("/") || value.includes("\\")
+  if (!absolute && !dottedRelative && !hasSeparator && !FILE_IMPORT_EXTENSION.test(value)) return value
+
+  const resolved = absolute ? value : path.resolve(cwd, value)
+  // `pkg/subpath` is a valid package export. Only rewrite it when it exists
+  // as a real file relative to cwd (`src/index-node-tui.ts`).
+  if (!absolute && !dottedRelative && !exists(resolved)) return value
+  return pathToFileURL(resolved).href
 }
