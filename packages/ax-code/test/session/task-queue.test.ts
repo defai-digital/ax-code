@@ -5,6 +5,7 @@ import { Instance } from "../../src/project/instance"
 import { Question } from "../../src/question"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
+import { ScheduledTask } from "../../src/session/scheduled-task"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
 import { createStoppedAssistantTextResponse } from "../../src/session/prompt-assistant-response"
@@ -768,12 +769,17 @@ describe("TaskQueue", () => {
         const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
         const sessionsBefore = [...Session.list()].length
         try {
+          const scheduled = await ScheduledTask.create({
+            title: "Timed out scheduled prompt",
+            prompt: "Do not start after timeout.",
+            schedule: { type: "cron", expression: "0 0 1 1 *" },
+          })
           const item = await TaskQueue.enqueue({
             kind: "automation",
             title: "Timed out scheduled prompt",
-            sourceTaskID: "sch_timeout_session",
+            sourceTaskID: scheduled.id,
             payload: {
-              scheduledTaskID: "sch_timeout_session",
+              scheduledTaskID: scheduled.id,
               prompt: "Do not start after timeout.",
             },
             executionTimeoutMs: 1000,
@@ -813,12 +819,17 @@ describe("TaskQueue", () => {
         const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
         const sessionsBefore = [...Session.list()].length
         try {
+          const scheduled = await ScheduledTask.create({
+            title: "Timed out scheduled attach",
+            prompt: "Do not attach after timeout.",
+            schedule: { type: "cron", expression: "0 0 1 1 *" },
+          })
           const item = await TaskQueue.enqueue({
             kind: "automation",
             title: "Timed out scheduled attach",
-            sourceTaskID: "sch_timeout_attach",
+            sourceTaskID: scheduled.id,
             payload: {
-              scheduledTaskID: "sch_timeout_attach",
+              scheduledTaskID: scheduled.id,
               prompt: "Do not attach after timeout.",
             },
             executionTimeoutMs: 1000,
@@ -906,12 +917,17 @@ describe("TaskQueue", () => {
         })
         const sessionsBefore = [...Session.list()].length
         try {
+          const scheduled = await ScheduledTask.create({
+            title: "Sessionless assistant error",
+            prompt: "This should fail.",
+            schedule: { type: "cron", expression: "0 0 1 1 *" },
+          })
           const item = await TaskQueue.enqueue({
             kind: "automation",
             title: "Sessionless assistant error",
-            sourceTaskID: "sch_sessionless_error",
+            sourceTaskID: scheduled.id,
             payload: {
-              scheduledTaskID: "sch_sessionless_error",
+              scheduledTaskID: scheduled.id,
               prompt: "This should fail.",
             },
           })
@@ -999,12 +1015,17 @@ describe("TaskQueue", () => {
         const cancel = vi.spyOn(SessionPrompt, "cancel").mockReturnValue(cancellation)
         let successor: TaskQueue.Info | undefined
         try {
+          const scheduled = await ScheduledTask.create({
+            title: "Sessionless predecessor",
+            prompt: "First",
+            schedule: { type: "cron", expression: "0 0 1 1 *" },
+          })
           const first = await TaskQueue.enqueue({
             kind: "automation",
             title: "Sessionless predecessor",
-            sourceTaskID: "sch_timeout_sessionless_gate",
+            sourceTaskID: scheduled.id,
             payload: {
-              scheduledTaskID: "sch_timeout_sessionless_gate",
+              scheduledTaskID: scheduled.id,
               prompt: "First",
             },
             executionTimeoutMs: 1000,
