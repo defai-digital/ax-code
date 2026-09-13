@@ -2,12 +2,12 @@
 // Keep this isolated from component modules so width calculations stay testable
 // and low-dependency.
 
-import { CHROME_WIDTH_DEFAULT, chromeWidth } from "../../chrome-width"
+import { SIDEBAR_WIDTH_DEFAULT, chromeWidth } from "../../chrome-width"
 
 const SIDEBAR_MAIN_MIN_WIDTH = 80
 
-export function computeSidebarWidth(terminalWidth: number, preferred: unknown = CHROME_WIDTH_DEFAULT): number {
-  const wanted = chromeWidth(preferred)
+export function computeSidebarWidth(terminalWidth: number, preferred: unknown = SIDEBAR_WIDTH_DEFAULT): number {
+  const wanted = chromeWidth(preferred, SIDEBAR_WIDTH_DEFAULT)
   if (terminalWidth <= 120) return Math.min(wanted, Math.max(0, terminalWidth))
   return Math.min(wanted, Math.max(0, terminalWidth - 4 - SIDEBAR_MAIN_MIN_WIDTH))
 }

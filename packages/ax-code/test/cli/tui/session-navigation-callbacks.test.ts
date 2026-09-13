@@ -476,6 +476,11 @@ describe("navigation recovery entry and width selection", () => {
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
+  test("defaults the sidebar width picker to 36 columns", () => {
+    expect(mount(DialogSidebarWidth).props.current).toBe(36)
+    expect(mount(DialogNavigationWidth).props.current).toBe(30)
+  })
+
   test.each([20, 24, 30, 36, 40])("persists the %i-column sidebar width preset and closes the picker", (width) => {
     const tree = mount(DialogSidebarWidth)
     const options = tree.props.options as { title: string; value: number }[]

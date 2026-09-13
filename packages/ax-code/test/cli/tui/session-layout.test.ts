@@ -2,12 +2,12 @@ import { describe, expect, test } from "vitest"
 import { computeSessionMainPaneWidth, computeSidebarWidth } from "../../../src/cli/cmd/tui/routes/session/layout"
 
 describe("session layout", () => {
-  test("defaults the sidebar to 30 columns and honors width presets", () => {
-    expect(computeSidebarWidth(80)).toBe(30)
-    expect(computeSidebarWidth(200)).toBe(30)
+  test("defaults the sidebar to 36 columns and honors width presets", () => {
+    expect(computeSidebarWidth(80)).toBe(36)
+    expect(computeSidebarWidth(200)).toBe(36)
     expect(computeSidebarWidth(200, 20)).toBe(20)
     expect(computeSidebarWidth(200, 40)).toBe(40)
-    expect(computeSidebarWidth(200, 99)).toBe(30)
+    expect(computeSidebarWidth(200, 99)).toBe(36)
   })
 
   test("clamps a wide sidebar so the main pane stays usable", () => {
@@ -20,7 +20,7 @@ describe("session layout", () => {
         terminalWidth: 130,
         sidebarVisible: true,
       }),
-    ).toBe(96)
+    ).toBe(90)
     expect(
       computeSessionMainPaneWidth({
         terminalWidth: 130,
