@@ -149,6 +149,8 @@ export function resolveBackendImportSpecifier(specifier: string, startupCwd = pr
 }
 
 function tuiUpgradeCheckStatePath() {
+  // Managed user-state root plus a fixed leaf; this is not a caller path.
+  // @scan-suppress security_scan
   return path.join(Global.Path.state, "upgrade-check.json")
 }
 
