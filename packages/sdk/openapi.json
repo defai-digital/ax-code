@@ -37695,7 +37695,7 @@
                 "type": "object",
                 "properties": {
                   "enabled": {
-                    "description": "Enable arena multi-contestant mode tools. Default: false until Phase 2.",
+                    "description": "Enable arena multi-contestant mode tools. Default: false; opt in per project.",
                     "type": "boolean"
                   },
                   "maxContestants": {
@@ -37709,6 +37709,28 @@
                     "type": "integer",
                     "exclusiveMinimum": 0,
                     "maximum": 9007199254740991
+                  },
+                  "reasoningTimeoutScale": {
+                    "description": "Timeout multiplier applied to contestants whose model declares reasoning capability (falls back to modes.council.reasoningTimeoutScale, then 3).",
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 10
+                  },
+                  "memberTimeoutMs": {
+                    "description": "Absolute per-contestant timeout overrides in ms, keyed by \"providerID\" or \"providerID/modelID\" (falls back to modes.council.memberTimeoutMs). Exact model keys win over provider-wide keys.",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "judge": {
+                    "description": "Run one blinded rubric judge call to rank plan-mode proposals (default: true). The judge scores requirement coverage, feasibility, verification plan, and risk evidence; self-assessed risk remains display-only.",
+                    "type": "boolean"
                   },
                   "strategy": {
                     "description": "Ranking strategy for arena candidates. verify_first is the recommended default (never pure popularity).",
