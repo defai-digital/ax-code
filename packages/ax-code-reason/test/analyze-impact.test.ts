@@ -1,3 +1,4 @@
+import path from "node:path"
 import { beforeEach, describe, expect, test } from "vitest"
 import { analyzeImpactImpl, extractFilesFromDiff } from "../src/analyze-impact"
 import { installTestHost, type TestHost } from "./fixture/host"
@@ -98,12 +99,16 @@ describe("analyzeImpactImpl", () => {
   })
 
   test("resolves file and diff seeds through symbolsInFile", async () => {
-    testHost.env.worktreeRoot = "/repo"
-    testHost.graph.addSymbol({ id: "s", name: "fn_s", file: "/repo/src/foo.ts" })
-    testHost.graph.addSymbol({ id: "a", name: "fn_a", file: "/repo/src/caller.ts" })
+    // `fileCandidates` resolves relative diff paths with native path.join, so
+    // the fixture root and graph keys must be native too (POSIX stays "/repo").
+    const root = path.resolve("/repo")
+    const foo = path.join(root, "src", "foo.ts")
+    testHost.env.worktreeRoot = root
+    testHost.graph.addSymbol({ id: "s", name: "fn_s", file: foo })
+    testHost.graph.addSymbol({ id: "a", name: "fn_a", file: path.join(root, "src", "caller.ts") })
     testHost.graph.addCallerEdge("s", "a")
 
-    const byFile = await analyzeImpactImpl("test-project", { changes: [{ kind: "file", path: "/repo/src/foo.ts" }] })
+    const byFile = await analyzeImpactImpl("test-project", { changes: [{ kind: "file", path: foo }] })
     expect(byFile.seeds).toEqual(["s"])
     expect(byFile.affectedSymbols.map((s) => s.symbol.id)).toEqual(["a"])
 

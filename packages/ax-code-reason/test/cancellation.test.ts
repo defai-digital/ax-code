@@ -42,6 +42,9 @@ describe("runCommand timeout behavior", () => {
   })
 
   test("a hanging command times out with code 124 and a timeout marker", async () => {
+    // POSIX-only: relies on `exec sleep` and SIGTERM-based timeout escalation.
+    if (process.platform === "win32") return
+
     const started = Date.now()
     const result = await runCommand("exec sleep 30", process.cwd(), 200)
     const elapsed = Date.now() - started
@@ -55,6 +58,9 @@ describe("runCommand timeout behavior", () => {
   })
 
   test("timeout escalation kills a SIGTERM-ignoring child via the host killTree port", async () => {
+    // POSIX-only: `trap "" TERM` + SIGTERM escalation have no win32 equivalent.
+    if (process.platform === "win32") return
+
     // `trap "" TERM` survives `exec` (ignored dispositions persist), so the
     // sleep ignores the initial SIGTERM and the 250ms force-kill grace
     // timer must escalate through host.killTree.

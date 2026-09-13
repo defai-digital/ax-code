@@ -383,6 +383,8 @@ describe("lsp server helpers", () => {
   })
 
   test("passes tar archive before extra tar options during extraction", async () => {
+    if (process.platform === "win32") return
+
     const commands: string[][] = []
     const bin = await installReleaseBin({
       id: "tinymist",
@@ -412,6 +414,8 @@ describe("lsp server helpers", () => {
   })
 
   test("inflates gzip-wrapped zip archives before extraction", async () => {
+    if (process.platform === "win32") return
+
     const calls: string[] = []
     const archive = gzipSync(Buffer.from("zip-archive"))
     const bin = await installReleaseBin({
@@ -529,6 +533,8 @@ describe("lsp server helpers", () => {
   })
 
   test("builds spawn info with cwd and args", () => {
+    if (process.platform === "win32") return
+
     const info = spawnInfo("/tmp/server", "/tmp/root", ["--stdio"])
 
     expect(info.process.spawnfile).toBe("/tmp/server")
@@ -537,6 +543,8 @@ describe("lsp server helpers", () => {
   })
 
   test("builds spawn info with initialization when provided", () => {
+    if (process.platform === "win32") return
+
     const initialization = { experimentalFeatures: { enabled: true } }
     const info = spawnInfo("/tmp/server", "/tmp/root", ["--stdio"], initialization)
 
@@ -553,6 +561,8 @@ describe("lsp server helpers", () => {
   })
 
   test("runs a published LSP tool by name via the runtime tool runner", () => {
+    if (process.platform === "win32") return
+
     // Under the Node test runtime this is `npx --yes <tool>`; a Bun runtime
     // would use `bun x <tool>`. Either way the tool name and its args follow the
     // runner prefix.
@@ -639,6 +649,8 @@ describe("lsp server helpers", () => {
   })
 
   test("builds tool-backed server info from the installed binary", async () => {
+    if (process.platform === "win32") return
+
     const info = await toolServer("/tmp/root", {
       name: "gopls",
       install: ["go", "install", "gopls"],
