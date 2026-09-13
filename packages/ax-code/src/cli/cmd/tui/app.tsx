@@ -89,7 +89,12 @@ import { isRecord } from "@/util/record"
 import { createTuiDialogLoaders } from "./tui-dialogs"
 import { appCommands, type AppCommandSandbox } from "./app-commands"
 import { MatrixRain } from "./component/matrix-rain"
-import { shouldAutoPlayMatrixRain, shouldStopMatrixRain } from "./component/matrix-rain-view-model"
+import {
+  MATRIX_RAIN_ON_START_DEFAULT,
+  shouldAutoPlayMatrixRain,
+  shouldPlayMatrixRainOnStart,
+  shouldStopMatrixRain,
+} from "./component/matrix-rain-view-model"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -232,7 +237,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
   // Short-lived ASCII digital-rain overlay. Manual preview is always
-  // available; the automatic trigger is opt-in via `matrix_rain_on_task_complete`.
+  // available; startup playback is on by default (`matrix_rain_on_start`
+  // opts out) and task-completion playback is opt-in
+  // (`matrix_rain_on_task_complete`).
   const [matrixPlaying, setMatrixPlaying] = createSignal(false)
   const playMatrixRain = () => setMatrixPlaying(true)
   createEffect(() => {
@@ -246,6 +253,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
 
   onMount(() => {
     recordTuiStartupOnce("tui.startup.appMounted", { route: route.data.type })
+  })
+
+  // Startup flourish: a single overlay play when the TUI mounts. On by
+  // default; the stop effect above tears it down if a dialog opens while it
+  // plays.
+  onMount(() => {
+    if (
+      shouldPlayMatrixRainOnStart({
+        enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
+        animationsEnabled: kv.get("animations_enabled", true),
+      })
+    ) {
+      playMatrixRain()
+    }
   })
 
   // Fatal backend exit (internal transport): the wire-death sentinel is

@@ -182,6 +182,34 @@ export function shouldAutoPlayMatrixRain(input: {
   return shouldUseTuiAnimations({ userEnabled: input.animationsEnabled, runtime: input.runtime })
 }
 
+/**
+ * Startup playback is on by default so the flourish is visible without
+ * configuration, but it stays one toggle away from off and still honors the
+ * shared animation policy.
+ */
+export const MATRIX_RAIN_ON_START_DEFAULT = true
+
+/**
+ * Whether a fresh TUI launch should play the overlay. Shares the completion
+ * gate but starts from a clean slate — nothing is playing and no dialog or
+ * selection can exist yet — so only the startup flag and the animation policy
+ * can hold it back.
+ */
+export function shouldPlayMatrixRainOnStart(input: {
+  enabled: boolean
+  animationsEnabled: boolean
+  runtime?: RuntimeMode
+}): boolean {
+  return shouldAutoPlayMatrixRain({
+    enabled: input.enabled,
+    animationsEnabled: input.animationsEnabled,
+    runtime: input.runtime,
+    alreadyPlaying: false,
+    dialogOpen: false,
+    hasSelection: false,
+  })
+}
+
 /** Stop a playing overlay if a dialog or selection appears after it started. */
 export function shouldStopMatrixRain(input: { dialogOpen: boolean; hasSelection: boolean }): boolean {
   return input.dialogOpen || input.hasSelection

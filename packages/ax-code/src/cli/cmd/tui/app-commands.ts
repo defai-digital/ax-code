@@ -10,6 +10,7 @@ import { clearTuiTerminalTitle } from "./renderer"
 import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 import { parseIsolationState } from "./context/sync-runtime-store"
 import { nextRunMode, runModeLabel, type RunMode } from "./component/prompt/run-mode-view-model"
+import { MATRIX_RAIN_ON_START_DEFAULT } from "./component/matrix-rain-view-model"
 import {
   nextAvailableWorkMode,
   workModeAvailability,
@@ -587,6 +588,18 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       category: "System",
       onSelect: (dialog) => {
         kv.set("matrix_rain_on_task_complete", !kv.get("matrix_rain_on_task_complete", false))
+        dialog.clear()
+      },
+    },
+    {
+      title: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT)
+        ? "Disable Matrix rain on startup"
+        : "Enable Matrix rain on startup",
+      description: "Play the overlay once when the TUI launches",
+      value: "app.toggle.matrix_rain_on_start",
+      category: "System",
+      onSelect: (dialog) => {
+        kv.set("matrix_rain_on_start", !kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT))
         dialog.clear()
       },
     },

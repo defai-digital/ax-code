@@ -6,10 +6,12 @@ import {
   MATRIX_RAIN_LEVELS,
   MATRIX_RAIN_MAX_DURATION_MS,
   MATRIX_RAIN_MIN_DURATION_MS,
+  MATRIX_RAIN_ON_START_DEFAULT,
   advanceMatrixRain,
   createMatrixRain,
   matrixRainRows,
   shouldAutoPlayMatrixRain,
+  shouldPlayMatrixRainOnStart,
   shouldStopMatrixRain,
   tickMatrixRain,
 } from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
@@ -199,5 +201,24 @@ describe("matrix rain auto-play gate", () => {
     expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: false })).toBe(false)
     expect(shouldStopMatrixRain({ dialogOpen: true, hasSelection: false })).toBe(true)
     expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: true })).toBe(true)
+  })
+})
+
+describe("matrix rain startup gate", () => {
+  const base = { enabled: true, animationsEnabled: true, runtime: "source" as const }
+
+  test("defaults to on so startup plays without configuration", () => {
+    expect(MATRIX_RAIN_ON_START_DEFAULT).toBe(true)
+    expect(shouldPlayMatrixRainOnStart({ ...base, enabled: MATRIX_RAIN_ON_START_DEFAULT })).toBe(true)
+  })
+
+  test("stays off when the user opts out", () => {
+    expect(shouldPlayMatrixRainOnStart({ ...base, enabled: false })).toBe(false)
+  })
+
+  test("honors the animation preference and the compiled-runtime policy", () => {
+    expect(shouldPlayMatrixRainOnStart({ ...base, animationsEnabled: false })).toBe(false)
+    expect(shouldPlayMatrixRainOnStart({ ...base, runtime: "compiled" })).toBe(false)
+    expect(shouldPlayMatrixRainOnStart({ ...base, runtime: "node-bundled" })).toBe(true)
   })
 })
