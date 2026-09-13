@@ -1,32 +1,25 @@
 {
   "$schema": "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
 
-  // Default executor: Qwen3.8 Max handles the high-volume build lane and all
-  // unpinned agents (general, scout, react, test, devops, perf). It is kept as
-  // the single global model rather than duplicating it under agent.build.
-  "model": "alibaba-token-plan/qwen3.8-max",
+  // Pin models on a provider you actually have connected. Disabled plan IDs
+  // (alibaba-token-plan, zai-coding-plan, …) remap to a connected gateway but
+  // warn first. Qwen 3.8 Max is opt-in via /model, not the session default.
+  "model": "deepseek/deepseek-v4-pro",
 
-  // Aux lane: DeepSeek V4 Flash is used for session titles, recaps,
-  // compaction, and the low-complexity classifier. getSmallModel() would also
-  // derive this from family metadata; the explicit pin keeps it stable across
-  // catalog updates.
-  "small_model": "deepseek/deepseek-v4-flash",
+  // Aux lane: titles, recaps, classifier. The live DeepSeek flash SKU is
+  // deepseek-flash (not deepseek-v4-flash).
+  "small_model": "deepseek/deepseek-flash",
 
   "agent": {
-    // Reasoning-dense lanes: keep diagnosis, planning, architecture, and
-    // security review on DeepSeek V4 Pro. Cross-provider review avoids
-    // correlated blind spots in Qwen-generated code.
+    // Reasoning-dense lanes stay on Pro. This is a capability split (Pro vs
+    // flash), not a required cross-provider split.
     "plan": { "model": "deepseek/deepseek-v4-pro" },
     "architect": { "model": "deepseek/deepseek-v4-pro" },
     "security": { "model": "deepseek/deepseek-v4-pro" },
     "debug": { "model": "deepseek/deepseek-v4-pro" },
 
-    // Read-only / mechanical lanes: route to the same-provider flash model.
-    "explore": { "model": "deepseek/deepseek-v4-flash" },
-
-    // Compaction bypasses small_model and would otherwise fall back to the
-    // session model, so pin it explicitly to Flash.
-    "compaction": { "model": "deepseek/deepseek-v4-flash" }
+    "explore": { "model": "deepseek/deepseek-flash" },
+    "compaction": { "model": "deepseek/deepseek-flash" }
   },
 
   // Consumed only by the replanner when a plan phase fails and needs to be

@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-08-19
+Last reviewed: 2026-09-13
 Owner: ax-code runtime
 
 This guide captures the recommended way to run ax-code with a premium reasoning model and cheaper same-provider aux models.
@@ -13,15 +13,21 @@ Use the expensive model for reasoning-dense work, and cheap models for mechanica
 
 ## Recommended layer split
 
-| Layer                 | Model class                                         | Typical agents / tasks                                                 |
-| --------------------- | --------------------------------------------------- | ---------------------------------------------------------------------- |
-| Worker / executor     | Strong general flagship (e.g. Qwen3.8 Max)          | `build`, `general`, `scout`, `test`, `devops`, `perf`                  |
-| Advisor / reasoning   | Reasoning model (e.g. DeepSeek V4 Pro, Claude Opus) | `plan`, `architect`, `security`, `debug`                               |
-| Cheap / read-only aux | Same-provider flash/mini (e.g. DeepSeek V4 Flash)   | `explore`, `compaction`, titles, recaps, low-complexity classification |
+| Layer                 | Model class                                              | Typical agents / tasks                                                 |
+| --------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Worker / executor     | Strong connected flagship (e.g. DeepSeek V4 Pro)         | `build`, `general`, `scout`, `test`, `devops`, `perf`                  |
+| Advisor / reasoning   | Same reasoning model, or a second family if you want it  | `plan`, `architect`, `security`, `debug`                               |
+| Cheap / read-only aux | Flash/mini on a connected provider (e.g. DeepSeek Flash) | `explore`, `compaction`, titles, recaps, low-complexity classification |
+
+Pin `provider/model` IDs that are connected. Disabled first-party plan IDs
+(`alibaba-token-plan`, `deepseek`, `zai-coding-plan`, `minimax-coding-plan`)
+still resolve by SKU, but each call first tries the disabled provider and
+warns. Qwen 3.8 Max is a valid explicit choice, not the product or example
+default; without `config.model`, implicit default prefers flash SKUs.
 
 ## Config template
 
-See `ax-code.json.example` at the repo root for a concrete DeepSeek + Alibaba example.
+See `ax-code.json.example` at the repo root for a concrete DeepSeek Pro + Flash example.
 
 ### Codex CLI auxiliary models
 
