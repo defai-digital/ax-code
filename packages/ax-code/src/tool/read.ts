@@ -1,8 +1,6 @@
 import z from "zod"
-import { createReadStream } from "fs"
 import * as fs from "fs/promises"
 import * as path from "path"
-import { createInterface } from "readline"
 import { Tool } from "./tool"
 import { LSP } from "@ax-code/ax-code-intel"
 import { FileTime } from "../file/time"
@@ -11,7 +9,7 @@ import { Instance } from "../project/instance"
 import { assertExternalDirectory, assertSymlinkInsideProject } from "./external-directory"
 import { InstructionPrompt } from "../session/instruction"
 import { Filesystem } from "../util/filesystem"
-import { DEFAULT_READ_LIMIT, MAX_LINE_LENGTH, MAX_LINE_SUFFIX, MAX_BYTES, MAX_BYTES_LABEL } from "@/constants/tool"
+import { DEFAULT_READ_LIMIT } from "@/constants/tool"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { isHarmlessInterrupt } from "@/util/harmless-interrupt"
@@ -19,6 +17,10 @@ import { NULL_BYTE_PATH_ERROR, normalizeToWorkspacePath, resolveToolFilePath, wi
 import { isBinaryFile } from "./file-content"
 import { ToolNumber } from "./schema"
 import { CanonicalOutput } from "./canonical-output"
+
+import { EvidenceCache } from "../evidence/cache"
+import { evidenceCacheMode } from "../evidence/mode"
+import { readSourceSnapshot, ReadTextResult, renderReadText, sameReadSource } from "./read-text"
 
 const log = Log.create({ service: "tool.read" })
 
@@ -236,81 +238,34 @@ export const ReadTool = Tool.define("read", {
       const isBinary = await isBinaryFile(filepath)
       if (isBinary) throw readError("ReadBinaryFileError", `Cannot read binary file: ${filepath}`)
 
-      const stream = createReadStream(filepath, { encoding: "utf8" })
-      const rl = createInterface({
-        input: stream,
-        // Note: we use the crlfDelay option to recognize all instances of CR LF
-        // ('\r\n') in file as a single line break.
-        crlfDelay: Infinity,
-      })
-
       const limit = params.limit ?? DEFAULT_READ_LIMIT
       const offset = params.offset ?? 1
-      const start = offset - 1
-      const raw: string[] = []
-      let bytes = 0
-      let lines = 0
-      let firstLine = true
-      let truncatedByBytes = false
-      let hasMoreLines = false
-      try {
-        for await (const text of rl) {
-          const normalizedText = firstLine && text.startsWith("\uFEFF") ? text.slice(1) : text
-          firstLine = false
-          lines += 1
-          if (lines <= start) continue
-
-          if (raw.length >= limit) {
-            hasMoreLines = true
-            continue
-          }
-
-          const line =
-            normalizedText.length > MAX_LINE_LENGTH
-              ? normalizedText.substring(0, MAX_LINE_LENGTH) + MAX_LINE_SUFFIX
-              : normalizedText
-          const size = Buffer.byteLength(line, "utf-8") + (raw.length > 0 ? 1 : 0)
-          if (bytes + size > MAX_BYTES) {
-            truncatedByBytes = true
-            hasMoreLines = true
-            break
-          }
-
-          raw.push(line)
-          bytes += size
-        }
-      } finally {
-        rl.close()
-        stream.destroy()
-      }
-
-      if (!truncatedByBytes && lines < offset && !(lines === 0 && offset === 1)) {
-        throw readError("ReadOffsetOutOfRangeError", `Offset ${offset} is out of range for this file (${lines} lines)`)
-      }
-
-      const content = raw.map((line, index) => {
-        return `${index + offset}: ${line}`
+      const before = await fs.stat(filepath, { bigint: true })
+      const snapshot =
+        evidenceCacheMode() !== "off" && Instance.containsPath(filepath)
+          ? await readSourceSnapshot(filepath, ctx.abort)
+          : undefined
+      const cacheKey = snapshot
+        ? EvidenceCache.key("read-v1", filepath, EvidenceCache.digest(snapshot.bytes), offset, limit)
+        : undefined
+      const cached = cacheKey ? await EvidenceCache.get(cacheKey, ReadTextResult) : undefined
+      const rendered =
+        cached ?? (await renderReadText(filepath, offset, limit, ctx.abort, snapshot?.bytes.toString("utf8")))
+      const observed = snapshot?.stamp ?? before
+      const after = await fs.stat(filepath, { bigint: true })
+      if (!sameReadSource(observed, after))
+        throw readError("ReadSourceChangedError", "File changed while reading; retry the read")
+      if (Instance.containsPath(filepath)) await assertSymlinkInsideProject(filepath)
+      ctx.abort.throwIfAborted()
+      if (cacheKey && !cached) await EvidenceCache.put(cacheKey, rendered)
+      ctx.abort.throwIfAborted()
+      await FileTime.read(ctx.sessionID, filepath, {
+        mtime: Number(observed.mtimeMs),
+        ctime: Number(observed.ctimeMs),
+        size: Number(observed.size),
       })
-      const preview = raw.slice(0, 20).join("\n")
-
-      let output = [`<path>${filepath}</path>`, `<type>file</type>`, "<content>"].join("\n")
-      output += content.join("\n")
-
-      const totalLines = lines
-      const lastReadLine = offset + raw.length - 1
-      const nextOffset = lastReadLine + 1
-      const truncated = hasMoreLines || truncatedByBytes
-
-      if (truncatedByBytes) {
-        output += `\n\n(Output capped at ${MAX_BYTES_LABEL}. Showing lines ${offset}-${lastReadLine} of file. Use offset=${nextOffset} to continue.)`
-      } else if (hasMoreLines) {
-        output += `\n\n(Showing lines ${offset}-${lastReadLine} of ${totalLines}. Use offset=${nextOffset} to continue.)`
-      } else {
-        output += `\n\n(End of file - total ${totalLines} lines)`
-      }
-      output += "\n</content>"
-
-      await FileTime.read(ctx.sessionID, filepath)
+      const { preview, truncated } = rendered
+      let output = rendered.output
 
       if (instructions.length > 0) {
         output += `\n\n<system-reminder>\n${instructions.map((i) => i.content).join("\n\n")}\n</system-reminder>`
@@ -328,6 +283,7 @@ export const ReadTool = Tool.define("read", {
         metadata: {
           preview,
           truncated,
+          ...(cacheKey ? { evidenceCache: cached ? "hit" : "miss" } : {}),
           loaded: instructions.map((i) => i.filepath),
         },
       }

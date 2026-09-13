@@ -19,12 +19,15 @@ import { createRequire } from "node:module"
 import { Flag } from "../flag/flag"
 import { toErrorMessage } from "../util/error-message"
 import { Log } from "../util/log"
+import type { EvidenceStore } from "../evidence/cache"
 
 // Type-only imports — erased at compile time, no runtime dependency.
 // The napi-rs `.d.ts` declarations provide typed interfaces for each
 // native addon so callers get autocomplete and type checking instead
 // of opaque `any`.
-type FsBinding = typeof import("@ax-code/fs")
+type FsBinding = Omit<typeof import("@ax-code/fs"), "openEvidenceStore"> & {
+  openEvidenceStore?: (path: string) => Promise<EvidenceStore>
+}
 type DiffBinding = typeof import("@ax-code/diff")
 type IndexBinding = typeof import("@ax-code/index-core")
 type ParserBinding = typeof import("@ax-code/parser")

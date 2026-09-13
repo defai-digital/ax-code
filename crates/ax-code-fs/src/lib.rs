@@ -3,6 +3,8 @@ extern crate napi_derive;
 
 mod detect;
 mod embedding;
+#[cfg(feature = "evidence-cache")]
+mod evidence;
 mod watcher;
 
 pub use embedding::*;

@@ -44,10 +44,10 @@ export namespace FileTime {
     return next
   }
 
-  export async function read(sessionID: SessionID, file: string) {
+  export async function read(sessionID: SessionID, file: string, observed?: Omit<Stamp, "read">) {
     const reads = state().reads
     log.info("read", { sessionID, file })
-    session(reads, sessionID).set(file, stamp(file))
+    session(reads, sessionID).set(file, observed ? { ...observed, read: new Date() } : stamp(file))
   }
 
   export async function get(sessionID: SessionID, file: string) {

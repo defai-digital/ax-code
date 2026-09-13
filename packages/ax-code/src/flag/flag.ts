@@ -51,6 +51,7 @@ export function parsePositiveIntegerFlagValue(value: string | undefined) {
 }
 
 export namespace Flag {
+  export declare const AX_CODE_EVIDENCE_CACHE: string | undefined
   export const AX_CODE_GIT_BASH_PATH = process.env["AX_CODE_GIT_BASH_PATH"]
   export const AX_CODE_CONFIG = process.env["AX_CODE_CONFIG"]
   export declare const AX_CODE_TUI_CONFIG: string | undefined
@@ -357,6 +358,7 @@ defineStringFlag("AX_CODE_CONFIG_CONTENT")
 defineStringFlag("AX_CODE_MODELS_URL")
 
 defineStringFlag("AX_CODE_MODELS_PATH")
+defineStringFlag("AX_CODE_EVIDENCE_CACHE")
 
 // This must be evaluated at access time, not module load time,
 // because some commands override the client at runtime

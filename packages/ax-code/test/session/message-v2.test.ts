@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { APICallError } from "ai"
 import { MessageV2 } from "../../src/session/message-v2"
 import type { Provider } from "../../src/provider/provider"
@@ -1789,4 +1789,70 @@ test("projects only completed recipe selections while preserving interrupted and
     "large intermediate",
   )
   expect(child.state).toMatchObject({ output: "large intermediate" })
+})
+
+test("evidence projection respects conversion cache, compaction and recipe-hidden children", async () => {
+  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "memory")
+  try {
+    const output =
+      "<path>/workspace/a.ts</path>\n<type>file</type>\n<content>" + "export const a = 1;\n".repeat(100) + "</content>"
+    function readMessage(id: string, callID: string): MessageV2.WithParts {
+      const mid = MessageID.make(id)
+      return {
+        info: assistantInfo(mid, MessageID.make("user")),
+        parts: [
+          {
+            ...basePart(mid, "part_" + id),
+            type: "tool",
+            tool: "read",
+            callID,
+            state: {
+              status: "completed",
+              input: { filePath: "/workspace/a.ts" },
+              output,
+              title: "read",
+              metadata: {},
+              time: { start: 1, end: 2 },
+            },
+          },
+        ],
+      }
+    }
+    const first = readMessage("msg_first", "call_first")
+    const second = readMessage("msg_second", "call_second")
+    const initial = await MessageV2.toModelMessages([first, second], model, { cache: true })
+    expect(JSON.stringify(initial)).toContain("Exact read output is already visible")
+    expect(await MessageV2.toModelMessages([first, second], model, { cache: true })).toEqual(initial)
+    const onlySecond = await MessageV2.toModelMessages([second], model, { cache: true })
+    expect(JSON.stringify(onlySecond)).not.toContain("Exact read output is already visible")
+    const compacted = structuredClone(first)
+    const part = compacted.parts[0] as MessageV2.ToolPart
+    if (part.state.status === "completed") part.state.time.compacted = 3
+    expect(JSON.stringify(await MessageV2.toModelMessages([compacted, second], model))).not.toContain(
+      "Exact read output is already visible",
+    )
+    const hidden = structuredClone(first)
+    const child = hidden.parts[0] as MessageV2.ToolPart
+    child.parentCallID = "recipe_parent"
+    hidden.parts.push({
+      ...basePart(hidden.info.id, "part_recipe"),
+      type: "tool",
+      tool: "read_recipe",
+      callID: "recipe_parent",
+      state: {
+        status: "completed",
+        input: {},
+        output: "selected different evidence",
+        title: "recipe",
+        metadata: { recipeProjection: true },
+        time: { start: 1, end: 2 },
+      },
+    })
+    expect(JSON.stringify(await MessageV2.toModelMessages([hidden, second], model))).not.toContain(
+      "Exact read output is already visible",
+    )
+    expect((second.parts[0] as MessageV2.ToolPart).state).toMatchObject({ output })
+  } finally {
+    vi.unstubAllEnvs()
+  }
 })

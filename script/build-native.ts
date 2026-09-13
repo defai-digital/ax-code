@@ -6,6 +6,7 @@
  *   tsx script/build-native.ts          # release build (default)
  *   tsx script/build-native.ts --debug  # debug build
  *   tsx script/build-native.ts fs diff  # build only selected packages
+ *   tsx script/build-native.ts --evidence-cache fs # optional RocksDB evidence store
  *
  * Each package in `packages/ax-code-*-native/` already has a `napi build`
  * script. This driver runs them in sequence and reports a summary. After
@@ -50,13 +51,15 @@ function parseArgs(argv: string[]) {
     if (arg.startsWith("--")) flags.add(arg.slice(2))
     else selected.push(arg)
   }
-  return { debug: flags.has("debug"), selected }
+  return { debug: flags.has("debug"), evidenceCache: flags.has("evidence-cache"), selected }
 }
 
-function buildPackage(pkg: NativePkg, debug: boolean): boolean {
+function buildPackage(pkg: NativePkg, debug: boolean, evidenceCache: boolean): boolean {
   const script = debug ? "build:debug" : "build"
   console.log(`\n→ pnpm --filter ${pkg.pkgName} run ${script}`)
-  const result = spawnSync("pnpm", ["--filter", pkg.pkgName, "run", script], {
+  const args = ["--filter", pkg.pkgName, "run", script]
+  if (evidenceCache && pkg.alias === "fs") args.push("--features", "evidence-cache")
+  const result = spawnSync("pnpm", args, {
     stdio: "inherit",
     cwd: ROOT,
     // On Windows `pnpm` is `pnpm.cmd`; spawnSync can't resolve it without a
@@ -85,7 +88,7 @@ function buildPackage(pkg: NativePkg, debug: boolean): boolean {
 }
 
 function main() {
-  const { debug, selected } = parseArgs(process.argv)
+  const { debug, evidenceCache, selected } = parseArgs(process.argv)
   const toBuild =
     selected.length > 0
       ? PACKAGES.filter((p) => selected.includes(p.alias) || selected.includes(p.pkgName) || selected.includes(p.dir))
@@ -100,7 +103,7 @@ function main() {
 
   let failed = 0
   for (const pkg of toBuild) {
-    if (!buildPackage(pkg, debug)) failed++
+    if (!buildPackage(pkg, debug, evidenceCache)) failed++
   }
 
   if (failed > 0) {

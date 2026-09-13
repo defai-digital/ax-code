@@ -78,7 +78,7 @@ void Promise.allSettled([
 
 const CACHE_VERSION = "21"
 const TRASH_PREFIX = ".trash-"
-const PERSISTENT_CACHE_ENTRIES = new Set(["ax-engine", "libexec"])
+const PERSISTENT_CACHE_ENTRIES = new Set(["ax-engine", "libexec", "evidence-v1"])
 
 export function staleCacheEntries(contents: readonly string[]) {
   return contents.filter((item) => !item.startsWith(TRASH_PREFIX) && !PERSISTENT_CACHE_ENTRIES.has(item))

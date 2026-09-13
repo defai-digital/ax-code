@@ -7,6 +7,7 @@ import { Log } from "../../src/util/log"
 import { CodeIntelligence } from "../../src/code-intelligence"
 import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { CodeGraphBuilder } from "../../src/code-intelligence/builder"
+import { EvidenceCache } from "../../src/evidence/cache"
 import { SyntacticExtractor } from "../../src/code-intelligence/syntactic"
 import { LSP } from "@ax-code/ax-code-intel"
 
@@ -220,4 +221,27 @@ describe("builder.indexFile syntactic fallback", () => {
       },
     })
   })
+})
+
+test("syntactic evidence cache reuses exact symbols and invalidates changed source", async () => {
+  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "memory")
+  await using tmp = await tmpdir()
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const first = await SyntacticExtractor.extract("typescript", "export function first() {}")
+        const second = await SyntacticExtractor.extract("typescript", "export function first() {}")
+        expect(first?.some((s) => s.name === "first")).toBe(true)
+        expect(second).toEqual(first)
+        expect((await EvidenceCache.stats()).hits).toBe(1)
+        const changed = await SyntacticExtractor.extract("typescript", "export function second() {}")
+        expect(changed?.some((s) => s.name === "second")).toBe(true)
+        expect((await EvidenceCache.stats()).hits).toBe(1)
+      },
+    })
+  } finally {
+    await Instance.disposeAll()
+    vi.unstubAllEnvs()
+  }
 })
