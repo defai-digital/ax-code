@@ -1,3 +1,4 @@
+import { useContentDimensions } from "@tui/context/content-dimensions"
 import { type Accessor, createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
 import { useRouteData } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
@@ -8,7 +9,6 @@ import { useCommandDialog } from "@tui/component/dialog-command"
 import { useKeybind } from "../../context/keybind"
 import { useKV } from "../../context/kv"
 import { Flag } from "@/flag/flag"
-import { useTerminalDimensions } from "ax-tui/solid"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
 import { autonomousActiveView, autonomousProgressLabel } from "./autonomous-active"
@@ -70,7 +70,7 @@ export function Header() {
   const kv = useKV()
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   let lastSubagentHeaderClickAt = 0
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
   const narrow = createMemo(() => {
     const sw = dimensions().width > 120 ? computeSidebarWidth(dimensions().width) : 0
     return dimensions().width - sw < 100

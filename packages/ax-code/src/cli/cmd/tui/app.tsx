@@ -8,6 +8,7 @@ import {
   Switch,
   Match,
   createEffect,
+  createMemo,
   ErrorBoundary,
   createSignal,
   onMount,
@@ -54,6 +55,10 @@ import { notifyTerminal } from "./util/terminal-notify"
 import { notifyAudioEvent, type AudioNotifySettings } from "./util/audio-notify"
 import { createTurnCompleteTracker } from "./util/turn-complete-tracker"
 import { createPendingRequestTracker, familySessionIDs, outsideFamilyRequests } from "./util/pending-request-notices"
+import { createSessionActivityIndex } from "./util/session-activity"
+import { ContentDimensionsProvider } from "./context/content-dimensions"
+import { navigationLayout } from "./navigation/navigation-layout"
+import { SessionNavigation } from "./component/session-navigation"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
@@ -255,10 +260,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     recordTuiStartupOnce("tui.startup.appMounted", { route: route.data.type })
   })
 
-  // Startup flourish: a single overlay play when the TUI mounts. On by
-  // default; the stop effect above tears it down if a dialog opens while it
-  // plays.
-  onMount(() => {
+  // Decide once after saved preferences load; the default must not override
+  // a user's animation opt-out while the asynchronous KV read is pending.
+  let startupMatrixDecided = false
+  createEffect(() => {
+    if (!kv.ready || startupMatrixDecided) return
+    startupMatrixDecided = true
+    if (dialog.stack.length > 0) return
     if (
       shouldPlayMatrixRainOnStart({
         enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
@@ -378,6 +386,39 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       .catch(toast.error)
   }
   const [terminalTitleEnabled, setTerminalTitleEnabled] = createSignal(kv.get("terminal_title_enabled", true))
+  const [navigationExpanded, setNavigationExpanded] = createSignal<ReadonlySet<string>>(new Set())
+  createEffect(
+    on(
+      () => sdk.directory ?? sync.data.path.directory,
+      () => setNavigationExpanded(new Set<string>()),
+    ),
+  )
+  createEffect(
+    on(
+      () =>
+        [
+          route.data.type === "session" ? route.data.sessionID : undefined,
+          sdk.directory ?? sync.data.path.directory,
+          sync.data.session_loaded,
+        ] as const,
+      ([current, directory]) => {
+        const byID = new Map(
+          sync.data.session
+            .filter((session) => session.directory === directory)
+            .map((session) => [session.id, session]),
+        )
+        const ancestors = new Set<string>()
+        let id = current
+        while (id && !ancestors.has(id)) {
+          ancestors.add(id)
+          id = byID.get(id)?.parentID
+        }
+        setNavigationExpanded((previous) => new Set([...previous, ...ancestors]))
+      },
+    ),
+  )
+  const navigation = createMemo(() => navigationLayout(dimensions().width, kv.get("navigation_visible", true)))
+  const contentDimensions = createMemo(() => ({ width: navigation().contentWidth, height: dimensions().height }))
 
   const sessionWorking = () => {
     if (route.data.type !== "session") return false
@@ -437,22 +478,39 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     events: tuiConfig.notifications?.events,
   })
 
-  // Notify when the agent's turn completes: the viewed session's status
-  // transitions from busy/retry to idle. The tracker (util/turn-complete-tracker.ts)
-  // resets its baseline on route changes and hands out a unique fire-once key
-  // per transition; unrelated re-renders return undefined.
+  // Observe the viewed subtree, not task success or only the parent status.
   const turnComplete = createTurnCompleteTracker()
   createEffect(() => {
     const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
     const status = sessionID === undefined ? undefined : sync.data.session_status?.[sessionID]?.type
-    const key = turnComplete.update(sessionID, status)
+    const activity =
+      sessionID === undefined
+        ? undefined
+        : createSessionActivityIndex({
+            sessions: sync.data.session,
+            statuses: sync.data.session_status,
+            permissions: sync.data.permission,
+            questions: sync.data.question,
+          }).get(sessionID)
+    const failedMembers = activity?.members
+      .filter(({ id }) => {
+        const last = sync.data.message[id]?.findLast((message) => message.role === "assistant")
+        return last?.role === "assistant" && !!last.error
+      })
+      .map(({ id }) => id)
+    const key = turnComplete.update(sessionID, status, {
+      members: activity?.members,
+      pending: activity?.attention,
+      ready: sdk.sseConnected && sync.data.status === "complete" && sync.data.session_loaded,
+      failedMembers,
+    })
     if (!key || sessionID === undefined) return
     if (!notificationsEnabled()) return
     const session = sync.session.get(sessionID)
     const sessionTitle = session && !SessionApi.isDefaultTitle(session.title) ? session.title : undefined
     notifyTerminal({
       title: "ax-code",
-      body: sessionTitle ? `Task complete: ${sessionTitle}` : "Task complete",
+      body: sessionTitle ? `Session idle: ${sessionTitle}` : "Session idle",
       key,
     })
     notifyAudioEvent({ kind: "complete", source: sessionTitle, settings: audioNotifySettings(), key })
@@ -510,8 +568,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       toast.show({
         message:
           request.kind === "approval"
-            ? `Approval needed in "${title}" — open that session to answer`
-            : `Question from the agent in "${title}" — open that session to answer`,
+            ? `Approval needed in "${title}" — use /attention to open it`
+            : `Question from the agent in "${title}" — use /attention to open it`,
         variant: "warning",
         duration: 8_000,
       })
@@ -903,12 +961,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSnapshot: props.onSnapshot,
       terminalSuspend,
       playMatrixRain,
+      terminalWidth: () => dimensions().width,
     }),
   )
 
   let updateHandlerDisposed = false
   let interactiveUpgradeVersion: string | undefined
   const eventUnsubs = [
+    sdk.event.on("server.resync_required", () => turnComplete.reset()),
+    sdk.event.on("server.serialization_error", () => turnComplete.reset()),
+    sdk.event.on("server.instance.disposed", () => turnComplete.reset()),
+    sdk.event.on("server.connected", () => turnComplete.reset()),
     sdk.event.on(TuiEvent.CommandExecute.type, (evt) => {
       command.trigger(evt.properties.command)
     }),
@@ -952,6 +1015,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     }),
 
     sdk.event.on(SessionApi.Event.Error.type, (evt) => {
+      turnComplete.suppress(evt.properties.sessionID)
       const error = evt.properties.error
       if (error && typeof error === "object" && error.name === "MessageAbortedError") return
 
@@ -1085,23 +1149,36 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       }}
       onMouseUp={Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
     >
-      <Switch>
-        <Match when={route.data.type === "home"}>
-          <Home />
-        </Match>
-        <Match when={route.data.type === "session"}>
-          <Show
-            when={sessionRoute()}
-            fallback={
-              <box paddingLeft={2} paddingRight={2} paddingTop={1}>
-                <text fg={theme.textMuted}>Loading session...</text>
-              </box>
-            }
-          >
-            {(SessionRoute) => <Dynamic component={SessionRoute()} />}
-          </Show>
-        </Match>
-      </Switch>
+      <box flexDirection="row" width="100%" height="100%">
+        <Show when={navigation().railWidth > 0}>
+          <SessionNavigation
+            width={navigation().railWidth}
+            expanded={navigationExpanded()}
+            setExpanded={setNavigationExpanded}
+          />
+        </Show>
+        <box width={navigation().contentWidth} height="100%" flexShrink={0}>
+          <ContentDimensionsProvider value={contentDimensions}>
+            <Switch>
+              <Match when={route.data.type === "home"}>
+                <Home />
+              </Match>
+              <Match when={route.data.type === "session"}>
+                <Show
+                  when={sessionRoute()}
+                  fallback={
+                    <box paddingLeft={2} paddingRight={2} paddingTop={1}>
+                      <text fg={theme.textMuted}>Loading session...</text>
+                    </box>
+                  }
+                >
+                  {(SessionRoute) => <Dynamic component={SessionRoute()} />}
+                </Show>
+              </Match>
+            </Switch>
+          </ContentDimensionsProvider>
+        </box>
+      </box>
       <Show when={matrixPlaying()}>
         <MatrixRain onDone={() => setMatrixPlaying(false)} />
       </Show>

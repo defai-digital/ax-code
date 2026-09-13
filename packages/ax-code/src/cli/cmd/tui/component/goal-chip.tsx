@@ -1,3 +1,4 @@
+import { useContentDimensions } from "@tui/context/content-dimensions"
 // Sidebar goal indicator, modeled on grok-build's goal status line: the mode
 // chip row shows work/run/sandbox state, but an active /goal — the thing the
 // agent is actually working toward — was only visible in the session header.
@@ -9,7 +10,6 @@
 
 import { createMemo, Show } from "solid-js"
 import type { RGBA } from "ax-tui"
-import { useTerminalDimensions } from "ax-tui/solid"
 import { useSync } from "@tui/context/sync"
 import { selectedForeground, useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "@tui/component/dialog-command"
@@ -22,7 +22,7 @@ export function GoalChip(props: { sessionID: string }) {
   const sync = useSync()
   const { theme } = useTheme()
   const command = useCommandDialog()
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
 
   // Budget the objective for what the sidebar can actually show after the
   // status word and token counters; the label wraps on the narrowest

@@ -125,7 +125,9 @@ afterwards:
   one session-list entry away even if a notification was missed.
 - If a run asks for a permission or question answer while you are viewing a
   different conversation, a warning notice names the session that needs you;
-  opening that session shows the pending prompt.
+  `/attention` lists known pending requests and opens the requesting session.
+  Requests can be answered in that session or a loaded ancestor's view, including
+  child and grandchild sessions. Opening a request never approves it automatically.
 - A one-time task is disabled only after a successful run. A failed occurrence
   retries with a bounded backoff, and repeated failures pause the task with a
   notification — a reminder can no longer vanish silently.
@@ -142,3 +144,35 @@ afterwards:
 
 `/loop` is intentionally process-local and does not survive a restart. Use
 scheduled tasks for durable unattended work.
+
+## Navigating parallel sessions
+
+At 146 terminal columns or wider, a left navigation sidebar shows sessions in
+the current workspace and their loaded child agents. Expand a row with its
+`+` control and click a title to open it. Pinned sessions keep their order and
+shortcut numbers. `Ask`, `Retry`, and `Work` describe observed activity; `Ask`
+also appears on the parent when a descendant needs input. These labels do not
+mean a task passed verification. The existing right sidebar keeps the current
+session's context and controls.
+
+Use `/navigation` to hide or restore the left sidebar on wide terminals. On
+narrower terminals it opens a session-and-agent picker instead. `/sessions`
+continues to open the normal session picker. `/attention` is available at every
+width. During disconnection, its list is labeled as cached; opening cached
+entries is still possible, but requests may already have been answered elsewhere.
+All these views are bounded by the connected instance and loaded session data.
+
+The optional completion notification now says `Session idle`. It follows
+observed work in the viewed session subtree and waits for observed active
+descendants to become explicitly idle, with no pending requests. Disconnects,
+resyncs, missing state, errors and cancellation can suppress the notice. It is
+a lifecycle notification, not evidence that tests passed or a goal completed.
+
+## Returning to setup
+
+If you dismiss the initial provider picker, use the visible `/connect` action
+on the new-chat screen. With a provider configured but no valid model selected,
+the action changes to `/models`. Failed provider discovery points to `/status`;
+`/connect` and `/providers` remain available to repair configuration. A selected
+model is a configuration choice, not a credential or runtime readiness check.
+The hints also appear for returning users whose configuration needs attention.

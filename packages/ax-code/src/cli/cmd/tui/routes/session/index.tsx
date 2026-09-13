@@ -1,3 +1,4 @@
+import { useContentDimensions } from "@tui/context/content-dimensions"
 import {
   createEffect,
   createMemo,
@@ -27,7 +28,7 @@ import type {
 } from "@ax-code/sdk/v2"
 import { useLocal } from "@tui/context/local"
 import { Locale } from "@/util/locale"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
+import { useKeyboard, useRenderer } from "ax-tui/solid"
 import { useSDK } from "@tui/context/sdk"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { DialogContext } from "@tui/ui/dialog"
@@ -82,6 +83,7 @@ import {
   useAutonomousPulse,
 } from "./autonomous-pulse"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
+import { familySessionIDs, requestsInSessionTree } from "../../util/pending-request-notices"
 import { recoveredAssistantMessageIDs } from "./display"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
@@ -321,14 +323,9 @@ export function Session() {
       parentSessionID: parentID,
     })
   })
-  const permissions = createMemo(() => {
-    if (session()?.parentID) return []
-    return children().flatMap((x) => sync.data.permission[x.id] ?? [])
-  })
-  const questions = createMemo(() => {
-    if (session()?.parentID) return []
-    return children().flatMap((x) => sync.data.question[x.id] ?? [])
-  })
+  const requestFamily = createMemo(() => familySessionIDs(sync.data.session, route.sessionID))
+  const permissions = createMemo(() => requestsInSessionTree(sync.data.permission, requestFamily()))
+  const questions = createMemo(() => requestsInSessionTree(sync.data.question, requestFamily()))
 
   const messagesWithParts = createMemo(() =>
     messages().map((item) => ({
@@ -368,7 +365,7 @@ export function Session() {
   })
   const recoveredAssistantIDs = createMemo(() => recoveredAssistantMessageIDs(messages()))
 
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
   // Default to auto-showing the sidebar on wide terminals. Narrow terminals
   // still use the overlay path when the user explicitly toggles it.
   const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")

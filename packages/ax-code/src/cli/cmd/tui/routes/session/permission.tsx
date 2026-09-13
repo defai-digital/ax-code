@@ -1,6 +1,7 @@
+import { useContentDimensions } from "@tui/context/content-dimensions"
 import { canPersistPermission, canConfirmPersistentPermission } from "@/permission/interaction"
 import { createStore, produce } from "solid-js/store"
-import { createEffect, createMemo, For, Match, on, Show, Switch } from "solid-js"
+import { createEffect, createMemo, createSignal, For, Match, on, Show, Switch } from "solid-js"
 import { Portal, useKeyboard, useTerminalDimensions, type JSX } from "ax-tui/solid"
 import type { TextareaRenderable } from "ax-tui"
 import { useKeybind } from "../../context/keybind"
@@ -59,12 +60,13 @@ function normalizePath(input?: string) {
   return normalizePathValue(input, Global.Path.home)
 }
 
-function EditBody(props: { request: PermissionRequest }) {
+function EditBody(props: { request: PermissionRequest; expanded: boolean }) {
   const themeState = useTheme()
   const theme = themeState.theme
   const syntax = themeState.syntax
   const config = useTuiConfig()
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
+  const terminalDimensions = useTerminalDimensions()
 
   const filepath = createMemo(() => (props.request.metadata?.filepath as string) ?? "")
   const diff = createMemo(() => (props.request.metadata?.diff as string) ?? "")
@@ -73,7 +75,7 @@ function EditBody(props: { request: PermissionRequest }) {
   const view = createMemo(() =>
     diffDisplayView({
       diffStyle: config.diff_style,
-      width: dimensions().width,
+      width: props.expanded ? terminalDimensions().width : dimensions().width,
       filePath: filepath(),
       wrapMode: "word",
     }),
@@ -209,6 +211,7 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
 }
 
 export function PermissionPrompt(props: { request: PermissionRequest }) {
+  const [expanded, setExpanded] = createSignal(false)
   const sdk = useSDK()
   const sync = useSync()
   const toast = useToast()
@@ -361,7 +364,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       return {
         icon: "→",
         title: `Edit ${normalizePath(filepath)}`,
-        body: <EditBody request={props.request} />,
+        body: <EditBody request={props.request} expanded={expanded()} />,
       }
     }
 
@@ -681,6 +684,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
           options={baseOptions()}
           escapeKey="reject"
           fullscreen
+          onFullscreenChange={setExpanded}
           onSelect={(option) => {
             if (option === "always") {
               if (!allowAlwaysAvailable()) return
@@ -724,7 +728,7 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
   const { theme } = useTheme()
   const keybind = useKeybind()
   const textareaKeybindings = useTextareaKeybindings()
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
   const narrow = createMemo(() => dimensions().width < 80)
   const dialog = useDialog()
 
@@ -799,11 +803,12 @@ function Prompt<const T extends Record<string, string>>(props: {
   options: T
   escapeKey?: keyof T
   fullscreen?: boolean
+  onFullscreenChange?: (expanded: boolean) => void
   onSelect: (option: keyof T) => void
 }) {
   const { theme } = useTheme()
   const keybind = useKeybind()
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
   // Reactive so a reused Prompt (queued requests flushed together) tracks the
   // current request's option set instead of freezing to the first one's.
   const keys = createMemo(() => Object.keys(props.options) as (keyof T)[])
@@ -811,6 +816,7 @@ function Prompt<const T extends Record<string, string>>(props: {
     selected: keys()[0],
     expanded: false,
   })
+  createEffect(() => props.onFullscreenChange?.(store.expanded))
   // Clamp the selection back into range whenever the option set changes, so it
   // never points at an option the new request removed.
   createEffect(() => {

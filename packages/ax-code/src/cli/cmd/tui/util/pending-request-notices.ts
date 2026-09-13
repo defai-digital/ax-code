@@ -1,3 +1,5 @@
+import { createSessionTreeIndex } from "./session-tree"
+
 // Surfaces permission/question requests that the current route cannot answer
 // (PRD-2026-09-12). The session route renders prompts only for the open
 // session's family, so a request raised by a top-level automation session
@@ -10,22 +12,23 @@ export type PendingRequestRef = {
   sessionID: string
 }
 
-// Mirrors the session route's family: the open session itself plus its child
-// sessions (or, for a child, its siblings and parent). Requests from these
-// sessions are answerable in place and need no global notice.
+// The route renders requests for itself and all loaded descendants, including
+// when the viewed session is a child. Ancestors and siblings need a notice.
 export function familySessionIDs(
   sessions: readonly { id: string; parentID?: string }[],
   currentSessionID: string | undefined,
 ): Set<string> {
-  if (currentSessionID === undefined) return new Set()
-  const current = sessions.find((session) => session.id === currentSessionID)
-  if (!current) return new Set([currentSessionID])
-  const parentID = current.parentID ?? current.id
-  const family = new Set<string>([parentID])
-  for (const session of sessions) {
-    if (session.parentID === parentID) family.add(session.id)
-  }
-  return family
+  return createSessionTreeIndex(sessions).subtree(currentSessionID)
+}
+
+export function requestsInSessionTree<T extends PendingRequestRef>(
+  requests: Record<string, T[] | undefined>,
+  family: ReadonlySet<string>,
+): T[] {
+  return Object.values(requests)
+    .flatMap((list) => list ?? [])
+    .filter((request) => family.has(request.sessionID))
+    .toSorted((a, b) => a.sessionID.localeCompare(b.sessionID) || a.id.localeCompare(b.id))
 }
 
 export function outsideFamilyRequests(

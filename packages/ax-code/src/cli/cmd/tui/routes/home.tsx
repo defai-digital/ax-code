@@ -1,3 +1,6 @@
+import { setupGuidance } from "../component/setup-guidance"
+import { SetupGuidanceView } from "../component/setup-guidance-view"
+import { useContentDimensions } from "@tui/context/content-dimensions"
 // Home route — transitional per ADR-035 (Lean TUI / Rich Desktop Boundary).
 //
 // This route is kept as a backward-compat alias. The default startup path
@@ -9,7 +12,6 @@
 
 import { Prompt, type PromptRef } from "@tui/component/prompt"
 import { createEffect, createMemo, For, Match, on, onMount, Show, Switch } from "solid-js"
-import { useTerminalDimensions } from "ax-tui/solid"
 import { useTheme } from "@tui/context/theme"
 import { Logo } from "../component/logo"
 import { ModeChips } from "../component/mode-chips"
@@ -77,7 +79,18 @@ export function Home() {
     return Object.values(sync.data.mcp).filter((x) => x.status === "connected").length
   })
 
-  const isFirstTimeUser = createMemo(() => sync.data.session.length === 0)
+  const isFirstTimeUser = createMemo(() => sync.data.session_loaded && sync.data.session.length === 0)
+  const guidance = createMemo(() =>
+    setupGuidance({
+      providerLoaded: sync.data.provider_loaded,
+      providerFailed: sync.data.provider_failed,
+      modelReady: local.model.ready,
+      providers: sync.data.provider,
+      model: local.model.current(),
+      sessionLoaded: sync.data.session_loaded,
+      sessionCount: sync.data.session.length,
+    }),
+  )
   const modelLoading = createMemo(
     () => !sync.data.provider_failed && (!sync.data.provider_loaded || !local.model.ready),
   )
@@ -89,14 +102,6 @@ export function Home() {
 
   const Hint = (
     <Switch>
-      <Match when={modelLoading()}>
-        <box flexShrink={0} flexDirection="row" gap={1}>
-          <text fg={theme.warning}>
-            <span style={{ fg: theme.warning }}>•</span> Provider is loading{" "}
-            <span style={{ fg: theme.textMuted }}>· please wait about 10 seconds while models initialize</span>
-          </text>
-        </box>
-      </Match>
       <Match when={connectedMcpCount() > 0}>
         <box flexShrink={0} flexDirection="row" gap={1}>
           <text fg={theme.text}>
@@ -164,7 +169,7 @@ export function Home() {
     ),
   )
   const directory = useDirectory()
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
   // The bottom bar stacks vertically once its segments no longer fit on one
   // line (promptFooterLayout-style degradation; the math lives in home-layout).
   const statusBarLayout = createMemo(() =>
@@ -184,7 +189,12 @@ export function Home() {
         <box flexGrow={1} minHeight={0} />
         <box height={4} minHeight={0} flexShrink={1} />
         <box flexShrink={0}>
-          <Logo />
+          <Show
+            when={dimensions().width >= 60 && dimensions().height >= 28}
+            fallback={<text fg={theme.accent}>AX Code</text>}
+          >
+            <Logo />
+          </Show>
         </box>
         <Show when={!modelLoading()}>
           <box flexShrink={0} maxWidth={75} paddingTop={1}>
@@ -195,7 +205,7 @@ export function Home() {
               {/* Clicking the model name opens the model picker via the same
                   registered-command path as the model_list keybind. The handler
                   lives on the wrapping box, never on <text> (see ModeChips). */}
-              <box flexShrink={0} onMouseUp={() => command.trigger("model.list")}>
+              <box flexShrink={0} onMouseUp={() => command.trigger(guidance().modelCommand)}>
                 <text fg={theme.textMuted} selectable={false}>
                   {local.model.parsed().model}
                 </text>
@@ -220,35 +230,7 @@ export function Home() {
             workspaceID={route.workspaceID}
           />
         </box>
-        <Show when={isFirstTimeUser()}>
-          <box
-            flexDirection="column"
-            alignItems="flex-start"
-            flexShrink={0}
-            maxWidth={75}
-            paddingLeft={2}
-            paddingRight={2}
-          >
-            <text>
-              <span style={{ fg: theme.accent }}>●</span>
-              {"  "}
-              <span style={{ fg: theme.text }}>Ask anything</span>
-              <span style={{ fg: theme.textMuted }}> · just type your question</span>
-            </text>
-            <text>
-              <span style={{ fg: theme.accent }}>●</span>
-              {"  "}
-              <span style={{ fg: theme.text }}>/help</span>
-              <span style={{ fg: theme.textMuted }}> · keyboard shortcuts and commands</span>
-            </text>
-            <text>
-              <span style={{ fg: theme.accent }}>●</span>
-              {"  "}
-              <span style={{ fg: theme.text }}>@</span>
-              <span style={{ fg: theme.textMuted }}> · attach files and invoke subagents</span>
-            </text>
-          </box>
-        </Show>
+        <SetupGuidanceView guidance={guidance()} />
         <Show when={!isFirstTimeUser() && recent().length > 0}>
           <box
             flexDirection="column"
