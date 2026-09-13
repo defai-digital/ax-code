@@ -1,6 +1,6 @@
+import { useContentDimensions } from "@tui/context/content-dimensions"
 import { useSync } from "@tui/context/sync"
 import { createMemo, createEffect, untrack, type Accessor, For, Match, Show, Switch } from "solid-js"
-import { useTerminalDimensions } from "ax-tui/solid"
 import { createStore } from "solid-js/store"
 import { useTheme } from "../../context/theme"
 import { Installation } from "@/installation"
@@ -137,7 +137,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     return footerSessionStatusView({ status: current, now: Date.now() })
   })
   const sidebarStatusLabel = createMemo(() => sidebarStatusView()?.label)
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
   const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
 
   const todoRemaining = createMemo(() => Todo.countActive(todo()))

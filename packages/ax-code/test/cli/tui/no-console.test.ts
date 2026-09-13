@@ -138,7 +138,8 @@ describe("tui console hygiene", () => {
     const CLICK_RE = /<box[^>]*onMouseUp=\{\(\) => command\.trigger\("model\.list"\)\}[^>]*>/
     const TEXT_CLICK_RE = /<text[^>]*onMouseUp=\{\(\) => command\.trigger\("model\.list"\)\}/
 
-    for (const src of [prompt, home]) {
+    expect(home).toMatch(/<box[^>]*onMouseUp=\{\(\) => command\.trigger\(guidance\(\)\.modelCommand\)\}[^>]*>/)
+    for (const src of [prompt]) {
       expect(src).toMatch(CLICK_RE)
       // The handler must live on the wrapping <box>, never directly on <text>
       // (clicks on text nested in a flex row are unreliable).

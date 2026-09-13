@@ -2,6 +2,7 @@ import { formatDuration } from "@/util/format"
 import { Locale } from "@/util/locale"
 import type { CompactionBudget } from "@/session/compaction-budget"
 import { parseStepTokenWindows, stepDecodeTotals } from "./step-windows"
+import { createSessionTreeIndex } from "../../util/session-tree"
 
 export type FooterSessionStatus =
   | {
@@ -365,9 +366,10 @@ export function hasActiveSubagentInSessionTree(input: {
   statuses?: Record<string, { type: string } | undefined>
   parentSessionID: string
 }): boolean {
-  return input.sessions.some((session) => {
-    if (session.parentID !== input.parentSessionID) return false
-    const status = input.statuses?.[session.id]
+  const descendants = createSessionTreeIndex(input.sessions).subtree(input.parentSessionID)
+  descendants.delete(input.parentSessionID)
+  return [...descendants].some((id) => {
+    const status = input.statuses?.[id]
     return status !== undefined && status.type !== "idle"
   })
 }
@@ -383,9 +385,10 @@ export function footerSubagentStatusView(input: {
   now?: number
 }): (FooterSessionStatusView & { running: number }) | undefined {
   let running = 0
-  for (const session of input.sessions) {
-    if (session.parentID !== input.parentSessionID) continue
-    const status = input.statuses?.[session.id]
+  const descendants = createSessionTreeIndex(input.sessions).subtree(input.parentSessionID)
+  descendants.delete(input.parentSessionID)
+  for (const id of descendants) {
+    const status = input.statuses?.[id]
     if (!status || status.type === "idle") continue
     running++
   }

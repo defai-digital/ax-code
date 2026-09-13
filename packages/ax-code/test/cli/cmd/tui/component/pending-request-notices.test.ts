@@ -3,6 +3,7 @@ import {
   createPendingRequestTracker,
   familySessionIDs,
   outsideFamilyRequests,
+  requestsInSessionTree,
 } from "@/cli/cmd/tui/util/pending-request-notices"
 
 describe("familySessionIDs", () => {
@@ -16,8 +17,25 @@ describe("familySessionIDs", () => {
     expect([...familySessionIDs(sessions, "ses_parent")].sort()).toEqual(["ses_child", "ses_parent"])
   })
 
-  test("a child session sees its parent and siblings as family", () => {
-    expect([...familySessionIDs(sessions, "ses_child")].sort()).toEqual(["ses_child", "ses_parent"])
+  test("a child route only hosts its own subtree, so parent requests still notify", () => {
+    const family = familySessionIDs(sessions, "ses_child")
+    expect([...family]).toEqual(["ses_child"])
+    const parentRequest = { id: "ask_parent", sessionID: "ses_parent" }
+    const childRequest = { id: "ask_child", sessionID: "ses_child" }
+    const requests = { ses_parent: [parentRequest], ses_child: [childRequest] }
+    expect(requestsInSessionTree(requests, family)).toEqual([childRequest])
+    expect(outsideFamilyRequests(requests, family)).toEqual([parentRequest])
+  })
+
+  test("a grandchild request is reachable from root, child and its own route", () => {
+    const tree = [...sessions, { id: "ses_grandchild", parentID: "ses_child" }]
+    const request = { id: "ask_deep", sessionID: "ses_grandchild" }
+    const requests = { ses_grandchild: [request] }
+    for (const route of ["ses_parent", "ses_child", "ses_grandchild"]) {
+      const family = familySessionIDs(tree, route)
+      expect(requestsInSessionTree(requests, family)).toEqual([request])
+      expect(outsideFamilyRequests(requests, family)).toEqual([])
+    }
   })
 
   test("an unknown or absent route yields no family beyond the session itself", () => {

@@ -1,3 +1,4 @@
+import { useContentDimensions } from "@tui/context/content-dimensions"
 import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent, MouseButton } from "ax-tui"
 import {
   createEffect,
@@ -35,7 +36,7 @@ import { usePromptHistory, type PromptInfo } from "./history"
 import { usePromptStash } from "./stash"
 import { type AutocompleteRef, Autocomplete } from "./autocomplete"
 import { useCommandDialog } from "../dialog-command"
-import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
+import { useKeyboard, useRenderer } from "ax-tui/solid"
 import { scheduleMicrotaskTask } from "@tui/util/microtask"
 import { blurRenderable, focusRenderable, isRenderableAlive } from "@tui/util/renderable-safety"
 import { scheduleTuiInterval } from "@tui/util/timer"
@@ -120,7 +121,7 @@ export function Prompt(props: PromptProps) {
   const local = useLocal()
   const sdk = useSDK()
   const route = useRoute()
-  const dimensions = useTerminalDimensions()
+  const dimensions = useContentDimensions()
   const sync = useSync()
   const dialog = useDialog()
   const toast = useToast()
@@ -1300,7 +1301,7 @@ export function Prompt(props: PromptProps) {
               cursorColor={theme.text}
               syntaxStyle={syntax()}
             />
-            <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1}>
+            <box flexDirection={dimensions().width < 60 ? "column" : "row"} flexShrink={0} paddingTop={1} gap={1}>
               <text fg={highlight()}>
                 {store.mode === "shell"
                   ? "Shell"
@@ -1321,7 +1322,9 @@ export function Prompt(props: PromptProps) {
                     <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
                       {local.model.parsed().model}
                     </text>
-                    <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                    <Show when={dimensions().width >= 60}>
+                      <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                    </Show>
                   </box>
                   <Show when={connectionChip()}>
                     {(chip) => (

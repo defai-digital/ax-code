@@ -58,7 +58,7 @@ Availability is probed at runtime. With no usable backend the audio step is skip
 
 ## What is spoken
 
-Speech uses four fixed templates only: `Approval required: <tool>`, `Question: <first question>`, `Task complete: <session title>`, and `AX Code error`. Text is truncated and stripped of control characters. Tool arguments, file paths from payloads, model output, and error messages are never spoken — safe for shared spaces within those limits.
+Speech uses four fixed templates only: `Approval required: <tool>`, `Question: <first question>`, `Session idle: <session title>`, and `AX Code error`. Text is truncated and stripped of control characters. Tool arguments, file paths from payloads, model output, and error messages are never spoken — safe for shared spaces within those limits.
 
 ## Custom sounds via hooks
 

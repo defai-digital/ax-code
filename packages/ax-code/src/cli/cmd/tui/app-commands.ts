@@ -19,6 +19,7 @@ import {
 } from "./component/work-mode-availability"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
+import { NAVIGATION_DOCK_MIN_WIDTH } from "./navigation/navigation-layout"
 
 export type AppCommandSandbox = {
   lastRestricted: "read-only" | "workspace-write" | undefined
@@ -61,6 +62,7 @@ export type AppCommandsInput = {
   onSnapshot?: () => Promise<string[]>
   terminalSuspend: { suspend: (input: { suspend: () => void; resume: () => void }) => void }
   playMatrixRain: () => void
+  terminalWidth: () => number
 }
 
 export function appCommands(input: AppCommandsInput): CommandOption[] {
@@ -108,6 +110,29 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
       onSelect: () => {
         void dialogs.showSessionListDialog()
+      },
+    },
+    {
+      title: "Open pending requests",
+      value: "session.attention",
+      category: "Session",
+      slash: { name: "attention" },
+      onSelect: () => {
+        void dialogs.showAttentionDialog()
+      },
+    },
+    {
+      title: "Toggle session navigation",
+      value: "session.navigation",
+      category: "Session",
+      slash: { name: "navigation" },
+      onSelect: () => {
+        if (input.terminalWidth() < NAVIGATION_DOCK_MIN_WIDTH) {
+          void dialogs.showNavigationDialog()
+          return
+        }
+        kv.set("navigation_visible", !kv.get("navigation_visible", true))
+        dialog.clear()
       },
     },
     ...(Flag.AX_CODE_EXPERIMENTAL_WORKSPACES

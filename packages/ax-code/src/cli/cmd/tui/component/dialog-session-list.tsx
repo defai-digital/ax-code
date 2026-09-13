@@ -15,7 +15,13 @@ import { useToast } from "../ui/toast"
 import { createAbortableResourceFetcher } from "../util/abortable-resource"
 import { Log } from "@/util/log"
 import type { Session } from "@ax-code/sdk/v2"
-import { localWorkspaceDirectory, normalizeDialogSessions } from "./session-list-data"
+import {
+  localWorkspaceDirectory,
+  normalizeDialogSessions,
+  orderRootSessions,
+  sessionNavigationEntries,
+} from "./session-list-data"
+import { createSessionActivityIndex } from "../util/session-activity"
 
 const log = Log.create({ service: "tui.dialog-session-list" })
 
@@ -34,7 +40,7 @@ function errorMessage(error: unknown, fallback: string) {
 // Without props it behaves as the global session list; `workspaceID` scopes
 // the listing to a workspace root, `localOnly` restricts to sessions in the
 // current directory.
-export function DialogSessionList(props: { workspaceID?: string; localOnly?: boolean } = {}) {
+export function DialogSessionList(props: { workspaceID?: string; localOnly?: boolean; navigation?: boolean } = {}) {
   const dialog = useDialog()
   const route = useRoute()
   const sync = useSync()
@@ -135,6 +141,12 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
   })
 
   const options = createMemo(() => {
+    const activity = createSessionActivityIndex({
+      sessions: sync.data.session,
+      statuses: sync.data.session_status,
+      permissions: sync.data.permission,
+      questions: sync.data.question,
+    })
     const today = new Date().toDateString()
     const pinnedIDs = local.session.pinned()
     const slotByID = new Map<string, number>(local.session.slots().map((id, i) => [id, i + 1]))
@@ -150,26 +162,30 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
       .toSorted((a: Session, b: Session) => b.time.updated - a.time.updated)
 
     const pinnedSet = new Set(pinnedIDs.filter((id) => allSessions.some((s) => s.id === id)))
-    const pinnedSessions = pinnedIDs
-      .filter((id) => pinnedSet.has(id))
-      .map((id) => allSessions.find((s) => s.id === id)!)
-      .filter(Boolean)
-    const unpinnedSessions = allSessions.filter((s) => !pinnedSet.has(s.id))
-    const ordered = [...pinnedSessions, ...unpinnedSessions]
+    const ordered = props.navigation
+      ? sessionNavigationEntries(sessions(), pinnedIDs, "all")
+      : orderRootSessions(allSessions, pinnedIDs).map((session) => ({ session, depth: 0 }))
 
-    return ordered.map((x: Session) => {
+    return ordered.map(({ session: x, depth }) => {
       const isPinned = pinnedSet.has(x.id)
       const date = new Date(x.time.updated)
       let category = date.toDateString()
       if (category === today) category = "Today"
       if (isPinned) category = "Pinned"
+      if (props.navigation) category = "Sessions and agents"
       const isDeleting = toDelete() === x.id
-      const status = sync.data.session_status?.[x.id]
-      const isWorking = status?.type === "busy"
+      const observed =
+        sdk.sseConnected && sync.data.session_loaded && x.directory === (sdk.directory ?? sync.data.path.directory)
+      const state = observed ? activity.get(x.id) : undefined
+      const isWorking = state?.working && !state.attention
       const slot = slotByID.get(x.id)
       const gutter = isWorking ? <Spinner /> : slot !== undefined ? <text fg={theme.accent}>{slot}</text> : undefined
       return {
-        title: isDeleting ? `Press ${keybind.print("session_delete")} again to confirm` : x.title,
+        title: isDeleting
+          ? `Press ${keybind.print("session_delete")} again to confirm`
+          : `${"  ".repeat(Math.min(depth, 3))}${x.title}`,
+        description: state?.label,
+        descriptionFg: state?.attention ? theme.warning : theme.textMuted,
         bg: isDeleting ? theme.error : undefined,
         value: x.id,
         category,
@@ -185,7 +201,15 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
 
   return (
     <DialogSelect
-      title={props.workspaceID ? "Workspace Sessions" : props.localOnly ? "Local Sessions" : "Sessions"}
+      title={
+        props.navigation
+          ? "Session navigation"
+          : props.workspaceID
+            ? "Workspace Sessions"
+            : props.localOnly
+              ? "Local Sessions"
+              : "Sessions"
+      }
       options={options()}
       skipFilter={!props.localOnly}
       current={currentSessionID()}

@@ -110,6 +110,26 @@ export function createTuiDialogLoaders(input: {
           return () => <DialogSessionList />
         },
       }),
+    showNavigationDialog: () =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load session navigation",
+        fail: "Failed to open session navigation",
+        load: async () => {
+          const { DialogSessionList } = await import("@tui/component/dialog-session-list")
+          return () => <DialogSessionList localOnly navigation />
+        },
+      }),
+    showAttentionDialog: () =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load pending requests dialog",
+        fail: "Failed to open pending requests",
+        load: async () => {
+          const { DialogAttention } = await import("@tui/component/dialog-attention")
+          return () => <DialogAttention />
+        },
+      }),
     showWorkspaceListDialog: () =>
       replaceLazyDialog({
         ...host,
