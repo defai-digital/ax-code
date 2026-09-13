@@ -1017,7 +1017,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // substitution, disables tracking entirely and every path resolves
       // against the base cwd (the previous behavior).
       const effectiveCwdAt = new Map<number, string>()
-      let cwdTrackingReliable = true
+      let skipExistenceChecks = false
       {
         let effectiveCwd = cwd
         for (const node of tree.rootNode.descendantsOfType("command")) {
@@ -1033,6 +1033,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           }
           if (parts.length === 0 || stripShellQuotes(parts[0]!) !== "cd") continue
           let nested = false
+          let alternation = false
           for (let p = node.parent; p; p = p.parent) {
             if (
               p.type === "subshell" ||
@@ -1047,18 +1048,22 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
               for (let i = 0; i < p.childCount; i++) {
                 const op = p.child(i)?.type
                 if (op === "||" || op === "|") {
-                  nested = true
+                  alternation = true
                   break
                 }
               }
-              if (nested) break
+              if (alternation) break
             }
           }
           const target = parts.length === 2 && !parts[1]!.startsWith("-") ? isStaticPathArg(parts[1]!) : undefined
-          if (nested || target === undefined) {
-            cwdTrackingReliable = false
-            effectiveCwdAt.clear()
-            break
+          if (nested) continue
+          if (alternation || target === undefined) {
+            skipExistenceChecks = true
+            if (target === undefined) {
+              effectiveCwdAt.clear()
+              break
+            }
+            continue
           }
           effectiveCwd = path.resolve(effectiveCwd, target)
         }
@@ -1107,7 +1112,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       }
 
       const missingPaths: string[] = []
-      for (const node of cwdTrackingReliable ? tree.rootNode.descendantsOfType("command") : []) {
+      for (const node of skipExistenceChecks ? [] : tree.rootNode.descendantsOfType("command")) {
         if (!node) continue
         const parts: string[] = []
         for (let i = 0; i < node.childCount; i++) {
