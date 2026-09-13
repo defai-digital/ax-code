@@ -14,6 +14,13 @@ changes belong to AX Coder.
 
 - Require Node.js 26 across the repo, SDK, and JSR publish manifests (was Node 24).
 
+### Fixed
+
+- Build the workspace SDK before `pnpm dev` and `pnpm cli` so a fresh checkout can run the TUI from source without a manual `pnpm --dir packages/sdk/js run build`.
+- Launch the source-mode TUI on Windows by gating the in-place `process.execve` on the platform instead of feature detection: Node 26 defines `process.execve` on Windows but calling it throws `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM`.
+- Pass the TUI backend's solid-loader `--import` as a `file://` URL so Windows source mode can spawn the backend; Node's ESM loader rejects a bare `C:\…` path with `ERR_UNSUPPORTED_ESM_URL_SCHEME`.
+- Give Node source (`node-source`) TUI backends a 90s readiness budget so a slow cold tsx transpile does not trip the packaged-runtime 10s handshake timeout.
+
 ## [7.16.3] - 2026-09-12
 
 ### Fixed

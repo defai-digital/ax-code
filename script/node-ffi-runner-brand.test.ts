@@ -101,7 +101,9 @@ describe("node FFI runner process branding", () => {
     expect(runner).toContain("resolveBrandedNodePath(runtime.path)")
     expect(runner).toContain("brandedSpawnOptions(process.env)")
     expect(runner).toContain("axCodeJobTitleOsc()")
-    expect(runner).toContain('typeof process.execve === "function"')
+    // Windows defines process.execve but it throws ERR_FEATURE_UNAVAILABLE_ON_PLATFORM,
+    // so the in-place exec is gated on the platform instead of feature detection.
+    expect(runner).toContain('process.platform !== "win32" && typeof process.execve === "function"')
     // POSIX execve keeps the process argv short ("AX-Code /dev/null [user args]")
     // for macOS Terminal job titles; the Node flags and the entry ride in
     // NODE_OPTIONS, and the caller's value is saved for the entry to restore.

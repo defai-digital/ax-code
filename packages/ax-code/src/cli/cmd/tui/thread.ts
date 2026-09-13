@@ -55,6 +55,12 @@ const require = createRequire(import.meta.url)
 const processStartupCwd = process.cwd()
 
 export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS = 10_000
+// Node source runs (npm run dev / cli on Node + tsx) transpile and import the
+// whole CLI graph inside the backend child on every spawn. A cold Windows start
+// measured ~42s, which the packaged-runtime 10s budget can never cover, so
+// source runs get a larger ceiling. Compiled / node-bundled backends boot in
+// well under a second and keep the tight default.
+export const DEFAULT_TUI_WORKER_READY_TIMEOUT_MS_NODE_SOURCE = 90_000
 export const DEFAULT_TUI_UPGRADE_CHECK_DELAY_MS = 30_000
 export const DEFAULT_TUI_UPGRADE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1_000
 export const DEFAULT_TUI_BACKEND_SHUTDOWN_TIMEOUT_MS = 5_000
@@ -80,11 +86,15 @@ type BackendRuntime = {
   terminate: () => Promise<void>
 }
 
-export function tuiWorkerReadyTimeoutMs(env: Record<string, string | undefined> = process.env) {
+export function tuiWorkerReadyTimeoutMs(
+  env: Record<string, string | undefined> = process.env,
+  mode: ReturnType<typeof runtimeMode> = runtimeMode(),
+) {
   return parseIntegerEnv({
     env,
     name: "AX_CODE_TUI_WORKER_READY_TIMEOUT_MS",
-    fallback: DEFAULT_TUI_WORKER_READY_TIMEOUT_MS,
+    fallback:
+      mode === "node-source" ? DEFAULT_TUI_WORKER_READY_TIMEOUT_MS_NODE_SOURCE : DEFAULT_TUI_WORKER_READY_TIMEOUT_MS,
     min: 1,
   })
 }
@@ -131,7 +141,11 @@ export function tsxLoaderImportSpecifier() {
 
 export function resolveBackendImportSpecifier(specifier: string, startupCwd = processStartupCwd) {
   if (specifier.startsWith("file:")) return specifier
-  return path.isAbsolute(specifier) ? specifier : path.resolve(startupCwd, specifier)
+  const resolved = path.isAbsolute(specifier) ? specifier : path.resolve(startupCwd, specifier)
+  // `--import` feeds Node's ESM loader, which rejects a bare Windows absolute
+  // path (`C:\…`) with ERR_UNSUPPORTED_ESM_URL_SCHEME ("Received protocol 'c:'").
+  // Return a file:// URL on every platform, matching tsxLoaderImportSpecifier().
+  return pathToFileURL(resolved).href
 }
 
 function tuiUpgradeCheckStatePath() {

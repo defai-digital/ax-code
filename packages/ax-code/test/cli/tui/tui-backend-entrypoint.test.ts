@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
+import { pathToFileURL } from "node:url"
 import {
   resolveBackendImportSpecifier,
   tsxLoaderImportSpecifier,
   tuiBackendTransport,
+  tuiWorkerReadyTimeoutMs,
 } from "../../../src/cli/cmd/tui/thread"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
@@ -45,11 +47,14 @@ describe("tui backend entrypoint guardrails", () => {
     expect(specifier).not.toBe("tsx")
   })
 
-  test("resolves relative backend imports from the parent process startup directory", () => {
+  test("resolves relative backend imports to file URLs from the parent process startup directory", () => {
     const startupCwd = path.join(path.parse(PACKAGE_ROOT).root, "repo", "packages", "ax-code")
+    const resolved = path.join(path.parse(PACKAGE_ROOT).root, "repo", "script", "solid-loader.mjs")
 
+    // `--import` feeds the ESM loader, which rejects bare absolute paths on
+    // Windows (ERR_UNSUPPORTED_ESM_URL_SCHEME), so the specifier must be a URL.
     expect(resolveBackendImportSpecifier("../../script/solid-loader.mjs", startupCwd)).toBe(
-      path.join(path.parse(PACKAGE_ROOT).root, "repo", "script", "solid-loader.mjs"),
+      pathToFileURL(resolved).href,
     )
   })
 
@@ -57,6 +62,15 @@ describe("tui backend entrypoint guardrails", () => {
     const specifier = "file:///repo/script/solid-loader.mjs"
 
     expect(resolveBackendImportSpecifier(specifier, "/different/cwd")).toBe(specifier)
+  })
+
+  test("gives source runs a larger readiness budget than packaged runtimes", () => {
+    // Node + tsx source runs re-transpile the CLI graph inside the backend;
+    // packaged runtimes boot in well under a second and keep the tight default.
+    expect(tuiWorkerReadyTimeoutMs({}, "node-source")).toBe(90_000)
+    expect(tuiWorkerReadyTimeoutMs({}, "node-bundled")).toBe(10_000)
+    expect(tuiWorkerReadyTimeoutMs({}, "compiled")).toBe(10_000)
+    expect(tuiWorkerReadyTimeoutMs({ AX_CODE_TUI_WORKER_READY_TIMEOUT_MS: "1234" }, "node-source")).toBe(1234)
   })
 
   test("backend spawn prefers the entry and solid-loader recorded by short-argv launchers", () => {

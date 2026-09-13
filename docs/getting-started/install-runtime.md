@@ -103,6 +103,8 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 `compiled` and `bun-bundled` are retired Bun-era runtime modes, retained only for legacy diagnostics. They are not supported user install channels.
 
+`pnpm dev` and `pnpm cli` compile the workspace SDK (`packages/sdk/js`) to `dist` with the repo TypeScript before launching, so a fresh checkout runs without a manual SDK build. The step invokes `typescript/bin/tsc` through `node` directly, so it does not depend on `node_modules/.bin` being linked. The bundled paths (`pnpm run setup:cli` and `pnpm --dir packages/ax-code run build`) still need `pnpm --dir packages/sdk/js run build` first.
+
 ## Platform Policy
 
 - macOS: use the bash release installer as the primary documented CLI path. It installs under `~/.ax-code`, bootstraps pinned Minisign when needed, verifies the release archive, and does not require Homebrew. Contributor builds use `pnpm run setup:cli`.

@@ -129,8 +129,10 @@ const spawnOptions = brandedSpawnOptions(process.env)
 
 // POSIX TUIs must remain the PTY's foreground process-group leader. Replace
 // this selector process in place instead of leaving a Node parent between the
-// terminal and the actual TUI. Windows has no process.execve implementation,
-// so it retains the asynchronous child-process fallback below.
+// terminal and the actual TUI. Windows has no process.execve implementation:
+// Node still defines the function there, but calling it throws
+// ERR_FEATURE_UNAVAILABLE_ON_PLATFORM. Gate on the platform, not feature
+// detection, and keep the asynchronous child-process fallback below.
 //
 // Apple Terminal composes inactive-tab job titles from the full KERN_PROCARGS2
 // argv, so the exec'd argv stays "AX-Code /dev/null [user args]": the Node
@@ -139,7 +141,7 @@ const spawnOptions = brandedSpawnOptions(process.env)
 // NODE_OPTIONS from AX_CODE_LAUNCH_NODE_OPTIONS before the CLI graph loads, so
 // spawned Node children never re-import the whole CLI. Import values that are
 // absolute paths become file URLs because NODE_OPTIONS tokenizes on spaces.
-if (typeof process.execve === "function") {
+if (process.platform !== "win32" && typeof process.execve === "function") {
   const { nodeFlags, entry, userArgs } = splitNodeLaunchArgs(launchArgs)
   const optionsFlags = []
   let solidLoader
