@@ -10,7 +10,7 @@ import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
 import { CouncilContext } from "../mode/council-context"
 import { Debate } from "../mode/debate"
-import { EnsembleShared } from "../mode/ensemble-shared"
+import { EnsembleShared, isNonTransientMemberError } from "../mode/ensemble-shared"
 import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
@@ -379,7 +379,9 @@ async function runMember(input: {
     const wasTimeout = errMessage.startsWith("timeout:")
     const wasAborted = errMessage.startsWith("aborted:") || abort.aborted
 
-    if (!wasTimeout && !wasAborted && attempt < maxAttempts) {
+    // ADR-099: retry only failures an immediate retry can fix — auth,
+    // rate-limit, and unsupported-spec failures fail again and add pressure.
+    if (!wasTimeout && !wasAborted && !isNonTransientMemberError(errMessage) && attempt < maxAttempts) {
       log.info("council member retrying", {
         toolName: "council",
         memberId: member.memberId,
@@ -498,7 +500,7 @@ export const CouncilTool = Tool.define("council", async () => {
       }
 
       const resolution = await EnsembleShared.resolveMembers(
-        { minMembers: 1, maxMembers: budgetCheck.allowedMembers, requireDistinctProviders: false },
+        { requireDistinctProviders: false },
         args.providers,
         budgetCheck.allowedMembers,
         args.question,

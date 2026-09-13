@@ -7,6 +7,8 @@ Modes:
 Requires modes.arena.enabled=true and at least two distinct models on connected providers. Prefer verify_first strategy for implement.
 If disabled, pass enableIfDisabled=true to opt in and continue in the same session (config is re-read each call).
 
+Context is required evidence when supplied: at most 24000 UTF-16 code units, sent verbatim or rejected before any approval prompt, worktree creation, or model call. Never cut off required evidence to fit; split oversized tasks into explicitly scoped requests.
+
 For code quality *findings* / security ratings prefer the council tool instead of plan arena.
 
 Do not use for trivial one-line edits. Do not invent rankings when providers are missing. Empty or unverified patches cannot win. Do not treat ranking as auto-merge authority.

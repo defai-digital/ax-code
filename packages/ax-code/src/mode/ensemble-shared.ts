@@ -195,6 +195,21 @@ export function keepDistinctProviderMembers<T extends { providerID: string; memb
   return { members: unique, rejected }
 }
 
+/**
+ * Member failures an immediate retry cannot fix: auth (401/403), rate limits
+ * (429/quota), and unsupported provider spec versions. String-matched,
+ * mirroring Council.classifyMemberFailure (ADR-099).
+ */
+export function isNonTransientMemberError(message: string): boolean {
+  const text = message.toLowerCase()
+  if (/unsupported model version/i.test(text)) return true
+  if (text.includes("401") || text.includes("403") || text.includes("auth")) return true
+  if (text.includes("429") || text.includes("rate limit") || text.includes("rate_limit") || text.includes("quota")) {
+    return true
+  }
+  return false
+}
+
 function catalogsForConnectedProviders(
   selectableModels: Readonly<Record<string, readonly string[]>>,
   connectedIDs: readonly string[],
@@ -356,8 +371,6 @@ export namespace EnsembleShared {
   }
 
   export interface ResolveConfig {
-    minMembers: number
-    maxMembers: number
     requireDistinctProviders: boolean
   }
 

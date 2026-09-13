@@ -44,12 +44,16 @@ vi.mock("@/provider/provider", () => ({
   },
 }))
 
-vi.mock("@/mode/ensemble-shared", () => ({
-  EnsembleShared: {
-    snapshotSelectableProviders: vi.fn(async () => ({ count: 3, ids: ["a", "b", "c"], excluded: [] })),
-    resolveMembers: vi.fn(),
-  },
-}))
+vi.mock("@/mode/ensemble-shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/mode/ensemble-shared")>()
+  return {
+    ...actual,
+    EnsembleShared: {
+      snapshotSelectableProviders: vi.fn(async () => ({ count: 3, ids: ["a", "b", "c"], excluded: [] })),
+      resolveMembers: vi.fn(),
+    },
+  }
+})
 
 vi.mock("@/mode/memory", () => ({
   ModeMemory: {
@@ -240,6 +244,25 @@ describe("council member robustness", () => {
     expect(generateObject).toHaveBeenCalledTimes(4)
     expect(generateText).not.toHaveBeenCalled()
   })
+
+  // ADR-099: failures an immediate retry cannot fix are not retried.
+  test.each(["401 Unauthorized: invalid api key", "429 Too Many Requests: quota exceeded"])(
+    "non-transient member failure is not retried (%s)",
+    async (message) => {
+      vi.mocked(Config.getFresh).mockResolvedValue(memberConfig())
+      twoMembers()
+      generateObject.mockRejectedValue(new Error(message))
+
+      const tool = await CouncilTool.init()
+      const result = await tool.execute({ question: "Review auth" }, ctx)
+
+      expect(result.metadata.successfulMembers).toBe(0)
+      expect(result.metadata.failedMembers).toBe(2)
+      // One attempt per member — the 504 case above keeps its retry.
+      expect(generateObject).toHaveBeenCalledTimes(2)
+      expect(generateText).not.toHaveBeenCalled()
+    },
+  )
 
   test("member fails when the generateText fallback is also unparseable and reports both stages", async () => {
     vi.mocked(Config.getFresh).mockResolvedValue(memberConfig())

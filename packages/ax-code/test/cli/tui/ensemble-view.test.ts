@@ -152,6 +152,12 @@ describe("arenaView", () => {
     expect(arenaView({ status: "no_successful_candidate" })).toMatchObject({ tone: "error" })
     expect(arenaView({ status: "no_verified_candidate" })).toMatchObject({ tone: "warn" })
     expect(arenaView({ status: "disabled" })).toMatchObject({ tone: "muted", statusLabel: "Disabled" })
+    expect(arenaView({ status: "context_rejected" })).toMatchObject({ tone: "error", statusLabel: "Context too large" })
+    expect(arenaView({ status: "budget_rejected" })).toMatchObject({ tone: "error", statusLabel: "Budget rejected" })
+    expect(arenaView({ status: "insufficient_members" })).toMatchObject({
+      tone: "warn",
+      statusLabel: "Needs 2+ models",
+    })
     expect(arenaView({ status: "not_git" })).toMatchObject({ tone: "error", statusLabel: "Requires a git repo" })
     expect(arenaView({ status: "no_base_commit" }).tone).toBe("error")
     expect(arenaView({ status: "dirty_worktree" }).statusLabel).toBe("Worktree not clean")

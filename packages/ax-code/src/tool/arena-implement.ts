@@ -453,7 +453,9 @@ export async function runImplementContestant(input: {
           `After edits, leave the tree in a state that typecheck/tests can validate.`,
           "",
           `Task: ${input.task}`,
-          input.context ? `\nContext:\n${input.context.slice(0, 16_000)}` : "",
+          // ADR-099: context is admitted verbatim by the arena tool (or the
+          // call was rejected with context_rejected) — never silently sliced.
+          input.context ? `\nContext:\n${input.context}` : "",
         ]
           .filter(Boolean)
           .join("\n")

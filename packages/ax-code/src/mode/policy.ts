@@ -28,6 +28,8 @@ export namespace ModePolicy {
       enabled?: boolean
       maxContestants?: number
       timeoutMs?: number
+      reasoningTimeoutScale?: number
+      memberTimeoutMs?: Record<string, number>
       strategy?: "verify_first" | "diversity" | "hybrid_score"
     }
     budget?: {
@@ -85,7 +87,7 @@ export namespace ModePolicy {
       return { ok: false, reasons: ["council_disabled"] }
     }
     if (mode === "arena" && config.arena?.enabled !== true) {
-      // Arena defaults off until Phase 2 productization
+      // Arena defaults off; opt in per project
       return { ok: false, reasons: ["arena_disabled"] }
     }
     if (signals.privacyRequired || signals.blockCloudEnsemble) {

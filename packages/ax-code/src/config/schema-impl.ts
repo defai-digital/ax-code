@@ -1196,11 +1196,25 @@ export const Info = z
             enabled: z
               .boolean()
               .optional()
-              .describe("Enable arena multi-contestant mode tools. Default: false until Phase 2."),
+              .describe("Enable arena multi-contestant mode tools. Default: false; opt in per project."),
             maxContestants: PositiveInteger.optional().describe("Maximum arena contestants (default: 3, hard max: 5)."),
             timeoutMs: PositiveInteger.optional().describe(
               "Per-member timeout in ms for arena fan-out (falls back to council timeout, then 60000).",
             ),
+            reasoningTimeoutScale: z
+              .number()
+              .min(1)
+              .max(10)
+              .optional()
+              .describe(
+                "Timeout multiplier applied to contestants whose model declares reasoning capability (falls back to modes.council.reasoningTimeoutScale, then 3).",
+              ),
+            memberTimeoutMs: z
+              .record(z.string(), PositiveInteger)
+              .optional()
+              .describe(
+                'Absolute per-contestant timeout overrides in ms, keyed by "providerID" or "providerID/modelID" (falls back to modes.council.memberTimeoutMs). Exact model keys win over provider-wide keys.',
+              ),
             strategy: z
               .enum(["verify_first", "diversity", "hybrid_score"])
               .optional()

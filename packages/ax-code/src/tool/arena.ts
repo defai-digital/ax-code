@@ -12,7 +12,8 @@ import { Config } from "../config/config"
 import { Arena } from "../mode/arena"
 import { Budget } from "../mode/budget"
 import { Council } from "../mode/council"
-import { EnsembleShared } from "../mode/ensemble-shared"
+import { CouncilContext } from "../mode/council-context"
+import { EnsembleShared, isNonTransientMemberError } from "../mode/ensemble-shared"
 import { ensureJsonModeInstruction } from "../mode/json-mode-prompt"
 import { EnsemblePreflight } from "../mode/preflight"
 import { ModeMemory } from "../mode/memory"
@@ -33,6 +34,22 @@ const log = Log.create({ service: "tool.arena" })
 const DEFAULT_MAX = 3
 const HARD_MAX = 5
 const DEFAULT_TIMEOUT_MS = 60_000
+
+/**
+ * Arena timeout policy: same knobs as council with the same fallback chain
+ * (arena → council → default) as timeoutMs itself (ADR-099). Exported for tests.
+ */
+export function arenaTimeoutPolicy(modes: ModePolicy.ModesConfig | undefined): {
+  timeoutMs: number
+  reasoningScale?: number
+  memberOverrides?: Record<string, number>
+} {
+  return {
+    timeoutMs: modes?.arena?.timeoutMs ?? modes?.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    reasoningScale: modes?.arena?.reasoningTimeoutScale ?? modes?.council?.reasoningTimeoutScale,
+    memberOverrides: modes?.arena?.memberTimeoutMs ?? modes?.council?.memberTimeoutMs,
+  }
+}
 
 // Length/count caps are enforced by clamping after parse (see clampProposal),
 // not hard zod .max() constraints — verbose members otherwise fail the whole
@@ -115,6 +132,8 @@ async function runProposal(input: {
   task: string
   context?: string
   timeoutMs: number
+  reasoningScale?: number
+  memberOverrides?: Record<string, number>
   abort: AbortSignal
   retryOnce?: boolean
 }): Promise<{
@@ -145,6 +164,8 @@ async function runProposal(input: {
     modelID: String(input.member.modelID),
     reasoning: model.capabilities?.reasoning,
     baseTimeoutMs: input.timeoutMs,
+    reasoningScale: input.reasoningScale,
+    memberOverrides: input.memberOverrides,
   })
 
   const attemptProposal = async (): Promise<FanOut.MemberResult<z.infer<typeof ProposalSchema>>> => {
@@ -181,7 +202,9 @@ Return a json object with this shape: {"approach": string, "steps": string[], "r
             },
             {
               role: "user",
-              content: [`Task: ${input.task}`, input.context ? `\nContext:\n${input.context.slice(0, 20_000)}` : ""]
+              // ADR-099: context is admitted verbatim (or the call was rejected
+              // with context_rejected) — never silently sliced.
+              content: [`Task: ${input.task}`, input.context ? `\nContext:\n${input.context}` : ""]
                 .filter(Boolean)
                 .join("\n"),
             },
@@ -218,8 +241,9 @@ Return a json object with this shape: {"approach": string, "steps": string[], "r
     status: wasTimeout ? "timeout" : wasAborted ? "aborted" : "error",
   })
 
-  // Retry once on non-abort, non-timeout failure
-  if (retryOnce && !wasTimeout && !wasAborted) {
+  // Retry once on non-abort, non-timeout failure. ADR-099: skip failures an
+  // immediate retry cannot fix (auth, rate limit, unsupported spec version).
+  if (retryOnce && !wasTimeout && !wasAborted && !isNonTransientMemberError(firstError)) {
     log.info("arena proposal retrying", {
       toolName: "arena",
       memberId: input.member.memberId,
@@ -267,6 +291,7 @@ type ArenaMetadata = {
   suggestedTool?: string
   baseCommit?: string
   selectionErrors?: string[]
+  contextAdmission?: CouncilContext.Admission
 }
 
 export const ArenaTool = Tool.define("arena", async () => {
@@ -282,6 +307,50 @@ export const ArenaTool = Tool.define("arena", async () => {
       const suggestedTool = EnsemblePreflight.suggestTool(args.task)
       const arenaMode = args.mode ?? "plan"
       let baseCommit: string | undefined
+
+      // Display-only config path in disabled messages; not a filesystem open.
+      const projectConfigHint = path.join(Instance.directory, "ax-code.json")
+      if (modes?.arena?.enabled !== true && args.enableIfDisabled !== true) {
+        // Pure no-op path: report disabled without an approval prompt (ADR-097).
+        const metadata: ArenaMetadata = {
+          status: "disabled",
+          mode: arenaMode,
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+          suggestedTool,
+        }
+        return {
+          title: "Arena disabled",
+          output: EnsemblePreflight.arenaDisabledMessage({
+            providers: providerSnap,
+            projectConfigHint,
+          }),
+          metadata,
+        }
+      }
+
+      // ADR-099: caller context is required evidence, admitted verbatim up to
+      // the shared cap or rejected before any preflight IO, approval prompt,
+      // worktree creation, or model call — never silently sliced.
+      const contextAdmission = CouncilContext.admit(args.context)
+      if (contextAdmission.status === "rejected") {
+        const metadata: ArenaMetadata = {
+          status: "context_rejected",
+          mode: arenaMode,
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+          contextAdmission,
+        }
+        return {
+          title: "Arena context rejected",
+          output:
+            `Arena rejected ${contextAdmission.suppliedCharacters} UTF-16 code units ` +
+            `(${contextAdmission.suppliedBytes} bytes) of required context; the limit is ${contextAdmission.maxCharacters}. ` +
+            "No approval prompt, worktree, or model call ran and no context was truncated. Split the task into " +
+            "explicitly scoped requests or reduce optional background while retaining the required evidence.",
+          metadata,
+        }
+      }
 
       if (arenaMode === "implement" && (modes?.arena?.enabled === true || args.enableIfDisabled === true)) {
         const preflight = await inspectImplementArenaBase(Instance.worktree)
@@ -320,84 +389,22 @@ export const ArenaTool = Tool.define("arena", async () => {
         baseCommit = preflight.baseCommit
       }
 
-      // Display-only config path in disabled messages; not a filesystem open.
-      const projectConfigHint = path.join(Instance.directory, "ax-code.json")
-      if (modes?.arena?.enabled !== true && args.enableIfDisabled !== true) {
-        // Pure no-op path: report disabled without an approval prompt (ADR-097).
-        const metadata: ArenaMetadata = {
-          status: "disabled",
-          mode: arenaMode,
-          providerCount: providerSnap.count,
-          providerIDs: providerSnap.ids,
-          suggestedTool,
-        }
-        return {
-          title: "Arena disabled",
-          output: EnsemblePreflight.arenaDisabledMessage({
-            providers: providerSnap,
-            projectConfigHint,
-          }),
-          metadata,
-        }
-      }
-
-      // Ask before any mutation (the enableIfDisabled project-config write,
-      // implement worktrees) and before the fan-out (ADR-097).
-      await ctx.ask({
-        permission: "arena",
-        patterns: ["*"],
-        always: ["*"],
-        metadata: { task: args.task.slice(0, 200), mode: args.mode ?? "plan" },
-      })
-
-      if (modes?.arena?.enabled !== true) {
-        // args.enableIfDisabled === true: persist the opt-in, then continue.
-        await Config.update({
-          modes: {
-            arena: {
-              enabled: true,
-              maxContestants: modes?.arena?.maxContestants ?? DEFAULT_MAX,
-              strategy: args.strategy ?? modes?.arena?.strategy ?? "verify_first",
-            },
-          },
-        })
-        enabledThisCall = true
-        cfg = await Config.getFresh()
-        modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
-      }
-
-      if (modes?.arena?.enabled !== true) {
-        const metadata: ArenaMetadata = {
-          status: "disabled",
-          mode: arenaMode,
-          providerCount: providerSnap.count,
-          providerIDs: providerSnap.ids,
-          suggestedTool,
-        }
-        return {
-          title: "Arena disabled",
-          output: EnsemblePreflight.arenaDisabledMessage({
-            providers: providerSnap,
-            projectConfigHint,
-          }),
-          metadata,
-        }
-      }
-
       const strategy =
-        args.strategy ?? modes.arena?.strategy ?? (arenaMode === "implement" ? "verify_first" : "diversity")
-      const timeoutMs = modes.arena?.timeoutMs ?? modes.council?.timeoutMs ?? DEFAULT_TIMEOUT_MS
-      const maxContestants = Math.min(HARD_MAX, Math.max(1, modes.arena?.maxContestants ?? DEFAULT_MAX))
+        args.strategy ?? modes?.arena?.strategy ?? (arenaMode === "implement" ? "verify_first" : "diversity")
+      const maxContestants = Math.min(HARD_MAX, Math.max(1, modes?.arena?.maxContestants ?? DEFAULT_MAX))
+      // ADR-099: arena honors the same timeout knobs as council, with the same
+      // fallback chain (arena → council → default) as timeoutMs itself.
+      const { timeoutMs, reasoningScale, memberOverrides } = arenaTimeoutPolicy(modes)
 
       const budgetCheck = Budget.check({
         kind: "arena",
         requestedMembers: args.providers?.length ?? maxContestants,
         budget: {
-          maxMembers: modes.arena?.maxContestants ?? 3,
+          maxMembers: modes?.arena?.maxContestants ?? 3,
           maxContestants,
           timeoutMs,
-          maxEstimatedUsd: modes.budget?.maxEstimatedUsd,
-          estimatedUsdPerMember: modes.budget?.estimatedUsdPerMember,
+          maxEstimatedUsd: modes?.budget?.maxEstimatedUsd,
+          estimatedUsdPerMember: modes?.budget?.estimatedUsdPerMember,
         },
       })
       if (!budgetCheck.ok) {
@@ -417,7 +424,7 @@ export const ArenaTool = Tool.define("arena", async () => {
       }
 
       const resolution = await EnsembleShared.resolveMembers(
-        { minMembers: 2, maxMembers: budgetCheck.allowedMembers, requireDistinctProviders: false },
+        { requireDistinctProviders: false },
         args.providers,
         budgetCheck.allowedMembers,
         args.task,
@@ -449,6 +456,51 @@ export const ArenaTool = Tool.define("arena", async () => {
             (resolution.notes?.length
               ? `\n\nSelection notes:\n${resolution.notes.map((note) => `- ${note}`).join("\n")}`
               : ""),
+          metadata,
+        }
+      }
+
+      // Ask only after every no-op preflight has passed (ADR-099 extends
+      // council's ADR-097 ask-last ordering to arena): the config write below
+      // and the fan-out are the first mutating/expensive steps.
+      await ctx.ask({
+        permission: "arena",
+        patterns: ["*"],
+        always: ["*"],
+        metadata: { task: args.task.slice(0, 200), mode: arenaMode },
+      })
+
+      if (modes?.arena?.enabled !== true) {
+        // args.enableIfDisabled === true: persist the opt-in, then continue.
+        await Config.update({
+          modes: {
+            arena: {
+              enabled: true,
+              maxContestants: modes?.arena?.maxContestants ?? DEFAULT_MAX,
+              strategy: args.strategy ?? modes?.arena?.strategy ?? "verify_first",
+            },
+          },
+        })
+        enabledThisCall = true
+        cfg = await Config.getFresh()
+        modes = (cfg as { modes?: ModePolicy.ModesConfig }).modes
+      }
+
+      if (modes?.arena?.enabled !== true) {
+        // Defensive: the persisted opt-in did not take effect.
+        const metadata: ArenaMetadata = {
+          status: "disabled",
+          mode: arenaMode,
+          providerCount: providerSnap.count,
+          providerIDs: providerSnap.ids,
+          suggestedTool,
+        }
+        return {
+          title: "Arena disabled",
+          output: EnsemblePreflight.arenaDisabledMessage({
+            providers: providerSnap,
+            projectConfigHint,
+          }),
           metadata,
         }
       }
@@ -515,6 +567,8 @@ export const ArenaTool = Tool.define("arena", async () => {
             task: args.task,
             context: args.context,
             timeoutMs,
+            reasoningScale,
+            memberOverrides,
             abort: ctx.abort,
           })
           arenaCompleted++

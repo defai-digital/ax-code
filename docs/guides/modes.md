@@ -82,14 +82,16 @@ In `ax-code.json`:
 }
 ```
 
-| Field                  | Meaning                                                                                                                                                                           |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `modes.default`        | `local` \| `cloud` \| `hybrid` \| `arena` \| `council`. Unset: hybrid when local fits the policy signals, else cloud for single-path defaults.                                    |
-| `modes.hybrid.*`       | Local preference, high-complexity escalate to cloud, local provider id                                                                                                            |
-| `modes.council.*`      | Enable, member cap, timeout, reasoning-model timeout scale, per-member timeout overrides, optional anonymous debate rounds (maximum 3)                                            |
-| `modes.arena.enabled`  | Must be `true` for the `arena` tool (default off). Mid-session edits are picked up on the next tool call (`Config.getFresh`). Or pass `enableIfDisabled: true` on the arena tool. |
-| `modes.arena.strategy` | `verify_first` (recommended for implement), `diversity`, or `hybrid_score`                                                                                                        |
-| `modes.budget.*`       | Fail-closed cap on estimated USD for ensemble fan-out                                                                                                                             |
+| Field                               | Meaning                                                                                                                                                                           |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `modes.default`                     | `local` \| `cloud` \| `hybrid` \| `arena` \| `council`. Unset: hybrid when local fits the policy signals, else cloud for single-path defaults.                                    |
+| `modes.hybrid.*`                    | Local preference, high-complexity escalate to cloud, local provider id                                                                                                            |
+| `modes.council.*`                   | Enable, member cap, timeout, reasoning-model timeout scale, per-member timeout overrides, optional anonymous debate rounds (maximum 3)                                            |
+| `modes.arena.enabled`               | Must be `true` for the `arena` tool (default off). Mid-session edits are picked up on the next tool call (`Config.getFresh`). Or pass `enableIfDisabled: true` on the arena tool. |
+| `modes.arena.strategy`              | `verify_first` (recommended for implement), `diversity`, or `hybrid_score`                                                                                                        |
+| `modes.arena.reasoningTimeoutScale` | Timeout multiplier for contestants whose model declares reasoning capability (falls back to `modes.council.reasoningTimeoutScale`, then 3)                                        |
+| `modes.arena.memberTimeoutMs`       | Absolute per-contestant timeout overrides keyed by `"providerID"` or `"providerID/modelID"` (falls back to `modes.council.memberTimeoutMs`)                                       |
+| `modes.budget.*`                    | Fail-closed cap on estimated USD for ensemble fan-out                                                                                                                             |
 
 ## Hybrid placement
 
@@ -177,6 +179,8 @@ If the user asked for council/arena, `task_parallel` is rejected until the ensem
 **Tool:** `arena`  
 **Slash:** `/arena <task>`  
 **Requires:** `modes.arena.enabled: true` and ≥2 distinct selectable models on connected providers (including a shared gateway)
+
+**Evidence admission (shared with council).** The optional `context` is accepted verbatim up to 24,000 UTF-16 code units. Larger context returns `context_rejected` before any approval prompt, worktree creation, or model call — AX Code never silently shortens it. Split the task into explicitly scoped requests or reduce optional background while retaining required evidence. The approval prompt itself fires only after every no-op preflight has passed (disabled, context admission, implement git preflight, budget, member resolution).
 
 ### `mode: "plan"` (default)
 
