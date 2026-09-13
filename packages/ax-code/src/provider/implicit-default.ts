@@ -4,14 +4,18 @@ import { modelSelectableForProvider, skuKey } from "./model-selectability"
 /** Session default when the user does not pass --model / config.model. */
 export const IMPLICIT_DEFAULT_MODEL_SKUS = [
   "deepseek-flash",
-  "MiniMax-M3",
   "glm-5.3-flash",
   "qwen3.8-flash",
-  "muse-spark-1.3",
+  "MiniMax-M3",
+  "grok-4.6",
+  "claude-sonnet-5",
+  "gpt-6",
+  "gemini-3.8-flash",
+  "qwen3.8-27b",
 ] as const
 
 export const IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE =
-  "No default model is available. Connect DeepSeek (deepseek-flash), MiniMax Token Plan (MiniMax-M3), Z.AI (glm-5.3-flash), Alibaba Token Plan (qwen3.8-flash), or Meta (muse-spark-1.3), or pass --model provider/model. AX Engine requires an explicit model ID."
+  "No default model is available. Connect a provider that offers deepseek-flash, glm-5.3-flash, qwen3.8-flash, MiniMax-M3, grok-4.6, claude-sonnet-5, gpt-6, gemini-3.8-flash, or qwen3.8-27b, or pass --model provider/model. AX Engine requires an explicit model ID."
 
 type SelectableProvider = {
   id: string

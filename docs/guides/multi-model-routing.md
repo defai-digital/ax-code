@@ -23,7 +23,9 @@ Pin `provider/model` IDs that are connected. Disabled first-party plan IDs
 (`alibaba-token-plan`, `deepseek`, `zai-coding-plan`, `minimax-coding-plan`)
 still resolve by SKU, but each call first tries the disabled provider and
 warns. Qwen 3.8 Max is a valid explicit choice, not the product or example
-default; without `config.model`, implicit default prefers flash SKUs.
+default; without `config.model`, implicit default walks connected catalogs in
+this order: deepseek-flash, glm-5.3-flash, qwen3.8-flash, MiniMax-M3, grok-4.6,
+claude-sonnet-5, gpt-6, gemini-3.8-flash, qwen3.8-27b.
 
 ## Config template
 

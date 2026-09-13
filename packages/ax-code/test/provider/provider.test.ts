@@ -4060,7 +4060,9 @@ test("defaultModel falls back when the configured model's provider is disabled",
       Env.set("GROQ_API_KEY", "test-api-key")
     },
     fn: async () => {
-      await expect(Provider.defaultModel()).rejects.toThrow(/No default model is available/)
+      const model = await Provider.defaultModel()
+      expect(String(model.providerID)).toBe("groq")
+      expect(String(model.modelID)).toBe("qwen/qwen3.8-27b")
     },
   })
 })

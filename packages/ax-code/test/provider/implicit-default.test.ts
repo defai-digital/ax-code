@@ -101,10 +101,14 @@ describe("implicit default model selection", () => {
   test("walks the implicit SKU chain across connected providers", () => {
     expect(IMPLICIT_DEFAULT_MODEL_SKUS).toEqual([
       "deepseek-flash",
-      "MiniMax-M3",
       "glm-5.3-flash",
       "qwen3.8-flash",
-      "muse-spark-1.3",
+      "MiniMax-M3",
+      "grok-4.6",
+      "claude-sonnet-5",
+      "gpt-6",
+      "gemini-3.8-flash",
+      "qwen3.8-27b",
     ])
     expect(
       pickImplicitDefaultModel([
@@ -113,18 +117,36 @@ describe("implicit default model selection", () => {
       ]),
     ).toEqual({ providerID: "deepseek", modelID: "deepseek-flash" })
     expect(
+      pickImplicitDefaultModel([
+        { id: "minimax-coding-plan", models: { "MiniMax-M3": tool, "MiniMax-M2.7": tool } },
+        { id: "zai", models: { "glm-5.3-flash": tool, "glm-5.3": tool } },
+      ]),
+    ).toEqual({ providerID: "zai", modelID: "glm-5.3-flash" })
+    expect(
       pickImplicitDefaultModel([{ id: "minimax-coding-plan", models: { "MiniMax-M3": tool, "MiniMax-M2.7": tool } }]),
     ).toEqual({ providerID: "minimax-coding-plan", modelID: "MiniMax-M3" })
-    expect(pickImplicitDefaultModel([{ id: "zai", models: { "glm-5.3-flash": tool, "glm-5.3": tool } }])).toEqual({
-      providerID: "zai",
-      modelID: "glm-5.3-flash",
-    })
     expect(
       pickImplicitDefaultModel([{ id: "alibaba-token-plan", models: { "qwen3.8-flash": tool, "qwen3.8-max": tool } }]),
     ).toEqual({ providerID: "alibaba-token-plan", modelID: "qwen3.8-flash" })
-    expect(pickImplicitDefaultModel([{ id: "meta", models: { "muse-spark-1.3": tool } }])).toEqual({
-      providerID: "meta",
-      modelID: "muse-spark-1.3",
+    expect(pickImplicitDefaultModel([{ id: "xai", models: { "grok-4.6": tool } }])).toEqual({
+      providerID: "xai",
+      modelID: "grok-4.6",
+    })
+    expect(pickImplicitDefaultModel([{ id: "anthropic", models: { "claude-sonnet-5": tool } }])).toEqual({
+      providerID: "anthropic",
+      modelID: "claude-sonnet-5",
+    })
+    expect(pickImplicitDefaultModel([{ id: "openai", models: { "gpt-6": tool } }])).toEqual({
+      providerID: "openai",
+      modelID: "gpt-6",
+    })
+    expect(pickImplicitDefaultModel([{ id: "google", models: { "gemini-3.8-flash": tool } }])).toEqual({
+      providerID: "google",
+      modelID: "gemini-3.8-flash",
+    })
+    expect(pickImplicitDefaultModel([{ id: "groq", models: { "qwen/qwen3.8-27b": tool } }])).toEqual({
+      providerID: "groq",
+      modelID: "qwen/qwen3.8-27b",
     })
   })
 
@@ -132,7 +154,7 @@ describe("implicit default model selection", () => {
     expect(
       pickImplicitDefaultModel([
         { id: "ax-engine", models: { "qwen3.8-27b-axq-6bit": tool, "deepseek-flash": tool } },
-        { id: "groq", models: { "qwen/qwen3.8-27b": tool } },
+        { id: "groq", models: { "llama-3.1-8b": tool } },
       ]),
     ).toBeUndefined()
   })
