@@ -131,3 +131,27 @@ describe("AutomatosX metadata store", () => {
     expect(result.warnings.join(" ")).toContain("Cached catalog unavailable")
   })
 })
+
+test("historical offline metadata survives provider catalog removal without granting eligibility", async () => {
+  await using tmp = await tmpdir()
+  const model = hubFixture()
+  const fetcher = vi.fn<typeof fetch>()
+  const store = createHubCatalogStore({ ...storeInput(tmp.path), productCatalog: async () => ({}), fetch: fetcher })
+  const id = hubModelID(model)
+  expect((await store.inspect()).definitions).toEqual([])
+  await expect(store.resolve(id)).rejects.toThrow("AX_ENGINE_MODEL_UNSUPPORTED")
+  expect(await store.resolve(id, { offline: true })).toMatchObject({
+    id,
+    revision: model.sha,
+    sourceModel: "Qwen/Qwen3.8-27B",
+    toolcall: false,
+    artifactFiles: ["config.json", "model.safetensors"],
+  })
+  expect(fetcher).not.toHaveBeenCalled()
+  const incomplete = createHubCatalogStore({
+    ...storeInput(tmp.path, [hubFixture({ siblings: [{ rfilename: "model.safetensors" }] })]),
+    productCatalog: async () => ({}),
+    fetch: fetcher,
+  })
+  await expect(incomplete.resolve(id, { offline: true })).rejects.toThrow("AX_ENGINE_MODEL_UNSUPPORTED")
+})

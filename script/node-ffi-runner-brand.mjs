@@ -35,17 +35,16 @@ function isSameFile(left, right, fsMod) {
   }
 }
 
-function linkOrCopy(real, branded, fsMod) {
+function copyRuntime(real, branded, fsMod) {
   fsMod.mkdirSync(path.dirname(branded), { recursive: true })
-  if (isSameFile(branded, real, fsMod)) return true
   const pending = `${branded}.${randomUUID()}`
   try {
-    try {
-      fsMod.linkSync(real, pending)
-    } catch {
-      fsMod.copyFileSync(real, pending)
-      fsMod.chmodSync(pending, 0o755)
-    }
+    // A hardlink aliases the original executable's vnode on macOS. Concurrent
+    // launches can then resolve its loader path through this temporary cache,
+    // breaking unrelated Node processes when that cache is removed. A copy
+    // also prevents cache changes from modifying the installed Node binary.
+    fsMod.copyFileSync(real, pending)
+    fsMod.chmodSync(pending, 0o755)
     fsMod.renameSync(pending, branded)
     return true
   } catch {
@@ -129,7 +128,7 @@ export function resolveBrandedNodePath(nodePath, options = {}) {
     .update(`${real}\n${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`)
     .digest("hex")
   const branded = path.join(cacheDir, `runtime-${identity}`, "bin", name)
-  if (linkOrCopy(real, branded, fsMod)) {
+  if (copyRuntime(real, branded, fsMod)) {
     linkNodeLibs(real, branded, fsMod)
     if (options.verify === false || verifyBrandedNodeRuns(branded, options)) return branded
   }

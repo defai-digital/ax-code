@@ -2,6 +2,7 @@
 import { spawn, spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
+import { fileURLToPath } from "node:url"
 import {
   partitionExecveFlags,
   prepareNodeArgs,
@@ -149,11 +150,31 @@ const spawnOptions = brandedSpawnOptions(process.env)
 // reject bare Windows paths, and split NODE_OPTIONS on spaces.
 if (process.platform !== "win32" && typeof process.execve === "function") {
   const { nodeFlags, entry, userArgs } = splitNodeLaunchArgs(launchArgs)
+  // Only this entry implements the preload restoration and worker guards.
+  // Generic scripts require Node's main-module identity and ordinary argv;
+  // importing them also leaks their initialization into children and workers.
+  const tuiEntry = fileURLToPath(new URL("../packages/ax-code/src/index-node-tui.ts", import.meta.url))
+  if (!entry || path.resolve(entry) !== tuiEntry) {
+    const argv = [AX_CODE_SPAWN_ARGV0, ...tuiArgs]
+    try {
+      process.execve(brandedPath, argv, process.env)
+    } catch (error) {
+      if (brandedPath === runtime.path) throw error
+      process.execve(runtime.path, argv, process.env)
+    }
+  }
   const { nodeOptionsFlags, argvFlags } = partitionExecveFlags(nodeFlags)
   const optionsFlags = []
   let solidLoader
   for (let i = 0; i < nodeOptionsFlags.length; i++) {
     const flag = nodeOptionsFlags[i]
+    if (flag.startsWith("--import=")) {
+      const value = flag.slice("--import=".length)
+      const specifier = toNodeOptionsImportSpecifier(value)
+      if (value.includes("solid-loader")) solidLoader = specifier
+      optionsFlags.push("--import", specifier)
+      continue
+    }
     if (flag === "--import" && i + 1 < nodeOptionsFlags.length) {
       const value = nodeOptionsFlags[i + 1]
       const specifier = toNodeOptionsImportSpecifier(value)

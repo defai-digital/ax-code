@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync, rmSync, readFileSync, statSync, chmodSync, mkdirSync } from "node:fs"
+import { mkdtempSync, writeFileSync, rmSync, readFileSync, chmodSync, mkdirSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
@@ -47,7 +47,8 @@ describe("node FFI runner process branding", () => {
       })
       expect(path.basename(branded)).toBe("AX-Code")
       expect(branded).toMatch(/runtime-[a-f0-9]+[/\\]bin[/\\]AX-Code$/)
-      expect(statSync(branded).ino).toBe(statSync(nodePath).ino)
+      writeFileSync(branded, "branded executable changed")
+      expect(readFileSync(nodePath, "utf8")).toBe("#!/bin/sh\n")
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
