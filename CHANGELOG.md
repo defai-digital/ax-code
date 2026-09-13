@@ -10,6 +10,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Keep provider error bodies out of the local ensemble ledger, and enforce its retention cap in UTF-8 bytes while discarding incomplete oversized records.
+
 - Keep POSIX TUI process argv at `AX-Code /dev/null [user args]` by moving Node flags and the entry into `NODE_OPTIONS`, so Apple Terminal inactive-tab job titles stay short. Restore the caller's `NODE_OPTIONS` before the CLI graph loads, and record the real entry path for the TUI backend spawn.
 - Bound chairman failure labels with the shared fan-out error description so nested SDK messages do not land in the council transcript.
 - Pause idle recap when the user types after opening a settled session: the prompt ref is a Solid signal so first-observation recap can subscribe before Prompt mounts.

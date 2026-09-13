@@ -30,7 +30,7 @@ export namespace EnsembleLedger {
     timeoutMs: number
     /** SHA-256 of the system+user prompt. Never the prompt text. */
     promptHash?: string
-    /** Bounded, body-free failure label (see FanOut.describeError). */
+    /** Accepted for compatibility but never persisted: errors can contain provider bodies. */
     error?: string
   }
 
@@ -52,9 +52,10 @@ export namespace EnsembleLedger {
    */
   export function truncateToCap(raw: string, maxBytes: number, retainBytes: number): string {
     if (Buffer.byteLength(raw, "utf8") <= maxBytes) return raw
-    const tail = raw.slice(raw.length - retainBytes)
-    const firstNewline = tail.indexOf("\n")
-    return firstNewline >= 0 ? tail.slice(firstNewline + 1) : tail
+    const bytes = Buffer.from(raw, "utf8")
+    const tail = bytes.subarray(Math.max(0, bytes.length - retainBytes))
+    const firstNewline = tail.indexOf(0x0a)
+    return firstNewline >= 0 ? tail.subarray(firstNewline + 1).toString("utf8") : ""
   }
 
   /**
@@ -62,12 +63,25 @@ export namespace EnsembleLedger {
    * and lock-protected cross-process; failures are logged, never thrown.
    */
   export function record(entry: Entry): void {
+    // Snapshot only declared fields before queuing; provider errors may contain
+    // model output or credentials even when their text has been length-bounded.
+    const serialized =
+      JSON.stringify({
+        at: entry.at,
+        tool: entry.tool,
+        memberId: entry.memberId,
+        phase: entry.phase,
+        outcome: entry.outcome,
+        durationMs: entry.durationMs,
+        timeoutMs: entry.timeoutMs,
+        promptHash: entry.promptHash,
+      }) + "\n"
     writeChain = writeChain.then(async () => {
       try {
         const target = ledgerPath()
         using _lock = await FileLock.acquire(target)
         await fs.mkdir(path.dirname(target), { recursive: true })
-        await fs.appendFile(target, JSON.stringify(entry) + "\n", "utf8")
+        await fs.appendFile(target, serialized, "utf8")
         const stat = await fs.stat(target).catch(() => undefined)
         if (stat && stat.size > MAX_BYTES) {
           const raw = await fs.readFile(target, "utf8")
@@ -103,7 +117,6 @@ export namespace EnsembleLedger {
         durationMs: event.durationMs,
         timeoutMs: input.timeoutMs,
         promptHash: input.promptHash,
-        ...(event.error ? { error: event.error.slice(0, 200) } : {}),
       })
   }
 }

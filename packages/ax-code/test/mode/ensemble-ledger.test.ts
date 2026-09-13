@@ -42,7 +42,7 @@ describe("EnsembleLedger", () => {
     expect(raw).not.toContain("Review auth")
   })
 
-  test("telemetryFor returns undefined when disabled and bounds errors when enabled", async () => {
+  test("telemetryFor returns undefined when disabled and omits untrusted errors when enabled", async () => {
     expect(
       EnsembleLedger.telemetryFor({ enabled: false, tool: "arena", timeoutMs: 1000, memberId: (m: string) => m }),
     ).toBeUndefined()
@@ -56,14 +56,40 @@ describe("EnsembleLedger", () => {
       memberId: (m) => m,
     })
     expect(telemetry).toBeDefined()
-    telemetry!({ member: "a/m", outcome: "error", durationMs: 5, error: "x".repeat(500) })
+    telemetry!({
+      member: "a/m",
+      outcome: "error",
+      durationMs: 5,
+      error: "Provider response: private prompt and credential contents",
+    })
     await EnsembleLedger.drain()
 
     const parsed = JSON.parse((await fs.readFile(EnsembleLedger.ledgerPath(), "utf8")).trim())
     expect(parsed.tool).toBe("arena")
     expect(parsed.phase).toBe("judge")
     expect(parsed.memberId).toBe("a/m")
-    expect(parsed.error.length).toBe(200)
+    expect(parsed.error).toBeUndefined()
+  })
+
+  test("record never persists provider error bodies", async () => {
+    EnsembleLedger.record(entry({ outcome: "error", error: "Private model output" }))
+    await EnsembleLedger.drain()
+    const raw = await fs.readFile(EnsembleLedger.ledgerPath(), "utf8")
+    expect(raw).not.toContain("Private model output")
+    expect(JSON.parse(raw).outcome).toBe("error")
+  })
+
+  test("truncateToCap measures Unicode tails in bytes", () => {
+    const member = "\u{1f680}".repeat(8)
+    const raw = (JSON.stringify({ member }) + "\n").repeat(100)
+    const out = EnsembleLedger.truncateToCap(raw, 200, 120)
+    expect(Buffer.byteLength(out, "utf8")).toBeLessThanOrEqual(120)
+    expect(out).not.toContain("\ufffd")
+    for (const line of out.trim().split("\n")) expect(JSON.parse(line)).toEqual({ member })
+  })
+
+  test("truncateToCap drops an oversized incomplete line", () => {
+    expect(EnsembleLedger.truncateToCap("x".repeat(200), 100, 60)).toBe("")
   })
 
   test("truncateToCap keeps a line-aligned tail and leaves small files alone", () => {
