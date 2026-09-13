@@ -181,7 +181,7 @@ describe("session navigation callbacks", () => {
     const tree = mount(() => SessionNavigation(navigationProps()))
     click(tree, "+ New session")
     click(tree, "Known requests (0)")
-    click(tree, "/navigation to hide")
+    click(tree, "/navigation")
     expect(mocked.trigger.mock.calls).toEqual([["session.new"], ["session.attention"], ["session.navigation"]])
     expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()

@@ -267,7 +267,7 @@ export function SessionNavigation(props: {
         </box>
         <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation")}>
           <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-            <span style={{ fg: theme.text }}>/navigation to hide</span>
+            <span style={{ fg: theme.text }}>/navigation</span>
           </text>
         </box>
       </box>
