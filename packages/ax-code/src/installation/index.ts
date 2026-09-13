@@ -1,3 +1,4 @@
+import { standaloneInstallRoot, isWithinInstallPrefix } from "./install-layout"
 import path from "path"
 import os from "os"
 import fs from "fs/promises"
@@ -8,9 +9,9 @@ import {
   HOMEBREW_TAP,
   LEGACY_HOMEBREW_TAP,
   HOMEBREW_FORMULA_API_URL,
-  INSTALL_SCRIPT_URL,
   INSTALL_PS1_SCRIPT_URL,
   GITHUB_RELEASES_API_URL,
+  GITHUB_REPO_URL,
 } from "@/constants/project"
 import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
@@ -233,7 +234,7 @@ export namespace Installation {
   // Fetches a remote installer script and verifies it against its optional
   // `.sha256` sidecar. A hash mismatch is a hard failure; a missing sidecar
   // only warns and proceeds so existing deployments without one keep working.
-  async function fetchInstallerScript(scriptUrl: string) {
+  async function fetchInstallerScript(scriptUrl: string, requireDigest = false) {
     const sha256Url = `${scriptUrl}.sha256`
     const response = await fetchOk(scriptUrl)
     // Preserve the response bytes exactly. Decoding to text and re-encoding
@@ -243,6 +244,10 @@ export namespace Installation {
     try {
       const sha256Res = await dependencies.fetch(sha256Url)
       if (!sha256Res.ok) {
+        if (requireDigest)
+          throw new Error(
+            "Install script integrity check failed: release digest is missing; use a verified manual installer",
+          )
         log.warn("install script .sha256 sidecar not found — skipping integrity check")
       } else {
         const expected = (await sha256Res.text()).trim().split(/\s+/)[0]
@@ -258,7 +263,7 @@ export namespace Installation {
       }
     } catch (e) {
       const msg = toErrorMessage(e)
-      if (msg.startsWith("Install script integrity check failed")) throw e
+      if (requireDigest || msg.startsWith("Install script integrity check failed")) throw e
       log.warn("could not verify install script integrity", { error: e })
     }
     return bodyBytes
@@ -266,7 +271,10 @@ export namespace Installation {
 
   async function upgradeCurl(target: string) {
     if (dependencies.platform === "win32") return upgradeWindows(target)
-    const bodyBytes = await fetchInstallerScript(INSTALL_SCRIPT_URL)
+    const version = semver.valid(target)
+    if (!version) throw new Error("Invalid installer release version")
+    target = version
+    const bodyBytes = await fetchInstallerScript(`${GITHUB_REPO_URL}/releases/download/v${target}/install`, true)
     return dependencies.run(["bash"], {
       input: bodyBytes,
       env: { VERSION: target },
@@ -308,20 +316,38 @@ export namespace Installation {
     }
   }
 
-  export async function method(): Promise<Method> {
-    if (process.execPath.includes(path.join(".ax-code", "bin"))) return "curl"
-    if (process.execPath.includes(path.join(".local", "bin"))) return "curl"
+  export async function activeInstallPath(input: { entryPath?: string; execPath?: string } = {}) {
+    const active =
+      input.entryPath ??
+      input.execPath ??
+      process.env.AX_CODE_CLI_ENTRY ??
+      (/\.[cm]?[jt]sx?$/.test(process.argv[1] ?? "") ? process.argv[1] : process.execPath)
+    return fs.realpath(active).catch(() => path.resolve(active))
+  }
 
+  export async function standaloneRoot(input: { entryPath?: string; execPath?: string; home?: string } = {}) {
+    const home = input.home ?? os.homedir()
+    const root = await fs.realpath(path.join(home, ".ax-code")).catch(() => path.join(home, ".ax-code"))
+    return standaloneInstallRoot(await activeInstallPath(input), home, dependencies.platform, root)
+  }
+
+  export async function method(input: { entryPath?: string; execPath?: string; home?: string } = {}): Promise<Method> {
+    const active = await activeInstallPath(input)
+    if (await standaloneRoot({ ...input, entryPath: active })) return "curl"
+    if (active === path.join(input.home ?? os.homedir(), ".local", "bin", "ax-code")) return "curl"
+    // A checkout remains source-owned even if a package manager also has AX Code.
+    if (/\.[cm]?tsx?$/.test(active)) return "unknown"
     for (const formula of [
       `${HOMEBREW_TAP}/ax-code`,
       `${LEGACY_HOMEBREW_TAP}/ax-code`,
       `${LEGACY_HOMEBREW_TAP}/ax`,
       "ax-code",
     ]) {
-      const out = await text(["brew", "list", "--formula", formula])
-      if (out.trim()) return "brew"
+      const prefix = (await text(["brew", "--prefix", formula])).trim()
+      if (!prefix) continue
+      const canonical = await fs.realpath(prefix).catch(() => path.resolve(prefix))
+      if (isWithinInstallPrefix(active, canonical, dependencies.platform)) return "brew"
     }
-
     return "unknown"
   }
 

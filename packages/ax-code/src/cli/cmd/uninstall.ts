@@ -88,7 +88,7 @@ export const UninstallCommand = {
   },
 }
 
-async function collectRemovalTargets(args: UninstallArgs, method: Installation.Method): Promise<RemovalTargets> {
+export async function collectRemovalTargets(args: UninstallArgs, method: Installation.Method): Promise<RemovalTargets> {
   const directories: RemovalTargets["directories"] = [
     { path: Global.Path.data, label: "Data", keep: args.keepData },
     { path: Global.Path.cache, label: "Cache", keep: false },
@@ -97,7 +97,17 @@ async function collectRemovalTargets(args: UninstallArgs, method: Installation.M
   ]
 
   const shellConfig = method === "curl" ? await getShellConfigFile() : null
-  const binary = method === "curl" ? process.execPath : null
+  const root = method === "curl" ? await Installation.standaloneRoot() : undefined
+  let launcher = "ax-code"
+  if (root && process.platform === "win32") {
+    const hasCmd = await fs.access(path.join(root, "bin", "ax-code.cmd")).then(
+      () => true,
+      () => false,
+    )
+    launcher = hasCmd ? "ax-code.cmd" : "ax-code.exe"
+  }
+  const binary =
+    method === "curl" ? (root ? path.join(root, "bin", launcher) : await Installation.activeInstallPath()) : null
 
   return { directories, shellConfig, binary }
 }
@@ -196,11 +206,17 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
   if (method === "curl" && targets.binary) {
     UI.empty()
     prompts.log.message("To finish removing the binary, run:")
-    prompts.log.info(`  rm "${targets.binary}"`)
+    prompts.log.info(
+      process.platform === "win32"
+        ? `  Remove-Item -LiteralPath '${targets.binary.replaceAll("'", "''")}'`
+        : `  rm '${targets.binary.replaceAll("'", "'\\''")}'`,
+    )
 
-    const binDir = path.dirname(targets.binary)
-    if (binDir.includes(".ax-code")) {
-      prompts.log.info(`  rmdir "${binDir}" 2>/dev/null`)
+    const root = await Installation.standaloneRoot()
+    if (root) {
+      prompts.log.info(`Retained runtime generations: ${path.join(root, "versions")}`)
+      prompts.log.info("Stop all AX Code runtimes before removing retained versions and legacy runtime files.")
+      prompts.log.info("Keep any configuration or other user files stored alongside the runtime.")
     }
   }
 

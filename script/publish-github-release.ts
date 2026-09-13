@@ -1,4 +1,5 @@
 import childProcess from "child_process"
+import { createHash } from "node:crypto"
 import { whichSync } from "./which"
 import fs from "fs"
 import os from "os"
@@ -67,7 +68,7 @@ export function expectedReleaseSignatures() {
 }
 
 export function expectedReleaseInstallerAssets() {
-  return ["install.ps1"]
+  return ["install", "install.ps1"]
 }
 
 export function expectedReleaseInstallerSignatures() {
@@ -75,7 +76,7 @@ export function expectedReleaseInstallerSignatures() {
 }
 
 export function expectedReleaseMetadataAssets() {
-  return ["ax-minisign.pub"]
+  return ["ax-minisign.pub", "install.sha256"]
 }
 
 export function missingReleaseAssets(
@@ -429,6 +430,16 @@ export async function downloadReleaseAssets(options: PublishGithubReleaseOptions
   if (missing.length > 0) throw new Error(`Downloaded release is missing expected assets: ${missing.join(", ")}`)
 }
 
+export function verifyInstallerDigest(assetDir: string) {
+  const expected = fs.readFileSync(path.join(assetDir, "install.sha256"), "utf8").trim().split(/\s+/)[0]
+  const actual = createHash("sha256")
+    .update(fs.readFileSync(path.join(assetDir, "install")))
+    .digest("hex")
+  if (!/^[a-f0-9]{64}$/i.test(expected) || expected.toLowerCase() !== actual) {
+    throw new Error("Downloaded Unix installer digest does not match install.sha256")
+  }
+}
+
 function verifyDownloadedReleaseAssets(options: PublishGithubReleaseOptions, assetDir: string) {
   if (options.dryRun) return
   const downloadedPublicKey = path.join(assetDir, expectedReleaseMetadataAssets()[0])
@@ -436,6 +447,7 @@ function verifyDownloadedReleaseAssets(options: PublishGithubReleaseOptions, ass
   if (fs.readFileSync(downloadedPublicKey, "utf8") !== fs.readFileSync(committedPublicKey, "utf8")) {
     throw new Error(`Downloaded ax-minisign.pub does not match ${AX_CODE_MINISIGN_PUBLIC_KEY_FILE}`)
   }
+  verifyInstallerDigest(assetDir)
   for (const asset of signableAssetPaths(assetDir)) {
     run("minisign", ["-V", "-p", committedPublicKey, "-m", asset, "-x", `${asset}.minisig`])
   }

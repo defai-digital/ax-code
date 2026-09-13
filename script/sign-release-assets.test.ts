@@ -36,12 +36,14 @@ describe("sign-release-assets helpers", () => {
       fs.writeFileSync(path.join(dir, "ax-code-darwin-arm64.zip"), "")
       fs.writeFileSync(path.join(dir, "ax-code-linux-x64.tar.gz"), "")
       fs.writeFileSync(path.join(dir, "ax-code-linux-x64.tar.gz.minisig"), "")
+      fs.writeFileSync(path.join(dir, "install"), "")
       fs.writeFileSync(path.join(dir, "install.ps1"), "")
       fs.writeFileSync(path.join(dir, "notes.txt"), "")
 
       expect(findReleaseAssets(dir).map((file) => path.basename(file))).toEqual([
         "ax-code-darwin-arm64.zip",
         "ax-code-linux-x64.tar.gz",
+        "install",
         "install.ps1",
       ])
     } finally {

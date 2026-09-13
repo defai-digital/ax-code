@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { describe, expect, test } from "vitest"
 import { Installation } from "../../src/installation"
 
@@ -224,6 +225,31 @@ describe("installation", () => {
   })
 
   describe("method", () => {
+    test.each([
+      ["/Users/fixture/.ax-code/node/bin/node", "curl"],
+      ["/Users/fixture/.ax-code/lib/index-node-tui.js", "curl"],
+      ["/Users/fixture/.ax-code/versions/runtime.ABC/runtime/lib/index-node-tui.js", "curl"],
+      ["/Users/fixture/project/src/index-node-tui.ts", "unknown"],
+      ["/Users/fixture/.ax-code/project/index.js", "unknown"],
+      ["/Users/fixture/.ax-code-other/lib/index-node-tui.js", "unknown"],
+    ])("identifies %s by active ownership even with Homebrew installed", async (entryPath, expected) => {
+      const result = await withTestDependencies(
+        { run: () => ({ code: 0, stdout: "/opt/homebrew/Cellar/ax-code/1.0.0", stderr: "" }) },
+        () => Installation.method({ entryPath, home: "/Users/fixture" }),
+      )
+      expect(result).toBe(expected)
+    })
+
+    test("application entry wins over a system or Homebrew Node executable", async () => {
+      expect(
+        await Installation.method({
+          entryPath: "/Users/fixture/.ax-code/lib/index-node-tui.js",
+          execPath: "/opt/homebrew/bin/node",
+          home: "/Users/fixture",
+        }),
+      ).toBe("curl")
+    })
+
     test("ignores legacy npm global installs as an unsupported channel", async () => {
       const result = await withTestDependencies(
         {
@@ -244,11 +270,12 @@ describe("installation", () => {
       const result = await withTestDependencies(
         {
           run: (cmd) => {
-            if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
+            if (cmd[0] === "brew" && cmd.includes("--prefix"))
+              return { code: 0, stdout: "/opt/homebrew/Cellar/ax-code/1.0.0\n", stderr: "" }
             return { code: 0, stdout: "", stderr: "" }
           },
         },
-        () => Installation.method(),
+        () => Installation.method({ entryPath: "/opt/homebrew/Cellar/ax-code/1.0.0/libexec/lib/index-node-tui.js" }),
       )
 
       expect(result).toBe("brew")
@@ -256,6 +283,32 @@ describe("installation", () => {
   })
 
   describe("upgrade", () => {
+    test("requires a target release installer and digest before invoking bash", async () => {
+      const urls: string[] = []
+      let invoked = false
+      await expect(
+        withTestDependencies(
+          {
+            platform: "darwin",
+            fetch: (url) => {
+              urls.push(url)
+              return new Response("#!/bin/bash\n", { status: url.endsWith(".sha256") ? 404 : 200 })
+            },
+            run: () => {
+              invoked = true
+              return { code: 0, stdout: "", stderr: "" }
+            },
+          },
+          () => Installation.upgrade("curl", "7.16.5"),
+        ),
+      ).rejects.toThrow("release digest is missing")
+      expect(invoked).toBe(false)
+      expect(urls).toEqual([
+        "https://github.com/defai-digital/ax-code/releases/download/v7.16.5/install",
+        "https://github.com/defai-digital/ax-code/releases/download/v7.16.5/install.sha256",
+      ])
+    })
+
     test("refreshes the detected Homebrew tap before upgrading", async () => {
       const calls: Array<{ cmd: string[]; cwd?: string }> = []
 
@@ -263,7 +316,8 @@ describe("installation", () => {
         {
           run: (cmd, opts) => {
             calls.push({ cmd, cwd: opts?.cwd })
-            if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
+            if (cmd[0] === "brew" && cmd.includes("--prefix"))
+              return { code: 0, stdout: "/opt/homebrew/Cellar/ax-code/1.0.0\n", stderr: "" }
             if (cmd[0] === "brew" && cmd.includes("--repo")) {
               return { code: 0, stdout: "/tmp/homebrew-tap\n", stderr: "" }
             }
@@ -305,7 +359,8 @@ describe("installation", () => {
         {
           run: (cmd) => {
             calls.push(cmd)
-            if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
+            if (cmd[0] === "brew" && cmd.includes("--prefix"))
+              return { code: 0, stdout: "/opt/homebrew/Cellar/ax-code/1.0.0\n", stderr: "" }
             if (cmd[0] === "brew" && cmd[1] === "upgrade") {
               return {
                 code: 0,
@@ -329,7 +384,8 @@ describe("installation", () => {
         {
           run: (cmd) => {
             calls.push(cmd)
-            if (cmd[0] === "brew" && cmd.includes("--formula")) return { code: 0, stdout: "ax-code\n", stderr: "" }
+            if (cmd[0] === "brew" && cmd.includes("--prefix"))
+              return { code: 0, stdout: "/opt/homebrew/Cellar/ax-code/1.0.0\n", stderr: "" }
             return { code: 0, stdout: "", stderr: "" }
           },
         },
@@ -348,7 +404,7 @@ describe("installation", () => {
           platform: "linux",
           fetch: (url) => {
             if (url.endsWith("/install")) return new Response(script, { status: 200 })
-            // Missing .sha256 sidecar warns and proceeds.
+            if (url.endsWith("/install.sha256")) return new Response(createHash("sha256").update(script).digest("hex"))
             return new Response("not found", { status: 404 })
           },
           run: (cmd, opts) => {

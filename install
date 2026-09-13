@@ -22,8 +22,8 @@ Options:
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
-    curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
-    curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash -s -- --version 1.0.180
+    curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
+    curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash -s -- --version 1.0.180
     ./install --binary /path/to/ax-code
 EOF
 }
@@ -263,7 +263,7 @@ else
       darwin-x64)
         echo -e "${RED}Unsupported OS/Arch: $os/$arch${NC}"
         echo -e "${MUTED}AX Code CLI release archives are published for Apple Silicon (darwin-arm64) only.${NC}"
-        echo -e "${MUTED}On an Apple Silicon Mac, use a native arm64 shell (not Rosetta x86_64), or install via Homebrew.${NC}"
+        echo -e "${MUTED}Intel macOS is not a supported release target; Homebrew does not add an Intel release archive.${NC}"
         exit 1
         ;;
       *)
@@ -456,17 +456,15 @@ cleanup_stale_bundled_launchers() {
 }
 
 check_version() {
-    if command -v ax-code >/dev/null 2>&1; then
-        ax_code_path=$(which ax-code)
-
-        ## Check the installed version
-        installed_version=$(ax-code --version 2>/dev/null || echo "")
-
-        if [[ "$installed_version" != "$specific_version" ]]; then
+    # Only inspect this channel's stable launcher, never an unrelated PATH entry.
+    # Explicit reinstallation also repairs incomplete trees at the same version.
+    if [ -x "$INSTALL_DIR/ax-code" ]; then
+        local installed_version=""
+        installed_version=$("$INSTALL_DIR/ax-code" --version 2>/dev/null || true)
+        if [[ "$installed_version" = "$specific_version" ]]; then
+            print_message info "${MUTED}Reinstalling version: ${NC}$specific_version."
+        elif [ -n "$installed_version" ]; then
             print_message info "${MUTED}Installed version: ${NC}$installed_version."
-        else
-            print_message info "${MUTED}Version ${NC}$specific_version${MUTED} already installed"
-            exit 0
         fi
     fi
 }
@@ -626,8 +624,23 @@ install_from_binary() {
         return
     fi
 
-    cp "$binary_path" "${INSTALL_DIR}/ax-code"
-    chmod 755 "${INSTALL_DIR}/ax-code"
+    # Raw binary imports must not overwrite an immutable generation through its symlink.
+    (
+        lock_dir="$INSTALL_ROOT/.install-lock"
+        mkdir "$lock_dir" 2>/dev/null || { print_message error "Another installation owns $lock_dir"; exit 1; }
+        staged_binary=""
+        trap 'rm -f "$staged_binary"; rmdir "$lock_dir"' EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
+        if [ -d "$INSTALL_DIR/ax-code" ]; then
+            print_message error "Refusing to replace a directory at $INSTALL_DIR/ax-code"
+            exit 1
+        fi
+        staged_binary=$(mktemp "$INSTALL_DIR/.ax-code.XXXXXX") || exit 1
+        cp "$binary_path" "$staged_binary" || exit 1
+        chmod 755 "$staged_binary" || exit 1
+        mv -f "$staged_binary" "$INSTALL_DIR/ax-code" || exit 1
+    )
 }
 
 write_node_bundle_launcher() {
@@ -729,92 +742,68 @@ install_node_bundle_tree() (
         exit 1
     fi
 
-    # A sibling staging tree cannot resolve missing dependencies through the
-    # previous installation's node_modules. Keep it on the same filesystem.
-    local staging_root
-    staging_root=$(mktemp -d "$(dirname "$INSTALL_ROOT")/.ax-code-install.XXXXXX") || exit 1
-    local backup_root="$staging_root/previous"
-    local committed=false preserve_backup=false
-    local backed_up_count=0 installed_count=0
-    local -a backed_up installed
-
+    # Serialize publishers without guessing whether a stale owner is safe to replace.
+    local lock_dir="$INSTALL_ROOT/.install-lock"
+    if ! mkdir "$lock_dir" 2>/dev/null; then
+        print_message error "Another installation owns $lock_dir. If interrupted, inspect active installers before removing that empty lock directory."
+        exit 1
+    fi
+    local staging_root="" version_root="" published=false
     finish_node_bundle_install() {
         local status=$?
-        local i relative destination staged backup
         trap - EXIT INT TERM
-        if [ "$committed" != true ]; then
-            for ((i = installed_count - 1; i >= 0; i--)); do
-                relative="${installed[$i]}"
-                destination="$INSTALL_ROOT/$relative"
-                staged="$staging_root/$relative"
-                if [ ! -e "$staged" ] && [ ! -L "$staged" ] && { [ -e "$destination" ] || [ -L "$destination" ]; }; then
-                    mv "$destination" "$staged" || preserve_backup=true
+        if [ "$status" -ne 0 ] && [ -n "$version_root" ]; then
+            # Restore only our publication; never overwrite another launcher.
+            if [ "$(readlink "$INSTALL_DIR/ax-code" 2>/dev/null || true)" = "$version_root/runtime/bin/ax-code" ]; then
+                if [ -e "$staging_root/previous" ] || [ -L "$staging_root/previous" ]; then
+                    mv -f "$staging_root/previous" "$INSTALL_DIR/ax-code" || {
+                        print_message error "Could not restore the previous launcher. Recovery files remain at $staging_root."
+                        staging_root=""
+                    }
+                else
+                    rm -f "$INSTALL_DIR/ax-code"
                 fi
-            done
-            for ((i = backed_up_count - 1; i >= 0; i--)); do
-                relative="${backed_up[$i]}"
-                destination="$INSTALL_ROOT/$relative"
-                backup="$backup_root/$relative"
-                if [ -e "$backup" ] || [ -L "$backup" ]; then
-                    if [ -e "$destination" ] || [ -L "$destination" ]; then
-                        preserve_backup=true
-                    else
-                        mv "$backup" "$destination" || preserve_backup=true
-                    fi
-                fi
-            done
-            if [ "$preserve_backup" = true ]; then
-                print_message error "Could not fully restore the previous runtime. Recovery files remain at $staging_root."
-                status=1
-            elif [ "$backed_up_count" -gt 0 ] || [ "$installed_count" -gt 0 ]; then
-                print_message error "AX Code installation failed; previous installation state restored."
             fi
         fi
-        if [ "$preserve_backup" != true ]; then
-            if ! rm -rf "$staging_root"; then
-                print_message warning "Temporary runtime files remain at $staging_root. Remove that directory when it is no longer in use."
-            fi
-        fi
+        # Any published generation may already have a live reader, even after rollback.
+        if [ -n "$version_root" ] && [ "$published" = false ]; then rm -rf "$version_root"; fi
+        if [ -n "$staging_root" ]; then rm -rf "$staging_root"; fi
+        rmdir "$lock_dir" || true
         exit "$status"
     }
     trap finish_node_bundle_install EXIT
     trap 'exit 130' INT
     trap 'exit 143' TERM
 
-    mkdir -p "$staging_root/bin" "$backup_root/bin" || exit 1
-    write_node_bundle_launcher "$staging_root/bin/ax-code" || exit 1
-    chmod 755 "$staging_root/bin/ax-code" || exit 1
-    cp -R "$lib_dir" "$staging_root/lib" || exit 1
-    cp -R "$node_dir" "$staging_root/node" || exit 1
-    chmod 755 "$staging_root/node/bin/node" || exit 1
-    cp -R "$node_modules_dir" "$staging_root/node_modules" || exit 1
-    cp "$package_json" "$staging_root/package.json" || exit 1
-    assert_node_bundle_runtime "$staging_root" || exit 1
+    # Validate outside the previous tree so its node_modules cannot mask missing files.
+    staging_root=$(mktemp -d "$(dirname "$INSTALL_ROOT")/.ax-code-install.XXXXXX") || exit 1
+    mkdir -p "$staging_root/runtime/bin" "$INSTALL_ROOT/versions" || exit 1
+    write_node_bundle_launcher "$staging_root/runtime/bin/ax-code" || exit 1
+    chmod 755 "$staging_root/runtime/bin/ax-code" || exit 1
+    cp -R "$lib_dir" "$staging_root/runtime/lib" || exit 1
+    cp -R "$node_dir" "$staging_root/runtime/node" || exit 1
+    chmod 755 "$staging_root/runtime/node/bin/node" || exit 1
+    cp -R "$node_modules_dir" "$staging_root/runtime/node_modules" || exit 1
+    cp "$package_json" "$staging_root/runtime/package.json" || exit 1
+    assert_node_bundle_runtime "$staging_root/runtime" || exit 1
 
-    local relative destination
-    local -a paths=(lib node node_modules package.json bin/ax-code)
-    for relative in "${paths[@]}"; do
-        destination="$INSTALL_ROOT/$relative"
-        if [ -e "$destination" ] || [ -L "$destination" ]; then
-            # Record intent before moving so an interrupt immediately after a
-            # successful rename still restores the complete previous tree.
-            backed_up[$backed_up_count]="$relative"
-            backed_up_count=$((backed_up_count + 1))
-            mv "$destination" "$backup_root/$relative" || exit 1
-        fi
-    done
-    for relative in "${paths[@]}"; do
-        destination="$INSTALL_ROOT/$relative"
-        if [ -e "$destination" ] || [ -L "$destination" ]; then
-            print_message error "Installation destination unexpectedly exists: $destination"
+    # Never overwrite a generation, including reinstallation of the same release.
+    version_root=$(mktemp -d "$INSTALL_ROOT/versions/runtime.XXXXXX") || exit 1
+    mv "$staging_root/runtime" "$version_root/runtime" || exit 1
+    printf '%s\n' "$specific_version" > "$version_root/version" || exit 1
+    if [ -e "$INSTALL_DIR/ax-code" ] || [ -L "$INSTALL_DIR/ax-code" ]; then
+        if [ -d "$INSTALL_DIR/ax-code" ]; then
+            print_message error "Refusing to replace a directory at $INSTALL_DIR/ax-code"
             exit 1
         fi
-        installed[$installed_count]="$relative"
-        installed_count=$((installed_count + 1))
-        mv "$staging_root/$relative" "$destination" || exit 1
-    done
+        cp -P "$INSTALL_DIR/ax-code" "$staging_root/previous" || exit 1
+    fi
+    ln -s "$version_root/runtime/bin/ax-code" "$staging_root/next" || exit 1
+    # Record intent before rename so an interrupt immediately after publication
+    # retains the generation and restores the previous pointer when possible.
+    published=true
+    mv -f "$staging_root/next" "$INSTALL_DIR/ax-code" || exit 1
     verify_installed_binary || exit 1
-    committed=true
 )
 
 verify_installed_binary() {

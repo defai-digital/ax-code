@@ -35,9 +35,9 @@ export async function upgrade() {
     return
   }
 
-  // An unrecognized install channel is unsafe to mutate automatically, but
-  // hiding patch releases entirely leaves those users permanently stale.
-  if (method === "unknown") {
+  // Homebrew may prune a keg still used by a running agent. Let its owner
+  // choose when to upgrade; unknown channels also receive notifications only.
+  if (method === "unknown" || method === "brew") {
     await Bus.publish(Installation.Event.UpdateAvailable, { version: latest })
     return
   }

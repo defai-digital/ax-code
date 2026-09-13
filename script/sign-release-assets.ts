@@ -41,7 +41,7 @@ export function defaultKeyPaths(env: NodeJS.ProcessEnv = process.env, home = os.
 }
 
 export function isReleaseArchive(file: string) {
-  return file.endsWith(".tar.gz") || file.endsWith(".zip") || path.basename(file) === "install.ps1"
+  return file.endsWith(".tar.gz") || file.endsWith(".zip") || ["install", "install.ps1"].includes(path.basename(file))
 }
 
 export function findReleaseAssets(distDir: string) {

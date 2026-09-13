@@ -39,8 +39,8 @@ export const CONFIG_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/conf
 /** JSON Schema for the TUI config, used by the legacy-config migrator. */
 export const TUI_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/tui.schema.json`
 
-/** Shell installer fetched by the curl-based self-upgrade path. */
-export const INSTALL_SCRIPT_URL = `${RAW_MAIN_BASE}/install`
+/** Standalone Unix installer for new installations; upgrades pin an explicit release. */
+export const INSTALL_SCRIPT_URL = `${GITHUB_REPO_URL}/releases/latest/download/install`
 
 /** PowerShell installer fetched by the Windows self-upgrade path. */
 export const INSTALL_PS1_SCRIPT_URL = `${RAW_MAIN_BASE}/install.ps1`

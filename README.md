@@ -92,7 +92,13 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 ### macOS (Apple Silicon)
 
-Install with Homebrew. Current Homebrew releases require explicit trust for third-party taps:
+Use the standalone release installer (recommended; Homebrew is not required):
+
+```bash
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
+```
+
+If you already manage tools with Homebrew, it remains a supported alternative:
 
 ```bash
 brew tap defai-digital/tap
@@ -100,14 +106,9 @@ brew trust defai-digital/tap
 brew install defai-digital/tap/ax-code
 ```
 
-Trusting the tap allows Homebrew to load all current and future formulae and casks published there. Use the release
-installer below if you do not want to grant whole-tap trust.
-
-Or use the release installer:
-
-```bash
-curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
-```
+Trusting the tap allows Homebrew to load all current and future formulae and casks published there.
+Existing Homebrew users do not need to migrate. Use one installation channel for `ax-code`;
+`ax-code upgrade` follows the active installation, while `brew upgrade ax-code` updates Homebrew.
 
 ### Windows
 
@@ -118,7 +119,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 ### Ubuntu 24.04+
 
 ```bash
-curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
 ```
 
 Then:

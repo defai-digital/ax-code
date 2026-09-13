@@ -87,6 +87,13 @@ describe("cli upgrade", () => {
     expect(publishSpy).not.toHaveBeenCalledWith(Installation.Event.UpdateAvailable, expect.anything())
   })
 
+  test("notifies without mutating Homebrew while agents may still use its keg", async () => {
+    setup({ method: "brew", latest: patch })
+    await upgrade()
+    expect(installSpy).not.toHaveBeenCalled()
+    expect(publishSpy).toHaveBeenCalledWith(Installation.Event.UpdateAvailable, { version: patch })
+  })
+
   test("only notifies for minor releases", async () => {
     setup({ latest: minor })
 

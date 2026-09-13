@@ -9,7 +9,7 @@ describe("install matrix smoke workflow", () => {
     expect(workflow).not.toContain("contents/install?ref=main")
     expect(
       workflow.match(
-        /INSTALLER_URL="https:\/\/raw\.githubusercontent\.com\/\$\{\{ github\.repository \}\}\/v\$\{VERSION\}\/install"/g,
+        /INSTALLER_URL="https:\/\/github\.com\/\$\{\{ github\.repository \}\}\/releases\/download\/v\$\{VERSION\}\/install"/g,
       ),
     ).toHaveLength(2)
     expect(workflow.match(/curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "\$INSTALLER_URL"/g)).toHaveLength(2)

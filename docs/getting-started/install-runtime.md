@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-28
+Last reviewed: 2026-09-13
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
@@ -14,7 +14,7 @@ Use a supported packaged installer unless you are developing from a checkout. Th
 ### macOS (Apple Silicon)
 
 ```bash
-curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
 ```
 
 ### Windows
@@ -26,7 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/d
 ### Ubuntu 24.04+
 
 ```bash
-curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
 ```
 
 Homebrew remains a supported alternative for the macOS CLI:
@@ -41,6 +41,23 @@ Homebrew requires explicit trust for non-official taps. This whole-tap trust cov
 casks, and external commands published in `defai-digital/tap`. The shared tap contains both the CLI formula and the
 Desktop cask, and Homebrew can load both definitions while resolving an install. Use the release installer instead if
 whole-tap trust is not acceptable.
+
+For an inspected, version-pinned Unix installation, first download the installer and
+its signature from the same release. With a trusted `minisign` already available:
+
+```bash
+AX_INSTALL_VERSION="<release>"
+AX_INSTALL_BASE="https://github.com/defai-digital/ax-code/releases/download/v${AX_INSTALL_VERSION}"
+curl -fsSL "$AX_INSTALL_BASE/install" -o ax-code-install
+curl -fsSL "$AX_INSTALL_BASE/install.minisig" -o ax-code-install.minisig
+minisign -Vm ax-code-install -x ax-code-install.minisig -P 'RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO'
+# Inspect ax-code-install before running it.
+bash ax-code-install --version "$AX_INSTALL_VERSION" --no-modify-path
+```
+
+The archive's signature does not authenticate the bootstrap script before execution.
+A digest downloaded from the same origin detects corruption but is not an independent
+publisher identity check. The one-line path relies on the HTTPS distribution endpoint.
 
 One-line remote execution is a convenience path. The Windows installer verifies the downloaded CLI ZIP with minisign after it starts, but `irm | iex` does not verify `install.ps1` itself before execution.
 
@@ -86,11 +103,11 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 | Channel                              | Install or setup command                                                                                                                            | Expected runtime label | Support status       | Use when                                                           |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | -------------------- | ------------------------------------------------------------------ |
-| macOS bash release installer         | `curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" \| bash`    | `node-bundled`         | Supported on macOS   | Primary Apple Silicon user-local install path                      |
+| macOS bash release installer         | `curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install \| bash`                                                      | `node-bundled`         | Supported on macOS   | Primary Apple Silicon user-local install path                      |
 | Homebrew formula                     | `brew tap defai-digital/tap && brew trust defai-digital/tap && brew install defai-digital/tap/ax-code`                                              | `node-bundled`         | Supported            | Alternative macOS package-manager install path                     |
 | Windows PowerShell release installer | `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 \| iex"` | `node-bundled`         | Supported on Windows | Windows user-local install path                                    |
 | Windows release assets               | Download `ax-code-windows-*.zip` from GitHub releases                                                                                               | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
-| Linux bash release installer         | `curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" \| bash`    | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
+| Linux bash release installer         | `curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install \| bash`                                                      | `node-bundled`         | Supported on Linux   | Ubuntu 24.04+ (glibc) amd64/arm64 user-local install path          |
 | Linux release assets                 | Download `ax-code-linux-*.tar.gz` from GitHub releases                                                                                              | `node-bundled`         | Manual               | Manual CLI validation or troubleshooting                           |
 | Local bundled launcher               | `pnpm install && pnpm run setup:cli`                                                                                                                | `node-bundled`         | Contributor          | Contributor parity with the packaged startup path                  |
 | Local source launcher                | `pnpm run setup:cli -- --source`                                                                                                                    | `source`               | Contributor          | Contributor-only source debugging                                  |
@@ -152,7 +169,7 @@ irm https://github.com/defai-digital/ax-code/releases/download/v$env:AX_CODE_VER
 Use the release installer for a user-local CLI installation without Homebrew:
 
 ```bash
-curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
+curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
 ```
 
 Managed Macs can use the Homebrew formula so CLI updates track the tap:
@@ -171,16 +188,48 @@ Stable CLI and Desktop releases attach generated winget manifest zips as release
 
 ## Updating
 
-For supported packaged channels:
+Choose the channel that owns the active installation:
 
-```bash
-ax-code upgrade
-brew upgrade ax-code
+| Installed with               | Update                                                               |
+| ---------------------------- | -------------------------------------------------------------------- |
+| Standalone Unix installer    | `ax-code upgrade`                                                    |
+| Homebrew                     | `brew upgrade ax-code` (or `ax-code upgrade` from that installation) |
+| Windows PowerShell installer | Re-run the PowerShell installer below                                |
+| Contributor checkout         | Rebuild that checkout; source mode does not auto-upgrade             |
+
+Existing Homebrew users do not need to migrate. A second installation can shadow the
+first on PATH; use `which -a ax-code`, `ax-code --version`, and `ax-code doctor` before
+changing channels. Installing the standalone version does not uninstall Homebrew.
+Move between channels only deliberately, and retain your session/configuration data.
+
+Unix self-upgrades fetch the installer from the target release and require its SHA-256
+sidecar. A missing installer or digest stops the upgrade; there is no mutable-main
+fallback. To install an older archive from a release without installer assets, download
+and verify a current released installer, then run it with `--version <older-version>`.
+
+Standalone Unix installs use `~/.ax-code/bin/ax-code` as a stable symlink into a unique
+runtime generation under `~/.ax-code/versions/`. The installer verifies the complete
+new tree before switching that link. Reinstalling a version creates a fresh generation.
+It retains old generations and legacy runtime files so already running agents can
+continue loading their own modules. It does not restart running agents. Start a new
+client/runtime to use the new version; stop active work explicitly before a runtime
+restart. Homebrew files remain managed by Homebrew.
+
+For rollback, use a verified installer with `--version <previous-version>`. The `version`
+file in each retained generation identifies its release. Old generations are not pruned
+automatically; after stopping all processes using them, you may remove unused generations.
+During uninstall, retain sessions/configuration with `--keep-data --keep-config` if needed;
+follow the binary-removal guidance and separately remove unused runtime generations only
+after their processes stop. Do not delete the entire `.ax-code` folder if you have stored
+other configuration or personal files there.
+
+A concurrent Unix installation fails with the `.install-lock` directory location. An
+abruptly killed installer may leave that empty directory. Check for active installers
+before removing a stale lock and retrying; do not remove it while an install is running.
+
+```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
-curl -fsSL -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/defai-digital/ax-code/contents/install?ref=main" | bash
 ```
-
-`brew upgrade` only updates the Homebrew keg. An older `setup:cli` wrapper at `~/.local/bin/ax-code` is typically earlier on PATH, so the shell keeps reporting that checkout until the wrapper is moved aside. Current `setup:cli` installs the checkout as `ax-code-src` when Homebrew is present, which prevents this. For a leftover wrapper: `mv ~/.local/bin/ax-code ~/.local/bin/ax-code.bak && hash -r`. `which -a ax-code` lists every match in PATH order.
 
 On Windows this updates the CLI. To remove the CLI install and its user PATH entry:
 
@@ -219,3 +268,5 @@ The source launcher should report `Runtime: Node vX.Y.Z (source)`.
 The repository enforces `pnpm@10.33.4` through the root `packageManager` field and `only-allow pnpm`. Node.js must match the root `package.json` engine (`>=26`), which also provides `--experimental-ffi` for source-mode TUI commands.
 
 Do not use root `pnpm test`; the root script intentionally exits with `do not run tests from root`. For `packages/ax-code`, run tests from `packages/ax-code/`.
+
+Homebrew installations receive update notifications without automatic background upgrades. Finish active agent runs before explicitly upgrading or cleaning old Homebrew kegs.

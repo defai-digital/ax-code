@@ -1,9 +1,11 @@
 import { describe, expect, test, vi } from "vitest"
 import childProcess from "child_process"
+import { createHash } from "node:crypto"
 import fs from "fs"
 import path from "path"
 import os from "node:os"
 import {
+  verifyInstallerDigest,
   defaultInstallChannel,
   defaultTag,
   downloadReleaseAssets,
@@ -24,6 +26,26 @@ import {
 } from "./publish-github-release"
 
 describe("publish-github-release helpers", () => {
+  test("checks Unix installer bytes against a required well-formed digest", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ax-installer-digest-"))
+    try {
+      const body = "#!/bin/bash\nprintf 'verified'\n"
+      fs.writeFileSync(path.join(directory, "install"), body)
+      expect(() => verifyInstallerDigest(directory)).toThrow()
+      fs.writeFileSync(path.join(directory, "install.sha256"), "invalid")
+      expect(() => verifyInstallerDigest(directory)).toThrow(/digest/)
+      fs.writeFileSync(
+        path.join(directory, "install.sha256"),
+        createHash("sha256").update(body).digest("hex") + "  install\n",
+      )
+      expect(() => verifyInstallerDigest(directory)).not.toThrow()
+      fs.appendFileSync(path.join(directory, "install"), "modified")
+      expect(() => verifyInstallerDigest(directory)).toThrow(/digest/)
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   test("retains authenticated gh downloads for private release repositories", async () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ax-private-release-test-"))
     const options = parsePublishGithubReleaseArgs(["--version", "5.10.1", "--repo", "owner/private"])
@@ -165,9 +187,9 @@ describe("publish-github-release helpers", () => {
       "ax-code-linux-x64.tar.gz.minisig",
       "ax-code-linux-arm64.tar.gz.minisig",
     ])
-    expect(expectedReleaseInstallerAssets()).toEqual(["install.ps1"])
-    expect(expectedReleaseInstallerSignatures()).toEqual(["install.ps1.minisig"])
-    expect(expectedReleaseMetadataAssets()).toEqual(["ax-minisign.pub"])
+    expect(expectedReleaseInstallerAssets()).toEqual(["install", "install.ps1"])
+    expect(expectedReleaseInstallerSignatures()).toEqual(["install.minisig", "install.ps1.minisig"])
+    expect(expectedReleaseMetadataAssets()).toEqual(["ax-minisign.pub", "install.sha256"])
   })
 
   test("reports missing release assets", () => {
@@ -186,8 +208,11 @@ describe("publish-github-release helpers", () => {
       "ax-code-windows-arm64.zip.minisig",
       "ax-code-linux-x64.tar.gz.minisig",
       "ax-code-linux-arm64.tar.gz.minisig",
+      "install",
+      "install.minisig",
       "install.ps1.minisig",
       "ax-minisign.pub",
+      "install.sha256",
     ])
   })
 

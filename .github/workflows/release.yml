@@ -400,8 +400,11 @@ jobs:
           path: packages/ax-code/dist/
           merge-multiple: true
 
-      - name: Add PowerShell installer release asset
-        run: cp install.ps1 packages/ax-code/dist/install.ps1
+      - name: Add versioned installer release assets
+        run: |
+          cp install.ps1 packages/ax-code/dist/install.ps1
+          cp install packages/ax-code/dist/install
+          shasum -a 256 packages/ax-code/dist/install > packages/ax-code/dist/install.sha256
 
       - name: Install minisign
         run: brew install minisign
@@ -446,7 +449,7 @@ jobs:
           # minisignPasswordFromKeychain() in sign-release-assets.ts.
           pnpm exec tsx script/sign-release-assets.ts --dist-dir packages/ax-code/dist --secret-key "$AX_CODE_MINISIGN_KEY_DIR/ax.minisign.key" --public-key "$AX_CODE_MINISIGN_KEY_DIR/ax.pub"
           shopt -s nullglob
-          signable_assets=(packages/ax-code/dist/install.ps1 packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
+          signable_assets=(packages/ax-code/dist/install packages/ax-code/dist/install.ps1 packages/ax-code/dist/*.tar.gz packages/ax-code/dist/*.zip)
           for asset in "${signable_assets[@]}"; do
             if [ ! -f "${asset}.minisig" ]; then
               echo "::error::missing minisign signature for ${asset}"
@@ -505,6 +508,9 @@ jobs:
           TAG="$AX_CODE_RELEASE_TAG"
           files=(
             docs/release/ax-minisign.pub
+            packages/ax-code/dist/install
+            packages/ax-code/dist/install.minisig
+            packages/ax-code/dist/install.sha256
             packages/ax-code/dist/install.ps1
             packages/ax-code/dist/install.ps1.minisig
             packages/ax-code/dist/ax-code-darwin-arm64.zip
@@ -537,8 +543,12 @@ jobs:
           mkdir -p "$VERIFY_DIR"
           node script/github-release-assets.mjs download --repo "$REPOSITORY" --tag "$TAG" --dir "$VERIFY_DIR"
           cmp docs/release/ax-minisign.pub "$VERIFY_DIR/ax-minisign.pub"
+          EXPECTED_DIGEST="$(awk '{print $1}' "$VERIFY_DIR/install.sha256")"
+          ACTUAL_DIGEST="$(shasum -a 256 "$VERIFY_DIR/install" | awk '{print $1}')"
+          test "$EXPECTED_DIGEST" = "$ACTUAL_DIGEST"
 
           assets=(
+            "$VERIFY_DIR/install"
             "$VERIFY_DIR/install.ps1"
             "$VERIFY_DIR/ax-code-darwin-arm64.zip"
             "$VERIFY_DIR/ax-code-windows-x64.zip"
