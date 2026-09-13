@@ -10,6 +10,10 @@ changes belong to AX Coder.
 
 - Play the Matrix rain overlay once when the TUI starts, on by default and disabled with the "Matrix rain on startup" command toggle; it still honors `animations_enabled` and the compiled-runtime policy.
 
+### Changed
+
+- Require Node.js 26 across the repo, SDK, and JSR publish manifests (was Node 24).
+
 ## [7.16.3] - 2026-09-12
 
 ### Fixed

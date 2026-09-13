@@ -18,7 +18,7 @@ deno add jsr:@defai-digital/ax-code-sdk@2.5.16
 npx jsr add @defai-digital/ax-code-sdk@2.5.16
 ```
 
-Requires **Node.js 24+** (or Deno with Node compatibility). Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`.
+Requires **Node.js 26+** (or Deno with Node compatibility). Headless and gRPC lifecycle helpers expect a signed `ax-code` executable on `PATH`, or an absolute path passed as `binary`.
 
 The workspace package name `@ax-code/sdk` is private to this monorepo. Public consumers always install `@defai-digital/ax-code-sdk` from JSR.
 

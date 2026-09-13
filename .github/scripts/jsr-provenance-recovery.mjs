@@ -84,7 +84,7 @@ export async function expectedFiles(root, tag) {
     description,
     type: "module",
     license: "Apache-2.0",
-    engines: { node: ">=24" },
+    engines: { node: ">=26" },
     repository: { type: "git", url: "https://github.com/defai-digital/ax-code.git", directory: "packages/sdk/js" },
     dependencies,
   }
