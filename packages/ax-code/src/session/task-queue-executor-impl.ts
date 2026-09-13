@@ -704,6 +704,30 @@ function withScheduledReusePreface<T extends { parts?: Array<{ type: string; tex
   return { ...body, parts: [{ type: "text" as const, text: SCHEDULED_REUSE_PREFACE.trim() }, ...parts] }
 }
 
+function scheduledSessionLockKey(projectID: string, sessionID: SessionID) {
+  return `session:${projectID}:${sessionID}`
+}
+
+async function sessionStillReusable(
+  item: TaskQueue.Info,
+  scheduledTaskID: ScheduledTaskID,
+  sessionID: SessionID,
+  Session: typeof import(".").Session,
+  ScheduledTask: typeof import("./scheduled-task").ScheduledTask,
+): Promise<boolean> {
+  const session = await Session.get(sessionID).catch(() => undefined)
+  if (!session || session.time.archived) return false
+  if (!Session.isCompatibleWithCurrentProject(session)) return false
+  if (sessionPromptBusy(sessionID)) return false
+  if ((await activeSessionItems(sessionID)).some((candidate) => candidate.id !== item.id)) return false
+  if ((await pendingSessionItems(sessionID)).length > 0) return false
+  const priorFires = (await TaskQueue.list({ sessionID, limit: 200 })).filter(
+    (candidate) =>
+      candidate.kind === "automation" && candidate.sourceTaskID === scheduledTaskID && candidate.id !== item.id,
+  ).length
+  return priorFires < ScheduledTask.SESSION_REUSE_LIMIT
+}
+
 async function resolveReusableScheduledSession(
   item: TaskQueue.Info,
   scheduledTaskID: ScheduledTaskID,
@@ -712,36 +736,44 @@ async function resolveReusableScheduledSession(
 ): Promise<SessionID | undefined> {
   const previous = await ScheduledTask.previousAutomationSessionID(scheduledTaskID, item.id)
   if (!previous) return
-  const session = await Session.get(previous).catch(() => undefined)
-  if (!session || session.time.archived) return
-  if (!Session.isCompatibleWithCurrentProject(session)) return
-  if (sessionPromptBusy(previous)) return
-  if ((await activeSessionItems(previous)).length > 0) return
-  if ((await pendingSessionItems(previous)).length > 0) return
-  const priorFires = (await TaskQueue.list({ sessionID: previous, limit: 200 })).filter(
-    (candidate) =>
-      candidate.kind === "automation" && candidate.sourceTaskID === scheduledTaskID && candidate.id !== item.id,
-  ).length
-  if (priorFires >= ScheduledTask.SESSION_REUSE_LIMIT) return
+  if (!(await sessionStillReusable(item, scheduledTaskID, previous, Session, ScheduledTask))) return
   return previous
 }
 
-async function attachScheduledAutomationSession(
+async function runScheduledPromptAutomation(
   item: TaskQueue.Info,
   scheduledTaskID: ScheduledTaskID,
   execution: QueueExecution,
-): Promise<{ sessionID: SessionID; reused: boolean }> {
-  if (item.sessionID) return { sessionID: item.sessionID, reused: false }
-
+): Promise<unknown> {
   await requireActiveQueueItem(item.id)
+  const prompt = (sessionID: SessionID, reused: boolean) => {
+    const body = promptBodyFromQueueItem(item)
+    if (!body) throw new Error(`Scheduled task ${scheduledTaskID} has no executable prompt`)
+    return SessionPrompt.prompt({
+      ...withScheduledReusePreface(body, reused),
+      sessionID,
+    })
+  }
+
+  if (item.sessionID) {
+    return startLocks().run(scheduledSessionLockKey(item.projectID, item.sessionID), () =>
+      prompt(item.sessionID!, false),
+    )
+  }
+
   const { Session } = await import(".")
   const { ScheduledTask } = await import("./scheduled-task")
   const reuseID = await resolveReusableScheduledSession(item, scheduledTaskID, Session, ScheduledTask)
   if (reuseID) {
-    await TaskQueue.attachSession(item.id, reuseID)
-    item.sessionID = reuseID
-    execution.sessionID = reuseID
-    return { sessionID: reuseID, reused: true }
+    const reused = await startLocks().run(scheduledSessionLockKey(item.projectID, reuseID), async () => {
+      if (!(await sessionStillReusable(item, scheduledTaskID, reuseID, Session, ScheduledTask))) return
+      await TaskQueue.attachSession(item.id, reuseID)
+      item.sessionID = reuseID
+      execution.sessionID = reuseID
+      if (sessionPromptBusy(reuseID)) return
+      return { result: await prompt(reuseID, true) }
+    })
+    if (reused) return reused.result
   }
 
   const session = await Session.create({ title: item.title })
@@ -760,7 +792,7 @@ async function attachScheduledAutomationSession(
   }
   item.sessionID = session.id
   execution.sessionID = session.id
-  return { sessionID: session.id, reused: false }
+  return startLocks().run(scheduledSessionLockKey(item.projectID, session.id), () => prompt(session.id, false))
 }
 
 function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | undefined {
@@ -806,14 +838,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
           return detail
         }
 
-        const attached = await attachScheduledAutomationSession(item, ScheduledTaskID.make(scheduledTaskID), execution)
-        await requireActiveQueueItem(item.id)
-        const body = promptBodyFromQueueItem(item)
-        if (!body) throw new Error(`Scheduled task ${scheduledTaskID} has no executable prompt`)
-        return SessionPrompt.prompt({
-          ...withScheduledReusePreface(body, attached.reused),
-          sessionID: attached.sessionID,
-        })
+        return runScheduledPromptAutomation(item, ScheduledTaskID.make(scheduledTaskID), execution)
       }),
   }
   return execution
