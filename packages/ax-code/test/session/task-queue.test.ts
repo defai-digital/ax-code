@@ -12,6 +12,7 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { MessageID, PartID, TaskQueueID } from "../../src/session/schema"
 import { TaskQueueTable } from "../../src/session/session.sql"
 import { SessionShard } from "../../src/session/shard"
+import { ScheduledTask } from "../../src/session/scheduled-task"
 import { TaskQueue } from "../../src/session/task-queue"
 import { TaskQueueExecutor } from "../../src/session/task-queue-executor"
 import { Database, eq } from "../../src/storage/db"
@@ -756,6 +757,11 @@ describe("TaskQueue", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const scheduled = await ScheduledTask.create({
+          title: "Queue lifecycle fixture",
+          prompt: "Run the queue lifecycle fixture.",
+          schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+        })
         const originalCreate = Session.create
         let releaseCreate!: () => void
         const blocked = new Promise<void>((resolve) => {
@@ -771,9 +777,9 @@ describe("TaskQueue", () => {
           const item = await TaskQueue.enqueue({
             kind: "automation",
             title: "Timed out scheduled prompt",
-            sourceTaskID: "sch_timeout_session",
+            sourceTaskID: scheduled.id,
             payload: {
-              scheduledTaskID: "sch_timeout_session",
+              scheduledTaskID: scheduled.id,
               prompt: "Do not start after timeout.",
             },
             executionTimeoutMs: 1000,
@@ -801,6 +807,11 @@ describe("TaskQueue", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const scheduled = await ScheduledTask.create({
+          title: "Queue lifecycle fixture",
+          prompt: "Run the queue lifecycle fixture.",
+          schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+        })
         const originalAttach = TaskQueue.attachSession
         let releaseAttach!: () => void
         const blocked = new Promise<void>((resolve) => {
@@ -816,9 +827,9 @@ describe("TaskQueue", () => {
           const item = await TaskQueue.enqueue({
             kind: "automation",
             title: "Timed out scheduled attach",
-            sourceTaskID: "sch_timeout_attach",
+            sourceTaskID: scheduled.id,
             payload: {
-              scheduledTaskID: "sch_timeout_attach",
+              scheduledTaskID: scheduled.id,
               prompt: "Do not attach after timeout.",
             },
             executionTimeoutMs: 1000,
@@ -890,6 +901,11 @@ describe("TaskQueue", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const scheduled = await ScheduledTask.create({
+          title: "Queue lifecycle fixture",
+          prompt: "Run the queue lifecycle fixture.",
+          schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+        })
         const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
           return {
             info: {
@@ -909,9 +925,9 @@ describe("TaskQueue", () => {
           const item = await TaskQueue.enqueue({
             kind: "automation",
             title: "Sessionless assistant error",
-            sourceTaskID: "sch_sessionless_error",
+            sourceTaskID: scheduled.id,
             payload: {
-              scheduledTaskID: "sch_sessionless_error",
+              scheduledTaskID: scheduled.id,
               prompt: "This should fail.",
             },
           })
@@ -985,6 +1001,11 @@ describe("TaskQueue", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const scheduled = await ScheduledTask.create({
+          title: "Queue lifecycle fixture",
+          prompt: "Run the queue lifecycle fixture.",
+          schedule: { type: "once", runAt: Date.now() + 86_400_000 },
+        })
         const stopRuns: Array<() => void> = []
         let finishCancellation!: () => void
         const cancellation = new Promise<void>((resolve) => {
@@ -1002,9 +1023,9 @@ describe("TaskQueue", () => {
           const first = await TaskQueue.enqueue({
             kind: "automation",
             title: "Sessionless predecessor",
-            sourceTaskID: "sch_timeout_sessionless_gate",
+            sourceTaskID: scheduled.id,
             payload: {
-              scheduledTaskID: "sch_timeout_sessionless_gate",
+              scheduledTaskID: scheduled.id,
               prompt: "First",
             },
             executionTimeoutMs: 1000,

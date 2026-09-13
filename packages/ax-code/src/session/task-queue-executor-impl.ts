@@ -756,9 +756,11 @@ async function runScheduledPromptAutomation(
   }
 
   if (item.sessionID) {
-    return startLocks().run(scheduledSessionLockKey(item.projectID, item.sessionID), () =>
-      prompt(item.sessionID!, false),
-    )
+    const started = await startLocks().run(scheduledSessionLockKey(item.projectID, item.sessionID), async () => {
+      await requireActiveQueueItem(item.id)
+      return { result: prompt(item.sessionID!, false) }
+    })
+    return started.result
   }
 
   const { Session } = await import(".")
@@ -770,8 +772,11 @@ async function runScheduledPromptAutomation(
       await TaskQueue.attachSession(item.id, reuseID)
       item.sessionID = reuseID
       execution.sessionID = reuseID
+      await requireActiveQueueItem(item.id)
       if (sessionPromptBusy(reuseID)) return
-      return { result: await prompt(reuseID, true) }
+      // Serialize admission only. Holding this lock for the entire prompt would
+      // prevent a successor from observing timeout cleanup and returning idle-wait.
+      return { result: prompt(reuseID, true) }
     })
     if (reused) return reused.result
   }
@@ -792,7 +797,11 @@ async function runScheduledPromptAutomation(
   }
   item.sessionID = session.id
   execution.sessionID = session.id
-  return startLocks().run(scheduledSessionLockKey(item.projectID, session.id), () => prompt(session.id, false))
+  const started = await startLocks().run(scheduledSessionLockKey(item.projectID, session.id), async () => {
+    await requireActiveQueueItem(item.id)
+    return { result: prompt(session.id, false) }
+  })
+  return started.result
 }
 
 function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | undefined {
