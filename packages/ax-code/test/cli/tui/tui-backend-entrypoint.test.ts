@@ -58,4 +58,13 @@ describe("tui backend entrypoint guardrails", () => {
 
     expect(resolveBackendImportSpecifier(specifier, "/different/cwd")).toBe(specifier)
   })
+
+  test("backend spawn prefers the entry and solid-loader recorded by short-argv launchers", () => {
+    const thread = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/thread.ts"), "utf8")
+
+    // POSIX launchers keep argv at "AX-Code /dev/null …", so argv[1] and
+    // process.execArgv no longer identify the CLI entry or the solid-loader.
+    expect(thread).toContain("Flag.AX_CODE_CLI_ENTRY ?? process.argv[1]")
+    expect(thread).toContain("Flag.AX_CODE_CLI_SOLID_LOADER")
+  })
 })

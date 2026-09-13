@@ -2,7 +2,8 @@
 import { spawn, spawnSync } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
-import { prepareNodeArgs } from "./node-ffi-runner-args.mjs"
+import { pathToFileURL } from "node:url"
+import { prepareNodeArgs, splitNodeLaunchArgs } from "./node-ffi-runner-args.mjs"
 import {
   AX_CODE_SPAWN_ARGV0,
   axCodeJobTitleOsc,
@@ -121,7 +122,8 @@ try {
   process.exit(1)
 }
 
-const tuiArgs = [...ffiArgs, ...prepareNodeArgs(process.argv.slice(2))]
+const launchArgs = prepareNodeArgs(process.argv.slice(2))
+const tuiArgs = [...ffiArgs, ...launchArgs]
 const brandedPath = resolveBrandedNodePath(runtime.path)
 const spawnOptions = brandedSpawnOptions(process.env)
 
@@ -129,12 +131,41 @@ const spawnOptions = brandedSpawnOptions(process.env)
 // this selector process in place instead of leaving a Node parent between the
 // terminal and the actual TUI. Windows has no process.execve implementation,
 // so it retains the asynchronous child-process fallback below.
+//
+// Apple Terminal composes inactive-tab job titles from the full KERN_PROCARGS2
+// argv, so the exec'd argv stays "AX-Code /dev/null [user args]": the Node
+// flags and the entry move into NODE_OPTIONS (the entry loads via --import and
+// /dev/null fills the main-script slot). The entry restores the caller's
+// NODE_OPTIONS from AX_CODE_LAUNCH_NODE_OPTIONS before the CLI graph loads, so
+// spawned Node children never re-import the whole CLI. Import values that are
+// absolute paths become file URLs because NODE_OPTIONS tokenizes on spaces.
 if (typeof process.execve === "function") {
+  const { nodeFlags, entry, userArgs } = splitNodeLaunchArgs(launchArgs)
+  const optionsFlags = []
+  let solidLoader
+  for (let i = 0; i < nodeFlags.length; i++) {
+    const flag = nodeFlags[i]
+    if (flag === "--import" && i + 1 < nodeFlags.length) {
+      const value = nodeFlags[i + 1]
+      if (value.includes("solid-loader")) solidLoader = value
+      optionsFlags.push(flag, value.startsWith("/") ? pathToFileURL(value).href : value)
+      i += 1
+      continue
+    }
+    optionsFlags.push(flag)
+  }
+  const childEnv = { ...process.env, AX_CODE_LAUNCH_NODE_OPTIONS: process.env.NODE_OPTIONS ?? "" }
+  const augmented = [...ffiArgs, ...optionsFlags]
+  if (entry) augmented.push("--import", entry.startsWith("/") ? pathToFileURL(entry).href : entry)
+  if (process.env.NODE_OPTIONS) augmented.push(process.env.NODE_OPTIONS)
+  childEnv.NODE_OPTIONS = augmented.join(" ")
+  if (solidLoader) childEnv.AX_CODE_CLI_SOLID_LOADER = solidLoader
+  const childArgv = [AX_CODE_SPAWN_ARGV0, "/dev/null", ...userArgs]
   try {
-    process.execve(brandedPath, [AX_CODE_SPAWN_ARGV0, ...tuiArgs], process.env)
+    process.execve(brandedPath, childArgv, childEnv)
   } catch (error) {
     if (brandedPath === runtime.path) throw error
-    process.execve(runtime.path, [AX_CODE_SPAWN_ARGV0, ...tuiArgs], process.env)
+    process.execve(runtime.path, childArgv, childEnv)
   }
 }
 

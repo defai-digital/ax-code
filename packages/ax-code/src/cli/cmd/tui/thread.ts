@@ -29,6 +29,7 @@ import { parseIntegerEnv } from "./util/env"
 import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
 import { hasExplicitNetworkBindFlag } from "./util/network-flags"
+import { Flag } from "@/flag/flag"
 import { createTuiRejectionHandler, registerTuiCrashHandlers, registerTuiProcessHandler } from "./util/lifecycle"
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
@@ -181,7 +182,11 @@ function backendProcessCommand() {
     }
   }
 
-  const entry = process.argv[1]
+  // POSIX launchers keep the process argv at "AX-Code /dev/null …" (macOS
+  // Terminal job titles read the full argv), so argv[1] is not the CLI entry
+  // there. The index-node-tui entry records its own path in AX_CODE_CLI_ENTRY
+  // at boot; argv[1] remains the fallback for direct `node <entry>` runs.
+  const entry = Flag.AX_CODE_CLI_ENTRY ?? process.argv[1]
   if (!entry) throw new Error("Cannot start TUI backend process: missing CLI entrypoint")
   const resolvedEntry = path.isAbsolute(entry) ? entry : path.resolve(process.cwd(), entry)
   // A source run executes a `.ts` entry, which plain `node` cannot load — forward
@@ -194,8 +199,14 @@ function backendProcessCommand() {
     loaderArgs = ["--import", tsxLoaderImportSpecifier()]
     // Forward the solid-loader if the parent process uses it. Convert relative
     // paths to absolute so the child process resolves correctly regardless of
-    // its CWD.
-    for (let i = 0; i < process.execArgv.length; i++) {
+    // its CWD. Launchers that move the Node flag chain into NODE_OPTIONS (the
+    // short-argv POSIX form) hide it from process.execArgv, so the node-ffi
+    // runner also records the loader in AX_CODE_CLI_SOLID_LOADER.
+    const envLoader = Flag.AX_CODE_CLI_SOLID_LOADER
+    if (envLoader) {
+      loaderArgs.push("--import", resolveBackendImportSpecifier(envLoader))
+    }
+    for (let i = 0; !envLoader && i < process.execArgv.length; i++) {
       const arg = process.execArgv[i]
       if (arg === "--import" && process.execArgv[i + 1]?.includes("solid-loader")) {
         const loaderPath = process.execArgv[i + 1]

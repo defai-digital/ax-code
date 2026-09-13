@@ -108,6 +108,8 @@ export namespace Flag {
   export declare const AX_CODE_SUPER_LONG: boolean
   export declare const AX_CODE_CALLER: string | undefined
   export declare const AX_CODE_ORIGINAL_CWD: string | undefined
+  export declare const AX_CODE_CLI_ENTRY: string | undefined
+  export declare const AX_CODE_CLI_SOLID_LOADER: string | undefined
   export declare const AX_CODE_PROFILE_NATIVE: boolean
   export declare const AX_CODE_DEBUG: boolean
   export declare const AX_CODE_DEBUG_DIR: string | undefined
@@ -303,6 +305,12 @@ defineStringFlag("AX_CODE_CALLER")
 
 // Keep evaluation lazy so launch-time overrides remain effective.
 defineStringFlag("AX_CODE_ORIGINAL_CWD")
+
+// Recorded by the index-node-tui entry itself: POSIX launchers keep argv at
+// "AX-Code /dev/null …" (macOS Terminal job titles read the full argv), so
+// argv[1] cannot identify the CLI entrypoint or the solid-loader import.
+defineStringFlag("AX_CODE_CLI_ENTRY")
+defineStringFlag("AX_CODE_CLI_SOLID_LOADER")
 
 defineBooleanFlag("AX_CODE_PROFILE_NATIVE")
 

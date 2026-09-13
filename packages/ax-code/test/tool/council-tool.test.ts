@@ -632,7 +632,12 @@ describe("council chairman (ADR-102)", () => {
     generateObject.mockImplementation((request: any) => {
       const system = request.messages[0].content as string
       if (system.includes("chairman of a multi-model review council")) {
-        return Promise.reject(new Error("chairman gateway 500"))
+        const error = new Error("chairman gateway 500")
+        ;(error as Error & { cause: unknown }).cause = {
+          name: "ValidationError",
+          message: "secret-token in model output",
+        }
+        return Promise.reject(error)
       }
       return Promise.resolve({ object: { overall: "ok", issues: [sharedIssue] } })
     })
@@ -643,6 +648,7 @@ describe("council chairman (ADR-102)", () => {
     expect(result.metadata.chairman).toBe("failed")
     expect(result.metadata.chairmanError).toContain("500")
     expect(result.output).toContain("Chairman unavailable")
+    expect(result.output).not.toContain("secret-token")
     expect(result.metadata.status).toBe("ok")
     expect(result.metadata.consensusCount).toBe(1)
   })

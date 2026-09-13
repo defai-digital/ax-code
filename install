@@ -643,13 +643,37 @@ while [ -L "$script" ]; do
   esac
 done
 dir="$(CDPATH= cd -- "$(dirname -- "$script")" && pwd -P)"
+entry="$dir/../lib/index-node-tui.js"
+# Keep the process argv short ("node /dev/null [user args]"): Apple Terminal
+# composes inactive-tab job titles from the full KERN_PROCARGS2 argv, so the
+# Node flags and the entry travel in NODE_OPTIONS (the entry loads via
+# --import and /dev/null fills the main-script slot; the entry restores the
+# caller's NODE_OPTIONS before the CLI graph loads). Whitespace or
+# non-absolute entry paths keep the legacy argv form.
+case "$entry" in
+  *[[:space:]]*) launch_modern=0 ;;
+  /*) launch_modern=1 ;;
+  *) launch_modern=0 ;;
+esac
+launch_node() {
+  node_cmd="$1"
+  shift
+  if [ "$launch_modern" -eq 1 ]; then
+    AX_CODE_LAUNCH_NODE_OPTIONS="${NODE_OPTIONS-}"
+    NODE_OPTIONS="--experimental-ffi --disable-warning=ExperimentalWarning --import ${entry}${NODE_OPTIONS:+ $NODE_OPTIONS}"
+    export AX_CODE_LAUNCH_NODE_OPTIONS NODE_OPTIONS
+    exec "$node_cmd" /dev/null "$@"
+  fi
+  exec "$node_cmd" --experimental-ffi --disable-warning=ExperimentalWarning "$entry" "$@"
+}
 if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node" ]; then
-  exec "$dir/../node/bin/node" --experimental-ffi --disable-warning=ExperimentalWarning "$dir/../lib/index-node-tui.js" "$@"
+  launch_node "$dir/../node/bin/node" "$@"
 fi
 if [ -z "$AX_CODE_SYSTEM_NODE" ] && [ -x "$dir/../node/bin/node.exe" ]; then
-  exec "$dir/../node/bin/node.exe" --experimental-ffi --disable-warning=ExperimentalWarning "$dir/../lib/index-node-tui.js" "$@"
+  # Windows runtimes cannot open /dev/null; keep the legacy argv form.
+  exec "$dir/../node/bin/node.exe" --experimental-ffi --disable-warning=ExperimentalWarning "$entry" "$@"
 fi
-exec node --experimental-ffi --disable-warning=ExperimentalWarning "$dir/../lib/index-node-tui.js" "$@"
+launch_node node "$@"
 EOF
 }
 

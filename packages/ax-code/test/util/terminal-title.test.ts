@@ -124,6 +124,14 @@ describe("terminal title", () => {
     expect(shouldClaimAxCodeTerminalTitleAtEntry([...node, "--help"], {})).toBe(false)
     expect(shouldClaimAxCodeTerminalTitleAtEntry([...bundled, "-v"], {})).toBe(false)
     expect(shouldClaimAxCodeTerminalTitleAtEntry(node, { AX_CODE_DISABLE_TERMINAL_TITLE: "true" })).toBe(false)
+
+    // POSIX launchers brand argv as "AX-Code /dev/null [user args]". /dev/null is
+    // the main-script slot, not a user path, so help/version still suppress the title.
+    const branded = ["/cache/ax-code/libexec/runtime-x/bin/AX-Code", "/dev/null"]
+    expect(shouldClaimAxCodeTerminalTitleAtEntry(branded, {})).toBe(true)
+    expect(shouldClaimAxCodeTerminalTitleAtEntry([...branded, "--continue"], {})).toBe(true)
+    expect(shouldClaimAxCodeTerminalTitleAtEntry([...branded, "--help"], {})).toBe(false)
+    expect(shouldClaimAxCodeTerminalTitleAtEntry([...branded, "-v"], {})).toBe(false)
   })
 
   test("TUI entries claim the title before loading the CLI graph", async () => {
@@ -131,9 +139,13 @@ describe("terminal title", () => {
     const compiledEntry = await readFile(path.join(repoRoot, "packages/ax-code/src/index-compiled.ts"), "utf8")
     const runner = await readFile(path.join(repoRoot, "script/node-ffi-runner.mjs"), "utf8")
 
+    expect(tuiEntry).toContain("restoreAxCodeLaunchNodeOptions()")
     expect(tuiEntry).toContain("shouldClaimAxCodeTerminalTitleAtEntry")
     expect(tuiEntry).toContain("claimAxCodeTerminalTitle()")
     expect(tuiEntry).toContain("claimAxCodeForegroundTtyJob()")
+    expect(tuiEntry.indexOf("restoreAxCodeLaunchNodeOptions()")).toBeLessThan(
+      tuiEntry.indexOf('await import("./cli/boot")'),
+    )
     expect(tuiEntry.indexOf("claimAxCodeTerminalTitle()")).toBeLessThan(tuiEntry.indexOf('await import("./cli/boot")'))
     expect(tuiEntry.indexOf("claimAxCodeForegroundTtyJob()")).toBeLessThan(
       tuiEntry.indexOf('await import("./cli/boot")'),

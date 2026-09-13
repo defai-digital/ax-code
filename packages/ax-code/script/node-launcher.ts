@@ -26,9 +26,32 @@ export function windowsNodeLauncherScript() {
 
 // Resolve a Node binary, hardlink it as AX-Code, and exec that path so the
 // TTY job name is AX-Code instead of node (Apple Terminal / iTerm).
+//
+// Apple Terminal composes inactive-tab job titles from the full KERN_PROCARGS2
+// argv, so the process argv must stay short: "AX-Code /dev/null [user args]".
+// The Node flags and the entry travel in NODE_OPTIONS instead (the entry is
+// loaded via --import and /dev/null fills the main-script slot); the entry
+// itself restores the caller's NODE_OPTIONS before the CLI graph loads (see
+// src/util/node-options.ts). Entries whose path NODE_OPTIONS cannot tokenize
+// (whitespace) or that are not absolute keep the legacy argv form.
 export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   node_bin="$1"
   shift
+  entry="$1"
+  shift
+  case "$entry" in
+    *[[:space:]]*) launch_modern=0 ;;
+    /*) launch_modern=1 ;;
+    *) launch_modern=0 ;;
+  esac
+  if [ "$launch_modern" -eq 1 ]; then
+    AX_CODE_LAUNCH_NODE_OPTIONS="\${NODE_OPTIONS-}"
+    NODE_OPTIONS="${NODE_LAUNCH_ARGS} --import \${entry}\${NODE_OPTIONS:+ \$NODE_OPTIONS}"
+    export AX_CODE_LAUNCH_NODE_OPTIONS NODE_OPTIONS
+    set -- /dev/null "$@"
+  else
+    set -- ${NODE_LAUNCH_ARGS} "$entry" "$@"
+  fi
   real="$node_bin"
   while [ -L "$real" ]; do
     link="$(readlink "$real")"
@@ -43,7 +66,7 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   cache="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec/runtime-\${identity%% *}"
   branded="$cache/bin/AX-Code"
   if ! mkdir -p "$cache/bin" "$cache/lib"; then
-    exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
+    exec "$node_bin" "$@"
   fi
   src_lib="$real_dir/../lib"
   if [ -d "$src_lib" ]; then
@@ -54,7 +77,7 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
       pending="$dest.$$"
       if ! { ln -s "$lib" "$pending" && mv -f "$pending" "$dest"; } 2>/dev/null; then
         rm -f "$pending"
-        exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
+        exec "$node_bin" "$@"
       fi
     done
   fi
@@ -62,7 +85,7 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
     pending="$branded.$$"
     if ! { { ln "$real" "$pending" || cp "$real" "$pending"; } && mv -f "$pending" "$branded"; } 2>/dev/null; then
       rm -f "$pending"
-      exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
+      exec "$node_bin" "$@"
     fi
   fi
   # Relocation can fail at code-signing or dynamic-library admission. Probe
@@ -76,9 +99,9 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
     });
     process.exit(result.status === 0 && result.stdout === process.version + "\\n" ? 0 : 1);
   ' "$branded" >/dev/null 2>&1; then
-    exec "$node_bin" ${NODE_LAUNCH_ARGS} "$@"
+    exec "$node_bin" "$@"
   fi
-  exec "$branded" ${NODE_LAUNCH_ARGS} "$@"
+  exec "$branded" "$@"
 }`
 
 export function unixNodeLauncherScript() {

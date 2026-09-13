@@ -102,7 +102,13 @@ describe("node FFI runner process branding", () => {
     expect(runner).toContain("brandedSpawnOptions(process.env)")
     expect(runner).toContain("axCodeJobTitleOsc()")
     expect(runner).toContain('typeof process.execve === "function"')
-    expect(runner).toContain("process.execve(brandedPath, [AX_CODE_SPAWN_ARGV0, ...tuiArgs], process.env)")
+    // POSIX execve keeps the process argv short ("AX-Code /dev/null [user args]")
+    // for macOS Terminal job titles; the Node flags and the entry ride in
+    // NODE_OPTIONS, and the caller's value is saved for the entry to restore.
+    expect(runner).toContain("process.execve(brandedPath, childArgv, childEnv)")
+    expect(runner).toContain('[AX_CODE_SPAWN_ARGV0, "/dev/null", ...userArgs]')
+    expect(runner).toContain("AX_CODE_LAUNCH_NODE_OPTIONS")
+    expect(runner).toContain("AX_CODE_CLI_SOLID_LOADER")
   })
 
   test("macOS-branded Homebrew-style Node actually runs and is named AX-Code", () => {

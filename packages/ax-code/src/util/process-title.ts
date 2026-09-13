@@ -17,8 +17,10 @@
  * but KERN_PROCARGS2 still reports the original argc. Terminal's job-title
  * reader can then consume environment entries as missing arguments, producing
  * a long title when it refreshes an inactive tab. The source and packaged
- * launchers instead brand the Node executable as "AX-Code", and OSC titles
- * provide the user-facing label without rewriting process arguments.
+ * launchers instead brand the Node executable as "AX-Code", keep the process
+ * argv short ("AX-Code /dev/null [user args]") by moving the Node flags and
+ * the entry into NODE_OPTIONS, and OSC titles provide the user-facing label
+ * without rewriting process arguments.
  */
 export const AX_CODE_PROCESS_TITLE = "ax-code"
 

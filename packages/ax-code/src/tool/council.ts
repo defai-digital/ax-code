@@ -873,7 +873,7 @@ export const CouncilTool = Tool.define("council", async () => {
             chairmanStatus = "ok"
           } catch (error) {
             chairmanStatus = "failed"
-            chairmanError = error instanceof Error ? error.message : String(error)
+            chairmanError = FanOut.describeError(error)
             log.warn("council chairman failed; deterministic report retained", {
               toolName: "council",
               error: chairmanError,

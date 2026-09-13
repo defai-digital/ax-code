@@ -129,9 +129,12 @@ function executableBasename(argv0: string | undefined) {
 
 function userArgv(argv: string[]) {
   // Node: argv[0]=node, argv[1]=script, user args from 2.
+  // POSIX branded short-argv: argv[0]=AX-Code, argv[1]=/dev/null, user args from 2.
   // Bundled/SEA: argv[0]=ax-code, user args from 1.
-  const exe = executableBasename(argv[0]).toLowerCase()
-  if (exe === "node" || exe === "node.exe") return argv.slice(2)
+  const exe = executableBasename(argv[0])
+  const lower = exe.toLowerCase()
+  if (lower === "node" || lower === "node.exe") return argv.slice(2)
+  if ((exe === "AX-Code" || exe === "AX-Code.exe") && argv[1] === "/dev/null") return argv.slice(2)
   return argv.slice(1)
 }
 
