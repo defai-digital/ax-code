@@ -11,7 +11,7 @@ import { NotificationEvent } from "@/notification/events"
 import { toErrorMessage } from "@/util/error-message"
 import { Log } from "@/util/log"
 import { JsonBoolean, JsonNumber } from "@/util/schema"
-import { ScheduledTaskID, ScheduledTaskRunID, type TaskQueueID } from "./schema"
+import { ScheduledTaskID, ScheduledTaskRunID, TaskQueueID, type SessionID } from "./schema"
 import { ScheduledTaskTable, ScheduledTaskRunTable } from "./session.sql"
 import { SessionShard } from "./shard"
 import { TaskQueue } from "./task-queue"
@@ -36,6 +36,8 @@ export namespace ScheduledTask {
   // ALTER path, so all new scheduler state lives in the new `scheduled_task_run`
   // table).
   export const RUN_HISTORY_LIMIT = 50
+  /** Roll to a fresh automation session after this many fires in one session. */
+  export const SESSION_REUSE_LIMIT = 24
   const RUN_HISTORY_GC_THRESHOLD = RUN_HISTORY_LIMIT * 2
   export const MAX_CONSECUTIVE_FAILURES = 5
   const FAILURE_BACKOFF_BASE_MS = 60 * 1_000
@@ -428,6 +430,20 @@ export namespace ScheduledTask {
         return []
       })
     })
+  }
+
+  /** Newest prior run's queue session, if any. Does not use last_queue_id (claim already points at the current item). */
+  export async function previousAutomationSessionID(
+    taskID: ScheduledTaskID,
+    currentQueueID?: TaskQueueID,
+  ): Promise<SessionID | undefined> {
+    const runs = await listRuns({ taskID, limit: RUN_HISTORY_LIMIT })
+    for (const run of runs) {
+      if (!run.queueID || run.queueID === currentQueueID) continue
+      const item = await TaskQueue.get(TaskQueueID.make(run.queueID)).catch(() => undefined)
+      if (item?.sessionID) return item.sessionID
+    }
+    return undefined
   }
 
   export async function listRuns(input: RunListInput): Promise<RunInfo[]> {

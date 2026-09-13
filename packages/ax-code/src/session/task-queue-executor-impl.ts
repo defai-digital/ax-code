@@ -687,6 +687,82 @@ function queueItemExecution(item: TaskQueue.Info): QueueExecution | undefined {
   }
 }
 
+const SCHEDULED_REUSE_PREFACE =
+  "[scheduled task] New occurrence. Earlier turns in this session are previous runs; fetch current data instead of reusing those answers.\n\n"
+
+function withScheduledReusePreface<T extends { parts?: Array<{ type: string; text?: string }> }>(
+  body: T,
+  reused: boolean,
+): T {
+  if (!reused) return body
+  const parts = Array.isArray(body.parts) ? [...body.parts] : []
+  const first = parts[0]
+  if (first && first.type === "text" && typeof first.text === "string") {
+    parts[0] = { ...first, text: SCHEDULED_REUSE_PREFACE + first.text }
+    return { ...body, parts }
+  }
+  return { ...body, parts: [{ type: "text" as const, text: SCHEDULED_REUSE_PREFACE.trim() }, ...parts] }
+}
+
+async function resolveReusableScheduledSession(
+  item: TaskQueue.Info,
+  scheduledTaskID: ScheduledTaskID,
+  Session: typeof import(".").Session,
+  ScheduledTask: typeof import("./scheduled-task").ScheduledTask,
+): Promise<SessionID | undefined> {
+  const previous = await ScheduledTask.previousAutomationSessionID(scheduledTaskID, item.id)
+  if (!previous) return
+  const session = await Session.get(previous).catch(() => undefined)
+  if (!session || session.time.archived) return
+  if (!Session.isCompatibleWithCurrentProject(session)) return
+  if (sessionPromptBusy(previous)) return
+  if ((await activeSessionItems(previous)).length > 0) return
+  if ((await pendingSessionItems(previous)).length > 0) return
+  const priorFires = (await TaskQueue.list({ sessionID: previous, limit: 200 })).filter(
+    (candidate) =>
+      candidate.kind === "automation" && candidate.sourceTaskID === scheduledTaskID && candidate.id !== item.id,
+  ).length
+  if (priorFires >= ScheduledTask.SESSION_REUSE_LIMIT) return
+  return previous
+}
+
+async function attachScheduledAutomationSession(
+  item: TaskQueue.Info,
+  scheduledTaskID: ScheduledTaskID,
+  execution: QueueExecution,
+): Promise<{ sessionID: SessionID; reused: boolean }> {
+  if (item.sessionID) return { sessionID: item.sessionID, reused: false }
+
+  await requireActiveQueueItem(item.id)
+  const { Session } = await import(".")
+  const { ScheduledTask } = await import("./scheduled-task")
+  const reuseID = await resolveReusableScheduledSession(item, scheduledTaskID, Session, ScheduledTask)
+  if (reuseID) {
+    await TaskQueue.attachSession(item.id, reuseID)
+    item.sessionID = reuseID
+    execution.sessionID = reuseID
+    return { sessionID: reuseID, reused: true }
+  }
+
+  const session = await Session.create({ title: item.title })
+  try {
+    await requireActiveQueueItem(item.id)
+    await TaskQueue.attachSession(item.id, session.id)
+  } catch (error) {
+    await Session.remove(session.id).catch((removeError) => {
+      log.warn("failed to discard cancelled scheduled session", {
+        taskID: item.id,
+        sessionID: session.id,
+        error: removeError,
+      })
+    })
+    throw error
+  }
+  item.sessionID = session.id
+  execution.sessionID = session.id
+  return { sessionID: session.id, reused: false }
+}
+
 function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | undefined {
   const scheduledTaskID = item.payload["scheduledTaskID"]
   if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) return undefined
@@ -730,43 +806,14 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
           return detail
         }
 
-        let sessionID = item.sessionID
-        if (!sessionID) {
-          await requireActiveQueueItem(item.id)
-          const { Session } = await import(".")
-          const session = await Session.create({ title: item.title })
-          try {
-            await requireActiveQueueItem(item.id)
-          } catch (error) {
-            await Session.remove(session.id).catch((removeError) => {
-              log.warn("failed to discard cancelled scheduled session", {
-                taskID: item.id,
-                sessionID: session.id,
-                error: removeError,
-              })
-            })
-            throw error
-          }
-          try {
-            await TaskQueue.attachSession(item.id, session.id)
-          } catch (error) {
-            await Session.remove(session.id).catch((removeError) => {
-              log.warn("failed to discard cancelled scheduled session", {
-                taskID: item.id,
-                sessionID: session.id,
-                error: removeError,
-              })
-            })
-            throw error
-          }
-          sessionID = session.id
-          item.sessionID = sessionID
-          execution.sessionID = sessionID
-        }
+        const attached = await attachScheduledAutomationSession(item, ScheduledTaskID.make(scheduledTaskID), execution)
         await requireActiveQueueItem(item.id)
         const body = promptBodyFromQueueItem(item)
         if (!body) throw new Error(`Scheduled task ${scheduledTaskID} has no executable prompt`)
-        return SessionPrompt.prompt({ ...body, sessionID })
+        return SessionPrompt.prompt({
+          ...withScheduledReusePreface(body, attached.reused),
+          sessionID: attached.sessionID,
+        })
       }),
   }
   return execution
