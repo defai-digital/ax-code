@@ -2,7 +2,9 @@ import { describe, expect, test } from "vitest"
 import {
   activeNavigationSessions,
   projectLabel,
+  navigationClearedAt,
   navigationFilter,
+  visibleAfterNavigationClear,
 } from "../../../src/cli/cmd/tui/navigation/navigation-model"
 import { NAVIGATION_CONTENT_MIN_WIDTH, navigationLayout } from "../../../src/cli/cmd/tui/navigation/navigation-layout"
 
@@ -49,6 +51,45 @@ describe("navigation scope and active filter", () => {
   test("invalid stored filters fall back to recent", () => {
     expect(navigationFilter("active")).toBe("active")
     expect(navigationFilter({ active: true })).toBe("recent")
+  })
+})
+
+describe("navigation rail clear", () => {
+  test("ignores malformed cutoffs", () => {
+    expect(navigationClearedAt("10")).toBe(0)
+    expect(navigationClearedAt(-1)).toBe(0)
+    expect(navigationClearedAt(Number.NaN)).toBe(0)
+    expect(visibleAfterNavigationClear({ ...base, clearedAt: "10" }).map((session) => session.id)).toEqual(
+      sessions.map((session) => session.id),
+    )
+  })
+  test("hides older rows and keeps the current tree", () => {
+    expect(
+      visibleAfterNavigationClear({ ...base, clearedAt: 4, currentID: "current" }).map((session) => session.id),
+    ).toEqual(["current"])
+    expect(
+      visibleAfterNavigationClear({ ...base, clearedAt: 10, currentID: "deep" }).map((session) => session.id),
+    ).toEqual(["root", "child", "deep"])
+  })
+  test("keeps pinned trees and observed working sessions after a clear", () => {
+    expect(
+      visibleAfterNavigationClear({ ...base, clearedAt: 10, pinned: ["idle"] }).map((session) => session.id),
+    ).toEqual(["idle"])
+    expect(
+      visibleAfterNavigationClear({
+        ...base,
+        clearedAt: 10,
+        statuses: { deep: { type: "busy" } },
+        observed: true,
+      }).map((session) => session.id),
+    ).toEqual(["root", "child", "deep"])
+  })
+  test("does not resurrect the full cached list while disconnected", () => {
+    expect(
+      visibleAfterNavigationClear({ ...base, clearedAt: 10, currentID: "current", observed: false }).map(
+        (session) => session.id,
+      ),
+    ).toEqual(["current"])
   })
 })
 

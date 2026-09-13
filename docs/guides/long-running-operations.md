@@ -210,7 +210,11 @@ Recent shows loaded sessions; Active keeps working or waiting session trees
 and the current session tree. The filter is shared with the navigation picker
 and remembered. Use `/navigation-filter` to toggle it from the keyboard. During
 disconnection it shows cached sessions rather than inferring which sessions
-are active.
+are active. Clear (or `/navigation-clear`) hides historical rows from the left
+rail and the navigation picker only. It does not delete sessions; `/sessions`
+still lists them. The current session tree, pinned sessions, and observed
+working or waiting trees stay on the rail. Opening a session from `/sessions`
+brings it back to the list.
 
 Use `/navigation-width` or the navigation Width action to choose 24, 30, or 36
 columns (default 30). The preference is remembered and shrinks automatically when needed

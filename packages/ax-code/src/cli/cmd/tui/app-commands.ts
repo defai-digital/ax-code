@@ -156,6 +156,16 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
+      title: "Clear session navigation list",
+      value: "session.navigation.clear",
+      category: "Session",
+      slash: { name: "navigation-clear" },
+      onSelect: () => {
+        kv.set("navigation_cleared_at", Date.now())
+        dialog.clear()
+      },
+    },
+    {
       title:
         input.terminalWidth() < NAVIGATION_DOCK_MIN_WIDTH
           ? "Open session navigation"

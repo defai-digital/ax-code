@@ -7,6 +7,47 @@ export function navigationFilter(value: unknown): NavigationFilter {
   return value === "active" ? "active" : "recent"
 }
 
+/** Rail-only recents cutoff. Zero means the bar has not been cleared. */
+export function navigationClearedAt(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0
+}
+
+function addAncestorsAndDescendants<T extends { id: string; parentID?: string }>(
+  sessions: readonly T[],
+  keep: Set<string>,
+  seed: string,
+) {
+  const byID = new Map(sessions.map((session) => [session.id, session]))
+  if (!byID.has(seed)) {
+    keep.add(seed)
+    return
+  }
+  const children = new Map<string, T[]>()
+  for (const session of sessions) {
+    if (!session.parentID) continue
+    const list = children.get(session.parentID) ?? []
+    list.push(session)
+    children.set(session.parentID, list)
+  }
+  const seen = new Set<string>()
+  let current = byID.get(seed)
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id)
+    keep.add(current.id)
+    current = current.parentID ? byID.get(current.parentID) : undefined
+  }
+  const pending = [seed]
+  while (pending.length) {
+    const id = pending.pop()!
+    keep.add(id)
+    for (const child of children.get(id) ?? []) {
+      if (seen.has(child.id)) continue
+      seen.add(child.id)
+      pending.push(child.id)
+    }
+  }
+}
+
 export function projectLabel(directory: string | undefined) {
   if (!directory) return "Workspace unavailable"
   const trimmed = directory.replace(/[\\/]+$/, "")
@@ -33,4 +74,44 @@ export function activeNavigationSessions<
     for (const member of state.members) included.add(member.id)
   }
   return input.sessions.filter((session) => included.has(session.id))
+}
+
+/**
+ * Hide historical rows from the navigation rail without deleting sessions.
+ * `/sessions` ignores this cutoff. Current, pinned, and observed active trees stay.
+ */
+export function visibleAfterNavigationClear<
+  T extends { id: string; parentID?: string; time: { updated: number } },
+>(input: {
+  sessions: readonly T[]
+  clearedAt: unknown
+  currentID?: string
+  pinned?: readonly string[]
+  statuses?: ActivityStatuses
+  permissions?: RequestBuckets
+  questions?: RequestBuckets
+  observed?: boolean
+}) {
+  const clearedAt = navigationClearedAt(input.clearedAt)
+  if (!clearedAt) return [...input.sessions]
+  const keep = new Set<string>()
+  for (const session of input.sessions) {
+    if (session.time.updated > clearedAt) keep.add(session.id)
+  }
+  for (const id of input.pinned ?? []) addAncestorsAndDescendants(input.sessions, keep, id)
+  if (input.currentID) addAncestorsAndDescendants(input.sessions, keep, input.currentID)
+  if (input.observed) {
+    for (const session of activeNavigationSessions({
+      sessions: input.sessions,
+      statuses: input.statuses ?? {},
+      permissions: input.permissions ?? {},
+      questions: input.questions ?? {},
+      currentID: input.currentID,
+      observed: true,
+    })) {
+      keep.add(session.id)
+    }
+  }
+  for (const id of [...keep]) addAncestorsAndDescendants(input.sessions, keep, id)
+  return input.sessions.filter((session) => keep.has(session.id))
 }

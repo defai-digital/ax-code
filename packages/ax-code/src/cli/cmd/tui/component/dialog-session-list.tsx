@@ -1,5 +1,5 @@
 import { useKV } from "@tui/context/kv"
-import { activeNavigationSessions, navigationFilter } from "../navigation/navigation-model"
+import { activeNavigationSessions, navigationFilter, visibleAfterNavigationClear } from "../navigation/navigation-model"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
@@ -177,8 +177,20 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
             observed: sdk.sseConnected && sync.data.session_loaded,
           })
         : sessions()
+    const listedSessions = props.navigation
+      ? visibleAfterNavigationClear({
+          sessions: navigationSessions,
+          clearedAt: kv.get("navigation_cleared_at"),
+          currentID: currentSessionID(),
+          pinned: pinnedIDs,
+          statuses: sync.data.session_status,
+          permissions: sync.data.permission,
+          questions: sync.data.question,
+          observed: sdk.sseConnected && sync.data.session_loaded,
+        })
+      : navigationSessions
     const ordered = props.navigation
-      ? sessionNavigationEntries(navigationSessions, pinnedIDs, "all")
+      ? sessionNavigationEntries(listedSessions, pinnedIDs, "all")
       : orderRootSessions(allSessions, pinnedIDs).map((session) => ({ session, depth: 0 }))
 
     return ordered.map(({ session: x, depth }) => {
@@ -227,6 +239,11 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
               </box>
             )}
           </For>
+          <box onMouseUp={() => kv.set("navigation_cleared_at", Date.now())}>
+            <text fg={theme.textMuted} selectable={false}>
+              Clear
+            </text>
+          </box>
         </box>
         <Show when={filter() === "active"}>
           <text paddingLeft={4} fg={theme.textMuted} wrapMode="word">

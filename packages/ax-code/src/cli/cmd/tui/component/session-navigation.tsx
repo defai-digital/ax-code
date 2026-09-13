@@ -2,7 +2,12 @@ import type { RGBA } from "ax-tui"
 import { createMemo, For, Show, type Setter } from "solid-js"
 import { useKV } from "@tui/context/kv"
 import { navigationPanelInnerWidth, navigationRailInnerWidth } from "../navigation/navigation-layout"
-import { activeNavigationSessions, navigationFilter, projectLabel } from "../navigation/navigation-model"
+import {
+  activeNavigationSessions,
+  navigationFilter,
+  projectLabel,
+  visibleAfterNavigationClear,
+} from "../navigation/navigation-model"
 import { useSync } from "@tui/context/sync"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
@@ -42,7 +47,7 @@ export function SessionNavigation(props: {
   const sessions = createMemo(() => sync.data.session.filter((session) => session.directory === directory()))
   const filter = () => navigationFilter(kv.get("navigation_filter"))
   const observed = () => sdk.sseConnected && sync.data.session_loaded
-  const visibleSessions = createMemo(() =>
+  const scopedSessions = createMemo(() =>
     filter() === "recent"
       ? sessions()
       : activeNavigationSessions({
@@ -54,7 +59,20 @@ export function SessionNavigation(props: {
           observed: observed(),
         }),
   )
+  const visibleSessions = createMemo(() =>
+    visibleAfterNavigationClear({
+      sessions: scopedSessions(),
+      clearedAt: kv.get("navigation_cleared_at"),
+      currentID: current(),
+      pinned: local.session.pinned(),
+      statuses: sync.data.session_status,
+      permissions: sync.data.permission,
+      questions: sync.data.question,
+      observed: observed(),
+    }),
+  )
   const rows = createMemo(() => sessionNavigationEntries(visibleSessions(), local.session.pinned(), expanded()))
+  const clearedHint = createMemo(() => scopedSessions().length > visibleSessions().length)
   const activity = createMemo(() =>
     createSessionActivityIndex({
       sessions: sessions(),
@@ -147,12 +165,14 @@ export function SessionNavigation(props: {
         }}
       >
         <Show when={rows().length === 0}>
-          <text flexShrink={0} fg={theme.textMuted} selectable={false}>
+          <text flexShrink={0} fg={theme.textMuted} selectable={false} wrapMode="word">
             {!sync.data.session_loaded
               ? "Loading sessions"
-              : filter() === "active"
+              : filter() === "active" && !clearedHint()
                 ? "No active sessions"
-                : "No sessions here"}
+                : clearedHint()
+                  ? "Cleared; /sessions to resume"
+                  : "No sessions here"}
           </text>
         </Show>
         <For each={rows()}>
@@ -225,6 +245,11 @@ export function SessionNavigation(props: {
           </box>
           <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.width")}>
             <text flexShrink={0} fg={theme.textMuted} selectable={false}>{`Width ${props.width}`}</text>
+          </box>
+          <box flexShrink={0} onMouseUp={() => kv.set("navigation_cleared_at", Date.now())}>
+            <text flexShrink={0} fg={theme.textMuted} selectable={false}>
+              Clear
+            </text>
           </box>
         </box>
         <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation")}>

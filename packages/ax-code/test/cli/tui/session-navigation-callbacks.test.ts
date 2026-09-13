@@ -195,6 +195,26 @@ describe("session navigation callbacks", () => {
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
+  test("clears historical rows from the rail without deleting or opening sessions", () => {
+    const props = navigationProps()
+    const tree = mount(() => SessionNavigation(props))
+    expect(text(tree)).toContain("Earlier session")
+    click(tree, "Clear")
+    expect(mocked.setKV).toHaveBeenCalledExactlyOnceWith("navigation_cleared_at", expect.any(Number))
+    expect(mocked.navigate).not.toHaveBeenCalled()
+    expect(mocked.reply).not.toHaveBeenCalled()
+    expect(mocked.trigger).not.toHaveBeenCalled()
+    mocked.kv.navigation_cleared_at = 10
+    mocked.invalidate()
+    disposals.pop()!()
+    const cleared = mount(() => SessionNavigation(props))
+    expect(text(cleared)).toContain("Parent session")
+    expect(text(cleared)).not.toContain("Earlier session")
+    expect(sessionPicker(false).options.map((option) => option.value)).toEqual(["root", "idle"])
+    expect(sessionPicker(true).options.map((option) => option.value)).toEqual(["root", "child"])
+    expect(mocked.reply).not.toHaveBeenCalled()
+  })
+
   test("persists the selected filter across remounts and permits switching back", () => {
     const props = navigationProps()
     const recent = mount(() => SessionNavigation(props))
@@ -481,6 +501,9 @@ describe("shared navigation picker filters", () => {
     ).toBeUndefined()
     expect(
       find(picker.tree, (node) => typeof node.props.onMouseUp === "function" && text(node) === "Active"),
+    ).toBeUndefined()
+    expect(
+      find(picker.tree, (node) => typeof node.props.onMouseUp === "function" && text(node) === "Clear"),
     ).toBeUndefined()
     expect(text(picker.tree)).not.toContain("Includes current session")
     expect(mocked.setKV).not.toHaveBeenCalled()
