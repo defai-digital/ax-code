@@ -1,6 +1,6 @@
 import { access, readFile, readdir, stat } from "node:fs/promises"
 import path from "node:path"
-import { discoverSources } from "./discovery.js"
+import { discoverSources, readSourceEvidence } from "./discovery.js"
 import { parseFrontmatter } from "./frontmatter.js"
 import { sha256 } from "./hash.js"
 import { INDEX_CANDIDATES, normalizePath, resolveInside, sanitizeWikiDir } from "./paths.js"
@@ -274,8 +274,23 @@ export async function lintWiki(input: {
   } catch {
     manifestCorrupt = true
   }
-  const pages = new Map((await loadWikiPages({ root, wikiDir })).map((page) => [page.relativePath, page.content]))
-  const report = validateWikiCandidate({ plan, pages, sources, manifest })
+  const loadedPages = await loadWikiPages({ root, wikiDir })
+  const pages = new Map(loadedPages.map((page) => [page.relativePath, page.content]))
+  // Grounding check: read the sources pages actually cite, bounded, and pass
+  // their excerpts to the validator. Lint is not a hot path, so the extra read
+  // buys a real (if heuristic) "symbol exists in its evidence" signal.
+  const citedPaths = new Set(loadedPages.flatMap((page) => page.sources))
+  const citedSources = sources.filter((source) => citedPaths.has(source.path))
+  const sourceContents =
+    citedSources.length > 0
+      ? new Map(
+          (await readSourceEvidence({ root, sources: citedSources, maxTotalBytes: 2_000_000 })).map((source) => [
+            source.path,
+            source.content,
+          ]),
+        )
+      : undefined
+  const report = validateWikiCandidate({ plan, pages, sources, manifest, sourceContents })
   if (manifestCorrupt) {
     report.issues.push({
       level: "error",

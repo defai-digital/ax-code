@@ -17,6 +17,8 @@ export const ScenarioResultSchema = z.object({
   language: z.enum(["ts", "py", "rust"]),
   serverId: z.string(),
   samples: z.number(),
+  min: z.number().optional(),
+  max: z.number().optional(),
   p50: z.number(),
   p95: z.number(),
   peakRssKb: z.number().optional(),
@@ -85,12 +87,12 @@ const cell = (value: number | undefined, suffix = "") => (value === undefined ? 
 
 export function formatMarkdownTable(results: ScenarioResult[]): string {
   const lines = [
-    "| scenario | fixture | language | server | samples | p50 (ms) | p95 (ms) | peak RSS (MB) | hit rate | RPCs | total (ms) |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| scenario | fixture | language | server | samples | min (ms) | p50 (ms) | p95 (ms) | max (ms) | peak RSS (MB) | hit rate | RPCs | total (ms) |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ]
   for (const r of results) {
     lines.push(
-      `| ${r.scenario} | ${r.fixture} | ${r.language} | ${r.serverId} | ${r.samples} | ${round(r.p50)} | ${round(r.p95)} | ` +
+      `| ${r.scenario} | ${r.fixture} | ${r.language} | ${r.serverId} | ${r.samples} | ${cell(r.min === undefined ? undefined : round(r.min))} | ${round(r.p50)} | ${round(r.p95)} | ${cell(r.max === undefined ? undefined : round(r.max))} | ` +
         `${cell(r.peakRssKb === undefined ? undefined : round(r.peakRssKb / 1024))} | ${cell(r.hitRate)} | ${cell(r.rpcCount)} | ${round(r.totalMs)} |`,
     )
   }

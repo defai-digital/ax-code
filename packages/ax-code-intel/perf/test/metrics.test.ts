@@ -22,12 +22,19 @@ describe("percentile", () => {
 })
 
 describe("summarizeDurations", () => {
-  test("aggregates samples, percentiles, and total", () => {
-    expect(summarizeDurations([40, 10, 30, 20])).toEqual({ samples: 4, p50: 30, p95: 40, totalMs: 100 })
+  test("aggregates samples, range, percentiles, and total", () => {
+    expect(summarizeDurations([40, 10, 30, 20])).toEqual({
+      samples: 4,
+      min: 10,
+      max: 40,
+      p50: 30,
+      p95: 40,
+      totalMs: 100,
+    })
   })
 
   test("handles empty input", () => {
-    expect(summarizeDurations([])).toEqual({ samples: 0, p50: 0, p95: 0, totalMs: 0 })
+    expect(summarizeDurations([])).toEqual({ samples: 0, min: 0, max: 0, p50: 0, p95: 0, totalMs: 0 })
   })
 })
 

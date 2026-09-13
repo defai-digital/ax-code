@@ -253,4 +253,31 @@ describe("AX Wiki build lifecycle", () => {
       "manifest is not valid JSON",
     )
   })
+
+  test("warns when a page lists a symbol absent from its cited sources", async () => {
+    const root = await fixture()
+    const page = (symbolFor: (title: string) => string) =>
+      vi.fn(async (request: WikiPageGenerationRequest) => ({
+        summary: `Grounded summary for ${request.page.title} and its repository responsibilities.`,
+        body: `## Purpose\n\n${request.page.purpose} This body is intentionally long enough to clear the minimum page length enforced by validation.\n\n## Change guidance\n\nVerify every claim against the cited source files before acting on it.`,
+        symbols: request.page.kind === "module" ? [symbolFor(request.page.title)] : [],
+      }))
+
+    // Each module page lists a symbol that exists in its own selected sources.
+    await buildAxWiki({
+      root,
+      action: "generate",
+      generator: page((title) => (title.toLowerCase().includes("web") ? "webValue" : "coreValue")),
+    })
+    const grounded = await lintWiki({ root })
+    expect(grounded.issues.some((issue) => issue.code === "wiki.ungrounded_symbol")).toBe(false)
+
+    await buildAxWiki({ root, action: "generate", generator: page(() => "GhostSymbolXYZ") })
+    const ungrounded = await lintWiki({ root })
+    expect(
+      ungrounded.issues.some(
+        (issue) => issue.code === "wiki.ungrounded_symbol" && issue.message.includes("GhostSymbolXYZ"),
+      ),
+    ).toBe(true)
+  })
 })

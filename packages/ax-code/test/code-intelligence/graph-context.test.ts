@@ -294,4 +294,72 @@ describe("GraphContext.build", () => {
       },
     })
   })
+
+  test("flags a candidate-cap hit instead of implying complete coverage", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const file = path.join(tmp.path, "capped.ts")
+        await writeFile(file, "export const capTarget = 1\n")
+        for (let index = 0; index < 45; index++) {
+          seedSymbol(projectID, { name: `capTarget${String(index).padStart(2, "0")}`, file })
+        }
+
+        const pack = await GraphContext.build(projectID, {
+          query: "capTarget",
+          maxSymbols: 5,
+          scope: "worktree",
+        })
+
+        expect(pack.candidateCapped).toBe(true)
+        expect(pack.output).toContain("candidateCapped=true")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
+
+  test("reports impact depth truthfully when a deeper depth was requested", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const projectID = Instance.project.id
+        CodeIntelligence.__clearProject(projectID)
+        const file = path.join(tmp.path, "impact.ts")
+        await writeFile(file, "export function processPayment() { return true }\n")
+        const callee = seedSymbol(projectID, { name: "processPayment", file, startLine: 0, endLine: 0 })
+        const caller = seedSymbol(projectID, { name: "handleRequest", file, startLine: 0, endLine: 0 })
+        seedCall(projectID, caller, callee, file)
+
+        const shallow = await GraphContext.build(projectID, {
+          query: "processPayment",
+          maxSymbols: 1,
+          includeImpact: true,
+          maxDepth: 1,
+          scope: "worktree",
+        })
+        expect(shallow.impact?.computedDepth).toBe(1)
+        expect(shallow.impact?.requestedDepth).toBe(1)
+        expect(shallow.impact?.truncated).toBe(false)
+
+        const deep = await GraphContext.build(projectID, {
+          query: "processPayment",
+          maxSymbols: 1,
+          includeImpact: true,
+          maxDepth: 3,
+          scope: "worktree",
+        })
+        expect(deep.impact?.computedDepth).toBe(1)
+        expect(deep.impact?.requestedDepth).toBe(3)
+        expect(deep.impact?.truncated).toBe(true)
+        expect(deep.output).toContain("computedDepth=1/3")
+
+        CodeIntelligence.__clearProject(projectID)
+      },
+    })
+  })
 })

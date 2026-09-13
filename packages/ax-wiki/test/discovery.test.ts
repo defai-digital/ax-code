@@ -85,6 +85,25 @@ describe("readSourceEvidence", () => {
     expect(Buffer.byteLength(evidence!.content)).toBe(32_000)
     expect(evidence?.content).not.toContain("criticalTailGuard")
   })
+
+  test("preserves source order and stops reading once the total budget is spent", async () => {
+    const root = await fixture()
+    const first = Buffer.from("aaaa", "utf8")
+    const second = Buffer.from("bbbb", "utf8")
+    const third = Buffer.from("cccc", "utf8")
+    await writeFile(path.join(root, "a.md"), first)
+    await writeFile(path.join(root, "b.md"), second)
+    await writeFile(path.join(root, "c.md"), third)
+    const evidence = await readSourceEvidence({
+      root,
+      sources: [sourceFor("a.md", first), sourceFor("b.md", second), sourceFor("c.md", third)],
+      maxTotalBytes: 6,
+    })
+    expect(evidence.map((item) => item.path)).toEqual(["a.md", "b.md"])
+    expect(evidence[0]?.content).toBe("aaaa")
+    expect(evidence[1]?.content).toBe("bb")
+    expect(evidence[1]?.truncated).toBe(true)
+  })
 })
 
 function createGate() {

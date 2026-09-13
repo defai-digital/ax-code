@@ -46,6 +46,7 @@ tsx packages/ax-code-intel/perf/src/harness.ts --scenario cold-start
 tsx ... --scenario full --external --record       # include pinned external fixtures
 tsx ... --compare perf/baseline/baseline.reference.json
 tsx ... --compare ... --fail-on-regression --threshold 20
+tsx ... --strict-preflight                        # fail when a fixture's server is unusable
 ```
 
 Scenarios: `cold-start`, `warm-query`, `peak-rss`, `cache-hit-rate`,
@@ -57,6 +58,13 @@ Profiles and timeouts: `--timeout <ms>` sets the per-query RPC budget
 (default 5000); `--cold-timeout <ms>` sets the spawn + initialize budget per
 launch (default 60000, enforced by the harness on top of the client's own
 initialize timeout so a silently dying server fails cleanly).
+
+A fixture whose server is missing or fails its handshake is skipped with a
+warning; the run exits non-zero only when no server is usable. Pass
+`--strict-preflight` to treat any skipped fixture as a failure instead.
+Reported percentiles keep the floor-index semantics of `src/perf.ts`; the
+table also prints each row's sample count and min/max so a small-sample p95
+(where p95 equals max) is visible rather than implied.
 
 ## What each scenario measures
 

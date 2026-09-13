@@ -234,7 +234,7 @@ function toRelationshipRecord(
 
 function bundleCompleteness(pack: GraphContext.Pack): Completeness {
   if (pack.symbols.length === 0) return "queried-zero-results"
-  if (pack.envelope.degraded) return "partial"
+  if (pack.envelope.degraded || pack.candidateCapped) return "partial"
   if (pack.symbols.every((symbol) => symbol.explain.completeness === "lsp-only")) return "lsp-only"
   if (pack.symbols.some((symbol) => symbol.explain.completeness === "partial") || pack.omitted.symbols > 0) {
     return "partial"

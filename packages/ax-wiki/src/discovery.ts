@@ -208,7 +208,8 @@ function decodeUtf8BytePrefix(buffer: Buffer, maxBytes: number): { content: stri
   return { content, truncated: buffer.length > limit }
 }
 
-async function readSourceBytesNoFollow(absolute: string): Promise<Buffer> {
+async function readSourcePrefixNoFollow(absolute: string, maxBytes: number): Promise<Buffer> {
+  if (maxBytes <= 0) return Buffer.alloc(0)
   let fh
   try {
     // O_NOFOLLOW mirrors readHashedSource: a source swapped for a symlink
@@ -218,7 +219,19 @@ async function readSourceBytesNoFollow(absolute: string): Promise<Buffer> {
     return Buffer.alloc(0)
   }
   try {
-    return await fh.readFile()
+    const info = await fh.stat()
+    if (!info.isFile()) return Buffer.alloc(0)
+    // Read only the prefix the page budget can use; a large file is no longer
+    // fully materialized only to be clipped to 32 KB afterwards.
+    const size = Math.min(info.size, maxBytes)
+    const buffer = Buffer.allocUnsafe(size)
+    let offset = 0
+    while (offset < size) {
+      const { bytesRead } = await fh.read(buffer, offset, size - offset, offset)
+      if (bytesRead <= 0) break
+      offset += bytesRead
+    }
+    return offset === size ? buffer : buffer.subarray(0, offset)
   } catch {
     return Buffer.alloc(0)
   } finally {
@@ -231,15 +244,21 @@ export async function readSourceEvidence(input: {
   sources: WikiSource[]
   maxTotalBytes: number
 }): Promise<Array<WikiSource & { content: string; truncated: boolean }>> {
-  const output: Array<WikiSource & { content: string; truncated: boolean }> = []
+  // Allocate the page budget up front, in source order, from the byte sizes
+  // discovery already recorded. This preserves the deterministic "budget runs
+  // out" semantics while letting the reads run with bounded concurrency.
+  const plans: Array<{ source: WikiSource; perFile: number }> = []
   let remaining = Math.max(1, input.maxTotalBytes)
   for (const source of input.sources) {
     if (remaining <= 0) break
     const perFile = Math.min(remaining, 32_000)
-    const raw = await readSourceBytesNoFollow(resolveInside(input.root, source.path))
-    const { content, truncated } = decodeUtf8BytePrefix(raw, perFile)
-    output.push({ ...source, content, truncated })
-    remaining -= Buffer.byteLength(content)
+    plans.push({ source, perFile })
+    remaining -= Math.min(perFile, source.bytes)
   }
-  return output
+  return mapWithBoundedConcurrency(plans, DISCOVERY_READ_CONCURRENCY, async ({ source, perFile }) => {
+    const raw = await readSourcePrefixNoFollow(resolveInside(input.root, source.path), perFile)
+    const { content, truncated } = decodeUtf8BytePrefix(raw, perFile)
+    // `truncated` describes the whole file, not just the prefix we chose to read.
+    return { ...source, content, truncated: truncated || source.bytes > perFile }
+  })
 }

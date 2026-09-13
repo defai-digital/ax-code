@@ -23,11 +23,28 @@ function markdownLinkTargets(content: string): string[] {
   return targets
 }
 
+function symbolGrounded(symbol: string, contents: string[]): boolean {
+  const candidates = new Set<string>([symbol])
+  const separator = symbol.includes("::") ? "::" : symbol.includes(".") ? "." : undefined
+  if (separator) {
+    const last = symbol.split(separator).filter(Boolean).pop()
+    if (last) candidates.add(last)
+  }
+  for (const content of contents) {
+    for (const candidate of candidates) {
+      if (candidate && content.includes(candidate)) return true
+    }
+  }
+  return false
+}
+
 export function validateWikiCandidate(input: {
   plan: WikiPlan
   pages: Map<string, string>
   sources: WikiSource[]
   manifest?: WikiManifest
+  /** Bounded source excerpts, keyed by relative path, used for grounding checks. */
+  sourceContents?: ReadonlyMap<string, string>
 }): WikiValidationReport {
   const issues: WikiValidationIssue[] = []
   const knownSources = new Set(input.sources.map((source) => source.path))
@@ -112,6 +129,26 @@ export function validateWikiCandidate(input: {
           page: pagePath,
           message: `${pagePath} cites missing source: ${source}`,
         })
+      }
+    }
+    // Deterministic symbol grounding: a listed symbol should occur in at least
+    // one cited source. Only runs when bounded source excerpts were supplied;
+    // the excerpt prefix can be shorter than the file, so this is a warning.
+    if (input.sourceContents && meta.symbols.length > 0) {
+      const contents = meta.sources
+        .map((source) => input.sourceContents?.get(source))
+        .filter((value): value is string => value !== undefined)
+      if (contents.length > 0) {
+        for (const symbol of meta.symbols) {
+          if (symbol.trim() && !symbolGrounded(symbol, contents)) {
+            issues.push({
+              level: "warning",
+              code: "wiki.ungrounded_symbol",
+              page: pagePath,
+              message: `${pagePath} lists a symbol not found in its cited sources: ${symbol}`,
+            })
+          }
+        }
       }
     }
     for (const href of markdownLinkTargets(content)) {

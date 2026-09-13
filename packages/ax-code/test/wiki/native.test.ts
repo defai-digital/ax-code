@@ -70,6 +70,7 @@ function emptyPack(overrides: Partial<GraphContextPack> = {}): GraphContextPack 
     heuristicBindings: [],
     notes: [],
     omitted: { symbols: 0, snippets: 0, relationships: 0 },
+    candidateCapped: false,
     recommendations: [],
     envelope: {
       data: {},

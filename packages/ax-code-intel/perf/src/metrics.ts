@@ -11,6 +11,10 @@ export type ScenarioResult = {
   language: MetricLanguage
   serverId: string
   samples: number
+  /** Minimum sample; absent on baselines recorded before this field existed. */
+  min?: number
+  /** Maximum sample; absent on baselines recorded before this field existed. */
+  max?: number
   p50: number
   p95: number
   peakRssKb?: number
@@ -27,6 +31,8 @@ export function percentile(sorted: readonly number[], p: number): number {
 
 export function summarizeDurations(durations: readonly number[]): {
   samples: number
+  min: number
+  max: number
   p50: number
   p95: number
   totalMs: number
@@ -34,6 +40,8 @@ export function summarizeDurations(durations: readonly number[]): {
   const sorted = [...durations].sort((a, b) => a - b)
   return {
     samples: sorted.length,
+    min: sorted[0] ?? 0,
+    max: sorted[sorted.length - 1] ?? 0,
     p50: percentile(sorted, 50),
     p95: percentile(sorted, 95),
     totalMs: sorted.reduce((sum, value) => sum + value, 0),

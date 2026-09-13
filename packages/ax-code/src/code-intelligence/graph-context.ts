@@ -68,6 +68,10 @@ type ImpactSummary = {
   affectedSymbolCount: number
   affectedFileCount: number
   truncated: boolean
+  /** Transitive depth actually computed; currently always 1 (direct callers). */
+  computedDepth: number
+  /** Depth the caller asked for via `maxDepth`. */
+  requestedDepth: number
   symbols: Array<{ symbol: CodeIntelligence.Symbol; distance: number }>
 }
 
@@ -86,6 +90,8 @@ export type GraphContextPack = {
     snippets: number
     relationships: number
   }
+  /** True when a symbol lookup hit its per-query candidate cap. */
+  candidateCapped: boolean
   recommendations: string[]
   envelope: CodeIntelligence.GraphEnvelope<unknown>
 }
@@ -207,31 +213,21 @@ async function canReadGraphFile(file: string, scope: CodeIntelligence.Scope): Pr
   return false
 }
 
-async function readSnippet(
-  symbol: CodeIntelligence.Symbol,
-  scope: CodeIntelligence.Scope,
-): Promise<Snippet | undefined> {
-  try {
-    if (!(await canReadGraphFile(symbol.file, scope))) return undefined
-    const text = await readFile(symbol.file, "utf8")
-    const lines = text.split(/\r?\n/)
-    const startLine = Math.max(0, symbol.range.start.line - 2)
-    const endLine = Math.min(lines.length - 1, symbol.range.end.line + 2)
-    const selected = lines.slice(startLine, endLine + 1)
-    const truncated = selected.length > 80
-    const body = (truncated ? selected.slice(0, 80) : selected)
-      .map((line, idx) => `${String(startLine + idx + 1).padStart(4, " ")} | ${line}`)
-      .join("\n")
-    return {
-      symbol,
-      file: symbol.file,
-      startLine,
-      endLine: truncated ? startLine + 79 : endLine,
-      text: body,
-      truncated,
-    }
-  } catch {
-    return undefined
+function snippetFromLines(symbol: CodeIntelligence.Symbol, lines: string[]): Snippet {
+  const startLine = Math.max(0, symbol.range.start.line - 2)
+  const endLine = Math.min(lines.length - 1, symbol.range.end.line + 2)
+  const selected = lines.slice(startLine, endLine + 1)
+  const truncated = selected.length > 80
+  const body = (truncated ? selected.slice(0, 80) : selected)
+    .map((line, idx) => `${String(startLine + idx + 1).padStart(4, " ")} | ${line}`)
+    .join("\n")
+  return {
+    symbol,
+    file: symbol.file,
+    startLine,
+    endLine: truncated ? startLine + 79 : endLine,
+    text: body,
+    truncated,
   }
 }
 
@@ -418,9 +414,9 @@ function buildImpactSummary(
     }
   }
 
-  // Keep the MVP bounded: direct callers are always included, and depth
-  // greater than one is reported as truncated until a full BFS planner is
-  // promoted into this composer.
+  // Only direct callers are computed today: a requested depth greater than one
+  // was not walked, and the rendered list is clamped to 20 below, so either
+  // condition is a real truncation of the requested result.
   const symbols = [...seen.values()].sort(
     (a, b) => a.distance - b.distance || a.symbol.qualifiedName.localeCompare(b.symbol.qualifiedName),
   )
@@ -429,7 +425,9 @@ function buildImpactSummary(
     seedCount: selected.length,
     affectedSymbolCount: symbols.length,
     affectedFileCount: files.size,
-    truncated: maxDepth > 1,
+    truncated: symbols.length > 20 || maxDepth > 1,
+    computedDepth: 1,
+    requestedDepth: maxDepth,
     symbols: symbols.slice(0, 20),
   }
 }
@@ -493,7 +491,7 @@ function formatOutput(pack: Omit<GraphContextPack, "output">): string {
   if (pack.impact) {
     lines.push(`## Impact`)
     lines.push(
-      `Seeds=${pack.impact.seedCount}, affectedSymbols=${pack.impact.affectedSymbolCount}, affectedFiles=${pack.impact.affectedFileCount}, truncated=${pack.impact.truncated}`,
+      `Seeds=${pack.impact.seedCount}, affectedSymbols=${pack.impact.affectedSymbolCount}, affectedFiles=${pack.impact.affectedFileCount}, truncated=${pack.impact.truncated}, computedDepth=${pack.impact.computedDepth}/${pack.impact.requestedDepth}`,
     )
     for (const item of pack.impact.symbols.slice(0, 10)) {
       lines.push(
@@ -527,9 +525,9 @@ function formatOutput(pack: Omit<GraphContextPack, "output">): string {
   for (const recommendation of pack.recommendations) {
     lines.push(`- ${recommendation}`)
   }
-  if (pack.omitted.symbols || pack.omitted.snippets || pack.omitted.relationships) {
+  if (pack.omitted.symbols || pack.omitted.snippets || pack.omitted.relationships || pack.candidateCapped) {
     lines.push(
-      `- Omitted: symbols=${pack.omitted.symbols}, snippets=${pack.omitted.snippets}, relationships=${pack.omitted.relationships}.`,
+      `- Omitted: symbols=${pack.omitted.symbols}, snippets=${pack.omitted.snippets}, relationships=${pack.omitted.relationships}, candidateCapped=${pack.candidateCapped ? "true" : "false"}.`,
     )
   }
 
@@ -547,6 +545,13 @@ export namespace GraphContext {
     const maxSnippets = Math.min(Math.max(opts.maxSnippets ?? DEFAULT_MAX_SNIPPETS, 0), 12)
     const maxDepth = Math.min(Math.max(opts.maxDepth ?? 1, 1), 3)
     const candidates: CodeIntelligence.Symbol[] = []
+    // A lookup that returns exactly MAX_CANDIDATES may have more matches that
+    // were dropped; record that so downstream completeness is not overstated.
+    let candidateCapped = false
+    const addCandidates = (found: CodeIntelligence.Symbol[]) => {
+      if (found.length >= MAX_CANDIDATES) candidateCapped = true
+      candidates.push(...found)
+    }
 
     for (const seed of opts.seeds ?? []) {
       if (seed.kind === "symbol") {
@@ -555,14 +560,14 @@ export namespace GraphContext {
       } else if (seed.kind === "file") {
         candidates.push(...CodeIntelligence.symbolsInFile(projectID, seed.value, { scope }))
       } else {
-        candidates.push(...CodeIntelligence.findSymbol(projectID, seed.value, { limit: MAX_CANDIDATES, scope }))
-        candidates.push(...CodeIntelligence.findSymbolByPrefix(projectID, seed.value, { limit: MAX_CANDIDATES, scope }))
+        addCandidates(CodeIntelligence.findSymbol(projectID, seed.value, { limit: MAX_CANDIDATES, scope }))
+        addCandidates(CodeIntelligence.findSymbolByPrefix(projectID, seed.value, { limit: MAX_CANDIDATES, scope }))
       }
     }
 
     for (const term of queryTerms(opts.query)) {
-      candidates.push(...CodeIntelligence.findSymbol(projectID, term, { limit: MAX_CANDIDATES, scope }))
-      candidates.push(...CodeIntelligence.findSymbolByPrefix(projectID, term, { limit: MAX_CANDIDATES, scope }))
+      addCandidates(CodeIntelligence.findSymbol(projectID, term, { limit: MAX_CANDIDATES, scope }))
+      addCandidates(CodeIntelligence.findSymbolByPrefix(projectID, term, { limit: MAX_CANDIDATES, scope }))
     }
 
     const allSymbols = rankSymbols(opts.query, uniqueByID(candidates))
@@ -614,9 +619,20 @@ export namespace GraphContext {
       }
     }
 
-    const snippets = (
-      await Promise.all(symbols.slice(0, maxSnippets).map((symbol) => readSnippet(symbol, scope)))
-    ).filter((item): item is Snippet => item !== undefined)
+    // Read each selected file once; snippet extraction and the binding scans
+    // below both reuse this map instead of reading the same file twice.
+    const linesByFile = new Map<string, string[] | undefined>()
+    for (const symbol of symbols) {
+      if (!linesByFile.has(symbol.file)) linesByFile.set(symbol.file, await readFileLines(symbol.file, scope))
+    }
+
+    const snippets = symbols
+      .slice(0, maxSnippets)
+      .map((symbol) => {
+        const lines = linesByFile.get(symbol.file)
+        return lines ? snippetFromLines(symbol, lines) : undefined
+      })
+      .filter((item): item is Snippet => item !== undefined)
 
     // Prior-session symbol notes (ADR-056). Attached to selected symbols and
     // rendered in a structurally distinct section so the agent can reuse prior
@@ -637,9 +653,7 @@ export namespace GraphContext {
 
     const frameworkBindings: FrameworkBinding[] = []
     const heuristicSignals: HeuristicBinding[] = []
-    const linesByFile = new Map<string, string[] | undefined>()
     for (const symbol of symbols) {
-      if (!linesByFile.has(symbol.file)) linesByFile.set(symbol.file, await readFileLines(symbol.file, scope))
       const lines = linesByFile.get(symbol.file)
       if (!lines) continue
       frameworkBindings.push(...routeBindings(symbol, lines))
@@ -688,6 +702,7 @@ export namespace GraphContext {
         snippets: Math.max(0, symbols.length - snippets.length),
         relationships: Math.max(0, totalRelationships - Math.min(totalRelationships, 40)),
       },
+      candidateCapped,
       recommendations,
       envelope,
     }

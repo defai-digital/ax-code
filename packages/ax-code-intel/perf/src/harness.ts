@@ -48,6 +48,8 @@ type Cli = {
   record: boolean
   compare?: string
   failOnRegression: boolean
+  /** Treat a skipped (unusable) fixture as a hard failure. Default: warn. */
+  strictPreflight: boolean
   thresholdPct: number
   queryTimeoutMs: number
   coldStartTimeoutMs: number
@@ -59,6 +61,7 @@ function parseArgs(argv: string[]): Cli {
     external: false,
     record: false,
     failOnRegression: false,
+    strictPreflight: false,
     thresholdPct: 20,
     queryTimeoutMs: 5_000,
     coldStartTimeoutMs: 60_000,
@@ -91,6 +94,9 @@ function parseArgs(argv: string[]): Cli {
         break
       case "--fail-on-regression":
         cli.failOnRegression = true
+        break
+      case "--strict-preflight":
+        cli.strictPreflight = true
         break
       case "--threshold":
         cli.thresholdPct = Number(argv[++i])
@@ -206,6 +212,7 @@ async function main() {
   const results: ScenarioResult[] = []
   let hadErrors = false
   let probedOk = 0
+  let skippedPreflight = 0
 
   console.log("LSP server preflight (spawn + initialize handshake per fixture):")
   for (const entry of fixtures) {
@@ -228,7 +235,10 @@ async function main() {
       }
       const probe = await probeServer(ctx)
       if (!probe.ok) {
-        hadErrors = true
+        skippedPreflight++
+        // A missing or unusable optional server is a skipped fixture, not a
+        // broken run. --strict-preflight restores the hard failure for CI.
+        if (cli.strictPreflight) hadErrors = true
         console.log(`  ✗ ${descriptor.serverBinary} (${descriptor.id}) — handshake failed, skipping fixture`)
         for (const line of probe.reason.split("\n").slice(0, 8)) console.log(`      ${line}`)
         continue
@@ -242,8 +252,9 @@ async function main() {
       const report = (name: string, rows: ScenarioResult[], started: number) => {
         results.push(...rows)
         for (const row of rows) {
+          const range = (value: number | undefined) => (value === undefined ? "—" : `${value}ms`)
           console.log(
-            `  ${row.scenario.padEnd(24)} p50=${row.p50}ms p95=${row.p95}ms samples=${row.samples}` +
+            `  ${row.scenario.padEnd(24)} min=${range(row.min)} p50=${row.p50}ms p95=${row.p95}ms max=${range(row.max)} samples=${row.samples}` +
               (row.peakRssKb !== undefined ? ` peakRss=${Math.round(row.peakRssKb / 1024)}MB` : "") +
               (row.hitRate !== undefined ? ` hitRate=${row.hitRate}` : "") +
               (row.rpcCount !== undefined ? ` rpc=${row.rpcCount}` : "") +
@@ -276,6 +287,12 @@ async function main() {
     } finally {
       await materialized.cleanup()
     }
+  }
+
+  if (skippedPreflight > 0) {
+    console.log(
+      `\n${skippedPreflight} fixture(s) skipped: no usable LSP server. Install them, or pass --strict-preflight to fail instead.`,
+    )
   }
 
   if (probedOk === 0) {

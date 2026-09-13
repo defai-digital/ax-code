@@ -52,11 +52,18 @@ describe("formatMarkdownTable", () => {
   test("renders one row per result with optional metrics", () => {
     const table = formatMarkdownTable([result({ peakRssKb: 204800, hitRate: 0.75, rpcCount: 12 })])
     expect(table).toContain("| scenario | fixture | language | server |")
-    expect(table).toContain("| cold-start | rust-workspace | rust | rust | 5 | 100 | 200 | 200 | 0.75 | 12 | 600 |")
+    expect(table).toContain(
+      "| cold-start | rust-workspace | rust | rust | 5 | — | 100 | 200 | — | 200 | 0.75 | 12 | 600 |",
+    )
+  })
+
+  test("renders min and max when recorded", () => {
+    const table = formatMarkdownTable([result({ min: 40, max: 260 })])
+    expect(table).toContain("| 5 | 40 | 100 | 200 | 260 | — | — | — | 600 |")
   })
 
   test("renders a dash for absent optional metrics", () => {
-    expect(formatMarkdownTable([result()])).toContain("| 5 | 100 | 200 | — | — | — | 600 |")
+    expect(formatMarkdownTable([result()])).toContain("| 5 | — | 100 | 200 | — | — | — | — | 600 |")
   })
 })
 
