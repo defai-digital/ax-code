@@ -3,8 +3,8 @@
 
   // Pin models on a provider you actually have connected. Disabled plan IDs
   // (alibaba-token-plan, zai-coding-plan, …) remap to a connected gateway but
-  // warn first. Qwen 3.8 Max is opt-in via /model, not the session default.
-  "model": "deepseek/deepseek-v4-pro",
+  // warn first. Default the session to DeepSeek Flash when that SKU exists.
+  "model": "deepseek/deepseek-flash",
 
   // Aux lane: titles, recaps, classifier. The live DeepSeek flash SKU is
   // deepseek-flash (not deepseek-v4-flash).

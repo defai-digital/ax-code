@@ -15,9 +15,9 @@ Use the expensive model for reasoning-dense work, and cheap models for mechanica
 
 | Layer                 | Model class                                              | Typical agents / tasks                                                 |
 | --------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Worker / executor     | Strong connected flagship (e.g. DeepSeek V4 Pro)         | `build`, `general`, `scout`, `test`, `devops`, `perf`                  |
-| Advisor / reasoning   | Same reasoning model, or a second family if you want it  | `plan`, `architect`, `security`, `debug`                               |
-| Cheap / read-only aux | Flash/mini on a connected provider (e.g. DeepSeek Flash) | `explore`, `compaction`, titles, recaps, low-complexity classification |
+| Worker / executor     | Connected flash SKU when available (e.g. DeepSeek Flash) | unpinned session, `build`, `general`, `scout`, `test`, `devops`, `perf` |
+| Advisor / reasoning   | Stronger connected model (e.g. DeepSeek V4 Pro)          | `plan`, `architect`, `security`, `debug`                                |
+| Cheap / read-only aux | Same flash SKU                                           | `explore`, `compaction`, titles, recaps, low-complexity classification  |
 
 Pin `provider/model` IDs that are connected. Disabled first-party plan IDs
 (`alibaba-token-plan`, `deepseek`, `zai-coding-plan`, `minimax-coding-plan`)
@@ -27,7 +27,7 @@ default; without `config.model`, implicit default prefers flash SKUs.
 
 ## Config template
 
-See `ax-code.json.example` at the repo root for a concrete DeepSeek Pro + Flash example.
+See `ax-code.json.example` at the repo root for a concrete DeepSeek Flash default with Pro on reasoning agents.
 
 ### Codex CLI auxiliary models
 
