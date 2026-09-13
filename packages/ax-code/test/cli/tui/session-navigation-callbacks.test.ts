@@ -409,6 +409,9 @@ describe("navigation recovery entry and width selection", () => {
     mocked.permissions = { child: [{ id: "permission", sessionID: "child" }] }
     mocked.connected = false
     const tree = mount(() => NavigationBar({ width: 50 }))
+    const pending = find(tree, (item) => typeof item.props.onMouseUp === "function" && text(item) === "Pending 1*")
+    expect(pending?.props.paddingLeft).toBe(1)
+    expect(pending?.props.paddingRight).toBe(1)
     click(tree, "Pending 1*")
     expect(mocked.trigger).toHaveBeenCalledExactlyOnceWith("session.attention")
     expect(mocked.reply).not.toHaveBeenCalled()

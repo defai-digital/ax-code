@@ -1,6 +1,7 @@
 import type { RGBA } from "ax-tui"
 import { createMemo, For, Show, type Setter } from "solid-js"
 import { useKV } from "@tui/context/kv"
+import { navigationPanelInnerWidth, navigationRailInnerWidth } from "../navigation/navigation-layout"
 import { activeNavigationSessions, navigationFilter, projectLabel } from "../navigation/navigation-model"
 import { useSync } from "@tui/context/sync"
 import { useSDK } from "@tui/context/sdk"
@@ -14,13 +15,9 @@ import { sessionNavigationEntries } from "./session-list-data"
 import { createSessionActivityIndex, knownAttentionRequests } from "../util/session-activity"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
 
-function railInnerWidth(width: number) {
-  return Math.max(0, width - 2)
-}
-
-function RailRule(props: { width: number; color: RGBA; marginTop?: number }) {
+function RailRule(props: { width: number; color: RGBA }) {
   return (
-    <text flexShrink={0} fg={props.color} selectable={false} marginTop={props.marginTop}>
+    <text flexShrink={0} fg={props.color} selectable={false}>
       {"─".repeat(Math.max(0, props.width))}
     </text>
   )
@@ -68,7 +65,8 @@ export function SessionNavigation(props: {
   )
   const pendingCount = createMemo(() => knownAttentionRequests(sync.data.permission, sync.data.question).length)
   const slots = createMemo(() => new Map(local.session.slots().map((id, index) => [id, index + 1])))
-  const innerWidth = () => railInnerWidth(props.width)
+  const innerWidth = () => navigationRailInnerWidth(props.width)
+  const panelWidth = () => navigationPanelInnerWidth(props.width)
 
   return (
     <box
@@ -79,40 +77,44 @@ export function SessionNavigation(props: {
       paddingBottom={1}
       paddingLeft={1}
       paddingRight={0}
+      gap={1}
       backgroundColor={theme.backgroundPanel}
       border={["right"]}
       borderColor={theme.border}
       customBorderChars={SplitBorder.customBorderChars}
     >
-      <text flexShrink={0} fg={theme.text} selectable={false}>
-        <b>Project</b>
-      </text>
-      <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
-        <text fg={theme.text} selectable={false}>
-          {truncateToCellWidth(projectLabel(directory()), innerWidth())}
+      <box flexShrink={0} backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+        <text flexShrink={0} fg={theme.text} selectable={false}>
+          <b>Project</b>
         </text>
+        <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
+          <text fg={theme.text} selectable={false}>
+            <b>{truncateToCellWidth(projectLabel(directory()), panelWidth())}</b>
+          </text>
+        </box>
+        <box flexShrink={0} onMouseUp={() => command.trigger("session.new")}>
+          <text fg={theme.primary} selectable={false}>
+            + New session
+          </text>
+        </box>
+        <ScheduleStatus width={panelWidth()} />
       </box>
-      <box flexShrink={0} onMouseUp={() => command.trigger("session.new")}>
-        <text fg={theme.accent} selectable={false}>
-          + New session
+      <box flexShrink={0} backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
+        <text flexShrink={0} fg={theme.text} selectable={false}>
+          <b>Across workspaces</b>
         </text>
+        <box flexShrink={0} onMouseUp={() => command.trigger("session.attention")}>
+          <text fg={pendingCount() ? theme.warning : theme.textMuted} selectable={false}>
+            {truncateToCellWidth(`Known requests (${pendingCount()})`, panelWidth())}
+          </text>
+        </box>
+        <Show when={!sdk.sseConnected}>
+          <text flexShrink={0} fg={theme.textMuted} selectable={false}>
+            {truncateToCellWidth("Cached; disconnected", panelWidth())}
+          </text>
+        </Show>
       </box>
-      <ScheduleStatus width={innerWidth()} />
-      <RailRule width={innerWidth()} color={theme.border} marginTop={1} />
-      <text flexShrink={0} fg={theme.text} selectable={false}>
-        <b>Across workspaces</b>
-      </text>
-      <box flexShrink={0} onMouseUp={() => command.trigger("session.attention")}>
-        <text fg={pendingCount() ? theme.warning : theme.textMuted} selectable={false}>
-          {truncateToCellWidth(`Known requests (${pendingCount()})`, innerWidth())}
-        </text>
-      </box>
-      <Show when={!sdk.sseConnected}>
-        <text flexShrink={0} fg={theme.warning} selectable={false}>
-          {truncateToCellWidth("Cached; disconnected", innerWidth())}
-        </text>
-      </Show>
-      <box flexShrink={0} flexDirection="row" gap={1} marginTop={1}>
+      <box flexShrink={0} flexDirection="row" gap={1}>
         <For each={["recent", "active"] as const}>
           {(value) => (
             <box
@@ -122,8 +124,8 @@ export function SessionNavigation(props: {
               backgroundColor={filter() === value ? theme.backgroundElement : undefined}
               onMouseUp={() => kv.set("navigation_filter", value)}
             >
-              <text fg={filter() === value ? theme.accent : theme.textMuted} selectable={false}>
-                {value === "recent" ? "Recent" : "Active"}
+              <text fg={filter() === value ? theme.primary : theme.textMuted} selectable={false}>
+                <span style={{ bold: filter() === value }}>{value === "recent" ? "Recent" : "Active"}</span>
               </text>
             </box>
           )}
@@ -134,7 +136,16 @@ export function SessionNavigation(props: {
           {observed() ? "Includes current session" : "Cached sessions; reconnect to filter"}
         </text>
       </Show>
-      <scrollbox flexGrow={1} minHeight={0} marginTop={1}>
+      <scrollbox
+        flexGrow={1}
+        minHeight={0}
+        verticalScrollbarOptions={{
+          trackOptions: {
+            backgroundColor: theme.background,
+            foregroundColor: theme.borderActive,
+          },
+        }}
+      >
         <Show when={rows().length === 0}>
           <text flexShrink={0} fg={theme.textMuted} selectable={false}>
             {!sync.data.session_loaded
@@ -159,10 +170,9 @@ export function SessionNavigation(props: {
               <box
                 flexDirection="row"
                 marginLeft={indent()}
-                marginBottom={1}
                 backgroundColor={selected() ? theme.backgroundElement : undefined}
               >
-                <box width={1} flexShrink={0} backgroundColor={selected() ? theme.accent : undefined} />
+                <box width={1} flexShrink={0} backgroundColor={selected() ? theme.primary : undefined} />
                 <box flexGrow={1} minWidth={0} flexDirection="column">
                   <box flexDirection="row">
                     <box
@@ -184,15 +194,18 @@ export function SessionNavigation(props: {
                       </text>
                     </box>
                     <box flexGrow={1} minWidth={0} onMouseUp={openSession}>
-                      <text fg={selected() ? theme.accent : theme.text} selectable={false}>
+                      <text fg={selected() ? theme.primary : theme.text} selectable={false}>
                         {truncateToCellWidth(`${slot() ? `${slot()} ` : ""}${row.session.title}`, titleWidth())}
                       </text>
                     </box>
                   </box>
                   <Show when={label()}>
-                    <box paddingLeft={2} onMouseUp={openSession}>
+                    <box flexDirection="row" gap={1} paddingLeft={2} onMouseUp={openSession}>
+                      <text flexShrink={0} fg={state()?.attention ? theme.warning : theme.primary} selectable={false}>
+                        •
+                      </text>
                       <text fg={state()?.attention ? theme.warning : theme.textMuted} selectable={false}>
-                        {truncateToCellWidth(label(), titleWidth())}
+                        {truncateToCellWidth(label(), Math.max(0, titleWidth() - 2))}
                       </text>
                     </box>
                   </Show>
@@ -202,21 +215,23 @@ export function SessionNavigation(props: {
           }}
         </For>
       </scrollbox>
-      <RailRule width={innerWidth()} color={theme.border} marginTop={1} />
-      <box flexShrink={0} flexDirection="row" gap={2}>
-        <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
-          <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-            Details
+      <box flexShrink={0} gap={1}>
+        <RailRule width={innerWidth()} color={theme.borderSubtle} />
+        <box flexShrink={0} flexDirection="row" gap={2}>
+          <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
+            <text flexShrink={0} fg={theme.textMuted} selectable={false}>
+              Details
+            </text>
+          </box>
+          <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.width")}>
+            <text flexShrink={0} fg={theme.textMuted} selectable={false}>{`Width ${props.width}`}</text>
+          </box>
+        </box>
+        <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation")}>
+          <text flexShrink={0} fg={theme.text} selectable={false}>
+            /navigation <span style={{ fg: theme.textMuted }}>to hide</span>
           </text>
         </box>
-        <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.width")}>
-          <text flexShrink={0} fg={theme.textMuted} selectable={false}>{`Width ${props.width}`}</text>
-        </box>
-      </box>
-      <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation")}>
-        <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-          {truncateToCellWidth("/navigation to hide", innerWidth())}
-        </text>
       </box>
     </box>
   )

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { navigationLayout } from "../../../src/cli/cmd/tui/navigation/navigation-layout"
+import {
+  navigationLayout,
+  navigationPanelInnerWidth,
+  navigationRailInnerWidth,
+} from "../../../src/cli/cmd/tui/navigation/navigation-layout"
 import { orderRootSessions, sessionNavigationEntries } from "../../../src/cli/cmd/tui/component/session-list-data"
 import { computeSessionMainPaneWidth } from "../../../src/cli/cmd/tui/routes/session/layout"
 
@@ -49,6 +53,14 @@ describe("session navigation layout and entries", () => {
       ["deep", 1],
     ])
   })
+  test("section cards keep known-request copy inside the 24-column rail", () => {
+    expect(navigationRailInnerWidth(24)).toBe(22)
+    expect(navigationPanelInnerWidth(24)).toBe(20)
+    expect("Known requests (12)".length).toBeLessThanOrEqual(navigationPanelInnerWidth(24))
+    expect("Cached; disconnected".length).toBeLessThanOrEqual(navigationPanelInnerWidth(24))
+    expect("Across workspaces".length).toBeLessThanOrEqual(navigationPanelInnerWidth(24))
+  })
+
   test("cycles without a known root do not hang or invent a root session", () => {
     const cycle = [
       { id: "a", parentID: "b", time: { updated: 1 } },

@@ -12,6 +12,7 @@ changes belong to AX Coder.
 
 ### Changed
 
+- Align the left session navigation rail and compact Sessions bar with the right sidebar: carded Project and Across workspaces sections, subtler dividers, padded pending chips, and muted cached-state copy.
 - Require Node.js 26 across the repo, SDK, and JSR publish manifests (was Node 24).
 
 ### Fixed
