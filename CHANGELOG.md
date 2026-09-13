@@ -6,6 +6,8 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.16.4] - 2026-09-13
+
 ### Added
 
 - Play the Matrix rain overlay once when the TUI starts, on by default and disabled with the "Matrix rain on startup" command toggle; it still honors `animations_enabled` and the compiled-runtime policy.
@@ -13,8 +15,16 @@ changes belong to AX Coder.
 ### Changed
 
 - Require Node.js 26 across the repo, SDK, and JSR publish manifests (was Node 24).
+- Publish the paired SDK 2.5.17 runtime contracts.
+- Add project-scoped persistent runtimes and durable follow-up queue controls, with unified session navigation.
 
 ### Fixed
+
+- Isolate branded Node executable copies from the installed runtime to prevent hardlink aliasing and cache edits from affecting it.
+- Preserve main-module identity, script arguments, and child/worker isolation when the Node FFI runner launches generic scripts.
+- Keep historical AX Engine artifact metadata readable offline after provider catalog changes, without allowing excluded models to activate.
+- Prevent parser workers from reinitializing the Node TUI CLI through inherited preloads.
+- Correct scheduled-task timeout completion, bash path preflight, and Council cancellation handling.
 
 - Build the workspace SDK before `pnpm dev` and `pnpm cli` so a fresh checkout can run the TUI from source without a manual `pnpm --dir packages/sdk/js run build`.
 - Launch the source-mode TUI on Windows by gating the in-place `process.execve` on the platform instead of feature detection: Node 26 defines `process.execve` on Windows but calling it throws `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM`.
