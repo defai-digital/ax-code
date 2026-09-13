@@ -474,6 +474,20 @@ describe("provider dialog options", () => {
     ).toBe("openai/gpt-oss-20b")
   })
 
+  test("defaults a custom Trust catalog to deepseek-flash when that SKU exists", () => {
+    expect(
+      selectableProviderDefaultModelID({
+        providerID: "defai-01-ax-trust-com",
+        defaultModel: "qwen3.8-max",
+        models: {
+          "qwen3.8-max": { id: "qwen3.8-max", capabilities: { toolcall: true } },
+          "deepseek-v4-pro": { id: "deepseek-v4-pro", capabilities: { toolcall: true } },
+          "deepseek-flash": { id: "deepseek-flash", capabilities: { toolcall: true } },
+        },
+      }),
+    ).toBe("deepseek-flash")
+  })
+
   test("defaults Alibaba Coding Plan to qwen3-coder-plus", () => {
     expect(
       selectableProviderDefaultModelID({

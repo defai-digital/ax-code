@@ -17,6 +17,7 @@ changes belong to AX Coder.
 - Make `/sidebar` hide the right session sidebar on click, and highlight Details, Width, Clear, `/navigation`, and `/sidebar` on hover.
 - Hide the default Agent work-mode chip. Choose Council or Arena from `/work-mode`; the footer chip appears only while armed and click returns to Agent.
 - Update the multi-model routing example so the session default is DeepSeek Flash when that SKU exists, with DeepSeek V4 Pro on reasoning agents, and pin connected provider IDs instead of Qwen 3.8 Max on a disabled plan provider.
+- Prefer DeepSeek Flash as a connected custom/AX Trust provider's default model when that SKU is listed.
 - Give the right session sidebar a Width control matching the left rail, with shared 20/24/30/36/40-column presets. Navigation defaults to 30 columns and the sidebar defaults to 36.
 - Add Clear on the left session navigation rail (`/navigation-clear`) to hide historical rows from that list without deleting sessions; `/sessions` still resumes them. Clearing asks for confirmation first.
 - Require Node.js 26 across the repo, SDK, and JSR publish manifests (was Node 24).

@@ -67,5 +67,9 @@ export function defaultModelIDForProvider(
     const hit = findSelectableSku([{ id: providerID, models }], preferred)
     if (hit) return hit.modelID
   }
+  // Custom / AX Trust catalogs have no vendor SKU map. If DeepSeek Flash is
+  // on the connected gateway, use it as that provider's default.
+  const flash = findSelectableSku([{ id: providerID, models }], IMPLICIT_DEFAULT_MODEL_SKUS[0])
+  if (flash) return flash.modelID
   return undefined
 }

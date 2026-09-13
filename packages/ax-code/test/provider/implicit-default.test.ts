@@ -59,6 +59,27 @@ describe("implicit default model selection", () => {
     ).toBe("openai/gpt-oss-20b")
   })
 
+  test("uses deepseek-flash as the default when a custom gateway lists it", () => {
+    expect(
+      defaultModelIDForProvider("defai-01-ax-trust-com", {
+        "anthropic/claude-opus-5": tool,
+        "qwen3.8-max": tool,
+        "deepseek-v4-pro": tool,
+        "deepseek-flash": tool,
+      }),
+    ).toBe("deepseek-flash")
+  })
+
+  test("does not steal a vendor preferred SKU when deepseek-flash is also listed", () => {
+    expect(
+      defaultModelIDForProvider("alibaba-token-plan", {
+        "qwen3.8-flash": tool,
+        "qwen3.8-max": tool,
+        "deepseek-flash": tool,
+      }),
+    ).toBe("qwen3.8-flash")
+  })
+
   test("does not default AX Engine models", () => {
     expect(
       defaultModelIDForProvider("ax-engine", {
