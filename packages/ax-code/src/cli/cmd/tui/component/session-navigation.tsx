@@ -1,3 +1,4 @@
+import type { RGBA } from "ax-tui"
 import { createMemo, For, Show, type Setter } from "solid-js"
 import { useKV } from "@tui/context/kv"
 import { activeNavigationSessions, navigationFilter, projectLabel } from "../navigation/navigation-model"
@@ -7,9 +8,23 @@ import { useRoute } from "@tui/context/route"
 import { useTheme } from "@tui/context/theme"
 import { useLocal } from "@tui/context/local"
 import { useCommandDialog } from "./dialog-command"
+import { ScheduleStatus } from "./schedule-status"
+import { SplitBorder } from "./border"
 import { sessionNavigationEntries } from "./session-list-data"
 import { createSessionActivityIndex, knownAttentionRequests } from "../util/session-activity"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
+
+function railInnerWidth(width: number) {
+  return Math.max(0, width - 2)
+}
+
+function RailRule(props: { width: number; color: RGBA; marginTop?: number }) {
+  return (
+    <text flexShrink={0} fg={props.color} selectable={false} marginTop={props.marginTop}>
+      {"─".repeat(Math.max(0, props.width))}
+    </text>
+  )
+}
 
 export function SessionNavigation(props: {
   width: number
@@ -53,15 +68,28 @@ export function SessionNavigation(props: {
   )
   const pendingCount = createMemo(() => knownAttentionRequests(sync.data.permission, sync.data.question).length)
   const slots = createMemo(() => new Map(local.session.slots().map((id, index) => [id, index + 1])))
+  const innerWidth = () => railInnerWidth(props.width)
 
   return (
-    <box width={props.width} flexShrink={0} height="100%" padding={1} backgroundColor={theme.backgroundPanel}>
-      <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-        Project
+    <box
+      width={props.width}
+      flexShrink={0}
+      height="100%"
+      paddingTop={1}
+      paddingBottom={1}
+      paddingLeft={1}
+      paddingRight={0}
+      backgroundColor={theme.backgroundPanel}
+      border={["right"]}
+      borderColor={theme.border}
+      customBorderChars={SplitBorder.customBorderChars}
+    >
+      <text flexShrink={0} fg={theme.text} selectable={false}>
+        <b>Project</b>
       </text>
       <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
         <text fg={theme.text} selectable={false}>
-          {truncateToCellWidth(projectLabel(directory()), props.width - 2)}
+          {truncateToCellWidth(projectLabel(directory()), innerWidth())}
         </text>
       </box>
       <box flexShrink={0} onMouseUp={() => command.trigger("session.new")}>
@@ -69,23 +97,31 @@ export function SessionNavigation(props: {
           + New session
         </text>
       </box>
-      <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-        Across workspaces
+      <ScheduleStatus width={innerWidth()} />
+      <RailRule width={innerWidth()} color={theme.border} marginTop={1} />
+      <text flexShrink={0} fg={theme.text} selectable={false}>
+        <b>Across workspaces</b>
       </text>
       <box flexShrink={0} onMouseUp={() => command.trigger("session.attention")}>
         <text fg={pendingCount() ? theme.warning : theme.textMuted} selectable={false}>
-          {truncateToCellWidth(`Known requests (${pendingCount()})`, props.width - 2)}
+          {truncateToCellWidth(`Known requests (${pendingCount()})`, innerWidth())}
         </text>
       </box>
       <Show when={!sdk.sseConnected}>
         <text flexShrink={0} fg={theme.warning} selectable={false}>
-          Cached; disconnected
+          {truncateToCellWidth("Cached; disconnected", innerWidth())}
         </text>
       </Show>
-      <box flexShrink={0} flexDirection="row" gap={2} marginTop={1}>
+      <box flexShrink={0} flexDirection="row" gap={1} marginTop={1}>
         <For each={["recent", "active"] as const}>
           {(value) => (
-            <box flexShrink={0} onMouseUp={() => kv.set("navigation_filter", value)}>
+            <box
+              flexShrink={0}
+              paddingLeft={1}
+              paddingRight={1}
+              backgroundColor={filter() === value ? theme.backgroundElement : undefined}
+              onMouseUp={() => kv.set("navigation_filter", value)}
+            >
               <text fg={filter() === value ? theme.accent : theme.textMuted} selectable={false}>
                 {value === "recent" ? "Recent" : "Active"}
               </text>
@@ -115,61 +151,58 @@ export function SessionNavigation(props: {
             )
             const indent = () => Math.min(row.depth, 3)
             const slot = () => slots().get(row.session.id)
-            const label = () => state()?.label ?? (current() === row.session.id ? "Current" : "")
+            const selected = () => current() === row.session.id
+            const label = () => state()?.label ?? ""
+            const titleWidth = () => Math.max(0, innerWidth() - 3 - indent())
+            const openSession = () => route.navigate({ type: "session", sessionID: row.session.id })
             return (
               <box
-                flexDirection="column"
+                flexDirection="row"
                 marginLeft={indent()}
                 marginBottom={1}
-                backgroundColor={current() === row.session.id ? theme.backgroundElement : undefined}
+                backgroundColor={selected() ? theme.backgroundElement : undefined}
               >
-                <box flexDirection="row">
-                  <box
-                    width={2}
-                    flexShrink={0}
-                    onMouseUp={(event) => {
-                      event.stopPropagation()
-                      if (!row.hasChildren) return
-                      setExpanded((previous) => {
-                        const next = new Set(previous)
-                        if (next.has(row.session.id)) next.delete(row.session.id)
-                        else next.add(row.session.id)
-                        return next
-                      })
-                    }}
-                  >
-                    <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-                      {row.hasChildren ? (expanded().has(row.session.id) ? "-" : "+") : " "}
-                    </text>
+                <box width={1} flexShrink={0} backgroundColor={selected() ? theme.accent : undefined} />
+                <box flexGrow={1} minWidth={0} flexDirection="column">
+                  <box flexDirection="row">
+                    <box
+                      width={2}
+                      flexShrink={0}
+                      onMouseUp={(event) => {
+                        event.stopPropagation()
+                        if (!row.hasChildren) return
+                        setExpanded((previous) => {
+                          const next = new Set(previous)
+                          if (next.has(row.session.id)) next.delete(row.session.id)
+                          else next.add(row.session.id)
+                          return next
+                        })
+                      }}
+                    >
+                      <text flexShrink={0} fg={selected() ? theme.text : theme.textMuted} selectable={false}>
+                        {row.hasChildren ? (expanded().has(row.session.id) ? "−" : "+") : " "}
+                      </text>
+                    </box>
+                    <box flexGrow={1} minWidth={0} onMouseUp={openSession}>
+                      <text fg={selected() ? theme.accent : theme.text} selectable={false}>
+                        {truncateToCellWidth(`${slot() ? `${slot()} ` : ""}${row.session.title}`, titleWidth())}
+                      </text>
+                    </box>
                   </box>
-                  <box
-                    flexGrow={1}
-                    minWidth={0}
-                    onMouseUp={() => route.navigate({ type: "session", sessionID: row.session.id })}
-                  >
-                    <text fg={current() === row.session.id ? theme.accent : theme.text} selectable={false}>
-                      {truncateToCellWidth(
-                        `${slot() ? `${slot()} ` : ""}${row.session.title}`,
-                        props.width - 4 - indent(),
-                      )}
-                    </text>
-                  </box>
+                  <Show when={label()}>
+                    <box paddingLeft={2} onMouseUp={openSession}>
+                      <text fg={state()?.attention ? theme.warning : theme.textMuted} selectable={false}>
+                        {truncateToCellWidth(label(), titleWidth())}
+                      </text>
+                    </box>
+                  </Show>
                 </box>
-                <Show when={label()}>
-                  <text
-                    paddingLeft={2}
-                    fg={state()?.attention ? theme.warning : theme.textMuted}
-                    selectable={false}
-                    wrapMode="word"
-                  >
-                    {label()}
-                  </text>
-                </Show>
               </box>
             )
           }}
         </For>
       </scrollbox>
+      <RailRule width={innerWidth()} color={theme.border} marginTop={1} />
       <box flexShrink={0} flexDirection="row" gap={2}>
         <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
           <text flexShrink={0} fg={theme.textMuted} selectable={false}>
@@ -182,7 +215,7 @@ export function SessionNavigation(props: {
       </box>
       <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation")}>
         <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-          /navigation to hide
+          {truncateToCellWidth("/navigation to hide", innerWidth())}
         </text>
       </box>
     </box>

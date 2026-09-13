@@ -3,6 +3,7 @@ import type { ScheduledTaskInfo, ScheduledTaskRunInfo } from "@/cli/cmd/tui/comp
 import {
   runDescription,
   runTitle,
+  scheduleChrome,
   scheduleSummary,
   sortTasks,
   taskDescription,
@@ -108,5 +109,33 @@ describe("dialog-scheduled-task view model", () => {
 
   test("runDescription falls back to the record time for runs that never started", () => {
     expect(runDescription(run({ status: "missed_skip" }))).toContain("recorded ")
+  })
+
+  test("scheduleChrome stays hidden when nothing is live", () => {
+    expect(scheduleChrome([])).toBeUndefined()
+    expect(scheduleChrome([task({ status: "disabled" })])).toBeUndefined()
+  })
+
+  test("scheduleChrome prefers a live error, then a running task, then the next fire", () => {
+    const now = Date.now()
+    const failed = scheduleChrome([task({ error: "This operation was aborted", nextRunAt: now + 60_000 })], now)
+    expect(failed?.compact).toBe("Sched error")
+    expect(failed?.tone).toBe("error")
+    expect(failed?.detail.startsWith("error: interrupted · next ")).toBe(true)
+    expect(scheduleChrome([task({ nextRunAt: undefined, lastRunAt: now })])).toEqual({
+      compact: "Sched running",
+      detail: "running now · Task",
+      tone: "success",
+    })
+    const next = now + 3_600_000
+    const chrome = scheduleChrome([task({ nextRunAt: next })], now)
+    expect(chrome?.tone).toBe("muted")
+    expect(chrome?.compact.startsWith("Next ")).toBe(true)
+    expect(chrome?.detail.startsWith("next ")).toBe(true)
+    expect(scheduleChrome([task({ status: "paused" })])).toEqual({
+      compact: "Sched paused",
+      detail: "paused · Task",
+      tone: "warning",
+    })
   })
 })

@@ -48,7 +48,7 @@ export function taskDescription(task: ScheduledTaskInfo): string {
   } else if (task.lastRunAt !== undefined) {
     parts.push("running now")
   }
-  if (task.error) parts.push(`error: ${task.error}`)
+  if (task.error) parts.push(`error: ${formatScheduleError(task.error)}`)
   return parts.join(" · ")
 }
 
@@ -90,6 +90,82 @@ export function runDescription(run: ScheduledTaskRunInfo): string {
     parts.push(`took ${Locale.duration(run.timeCompleted - run.timeStarted)}`)
   }
   if (run.coalescedCount > 1) parts.push(`covers ${run.coalescedCount} missed occurrences`)
-  if (run.error) parts.push(`error: ${run.error}`)
+  if (run.error) parts.push(`error: ${formatScheduleError(run.error)}`)
   return parts.join(" · ")
+}
+
+export const SCHEDULED_TASK_EVENTS = [
+  "scheduled.task.created",
+  "scheduled.task.updated",
+  "scheduled.task.deleted",
+  "scheduled.task.fired",
+  "scheduled.task.succeeded",
+  "scheduled.task.failed",
+  "scheduled.task.skipped",
+  "scheduled.task.failed_persistently",
+] as const
+
+export type ScheduleChromeTone = "muted" | "success" | "warning" | "error"
+
+export type ScheduleChrome = {
+  compact: string
+  detail: string
+  tone: ScheduleChromeTone
+}
+
+export function formatScheduleError(error: string) {
+  const trimmed = error.trim()
+  if (/\babort(ed|error)?\b/i.test(trimmed)) return "interrupted"
+  if (/\btimed?\s+out\b/i.test(trimmed)) return "timed out"
+  const cut = trimmed.search(/[.\n]/)
+  return (cut > 0 ? trimmed.slice(0, cut) : trimmed).slice(0, 48)
+}
+
+/** Compact chrome for the navigation rail / top bar. Hidden when nothing is scheduled. */
+export function scheduleChrome(tasks: readonly ScheduledTaskInfo[], now = Date.now()): ScheduleChrome | undefined {
+  const live = tasks.filter((task) => task.status !== "disabled")
+  if (live.length === 0) return undefined
+  const failed = live.filter((task) => Boolean(task.error))
+  const upcoming = live
+    .filter((task) => task.status === "active" && task.nextRunAt !== undefined)
+    .toSorted((a, b) => (a.nextRunAt ?? now) - (b.nextRunAt ?? now))
+  if (failed[0]?.error) {
+    const count = failed.length
+    const nextAt = failed[0].nextRunAt ?? upcoming[0]?.nextRunAt
+    const when = nextAt !== undefined ? Locale.todayTimeOrDateTime(nextAt) : undefined
+    const err = formatScheduleError(failed[0].error)
+    return {
+      compact: count === 1 ? "Sched error" : `Sched ${count} errors`,
+      detail: when ? `error: ${err} · next ${when}` : `error: ${err}`,
+      tone: "error",
+    }
+  }
+  const running = live.filter((task) => task.status === "active" && task.nextRunAt === undefined && task.lastRunAt)
+  if (running[0]) {
+    const count = running.length
+    return {
+      compact: count === 1 ? "Sched running" : `Sched ${count} running`,
+      detail: count === 1 ? `running now · ${running[0].title}` : `${count} running`,
+      tone: "success",
+    }
+  }
+  const next = upcoming[0]
+  if (next?.nextRunAt !== undefined) {
+    const when = Locale.todayTimeOrDateTime(next.nextRunAt)
+    const active = live.filter((task) => task.status === "active").length
+    return {
+      compact: active === 1 ? `Next ${when}` : `Sched ${active}`,
+      detail: active === 1 ? `next ${when}` : `${active} active · next ${when}`,
+      tone: "muted",
+    }
+  }
+  const paused = live.filter((task) => task.status === "paused")
+  if (paused[0]) {
+    return {
+      compact: paused.length === 1 ? "Sched paused" : `Sched ${paused.length} paused`,
+      detail: paused.length === 1 ? `paused · ${paused[0].title}` : `${paused.length} paused`,
+      tone: "warning",
+    }
+  }
+  return undefined
 }

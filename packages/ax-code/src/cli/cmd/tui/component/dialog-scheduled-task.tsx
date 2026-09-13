@@ -11,6 +11,7 @@ import { Keybind } from "@/util/keybind"
 import { Log } from "@/util/log"
 import type { ScheduledTaskInfo, ScheduledTaskRunInfo } from "./dialog-scheduled-task-view-model"
 import {
+  SCHEDULED_TASK_EVENTS,
   runDescription,
   runTitle,
   sortTasks,
@@ -19,17 +20,6 @@ import {
 } from "./dialog-scheduled-task-view-model"
 
 const log = Log.create({ service: "tui.dialog-scheduled-task" })
-
-const SCHEDULED_TASK_EVENTS = [
-  "scheduled.task.created",
-  "scheduled.task.updated",
-  "scheduled.task.deleted",
-  "scheduled.task.fired",
-  "scheduled.task.succeeded",
-  "scheduled.task.failed",
-  "scheduled.task.skipped",
-  "scheduled.task.failed_persistently",
-] as const
 
 function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message
@@ -85,15 +75,24 @@ export function DialogScheduledTask() {
     })
   })
 
-  const options = createMemo(() =>
-    sortTasks(tasks()).map((task) => ({
+  const options = createMemo(() => {
+    const rows = sortTasks(tasks()).map((task) => ({
       title: toDelete() === task.id ? `Press ctrl+d again to delete "${task.title}"` : task.title,
       value: task.id,
       description: taskDescription(task),
       footer: <StatusBadge task={task} />,
       bg: toDelete() === task.id ? theme.error : undefined,
-    })),
-  )
+    }))
+    if (rows.length > 0) return rows
+    return [
+      {
+        title: "No scheduled tasks",
+        value: "empty",
+        description: "Ask the agent to schedule work. It only runs while this project backend is alive.",
+        disabled: true,
+      },
+    ]
+  })
 
   function taskByID(id: string): ScheduledTaskInfo | undefined {
     return tasks().find((task) => task.id === id)

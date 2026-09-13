@@ -3,6 +3,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "./dialog-command"
+import { ScheduleStatus } from "./schedule-status"
 import { knownAttentionRequests } from "../util/session-activity"
 import { projectLabel } from "../navigation/navigation-model"
 import { truncateToCellWidth } from "../routes/session/last-input-view-model"
@@ -25,11 +26,18 @@ export function NavigationBar(props: { width: number }) {
         </text>
       </box>
       <Show when={pending() > 0}>
-        <box flexShrink={0} onMouseUp={() => command.trigger("session.attention")}>
+        <box
+          flexShrink={0}
+          backgroundColor={theme.backgroundElement}
+          onMouseUp={() => command.trigger("session.attention")}
+        >
           <text fg={theme.warning} selectable={false}>
             {attentionLabel()}
           </text>
         </box>
+      </Show>
+      <Show when={props.width >= (pending() > 0 ? 50 : 36)}>
+        <ScheduleStatus width={14} compact />
       </Show>
       <Show when={projectWidth() >= 12}>
         <box onMouseUp={() => command.trigger("session.navigation.info")}>
