@@ -10,12 +10,16 @@ import {
   MATRIX_RAIN_MIN_DURATION_MS,
   MATRIX_RAIN_ON_START_DEFAULT,
   advanceMatrixRain,
+  completeStartupRain,
   createMatrixRain,
+  initialStartupRainPhase,
   matrixRainRows,
+  resolveStartupRainPhase,
   shouldAutoPlayMatrixRain,
   decideMatrixRainOnStart,
   shouldPlayMatrixRainOnStart,
   shouldStopMatrixRain,
+  startupRainCoversChrome,
   tickMatrixRain,
 } from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
 
@@ -227,7 +231,9 @@ describe("matrix rain startup gate", () => {
 
   test("App waits for kv.ready before deciding startup rain", () => {
     const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app.tsx"), "utf8")
-    expect(app).toContain("decideMatrixRainOnStart")
+    expect(app).toContain("resolveStartupRainPhase")
+    expect(app).toContain("initialStartupRainPhase")
+    expect(app).toContain("MatrixRainCover")
     expect(app).toContain("() => kv.ready")
     expect(app).not.toMatch(/onMount\(\(\) => \{\s*if \(\s*shouldPlayMatrixRainOnStart/)
   })
@@ -257,5 +263,41 @@ describe("matrix rain startup gate", () => {
         runtime: "source",
       }),
     ).toBe(true)
+  })
+})
+
+describe("startup rain chrome cover", () => {
+  const hold = {
+    phase: "hold" as const,
+    ready: false,
+    enabled: true,
+    animationsEnabled: true,
+    runtime: "source" as const,
+    dialogOpen: false,
+  }
+
+  test("covers the main screen until kv can honor a persisted opt-out", () => {
+    expect(initialStartupRainPhase("source")).toBe("hold")
+    expect(initialStartupRainPhase("node-bundled")).toBe("hold")
+    expect(initialStartupRainPhase("compiled")).toBe("app")
+    expect(startupRainCoversChrome("hold")).toBe(true)
+    expect(startupRainCoversChrome("rain")).toBe(true)
+    expect(startupRainCoversChrome("app")).toBe(false)
+  })
+
+  test("stays covered while kv is loading, then plays or reveals", () => {
+    expect(resolveStartupRainPhase(hold)).toBe("hold")
+    expect(resolveStartupRainPhase({ ...hold, ready: true })).toBe("rain")
+    expect(resolveStartupRainPhase({ ...hold, ready: true, enabled: false })).toBe("app")
+    expect(resolveStartupRainPhase({ ...hold, ready: true, animationsEnabled: false })).toBe("app")
+    expect(resolveStartupRainPhase({ ...hold, ready: true, runtime: "compiled" })).toBe("app")
+  })
+
+  test("drops the cover for a dialog and after the overlay finishes", () => {
+    expect(resolveStartupRainPhase({ ...hold, dialogOpen: true })).toBe("app")
+    expect(resolveStartupRainPhase({ ...hold, phase: "rain", ready: true })).toBe("rain")
+    expect(resolveStartupRainPhase({ ...hold, phase: "rain", ready: true, dialogOpen: true })).toBe("app")
+    expect(resolveStartupRainPhase({ ...hold, phase: "app", ready: true })).toBe("app")
+    expect(completeStartupRain()).toBe("app")
   })
 })

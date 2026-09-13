@@ -229,6 +229,47 @@ export function decideMatrixRainOnStart(input: {
   })
 }
 
+/**
+ * Startup chrome cover. `hold` hides the main screen until kv can honor a
+ * persisted opt-out; `rain` keeps it covered while the overlay plays; `app`
+ * is the normal UI. Compiled runtimes never animate, so they start in `app`.
+ */
+export type StartupRainPhase = "hold" | "rain" | "app"
+
+export function initialStartupRainPhase(runtime?: RuntimeMode): StartupRainPhase {
+  return shouldUseTuiAnimations({ runtime }) ? "hold" : "app"
+}
+
+export function resolveStartupRainPhase(input: {
+  phase: StartupRainPhase
+  ready: boolean
+  enabled: boolean
+  animationsEnabled: boolean
+  runtime?: RuntimeMode
+  dialogOpen: boolean
+}): StartupRainPhase {
+  if (input.phase === "app") return "app"
+  if (input.dialogOpen) return "app"
+  if (input.phase === "rain") return "rain"
+  if (!input.ready) return "hold"
+  return decideMatrixRainOnStart({
+    ready: true,
+    enabled: input.enabled,
+    animationsEnabled: input.animationsEnabled,
+    runtime: input.runtime,
+  })
+    ? "rain"
+    : "app"
+}
+
+export function completeStartupRain(): StartupRainPhase {
+  return "app"
+}
+
+export function startupRainCoversChrome(phase: StartupRainPhase): boolean {
+  return phase !== "app"
+}
+
 /** Stop a playing overlay if a dialog or selection appears after it started. */
 export function shouldStopMatrixRain(input: { dialogOpen: boolean; hasSelection: boolean }): boolean {
   return input.dialogOpen || input.hasSelection

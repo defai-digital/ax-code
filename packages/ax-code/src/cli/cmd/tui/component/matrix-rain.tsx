@@ -24,6 +24,22 @@ const LEVEL_COLORS: RGBA[] = [
 
 const BACKGROUND = RGBA.fromInts(0, 0, 0)
 
+/** Opaque cover so the main chrome never paints before startup rain. */
+export function MatrixRainCover() {
+  const dimensions = useTerminalDimensions()
+  return (
+    <box
+      position="absolute"
+      left={0}
+      top={0}
+      width={dimensions().width}
+      height={dimensions().height}
+      backgroundColor={BACKGROUND}
+      onMouseDown={(evt) => evt.stopPropagation()}
+    />
+  )
+}
+
 export function MatrixRain(props: { durationMs?: number; onDone: () => void }) {
   const dimensions = useTerminalDimensions()
   const durationMs = props.durationMs ?? MATRIX_RAIN_DURATION_MS

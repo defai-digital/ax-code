@@ -97,11 +97,14 @@ import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
 import { createTuiDialogLoaders } from "./tui-dialogs"
 import { appCommands, type AppCommandSandbox } from "./app-commands"
-import { MatrixRain } from "./component/matrix-rain"
+import { MatrixRain, MatrixRainCover } from "./component/matrix-rain"
 import {
   MATRIX_RAIN_ON_START_DEFAULT,
   shouldAutoPlayMatrixRain,
-  decideMatrixRainOnStart,
+  initialStartupRainPhase,
+  resolveStartupRainPhase,
+  completeStartupRain,
+  startupRainCoversChrome,
   shouldStopMatrixRain,
 } from "./component/matrix-rain-view-model"
 
@@ -303,12 +306,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // opts out) and task-completion playback is opt-in
   // (`matrix_rain_on_task_complete`).
   const [matrixPlaying, setMatrixPlaying] = createSignal(false)
+  const [startupRainPhase, setStartupRainPhase] = createSignal(initialStartupRainPhase())
   const playMatrixRain = () => setMatrixPlaying(true)
-  createEffect(() => {
-    if (!matrixPlaying()) return
-    if (shouldStopMatrixRain({ dialogOpen: dialog.stack.length > 0, hasSelection: false })) {
+  const endMatrixRain = () => {
+    batch(() => {
       setMatrixPlaying(false)
-    }
+      if (startupRainPhase() === "rain") setStartupRainPhase(completeStartupRain())
+    })
+  }
+  createEffect(() => {
+    if (!shouldStopMatrixRain({ dialogOpen: dialog.stack.length > 0, hasSelection: false })) return
+    batch(() => {
+      if (matrixPlaying()) setMatrixPlaying(false)
+      if (startupRainPhase() !== "app") setStartupRainPhase("app")
+    })
   })
   let sessionRoutePromise: Promise<Component> | undefined
   let sessionRouteLoadFailed = false
@@ -317,27 +328,27 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     recordTuiStartupOnce("tui.startup.appMounted", { route: route.data.type })
   })
 
-  // Startup flourish: a single overlay play once kv.json has loaded. On by
-  // default; reading before kv.ready would ignore a persisted opt-out
-  // (the default is true). The stop effect above tears it down if a dialog
-  // opens while it plays.
-  let startupRainDecided = false
+  // Startup flourish: cover the main chrome from the first paint, then play
+  // rain once kv.json has loaded. Reading before kv.ready would ignore a
+  // persisted opt-out (the default is true). A dialog or selection drops the
+  // cover so it never hides an interactive surface.
   createEffect(
     on(
       () => kv.ready,
       (ready) => {
-        if (!ready || startupRainDecided) return
-        startupRainDecided = true
-        if (dialog.stack.length > 0) return
-        if (
-          decideMatrixRainOnStart({
-            ready: true,
-            enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
-            animationsEnabled: kv.get("animations_enabled", true),
-          })
-        ) {
-          playMatrixRain()
-        }
+        if (startupRainPhase() !== "hold") return
+        const next = resolveStartupRainPhase({
+          phase: "hold",
+          ready,
+          enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
+          animationsEnabled: kv.get("animations_enabled", true),
+          dialogOpen: dialog.stack.length > 0,
+        })
+        if (next === "hold") return
+        batch(() => {
+          setStartupRainPhase(next)
+          if (next === "rain") playMatrixRain()
+        })
       },
     ),
   )
@@ -1262,8 +1273,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           </ContentDimensionsProvider>
         </box>
       </box>
+      <Show when={startupRainCoversChrome(startupRainPhase())}>
+        <MatrixRainCover />
+      </Show>
       <Show when={matrixPlaying()}>
-        <MatrixRain onDone={() => setMatrixPlaying(false)} />
+        <MatrixRain onDone={endMatrixRain} />
       </Show>
     </box>
   )
