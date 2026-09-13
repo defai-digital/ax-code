@@ -610,8 +610,9 @@ const MultiOccurrenceReplacer: Replacer = function* (content, find) {
 const TrimmedBoundaryReplacer: Replacer = function* (content, find) {
   const trimmedFind = find.trim()
 
-  if (trimmedFind === find) {
-    // Already trimmed, no point in trying
+  if (trimmedFind === find || trimmedFind.length === 0) {
+    // Already trimmed, or whitespace-only (empty after trim) which would
+    // match at every indexOf position and hang/OOM.
     return
   }
 
@@ -771,7 +772,7 @@ export function replace(content: string, oldString: string, newString: string, r
     if (!content.includes(oldString)) {
       throw new Error("Could not find oldString in the file. It must match exactly when replaceAll is enabled.")
     }
-    return content.replaceAll(oldString, newString)
+    return content.replaceAll(oldString, () => newString)
   }
 
   // Normalize CRLF to LF for fuzzy matching. Fuzzy replacers use
@@ -793,12 +794,13 @@ export function replace(content: string, oldString: string, newString: string, r
       return [{ index: indexed, text }]
     }
     const matches: Array<{ index: number; text: string }> = []
+    if (text.length === 0) return matches
     let startIndex = 0
     while (true) {
       const index = matchContent.indexOf(text, startIndex)
       if (index === -1) break
       matches.push({ index, text })
-      startIndex = index + Math.max(text.length, 1)
+      startIndex = index + text.length
     }
     return matches
   }

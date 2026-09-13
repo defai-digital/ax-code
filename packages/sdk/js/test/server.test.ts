@@ -34,6 +34,13 @@ afterEach(() => {
 })
 
 describe("createAxCodeServer", () => {
+  test("ignores undefined option values so defaults remain", () => {
+    expect(resolveServerDefaults({ timeout: undefined, port: undefined })).toMatchObject({
+      timeout: 30_000,
+      port: 4096,
+    })
+  })
+
   test("normalizes bracketed IPv6 loopback for bind and URL forms", () => {
     expect(resolveServerDefaults({ hostname: "[::1]" }).hostname).toBe("::1")
     expect(formatHostnameForUrl("::1")).toBe("[::1]")
@@ -57,6 +64,27 @@ describe("createAxCodeServer", () => {
     proc.emit("exit", null)
     expect(proc.listenerCount("exit")).toBe(0)
     expect(proc.listenerCount("error")).toBe(0)
+  })
+
+  test("rejects immediately when the readiness signal is already aborted", async () => {
+    const proc = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: vi.fn(() => true),
+    }) as unknown as Proc
+    const controller = new AbortController()
+    controller.abort()
+
+    const result = await Promise.race([
+      waitForServerReady(proc, { timeout: 60_000, signal: controller.signal }).then(
+        () => "resolved",
+        (error: Error) => error.message,
+      ),
+      new Promise<string>((resolve) => setTimeout(() => resolve("still-pending"), 50)),
+    ])
+
+    expect(result).toMatch(/abort/i)
+    expect(proc.kill).toHaveBeenCalledWith("SIGTERM")
   })
 
   test("kills the spawned server when startup is aborted", async () => {

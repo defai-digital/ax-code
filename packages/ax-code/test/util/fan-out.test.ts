@@ -2,6 +2,19 @@ import { describe, expect, test } from "vitest"
 import { FanOut } from "../../src/util/fan-out"
 
 describe("FanOut.run", () => {
+  test("clamps oversized timeouts so setTimeout does not fire immediately", async () => {
+    const result = await FanOut.run({
+      members: [1],
+      timeoutMs: 3_000_000_000,
+      abort: new AbortController().signal,
+      execute: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        return "ok"
+      },
+    })
+    expect(result[0]?.result).toBe("ok")
+  })
+
   test("does not start members when cancellation is already requested", async () => {
     let calls = 0
     const result = await FanOut.run({

@@ -453,6 +453,54 @@ describe("tool.edit", () => {
       })
     })
 
+    test("replaceAll inserts dollar signs literally", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "x = 1\r\ny = 1\r\n", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await FileTime.read(ctx.sessionID, filepath)
+          const edit = await EditTool.init()
+          await edit.execute(
+            {
+              filePath: filepath,
+              oldString: "1",
+              newString: "'$$'",
+              replaceAll: true,
+            },
+            ctx,
+          )
+          expect(await fs.readFile(filepath, "utf-8")).toBe("x = '$$'\r\ny = '$$'\r\n")
+        },
+      })
+    })
+
+    test("rejects a whitespace-only oldString instead of hanging", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "a\n\n\nb\n\n\nc\n", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await FileTime.read(ctx.sessionID, filepath)
+          const edit = await EditTool.init()
+          await expect(
+            edit.execute(
+              {
+                filePath: filepath,
+                oldString: "\n\n\n",
+                newString: "\n\n",
+              },
+              ctx,
+            ),
+          ).rejects.toThrow(/oldString|match/i)
+        },
+      })
+    })
+
     test("emits change event for existing files", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "file.txt")

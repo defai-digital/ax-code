@@ -124,10 +124,12 @@ export namespace FanOut {
       config.abort.addEventListener("abort", onParentAbort, { once: true })
     }
     let timedOut = false
+    // Node treats delays above 2^31-1 ms as 1 ms.
+    const delayMs = Math.min(Math.max(1, config.timeoutMs), 2_147_483_647)
     const timer = setTimeout(() => {
       timedOut = true
       localAbort.abort()
-    }, config.timeoutMs)
+    }, delayMs)
     timer.unref?.()
     let onAbort: (() => void) | undefined
     try {

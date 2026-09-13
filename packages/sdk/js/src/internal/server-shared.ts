@@ -52,10 +52,15 @@ export function resolveServerDefaults(options?: {
   config?: Record<string, unknown>
   auth?: { username?: string; password?: string }
 }) {
-  const resolved = Object.assign(
-    { hostname: DEFAULT_HOSTNAME, port: DEFAULT_PORT, timeout: DEFAULT_TIMEOUT },
-    options ?? {},
-  )
+  const resolved = {
+    hostname: options?.hostname ?? DEFAULT_HOSTNAME,
+    port: options?.port ?? DEFAULT_PORT,
+    timeout: options?.timeout ?? DEFAULT_TIMEOUT,
+    allowNetworkBind: options?.allowNetworkBind,
+    signal: options?.signal,
+    config: options?.config,
+    auth: options?.auth,
+  }
   const hostname = normalizeLoopbackHostname(resolved.hostname ?? DEFAULT_HOSTNAME)
   assertSdkHttpLoopbackBind(hostname, resolved.allowNetworkBind, "createAxCodeServer")
   return { ...resolved, hostname }
@@ -189,7 +194,8 @@ export function waitForServerReady(proc: Proc, options: { timeout: number; signa
     proc.once("exit", onExit)
     proc.once("error", onError)
     if (options.signal) {
-      options.signal.addEventListener("abort", onAbort, { once: true })
+      if (options.signal.aborted) onAbort()
+      else options.signal.addEventListener("abort", onAbort, { once: true })
     }
   })
 }

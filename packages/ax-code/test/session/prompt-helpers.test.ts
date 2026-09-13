@@ -255,6 +255,12 @@ describe("session.prompt helpers", () => {
     await expect(
       commandTemplateText({ template: "run this:\n$ARGUMENTS", arguments: `echo "hello world"` }),
     ).resolves.toBe('run this:\necho "hello world"')
+    await expect(
+      commandTemplateText({ template: "Task: $ARGUMENTS", arguments: "cost is $$5", allowShell: false }),
+    ).resolves.toBe("Task: cost is $$5")
+    await expect(
+      commandTemplateText({ template: "Task: $ARGUMENTS", arguments: "keep $& here", allowShell: false }),
+    ).resolves.toBe("Task: keep $& here")
   })
 
   test("does not partially replace arguments placeholder prefixes", async () => {

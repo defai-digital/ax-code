@@ -781,12 +781,14 @@ export const CouncilTool = Tool.define("council", async () => {
       ctx.abort.throwIfAborted()
       let report = Council.aggregateCouncil(results)
       let adaptiveExpanded = 0
+      let adaptiveRound1Count = results.length
       if (adaptive) {
         for (let next = initialMembers.length; next < resolvedMembers.length && adaptiveShouldExpand(report); next++) {
           log.info("council adaptive expansion", { toolName: "council", expandingTo: next + 1 })
           const result = await runOne(resolvedMembers[next]!)
           results = [...results, result]
           adaptiveExpanded++
+          adaptiveRound1Count = results.length
           ctx.abort.throwIfAborted()
           report = Council.aggregateCouncil(results)
         }
@@ -821,8 +823,11 @@ export const CouncilTool = Tool.define("council", async () => {
         }
         debateNotes.push(`### Debate round ${round}`, "", synthesis, "")
 
+        const debateMembers = resolvedMembers.filter((resolved) =>
+          results.some((result) => result.memberId === resolved.member.memberId),
+        )
         results = await Promise.all(
-          resolvedMembers.map((resolved) =>
+          debateMembers.map((resolved) =>
             runMember({
               resolved,
               system,
@@ -942,8 +947,8 @@ export const CouncilTool = Tool.define("council", async () => {
         parts.push(
           "",
           adaptiveExpanded > 0
-            ? `_Adaptive fan-out: started ${started}, expanded to ${started + adaptiveExpanded} of ${resolvedMembers.length} members on weak round-1 evidence._`
-            : `_Adaptive fan-out: round-1 evidence was sufficient at ${results.length} members; no expansion._`,
+            ? `_Adaptive fan-out: started ${started}, expanded to ${adaptiveRound1Count} of ${resolvedMembers.length} members on weak round-1 evidence._`
+            : `_Adaptive fan-out: round-1 evidence was sufficient at ${adaptiveRound1Count} members; no expansion._`,
         )
       }
       if (budgetCheck.reasons.length) {

@@ -210,6 +210,25 @@ export function shouldPlayMatrixRainOnStart(input: {
   })
 }
 
+/**
+ * Startup rain must not fire on kv defaults. kv.json loads asynchronously,
+ * and `matrix_rain_on_start` defaults to on — reading before `ready` would
+ * replay the overlay after the user turned it off.
+ */
+export function decideMatrixRainOnStart(input: {
+  ready: boolean
+  enabled: boolean
+  animationsEnabled: boolean
+  runtime?: RuntimeMode
+}): boolean {
+  if (!input.ready) return false
+  return shouldPlayMatrixRainOnStart({
+    enabled: input.enabled,
+    animationsEnabled: input.animationsEnabled,
+    runtime: input.runtime,
+  })
+}
+
 /** Stop a playing overlay if a dialog or selection appears after it started. */
 export function shouldStopMatrixRain(input: { dialogOpen: boolean; hasSelection: boolean }): boolean {
   return input.dialogOpen || input.hasSelection

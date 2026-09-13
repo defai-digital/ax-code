@@ -681,6 +681,28 @@ describe("council adaptive fan-out (ADR-102)", () => {
     expect(result.metadata.majorityCount).toBe(1)
   })
 
+  test("debates only round-1 members when adaptive does not expand", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue(adaptiveMemberConfig({ adaptive: true, debateRounds: 1 }))
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b", "c"]), rejected: [] })
+    const shared = { severity: "medium" as const, category: "correctness", summary: "Off-by-one in pagination" }
+    const lone = { severity: "high" as const, category: "security", summary: "Missing rate limit" }
+    let call = 0
+    generateObject.mockImplementation(() => {
+      call++
+      if (call === 1) return Promise.resolve({ object: { overall: "ok", issues: [shared, lone] } })
+      if (call === 2) return Promise.resolve({ object: { overall: "ok", issues: [shared] } })
+      return Promise.resolve({ object: { overall: "ok", issues: [shared] } })
+    })
+
+    const tool = await CouncilTool.init()
+    const result = await tool.execute({ question: "Review auth" }, ctx)
+
+    expect(generateObject).toHaveBeenCalledTimes(4)
+    expect(result.metadata.adaptiveExpanded).toBe(0)
+    expect(result.output).toContain("at 2 members")
+    expect(result.output).not.toContain("at 3 members")
+  })
+
   test("does not expand when round-1 evidence is sufficient", async () => {
     vi.mocked(Config.getFresh).mockResolvedValue(adaptiveMemberConfig({ adaptive: true }))
     vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b", "c"]), rejected: [] })

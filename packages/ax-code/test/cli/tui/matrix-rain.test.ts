@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { describe, expect, test } from "vitest"
 import {
   MATRIX_RAIN_COLUMN_SPACING,
@@ -11,6 +13,7 @@ import {
   createMatrixRain,
   matrixRainRows,
   shouldAutoPlayMatrixRain,
+  decideMatrixRainOnStart,
   shouldPlayMatrixRainOnStart,
   shouldStopMatrixRain,
   tickMatrixRain,
@@ -220,5 +223,39 @@ describe("matrix rain startup gate", () => {
     expect(shouldPlayMatrixRainOnStart({ ...base, animationsEnabled: false })).toBe(false)
     expect(shouldPlayMatrixRainOnStart({ ...base, runtime: "compiled" })).toBe(false)
     expect(shouldPlayMatrixRainOnStart({ ...base, runtime: "node-bundled" })).toBe(true)
+  })
+
+  test("App waits for kv.ready before deciding startup rain", () => {
+    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app.tsx"), "utf8")
+    expect(app).toContain("decideMatrixRainOnStart")
+    expect(app).toContain("() => kv.ready")
+    expect(app).not.toMatch(/onMount\(\(\) => \{\s*if \(\s*shouldPlayMatrixRainOnStart/)
+  })
+
+  test("does not play until kv is ready, then honors a persisted opt-out", () => {
+    expect(
+      decideMatrixRainOnStart({
+        ready: false,
+        enabled: MATRIX_RAIN_ON_START_DEFAULT,
+        animationsEnabled: true,
+        runtime: "source",
+      }),
+    ).toBe(false)
+    expect(
+      decideMatrixRainOnStart({
+        ready: true,
+        enabled: false,
+        animationsEnabled: true,
+        runtime: "source",
+      }),
+    ).toBe(false)
+    expect(
+      decideMatrixRainOnStart({
+        ready: true,
+        enabled: true,
+        animationsEnabled: true,
+        runtime: "source",
+      }),
+    ).toBe(true)
   })
 })

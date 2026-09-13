@@ -42,7 +42,7 @@ function commandTemplate(template: string, input: string) {
   if (!hasArgumentsPlaceholder) return withArgs
 
   const remaining = placeholders.length > 0 ? args.slice(last).join(" ") : input
-  return withArgs.replaceAll(argumentsPlaceholderRegex, remaining)
+  return withArgs.replaceAll(argumentsPlaceholderRegex, () => remaining)
 }
 
 export async function commandTemplateText(input: {

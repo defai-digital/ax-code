@@ -97,7 +97,7 @@ import { MatrixRain } from "./component/matrix-rain"
 import {
   MATRIX_RAIN_ON_START_DEFAULT,
   shouldAutoPlayMatrixRain,
-  shouldPlayMatrixRainOnStart,
+  decideMatrixRainOnStart,
   shouldStopMatrixRain,
 } from "./component/matrix-rain-view-model"
 
@@ -260,22 +260,30 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     recordTuiStartupOnce("tui.startup.appMounted", { route: route.data.type })
   })
 
-  // Decide once after saved preferences load; the default must not override
-  // a user's animation opt-out while the asynchronous KV read is pending.
-  let startupMatrixDecided = false
-  createEffect(() => {
-    if (!kv.ready || startupMatrixDecided) return
-    startupMatrixDecided = true
-    if (dialog.stack.length > 0) return
-    if (
-      shouldPlayMatrixRainOnStart({
-        enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
-        animationsEnabled: kv.get("animations_enabled", true),
-      })
-    ) {
-      playMatrixRain()
-    }
-  })
+  // Startup flourish: a single overlay play once kv.json has loaded. On by
+  // default; reading before kv.ready would ignore a persisted opt-out
+  // (the default is true). The stop effect above tears it down if a dialog
+  // opens while it plays.
+  let startupRainDecided = false
+  createEffect(
+    on(
+      () => kv.ready,
+      (ready) => {
+        if (!ready || startupRainDecided) return
+        startupRainDecided = true
+        if (dialog.stack.length > 0) return
+        if (
+          decideMatrixRainOnStart({
+            ready: true,
+            enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
+            animationsEnabled: kv.get("animations_enabled", true),
+          })
+        ) {
+          playMatrixRain()
+        }
+      },
+    ),
+  )
 
   // Fatal backend exit (internal transport): the wire-death sentinel is
   // emitted by createEventSource in thread.ts when the backend process dies.

@@ -29,6 +29,10 @@ vi.mock("@/util/filesystem", async (importOriginal) => {
 })
 
 import { createKVStore } from "../../../src/cli/cmd/tui/context/kv"
+import {
+  MATRIX_RAIN_ON_START_DEFAULT,
+  decideMatrixRainOnStart,
+} from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
 
 function flush() {
   // Drain the microtask queue a few times so promise chains settle.
@@ -131,6 +135,35 @@ describe("tui kv store initial-load race", () => {
       kv.set("theme", "everforest")
       await flush()
       expect(writeJson).not.toHaveBeenCalled()
+    } finally {
+      dispose()
+    }
+  })
+
+  test("startup rain stays off across a deferred load that persisted matrix_rain_on_start false", async () => {
+    const { kv, dispose } = makeKV()
+    try {
+      expect(kv.ready).toBe(false)
+      expect(
+        decideMatrixRainOnStart({
+          ready: kv.ready,
+          enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
+          animationsEnabled: kv.get("animations_enabled", true),
+          runtime: "source",
+        }),
+      ).toBe(false)
+      resolveLoad({ status: "found", value: { matrix_rain_on_start: false } })
+      await flush()
+      expect(kv.ready).toBe(true)
+      expect(kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT)).toBe(false)
+      expect(
+        decideMatrixRainOnStart({
+          ready: kv.ready,
+          enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
+          animationsEnabled: kv.get("animations_enabled", true),
+          runtime: "source",
+        }),
+      ).toBe(false)
     } finally {
       dispose()
     }
