@@ -59,6 +59,7 @@ import { createSessionActivityIndex } from "./util/session-activity"
 import { ContentDimensionsProvider } from "./context/content-dimensions"
 import { navigationLayout } from "./navigation/navigation-layout"
 import { SessionNavigation } from "./component/session-navigation"
+import { NavigationBar } from "./component/navigation-bar"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
@@ -425,8 +426,13 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       },
     ),
   )
-  const navigation = createMemo(() => navigationLayout(dimensions().width, kv.get("navigation_visible", true)))
-  const contentDimensions = createMemo(() => ({ width: navigation().contentWidth, height: dimensions().height }))
+  const navigation = createMemo(() =>
+    navigationLayout(dimensions().width, kv.get("navigation_visible", true), kv.get("navigation_width")),
+  )
+  const contentDimensions = createMemo(() => ({
+    width: navigation().contentWidth,
+    height: Math.max(0, dimensions().height - (navigation().railWidth ? 0 : 1)),
+  }))
 
   const sessionWorking = () => {
     if (route.data.type !== "session") return false
@@ -1157,7 +1163,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       }}
       onMouseUp={Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
     >
-      <box flexDirection="row" width="100%" height="100%">
+      <Show when={navigation().railWidth === 0}>
+        <NavigationBar width={dimensions().width} />
+      </Show>
+      <box flexDirection="row" width="100%" height={contentDimensions().height}>
         <Show when={navigation().railWidth > 0}>
           <SessionNavigation
             width={navigation().railWidth}

@@ -1,3 +1,4 @@
+import { applyInitialPromptDraft } from "@tui/component/prompt/session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import {
   createEffect,
@@ -1482,27 +1483,9 @@ export function Session() {
     ),
   )
 
-  // Apply route.initialPrompt (fork, /new with a draft) on session→session
-  // navigation. The Prompt ref callback below only runs on first mount, so
-  // when the target session is already in the sync store (e.g. the SSE
-  // session.created beat the fork response) the pre-filled prompt would be
-  // dropped without this effect. Consume-once: clear it after applying so a
-  // stale prompt can't leak into later navigations — route.navigate() merges
-  // shallowly and never clears keys on its own.
-  createEffect(
-    on(
-      () => route.sessionID,
-      (sessionID) => {
-        const initial = route.initialPrompt
-        if (!initial) return
-        // Prompt not mounted yet (session record still loading) — leave the
-        // value for the ref callback to consume on first mount instead.
-        if (!prompt) return
-        prompt.set(initial)
-        navigate({ type: "session", sessionID, initialPrompt: undefined })
-      },
-    ),
-  )
+  // Session-keyed Prompt mounts consume route drafts in their ref callback.
+  // A route effect could otherwise address a disposed ref while the next
+  // session record is still loading.
 
   return (
     <context.Provider
@@ -1703,10 +1686,13 @@ export function Session() {
                 ref={(r) => {
                   prompt = r
                   promptRef.set(r)
-                  // Apply initial prompt when prompt component mounts (e.g., from fork)
-                  if (route.initialPrompt) {
-                    r.set(route.initialPrompt)
-                  }
+                  // Cache restore has completed before this mounted ref arrives.
+                  // An explicit fork/new draft intentionally takes precedence.
+                  applyInitialPromptDraft({
+                    initial: route.initialPrompt,
+                    set: (initial) => r.set(initial),
+                    consume: () => navigate({ type: "session", sessionID: route.sessionID, initialPrompt: undefined }),
+                  })
                 }}
                 disabled={permissions().length > 0 || questions().length > 0}
                 onSubmit={() => {

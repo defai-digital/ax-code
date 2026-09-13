@@ -1,3 +1,5 @@
+import { usePromptRef } from "@tui/context/prompt"
+import { createSessionPromptDraftLifecycle, promptDraftKey } from "./session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent, MouseButton } from "ax-tui"
 import {
@@ -113,6 +115,15 @@ const MSG_NO_MODEL = "No model available — check your provider configuration"
 const MSG_NO_PROVIDER = "No provider configured — connect a provider to send prompts"
 
 export function Prompt(props: PromptProps) {
+  const sdk = useSDK()
+  return (
+    <Show keyed when={promptDraftKey(props.workspaceID ?? sdk.directory ?? sdk.baseDirectory, props.sessionID)}>
+      {(draftKey) => <SessionPrompt {...props} draftKey={draftKey} />}
+    </Show>
+  )
+}
+
+function SessionPrompt(props: PromptProps & { draftKey: string }) {
   let input: TextareaRenderable
   let anchor: BoxRenderable
   let autocomplete: AutocompleteRef
@@ -579,7 +590,10 @@ export function Prompt(props: PromptProps) {
     syncPromptInputFromRenderable,
     promptModelWarning,
     clearPromptDraft,
-    onSubmit: () => props.onSubmit?.(),
+    onSubmit: () => {
+      draftLifecycle.submitted()
+      props.onSubmit?.()
+    },
     exit,
     sessionID: () => props.sessionID,
     workspaceID: () => props.workspaceID,
@@ -899,7 +913,30 @@ export function Prompt(props: PromptProps) {
     }),
   )
 
+  const draftLifecycle = createSessionPromptDraftLifecycle({
+    drafts: usePromptRef().drafts,
+    key: props.draftKey,
+    read: () => ({
+      prompt: unwrap(store.prompt),
+      mode: store.mode,
+      cursor: isRenderableAlive(input) ? input.cursorOffset : 0,
+      expandedPastes: [...expandedPastes()],
+    }),
+    restore: (draft) => {
+      // setText can emit synchronously; install attachments only after it has
+      // completed, then recreate native marks from their saved source ranges.
+      suppressAutocompleteForNextContentChange()
+      input.setText(draft.prompt.input)
+      setStore("prompt", draft.prompt)
+      setStore("mode", draft.mode)
+      restoreExtmarksFromParts(draft.prompt.parts)
+      setExpandedPastes(new Set(draft.expandedPastes))
+      input.cursorOffset = Math.min(draft.cursor, endDisplayOffset(draft.prompt.input))
+    },
+  })
+
   onCleanup(() => {
+    draftLifecycle.dispose()
     paste.dispose()
     submitController.dispose()
   })
@@ -1096,6 +1133,7 @@ export function Prompt(props: PromptProps) {
               minHeight={1}
               maxHeight={6}
               onContentChange={() => {
+                draftLifecycle.edited()
                 const suppressAutocomplete = suppressAutocompleteOnNextContentChange
                 suppressAutocompleteOnNextContentChange = false
                 syncPromptInputFromRenderable({ autocomplete: suppressAutocomplete ? false : undefined })
@@ -1286,6 +1324,7 @@ export function Prompt(props: PromptProps) {
                 if (promptPartTypeId === 0) {
                   promptPartTypeId = input.extmarks.registerType("prompt-part")
                 }
+                draftLifecycle.restore()
                 props.ref?.(ref)
                 syncInputCursorColor()
               }}

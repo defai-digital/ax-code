@@ -4,6 +4,7 @@ import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
 import { useSDK } from "@tui/context/sdk"
+import { projectLabel } from "../navigation/navigation-model"
 import { knownAttentionRequests } from "../util/session-activity"
 
 export function DialogAttention() {
@@ -16,13 +17,17 @@ export function DialogAttention() {
     pending().map((request) => ({
       title: sync.session.get(request.sessionID)?.title ?? request.sessionID,
       value: request,
+      category: (() => {
+        const directory = sync.session.get(request.sessionID)?.directory
+        return directory ? `${projectLabel(directory)} - ${directory}` : "Workspace unavailable"
+      })(),
       description: request.kind === "approval" ? "Approval needed" : "Question pending",
     })),
   )
   onMount(() => dialog.setSize("large"))
   return (
     <DialogSelect
-      title={sdk.sseConnected ? "Pending requests" : "Pending requests (cached)"}
+      title={sdk.sseConnected ? "Pending requests - known workspaces" : "Pending requests - known workspaces (cached)"}
       placeholder={sdk.sseConnected ? "Find a pending request" : "Connection unavailable; requests may be stale"}
       options={
         options().length

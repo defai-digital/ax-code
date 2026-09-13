@@ -150,17 +150,38 @@ scheduled tasks for durable unattended work.
 At 146 terminal columns or wider, a left navigation sidebar shows sessions in
 the current workspace and their loaded child agents. Expand a row with its
 `+` control and click a title to open it. Pinned sessions keep their order and
-shortcut numbers. `Ask`, `Retry`, and `Work` describe observed activity; `Ask`
-also appears on the parent when a descendant needs input. These labels do not
+shortcut numbers. Full activity labels distinguish working, retrying, approvals,
+and questions; parents also reflect requests from descendants. These labels do not
 mean a task passed verification. The existing right sidebar keeps the current
 session's context and controls.
 
-Use `/navigation` to hide or restore the left sidebar on wide terminals. On
-narrower terminals it opens a session-and-agent picker instead. `/sessions`
+The Project heading identifies the current directory. Click it or use
+`/navigation-info` to see the full project path and current session title.
+Recent shows loaded sessions; Active keeps working or waiting session trees
+and the current session tree. The filter is shared with the navigation picker
+and remembered. Use `/navigation-filter` to toggle it from the keyboard. During
+disconnection it shows cached sessions rather than inferring which sessions
+are active.
+
+Use `/navigation-width` or the sidebar Width action to choose 24, 30, or 36
+columns. The preference is remembered and shrinks automatically when needed
+to preserve the main content. Use `/navigation` to hide or restore the left
+sidebar on wide terminals. On narrower terminals it opens a session-and-agent
+picker instead. A visible Sessions bar provides the same action whenever the
+sidebar is absent. Its Pending action appears when known requests need input;
+an asterisk marks a cached count during disconnection. `/sessions`
 continues to open the normal session picker. `/attention` is available at every
 width. During disconnection, its list is labeled as cached; opening cached
 entries is still possible, but requests may already have been answered elsewhere.
-All these views are bounded by the connected instance and loaded session data.
+The sidebar's Known requests action opens pending requests across known
+workspaces, while its session tree remains scoped to the current project.
+All these views are bounded by the connected instance and loaded session data;
+this count is not a complete inventory of other servers or unloaded workspaces.
+
+Unsent drafts are isolated by project and session within the running TUI.
+Switching sessions preserves text, attachments, cursor position and shell mode;
+returning restores the matching draft. These drafts are memory-only and do not
+survive closing the TUI.
 
 The optional completion notification now says `Session idle`. It follows
 observed work in the viewed session subtree and waits for observed active

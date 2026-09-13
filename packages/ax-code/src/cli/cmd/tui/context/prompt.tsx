@@ -1,3 +1,4 @@
+import { createSessionPromptDrafts } from "../component/prompt/session-drafts"
 import { createSignal } from "solid-js"
 import { createSimpleContext } from "./helper"
 import type { PromptRef } from "../component/prompt"
@@ -8,6 +9,7 @@ import type { PromptRef } from "../component/prompt"
 export function createPromptRefState() {
   const [current, setCurrent] = createSignal<PromptRef | undefined>()
   return {
+    drafts: createSessionPromptDrafts(),
     get current() {
       return current()
     },

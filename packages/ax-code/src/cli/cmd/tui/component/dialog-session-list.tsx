@@ -1,8 +1,10 @@
+import { useKV } from "@tui/context/kv"
+import { activeNavigationSessions, navigationFilter } from "../navigation/navigation-model"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { createMemo, createSignal, createResource, onMount } from "solid-js"
+import { createMemo, createSignal, createResource, onMount, Show, For } from "solid-js"
 import { Locale } from "@/util/locale"
 import { useKeybind } from "../context/keybind"
 import { useTheme } from "../context/theme"
@@ -42,6 +44,8 @@ function errorMessage(error: unknown, fallback: string) {
 // current directory.
 export function DialogSessionList(props: { workspaceID?: string; localOnly?: boolean; navigation?: boolean } = {}) {
   const dialog = useDialog()
+  const kv = useKV()
+  const filter = () => navigationFilter(kv.get("navigation_filter"))
   const route = useRoute()
   const sync = useSync()
   const keybind = useKeybind()
@@ -162,8 +166,19 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
       .toSorted((a: Session, b: Session) => b.time.updated - a.time.updated)
 
     const pinnedSet = new Set(pinnedIDs.filter((id) => allSessions.some((s) => s.id === id)))
+    const navigationSessions =
+      props.navigation && filter() === "active"
+        ? activeNavigationSessions({
+            sessions: sessions(),
+            statuses: sync.data.session_status,
+            permissions: sync.data.permission,
+            questions: sync.data.question,
+            currentID: currentSessionID(),
+            observed: sdk.sseConnected && sync.data.session_loaded,
+          })
+        : sessions()
     const ordered = props.navigation
-      ? sessionNavigationEntries(sessions(), pinnedIDs, "all")
+      ? sessionNavigationEntries(navigationSessions, pinnedIDs, "all")
       : orderRootSessions(allSessions, pinnedIDs).map((session) => ({ session, depth: 0 }))
 
     return ordered.map(({ session: x, depth }) => {
@@ -200,80 +215,102 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
   })
 
   return (
-    <DialogSelect
-      title={
-        props.navigation
-          ? "Session navigation"
-          : props.workspaceID
-            ? "Workspace Sessions"
-            : props.localOnly
-              ? "Local Sessions"
-              : "Sessions"
-      }
-      options={options()}
-      skipFilter={!props.localOnly}
-      current={currentSessionID()}
-      onFilter={setSearch}
-      onMove={() => {
-        setToDelete(undefined)
-      }}
-      onSelect={(option) => {
-        route.navigate({
-          type: "session",
-          sessionID: option.value,
-        })
-        dialog.clear()
-      }}
-      keybind={[
-        {
-          keybind: keybind.all.session_pin_toggle?.[0],
-          title: "pin/unpin",
-          onTrigger: (option) => {
-            local.session.togglePin(option.value)
+    <box>
+      <Show when={props.navigation}>
+        <box flexDirection="row" gap={2} paddingLeft={4}>
+          <For each={["recent", "active"] as const}>
+            {(value) => (
+              <box onMouseUp={() => kv.set("navigation_filter", value)}>
+                <text fg={filter() === value ? theme.accent : theme.textMuted} selectable={false}>
+                  {value === "recent" ? "Recent" : "Active"}
+                </text>
+              </box>
+            )}
+          </For>
+        </box>
+        <Show when={filter() === "active"}>
+          <text paddingLeft={4} fg={theme.textMuted} wrapMode="word">
+            {sdk.sseConnected && sync.data.session_loaded
+              ? "Includes current session"
+              : "Cached sessions; reconnect to filter"}
+          </text>
+        </Show>
+      </Show>
+      <DialogSelect
+        title={
+          props.navigation
+            ? "Session navigation"
+            : props.workspaceID
+              ? "Workspace Sessions"
+              : props.localOnly
+                ? "Local Sessions"
+                : "Sessions"
+        }
+        options={options()}
+        skipFilter={!props.localOnly}
+        current={currentSessionID()}
+        onFilter={setSearch}
+        onMove={() => {
+          setToDelete(undefined)
+        }}
+        onSelect={(option) => {
+          route.navigate({
+            type: "session",
+            sessionID: option.value,
+          })
+          dialog.clear()
+        }}
+        keybind={[
+          {
+            keybind: keybind.all.session_pin_toggle?.[0],
+            title: "pin/unpin",
+            onTrigger: (option) => {
+              local.session.togglePin(option.value)
+            },
           },
-        },
-        {
-          keybind: keybind.all.session_delete?.[0],
-          title: "delete",
-          onTrigger: async (option) => {
-            if (toDelete() === option.value) {
-              const deleted = await sdk.client.session
-                .delete({
-                  sessionID: option.value,
-                })
-                .then((result) => !result.error)
-                .catch(() => false)
-              setToDelete(undefined)
-              if (!deleted) {
-                toast.show({
-                  message: "Failed to delete session",
-                  variant: "error",
-                })
-                return
-              }
-              if (props.workspaceID) {
-                listedActions.mutate((sessions: Session[] | undefined) =>
-                  sessions?.filter((session: Session) => session.id !== option.value),
+          {
+            keybind: keybind.all.session_delete?.[0],
+            title: "delete",
+            onTrigger: async (option) => {
+              if (toDelete() === option.value) {
+                const deleted = await sdk.client.session
+                  .delete({
+                    sessionID: option.value,
+                  })
+                  .then((result) => !result.error)
+                  .catch(() => false)
+                setToDelete(undefined)
+                if (!deleted) {
+                  toast.show({
+                    message: "Failed to delete session",
+                    variant: "error",
+                  })
+                  return
+                }
+                if (props.workspaceID) {
+                  listedActions.mutate((sessions: Session[] | undefined) =>
+                    sessions?.filter((session: Session) => session.id !== option.value),
+                  )
+                  return
+                }
+                sync.set(
+                  "session",
+                  sync.data.session.filter((session) => session.id !== option.value),
                 )
                 return
               }
-              sync.set(
-                "session",
-                sync.data.session.filter((session) => session.id !== option.value),
-              )
-              return
-            }
-            setToDelete(option.value)
+              setToDelete(option.value)
+            },
           },
-        },
-        {
-          keybind: keybind.all.session_rename?.[0],
-          title: "rename",
-          onTrigger: async (option) => {
-            dialog.replace(() => <DialogSessionRename session={option.value} />)
+          {
+            keybind: keybind.all.session_rename?.[0],
+            title: "rename",
+            onTrigger: async (option) => {
+              dialog.replace(() => <DialogSessionRename session={option.value} />)
+            },
           },
-        },
-      ]}
-    />
+        ]}
+      />
+    </box>
   )
 }

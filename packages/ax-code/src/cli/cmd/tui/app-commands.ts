@@ -19,6 +19,7 @@ import {
 } from "./component/work-mode-availability"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
+import { navigationFilter } from "./navigation/navigation-model"
 import { NAVIGATION_DOCK_MIN_WIDTH } from "./navigation/navigation-layout"
 
 export type AppCommandSandbox = {
@@ -119,6 +120,38 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       slash: { name: "attention" },
       onSelect: () => {
         void dialogs.showAttentionDialog()
+      },
+    },
+    {
+      title: "Show current project and session details",
+      value: "session.navigation.info",
+      category: "Session",
+      slash: { name: "navigation-info" },
+      onSelect: () => {
+        const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+        void dialogs.showNavigationInfo(
+          sdk.directory ?? sync.data.path.directory ?? "Unavailable",
+          sessionID ? (sync.session.get(sessionID)?.title ?? sessionID) : "New session",
+        )
+      },
+    },
+    {
+      title: "Toggle recent / active navigation sessions",
+      value: "session.navigation.filter",
+      category: "Session",
+      slash: { name: "navigation-filter" },
+      onSelect: () => {
+        kv.set("navigation_filter", navigationFilter(kv.get("navigation_filter")) === "recent" ? "active" : "recent")
+        dialog.clear()
+      },
+    },
+    {
+      title: "Set session navigation width",
+      value: "session.navigation.width",
+      category: "Session",
+      slash: { name: "navigation-width" },
+      onSelect: () => {
+        void dialogs.showNavigationWidthDialog()
       },
     },
     {

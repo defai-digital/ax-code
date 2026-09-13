@@ -106,21 +106,31 @@ describe("v2 SDK result.error handling", () => {
 })
 
 describe("fork pre-filled prompt on session navigation", () => {
-  test("route.initialPrompt is applied on sessionID change and consumed once", async () => {
-    const sessionIndex = await fs.readFile(SESSION_INDEX_SRC, "utf8")
-
-    // The Prompt ref callback only runs on first mount; session→session
-    // navigation (fork target already in the sync store) needs an effect.
-    const effectIndex = sessionIndex.indexOf("const initial = route.initialPrompt")
-    expect(effectIndex).toBeGreaterThan(0)
-    const effectBlock = sessionIndex.slice(effectIndex, effectIndex + 600)
-    expect(effectBlock).toContain("prompt.set(initial)")
-    // Consume-once: clearing prevents the stale prompt from leaking into
-    // later navigations (route.navigate merges shallowly).
-    expect(effectBlock).toContain('navigate({ type: "session", sessionID, initialPrompt: undefined })')
-    // The first-mount ref-callback path stays intact.
-    expect(sessionIndex).toContain("if (route.initialPrompt) {")
-    expect(sessionIndex).toContain("r.set(route.initialPrompt)")
+  test("mounted editor receives the explicit route draft before it is consumed", async () => {
+    const { applyInitialPromptDraft } = await import("../../../src/cli/cmd/tui/component/prompt/session-drafts")
+    const initial = { input: "Fork instruction", parts: [] }
+    const events: string[] = []
+    let routeDraft: typeof initial | undefined = initial
+    let editorInput = "Restored cached draft"
+    const mount = () =>
+      applyInitialPromptDraft({
+        initial: routeDraft,
+        set: (prompt) => {
+          editorInput = prompt.input
+          events.push("set")
+        },
+        consume: () => {
+          routeDraft = undefined
+          events.push("consume")
+        },
+      })
+    mount()
+    expect(editorInput).toBe("Fork instruction")
+    expect(events).toEqual(["set", "consume"])
+    editorInput = "Later unsent input"
+    mount()
+    expect(editorInput).toBe("Later unsent input")
+    expect(events).toEqual(["set", "consume"])
   })
 })
 

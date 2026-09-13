@@ -328,3 +328,45 @@ describe("prompt submission lifecycle", () => {
     expect(host.route.navigate).toHaveBeenCalledWith({ type: "session", sessionID })
   })
 })
+
+describe("prompt editor disposal during navigation", () => {
+  test("ignores late session creation after its editor is disposed", async () => {
+    const { controller, host, create, requests } = setupNewSession()
+    let finish!: (result: { data: Session }) => void
+    create.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const pending = controller.submit()
+    controller.dispose()
+    finish({ data: session("ses_late_creation") })
+    await pending
+    expect(requests).toHaveLength(0)
+    expect(host.onSubmit).not.toHaveBeenCalled()
+    expect(host.history.append).not.toHaveBeenCalled()
+    expect(host.route.navigate).not.toHaveBeenCalled()
+    expect(host.input.clear).not.toHaveBeenCalled()
+  })
+
+  test("does not settle or clear a draft after disposed editor dispatch resolves late", async () => {
+    const { controller, host } = setup({ mode: "normal", workMode: "agent", text: "Session A draft" })
+    let finish!: (response: Response) => void
+    host.sdk.fetch = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+        }),
+    )
+    const pending = controller.submit()
+    expect(host.sdk.fetch).toHaveBeenCalledOnce()
+    controller.dispose()
+    finish(new Response(null, { status: 202 }))
+    await pending
+    expect(host.onSubmit).not.toHaveBeenCalled()
+    expect(host.history.append).not.toHaveBeenCalled()
+    expect(host.input.clear).not.toHaveBeenCalled()
+    expect(host.route.navigate).not.toHaveBeenCalled()
+  })
+})
