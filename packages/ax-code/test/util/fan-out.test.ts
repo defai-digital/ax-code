@@ -45,7 +45,7 @@ describe("FanOut.run", () => {
         return "late success"
       },
     })
-    expect(result).toEqual([{ error: "timeout: member exceeded 1ms" }])
+    expect(result).toEqual([{ error: "timeout: member exceeded 1ms", durationMs: expect.any(Number) }])
   })
 
   test("retains an empty HTTP failure nested inside an SDK retry error", async () => {
@@ -82,7 +82,10 @@ describe("FanOut.run", () => {
       execute: async (member) => member * 2,
     })
 
-    expect(result).toEqual([{ result: 2 }, { result: 4 }])
+    expect(result).toEqual([
+      { result: 2, durationMs: expect.any(Number) },
+      { result: 4, durationMs: expect.any(Number) },
+    ])
   })
 
   test("labels a timer-fired timeout distinctly from an abort", async () => {

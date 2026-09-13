@@ -14,6 +14,7 @@ changes belong to AX Coder.
 - Bound chairman failure labels with the shared fan-out error description so nested SDK messages do not land in the council transcript.
 - Pause idle recap when the user types after opening a settled session: the prompt ref is a Solid signal so first-observation recap can subscribe before Prompt mounts.
 - Report wiki graph completeness as partial when snippets, relationships, or truncated file reads were omitted, instead of claiming complete coverage.
+- Parse ensemble eval fixtures through the shared JSON helper, and keep FanOut `durationMs` in the timeout and concurrency tests.
 
 ## [7.16.2] - 2026-09-12
 

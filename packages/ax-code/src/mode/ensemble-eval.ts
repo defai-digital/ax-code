@@ -10,6 +10,7 @@ import z from "zod"
 import { Council } from "./council"
 import { Debate } from "./debate"
 import { Arena } from "./arena"
+import { parseJsonStrict } from "../util/json-value"
 
 export namespace EnsembleEval {
   // --- Fixture schemas ----------------------------------------------------
@@ -145,7 +146,7 @@ export namespace EnsembleEval {
     return files.map((file) => {
       // Golden fixtures are project-owned; parse-then-validate with zod so a
       // malformed case fails loudly with its filename.
-      const raw = JSON.parse(readFileSync(path.join(dir, file), "utf8")) as unknown
+      const raw = parseJsonStrict(readFileSync(path.join(dir, file), "utf8"))
       return Case.parse(raw)
     })
   }
