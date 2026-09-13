@@ -5,6 +5,7 @@ import { Instance } from "../../src/project/instance"
 import { Question } from "../../src/question"
 import { Recorder } from "../../src/replay/recorder"
 import { Session } from "../../src/session"
+import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
 import { createStoppedAssistantTextResponse } from "../../src/session/prompt-assistant-response"
 import { ModelID, ProviderID } from "../../src/provider/schema"
@@ -776,6 +777,138 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("does not attach a session to a timed-out scheduled automation", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const originalAttach = TaskQueue.attachSession
+        let releaseAttach!: () => void
+        const blocked = new Promise<void>((resolve) => {
+          releaseAttach = resolve
+        })
+        const attach = vi.spyOn(TaskQueue, "attachSession").mockImplementation(async (id, sessionID) => {
+          await blocked
+          return originalAttach(id, sessionID)
+        })
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue(undefined as never)
+        const sessionsBefore = [...Session.list()].length
+        try {
+          const item = await TaskQueue.enqueue({
+            kind: "automation",
+            title: "Timed out scheduled attach",
+            sourceTaskID: "sch_timeout_attach",
+            payload: {
+              scheduledTaskID: "sch_timeout_attach",
+              prompt: "Do not attach after timeout.",
+            },
+            executionTimeoutMs: 1000,
+          })
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "failed")
+          releaseAttach()
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          const failed = await TaskQueue.get(item.id)
+          expect(failed.error).toContain("timed out")
+          expect(failed.sessionID).toBeUndefined()
+          expect(prompt).not.toHaveBeenCalled()
+          expect([...Session.list()].length).toBe(sessionsBefore)
+        } finally {
+          releaseAttach()
+          attach.mockRestore()
+          prompt.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("does not start a scheduled workflow after the queue item times out", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { WorkflowTemplate } = await import("../../src/workflow/template")
+        const { WorkflowScheduler } = await import("../../src/workflow/scheduler")
+        let releaseCreate!: () => void
+        const blocked = new Promise<void>((resolve) => {
+          releaseCreate = resolve
+        })
+        const createRun = vi.spyOn(WorkflowTemplate, "createRun").mockImplementation(async () => {
+          await blocked
+          return { id: "wfr_timeout_scheduled" } as never
+        })
+        const start = vi.spyOn(WorkflowScheduler, "start").mockResolvedValue({ status: "completed" } as never)
+        const cancel = vi.spyOn(WorkflowScheduler, "cancel").mockResolvedValue(undefined as never)
+        try {
+          const item = await TaskQueue.enqueue({
+            kind: "automation",
+            title: "Timed out scheduled workflow",
+            sourceTaskID: "sch_timeout_workflow",
+            payload: {
+              scheduledTaskID: "sch_timeout_workflow",
+              workflowTemplateID: "builtin:noop-dry-run",
+            },
+            executionTimeoutMs: 1000,
+          })
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "failed")
+          releaseCreate()
+          await new Promise((resolve) => setTimeout(resolve, 50))
+          expect(start).not.toHaveBeenCalled()
+          expect(cancel).toHaveBeenCalledWith("wfr_timeout_scheduled")
+        } finally {
+          releaseCreate()
+          createRun.mockRestore()
+          start.mockRestore()
+          cancel.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("fails sessionless scheduled automation when the assistant result has an error", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+          return {
+            info: {
+              id: "msg_sessionless_assistant_error",
+              sessionID: input.sessionID,
+              role: "assistant",
+              error: new MessageV2.APIError({
+                message: "Your token-plan quota has been exhausted.",
+                isRetryable: false,
+              }).toObject(),
+            },
+            parts: [],
+          } as never
+        })
+        const sessionsBefore = [...Session.list()].length
+        try {
+          const item = await TaskQueue.enqueue({
+            kind: "automation",
+            title: "Sessionless assistant error",
+            sourceTaskID: "sch_sessionless_error",
+            payload: {
+              scheduledTaskID: "sch_sessionless_error",
+              prompt: "This should fail.",
+            },
+          })
+          await TaskQueueExecutor.start(item)
+          await waitForQueueStatus(item.id, "failed")
+          const failed = await TaskQueue.get(item.id)
+          expect(failed.error).toContain("Your token-plan quota has been exhausted.")
+          expect(failed.sessionID).toBeDefined()
+          expect([...Session.list()].length).toBeGreaterThan(sessionsBefore)
+        } finally {
+          prompt.mockRestore()
+        }
+      },
+    })
+  })
+
   test("does not admit a successor while timeout cancellation is pending", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
@@ -823,6 +956,61 @@ describe("TaskQueue", () => {
           prompt.mockRestore()
           cancel.mockRestore()
           await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("holds a successor while a sessionless automation timeout is still cancelling", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const stopRuns: Array<() => void> = []
+        let finishCancellation!: () => void
+        const cancellation = new Promise<void>((resolve) => {
+          finishCancellation = resolve
+        })
+        const prompt = vi.spyOn(SessionPrompt, "prompt").mockImplementation(
+          () =>
+            new Promise((_, reject) => {
+              stopRuns.push(() => reject(new Error("Fixture execution stopped")))
+            }),
+        )
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockReturnValue(cancellation)
+        let successor: TaskQueue.Info | undefined
+        try {
+          const first = await TaskQueue.enqueue({
+            kind: "automation",
+            title: "Sessionless predecessor",
+            sourceTaskID: "sch_timeout_sessionless_gate",
+            payload: {
+              scheduledTaskID: "sch_timeout_sessionless_gate",
+              prompt: "First",
+            },
+            executionTimeoutMs: 1000,
+          })
+          await TaskQueueExecutor.start(first)
+          await waitForQueueStatus(first.id, "failed")
+          const failed = await TaskQueue.get(first.id)
+          expect(failed.sessionID).toBeDefined()
+          expect(cancel).toHaveBeenCalledWith(failed.sessionID)
+          successor = await TaskQueue.enqueue({
+            sessionID: failed.sessionID,
+            kind: "prompt",
+            title: "Successor",
+            payload: { text: "Second" },
+          })
+          const admitted = await TaskQueueExecutor.start(successor)
+          expect(admitted.status).toBe("waiting_for_idle")
+          expect(prompt).toHaveBeenCalledTimes(1)
+        } finally {
+          if (successor) await TaskQueue.setStatus({ id: successor.id, status: "cancelled" })
+          finishCancellation()
+          for (const stop of stopRuns) stop()
+          await new Promise((resolve) => setTimeout(resolve, 30))
+          prompt.mockRestore()
+          cancel.mockRestore()
         }
       },
     })

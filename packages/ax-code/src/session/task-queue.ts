@@ -948,10 +948,24 @@ export namespace TaskQueue {
       const row = db
         .update(TaskQueueTable)
         .set({ session_id: sessionID, time_updated: now })
-        .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.project_id, Instance.project.id)))
+        .where(
+          and(
+            eq(TaskQueueTable.id, id),
+            eq(TaskQueueTable.project_id, Instance.project.id),
+            inArray(TaskQueueTable.status, ["running", "blocked_permission", "blocked_question"]),
+          ),
+        )
         .returning()
         .get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      if (!row) {
+        const current = db
+          .select()
+          .from(TaskQueueTable)
+          .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.project_id, Instance.project.id)))
+          .get()
+        if (!current) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+        throw new Error(`Scheduled automation stopped before execution (${fromRow(current).status})`)
+      }
       return fromRow(row)
     })
     publishUpdated(item)

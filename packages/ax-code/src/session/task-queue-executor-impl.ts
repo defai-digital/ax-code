@@ -183,7 +183,8 @@ async function executeClaimedItem(item: TaskQueue.Info, execution: QueueExecutio
     let result: unknown
     try {
       result = await runWithExecutionWatchdog(item, execution)
-      const failure = failureForQueueExecution(item, result)
+      const latest = await TaskQueue.get(item.id).catch(() => item)
+      const failure = failureForQueueExecution({ ...item, ...latest }, result)
       if (failure) throw new Error(failure)
       succeeded = true
     } catch (error) {
@@ -676,7 +677,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
   const scheduledTaskID = item.payload["scheduledTaskID"]
   if (typeof scheduledTaskID !== "string" || !scheduledTaskID.startsWith("sch_")) return undefined
   let workflowRunID: WorkflowRunID | undefined
-  return {
+  const execution: QueueExecution = {
     sessionID: item.sessionID,
     cancel: async () => {
       if (!workflowRunID) return cancelTimedOutExecution(item)
@@ -694,6 +695,18 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
             sourceTaskID: scheduledTaskID,
           })
           workflowRunID = run.id
+          try {
+            await requireActiveQueueItem(item.id)
+          } catch (error) {
+            await WorkflowScheduler.cancel(run.id).catch((cancelError) => {
+              log.warn("failed to cancel timed-out scheduled workflow run", {
+                taskID: item.id,
+                runID: run.id,
+                error: cancelError,
+              })
+            })
+            throw error
+          }
           const { ScheduledTask } = await import("./scheduled-task")
           await ScheduledTask.recordWorkflowRun(ScheduledTaskID.make(scheduledTaskID), run.id)
           const detail = await WorkflowScheduler.start(run.id, item.payload["workflowStartOptions"] ?? {})
@@ -720,9 +733,21 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
             })
             throw error
           }
-          await TaskQueue.attachSession(item.id, session.id)
+          try {
+            await TaskQueue.attachSession(item.id, session.id)
+          } catch (error) {
+            await Session.remove(session.id).catch((removeError) => {
+              log.warn("failed to discard cancelled scheduled session", {
+                taskID: item.id,
+                sessionID: session.id,
+                error: removeError,
+              })
+            })
+            throw error
+          }
           sessionID = session.id
           item.sessionID = sessionID
+          execution.sessionID = sessionID
         }
         await requireActiveQueueItem(item.id)
         const body = promptBodyFromQueueItem(item)
@@ -730,6 +755,7 @@ function scheduledAutomationExecution(item: TaskQueue.Info): QueueExecution | un
         return SessionPrompt.prompt({ ...body, sessionID })
       }),
   }
+  return execution
 }
 
 function subagentExecution(item: TaskQueue.Info): QueueExecution | undefined {
