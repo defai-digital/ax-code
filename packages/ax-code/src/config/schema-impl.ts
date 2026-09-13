@@ -1215,6 +1215,12 @@ export const Info = z
               .describe(
                 'Absolute per-contestant timeout overrides in ms, keyed by "providerID" or "providerID/modelID" (falls back to modes.council.memberTimeoutMs). Exact model keys win over provider-wide keys.',
               ),
+            judge: z
+              .boolean()
+              .optional()
+              .describe(
+                "Run one blinded rubric judge call to rank plan-mode proposals (default: true). The judge scores requirement coverage, feasibility, verification plan, and risk evidence; self-assessed risk remains display-only.",
+              ),
             strategy: z
               .enum(["verify_first", "diversity", "hybrid_score"])
               .optional()

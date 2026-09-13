@@ -34,6 +34,9 @@ const log = Log.create({ service: "tool.arena" })
 const DEFAULT_MAX = 3
 const HARD_MAX = 5
 const DEFAULT_TIMEOUT_MS = 60_000
+// ADR-101: planning estimate for one implement trajectory under the
+// 12-minute cap — a rough upper bound, not a measurement.
+const IMPLEMENT_ESTIMATED_CALLS_PER_MEMBER = 12
 
 /**
  * Arena timeout policy: same knobs as council with the same fallback chain
@@ -276,6 +279,156 @@ Return a json object with this shape: {"approach": string, "steps": string[], "r
   return { member: input.member, error: first.error ?? "unknown" }
 }
 
+// ADR-101: blinded listwise rubric judge for plan mode. One extra structured
+// call scores every proposal on a fixed rubric; identities are stripped and
+// candidate order is randomized so position/origin cannot steer the scores.
+const JudgeScoreSchema = z.object({
+  candidate: z.string().min(1).describe('Anonymous candidate label, e.g. "A"'),
+  requirementCoverage: z.preprocess(clampNumber(0, 10), z.number()),
+  feasibility: z.preprocess(clampNumber(0, 10), z.number()),
+  verificationPlan: z.preprocess(clampNumber(0, 10), z.number()),
+  riskEvidence: z.preprocess(clampNumber(0, 10), z.number()),
+})
+
+const JudgeOutputSchema = z.object({
+  scores: z.array(JudgeScoreSchema).describe("Exactly one entry per candidate label; ties are allowed"),
+})
+
+export type JudgeDimensionScores = {
+  requirementCoverage: number
+  feasibility: number
+  verificationPlan: number
+  riskEvidence: number
+  total: number
+}
+
+function candidateLabel(index: number): string {
+  // A..Z for up to 26 candidates (arena hard max is 5).
+  return String.fromCharCode(65 + index)
+}
+
+async function runPlanJudge(input: {
+  member: EnsembleShared.MemberSpec
+  task: string
+  context?: string
+  proposals: Array<{ memberId: string; approach: string; steps: string[]; risks: string[] }>
+  timeoutMs: number
+  reasoningScale?: number
+  memberOverrides?: Record<string, number>
+  abort: AbortSignal
+}): Promise<Map<string, JudgeDimensionScores>> {
+  const model = await Provider.getModel(input.member.providerID, input.member.modelID)
+  const language = await Provider.getLanguage(model)
+  const memberTimeoutMs = resolveMemberTimeoutMs({
+    providerID: String(input.member.providerID),
+    modelID: String(input.member.modelID),
+    reasoning: model.capabilities?.reasoning,
+    baseTimeoutMs: input.timeoutMs,
+    reasoningScale: input.reasoningScale,
+    memberOverrides: input.memberOverrides,
+  })
+
+  // Blinding: strip member identities and shuffle so the judge cannot map a
+  // proposal to a provider or to its fan-out position (its own included).
+  const shuffled = [...input.proposals]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    const tmp = shuffled[i]!
+    shuffled[i] = shuffled[j]!
+    shuffled[j] = tmp
+  }
+  const memberIdByLabel = new Map<string, string>()
+  const blocks = shuffled.map((proposal, index) => {
+    const label = candidateLabel(index)
+    memberIdByLabel.set(label, proposal.memberId)
+    const steps = proposal.steps.map((step) => `- ${step}`).join("\n")
+    const risks = proposal.risks.length ? proposal.risks.map((risk) => `- ${risk}`).join("\n") : "(none stated)"
+    return `### Candidate ${label}\nApproach: ${proposal.approach}\nSteps:\n${steps}\nRisks:\n${risks}`
+  })
+
+  const user = [
+    `Task: ${input.task}`,
+    input.context ? `\nContext:\n${input.context}` : "",
+    "",
+    "Proposals (anonymized, order randomized):",
+    "",
+    ...blocks,
+  ]
+    .filter((line) => line !== "")
+    .join("\n")
+
+  const attempt = async (): Promise<z.infer<typeof JudgeOutputSchema>> => {
+    const [result] = await FanOut.run({
+      members: [input.member],
+      timeoutMs: memberTimeoutMs,
+      abort: input.abort,
+      execute: async (_m, signal) => {
+        const result = streamObject({
+          model: language,
+          maxOutputTokens: ProviderTransform.auxMaxOutputTokens(model),
+          schema: JudgeOutputSchema,
+          maxRetries: 0,
+          abortSignal: signal,
+          temperature: 0.1,
+          messages: [
+            {
+              role: "system",
+              // ensureJsonModeInstruction: Qwen/Alibaba require the word "json" when generateObject
+              // uses response_format json_object.
+              content: ensureJsonModeInstruction(`You are an independent judge in a coding-agent plan arena.
+Score each anonymized proposal on four dimensions from 0 (absent) to 10 (excellent):
+- requirementCoverage: how completely the approach addresses the stated task and context.
+- feasibility: how realistic the ordered steps are to implement correctly.
+- verificationPlan: how well the proposal makes its own correctness checkable (tests, validation).
+- riskEvidence: how concretely the stated risks are tied to this task rather than generic boilerplate.
+Candidate identities are hidden and order is randomized: do not infer origin, and do not reward style or verbosity.
+Score candidates independently; ties are allowed.
+Return a json object with this shape: {"scores": [{"candidate": "A", "requirementCoverage": number, "feasibility": number, "verificationPlan": number, "riskEvidence": number}]} with exactly one entry per candidate label.`),
+            },
+            { role: "user", content: user },
+          ],
+        })
+        for await (const part of result.fullStream) {
+          if (part.type === "error") throw part.error
+        }
+        return await result.object
+      },
+    })
+    if (result.error) throw new Error(result.error)
+    return result.result!
+  }
+
+  let output: z.infer<typeof JudgeOutputSchema>
+  try {
+    output = await attempt()
+  } catch (firstError) {
+    const message = firstError instanceof Error ? firstError.message : String(firstError)
+    if (message.startsWith("timeout:") || message.startsWith("aborted:") || isNonTransientMemberError(message)) {
+      throw firstError
+    }
+    output = await attempt()
+  }
+
+  const scores = new Map<string, JudgeDimensionScores>()
+  for (const entry of output.scores) {
+    const memberId = memberIdByLabel.get(entry.candidate.trim())
+    if (!memberId || scores.has(memberId)) continue
+    const requirementCoverage = Math.round(entry.requirementCoverage)
+    const feasibility = Math.round(entry.feasibility)
+    const verificationPlan = Math.round(entry.verificationPlan)
+    const riskEvidence = Math.round(entry.riskEvidence)
+    scores.set(memberId, {
+      requirementCoverage,
+      feasibility,
+      verificationPlan,
+      riskEvidence,
+      total: requirementCoverage + feasibility + verificationPlan + riskEvidence,
+    })
+  }
+  if (scores.size === 0) throw new Error("judge returned no usable candidate scores")
+  return scores
+}
+
 type ArenaMetadata = {
   status: string
   strategy?: string
@@ -292,6 +445,8 @@ type ArenaMetadata = {
   baseCommit?: string
   selectionErrors?: string[]
   contextAdmission?: CouncilContext.Admission
+  judge?: "ok" | "failed" | "disabled" | "skipped"
+  judgeError?: string
 }
 
 export const ArenaTool = Tool.define("arena", async () => {
@@ -396,9 +551,16 @@ export const ArenaTool = Tool.define("arena", async () => {
       // fallback chain (arena → council → default) as timeoutMs itself.
       const { timeoutMs, reasoningScale, memberOverrides } = arenaTimeoutPolicy(modes)
 
+      // ADR-101: plan contestants cost their call plus the possible retry;
+      // the blinded judge is one flat call per invocation. Implement
+      // contestants run a full agent trajectory — price the documented
+      // per-trajectory estimate, not one review call.
+      const judgeEnabled = arenaMode === "plan" && modes?.arena?.judge !== false
       const budgetCheck = Budget.check({
         kind: "arena",
         requestedMembers: args.providers?.length ?? maxContestants,
+        callsPerMember: arenaMode === "implement" ? IMPLEMENT_ESTIMATED_CALLS_PER_MEMBER : 2,
+        flatCalls: judgeEnabled ? 1 : 0,
         budget: {
           maxMembers: modes?.arena?.maxContestants ?? 3,
           maxContestants,
@@ -615,6 +777,45 @@ export const ArenaTool = Tool.define("arena", async () => {
         })
       }
 
+      // ADR-101: blinded rubric judge — the primary plan ranking signal.
+      // Failure (or modes.arena.judge: false) degrades to self-assessed
+      // scoring with a disclosure note.
+      let judgeStatus: "ok" | "failed" | "disabled" | "skipped" = judgeEnabled ? "skipped" : "disabled"
+      let judgeError: string | undefined
+      const judgeById = new Map<string, JudgeDimensionScores>()
+      if (judgeEnabled && proposalById.size >= 2) {
+        try {
+          const judged = await runPlanJudge({
+            member: members[0]!,
+            task: args.task,
+            context: args.context,
+            proposals: [...proposalById.entries()].map(([memberId, p]) => ({
+              memberId,
+              approach: p.approach,
+              steps: p.steps,
+              risks: p.risks,
+            })),
+            timeoutMs,
+            reasoningScale,
+            memberOverrides,
+            abort: ctx.abort,
+          })
+          for (const [memberId, score] of judged) judgeById.set(memberId, score)
+          judgeStatus = "ok"
+        } catch (error) {
+          judgeStatus = "failed"
+          judgeError = error instanceof Error ? error.message : String(error)
+          log.warn("arena plan judge failed; falling back to self-assessed scores", {
+            toolName: "arena",
+            error: judgeError,
+          })
+        }
+      }
+      for (const candidate of candidates) {
+        const score = judgeById.get(candidate.id)
+        if (score) candidate.judgeScore = score.total
+      }
+
       const ranked = Arena.rankArenaCandidates(candidates, strategy)
       const rankingMd = Arena.renderRankingMarkdown(ranked)
 
@@ -629,6 +830,13 @@ export const ArenaTool = Tool.define("arena", async () => {
           for (const risk of p.risks) detail.push(`- ${risk}`)
         }
         detail.push("", `**Self-assessed implementation risk:** ${p.riskScore}/20`)
+        const judged = judgeById.get(c.id)
+        if (judged) {
+          detail.push(
+            `**Judge rubric (blinded):** ${judged.total}/40 — coverage ${judged.requirementCoverage}, ` +
+              `feasibility ${judged.feasibility}, verification ${judged.verificationPlan}, risk evidence ${judged.riskEvidence}`,
+          )
+        }
       }
       if (errors.length) {
         detail.push("", "## Errors", ...errors.map((e) => `- ${e}`))
@@ -663,6 +871,8 @@ export const ArenaTool = Tool.define("arena", async () => {
         enabledThisCall,
         suggestedTool,
         selectionErrors: resolution.rejected,
+        judge: judgeStatus,
+        ...(judgeError ? { judgeError } : {}),
       }
 
       const header =
@@ -670,6 +880,12 @@ export const ArenaTool = Tool.define("arena", async () => {
         (suggestedTool === "council"
           ? "_Note: this task looks like a quality/review finding request — **council** may fit better than plan arena._\n\n"
           : "")
+      const judgeNote =
+        judgeStatus === "ok"
+          ? `_Rubric judge: ${members[0]!.memberId} — blinded candidates, randomized order; ranked by rubric total (0–40)._\n\n`
+          : judgeStatus === "failed"
+            ? `_Rubric judge unavailable (${judgeError ?? "unknown"}); ranking falls back to self-assessed scores._\n\n`
+            : ""
 
       const successfulIds = [...proposalById.keys()]
       const statusBanner =
@@ -699,7 +915,7 @@ export const ArenaTool = Tool.define("arena", async () => {
             : successfulCount === 0
               ? "Arena produced no valid proposals"
               : `Arena incomplete (${successfulCount}/${members.length} proposals)`,
-        output: header + statusBanner + rankingMd + detail.join("\n"),
+        output: header + judgeNote + statusBanner + rankingMd + detail.join("\n"),
         metadata,
       }
     },

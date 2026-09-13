@@ -123,4 +123,31 @@ describe("Arena.rankArenaCandidates", () => {
     expect(md).toContain("Arena ranking")
     expect(md).toContain("p/m")
   })
+
+  test("judge score replaces the self-assessed risk contribution (ADR-101)", () => {
+    const ranked = Arena.rankArenaCandidates([
+      { id: "low-self-risk", providerID: "a", modelID: "1", verification: "unknown", riskScore: 1, judgeScore: 8 },
+      { id: "high-self-risk", providerID: "b", modelID: "2", verification: "unknown", riskScore: 19, judgeScore: 38 },
+    ])
+    // Self-risk alone would rank low-self-risk first; the rubric total wins.
+    expect(ranked[0]!.id).toBe("high-self-risk")
+    expect(ranked[0]!.reasons.some((reason) => reason.startsWith("judge:"))).toBe(true)
+    expect(ranked[1]!.reasons.some((reason) => reason.startsWith("risk:"))).toBe(false)
+  })
+
+  test("judge score is clamped to 0–40", () => {
+    const ranked = Arena.rankArenaCandidates([
+      { id: "overflow", providerID: "a", modelID: "1", verification: "unknown", judgeScore: 99 },
+      { id: "max", providerID: "b", modelID: "2", verification: "unknown", judgeScore: 40 },
+    ])
+    expect(ranked.find((c) => c.id === "overflow")!.score).toBe(ranked.find((c) => c.id === "max")!.score)
+  })
+
+  test("without a judge score, self-assessed risk still ranks", () => {
+    const ranked = Arena.rankArenaCandidates([
+      { id: "risky", providerID: "a", modelID: "1", verification: "unknown", riskScore: 15 },
+      { id: "safe", providerID: "b", modelID: "2", verification: "unknown", riskScore: 2 },
+    ])
+    expect(ranked[0]!.id).toBe("safe")
+  })
 })

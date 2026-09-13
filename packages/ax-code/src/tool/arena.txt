@@ -1,7 +1,7 @@
 Compare multiple models on the same coding task (arena / best-of-N).
 
 Modes:
-- plan (default): fan out structured approach proposals; rank by diversity and self-assessed risk (advisory, no file writes).
+- plan (default): fan out structured approach proposals; a blinded rubric judge scores requirement coverage, feasibility, verification plan, and risk evidence (self-assessed risk is the fallback). Advisory, no file writes.
 - implement: require a clean git worktree with a base commit, create an isolated worktree per contestant from that exact commit, snapshot each non-empty patch to its branch, run project verification, and rank verify-first. Main workspace is not modified by contestants. Winner is not auto-merged.
 
 Requires modes.arena.enabled=true and at least two distinct models on connected providers. Prefer verify_first strategy for implement.

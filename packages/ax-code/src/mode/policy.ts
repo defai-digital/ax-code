@@ -30,6 +30,7 @@ export namespace ModePolicy {
       timeoutMs?: number
       reasoningTimeoutScale?: number
       memberTimeoutMs?: Record<string, number>
+      judge?: boolean
       strategy?: "verify_first" | "diversity" | "hybrid_score"
     }
     budget?: {

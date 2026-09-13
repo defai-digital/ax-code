@@ -15,6 +15,11 @@ export namespace Arena {
     verification: Verification
     /** Lower is better (blast radius / risk). Missing sorts as neutral. */
     riskScore?: number
+    /**
+     * ADR-101: blinded rubric total (0–40) from the plan judge. When present
+     * it replaces the self-assessed risk contribution as the plan signal.
+     */
+    judgeScore?: number
     /** Normalized fingerprint for near-duplicate detection. */
     patchFingerprint?: string
     /** Optional popularity signal — never used alone. */
@@ -40,7 +45,13 @@ export namespace Arena {
     if (c.verification === "pass") score += 100
     else if (c.verification === "unknown") score += 40
 
-    if (typeof c.riskScore === "number" && Number.isFinite(c.riskScore)) {
+    if (typeof c.judgeScore === "number" && Number.isFinite(c.judgeScore)) {
+      // ADR-101: the blinded rubric total is the primary plan signal;
+      // self-assessed risk stays display-only when a judge score exists.
+      const judge = Math.max(0, Math.min(40, c.judgeScore))
+      score += judge
+      reasons.push(`judge:${judge}`)
+    } else if (typeof c.riskScore === "number" && Number.isFinite(c.riskScore)) {
       const risk = Math.max(0, Math.min(20, c.riskScore))
       const riskContribution = 20 - risk
       score += riskContribution

@@ -43,6 +43,8 @@ export namespace Council {
     totalMembers: number
     successfulMembers: number
     failedMembers: number
+    /** ADR-101: minimum successes before the consensus tier may fire. */
+    quorum: number
     incomplete: boolean
     consensus: AggregatedIssue[]
     majority: AggregatedIssue[]
@@ -201,10 +203,24 @@ export namespace Council {
     return SEVERITY_RANK[a] <= SEVERITY_RANK[b] ? a : b
   }
 
-  function classifyTier(support: number, total: number): AgreementTier {
-    if (total <= 0) return "singleton"
-    if (support >= total) return "consensus"
-    const majorityThreshold = Math.floor(total / 2) + 1
+  /**
+   * ADR-101: minimum successful members before "consensus" may fire.
+   * Two agreeing survivors of a six-member fan-out must not read as
+   * unanimity — coverage is part of the agreement signal.
+   */
+  export function quorumFor(attempted: number): number {
+    return Math.max(2, Math.ceil((2 * attempted) / 3))
+  }
+
+  /**
+   * Tier by attempted-member coverage: consensus is unanimity among
+   * successful members at quorum; majority is an absolute majority of
+   * attempted members; minority is any shared finding.
+   */
+  function classifyTier(support: number, successful: number, attempted: number): AgreementTier {
+    if (attempted <= 0 || successful <= 0) return "singleton"
+    if (support >= successful && successful >= quorumFor(attempted)) return "consensus"
+    const majorityThreshold = Math.floor(attempted / 2) + 1
     if (support >= majorityThreshold && support >= 2) return "majority"
     if (support >= 2) return "minority"
     return "singleton"
@@ -214,6 +230,8 @@ export namespace Council {
     const successful = members.filter((m) => !m.error)
     const failed = members.filter((m) => m.error)
     const total = successful.length
+    const attempted = members.length
+    const quorum = quorumFor(attempted)
     const incomplete = total < 2
 
     type Bucket = {
@@ -298,7 +316,7 @@ export namespace Council {
 
     for (const { bucket } of scored) {
       const supportCount = bucket.memberIds.size
-      const tier = incomplete ? "singleton" : classifyTier(supportCount, total)
+      const tier = incomplete ? "singleton" : classifyTier(supportCount, total, attempted)
       const item: AggregatedIssue = {
         key: bucket.key,
         tier,
@@ -309,7 +327,9 @@ export namespace Council {
         suggestedFix: bucket.suggestedFix,
         memberIds: [...bucket.memberIds].sort(),
         supportCount,
-        totalMembers: total,
+        // ADR-101: findings disclose support against attempted members, so a
+        // 2/6 agreement cannot masquerade as 2/2.
+        totalMembers: attempted,
       }
       if (tier === "consensus") consensus.push(item)
       else if (tier === "majority") majority.push(item)
@@ -329,9 +349,10 @@ export namespace Council {
     singleton.sort(bySeverityThenSupport)
 
     return {
-      totalMembers: members.length,
+      totalMembers: attempted,
       successfulMembers: total,
       failedMembers: failed.length,
+      quorum,
       incomplete,
       consensus,
       majority,
@@ -347,9 +368,15 @@ export namespace Council {
     if (question) lines.push("", `**Question:** ${question}`)
     lines.push(
       "",
-      `Members: ${report.successfulMembers}/${report.totalMembers} successful` +
+      `Members: ${report.successfulMembers}/${report.totalMembers} successful · quorum ${report.quorum}` +
         (report.incomplete ? " — **incomplete** (need ≥2 successes for consensus tiers)" : ""),
     )
+    if (!report.incomplete && report.successfulMembers < report.quorum) {
+      lines.push(
+        "",
+        `**Low coverage** — ${report.successfulMembers}/${report.totalMembers} succeeded (quorum ${report.quorum}); consensus and majority labels are capped at minority.`,
+      )
+    }
 
     if (report.incomplete) {
       lines.push(
@@ -423,8 +450,13 @@ export namespace Council {
   /**
    * Prefer diverse provider families when selecting council members.
    * Heuristic: first path segment / known vendor prefix of provider id.
+   *
+   * ADR-101: when the provider id resolves only to the generic fallback
+   * (an unrecognized gateway such as a multi-model trust gateway), derive
+   * the family from the model id instead so one gateway's models can
+   * diversify. Providers with a mapped family keep it.
    */
-  export function providerFamily(providerID: string): string {
+  export function providerFamily(providerID: string, modelID?: string): string {
     const id = providerID.toLowerCase()
     const segments = id.split(/[-_]/)
     const prefixMap: Record<string, string> = {
@@ -481,6 +513,26 @@ export namespace Council {
     for (const [needle, family] of substringChecks) {
       if (id.includes(needle)) return family
     }
+    // Generic fallback: an unrecognized (possibly multi-model) gateway. The
+    // model id is the only real family signal left.
+    if (modelID) {
+      const model = modelID.toLowerCase()
+      const modelFamilyHints: Array<[string, string]> = [
+        ["deepseek", "deepseek"],
+        ["qwen", "alibaba"],
+        ["glm", "zhipu"],
+        ["minimax", "minimax"],
+        ["moonshot", "kimi"],
+        ["kimi", "kimi"],
+        ["grok", "grok"],
+        ["claude", "anthropic"],
+        ["gpt", "openai"],
+        ["gemini", "google"],
+      ]
+      for (const [needle, family] of modelFamilyHints) {
+        if (model.includes(needle)) return family
+      }
+    }
     return segments[0] || id
   }
 
@@ -506,7 +558,10 @@ export namespace Council {
     // First pass: one per family
     for (const c of unique) {
       if (selected.length >= cap) break
-      const fam = providerFamily(c.providerID)
+      const fam = providerFamily(
+        c.providerID,
+        c.modelID === undefined || c.modelID === null ? undefined : String(c.modelID),
+      )
       if (seenFamilies.has(fam)) continue
       seenFamilies.add(fam)
       selected.push(c)

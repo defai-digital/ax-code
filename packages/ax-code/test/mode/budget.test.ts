@@ -86,4 +86,64 @@ describe("Budget.check", () => {
     if (!r.ok) throw new Error("expected ok")
     expect(r.allowedMembers).toBe(3)
   })
+
+  test("flat calls are priced once and subtracted from the member headroom (ADR-101)", () => {
+    const r = Budget.check({
+      kind: "arena",
+      requestedMembers: 3,
+      callsPerMember: 2,
+      flatCalls: 1,
+      budget: {
+        maxMembers: 3,
+        maxContestants: 3,
+        timeoutMs: 1000,
+        maxEstimatedUsd: 0.07,
+        estimatedUsdPerMember: 0.01,
+      },
+    })
+    expect(r.ok).toBe(true)
+    if (!r.ok) throw new Error("expected ok")
+    // (0.07 − 0.01 judge) / 0.02 = 3 members fit; estimate = 3×0.02 + 0.01
+    expect(r.allowedMembers).toBe(3)
+    expect(r.estimatedUsd).toBeCloseTo(0.07, 4)
+    expect(r.reasons).toContain("flat_calls:1")
+  })
+
+  test("flat calls tighten the USD fit and can force a rejection", () => {
+    const viable = Budget.check({
+      kind: "arena",
+      requestedMembers: 3,
+      callsPerMember: 2,
+      flatCalls: 1,
+      budget: {
+        maxMembers: 3,
+        maxContestants: 3,
+        timeoutMs: 1000,
+        maxEstimatedUsd: 0.05,
+        estimatedUsdPerMember: 0.01,
+      },
+    })
+    // (0.05 − 0.01) / 0.02 = 2 members fit — still viable
+    expect(viable.ok).toBe(true)
+    if (!viable.ok) throw new Error("expected ok")
+    expect(viable.allowedMembers).toBe(2)
+
+    const tight = Budget.check({
+      kind: "arena",
+      requestedMembers: 3,
+      callsPerMember: 2,
+      flatCalls: 1,
+      budget: {
+        maxMembers: 3,
+        maxContestants: 3,
+        timeoutMs: 1000,
+        maxEstimatedUsd: 0.03,
+        estimatedUsdPerMember: 0.01,
+      },
+    })
+    // (0.03 − 0.01) / 0.02 = 1 → arena needs ≥2 → rejected
+    expect(tight.ok).toBe(false)
+    if (tight.ok) throw new Error("expected fail")
+    expect(tight.reason).toBe("usd_budget")
+  })
 })

@@ -16,6 +16,12 @@ export namespace Budget {
     kind: "council" | "arena"
     requestedMembers: number
     callsPerMember?: number
+    /**
+     * ADR-101: invocation-level calls that are not per-member (e.g. the
+     * plan-arena judge). Priced once at estimatedUsdPerMember and subtracted
+     * from the USD headroom before members are counted.
+     */
+    flatCalls?: number
     budget: EnsembleBudget
   }
 
@@ -65,13 +71,18 @@ export namespace Budget {
         typeof input.callsPerMember === "number" && Number.isFinite(input.callsPerMember)
           ? Math.max(1, Math.floor(input.callsPerMember))
           : 1
+      const flatCalls =
+        typeof input.flatCalls === "number" && Number.isFinite(input.flatCalls)
+          ? Math.max(0, Math.floor(input.flatCalls))
+          : 0
 
       const estimatedPerMember = per * callsPerMember
       if (callsPerMember > 1) reasons.push(`calls_per_member:${callsPerMember}`)
+      if (flatCalls > 0) reasons.push(`flat_calls:${flatCalls}`)
       // How many members fit under USD budget?
       if (estimatedPerMember > 0) {
         const tolerance = Number.EPSILON * Math.max(1, Math.abs(maxUsd), Math.abs(estimatedPerMember)) * 4
-        const maxByUsd = Math.floor((maxUsd + tolerance) / estimatedPerMember)
+        const maxByUsd = Math.floor((maxUsd - flatCalls * per + tolerance) / estimatedPerMember)
         if (maxByUsd < 2 && input.kind === "arena") {
           return {
             ok: false,
@@ -91,7 +102,7 @@ export namespace Budget {
           allowed = maxByUsd
         }
       }
-      const estimatedUsd = allowed * estimatedPerMember
+      const estimatedUsd = allowed * estimatedPerMember + flatCalls * per
       reasons.push(`estimated_usd:${estimatedUsd.toFixed(4)}`)
       return { ok: true, allowedMembers: allowed, estimatedUsd, reasons }
     }

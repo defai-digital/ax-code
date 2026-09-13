@@ -428,6 +428,8 @@ type CouncilMetadata = {
   majorityCount?: number
   minorityCount?: number
   singletonCount?: number
+  /** ADR-101: minimum successes before the consensus tier may fire. */
+  quorum?: number
   memberIds?: string[]
   debateRoundsRun?: number
   debateStopReason?: string
@@ -481,7 +483,10 @@ export const CouncilTool = Tool.define("council", async () => {
       const budgetCheck = Budget.check({
         kind: "council",
         requestedMembers: args.providers?.length ?? maxMembers,
-        callsPerMember: maxRounds + 1,
+        // ADR-101: worst case per round is the structured call plus its
+        // schema-fallback, and the initial round can retry once — price 2×
+        // per round instead of the optimistic 1×.
+        callsPerMember: 2 * (maxRounds + 1),
         budget: {
           maxMembers,
           maxContestants: modes?.arena?.maxContestants ?? 3,
@@ -721,6 +726,7 @@ export const CouncilTool = Tool.define("council", async () => {
         majorityCount: report.majority.length,
         minorityCount: report.minority.length,
         singletonCount: report.singleton.length,
+        quorum: report.quorum,
         memberIds: results.map((r) => r.memberId),
         debateRoundsRun,
         debateStopReason,

@@ -120,8 +120,11 @@ describe("arena execute()", () => {
     expect(result.metadata.rankedIds).toHaveLength(2)
     for (const [request] of generateObject.mock.calls) {
       expect(request.maxRetries).toBe(0)
-      expect(request.messages[0].content).toContain('"approach"')
     }
+    // Two proposal calls carry the proposal contract; an optional third call
+    // is the blinded rubric judge (ADR-101) with its own contract.
+    const systemPrompts = generateObject.mock.calls.map(([request]) => request.messages[0].content as string)
+    expect(systemPrompts.filter((content) => content.includes('"approach"'))).toHaveLength(2)
   })
 
   test("stream errors never rank partially generated proposals", async () => {
@@ -386,5 +389,82 @@ describe("arenaTimeoutPolicy (ADR-099)", () => {
       reasoningScale: undefined,
       memberOverrides: undefined,
     })
+  })
+})
+
+describe("arena rubric judge (ADR-101)", () => {
+  test("ranks by the blinded rubric total, not self-assessed risk", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { arena: { enabled: true } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+    let proposalCalls = 0
+    generateObject.mockImplementation((request: any) => {
+      const system = request.messages[0].content as string
+      if (system.includes('"scores"')) {
+        const user = request.messages[1].content as string
+        // Blinding: the judge must not see member identities
+        expect(user).not.toContain("a/m")
+        expect(user).not.toContain("b/m")
+        const scores = ["A", "B", "C", "D", "E"]
+          .filter((label) => user.includes(`### Candidate ${label}`))
+          .map((label) => {
+            const block = user.slice(user.indexOf(`### Candidate ${label}`))
+            const excellent = block.startsWith(`### Candidate ${label}\nApproach: Approach risk-15`)
+            const value = excellent ? 10 : 1
+            return {
+              candidate: label,
+              requirementCoverage: value,
+              feasibility: value,
+              verificationPlan: value,
+              riskEvidence: value,
+            }
+          })
+        return Promise.resolve({ object: { scores } })
+      }
+      proposalCalls++
+      // Member a flatters itself (risk 3), member b is honest (risk 15)
+      return Promise.resolve({ object: mkProposal(proposalCalls === 1 ? 3 : 15) })
+    })
+
+    const tool = await ArenaTool.init()
+    const result = await tool.execute({ task: "Add rate limiting" }, ctx)
+
+    expect(result.metadata.judge).toBe("ok")
+    // Self-risk alone would rank a/m first; the rubric total ranks b/m first.
+    expect(result.metadata.rankedIds?.[0]).toBe("b/m")
+    expect(result.output).toContain("Judge rubric (blinded):** 40/40")
+    expect(result.output).toContain("blinded candidates, randomized order")
+    // 2 proposal calls + 1 judge call
+    expect(generateObject).toHaveBeenCalledTimes(3)
+  })
+
+  test("modes.arena.judge: false skips the judge call", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { arena: { enabled: true, judge: false } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+    generateObject.mockResolvedValue({ object: mkProposal(3) })
+
+    const tool = await ArenaTool.init()
+    const result = await tool.execute({ task: "Add rate limiting" }, ctx)
+
+    expect(result.metadata.judge).toBe("disabled")
+    expect(generateObject).toHaveBeenCalledTimes(2)
+    expect(result.output).not.toContain("Rubric judge")
+  })
+
+  test("a failed judge falls back to self-assessed scoring with a disclosure", async () => {
+    vi.mocked(Config.getFresh).mockResolvedValue({ modes: { arena: { enabled: true } } } as any)
+    vi.mocked(EnsembleShared.resolveMembers).mockResolvedValue({ members: mkMembers(["a", "b"]), rejected: [] })
+    generateObject.mockImplementation((request: any) => {
+      const system = request.messages[0].content as string
+      if (system.includes('"scores"')) return Promise.reject(new Error("judge gateway 500"))
+      return Promise.resolve({ object: mkProposal(3) })
+    })
+
+    const tool = await ArenaTool.init()
+    const result = await tool.execute({ task: "Add rate limiting" }, ctx)
+
+    expect(result.metadata.judge).toBe("failed")
+    expect(result.metadata.judgeError).toContain("500")
+    expect(result.output).toContain("Rubric judge unavailable")
+    expect(result.metadata.rankedIds).toHaveLength(2)
   })
 })

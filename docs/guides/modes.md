@@ -91,6 +91,7 @@ In `ax-code.json`:
 | `modes.arena.strategy`              | `verify_first` (recommended for implement), `diversity`, or `hybrid_score`                                                                                                        |
 | `modes.arena.reasoningTimeoutScale` | Timeout multiplier for contestants whose model declares reasoning capability (falls back to `modes.council.reasoningTimeoutScale`, then 3)                                        |
 | `modes.arena.memberTimeoutMs`       | Absolute per-contestant timeout overrides keyed by `"providerID"` or `"providerID/modelID"` (falls back to `modes.council.memberTimeoutMs`)                                       |
+| `modes.arena.judge`                 | Blinded rubric judge for plan mode (default: `true`)                                                                                                                              |
 | `modes.budget.*`                    | Fail-closed cap on estimated USD for ensemble fan-out                                                                                                                             |
 
 ## Hybrid placement
@@ -111,9 +112,9 @@ Local models and memory guidance: [AX Engine Model Selection](../providers/ax-en
 **Tool:** `council`  
 **Slash:** `/council <question>`
 
-1. Selects diverse connected providers (family diversity; soft bias from outcome memory).
+1. Selects diverse connected providers (family diversity — under an unrecognized multi-model gateway the family falls back to the model id; soft bias from outcome memory).
 2. Fans out a structured review or design prompt in parallel.
-3. Aggregates issues into **consensus** (all successful members), strict **majority** (more than half), **minority** (at least two), and **singleton** tiers.
+3. Aggregates issues into **consensus** (unanimous among successful members at quorum — at least `max(2, ⌈2/3 × attempted⌉)` successes), strict **majority** (more than half of attempted members), **minority** (at least two), and **singleton** tiers. Findings disclose support against attempted members (`2/6`), and low-coverage reports state that consensus/majority labels are capped at minority.
 4. Optional **debate rounds**: anonymous (Chatham House) synthesis shared between rounds; no brand attribution. Debate is capped at three rounds and stops early on convergence.
 5. Returns an **advisory** markdown report. Does not edit files.
 
@@ -185,7 +186,8 @@ If the user asked for council/arena, `task_parallel` is rejected until the ensem
 ### `mode: "plan"` (default)
 
 - Each contestant proposes an approach, steps, risks, and a calibrated self-assessed risk score (no workspace writes).
-- Ranked with diversity / self-assessed risk (not pure popularity). Plan rankings are advisory and are not execution verification.
+- With ≥2 successful proposals, one **blinded rubric judge** call (the first resolved member; identities stripped, order randomized) scores each proposal on requirement coverage, feasibility, verification plan, and risk evidence (0–10 each, ties allowed). The rubric total (0–40) is the primary ranking signal; self-assessed risk stays display-only. Judge failure or `modes.arena.judge: false` falls back to self-assessed scoring with a disclosure note.
+- Ranked with verification tier first, then judge/risk score, then patch-fingerprint diversity (never pure popularity). Plan rankings are advisory and are not execution verification.
 - Advisory only.
 
 ### `mode: "implement"`
@@ -217,7 +219,7 @@ Naive majority vote on similar wrong patches is an anti-pattern (popularity trap
 - **Sandbox / autonomous** still apply to single-agent work ([Sandbox](sandbox.md), [Autonomous](autonomous.md)).
 - Council and plan-arena do not write files.
 - Implement arena writers are isolated in worktrees; a dirty primary worktree is rejected so uncommitted input cannot be silently omitted.
-- Ensemble fan-out multiplies provider egress and cost; use `modes.budget` and keep `maxMembers` / `maxContestants` small. Council budgeting includes the worst-case configured debate calls.
+- Ensemble fan-out multiplies provider egress and cost; use `modes.budget` and keep `maxMembers` / `maxContestants` small. Budget estimates price the worst case: council `2 × (debateRounds + 1)` calls per member (schema fallback + retry), plan arena 2 per contestant plus one flat judge call, implement arena a documented 12-call per-trajectory estimate.
 - Multi-model agreement is **evidence, not proof** — run tests before shipping.
 
 ## Related

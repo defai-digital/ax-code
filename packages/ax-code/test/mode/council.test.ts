@@ -426,3 +426,106 @@ describe("Council.providerFamily", () => {
     expect(Council.providerFamily("unknown")).toBe("unknown")
   })
 })
+
+describe("Council.providerFamily model fallback (ADR-101)", () => {
+  test("derives the family from the model id under an unrecognized gateway", () => {
+    expect(Council.providerFamily("ax-trust-defai-digital", "deepseek-v4-pro")).toBe("deepseek")
+    expect(Council.providerFamily("ax-trust-defai-digital", "qwen3.8-max")).toBe("alibaba")
+    expect(Council.providerFamily("ax-trust-defai-digital", "glm-5.3")).toBe("zhipu")
+    expect(Council.providerFamily("ax-trust-defai-digital", "MiniMax-M3")).toBe("minimax")
+    expect(Council.providerFamily("ax-trust-defai-digital", "kimi-k3")).toBe("kimi")
+    expect(Council.providerFamily("ax-trust-defai-digital", "grok-4.6")).toBe("grok")
+  })
+
+  test("unrecognized gateway with an unrecognized model keeps the provider fallback", () => {
+    expect(Council.providerFamily("ax-trust-defai-digital", "orphan-7b")).toBe("ax")
+    expect(Council.providerFamily("ax-trust-defai-digital")).toBe("ax")
+  })
+
+  test("mapped provider families ignore the model id", () => {
+    expect(Council.providerFamily("openrouter", "deepseek-v4-pro")).toBe("openrouter")
+    expect(Council.providerFamily("deepseek", "qwen3.8-max")).toBe("deepseek")
+  })
+
+  test("selectDiverseMembers spreads across one gateway's model families", () => {
+    const gateway = (modelID: string) => ({ providerID: "ax-trust-defai-digital", modelID })
+    const selected = Council.selectDiverseMembers(
+      [gateway("deepseek-v4-pro"), gateway("qwen3.8-max"), gateway("glm-5.3"), gateway("MiniMax-M3")],
+      3,
+    )
+    expect(selected).toHaveLength(3)
+    expect(selected.map((member) => member.modelID)).toEqual(["deepseek-v4-pro", "qwen3.8-max", "glm-5.3"])
+  })
+})
+
+describe("Council quorum and coverage (ADR-101)", () => {
+  const shared = {
+    severity: "high" as const,
+    category: "security",
+    location: "a.ts:1",
+    summary: "Missing rate limit",
+  }
+  const member = (id: string, opts: { issues?: number; error?: string } = {}) => ({
+    memberId: id,
+    providerID: "p",
+    modelID: "m",
+    issues: Array.from({ length: opts.issues ?? 1 }, () => ({ memberId: id, ...shared })),
+    ...(opts.error ? { error: opts.error } : {}),
+  })
+
+  test("two agreeing survivors of six are minority, not consensus", () => {
+    const report = Council.aggregateCouncil([
+      member("m1"),
+      member("m2"),
+      member("m3", { issues: 0, error: "timeout" }),
+      member("m4", { issues: 0, error: "timeout" }),
+      member("m5", { issues: 0, error: "timeout" }),
+      member("m6", { issues: 0, error: "timeout" }),
+    ])
+    expect(report.quorum).toBe(4)
+    expect(report.consensus).toHaveLength(0)
+    expect(report.majority).toHaveLength(0)
+    expect(report.minority).toHaveLength(1)
+    // Findings disclose support against attempted members, not 2/2
+    expect(report.minority[0]!.supportCount).toBe(2)
+    expect(report.minority[0]!.totalMembers).toBe(6)
+  })
+
+  test("unanimity at quorum still reaches consensus", () => {
+    const report = Council.aggregateCouncil([member("m1"), member("m2"), member("m3")])
+    expect(report.quorum).toBe(2)
+    expect(report.consensus).toHaveLength(1)
+    expect(report.consensus[0]!.totalMembers).toBe(3)
+  })
+
+  test("majority requires an absolute majority of attempted members", () => {
+    // 4/6 succeeded and 3 agree — half, not a majority of the six attempted.
+    const report = Council.aggregateCouncil([
+      member("m1"),
+      member("m2"),
+      member("m3"),
+      member("m4", { issues: 0 }),
+      member("m5", { issues: 0, error: "timeout" }),
+      member("m6", { issues: 0, error: "timeout" }),
+    ])
+    expect(report.quorum).toBe(4)
+    expect(report.consensus).toHaveLength(0)
+    expect(report.majority).toHaveLength(0)
+    expect(report.minority).toHaveLength(1)
+  })
+
+  test("low-coverage reports disclose the quorum cap in markdown", () => {
+    const report = Council.aggregateCouncil([
+      member("m1"),
+      member("m2"),
+      member("m3", { issues: 0, error: "timeout" }),
+      member("m4", { issues: 0, error: "timeout" }),
+      member("m5", { issues: 0, error: "timeout" }),
+      member("m6", { issues: 0, error: "timeout" }),
+    ])
+    const md = Council.renderReportMarkdown(report)
+    expect(md).toContain("quorum 4")
+    expect(md).toContain("Low coverage")
+    expect(md).toContain("(2/6:")
+  })
+})
