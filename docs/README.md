@@ -32,6 +32,7 @@ pages are the ones linked here.
 | Administer cloud or network infrastructure safely        | [Cloud Operations Mode](guides/cloud-operations.md)                     |
 | Run unattended or in CI                                  | [Autonomous Mode](guides/autonomous.md)                                 |
 | Run recurring prompts or schedule durable tasks          | [Loop Mode and Scheduled Tasks](guides/loop-mode.md)                    |
+| Hear a sound or spoken alert when a run needs attention  | [Audio Notifications](guides/audio-notifications.md)                    |
 | Keep scheduled work running across process or host exits | [Long-Running Operations](guides/long-running-operations.md)            |
 | Choose local, cloud, hybrid, council, or arena execution | [Execution Modes](guides/modes.md)                                      |
 | Connect external tools and data                          | [MCP Integrations](integrations/mcp.md)                                 |
@@ -50,6 +51,7 @@ pages are the ones linked here.
 ## Runtime guides
 
 - [Conversation Recap](guides/conversation-recap.md) — catch up on recent work with `/recap` and configure idle banners.
+- [Audio Notifications](guides/audio-notifications.md) — system sounds and opt-in spoken alerts when a run needs your attention.
 - [Execution Evidence](guides/execution-evidence.md) — graph, compare, replay, risk, rollback, branch, trace, and
   audit export.
 - [Verified Multi-Model Changes](guides/verified-multi-model-change.md) — the council and arena workflow end to end.

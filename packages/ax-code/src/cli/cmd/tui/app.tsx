@@ -51,6 +51,7 @@ import { VisualCapabilityProvider } from "./ui/primitives/capability-context"
 import { runMode, runModeFlags, runModeTransition, type RunMode } from "./component/prompt/run-mode-view-model"
 import { TuiConfigProvider, useTuiConfig } from "./context/tui-config"
 import { notifyTerminal } from "./util/terminal-notify"
+import { notifyAudioEvent, type AudioNotifySettings } from "./util/audio-notify"
 import { createTurnCompleteTracker } from "./util/turn-complete-tracker"
 import { createPendingRequestTracker, familySessionIDs, outsideFamilyRequests } from "./util/pending-request-notices"
 import { TuiConfig } from "@/config/tui"
@@ -84,6 +85,7 @@ import { createTerminalSuspendController } from "@tui/util/terminal-suspend"
 import { resolveSessionFirstRoute } from "./navigation/launch-policy"
 import { formatTuiUpgradeCompleteMessage } from "./upgrade-check-view-model"
 import { parseJsonPayload } from "@/util/json-value"
+import { isRecord } from "@/util/record"
 import { createTuiDialogLoaders } from "./tui-dialogs"
 import { appCommands, type AppCommandSandbox } from "./app-commands"
 import { MatrixRain } from "./component/matrix-rain"
@@ -193,6 +195,22 @@ export function tui(input: TuiInput) {
       }
     })()
   })
+}
+
+// Fire-once key for session error notifications: the same session reporting
+// the same error (name + bounded data payload) dedupes to a single terminal
+// and audio notification, so consecutive identical errors cannot spam either
+// channel.
+function sessionErrorNotifyKey(props: { sessionID?: string; error?: unknown }): string {
+  const error = isRecord(props.error) ? props.error : {}
+  const name = typeof error.name === "string" ? error.name : "unknown"
+  let data = ""
+  try {
+    data = JSON.stringify(error.data ?? {})
+  } catch {
+    data = ""
+  }
+  return `error:${props.sessionID ?? "global"}:${name}:${data.slice(0, 300)}`
 }
 
 function App(props: { onSnapshot?: () => Promise<string[]> }) {
@@ -387,6 +405,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // re-runs of these effects never re-notify for the same event.
   const notificationsEnabled = () => tuiConfig.notifications?.enabled ?? true
 
+  // Audio notifications ride the same triggers as the terminal notifier.
+  // Sound requires notifications.enabled and defaults to off, so a stock
+  // config adds zero behavior here.
+  const audioNotifySettings = (): AudioNotifySettings => ({
+    enabled: notificationsEnabled(),
+    sound: tuiConfig.notifications?.sound,
+    voice: tuiConfig.notifications?.voice,
+    rate: tuiConfig.notifications?.rate,
+    events: tuiConfig.notifications?.events,
+  })
+
   // Notify when the agent's turn completes: the viewed session's status
   // transitions from busy/retry to idle. The tracker (util/turn-complete-tracker.ts)
   // resets its baseline on route changes and hands out a unique fire-once key
@@ -405,6 +434,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       body: sessionTitle ? `Task complete: ${sessionTitle}` : "Task complete",
       key,
     })
+    notifyAudioEvent({ kind: "complete", source: sessionTitle, settings: audioNotifySettings(), key })
   })
 
   // Notify when a permission approval or question is pending. The request's
@@ -413,12 +443,22 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     if (!notificationsEnabled()) return
     for (const requests of Object.values(sync.data.permission)) {
       for (const request of requests) {
-        notifyTerminal({ title: "ax-code", body: "Permission requested", key: `permission:${request.id}` })
+        const key = `permission:${request.id}`
+        notifyTerminal({ title: "ax-code", body: "Permission requested", key })
+        notifyAudioEvent({ kind: "permission", source: request.permission, settings: audioNotifySettings(), key })
       }
     }
     for (const requests of Object.values(sync.data.question)) {
       for (const request of requests) {
-        notifyTerminal({ title: "ax-code", body: "Question from agent", key: `question:${request.id}` })
+        const key = `question:${request.id}`
+        notifyTerminal({ title: "ax-code", body: "Question from agent", key })
+        const first = request.questions[0]
+        notifyAudioEvent({
+          kind: "question",
+          source: first?.header || first?.question,
+          settings: audioNotifySettings(),
+          key,
+        })
       }
     }
   })
@@ -899,6 +939,12 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         message: unknownErrorMessage(error),
         duration: 5000,
       })
+
+      // Session errors also notify through the terminal (OSC 9 / BEL) and
+      // audio channels, fire-once per session + error identity.
+      const key = sessionErrorNotifyKey(evt.properties)
+      if (notificationsEnabled()) notifyTerminal({ title: "ax-code", body: "Session error", key })
+      notifyAudioEvent({ kind: "error", settings: audioNotifySettings(), key })
     }),
 
     sdk.event.on("installation.update-available", async (evt) => {

@@ -4,7 +4,7 @@ import { mergeDeep, unique } from "remeda"
 import { Config } from "./config"
 import { ConfigPaths } from "./paths"
 import { migrateTuiConfig } from "./migrate-tui-config"
-import { TuiInfo, TuiOptions } from "./tui-schema"
+import { TuiInfo, TuiNotifications, TuiOptions } from "./tui-schema"
 import { Instance } from "@/project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "@/util/log"
@@ -146,6 +146,19 @@ export namespace TuiConfig {
     for (const [key, field] of Object.entries(TuiOptions.shape)) {
       const res = field.safeParse(normalized[key])
       if (res.success && res.data !== undefined) result[key] = res.data
+    }
+
+    // The notifications object gets nested per-field salvage: one bad
+    // sub-field (e.g. a typo'd sound value) drops only that field instead of
+    // discarding enabled/events with it.
+    const rawNotifications = normalized.notifications
+    if (result.notifications === undefined && isRecord(rawNotifications)) {
+      const notifications: Record<string, unknown> = {}
+      for (const [key, field] of Object.entries(TuiNotifications.shape)) {
+        const res = field.safeParse(rawNotifications[key])
+        if (res.success && res.data !== undefined) notifications[key] = res.data
+      }
+      if (Object.keys(notifications).length > 0) result.notifications = notifications
     }
 
     const rawKeybinds = normalized.keybinds

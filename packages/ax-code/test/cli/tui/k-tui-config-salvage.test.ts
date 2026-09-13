@@ -105,6 +105,63 @@ test("salvages theme when an unknown top-level key is present", async () => {
   })
 })
 
+test("salvages notification sub-fields when the sound value is invalid", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "tui.json"),
+        JSON.stringify({
+          theme: "salvaged-theme",
+          notifications: {
+            enabled: false,
+            // not one of "off" | "chime" | "speak" -> fails enum validation
+            sound: "loud",
+            rate: 200,
+            events: { complete: true },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await TuiConfig.get()
+      expect(config.theme).toBe("salvaged-theme")
+      // The invalid sound value drops alone and falls back to the default
+      // (off) instead of discarding the whole notifications object.
+      expect(config.notifications?.enabled).toBe(false)
+      expect(config.notifications?.sound).toBeUndefined()
+      expect(config.notifications?.rate).toBe(200)
+      expect(config.notifications?.events).toEqual({ complete: true })
+    },
+  })
+})
+
+test("drops a wholly invalid notifications value but keeps other fields", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "tui.json"),
+        JSON.stringify({
+          theme: "salvaged-theme",
+          notifications: "loud",
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await TuiConfig.get()
+      expect(config.theme).toBe("salvaged-theme")
+      expect(config.notifications).toBeUndefined()
+    },
+  })
+})
+
 test("migration filters unknown and non-string keybinds before writing tui.json", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

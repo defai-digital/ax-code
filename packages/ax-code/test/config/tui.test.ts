@@ -518,3 +518,34 @@ test("gracefully falls back when tui.json has invalid JSON", async () => {
     },
   })
 })
+
+test("loads extended notification sound settings", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "tui.json"),
+        JSON.stringify({
+          notifications: {
+            enabled: true,
+            sound: "speak",
+            voice: "Samantha",
+            rate: 180,
+            events: { complete: true, error: false },
+          },
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await TuiConfig.get()
+      expect(config.notifications?.enabled).toBe(true)
+      expect(config.notifications?.sound).toBe("speak")
+      expect(config.notifications?.voice).toBe("Samantha")
+      expect(config.notifications?.rate).toBe(180)
+      expect(config.notifications?.events).toEqual({ complete: true, error: false })
+    },
+  })
+})
