@@ -13,9 +13,17 @@ import {
 } from "./constants"
 import type { AxEngineModelDefinition, AxEngineModelID } from "./constants"
 import { AxEnginePaths } from "./paths"
-import { HubCatalog, HubModel, evaluateHubModel, hubModelDefinition, hubModelID, hubTextConfig } from "./hub-model"
+import {
+  HubCatalog,
+  HubModel,
+  evaluateHubModel,
+  hubArtifactMetadata,
+  hubModelDefinition,
+  hubModelID,
+  hubTextConfig,
+} from "./hub-model"
 import bundled from "./hub-catalog-snapshot.json"
-import { AX_ENGINE_LOCAL_REPOSITORIES } from "./local-models"
+import { AX_ENGINE_LOCAL_REPOSITORIES, axEngineLocalRepository } from "./local-models"
 
 export const AxEngineCatalogError = NamedError.create("AxEngineCatalogError", z.object({ message: z.string() }))
 const MAX_JSON_BYTES = 8 * 1024 * 1024
@@ -277,7 +285,12 @@ export function createHubCatalogStore(input: {
       model = await fetchModel(id, signal)
     }
     const decision = evaluateHubModel(model, catalog)
-    const definition = hubModelDefinition(model, decision)
+    // Historical artifacts must remain inspectable offline after provider
+    // metadata stops advertising their source. They remain absent from
+    // discovery, and preparation/download/activation still enforce selection.
+    const definition =
+      hubModelDefinition(model, decision) ??
+      (options.offline && !axEngineLocalRepository(id) ? hubArtifactMetadata(model, decision) : undefined)
     if (!definition)
       throw new AxEngineCatalogError({ message: `${AX_ENGINE_ERROR.ModelUnsupported}: ${decision.reason}` })
     options.signal?.throwIfAborted()
