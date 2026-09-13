@@ -22,7 +22,6 @@ import { scheduleTuiTimeout } from "@tui/util/timer"
 import { upsert } from "../../context/sync-util"
 import { axEngineDownloadChip, type AxEngineDownloadJobView } from "../ax-engine-downloads-view-model"
 import { isQueueableStatus } from "./follow-up-queue"
-import { enqueueFollowUp } from "./follow-up-queue-store"
 import { assign } from "./part"
 import { SESSION_CREATE_TIMEOUT_MS } from "@/constants/session-create"
 import { submitPromptRoute } from "./prompt-submit"
@@ -117,6 +116,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
   let submitRunID = 0
   let submitInFlight = false
   let cancelRouteHandoff: (() => void) | undefined
+  let retrySubmission: { fingerprint: string; messageID: MessageID; followup: boolean } | undefined
 
   function requestHeaders() {
     return directoryRequestHeaders({
@@ -132,6 +132,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     body: unknown
     action: string
     signal: AbortSignal
+    followup?: boolean
   }) {
     await submitPromptRoute({
       ...input,
@@ -355,8 +356,18 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     if (startingNewSession) sessionID = SessionID.descending()
     submitInFlight = true
     setSubmitPending(true)
-    const messageID = MessageID.ascending()
     const variant = local.model.variant.current()
+    const fingerprint = JSON.stringify({
+      sessionID,
+      text: submitText,
+      parts: nonTextParts,
+      model: { providerID: selectedModel.providerID, modelID: selectedModel.modelID },
+      agent: local.agent.current().name,
+      variant,
+      mode: currentMode,
+    })
+    const retry = retrySubmission?.fingerprint === fingerprint ? retrySubmission : undefined
+    const messageID = retry?.messageID ?? MessageID.ascending()
     let submitAction = "Prompt submission"
     const nextSubmitAbort = new AbortController()
     submitAbort = nextSubmitAbort
@@ -447,37 +458,20 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       )
     }
 
-    // ADR-028: while the session is busy, buffer plain follow-up prompts in the
-    // client-owned queue and let the drain effect replay them when idle. Slash
-    // commands and shell input keep the existing async routes; new sessions and
-    // idle sessions dispatch immediately below.
+    // Accepted follow-ups are durable server work; the composer stays intact until acknowledgement.
     const isKnownSlashCommand =
       workRouted.kind === "command" ||
       (slashName != null && sync.data.command.some((x: { name: string }) => x.name === slashName))
-    if (
-      queueModeEnabled() &&
-      currentMode === "normal" &&
-      !isKnownSlashCommand &&
-      props.sessionID &&
-      isQueueableStatus(status().type)
-    ) {
-      enqueueFollowUp(props.sessionID, {
-        parts: [
-          {
-            id: PartID.ascending(),
-            type: "text",
-            text: submitText,
-          },
-          ...nonTextParts.map(assign),
-        ],
-        agent: local.agent.current().name,
-        model: selectedModel,
-        variant,
-      })
-      settlePromptLocally({ clearPrompt: true })
-      finishPendingSubmit()
-      return
-    }
+    const followup =
+      retry?.followup ??
+      Boolean(
+        queueModeEnabled() &&
+          currentMode === "normal" &&
+          !isKnownSlashCommand &&
+          props.sessionID &&
+          isQueueableStatus(status().type),
+      )
+    retrySubmission = { fingerprint, messageID, followup }
 
     try {
       if (startingNewSession) {
@@ -570,6 +564,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
         await submitAsyncRoute({
           sessionID,
           path: "prompt_async",
+          followup,
           action: submitAction,
           signal: nextSubmitAbort.signal,
           body: {
@@ -599,6 +594,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
 
     if (nextSubmitAbort.signal.aborted) return
 
+    retrySubmission = undefined
     settlePromptLocally({ clearPrompt: !startingNewSession })
     routeToSession(sessionID)
   }

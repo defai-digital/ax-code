@@ -128,7 +128,7 @@ import {
 import { SubagentStatusPanel } from "./subagent-status-panel"
 import { hasNewActiveSubagent } from "./subagent-panel-layout"
 import { SessionRouteContext as context } from "./context"
-import { followUpQueue } from "../../component/prompt/follow-up-queue-store"
+import { durableFollowUps } from "../../component/prompt/durable-follow-up"
 
 addDefaultParsers(parsers.parsers)
 
@@ -278,7 +278,7 @@ export function Session() {
     return promise
   }
   onCleanup(() => historyFlight?.controller.abort())
-  const queuedFollowUps = createMemo(() => followUpQueue(route.sessionID))
+  const queuedFollowUps = createMemo(() => durableFollowUps(sync.data.task_queue, route.sessionID))
   // Extract task parts per-message with mapArray so a single streamed part
   // update only re-scans the one message whose parts changed, instead of
   // rescanning every part of every message (which this memo is read 6+ times
@@ -1667,6 +1667,11 @@ export function Session() {
               <QueuedFollowUps items={queuedFollowUps()} />
             </scrollbox>
             <box flexShrink={0}>
+              <Show when={queuedFollowUps().length > 0}>
+                <box height={1} flexShrink={0} paddingLeft={2} onMouseUp={() => command.trigger("session.followups")}>
+                  <text fg={theme.accent}>Follow-ups ({queuedFollowUps().length}) · /queue</text>
+                </box>
+              </Show>
               <Show when={permissions().length > 0}>
                 <PermissionPrompt request={permissions()[0]} />
               </Show>

@@ -8,6 +8,9 @@ import { InstanceBootstrap } from "../../../project/bootstrap"
 import { Filesystem } from "../../../util/filesystem"
 import { toErrorMessage } from "../../../util/error-message"
 import { unlinkSync } from "node:fs"
+import fs from "node:fs/promises"
+import { ManagedRuntime } from "../../../runtime/managed-runtime"
+import { ServerRuntimeAuth } from "../../../server/runtime-auth"
 
 function prewarmServeInstance() {
   const directory = process.env.AX_CODE_PROJECT || Filesystem.callerCwd()
@@ -29,9 +32,11 @@ export const ServeCommand = cmd({
     }),
   describe: "starts a headless ax-code server",
   handler: async (args) => {
+    const registryFile = process.env.AX_CODE_MANAGED_RUNTIME_FILE
+    delete process.env.AX_CODE_MANAGED_RUNTIME_FILE
     const opts = await resolveNetworkOptions(args)
     requireAuthForNetwork(opts.hostname)
-    const app = Server.createApp(opts)
+    const app = Server.createApp({ ...opts, runtimeAuth: !!registryFile })
     const server = await Server.listen({ ...opts, app })
 
     let ipcServer: Awaited<ReturnType<typeof listenIpc>> | undefined
@@ -53,11 +58,28 @@ export const ServeCommand = cmd({
     prewarmServeInstance()
 
     const shutdown = async () => {
+      await Instance.disposeAll()
       await ipcServer?.stop(true)
       await server.stop(true)
       process.exit(0)
     }
     registerShutdownSignals(shutdown)
+
+    if (registryFile) {
+      const directory = await fs.realpath(process.env.AX_CODE_PROJECT || Filesystem.callerCwd())
+      const info = ManagedRuntime.configure(directory, shutdown)
+      const tempFile = `${registryFile}.${process.pid}.tmp`
+      await fs.writeFile(
+        tempFile,
+        JSON.stringify({
+          ...info,
+          url: `http://127.0.0.1:${server.port}/`,
+          token: ServerRuntimeAuth.headers()[ServerRuntimeAuth.HEADER],
+        }),
+        { mode: 0o600, flag: "wx" },
+      )
+      await fs.rename(tempFile, registryFile)
+    }
 
     await new Promise(() => {})
   },

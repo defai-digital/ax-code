@@ -1,6 +1,7 @@
 import { createSimpleContext } from "./helper"
 
 export interface Args {
+  persistentRuntime?: { host: string; pid: number }
   model?: string
   agent?: string
   prompt?: string

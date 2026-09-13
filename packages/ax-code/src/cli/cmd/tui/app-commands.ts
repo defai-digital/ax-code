@@ -59,6 +59,7 @@ export type AppCommandsInput = {
   ) => Promise<unknown>
   sandbox: AppCommandSandbox
   exit: () => void
+  persistentRuntime?: boolean
   renderer: any
   onSnapshot?: () => Promise<string[]>
   terminalSuspend: { suspend: (input: { suspend: () => void; resume: () => void }) => void }
@@ -530,7 +531,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Exit the app",
+      title: input.persistentRuntime ? "Disconnect (keep runtime working)" : "Exit the app",
       value: "app.exit",
       slash: {
         name: "exit",

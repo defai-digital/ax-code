@@ -56,6 +56,11 @@ const ASYNC_EXECUTION_QUERY = z.object({
   ),
   sourceTaskID: z.string().trim().min(1).max(200).optional(),
   resumeOnRestart: QueryBoolean.optional(),
+  // prompt_async only (ADR-106 D4): selects the existing followup queue kind
+  // for a busy normal-mode prompt instead of the plain "prompt" kind, so
+  // presentation/recovery can distinguish an interactive follow-up from an
+  // ordinary queued prompt without a new execution engine.
+  followup: QueryBoolean.optional(),
 })
 const SESSION_MESSAGE_PARAM = z.object({
   sessionID: SessionID.zod,
@@ -87,19 +92,24 @@ async function startAsyncSessionHandler<TBody>(
     executionTimeoutMs?: number
     sourceTaskID?: string
     resumeOnRestart?: boolean
+    followup?: boolean
   },
 ) {
   const { sessionID, body } = await parseSessionJSONInput<TBody>(c as SessionJSONRouteContext)
+  // A followup is durable by contract regardless of what the caller passed:
+  // force resumeOnRestart so listRestartableQueued/recoverInterrupted always
+  // requeue it across a backend restart.
+  const resumeOnRestart = input.followup === true ? true : input.resumeOnRestart
   const queueItem = await TaskQueue.enqueueIdempotent({
     sessionID,
-    kind: input.kind,
+    kind: input.followup === true ? "followup" : input.kind,
     title: asyncTaskQueueTitle(input.kind, body),
     worktree: asyncTaskQueueWorktree(body),
     agent: asyncTaskQueueAgent(body),
     model: asyncTaskQueueModel(body),
     sourceMessageID: asyncTaskQueueSourceMessageID(body),
     sourceTaskID: input.sourceTaskID,
-    payload: asyncTaskQueuePayload(input.kind, body, input.resumeOnRestart),
+    payload: asyncTaskQueuePayload(input.kind, body, resumeOnRestart),
     executionTimeoutMs: input.executionTimeoutMs,
   })
   const started = await TaskQueueExecutor.start(queueItem)
@@ -1431,6 +1441,7 @@ export const SessionRoutes = lazy(() =>
           executionTimeoutMs: query.executionTimeoutMs,
           sourceTaskID: query.sourceTaskID,
           resumeOnRestart: query.resumeOnRestart,
+          followup: query.followup,
         })
       },
     )

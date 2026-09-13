@@ -16,6 +16,7 @@ import {
   Show,
   on,
   onCleanup,
+  untrack,
 } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { win32DisableProcessedInput, win32FlushInputBuffer, win32InstallCtrlCGuard } from "./win32"
@@ -60,6 +61,8 @@ import { ContentDimensionsProvider } from "./context/content-dimensions"
 import { navigationLayout } from "./navigation/navigation-layout"
 import { SessionNavigation } from "./component/session-navigation"
 import { NavigationBar } from "./component/navigation-bar"
+import { mergeFollowUpSnapshot } from "./component/prompt/durable-follow-up"
+import { DialogFollowUps } from "./component/dialog-follow-ups"
 import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
@@ -240,6 +243,59 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const sync = useSync()
   const tuiConfig = useTuiConfig()
   const exit = useExit()
+  const args = useArgs()
+  const [queueRefresh, refreshQueue] = createSignal(0)
+  for (const event of ["server.connected", "server.resync_required"] as const) {
+    onCleanup(sdk.event.on(event, () => refreshQueue((value) => value + 1)))
+  }
+  command.register(() => [
+    {
+      title: "Manage saved follow-ups",
+      value: "session.followups",
+      category: "Session",
+      slash: { name: "queue" },
+      enabled: route.data.type === "session",
+      onSelect: () => {
+        if (route.data.type !== "session") return
+        const sessionID = route.data.sessionID
+        dialog.replace(() => (
+          <DialogFollowUps sessionID={sessionID} onAttention={() => command.trigger("session.attention")} />
+        ))
+      },
+    },
+  ])
+  createEffect(() => {
+    queueRefresh()
+    const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
+    const directory = sdk.directory
+    if (!sessionID || !sdk.sseConnected || sync.data.status === "loading") return
+    const abort = new AbortController()
+    const deleted = new Set<string>()
+    const unsubscribe = sdk.event.on("task.queue.deleted", (event) => deleted.add(event.properties.id))
+    onCleanup(unsubscribe)
+    onCleanup(() => abort.abort())
+    untrack(() => {
+      const before = new Map(sync.data.task_queue.map((item) => [item.id, JSON.stringify(item)]))
+      void sdk
+        .fetch(`${sdk.url.replace(/\/$/, "")}/task-queue?sessionID=${encodeURIComponent(sessionID)}`, {
+          headers: directoryRequestHeaders({ directory }),
+          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(10_000)]),
+        })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("Unable to refresh saved follow-ups")
+          const rows: unknown = await response.json()
+          if (!Array.isArray(rows)) throw new Error("Invalid saved follow-up response")
+          if (abort.signal.aborted || sdk.directory !== directory) return
+          sync.set("task_queue", (current) => mergeFollowUpSnapshot(current, rows, sessionID, before, deleted))
+        })
+        .catch((error) => {
+          if (abort.signal.aborted) return
+          Log.Default.warn("follow-up refresh failed", { error })
+          toast.show({ message: "Saved follow-ups could not be refreshed; reconnect to retry", variant: "warning" })
+        })
+        .finally(unsubscribe)
+    })
+  })
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
   // Short-lived ASCII digital-rain overlay. Manual preview is always
@@ -431,7 +487,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   )
   const contentDimensions = createMemo(() => ({
     width: navigation().contentWidth,
-    height: Math.max(0, dimensions().height - (navigation().railWidth ? 0 : 1)),
+    height: Math.max(0, dimensions().height - (navigation().railWidth ? 0 : 1) - (args.persistentRuntime ? 1 : 0)),
   }))
 
   const sessionWorking = () => {
@@ -589,8 +645,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       })
     }
   })
-
-  const args = useArgs()
 
   createEffect(() => {
     if (!sync.data.provider_loaded) return
@@ -963,6 +1017,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       putJsonWithTimeout,
       sandbox,
       exit,
+      persistentRuntime: !!args.persistentRuntime,
       renderer,
       onSnapshot: props.onSnapshot,
       terminalSuspend,
@@ -1155,6 +1210,25 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       }}
       onMouseUp={Flag.AX_CODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
     >
+      <Show when={args.persistentRuntime}>
+        {(runtime) => (
+          <box
+            height={1}
+            flexShrink={0}
+            flexDirection="row"
+            justifyContent="space-between"
+            backgroundColor={theme.backgroundPanel}
+          >
+            <text fg={theme.textMuted}>
+              {dimensions().width >= 65 ? `Persistent on ${runtime().host.slice(0, 30)} · ` : "Persistent · "}
+              {sdk.sseConnected ? "connected" : "disconnected"}
+            </text>
+            <box onMouseUp={() => void exit()}>
+              <text fg={theme.accent}>Disconnect</text>
+            </box>
+          </box>
+        )}
+      </Show>
       <Show when={navigation().railWidth === 0}>
         <NavigationBar width={dimensions().width} />
       </Show>

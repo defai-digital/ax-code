@@ -39,6 +39,7 @@ import { ProvidersCommand } from "./cmd/providers"
 import { RestartCommand } from "./cmd/restart"
 import { RunCommand } from "./cmd/run"
 import { ServeCommand } from "./cmd/serve"
+import { RuntimeCommand } from "./cmd/runtime"
 import { SessionCommand } from "./cmd/session"
 import { SkillCommand } from "./cmd/skill"
 import { StatsCommand } from "./cmd/stats"
@@ -88,6 +89,7 @@ const cmds = [
   UninstallCommand,
   WebUiCommand,
   ServeCommand,
+  RuntimeCommand,
   RestartCommand,
   ModelsCommand,
   StatsCommand,

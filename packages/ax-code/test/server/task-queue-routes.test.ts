@@ -11,6 +11,44 @@ afterEach(async () => {
 })
 
 describe("task queue routes", () => {
+  test.each(["resume", "retry"] as const)(
+    "%s starts an idle follow-up without waiting for another turn",
+    async (action) => {
+      await using tmp = await tmpdir({ git: true })
+      const app = Server.Default()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue({} as any)
+          try {
+            const item = await TaskQueue.enqueue({
+              sessionID: session.id,
+              kind: "followup",
+              title: "Resume work",
+              payload: { source: "app.composer", mode: "prompt", text: "Continue after explicit action" },
+            })
+            if (action === "resume") await TaskQueue.pause(item.id)
+            else await TaskQueue.setStatus({ id: item.id, status: "failed", error: "Fixture interruption" })
+            const response = await app.request(
+              `/task-queue/${item.id}/${action}?directory=${encodeURIComponent(tmp.path)}`,
+              { method: "POST" },
+            )
+            expect(response.status).toBe(200)
+            await vi.waitFor(() => expect(promptSpy).toHaveBeenCalledTimes(1))
+            expect(promptSpy.mock.calls[0][0]).toMatchObject({
+              sessionID: session.id,
+              parts: [{ type: "text", text: "Continue after explicit action" }],
+            })
+            await waitForQueueStatus("completed")
+          } finally {
+            promptSpy.mockRestore()
+          }
+        },
+      })
+    },
+  )
+
   test("create, list, update, and delete project-scoped queue items", async () => {
     await using tmp = await tmpdir({ git: true })
     const app = Server.Default()

@@ -25,13 +25,6 @@ import { Card } from "@tui/ui/primitives/card"
 import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import {
-  clearFollowUpEdit,
-  followUpEditRequest,
-  forgetFollowUpSession,
-  reconcileFollowUpDrain,
-  removeQueuedFollowUp,
-} from "./follow-up-queue-store"
 import { createStore, produce, unwrap } from "solid-js/store"
 import { useKeybind } from "@tui/context/keybind"
 import { usePromptHistory, type PromptInfo } from "./history"
@@ -179,37 +172,11 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     return job ? axEngineDownloadChip(job) : undefined
   })
 
-  // ADR-028: interactive follow-up queueing. While the session is busy, plain
-  // prompts are buffered client-side and replayed when the session goes idle,
-  // instead of parking durable `waiting_for_idle` task-queue rows. Default on;
-  // disabling falls back to immediate async send.
+  // Accepted follow-ups are durable server tasks; this preference controls
+  // whether busy-session submissions use the follow-up queue.
+
   const [queueModeEnabled] = kv.signal("prompt_queue_mode", true)
 
-  // Drain the client follow-up queue when any session transitions busy/retry ->
-  // idle. This watches every session's status (not just the one on screen) so a
-  // background session's queue still replays when it finishes — matching the
-  // desktop auto-send hook. The store dedupes across the multiple mounted Prompt
-  // instances, so running this effect in each is safe.
-  createEffect(() => {
-    const record = sync.data.session_status ?? {}
-    const snapshot: Array<readonly [string, string]> = []
-    for (const id of Object.keys(record)) {
-      snapshot.push([id, (record[id] as { type?: string } | undefined)?.type ?? "idle"] as const)
-    }
-    untrack(() => {
-      reconcileFollowUpDrain(sdk, snapshot, (sessionID, error) => {
-        log.warn("follow-up queue drain failed", {
-          command: "tui.prompt.queue.drain",
-          status: "error",
-          sessionID,
-          error,
-        })
-        // Keep the item queued (it stays visible with send-now/edit) and let the
-        // user know the auto-send did not go through.
-        toast.show({ message: "Failed to send queued message", variant: "error" })
-      })
-    })
-  })
   const [localStatusTick, setLocalStatusTick] = createSignal(0)
   const statusTick = () => props.statusTick?.() ?? localStatusTick()
 
@@ -482,47 +449,6 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     requestInputLayoutRefresh({ gotoBufferEnd: true })
   })
   onCleanup(() => unsubPromptAppend())
-
-  // ADR-028: edit a queued follow-up — the sidebar removes it from the queue and
-  // requests its text here so the user can revise and resubmit it.
-  createEffect(() => {
-    const request = followUpEditRequest()
-    if (!request) return
-    untrack(() => {
-      // Several Prompt instances are mounted at once (session, permission,
-      // home). Only the instance the request targets consumes it — otherwise a
-      // non-matching instance could clear the request before the right one
-      // applies it, silently dropping the user's edited text.
-      if (request.sessionID !== props.sessionID) return
-      // Remove from the queue only once the text actually lands in the composer,
-      // so a request that arrives while the input is unavailable doesn't lose
-      // the message (it stays queued and can be edited again).
-      if (isRenderableAlive(input)) {
-        input.insertText(request.text)
-        requestInputLayoutRefresh({ gotoBufferEnd: true })
-        removeQueuedFollowUp(request.sessionID, request.id)
-      }
-      clearFollowUpEdit()
-    })
-  })
-
-  // Forget client follow-up state for sessions that no longer exist so queues,
-  // drain baselines, and abort marks don't leak (and a recreated id can't
-  // inherit a stale baseline). Runs in every Prompt instance; forget is
-  // idempotent. Skip pruning when the list is empty — that is almost always a
-  // transient bootstrap/reconnect blip, and forgetting then would drop live
-  // queues for sessions that are about to reappear.
-  let knownFollowUpSessions = new Set<string>()
-  createEffect(() => {
-    const current = new Set((sync.data.session ?? []).map((s) => s.id))
-    untrack(() => {
-      if (current.size === 0) return
-      for (const id of knownFollowUpSessions) {
-        if (!current.has(id)) forgetFollowUpSession(id)
-      }
-      knownFollowUpSessions = current
-    })
-  })
 
   createEffect(() => {
     syncInputCursorColor()

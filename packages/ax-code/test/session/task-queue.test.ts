@@ -31,6 +31,25 @@ async function restartInstance(directory: string) {
 }
 
 describe("TaskQueue", () => {
+  test("rejects a stale client edit even when both clients see a paused item", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const item = await TaskQueue.enqueue({ sessionID: session.id, kind: "followup", title: "Original" })
+        const paused = await TaskQueue.pause(item.id)
+        const first = await TaskQueue.edit({ id: item.id, title: "First edit", expectedUpdatedAt: paused.time.updated })
+        expect(first.time.updated).toBeGreaterThan(paused.time.updated!)
+        await expect(
+          TaskQueue.edit({ id: item.id, title: "Stale edit", expectedUpdatedAt: paused.time.updated }),
+        ).rejects.toThrow("changed; reload")
+        expect((await TaskQueue.get(item.id)).title).toBe("First edit")
+        expect((await TaskQueue.get(item.id)).status).toBe("paused")
+      },
+    })
+  })
+
   test("persists lifecycle state and publishes durable queue events", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -1808,6 +1827,259 @@ describe("TaskQueue", () => {
           prompt.mockRestore()
         }
       },
+    })
+  })
+
+  describe("guarded atomic transitions (ADR-106 D5)", () => {
+    // claimForExecution's write is now a single synchronous critical section
+    // (no internal await before the row is claimed), while edit/pause/sendNow
+    // each suspend at their own earlier `await get(...)` before reaching their
+    // write. Calling the guarded action first and claimForExecution second —
+    // without awaiting either individually — deterministically reproduces the
+    // race: the guarded action's continuation resumes with a stale pre-claim
+    // snapshot, but its own write is now conditioned on the row still being in
+    // an expected source status, so it must fail instead of clobbering the
+    // claim.
+    test("edit cannot land on a row the executor claimed in the same tick", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const item = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "followup",
+            title: "Follow up",
+            payload: { text: "original text" },
+          })
+
+          const editCall = TaskQueue.edit({ id: item.id, payload: { text: "raced edit" } })
+          const claimed = await TaskQueue.claimForExecution(item.id)
+
+          expect(claimed?.status).toBe("running")
+          await expect(editCall).rejects.toThrow("changed; reload")
+
+          const after = await TaskQueue.get(item.id)
+          expect(after.status).toBe("running")
+          expect(after.payload["text"]).toBe("original text")
+        },
+      })
+    })
+
+    test("pause cannot land on a row the executor claimed in the same tick", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const item = await TaskQueue.enqueue({ kind: "followup", title: "Follow up" })
+
+          const pauseCall = TaskQueue.pause(item.id)
+          const claimed = await TaskQueue.claimForExecution(item.id)
+
+          expect(claimed?.status).toBe("running")
+          await expect(pauseCall).rejects.toThrow("Cannot pause task queue item")
+
+          expect((await TaskQueue.get(item.id)).status).toBe("running")
+        },
+      })
+    })
+
+    test("cancel cannot land on a row the executor claimed in the same tick", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const item = await TaskQueue.enqueue({ kind: "followup", title: "Follow up" })
+
+          const cancelCall = TaskQueue.cancel(item.id)
+          const claimed = await TaskQueue.claimForExecution(item.id)
+
+          expect(claimed?.status).toBe("running")
+          await expect(cancelCall).rejects.toThrow("Cannot cancel task queue item")
+
+          expect((await TaskQueue.get(item.id)).status).toBe("running")
+        },
+      })
+    })
+
+    test("send now cannot land on a row the executor claimed in the same tick", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const first = await TaskQueue.enqueue({ kind: "followup", title: "First" })
+          const second = await TaskQueue.enqueue({ kind: "followup", title: "Second" })
+
+          const sendNowCall = TaskQueue.sendNow(second.id)
+          const claimed = await TaskQueue.claimForExecution(second.id)
+
+          expect(claimed?.status).toBe("running")
+          await expect(sendNowCall).rejects.toThrow("Cannot send now task queue item")
+
+          // The lost race must not have shifted the sibling's position either.
+          expect((await TaskQueue.get(first.id)).position).toBe(0)
+          expect((await TaskQueue.get(second.id)).status).toBe("running")
+        },
+      })
+    })
+
+    test("concurrent duplicate resume calls stay idempotent instead of racing into a 409", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const item = await TaskQueue.enqueue({ kind: "followup", title: "Follow up" })
+          await TaskQueue.pause(item.id)
+
+          const [first, second] = await Promise.all([TaskQueue.resume(item.id), TaskQueue.resume(item.id)])
+
+          expect(first.status).toBe("queued")
+          expect(second.status).toBe("queued")
+          expect((await TaskQueue.get(item.id)).status).toBe("queued")
+        },
+      })
+    })
+
+    test("executor runs the body from the claim, not a stale pre-claim snapshot", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const item = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "followup",
+            title: "Follow up",
+            payload: { text: "stale text from before the edit" },
+          })
+
+          const originalGet = TaskQueue.get
+          const getSpy = vi.spyOn(TaskQueue, "get").mockImplementationOnce(async (id) => {
+            // Simulate an edit() landing between TaskQueueExecutor.start()'s
+            // pre-claim snapshot (this get()) and the atomic claim it makes
+            // right after — the exact gap ADR-106 D5 closes.
+            const snapshot = await originalGet(id)
+            await TaskQueue.edit({ id, payload: { text: "edited during the race" } })
+            return snapshot
+          })
+
+          const prompt = vi.spyOn(SessionPrompt, "prompt").mockResolvedValue({
+            info: { id: "msg_race_body", sessionID: session.id, role: "assistant" },
+            parts: [],
+          } as any)
+
+          try {
+            await TaskQueueExecutor.start(item)
+            await waitForQueueStatus(item.id, "completed")
+
+            expect(prompt).toHaveBeenCalledTimes(1)
+            const [callArgs] = prompt.mock.calls[0]!
+            expect(callArgs.parts).toEqual([{ type: "text", text: "edited during the race" }])
+
+            const finished = await TaskQueue.get(item.id)
+            expect(finished.payload["text"]).toBe("edited during the race")
+          } finally {
+            getSpy.mockRestore()
+            prompt.mockRestore()
+            await Session.remove(session.id)
+          }
+        },
+      })
+    })
+  })
+
+  describe("abort pauses pending follow-ups (ADR-106 D5)", () => {
+    test("SessionPrompt.cancel with interrupt:true pauses queued follow-ups instead of cancelling them", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const followup = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "followup",
+            title: "Pending follow-up",
+            payload: { text: "keep going" },
+          })
+          const other = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "prompt",
+            title: "Unrelated queued prompt",
+            payload: { text: "unrelated" },
+          })
+
+          await SessionPrompt.cancel(session.id, { interrupt: true })
+
+          const pausedFollowup = await TaskQueue.get(followup.id)
+          expect(pausedFollowup.status).toBe("paused")
+
+          // Non-followup kinds keep the existing interrupt-cancels-everything
+          // behavior; only the followup kind is preserved by an abort.
+          expect((await TaskQueue.get(other.id)).status).toBe("cancelled")
+        },
+      })
+    })
+
+    test("a genuine session stop without interrupt:true still cancels queued follow-ups", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({})
+          const followup = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "followup",
+            title: "Pending follow-up",
+            payload: { text: "keep going" },
+          })
+
+          await SessionPrompt.cancel(session.id)
+
+          expect((await TaskQueue.get(followup.id)).status).toBe("cancelled")
+        },
+      })
+    })
+  })
+
+  describe("machine-readable backend restart reason", () => {
+    test("recoverInterrupted stamps an interruption reason presentation can read without a new column", async () => {
+      await using tmp = await tmpdir({ git: true })
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const item = await TaskQueue.enqueue({ kind: "prompt", title: "Interrupted prompt" })
+          await TaskQueue.setStatus({ id: item.id, status: "running" })
+          return item
+        },
+      })
+
+      const recovered = await restartInstance(tmp.path)
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const failedItem = recovered.failed[0]
+          expect(failedItem).toBeDefined()
+          expect(TaskQueue.interruptionReason(failedItem!.payload)).toBe("backend_restart")
+
+          const failed = await TaskQueue.get(failedItem!.id)
+          expect(TaskQueue.interruptionReason(failed.payload)).toBe("backend_restart")
+
+          // retry() clears the reason so a successful re-run does not still
+          // present as backend-restart-interrupted.
+          const retried = await TaskQueue.retry(failed.id)
+          expect(TaskQueue.interruptionReason(retried.payload)).toBeUndefined()
+        },
+      })
     })
   })
 })

@@ -2,13 +2,62 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-12
+Last reviewed: 2026-09-13
 Owner: AX Code maintainers
 
 AX Code bounds one interactive Super-Long run at 72 hours. For operation over
 days or weeks, run a supervised `ax-code serve` process and divide the work
 into durable scheduled occurrences. The supervisor restarts the server; the
 project database preserves schedules and queue state.
+
+## Persistent interactive workspace
+
+For local work that should continue after closing the terminal, opt into a
+project runtime:
+
+```bash
+ax-code runtime start --dir /absolute/path/project
+ax-code runtime attach --dir /absolute/path/project --continue
+ax-code runtime status --dir /absolute/path/project
+ax-code runtime stop --dir /absolute/path/project
+```
+
+`runtime attach` also starts the runtime when none exists. The runtime is keyed
+by the canonical project directory; concurrent starts reuse one process.
+The TUI shows its execution host and a **Disconnect** action. Disconnecting
+closes the client and keeps accepted work running. `runtime stop` shuts down
+that project's runtime and interrupts its active work. Ordinary `ax-code`
+retains its existing foreground lifecycle.
+
+Accepted follow-ups submitted while a session is busy are saved on the server.
+The composer clears only after acknowledgement. Reattach to the same session
+and use `/queue` to inspect, pause, edit, resume, or cancel them. Editing first
+pauses the item and preserves attachments and model selection; saving does not
+resume it. Concurrent stale edits are rejected. In `/queue`, `Ctrl+R` includes
+completed and cancelled history. Narrow terminals also show a clickable
+`Follow-ups` heading. A disconnected view is cached and cannot change items.
+Interrupting the active turn pauses pending follow-ups so they do not immediately
+start another turn. Resume them explicitly when ready.
+
+After a backend restart, accepted waiting follow-ups can resume. An ordinary
+in-flight prompt interrupted by that restart is marked failed and requires
+inspection before retry; restoring queue records does not restore an executing
+shell process. A lost acknowledgement can be retried from the unchanged composer
+with the same request identity during that client session. Unsaved drafts are
+not accepted jobs, and this does not guarantee exactly-once external effects.
+
+This mode does not install a login service, automatically restart a crashed
+server, or execute while the host is asleep or powered off. Start or attach
+again after a crash; use the supervised service examples below for unattended
+server restarts. SSH users should run the runtime on an awake remote host and
+attach there. Do not expose the HTTP port publicly.
+
+Runtime discovery stores a private capability and log under the AX Code state
+directory's `runtime/` folder. Status output omits the capability. Shutdown
+requires an authenticated matching runtime identity, not just a saved PID.
+An unavailable live process, corrupt record, or version mismatch requires
+inspection; the CLI refuses to kill an unverified process. Stop a healthy
+runtime before upgrading and restart it with the new executable.
 
 ## Reliability model
 

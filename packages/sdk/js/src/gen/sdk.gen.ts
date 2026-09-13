@@ -58,6 +58,10 @@ import type {
   GlobalEventResponse,
   GlobalEventResponses,
   GlobalHealthResponses,
+  GlobalRuntimeErrors,
+  GlobalRuntimeResponses,
+  GlobalRuntimeStopErrors,
+  GlobalRuntimeStopResponses,
   GlobalUpgradeErrors,
   GlobalUpgradeResponses,
   GraphGetErrors,
@@ -458,6 +462,38 @@ export class Config extends HeyApiClient {
 
 /** AX Code API schema `Global` (auto-generated from the OpenAPI contract). */
 export class Global extends HeyApiClient {
+  /**
+   * Get managed runtime identity
+   */
+  public runtime<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
+    return (options?.client ?? this.client).get<GlobalRuntimeResponses, GlobalRuntimeErrors, ThrowOnError>({
+      url: "/global/runtime",
+      ...options,
+    })
+  }
+
+  /**
+   * Stop an identified managed runtime
+   */
+  public runtimeStop<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "id" }] }])
+    return (options?.client ?? this.client).post<GlobalRuntimeStopResponses, GlobalRuntimeStopErrors, ThrowOnError>({
+      url: "/global/runtime/stop",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
   /**
    * Get health
    *
@@ -1541,6 +1577,7 @@ export class TaskQueue extends HeyApiClient {
     parameters: {
       taskID: string
       directory?: string
+      expectedUpdatedAt?: number
       title?: string
       worktree?: string | null
       agent?: string | null
@@ -1559,6 +1596,7 @@ export class TaskQueue extends HeyApiClient {
           args: [
             { in: "path", key: "taskID" },
             { in: "query", key: "directory" },
+            { in: "body", key: "expectedUpdatedAt" },
             { in: "body", key: "title" },
             { in: "body", key: "worktree" },
             { in: "body", key: "agent" },
@@ -4779,6 +4817,7 @@ export class Session2 extends HeyApiClient {
       executionTimeoutMs?: number
       sourceTaskID?: string
       resumeOnRestart?: boolean
+      followup?: boolean
       messageID?: string
       model?: {
         providerID: string
@@ -4814,6 +4853,7 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "executionTimeoutMs" },
             { in: "query", key: "sourceTaskID" },
             { in: "query", key: "resumeOnRestart" },
+            { in: "query", key: "followup" },
             { in: "body", key: "messageID" },
             { in: "body", key: "model" },
             { in: "body", key: "agent" },
@@ -4856,6 +4896,7 @@ export class Session2 extends HeyApiClient {
       executionTimeoutMs?: number
       sourceTaskID?: string
       resumeOnRestart?: boolean
+      followup?: boolean
       messageID?: string
       agent?: string
       model?: string
@@ -4876,6 +4917,7 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "executionTimeoutMs" },
             { in: "query", key: "sourceTaskID" },
             { in: "query", key: "resumeOnRestart" },
+            { in: "query", key: "followup" },
             { in: "body", key: "messageID" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
@@ -4962,6 +5004,7 @@ export class Session2 extends HeyApiClient {
       executionTimeoutMs?: number
       sourceTaskID?: string
       resumeOnRestart?: boolean
+      followup?: boolean
       messageID?: string
       agent: string
       model?: {
@@ -4982,6 +5025,7 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "executionTimeoutMs" },
             { in: "query", key: "sourceTaskID" },
             { in: "query", key: "resumeOnRestart" },
+            { in: "query", key: "followup" },
             { in: "body", key: "messageID" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },

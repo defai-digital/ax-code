@@ -1,3 +1,4 @@
+import { DialogFollowUps } from "../../component/dialog-follow-ups"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { useSync } from "@tui/context/sync"
 import { createMemo, createEffect, untrack, type Accessor, For, Match, Show, Switch } from "solid-js"
@@ -22,13 +23,18 @@ import { SessionRollbackView } from "./rollback"
 import { SessionSemanticDiff } from "@/session/semantic-diff"
 import { Todo } from "@/session/todo"
 import { footerSessionStatusOrIdle, footerSessionStatusView } from "./footer-view-model"
-import { followUpPreview, followUpText } from "../../component/prompt/follow-up-queue"
+import { followUpText } from "../../component/prompt/follow-up-queue"
 import {
-  dispatchFollowUp,
-  followUpQueue,
-  removeQueuedFollowUp,
-  requestFollowUpEdit,
-} from "../../component/prompt/follow-up-queue-store"
+  durableFollowUps,
+  followUpAction,
+  pauseFollowUp,
+  followUpBody,
+  followUpStatus,
+  type DurableFollowUp,
+} from "../../component/prompt/durable-follow-up"
+import { DialogPrompt } from "../../ui/dialog-prompt"
+import { useDialog } from "../../ui/dialog"
+
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import { sidebarLocalInferenceView } from "./sidebar-local-inference-view-model"
@@ -142,13 +148,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
 
   const todoRemaining = createMemo(() => Todo.countActive(todo()))
 
-  // ADR-028: the "Queued" section reflects the client-owned interactive
-  // follow-up queue, not persisted messages. Follow-ups typed while the
-  // session is busy are buffered client-side (see prompt/follow-up-queue-store)
-  // and replayed when the session goes idle, so this is the single source of
-  // truth for what is actually pending. Deriving from messages was wrong: a
-  // truly-queued follow-up has no persisted message until it runs.
-  const queued = createMemo(() => followUpQueue(props.sessionID))
+  const queueDialog = useDialog()
+  const queued = createMemo(() => durableFollowUps(sync.data.task_queue, props.sessionID))
 
   const [expanded, setExpanded] = createStore({
     mcp: true,
@@ -172,41 +173,55 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
     if (queued().length === 0) setExpanded("queued", true)
   })
 
-  // Removing a queued follow-up is purely client-side: the item never reached
-  // the server, so dropping it from the buffer guarantees it will not run.
-  function dropQueued(id: string) {
-    removeQueuedFollowUp(props.sessionID, id)
+  function updateQueue(item: DurableFollowUp) {
+    sync.set("task_queue", (rows) => [...rows.filter((row) => row.id !== item.id), item])
   }
 
-  // Editing loads the follow-up's text back into the composer so the user can
-  // revise it. The composer removes it from the queue only once the text lands
-  // (see the prompt edit effect), so a dropped request never loses the message.
-  function editQueued(id: string) {
-    const item = queued().find((entry) => entry.id === id)
-    if (!item) return
-    requestFollowUpEdit(props.sessionID, id, followUpText(item))
-  }
-
-  // Send a queued follow-up immediately. dispatchFollowUp removes it from the
-  // queue on success; a thrown error keeps it queued so the user can retry.
-  async function sendQueuedNow(id: string) {
-    const item = queued().find((entry) => entry.id === id)
-    if (!item) return
+  async function queueOperation(run: () => Promise<void>) {
     try {
-      const dispatched = await dispatchFollowUp(sdk, props.sessionID, item)
-      // `false` = a dispatch for this session is already in flight; the item is
-      // left queued and will drain — tell the user the click wasn't a no-op.
-      if (!dispatched) toast.show({ message: "Already sending — left in queue", variant: "info" })
+      await run()
     } catch (error) {
-      log.warn("send queued follow-up failed", {
-        command: "tui.sidebar.queue.send",
-        status: "error",
-        sessionID: props.sessionID,
-        id,
-        error,
-      })
-      toast.show({ message: "Failed to send queued message", variant: "error" })
+      log.warn("follow-up action failed", { error })
+      toast.show({ message: error instanceof Error ? error.message : "Follow-up action failed", variant: "error" })
     }
+  }
+
+  function dropQueued(id: string) {
+    void queueOperation(async () => updateQueue(await followUpAction(sdk, id, "cancel")))
+  }
+
+  function editQueued(id: string) {
+    void queueOperation(async () => {
+      // Pause first: editing cannot race a queued body into execution.
+      const paused = await pauseFollowUp(sdk, id)
+      updateQueue(paused)
+      const body = followUpBody(paused)
+      const text = await DialogPrompt.show(queueDialog, "Edit paused follow-up", {
+        value: followUpText(body),
+        placeholder: "Save changes, then resume when ready",
+      })
+      if (text === null) return
+      const parts = [...body.parts]
+      const index = parts.findIndex((part) => part.type === "text")
+      if (index < 0) parts.unshift({ type: "text", text })
+      else parts[index] = { ...parts[index], text }
+      updateQueue(
+        await followUpAction(sdk, id, "edit", {
+          expectedUpdatedAt: paused.time.updated,
+          title: text.trim().slice(0, 200) || "Follow-up",
+          payload: { ...paused.payload, body: { ...body, parts } },
+        }),
+      )
+      toast.show({ message: "Follow-up saved and paused; resume when ready", variant: "info" })
+    })
+  }
+
+  async function sendQueuedNow(id: string) {
+    await queueOperation(async () => {
+      const item = queued().find((row) => row.id === id)
+      if (!item) return
+      updateQueue(await followUpAction(sdk, id, item.status === "paused" ? "resume" : "pause"))
+    })
   }
 
   // Clicking the session id copies it so it can be pasted into issues, logs,
@@ -664,7 +679,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <text fg={theme.text}>{expanded.queued ? "−" : "+"}</text>
                     </Show>
                     <text fg={theme.text}>
-                      <b>Queued</b>
+                      <b>Follow-ups{sdk.sseConnected ? "" : " (cached)"}</b>
                       <span style={{ fg: theme.textMuted }}> ({queued().length})</span>
                     </text>
                   </box>
@@ -673,36 +688,52 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                     <For each={queued()}>
                       {(item) => (
                         <box flexDirection="row" gap={1}>
+                          <Show when={["queued", "waiting_for_idle", "paused"].includes(item.status)}>
+                            <box
+                              flexShrink={0}
+                              width={QUEUED_EDIT_ICON_WIDTH}
+                              onMouseUp={() => {
+                                editQueued(item.id)
+                              }}
+                            >
+                              <text style={{ fg: theme.text }}>{QUEUED_EDIT_ICON}</text>
+                            </box>
+                            <box
+                              flexShrink={0}
+                              width={QUEUED_SEND_ICON_WIDTH}
+                              onMouseUp={() => {
+                                void sendQueuedNow(item.id)
+                              }}
+                            >
+                              <text style={{ fg: theme.primary }}>
+                                {item.status === "paused" ? QUEUED_SEND_ICON : "Ⅱ"}
+                              </text>
+                            </box>
+                            <box
+                              flexShrink={0}
+                              width={QUEUED_DELETE_ICON_WIDTH}
+                              onMouseUp={() => {
+                                dropQueued(item.id)
+                              }}
+                            >
+                              <text style={{ fg: theme.warning }}>{QUEUED_DELETE_ICON}</text>
+                            </box>
+                          </Show>
                           <box
-                            flexShrink={0}
-                            width={QUEUED_EDIT_ICON_WIDTH}
-                            onMouseUp={() => {
-                              editQueued(item.id)
-                            }}
+                            flexGrow={1}
+                            onMouseUp={() =>
+                              queueDialog.replace(() => (
+                                <DialogFollowUps
+                                  sessionID={props.sessionID}
+                                  onAttention={() => command.trigger("session.attention")}
+                                />
+                              ))
+                            }
                           >
-                            <text style={{ fg: theme.text }}>{QUEUED_EDIT_ICON}</text>
+                            <text fg={theme.textMuted} wrapMode="word">
+                              {followUpStatus(item)}: {item.title}
+                            </text>
                           </box>
-                          <box
-                            flexShrink={0}
-                            width={QUEUED_SEND_ICON_WIDTH}
-                            onMouseUp={() => {
-                              void sendQueuedNow(item.id)
-                            }}
-                          >
-                            <text style={{ fg: theme.primary }}>{QUEUED_SEND_ICON}</text>
-                          </box>
-                          <box
-                            flexShrink={0}
-                            width={QUEUED_DELETE_ICON_WIDTH}
-                            onMouseUp={() => {
-                              dropQueued(item.id)
-                            }}
-                          >
-                            <text style={{ fg: theme.warning }}>{QUEUED_DELETE_ICON}</text>
-                          </box>
-                          <text fg={theme.textMuted} wrapMode="word">
-                            {followUpPreview(item)}
-                          </text>
                         </box>
                       )}
                     </For>

@@ -283,9 +283,19 @@ export namespace SessionPrompt {
   // and turn every successful run into "cancelled".
   export async function cancel(sessionID: SessionID, opts?: { interrupt?: boolean; cancelQueueItems?: boolean }) {
     log.info("cancel", { command: "session.prompt.cancel", status: "started", sessionID })
+    const isGenuineInterrupt = opts?.interrupt === true
+    // Pause remaining followup rows BEFORE runState.cancel marks the session
+    // idle (ADR-106 D5). Once idle is set, the queue executor's busy check
+    // (sessionPromptBusy -> SessionPrompt.assertNotBusy) sees the session as
+    // free to admit a waiting followup; pausing after that point would race a
+    // followup starting during the very abort meant to stop it.
+    if (isGenuineInterrupt) await pausePendingFollowups(sessionID)
     await runState.cancel(sessionID)
-    await cancelDescendantSessions(sessionID, { cancelQueueItems: opts?.cancelQueueItems })
-    if (opts?.interrupt !== true) return
+    await cancelDescendantSessions(sessionID, {
+      cancelQueueItems: opts?.cancelQueueItems,
+      preservePausedFollowups: isGenuineInterrupt,
+    })
+    if (!isGenuineInterrupt) return
     // User lifecycle hooks (Interrupt) — observational only, fire-and-forget:
     // hook latency/failures must never delay or break cancellation.
     void import("@/hooks/lifecycle")
@@ -295,7 +305,17 @@ export namespace SessionPrompt {
       .catch((error) => log.warn("Interrupt lifecycle hooks failed", { sessionID, error }))
   }
 
-  async function cancelDescendantSessions(sessionID: SessionID, opts?: { cancelQueueItems?: boolean }) {
+  async function pausePendingFollowups(sessionID: SessionID) {
+    const { TaskQueue } = await import("./task-queue")
+    await TaskQueue.pauseFollowupsForSession(sessionID).catch((error) => {
+      log.warn("failed to pause pending follow-ups before session abort", { sessionID, error })
+    })
+  }
+
+  async function cancelDescendantSessions(
+    sessionID: SessionID,
+    opts?: { cancelQueueItems?: boolean; preservePausedFollowups?: boolean },
+  ) {
     const { Session } = await import(".")
     const { TaskQueue } = await import("./task-queue")
     const children = await Session.children(sessionID).catch((error) => {
@@ -311,7 +331,9 @@ export namespace SessionPrompt {
     // because the session's active items belong to the queue executor driving
     // that very loop — it settles them to their real outcome.
     if (opts?.cancelQueueItems === false) return
-    await TaskQueue.cancelForSession(sessionID, "Cancelled because the parent session stopped.").catch((error) => {
+    await TaskQueue.cancelForSession(sessionID, "Cancelled because the parent session stopped.", {
+      preservePausedFollowups: opts?.preservePausedFollowups,
+    }).catch((error) => {
       log.warn("failed to cancel task queue items during session abort", { sessionID, error })
     })
   }
@@ -356,6 +378,10 @@ export namespace SessionPrompt {
         // stay queued so the executor can drain them next.
         cancel: (id) => cancel(id, { cancelQueueItems: false }),
         resumeLoop: loop,
+        drainFollowups: async (id) => {
+          const { TaskQueueExecutor } = await import("./task-queue-executor")
+          await TaskQueueExecutor.drainNextForSession(id)
+        },
       })
     })
     let sessionStarted = false

@@ -13,6 +13,7 @@ export async function submitPromptRoute(input: {
   url: string
   headers: HeadersInit
   fetch: typeof globalThis.fetch
+  followup?: boolean
 }) {
   const startedAt = performance.now()
   const timeoutAbort = new AbortController()
@@ -25,15 +26,25 @@ export async function submitPromptRoute(input: {
   })
   await withTimeout(
     (async () => {
-      const response = await input.fetch(`${input.url}/session/${encodeURIComponent(input.sessionID)}/${input.path}`, {
-        method: "POST",
-        headers: input.headers,
-        body: JSON.stringify(input.body),
-        signal,
-      })
+      const suffix = input.followup ? "?followup=true&resumeOnRestart=true" : ""
+      const response = await input.fetch(
+        `${input.url}/session/${encodeURIComponent(input.sessionID)}/${input.path}${suffix}`,
+        {
+          method: "POST",
+          headers: input.headers,
+          body: JSON.stringify(input.body),
+          signal,
+        },
+      )
       signal.throwIfAborted()
 
       if (response.status === 202 || response.ok) {
+        if (input.followup) {
+          const accepted: unknown = await response.json()
+          if (!accepted || typeof accepted !== "object" || !("id" in accepted) || typeof accepted.id !== "string") {
+            throw new Error("Follow-up acceptance is uncertain; retry the unchanged draft to check the same submission")
+          }
+        }
         DiagnosticLog.recordProcess("tui.promptSubmitAccepted", {
           sessionID: input.sessionID,
           path: input.path,

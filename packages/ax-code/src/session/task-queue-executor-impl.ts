@@ -138,8 +138,22 @@ export namespace TaskQueueExecutor {
       const running = await TaskQueue.claimForExecution(latest.id)
       if (!running) return TaskQueue.get(latest.id)
 
+      // Re-derive the execution plan from the row the claim actually
+      // returned, not `latestExecution` (built from the pre-claim snapshot).
+      // A concurrent edit() can land between that snapshot and the atomic
+      // claim above; the executor must run the body the claim captured, or a
+      // successful edit right before execution starts would be silently
+      // discarded in favor of the stale pre-edit text (ADR-106 D5).
+      const claimedExecution = queueItemExecution(running)
       startDetachedQueueTask(async () => {
-        await executeClaimedItem(running, latestExecution)
+        if (!claimedExecution) {
+          await finishIfRunning(running, {
+            status: "failed",
+            error: "Task queue item became unexecutable after an edit raced its execution claim.",
+          })
+          return
+        }
+        await executeClaimedItem(running, claimedExecution)
       })
       return running
     })

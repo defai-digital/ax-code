@@ -185,7 +185,10 @@ export const TaskQueueRoutes = lazy(() =>
         },
       }),
       validator("param", TASK_QUEUE_ID_PARAM),
-      async (c) => c.json(await TaskQueue.resume(taskID(c))),
+      async (c) => {
+        const item = await TaskQueue.resume(taskID(c))
+        return c.json(item.kind === "followup" ? await TaskQueueExecutor.start(item) : item)
+      },
     )
     .post(
       "/:taskID/cancel",
@@ -219,7 +222,10 @@ export const TaskQueueRoutes = lazy(() =>
         },
       }),
       validator("param", TASK_QUEUE_ID_PARAM),
-      async (c) => c.json(await TaskQueue.retry(taskID(c))),
+      async (c) => {
+        const item = await TaskQueue.retry(taskID(c))
+        return c.json(item.kind === "followup" ? await TaskQueueExecutor.start(item) : item)
+      },
     )
     .post(
       "/:taskID/send-now",

@@ -1532,7 +1532,7 @@ describe("AX Code TUI stability guardrails", () => {
     expect(thread).toContain('persisted.status === "invalid"')
     expect(thread).toContain("skipping startup upgrade check because state failed to load")
     expect(thread).toContain('runtime.hasBun && runtime.mode !== "compiled" ? "worker" : "process"')
-    expect(thread).toContain('args: ["tui-backend", "--stdio"]')
+    expect(thread).toContain('backendProcessCommand(commandArgs = ["tui-backend", "--stdio"])')
     expect(thread).toContain("spawn(command.command, command.args")
     expect(thread).toContain('client.call("health", undefined)')
     expect(thread).toContain("TUI backend did not become ready")

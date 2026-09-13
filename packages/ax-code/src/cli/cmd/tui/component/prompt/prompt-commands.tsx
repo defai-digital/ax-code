@@ -6,7 +6,6 @@ import type { DialogContext } from "@tui/ui/dialog"
 import type { CommandOption } from "../dialog-command"
 import { endDisplayOffset, expandPromptTextParts, relocatePromptPartAfterEditor } from "./prompt-helpers"
 import type { PromptInfo } from "./history"
-import { markFollowUpAbort } from "./follow-up-queue-store"
 import type { StashEntry } from "./stash-util"
 
 type PromptComposer = {
@@ -150,9 +149,7 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
         const currentSessionID = sessionID()
         if (!currentSessionID) return
 
-        // Suppress auto-draining the follow-up queue right after a manual
-        // interrupt so we don't immediately resend on the busy -> idle edge.
-        markFollowUpAbort(currentSessionID)
+        // The server pauses accepted follow-ups before aborting the active turn.
         void sdk.client.session
           .abort({
             sessionID: currentSessionID,

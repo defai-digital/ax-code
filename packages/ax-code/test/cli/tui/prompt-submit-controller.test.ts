@@ -114,6 +114,30 @@ function setupNewSession() {
   return { ...fixture, create }
 }
 
+test("busy follow-ups retain the draft until durable acknowledgement and reuse identity after a lost response", async () => {
+  const { controller, host } = setup({ mode: "normal", workMode: "agent", text: "Review the patch" })
+  host.queueModeEnabled = () => true
+  host.status = () => ({ type: "busy" })
+  const attempts: Request[] = []
+  host.sdk.fetch = async (url, init) => {
+    attempts.push(new Request(url, init))
+    if (attempts.length === 1) throw new Error("Connection lost after acceptance")
+    return Response.json({ id: "queue_saved", status: "waiting_for_idle" }, { status: 202 })
+  }
+  await controller.submit()
+  expect(host.input.clear).not.toHaveBeenCalled()
+  // A retry stays a follow-up even if the first accepted attempt has already finished.
+  host.status = () => ({ type: "idle" })
+  await controller.submit()
+  expect(host.input.clear).toHaveBeenCalledTimes(1)
+  expect(attempts).toHaveLength(2)
+  const first = await attempts[0].json()
+  const second = await attempts[1].json()
+  expect(second.messageID).toBe(first.messageID)
+  expect(new URL(attempts[0].url).searchParams.get("followup")).toBe("true")
+  expect(new URL(attempts[1].url).searchParams.get("followup")).toBe("true")
+})
+
 test.each([15_300, 45_150])(
   "session creation waits %d ms through SQLite contention without a premature failure",
   async (delay) => {

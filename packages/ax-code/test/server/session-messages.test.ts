@@ -312,6 +312,78 @@ describe("session.prompt_async error handling", () => {
     })
   })
 
+  test("prompt_async with followup=true selects the followup queue kind and forces resumeOnRestart", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+
+        try {
+          const app = Server.Default()
+          const messageID = MessageID.ascending()
+          const query = new URLSearchParams({ directory: tmp.path, followup: "true" })
+          const response = await app.request(`/session/${session.id}/prompt_async?${query}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              messageID,
+              parts: [{ type: "text", text: "Keep going while the session is busy." }],
+            }),
+          })
+
+          expect(response.status).toBe(202)
+          expect(await response.json()).toMatchObject({
+            sessionID: session.id,
+            // ADR-106 D4: reuse the existing followup queue kind for a busy
+            // normal-mode prompt instead of a second execution engine.
+            kind: "followup",
+            status: "queued",
+            sourceMessageID: messageID,
+            payload: {
+              kind: "prompt",
+              // Durable by contract regardless of the caller's own query flag.
+              resumeOnRestart: true,
+            },
+          })
+        } finally {
+          start.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("command_async ignores a followup query flag and keeps the command kind", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const start = vi.spyOn(TaskQueueExecutor, "start").mockImplementation(async (item) => item)
+
+        try {
+          const app = Server.Default()
+          const query = new URLSearchParams({ directory: tmp.path, followup: "true" })
+          const response = await app.request(`/session/${session.id}/command_async?${query}`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ command: "test", arguments: "" }),
+          })
+
+          expect(response.status).toBe(202)
+          expect(await response.json()).toMatchObject({ sessionID: session.id, kind: "command" })
+        } finally {
+          start.mockRestore()
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("task queue executor defers detached work to the next tick without unref", async () => {
     const detached = await extractFrom(
       "../../src/session/task-queue-executor-impl.ts",

@@ -189,12 +189,12 @@ async function shouldRunStartupUpgradeCheck() {
   return true
 }
 
-function backendProcessCommand() {
+export function backendProcessCommand(commandArgs = ["tui-backend", "--stdio"]) {
   if (runtimeMode() === "compiled") {
     return {
       command: process.execPath,
-      args: ["tui-backend", "--stdio"],
-      label: `${process.execPath} tui-backend --stdio`,
+      args: commandArgs,
+      label: `${process.execPath} ${commandArgs.join(" ")}`,
     }
   }
 
@@ -242,7 +242,7 @@ function backendProcessCommand() {
   // loopback (--port, network bind). Solid client resolution for the TUI itself
   // is handled by solid-loader aliases in the parent process; the backend is
   // server code and must see Node package exports.
-  const args = [...loaderArgs, "--conditions=node", resolvedEntry, "tui-backend", "--stdio"]
+  const args = [...loaderArgs, "--conditions=node", resolvedEntry, ...commandArgs]
   return {
     command: process.execPath,
     args,

@@ -34,13 +34,13 @@ import {
 import { SessionCodeRenderer } from "./render-adapter"
 import { coalescedToolLabel } from "./tool-rendering"
 import { toolRendererComponent } from "./tool-renderers"
-import { followUpPreview, type QueuedFollowUp } from "../../component/prompt/follow-up-queue"
+import { followUpStatus, type DurableFollowUp } from "../../component/prompt/durable-follow-up"
 import { useSessionRouteContext as use } from "./context"
 import { userRoute } from "../../util/transcript"
 import { routeEvent } from "./route"
 import { isAssistantThinkingActive } from "./thinking-status"
 
-export function QueuedFollowUps(props: { items: QueuedFollowUp[] }) {
+export function QueuedFollowUps(props: { items: DurableFollowUp[] }) {
   const { theme } = useTheme()
 
   return (
@@ -50,8 +50,12 @@ export function QueuedFollowUps(props: { items: QueuedFollowUp[] }) {
           {(item, index) => (
             <text fg={theme.textMuted} wrapMode="word">
               <span style={{ fg: theme.accent }}>↳</span>
-              <span> queued{props.items.length > 1 ? ` ${index() + 1}/${props.items.length}` : ""}: </span>
-              <span>{followUpPreview(item, 64)}</span>
+              <span>
+                {" "}
+                {followUpStatus(item)}
+                {props.items.length > 1 ? ` ${index() + 1}/${props.items.length}` : ""}:{" "}
+              </span>
+              <span>{item.title.slice(0, 64)}</span>
             </text>
           )}
         </For>

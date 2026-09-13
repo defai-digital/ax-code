@@ -1,15 +1,4 @@
-/**
- * Pure logic for the TUI interactive follow-up queue (ADR-028).
- *
- * While a session is busy, plain prompts the user types are buffered in a
- * client-owned queue instead of being parked as durable `waiting_for_idle`
- * task-queue rows on the server. When the session goes idle the head of the
- * queue is replayed through the normal prompt route.
- *
- * This module holds the side-effect-free pieces (reducers + status decisions)
- * so they can be unit tested without SolidJS or a live server. The reactive
- * singleton store and the dispatch path live in `follow-up-queue-store.ts`.
- */
+/** Shared composer input types; accepted follow-ups live in the server task queue. */
 
 /** A prompt part as captured from the composer; shape mirrors the prompt body parts. */
 export type FollowUpPart = { id?: string; type: string; text?: string; [key: string]: unknown }
@@ -21,60 +10,12 @@ export interface FollowUpInput {
   variant?: string
 }
 
-export interface QueuedFollowUp extends FollowUpInput {
-  id: string
-  createdAt: number
-}
-
-export type SessionStatusType = "idle" | "busy" | "retry"
-
-export function makeFollowUp(input: FollowUpInput, id: string, createdAt: number): QueuedFollowUp {
-  return { ...input, id, createdAt }
-}
-
-export function appendFollowUp(list: readonly QueuedFollowUp[] | undefined, item: QueuedFollowUp): QueuedFollowUp[] {
-  return [...(list ?? []), item]
-}
-
-export function removeFollowUp(list: readonly QueuedFollowUp[] | undefined, id: string): QueuedFollowUp[] {
-  return (list ?? []).filter((item) => item.id !== id)
-}
-
-export function headFollowUp(list: readonly QueuedFollowUp[] | undefined): QueuedFollowUp | undefined {
-  return (list ?? [])[0]
-}
-
-/** A session is busy enough to buffer follow-ups when it is not idle. */
-export function isQueueableStatus(type: SessionStatusType | string | undefined): boolean {
+/** A busy or retrying session accepts subsequent prompts as durable follow-ups. */
+export function isQueueableStatus(type: string | undefined): boolean {
   return type === "busy" || type === "retry"
 }
 
-/**
- * Drain the queue only on a real busy/retry -> idle transition. This mirrors the
- * desktop auto-send rule so follow-ups run exactly once when a turn finishes,
- * not on unrelated status churn.
- */
-export function shouldDrainOnIdle(
-  previous: SessionStatusType | string | undefined,
-  current: SessionStatusType | string | undefined,
-): boolean {
-  return (previous === "busy" || previous === "retry") && current === "idle"
-}
-
-/** First non-empty text of a queued follow-up, used for display + tests. */
-export function followUpText(item: QueuedFollowUp): string {
-  for (const part of item.parts) {
-    if (part.type === "text" && typeof part.text === "string" && part.text.trim().length > 0) {
-      return part.text.trim()
-    }
-  }
-  return ""
-}
-
-/** A single-line preview for compact transcript and sidebar queue rows. */
-export function followUpPreview(item: QueuedFollowUp, maxLength = 48): string {
-  const text = followUpText(item).replace(/\s+/g, " ")
-  if (!text) return "(empty message)"
-  if (text.length <= maxLength) return text
-  return text.slice(0, Math.max(1, maxLength - 3)) + "..."
+/** Preserve composer text exactly when opening a paused follow-up for editing. */
+export function followUpText(item: FollowUpInput): string {
+  return item.parts.find((part) => part.type === "text" && typeof part.text === "string")?.text ?? ""
 }

@@ -17,6 +17,8 @@ import { Event } from "../event"
 import { ServiceManager } from "@/runtime/service-manager"
 import { Filesystem } from "@/util/filesystem"
 import { EventStream } from "../event-stream"
+import { ManagedRuntime } from "@/runtime/managed-runtime"
+import { ServerRuntimeAuth } from "../runtime-auth"
 
 const log = Log.create({ service: "server" })
 const SERVER_STARTED_AT = Date.now()
@@ -231,6 +233,48 @@ function getGlobalCapabilitiesInfo(): z.infer<typeof GlobalCapabilitiesInfo> {
 
 export const GlobalRoutes = lazy(() =>
   new Hono()
+    .get(
+      "/runtime",
+      describeRoute({
+        summary: "Get managed runtime identity",
+        operationId: "global.runtime",
+        responses: {
+          200: {
+            description: "Managed runtime identity",
+            content: { "application/json": { schema: resolver(ManagedRuntime.Info) } },
+          },
+          ...errors(403, 404),
+        },
+      }),
+      (c) => {
+        const denied = ServerRuntimeAuth.require(c)
+        if (denied) return denied
+        const info = ManagedRuntime.info()
+        if (!info) return c.notFound()
+        return c.json(info)
+      },
+    )
+    .post(
+      "/runtime/stop",
+      describeRoute({
+        summary: "Stop an identified managed runtime",
+        operationId: "global.runtimeStop",
+        responses: {
+          200: {
+            description: "Runtime shutdown accepted",
+            content: { "application/json": { schema: resolver(z.boolean()) } },
+          },
+          ...errors(400, 403, 404),
+        },
+      }),
+      validator("json", z.object({ id: z.string().uuid() })),
+      (c) => {
+        const denied = ServerRuntimeAuth.require(c)
+        if (denied) return denied
+        if (!ManagedRuntime.requestStop(c.req.valid("json").id)) return c.notFound()
+        return c.json(true)
+      },
+    )
     .get(
       "/health",
       describeRoute({

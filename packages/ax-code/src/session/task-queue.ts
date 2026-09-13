@@ -109,6 +109,7 @@ export namespace TaskQueue {
 
   export const EditBody = z
     .object({
+      expectedUpdatedAt: z.number().optional(),
       title: z.string().trim().min(1).max(200).optional(),
       worktree: z.string().trim().min(1).max(500).nullable().optional(),
       agent: z.string().trim().min(1).nullable().optional(),
@@ -116,7 +117,7 @@ export namespace TaskQueue {
       payload: Payload.optional(),
       priority: JsonNumber(z.number().int().min(-1000).max(1000)).optional(),
     })
-    .refine((input) => Object.keys(input).length > 0, {
+    .refine((input) => Object.keys(input).some((key) => key !== "expectedUpdatedAt"), {
       message: "At least one editable queue field is required",
     })
   export type EditBody = z.infer<typeof EditBody>
@@ -901,19 +902,29 @@ export namespace TaskQueue {
   }
 
   export async function claimForExecution(id: TaskQueueID): Promise<Info | undefined> {
-    const current = await get(id)
-    if (current.status !== "queued" && current.status !== "waiting_for_idle") return undefined
-
     const now = Date.now()
-    // "running" is an owned status (see ownedStatuses): restart recovery's
-    // dead-owner fast path depends on payload.executorOwner being stamped
-    // here, since this is the only path that transitions queued/waiting rows
-    // to "running" in production (setStatus is only exercised directly by
-    // tests). Without it, recoverInterrupted falls back to heartbeat
-    // freshness alone and never fast-fails a row whose owning process has
-    // verifiably died.
-    const ownerPayload = withExecutorOwner(current.payload, now)
+    // Read-modify-write inside one synchronous critical section (same
+    // pattern as setDelivery/claimResultDelivery below): the previous
+    // implementation read the row via a separate awaited get() before this
+    // write, so a concurrent edit() landing in that gap would commit its
+    // payload change first, and this write would then stamp the executor
+    // owner onto the pre-edit snapshot it captured earlier — silently
+    // reverting the edit the instant execution claims the row. Reading and
+    // writing here in the same callback closes that gap.
     const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const currentRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!currentRow) return undefined
+      const current = fromRow(currentRow)
+      if (current.status !== "queued" && current.status !== "waiting_for_idle") return undefined
+
+      // "running" is an owned status (see ownedStatuses): restart recovery's
+      // dead-owner fast path depends on payload.executorOwner being stamped
+      // here, since this is the only path that transitions queued/waiting rows
+      // to "running" in production (setStatus is only exercised directly by
+      // tests). Without it, recoverInterrupted falls back to heartbeat
+      // freshness alone and never fast-fails a row whose owning process has
+      // verifiably died.
+      const ownerPayload = withExecutorOwner(current.payload, now)
       const row = db
         .update(TaskQueueTable)
         .set({
@@ -987,6 +998,22 @@ export namespace TaskQueue {
   })
   export type ExecutorOwner = z.infer<typeof ExecutorOwner>
   export const EXECUTOR_OWNER_KEY = "executorOwner"
+
+  /**
+   * Machine-readable classification of why a terminal "failed" row ended up
+   * that way, stored in `payload.interruptionReason` (same no-ALTER-path
+   * rationale as executorOwner above). Lets presentation distinguish a
+   * backend-restart interruption from an ordinary execution failure without a
+   * new DB column.
+   */
+  export const InterruptionReason = z.enum(["backend_restart"])
+  export type InterruptionReason = z.infer<typeof InterruptionReason>
+  export const INTERRUPTION_REASON_KEY = "interruptionReason"
+
+  export function interruptionReason(payload: Payload): InterruptionReason | undefined {
+    const parsed = InterruptionReason.safeParse(payload[INTERRUPTION_REASON_KEY])
+    return parsed.success ? parsed.data : undefined
+  }
 
   const ownedStatuses: readonly Status[] = ["running", "blocked_permission", "blocked_question", "waiting_for_idle"]
   const liveBoots = new Set<string>()
@@ -1070,13 +1097,52 @@ export namespace TaskQueue {
   export async function pause(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
     assertActionStatus(current, "pause", ["queued", "waiting_for_idle"])
-    return setStatus({ id, status: "paused" })
+    return transitionStatus({ id, action: "pause", fromStatuses: ["queued", "waiting_for_idle"], status: "paused" })
   }
 
   export async function resume(id: TaskQueueID): Promise<Info> {
     const current = await get(id)
     assertActionStatus(current, "resume", ["paused"])
-    return setStatus({ id, status: "queued" })
+    return transitionStatus({ id, action: "resume", fromStatuses: ["paused"], status: "queued" })
+  }
+
+  /**
+   * Atomically transition an item from one of `fromStatuses` to `status`,
+   * closing the gap between an action's earlier get()+assertActionStatus
+   * check and this write (ADR-106 D5: "guarded atomic transitions for
+   * edit/pause/resume/cancel and execution claim"). A concurrent transition
+   * landing in that gap — most commonly the executor claiming the row to
+   * "running" — fails this write instead of silently clobbering whichever
+   * process now owns the row; the caller sees a 409 against the fresh status.
+   */
+  async function transitionStatus(input: {
+    id: TaskQueueID
+    action: string
+    fromStatuses: Status[]
+    status: Status
+  }): Promise<Info> {
+    const now = Date.now()
+    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const row = db
+        .update(TaskQueueTable)
+        .set({ status: input.status, time_updated: now })
+        .where(and(eq(TaskQueueTable.id, input.id), inArray(TaskQueueTable.status, input.fromStatuses)))
+        .returning()
+        .get()
+      if (row) return fromRow(row)
+      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, input.id)).get()
+      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${input.id}` })
+      return fromRow(fresh)
+    })
+    assertProjectItem(item)
+    if (item.status !== input.status) {
+      throw new HTTPException(409, {
+        message: `Cannot ${input.action} task queue item ${input.id} while it is ${item.status}.`,
+      })
+    }
+    publishUpdated(item)
+    await syncWorkflowStatusIfNeeded(item)
+    return item
   }
 
   export async function cancel(id: TaskQueueID): Promise<Info> {
@@ -1088,7 +1154,12 @@ export namespace TaskQueue {
       "blocked_permission",
       "blocked_question",
     ])
-    return setStatus({ id, status: "cancelled" })
+    return transitionStatus({
+      id,
+      action: "cancel",
+      fromStatuses: ["queued", "waiting_for_idle", "paused", "blocked_permission", "blocked_question"],
+      status: "cancelled",
+    })
   }
 
   export async function stop(id: TaskQueueID): Promise<Info> {
@@ -1118,11 +1189,53 @@ export namespace TaskQueue {
     return cancel(id)
   }
 
-  export async function cancelForSession(sessionID: SessionID, error?: string): Promise<Info[]> {
+  /**
+   * Pause queued/waiting-for-idle followup rows for a session (ADR-106 D5:
+   * "user interruption pauses remaining interactive follow-ups before the
+   * current session becomes idle"). Only the followup kind is affected —
+   * other queue kinds keep their existing interrupt behavior — and only rows
+   * that have not started yet; a followup already running or blocked is the
+   * turn being interrupted itself, not a "remaining" one.
+   */
+  export async function pauseFollowupsForSession(sessionID: SessionID): Promise<Info[]> {
+    const items = await list({ sessionID, statuses: ["queued", "waiting_for_idle"], limit: 500 })
+    const paused: Info[] = []
+    for (const item of items) {
+      if (item.kind !== "followup") continue
+      try {
+        // Best-effort bulk pause: a row the executor claimed in the gap
+        // between the list() read above and this write no longer matches its
+        // snapshotted status, and transitionStatus throws a 409 for that —
+        // skip it rather than aborting the rest of the batch.
+        paused.push(
+          await transitionStatus({ id: item.id, action: "pause", fromStatuses: [item.status], status: "paused" }),
+        )
+      } catch (error) {
+        if (!(error instanceof HTTPException)) throw error
+        log.warn("skipped pausing a followup that raced past its snapshotted status", {
+          taskQueueID: item.id,
+          sessionID,
+          error,
+        })
+      }
+    }
+    return paused
+  }
+
+  export async function cancelForSession(
+    sessionID: SessionID,
+    error?: string,
+    options?: { preservePausedFollowups?: boolean },
+  ): Promise<Info[]> {
     const items = await list({ sessionID, limit: 500 })
     const cancelled: Info[] = []
     for (const item of items) {
       if (item.status === "completed" || item.status === "failed" || item.status === "cancelled") continue
+      // A followup paused just now by pauseFollowupsForSession (or by an
+      // earlier explicit user pause) is preserved, not cancelled, when the
+      // caller is honoring the abort-pauses-followups contract: resume stays
+      // explicit, and the row must survive to be resumed later.
+      if (options?.preservePausedFollowups && item.kind === "followup" && item.status === "paused") continue
       cancelled.push(
         await setStatus({
           id: item.id,
@@ -1140,6 +1253,7 @@ export namespace TaskQueue {
     const now = Date.now()
     const payload: Payload = { ...current.payload }
     delete payload[EXECUTOR_OWNER_KEY]
+    delete payload[INTERRUPTION_REASON_KEY]
     if (current.kind === "subagent" && current.payload["source"] === "task") {
       payload["deliveryStatus"] = "pending"
       delete payload["resultDelivery"]
@@ -1261,6 +1375,7 @@ export namespace TaskQueue {
           .set({
             status: "failed",
             error: "Task interrupted by backend restart; inspect output and retry when safe.",
+            payload: { ...row.payload, [INTERRUPTION_REASON_KEY]: "backend_restart" satisfies InterruptionReason },
             time_completed: now,
             time_updated: now,
           })
@@ -1317,7 +1432,7 @@ export namespace TaskQueue {
       })
     }
 
-    const now = Date.now()
+    const now = Math.max(Date.now(), (current.time.updated ?? 0) + 1)
     const updates: Partial<typeof TaskQueueTable.$inferInsert> = {
       time_updated: now,
     }
@@ -1328,16 +1443,42 @@ export namespace TaskQueue {
     if (parsed.payload !== undefined) updates.payload = parsed.payload
     if (parsed.priority !== undefined) updates.priority = parsed.priority
 
-    const item = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
-      const row = db.update(TaskQueueTable).set(updates).where(eq(TaskQueueTable.id, parsed.id)).returning().get()
-      if (!row) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
-      return fromRow(row)
+    // Re-check editability as part of the same write as the isEditableStatus
+    // guard above (ADR-106 D5: "editing cannot race into overwriting a
+    // running turn"). Without this, an executor claim landing in the gap
+    // between that read and this write would let the edit land silently on a
+    // row that has since started running, and the executor — already
+    // mid-flight on the pre-edit body — would never see it.
+    const result = SessionShard.storeForProject(Instance.project.id, { write: true }).use((db) => {
+      const row = db
+        .update(TaskQueueTable)
+        .set(updates)
+        .where(
+          and(
+            eq(TaskQueueTable.id, parsed.id),
+            inArray(TaskQueueTable.status, EDITABLE_STATUSES),
+            parsed.expectedUpdatedAt === undefined
+              ? undefined
+              : eq(TaskQueueTable.time_updated, parsed.expectedUpdatedAt),
+          ),
+        )
+        .returning()
+        .get()
+      if (row) return { item: fromRow(row), raced: false }
+      const fresh = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, parsed.id)).get()
+      if (!fresh) throw new NotFoundError({ message: `Task queue item not found: ${parsed.id}` })
+      return { item: fromRow(fresh), raced: true }
     })
-    assertProjectItem(item)
-    publishUpdated(item)
-    await syncSessionQueueMetadata(item)
-    await syncWorkflowStatusIfNeeded(item)
-    return item
+    if (result.raced) {
+      throw new HTTPException(409, {
+        message: `Task queue item ${parsed.id} changed; reload it before editing (${result.item.status}).`,
+      })
+    }
+    assertProjectItem(result.item)
+    publishUpdated(result.item)
+    await syncSessionQueueMetadata(result.item)
+    await syncWorkflowStatusIfNeeded(result.item)
+    return result.item
   }
 
   export async function reorder(input: ReorderInput): Promise<Info> {
@@ -1381,7 +1522,20 @@ export namespace TaskQueue {
     const current = await get(id)
     assertActionStatus(current, "send now", ["queued", "waiting_for_idle", "paused"])
     const now = Date.now()
+    const sendNowFromStatuses: Status[] = ["queued", "waiting_for_idle", "paused"]
+    let raced: Status | undefined
     const changed = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      // Re-check the source status inside the same transaction as the write
+      // below (ADR-106 D5): a claim landing in the gap between the get() above
+      // and this transaction must not let sendNow force a running item back to
+      // "queued". Bail out before touching sibling positions so a lost race
+      // leaves no shifted rows to roll back.
+      const freshRow = db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get()
+      if (!freshRow) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
+      if (!sendNowFromStatuses.includes(freshRow.status as Status)) {
+        raced = freshRow.status as Status
+        return { item: fromRow(freshRow), shifted: [] as Info[] }
+      }
       const shifted = db
         .update(TaskQueueTable)
         .set({ position: sql`${TaskQueueTable.position} + 1`, time_updated: now })
@@ -1392,7 +1546,7 @@ export namespace TaskQueue {
             // Only the active queue participates in ordering. Terminal history
             // rows would otherwise be renumbered and re-published (an SSE event
             // storm on large projects) without affecting the schedule.
-            inArray(TaskQueueTable.status, ["queued", "waiting_for_idle", "paused"]),
+            inArray(TaskQueueTable.status, sendNowFromStatuses),
           ),
         )
         .returning()
@@ -1401,12 +1555,17 @@ export namespace TaskQueue {
       const row = db
         .update(TaskQueueTable)
         .set({ status: "queued", position: 0, time_updated: now })
-        .where(eq(TaskQueueTable.id, id))
+        .where(and(eq(TaskQueueTable.id, id), inArray(TaskQueueTable.status, sendNowFromStatuses)))
         .returning()
         .get()
       if (!row) throw new NotFoundError({ message: `Task queue item not found: ${id}` })
       return { item: fromRow(row), shifted }
     })
+    if (raced) {
+      throw new HTTPException(409, {
+        message: `Cannot send now task queue item ${id} while it is ${raced}.`,
+      })
+    }
     assertProjectItem(changed.item)
     for (const item of changed.shifted) publishUpdated(item)
     publishUpdated(changed.item)
@@ -1422,14 +1581,10 @@ export namespace TaskQueue {
     return true
   }
 
+  const EDITABLE_STATUSES: readonly Status[] = ["queued", "waiting_for_idle", "paused", "failed", "cancelled"]
+
   function isEditableStatus(status: Status) {
-    return (
-      status === "queued" ||
-      status === "waiting_for_idle" ||
-      status === "paused" ||
-      status === "failed" ||
-      status === "cancelled"
-    )
+    return EDITABLE_STATUSES.includes(status)
   }
 
   function assertActionStatus(item: Info, action: string, allowed: Status[]) {

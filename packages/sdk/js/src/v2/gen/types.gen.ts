@@ -4845,6 +4845,88 @@ export type WorktreeResetInput = {
   directory: string
 }
 
+/** Request payload shape for `GET /global/runtime` — Get managed runtime identity */
+export type GlobalRuntimeData = {
+  body?: never
+  path?: never
+  query?: never
+  url: "/global/runtime"
+}
+
+/** Error response payloads for `GET /global/runtime` — Get managed runtime identity */
+export type GlobalRuntimeErrors = {
+  /**
+   * Forbidden
+   */
+  403: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `GET /global/runtime` — Get managed runtime identity */
+export type GlobalRuntimeError = GlobalRuntimeErrors[keyof GlobalRuntimeErrors]
+
+/** Success response payloads for `GET /global/runtime` — Get managed runtime identity */
+export type GlobalRuntimeResponses = {
+  /**
+   * Managed runtime identity
+   */
+  200: {
+    schemaVersion: 1
+    id: string
+    directory: string
+    pid: number
+    host: string
+    version: string
+    startedAt: number
+  }
+}
+
+/** Successful response payload for `GET /global/runtime` — Get managed runtime identity */
+export type GlobalRuntimeResponse = GlobalRuntimeResponses[keyof GlobalRuntimeResponses]
+
+/** Request payload shape for `POST /global/runtime/stop` — Stop an identified managed runtime */
+export type GlobalRuntimeStopData = {
+  body?: {
+    id: string
+  }
+  path?: never
+  query?: never
+  url: "/global/runtime/stop"
+}
+
+/** Error response payloads for `POST /global/runtime/stop` — Stop an identified managed runtime */
+export type GlobalRuntimeStopErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+  /**
+   * Forbidden
+   */
+  403: AppErrorEnvelope
+  /**
+   * Not found
+   */
+  404: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /global/runtime/stop` — Stop an identified managed runtime */
+export type GlobalRuntimeStopError = GlobalRuntimeStopErrors[keyof GlobalRuntimeStopErrors]
+
+/** Success response payloads for `POST /global/runtime/stop` — Stop an identified managed runtime */
+export type GlobalRuntimeStopResponses = {
+  /**
+   * Runtime shutdown accepted
+   */
+  200: boolean
+}
+
+/** Successful response payload for `POST /global/runtime/stop` — Stop an identified managed runtime */
+export type GlobalRuntimeStopResponse = GlobalRuntimeStopResponses[keyof GlobalRuntimeStopResponses]
+
 /** Request payload shape for `GET /global/health` — Get health */
 export type GlobalHealthData = {
   body?: never
@@ -6275,6 +6357,7 @@ export type TaskQueueStatusResponse = TaskQueueStatusResponses[keyof TaskQueueSt
 /** Request payload shape for `POST /task-queue/{taskID}/edit` — Edit queued task */
 export type TaskQueueEditData = {
   body?: {
+    expectedUpdatedAt?: number
     title?: string
     worktree?: string | null
     agent?: string | null
@@ -13412,6 +13495,7 @@ export type SessionPromptAsyncData = {
     executionTimeoutMs?: number
     sourceTaskID?: string
     resumeOnRestart?: boolean
+    followup?: boolean
   }
   url: "/session/{sessionID}/prompt_async"
 }
@@ -13496,6 +13580,7 @@ export type SessionCommandAsyncData = {
     executionTimeoutMs?: number
     sourceTaskID?: string
     resumeOnRestart?: boolean
+    followup?: boolean
   }
   url: "/session/{sessionID}/command_async"
 }
@@ -13629,6 +13714,7 @@ export type SessionShellAsyncData = {
     executionTimeoutMs?: number
     sourceTaskID?: string
     resumeOnRestart?: boolean
+    followup?: boolean
   }
   url: "/session/{sessionID}/shell_async"
 }
