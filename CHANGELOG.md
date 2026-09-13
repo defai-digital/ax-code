@@ -6,9 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.16.5] - 2026-09-13
+
+### Changed
+
+- Prepare AX Code 7.16.5 and SDK 2.5.18.
+
 ### Fixed
 
 - Keep weekly schedules active across missing daylight-saving occurrences and preserve local daily/weekly wall-clock times instead of normalizing them into a different hour.
+- Release scheduled-task admission locks before awaiting the full run so successor requests can observe pending timeout cancellation instead of hanging.
 
 ## [7.16.4] - 2026-09-13
 
