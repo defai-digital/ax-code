@@ -106,7 +106,7 @@ describe("navigation rail clear", () => {
 })
 
 describe("preferred navigation width", () => {
-  test.each([24, 30, 36])("preserves the content minimum with preferred width %i", (preferred) => {
+  test.each([20, 24, 30, 36, 40])("preserves the content minimum with preferred width %i", (preferred) => {
     for (const width of [145, 146, 147, 150, 152, 158, 160, 200]) {
       const layout = navigationLayout(width, true, preferred)
       expect(layout.railWidth).toBe(width < 146 ? 0 : Math.min(preferred, width - NAVIGATION_CONTENT_MIN_WIDTH))

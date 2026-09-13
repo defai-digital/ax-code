@@ -120,6 +120,16 @@ export function createTuiDialogLoaders(input: {
           return () => <DialogNavigationWidth />
         },
       }),
+    showSidebarWidthDialog: () =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load sidebar width dialog",
+        fail: "Failed to open sidebar width",
+        load: async () => {
+          const { DialogSidebarWidth } = await import("@tui/component/dialog-navigation-width")
+          return () => <DialogSidebarWidth />
+        },
+      }),
     showNavigationInfo: (directory: string, title: string) =>
       DialogAlert.show(input.dialog, "Current project and session", `Project: ${directory}\n\nSession: ${title}`),
     showNavigationDialog: () =>

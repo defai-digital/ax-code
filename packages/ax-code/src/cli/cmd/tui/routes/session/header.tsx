@@ -72,7 +72,7 @@ export function Header() {
   let lastSubagentHeaderClickAt = 0
   const dimensions = useContentDimensions()
   const narrow = createMemo(() => {
-    const sw = dimensions().width > 120 ? computeSidebarWidth(dimensions().width) : 0
+    const sw = dimensions().width > 120 ? computeSidebarWidth(dimensions().width, kv.get("sidebar_width")) : 0
     return dimensions().width - sw < 100
   })
   const breadcrumbs = createMemo(() =>

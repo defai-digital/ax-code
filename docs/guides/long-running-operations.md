@@ -216,8 +216,9 @@ delete sessions; `/sessions` still lists them. The current session tree, pinned 
 working or waiting trees stay on the rail. Opening a session from `/sessions`
 brings it back to the list.
 
-Use `/navigation-width` or the navigation Width action to choose 24, 30, or 36
-columns (default 30). The preference is remembered and shrinks automatically when needed
+Use `/navigation-width` or the navigation Width action to choose 20, 24, 30, 36, or 40
+columns (default 30). The right session sidebar has the same Width action and
+`/sidebar-width`. Both preferences are remembered and shrink automatically when needed
 to preserve the main content. Use `/navigation` to hide or restore the left
 navigation rail on wide terminals. `/sidebar` hides or restores the right
 session sidebar the same way. On narrower terminals `/navigation` opens a session-and-agent

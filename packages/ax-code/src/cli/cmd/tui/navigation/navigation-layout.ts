@@ -1,10 +1,12 @@
-export const NAVIGATION_RAIL_WIDTH = 30
+import { CHROME_WIDTH_DEFAULT, CHROME_WIDTHS, chromeWidth } from "../chrome-width"
+
+export const NAVIGATION_RAIL_WIDTH = CHROME_WIDTH_DEFAULT
 export const NAVIGATION_DOCK_MIN_WIDTH = 146
 export const NAVIGATION_CONTENT_MIN_WIDTH = 122
-export const NAVIGATION_WIDTHS = [24, 30, 36] as const
+export const NAVIGATION_WIDTHS = CHROME_WIDTHS
 
 export function navigationWidth(value: unknown): number {
-  return typeof value === "number" && NAVIGATION_WIDTHS.some((width) => width === value) ? value : NAVIGATION_RAIL_WIDTH
+  return chromeWidth(value, NAVIGATION_RAIL_WIDTH)
 }
 
 /** Content columns after the rail's left padding and right split border. */

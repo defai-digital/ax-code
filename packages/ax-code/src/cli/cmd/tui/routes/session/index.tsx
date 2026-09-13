@@ -420,6 +420,7 @@ export function Session() {
     computeSessionMainPaneWidth({
       terminalWidth: dimensions().width,
       sidebarVisible: sidebarPanelVisible(),
+      sidebarPreferredWidth: kv.get("sidebar_width"),
     }),
   )
 

@@ -11,6 +11,7 @@ import { useContentDimensions } from "@tui/context/content-dimensions"
 import { createMemo, Show } from "solid-js"
 import type { RGBA } from "ax-tui"
 import { useSync } from "@tui/context/sync"
+import { useKV } from "@tui/context/kv"
 import { selectedForeground, useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { footerGoalChip } from "../routes/session/footer-view-model"
@@ -27,7 +28,10 @@ export function GoalChip(props: { sessionID: string }) {
   // Budget the objective for what the sidebar can actually show after the
   // status word and token counters; the label wraps on the narrowest
   // sidebars rather than pushing the version row off screen.
-  const maxObjective = createMemo(() => Math.max(10, computeSidebarWidth(dimensions().width) - 26))
+  const kv = useKV()
+  const maxObjective = createMemo(() =>
+    Math.max(10, computeSidebarWidth(dimensions().width, kv.get("sidebar_width")) - 26),
+  )
   const planning = createMemo(() =>
     hasActiveGoalPlanner({
       childSessions: sync.data.session,

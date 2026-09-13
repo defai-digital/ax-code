@@ -144,7 +144,8 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   })
   const sidebarStatusLabel = createMemo(() => sidebarStatusView()?.label)
   const dimensions = useContentDimensions()
-  const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width))
+  const kv = useKV()
+  const sidebarWidth = createMemo(() => computeSidebarWidth(dimensions().width, kv.get("sidebar_width")))
 
   const todoRemaining = createMemo(() => Todo.countActive(todo()))
 
@@ -351,7 +352,6 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   )
 
   const directory = useDirectory()
-  const kv = useKV()
 
   const hasProviders = createMemo(() => sync.data.provider.length > 0)
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
@@ -1094,9 +1094,14 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <span style={{ fg: theme.text }}>{directory().split("/").at(-1)}</span>
               </Show>
             </text>
-            <text fg={theme.textMuted}>
-              Sidebar <span style={{ fg: theme.text }}>/sidebar to hide</span>
-            </text>
+            <box flexShrink={0} flexDirection="row" gap={2}>
+              <text fg={theme.textMuted}>
+                Sidebar <span style={{ fg: theme.text }}>/sidebar to hide</span>
+              </text>
+              <box flexShrink={0} onMouseUp={() => command.trigger("session.sidebar.width")}>
+                <text fg={theme.textMuted} selectable={false}>{`Width ${sidebarWidth()}`}</text>
+              </box>
+            </box>
             <ModeChips />
             <GoalChip sessionID={props.sessionID} />
             <text fg={theme.textMuted}>

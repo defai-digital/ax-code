@@ -162,6 +162,15 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
+      title: "Set session sidebar width",
+      value: "session.sidebar.width",
+      category: "Session",
+      slash: { name: "sidebar-width" },
+      onSelect: () => {
+        void dialogs.showSidebarWidthDialog()
+      },
+    },
+    {
       title: "Clear session navigation list",
       value: "session.navigation.clear",
       category: "Session",
