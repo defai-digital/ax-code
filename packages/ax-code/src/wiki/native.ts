@@ -235,10 +235,10 @@ function toRelationshipRecord(
 function bundleCompleteness(pack: GraphContext.Pack): Completeness {
   if (pack.symbols.length === 0) return "queried-zero-results"
   if (pack.envelope.degraded || pack.candidateCapped) return "partial"
+  if (pack.omitted.symbols > 0 || pack.omitted.snippets > 0 || pack.omitted.relationships > 0) return "partial"
+  if (pack.snippets.some((snippet) => snippet.truncated)) return "partial"
   if (pack.symbols.every((symbol) => symbol.explain.completeness === "lsp-only")) return "lsp-only"
-  if (pack.symbols.some((symbol) => symbol.explain.completeness === "partial") || pack.omitted.symbols > 0) {
-    return "partial"
-  }
+  if (pack.symbols.some((symbol) => symbol.explain.completeness === "partial")) return "partial"
   return "complete"
 }
 

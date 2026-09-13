@@ -46,8 +46,9 @@ export function IdleRecap(props: { sessionID: string }) {
       enabled: tuiConfig?.idle_recap?.enabled ?? true,
       delayMs: Math.max(1_000, tuiConfig?.idle_recap?.delay_ms ?? 5_000),
       pregenerate: tuiConfig?.idle_recap?.pregenerate ?? true,
-      // store.prompt.input is a Solid store, so input edits re-run this memo
-      // without a polling interval.
+      // PromptRef.current is a Solid signal, so this memo re-runs when Prompt
+      // mounts below us; store.prompt.input then tracks typing. A plain let
+      // left first-observation recap armed with input: "" forever.
       input: promptRef.current?.current.input ?? "",
       autoScope: subtree ? "conversation" : "turn",
     }

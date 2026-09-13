@@ -296,4 +296,45 @@ describe("wiki native generator", () => {
     expect(prompt).toContain("[function] src/index.ts::boot")
     expect(prompt).toContain("src/index.ts:4")
   })
+
+  test("marks omitted graph relationships as partial instead of complete", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = `${tmp.path}/src/index.ts`
+    vi.mocked(GraphContext.build).mockResolvedValue(
+      emptyPack({
+        symbols: [
+          {
+            id: CodeNodeID.make("code_node_test"),
+            kind: "function",
+            name: "boot",
+            qualifiedName: "src/index.ts::boot",
+            file,
+            range: { start: { line: 3, character: 0 }, end: { line: 8, character: 1 } },
+            explain: {
+              source: "code-graph",
+              indexedAt: 1_700_000_000_000,
+              completeness: "full",
+              queryId: "q_omitted",
+            },
+          },
+        ],
+        omitted: { symbols: 0, snippets: 0, relationships: 4 },
+        envelope: {
+          data: {},
+          source: "graph",
+          completeness: "full",
+          timestamp: 1_700_000_000_000,
+          serverIDs: [],
+          degraded: false,
+        },
+      }),
+    )
+
+    const { evidence } = await runNative(tmp.path, true)
+    expect(evidence?.completeness).toBe("partial")
+    const prompt = (
+      vi.mocked(generateObject).mock.calls[0]?.[0] as { messages: Array<{ role: string; content: string }> }
+    ).messages.find((message) => message.role === "user")?.content
+    expect(prompt).toContain("completeness: partial")
+  })
 })
