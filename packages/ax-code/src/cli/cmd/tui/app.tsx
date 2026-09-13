@@ -933,16 +933,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     forkSessionWithRetries({ sessionID: args.sessionID, source: "startup" })
   })
 
-  createEffect(
-    on(
-      () => sync.data.provider_loaded && !sync.data.provider_failed && sync.data.provider.length === 0,
-      (isEmpty, wasEmpty) => {
-        // only trigger when we transition into an empty-provider state
-        if (!isEmpty || wasEmpty) return
-        void dialogs.showProviderDialog()
-      },
-    ),
-  )
+  // Provider setup is an explicit action from the new-task surface or prompt.
+  // Loading an empty provider list must not open a blocking startup dialog.
 
   const connected = useConnected()
   command.register(() =>

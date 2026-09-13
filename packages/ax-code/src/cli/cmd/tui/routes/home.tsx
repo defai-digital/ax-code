@@ -1,23 +1,16 @@
 import { setupGuidance } from "../component/setup-guidance"
 import { SetupGuidanceView } from "../component/setup-guidance-view"
 import { useContentDimensions } from "@tui/context/content-dimensions"
-// Home route — transitional per ADR-035 (Lean TUI / Rich Desktop Boundary).
-//
-// This route is kept as a backward-compat alias. The default startup path
-// resolves to a session or new-session route via the launch policy (see
-// navigation/launch-policy.ts). Dashboard/workflow supervision ownership moves
-// to AX Code Desktop.
-//
-// TODO(ADR-035): Re-evaluate whether this backward-compatibility route is still needed.
+// The internal Home route owns an unsubmitted new task. It renders the same
+// work-oriented shell as sessions without creating a backend session on open.
+// Keep its workspace, draft and explicit CLI prompt lifecycle contracts here.
 
 import { Prompt, type PromptRef } from "@tui/component/prompt"
-import { createEffect, createMemo, For, Match, on, onMount, Show, Switch } from "solid-js"
+import { createEffect, createMemo, Match, on, onMount, Show, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
-import { Logo } from "../component/logo"
 import { ModeChips } from "../component/mode-chips"
 import { WorkModeNotice } from "../component/work-mode-notice"
 import { useCommandDialog } from "../component/dialog-command"
-import { recentSessions, recentSessionTitle } from "../component/session-picker-view-model"
 import { homeStatusBarLayout, homeStatusBarMcpWidth } from "./home-layout"
 import { Locale } from "@/util/locale"
 import { useSync } from "../context/sync"
@@ -26,7 +19,6 @@ import { useArgs } from "../context/args"
 import { useDirectory } from "../context/directory"
 import { useRoute, useRouteData } from "@tui/context/route"
 import { useSDK } from "@tui/context/sdk"
-import { useKeybind } from "../context/keybind"
 import { usePromptRef } from "../context/prompt"
 import { useKV } from "../context/kv"
 import { Installation } from "@/installation"
@@ -50,7 +42,6 @@ export function Home() {
   const sync = useSync()
   const { theme } = useTheme()
   const nav = useRoute()
-  const keybind = useKeybind()
   const route = useRouteData("home")
   const sdk = useSDK()
   const kv = useKV()
@@ -79,7 +70,6 @@ export function Home() {
     return Object.values(sync.data.mcp).filter((x) => x.status === "connected").length
   })
 
-  const isFirstTimeUser = createMemo(() => sync.data.session_loaded && sync.data.session.length === 0)
   const guidance = createMemo(() =>
     setupGuidance({
       providerLoaded: sync.data.provider_loaded,
@@ -94,7 +84,6 @@ export function Home() {
   const modelLoading = createMemo(
     () => !sync.data.provider_failed && (!sync.data.provider_loaded || !local.model.ready),
   )
-  const recent = createMemo(() => recentSessions(sync.data.session))
   const agentLabel = createMemo(() => {
     const agent = local.agent.current()
     return agent.displayName ?? Locale.titlecase(agent.name)
@@ -170,6 +159,7 @@ export function Home() {
   )
   const directory = useDirectory()
   const dimensions = useContentDimensions()
+  const compact = () => dimensions().height < 22
   // The bottom bar stacks vertically once its segments no longer fit on one
   // line (promptFooterLayout-style degradation; the math lives in home-layout).
   const statusBarLayout = createMemo(() =>
@@ -185,40 +175,38 @@ export function Home() {
 
   return (
     <>
-      <box flexGrow={1} alignItems="center" paddingLeft={2} paddingRight={2}>
-        <box flexGrow={1} minHeight={0} />
-        <box height={4} minHeight={0} flexShrink={1} />
-        <box flexShrink={0}>
-          <Show
-            when={dimensions().width >= 60 && dimensions().height >= 28}
-            fallback={<text fg={theme.accent}>AX Code</text>}
-          >
-            <Logo />
-          </Show>
-        </box>
-        <Show when={!modelLoading()}>
-          <box flexShrink={0} maxWidth={75} paddingTop={1}>
-            <box flexDirection="row" flexShrink={0}>
+      <box flexGrow={1} minHeight={0} paddingTop={1} paddingLeft={2} paddingRight={2}>
+        <text fg={theme.accent} flexShrink={0} selectable={false}>
+          New task
+        </text>
+        <Show when={!modelLoading() && !compact()}>
+          <box flexDirection="row" flexShrink={0}>
+            <text fg={theme.textMuted} selectable={false}>
+              {agentLabel()} ·{" "}
+            </text>
+            <box onMouseUp={() => command.trigger(guidance().modelCommand)}>
               <text fg={theme.textMuted} selectable={false}>
-                {agentLabel()} ·{" "}
-              </text>
-              {/* Clicking the model name opens the model picker via the same
-                  registered-command path as the model_list keybind. The handler
-                  lives on the wrapping box, never on <text> (see ModeChips). */}
-              <box flexShrink={0} onMouseUp={() => command.trigger(guidance().modelCommand)}>
-                <text fg={theme.textMuted} selectable={false}>
-                  {local.model.parsed().model}
-                </text>
-              </box>
-              <text fg={theme.textMuted} selectable={false} flexShrink={1}>
-                {" "}
-                · {directory()}
+                {local.model.parsed().model}
               </text>
             </box>
           </box>
         </Show>
-        <box height={1} minHeight={0} flexShrink={1} />
-        <box width="100%" maxWidth={75} zIndex={1000} paddingTop={1} flexShrink={0}>
+        <scrollbox flexGrow={1} minHeight={0} marginTop={1}>
+          <SetupGuidanceView guidance={guidance()} compact={compact()} />
+          <Show when={guidance().state === "selected" && (!guidance().showIntroduction || compact())}>
+            <text flexShrink={0} fg={theme.textMuted} wrapMode="word">
+              Describe a task to start a new conversation.
+            </text>
+          </Show>
+          <Show when={!compact()}>
+            <box flexShrink={0} marginTop={1} onMouseUp={() => command.trigger("session.list")}>
+              <text fg={theme.accent} selectable={false} wrapMode="word">
+                /sessions - resume an existing session
+              </text>
+            </box>
+          </Show>
+        </scrollbox>
+        <box width="100%" zIndex={1000} paddingTop={1} flexShrink={0}>
           <WorkModeNotice />
           <Prompt
             ref={(r) => {
@@ -230,36 +218,6 @@ export function Home() {
             workspaceID={route.workspaceID}
           />
         </box>
-        <SetupGuidanceView guidance={guidance()} />
-        <Show when={!isFirstTimeUser() && recent().length > 0}>
-          <box
-            flexDirection="column"
-            alignItems="flex-start"
-            flexShrink={0}
-            width="100%"
-            maxWidth={75}
-            paddingLeft={2}
-            paddingRight={2}
-            paddingTop={1}
-          >
-            <For each={recent()}>
-              {(session) => (
-                <box flexDirection="row" onMouseUp={() => nav.navigate({ type: "session", sessionID: session.id })}>
-                  <text selectable={false}>
-                    <span style={{ fg: theme.accent }}>●</span>
-                    {"  "}
-                    <span style={{ fg: theme.text }}>{recentSessionTitle(session)}</span>
-                    <span style={{ fg: theme.textMuted }}> {Locale.todayTimeOrDateTime(session.time.updated)}</span>
-                  </text>
-                </box>
-              )}
-            </For>
-            <text fg={theme.textMuted} selectable={false}>
-              {"   "}click to resume · /sessions or {keybind.print("session_list")} for all
-            </text>
-          </box>
-        </Show>
-        <box flexGrow={1} minHeight={0} />
         <Toast />
       </box>
       <box

@@ -189,10 +189,17 @@ descendants to become explicitly idle, with no pending requests. Disconnects,
 resyncs, missing state, errors and cancellation can suppress the notice. It is
 a lifecycle notification, not evidence that tests passed or a goal completed.
 
-## Returning to setup
+## New tasks and setup
 
-If you dismiss the initial provider picker, use the visible `/connect` action
-on the new-chat screen. With a provider configured but no valid model selected,
+Normal startup opens the New task work surface with a bottom composer and
+session navigation. Opening it or typing a draft does not create a saved
+session; a session is created when you submit. Use `/sessions` or the left
+navigation to resume existing work. Explicit `--session`, `--continue` and
+`--prompt` behavior remains available; startup does not enable auto-resume.
+
+Provider setup does not open automatically. Use the visible `/connect` action
+in the work area when no provider is configured. With a provider configured
+but no valid model selected,
 the action changes to `/models`. Failed provider discovery points to `/status`;
 `/connect` and `/providers` remain available to repair configuration. A selected
 model is a configuration choice, not a credential or runtime readiness check.
