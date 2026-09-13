@@ -10,6 +10,7 @@ import { useKV } from "../../context/kv"
 import { ModeChips } from "../../component/mode-chips"
 import { GoalChip } from "../../component/goal-chip"
 import { TodoItem } from "../../component/todo-item"
+import { ChromeAction } from "../../component/chrome-action"
 import { useCommandDialog } from "../../component/dialog-command"
 import { useSDK } from "@tui/context/sdk"
 import { useToast } from "../../ui/toast"
@@ -1095,12 +1096,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               </Show>
             </text>
             <box flexShrink={0} flexDirection="row" gap={2}>
-              <text fg={theme.textMuted}>
-                <span style={{ fg: theme.text }}>/sidebar</span>
-              </text>
-              <box flexShrink={0} onMouseUp={() => command.trigger("session.sidebar.width")}>
-                <text fg={theme.textMuted} selectable={false}>{`Width ${sidebarWidth()}`}</text>
-              </box>
+              <ChromeAction onMouseUp={() => command.trigger("session.sidebar.toggle")}>/sidebar</ChromeAction>
+              <ChromeAction
+                onMouseUp={() => command.trigger("session.sidebar.width")}
+              >{`Width ${sidebarWidth()}`}</ChromeAction>
             </box>
             <ModeChips />
             <GoalChip sessionID={props.sessionID} />

@@ -18,6 +18,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useTheme } from "@tui/context/theme"
 import { useLocal } from "@tui/context/local"
+import { ChromeAction } from "./chrome-action"
 import { useCommandDialog } from "./dialog-command"
 import { ScheduleStatus } from "./schedule-status"
 import { SplitBorder } from "./border"
@@ -251,25 +252,13 @@ export function SessionNavigation(props: {
       <box flexShrink={0} gap={1}>
         <RailRule width={innerWidth()} color={theme.borderSubtle} />
         <box flexShrink={0} flexDirection="row" gap={2}>
-          <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
-            <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-              Details
-            </text>
-          </box>
-          <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.width")}>
-            <text flexShrink={0} fg={theme.textMuted} selectable={false}>{`Width ${props.width}`}</text>
-          </box>
-          <box flexShrink={0} onMouseUp={clearNavigationList}>
-            <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-              Clear
-            </text>
-          </box>
+          <ChromeAction onMouseUp={() => command.trigger("session.navigation.info")}>Details</ChromeAction>
+          <ChromeAction
+            onMouseUp={() => command.trigger("session.navigation.width")}
+          >{`Width ${props.width}`}</ChromeAction>
+          <ChromeAction onMouseUp={clearNavigationList}>Clear</ChromeAction>
         </box>
-        <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation")}>
-          <text flexShrink={0} fg={theme.textMuted} selectable={false}>
-            <span style={{ fg: theme.text }}>/navigation</span>
-          </text>
-        </box>
+        <ChromeAction onMouseUp={() => command.trigger("session.navigation")}>/navigation</ChromeAction>
       </box>
     </box>
   )
