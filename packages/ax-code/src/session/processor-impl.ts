@@ -188,6 +188,8 @@ export namespace SessionProcessor {
       eventInput: unknown
       fallbackInput: unknown
       output?: unknown
+      /** Precomputed canonical form of `output`; avoids a second full walk. */
+      outputFingerprint?: string
     }) => {
       recentToolRing.push({
         tool: input.tool,
@@ -199,7 +201,7 @@ export namespace SessionProcessor {
           (input.eventInput
             ? safeStringify(redactPersistedBashInput(input.tool, jsonSafeInput(input.eventInput)))
             : safeStringify(redactPersistedBashInput(input.tool, jsonSafeInput(input.fallbackInput)))),
-        output: input.output === undefined ? undefined : canonicalize(input.output),
+        output: input.output === undefined ? undefined : (input.outputFingerprint ?? canonicalize(input.output)),
       })
       if (recentToolRing.length > recentToolRingLimit) recentToolRing.shift()
       delete toolcalls[input.toolCallId]
@@ -953,6 +955,7 @@ export namespace SessionProcessor {
                       eventInput: value.input,
                       fallbackInput: match.state.input,
                       output: value.output.output,
+                      outputFingerprint: completedOutput,
                     })
                   } else {
                     log.warn("late or duplicate tool result ignored", {

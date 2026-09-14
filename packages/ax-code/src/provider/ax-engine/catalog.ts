@@ -225,12 +225,23 @@ export async function getAxEngineModelsCatalog(
     server.ready && server.state
       ? await fetchAxEngineModelContracts({ baseURL: server.state.baseURL, signal: options.signal }).catch(() => [])
       : []
-  for (const definition of definitions) {
+  // Each definition's local status is an independent filesystem inspection.
+  // Resolve them in parallel (matching the Promise.all above) instead of
+  // awaiting one model at a time; index mapping preserves catalog order and
+  // the "no quantization" skip.
+  const inspectable = definitions.flatMap((definition) => {
+    const quant = definition.quantizations[definition.defaultQuantization]
+    return quant ? [{ definition, quant }] : []
+  })
+  const locals = await Promise.all(
+    inspectable.map(({ definition }) =>
+      getModelStatus({ modelID: definition.id, quantization: definition.defaultQuantization }),
+    ),
+  )
+  for (const [index, { definition, quant }] of inspectable.entries()) {
     const modelID = definition.id
     const quantization = definition.defaultQuantization
-    const quant = definition.quantizations[quantization]
-    if (!quant) continue
-    const local = await getModelStatus({ modelID, quantization })
+    const local = locals[index]!
     const disk = evaluateDiskStatus({
       path: diskRootStatus.path,
       modelID,

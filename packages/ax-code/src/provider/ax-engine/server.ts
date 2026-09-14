@@ -270,7 +270,7 @@ async function waitForPidExit(pid: number, timeoutMs: number): Promise<boolean> 
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     if (!pidLive(pid)) return true
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await delay(100)
   }
   return !pidLive(pid)
 }
