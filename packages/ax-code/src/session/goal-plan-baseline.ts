@@ -200,7 +200,8 @@ function dashCScript(args: ShellWord[]) {
     }
     if (value.startsWith("--rcfile=") || value.startsWith("--init-file=")) continue
     if (SHELL_VALUE_OPTIONS.has(value)) {
-      index++
+      const next = args[index + 1]?.value
+      if (next && !next.startsWith("-")) index++
       continue
     }
     if (value.startsWith("-")) continue
@@ -366,7 +367,7 @@ function commandSubstitutions(input: string) {
       index += 2
       continue
     }
-    if (char === "#" && (index === 0 || /[\s;&|<>()]/.test(input[index - 1]!))) {
+    if (char === "#" && (index === 0 || /[\s;&|]/.test(input[index - 1]!))) {
       while (index < input.length && input[index] !== "\n") index++
       continue
     }
