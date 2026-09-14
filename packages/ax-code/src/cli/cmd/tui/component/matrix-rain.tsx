@@ -45,6 +45,7 @@ export type MatrixRainDoneReason = "timeout" | "skip"
 
 export function MatrixRain(props: { durationMs?: number; onDone: (reason: MatrixRainDoneReason) => void }) {
   useHiddenTerminalCursor()
+  const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
   const durationMs = props.durationMs ?? MATRIX_RAIN_DURATION_MS
 
@@ -75,12 +76,17 @@ export function MatrixRain(props: { durationMs?: number; onDone: (reason: Matrix
   })
 
   // Only Escape is consumed. Ordinary keys keep flowing to the prompt, so the
-  // overlay never eats a keystroke the user did not aim at it.
+  // overlay never eats a keystroke the user did not aim at it — which includes
+  // keyboard selections: the moment one exists under the cover, yield instead
+  // of hiding it.
   useKeyboard((evt) => {
-    if (evt.name !== "escape") return
-    evt.preventDefault()
-    evt.stopPropagation()
-    props.onDone("skip")
+    if (evt.name === "escape") {
+      evt.preventDefault()
+      evt.stopPropagation()
+      props.onDone("skip")
+      return
+    }
+    if (renderer.hasSelection) props.onDone("skip")
   })
 
   return (

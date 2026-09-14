@@ -84,10 +84,15 @@ export function StartupLogo(props: { durationMs?: number; onDone: () => void }) 
   })
 
   useKeyboard((evt) => {
-    if (evt.name !== "escape") return
-    evt.preventDefault()
-    evt.stopPropagation()
-    props.onDone()
+    if (evt.name === "escape") {
+      evt.preventDefault()
+      evt.stopPropagation()
+      props.onDone()
+      return
+    }
+    // Keys pass through to the prompt, so a keyboard selection can grow under
+    // the cover. Yield as soon as one exists instead of hiding it.
+    if (renderer.hasSelection) props.onDone()
   })
 
   return (

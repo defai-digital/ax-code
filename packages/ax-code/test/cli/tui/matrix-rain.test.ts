@@ -165,6 +165,24 @@ describe("matrix rain frames", () => {
   })
 })
 
+describe("overlay yields to a selection", () => {
+  test("a live selection stops the overlay even without a dialog", () => {
+    expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: false })).toBe(false)
+    expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: true })).toBe(true)
+    expect(shouldStopMatrixRain({ dialogOpen: true, hasSelection: false })).toBe(true)
+  })
+
+  test("both overlays yield when the renderer reports a selection", () => {
+    const dir = "../../../src/cli/cmd/tui/component"
+    expect(readFileSync(path.join(import.meta.dirname, dir, "matrix-rain.tsx"), "utf8")).toContain(
+      "renderer.hasSelection",
+    )
+    expect(readFileSync(path.join(import.meta.dirname, dir, "startup-logo.tsx"), "utf8")).toContain(
+      "renderer.hasSelection",
+    )
+  })
+})
+
 describe("matrix rain column weight", () => {
   test("splits the glyph set into disjoint ASCII pools", () => {
     expect(MATRIX_RAIN_HEAVY_GLYPHS.length).toBeGreaterThan(0)

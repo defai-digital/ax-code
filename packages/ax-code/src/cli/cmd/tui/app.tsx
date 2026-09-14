@@ -321,6 +321,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     if (startupRainShowsLogo(startupRainPhase())) setStartupRainPhase(completeStartupRain())
   }
   createEffect(() => {
+    // Selection is not checked here on purpose: a selection can only appear
+    // under the overlays through the keys they pass through, and the overlays
+    // yield on their own the moment `renderer.hasSelection` becomes true. This
+    // stop path therefore only has to guard dialogs.
     if (!shouldStopMatrixRain({ dialogOpen: dialog.stack.length > 0, hasSelection: false })) return
     batch(() => {
       if (matrixPlaying()) setMatrixPlaying(false)
