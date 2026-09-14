@@ -53,6 +53,7 @@ concurrency:
 permissions:
   contents: read
   actions: read
+  pull-requests: read
 
 jobs:
   evidence-native:
@@ -68,9 +69,39 @@ jobs:
       - uses: ./.github/actions/setup-ax-code-toolchain
         with:
           checkout: "false"
-      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Decide native evidence rebuild
+        id: native
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename' || true)"
+          if [ -z "$files" ]; then
+            echo "Could not list pull request files; rebuilding native evidence."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$files" | node --experimental-strip-types script/ci-native-evidence-needed.ts; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Skip unchanged native evidence rebuild
+        if: steps.native.outputs.run != 'true'
+        shell: bash
+        run: echo "Skipping native evidence rebuild; crates and addon inputs are unchanged on this pull request."
+      - name: Install deps
+        if: steps.native.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: ./.github/actions/build-evidence-cache
+        if: steps.native.outputs.run == 'true'
       - name: Test native evidence contracts
+        if: steps.native.outputs.run == 'true'
         run: cargo test --manifest-path crates/Cargo.toml -p ax-code-fs --lib
 
   windows-snapshot:

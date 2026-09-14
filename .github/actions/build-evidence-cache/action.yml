@@ -12,6 +12,11 @@ runs:
     - name: Prepare Rust toolchain
       shell: bash
       run: rustup toolchain install stable --profile minimal
+    - name: Cache cargo
+      uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1 # v2.8.1
+      with:
+        workspaces: crates -> target
+        cache-on-failure: true
     - name: Locate Windows libclang
       if: ${{ runner.os == 'Windows' }}
       shell: pwsh
