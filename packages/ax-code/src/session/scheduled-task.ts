@@ -615,6 +615,15 @@ export namespace ScheduledTask {
   // never recorded as an execution failure.
   class RunNowOverlapAborted extends Error {}
 
+  // Marks a workflow dispatch failure whose run row and task state were
+  // already finalized inside runWorkflowNow; runNow's catch unwraps and
+  // rethrows it without double-recording.
+  class WorkflowDispatchRecorded extends Error {
+    constructor(readonly original: unknown) {
+      super(toErrorMessage(original))
+    }
+  }
+
   export async function runNow(id: ScheduledTaskID): Promise<RunNowResult> {
     const current = await get(id)
     if (current.status === "disabled") {
@@ -680,6 +689,11 @@ export namespace ScheduledTask {
           message: `Scheduled task ${id} already has a run in progress; wait for it to finish.`,
         })
       }
+      if (error instanceof WorkflowDispatchRecorded) {
+        // runWorkflowNow already finalized the run row and task state;
+        // surface the original dispatch error without double-recording.
+        throw error.original
+      }
       if (claimedQueueID) {
         // The run row exists and is `running`: finalize it through the queue
         // outcome path (like the scheduler tick's dispatch failure does) so a
@@ -701,27 +715,33 @@ export namespace ScheduledTask {
     const { WorkflowTemplate } = await import("@/workflow/template")
     const { WorkflowScheduler } = await import("@/workflow/scheduler")
     const startOptions = WorkflowStartOptionsSchema.parse(current.workflowStartOptions ?? {}) as WorkflowStartOptions
+    // Create the inert (not-yet-started) workflow record BEFORE the claim so
+    // the open-run guard is authoritative: if the guard aborts, nothing
+    // observable ever starts. Starting first and claiming after would let a
+    // due tick claim the same occurrence in the gap and double-fire the
+    // workflow (same check-then-act class as the queue path, 2026-09-14).
     const run = await WorkflowTemplate.createRun({
       templateID: WorkflowTemplateIDSchema.parse(current.workflowTemplateID) as WorkflowTemplateID,
       sourceTaskID: current.id,
     })
-    const workflowRun = await WorkflowScheduler.start(run.id, startOptions)
     const now = Date.now()
+    const deadlineMs = current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
     const { task, run: runRow } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction(
       (db) => {
+        if (hasOpenRunIn(db, current.id, now, deadlineMs)) throw new RunNowOverlapAborted()
         const runRow = insertRunRow(db, {
           taskID: current.id,
           triggerType: "manual",
           status: "running",
           occurrenceAt: now,
           coalescedCount: 1,
-          workflowRunID: workflowRun.id,
+          workflowRunID: run.id,
           now,
         })
         const row = db
           .update(ScheduledTaskTable)
           .set({
-            last_workflow_run_id: workflowRun.id,
+            last_workflow_run_id: run.id,
             last_run_at: now,
             error: null,
             time_updated: now,
@@ -735,7 +755,18 @@ export namespace ScheduledTask {
     )
     publishUpdated(task)
     publishFired(task, runRow)
-    return { task, workflowRun }
+    try {
+      const workflowRun = await WorkflowScheduler.start(run.id, startOptions)
+      return { task, workflowRun }
+    } catch (error) {
+      // The run row is claimed and `running`: finalize it through the
+      // workflow outcome path so a start failure cannot wedge overlap
+      // protection until orphan reconciliation or bypass the failure policy.
+      await recordWorkflowOutcome(current.id, "failed", error).catch((recordError) => {
+        log.warn("scheduled workflow dispatch failure record failed", { taskID: current.id, error: recordError })
+      })
+      throw new WorkflowDispatchRecorded(error)
+    }
   }
 
   async function recordRunFailure(id: ScheduledTaskID, error: unknown): Promise<Info> {

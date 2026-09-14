@@ -199,9 +199,18 @@ export namespace Permission {
       const row = Database.use((db) =>
         db.select().from(PermissionTable).where(eq(PermissionTable.project_id, Instance.project.id)).get(),
       )
+      const approved = row?.data ?? []
+      const legacy = legacyBashFlagGrants(approved)
+      if (legacy.length > 0) {
+        log.warn(
+          "legacy bash always-grants with flag-terminated patterns detected (pre-2026-09-14 BashArity bug): " +
+            "auto-approval is broader than the command that was approved. Review and re-approve via /permissions.",
+          { count: legacy.length, patterns: legacy.slice(0, 10).map((rule) => rule.pattern) },
+        )
+      }
       return {
         pending: new Map<PermissionID, PendingEntry>(),
-        approved: row?.data ?? [],
+        approved,
         projectID: Instance.project.id,
         alwaysReplyQueue: Promise.resolve(),
       } satisfies State
@@ -234,6 +243,26 @@ export namespace Permission {
 
   export function isNeverAutonomousAutoApprove(permission: string): boolean {
     return NEVER_AUTONOMOUS_AUTOAPPROVE.has(permission)
+  }
+
+  // BashArity.prefix used to count flag tokens as subcommands, so "always"
+  // grants for flag-prefixed commands persisted patterns whose fixed prefix
+  // ends at a flag (e.g. `git --no-pager *`), auto-approving every later
+  // subcommand behind the same flag. The generator is fixed (2026-09-14);
+  // rules saved before the fix keep the over-broad shape. They are
+  // indistinguishable from hand-written rules, so they are surfaced for
+  // review at load time and never rewritten or removed automatically.
+  export function legacyBashFlagGrants(rules: Ruleset): Rule[] {
+    return rules.filter(
+      (rule) => rule.permission === "bash" && rule.action === "allow" && isFlagTerminatedGrant(rule.pattern),
+    )
+  }
+
+  function isFlagTerminatedGrant(pattern: string): boolean {
+    if (!pattern.endsWith(" *")) return false
+    const tokens = pattern.slice(0, -2).split(" ").filter(Boolean)
+    // The degenerate " *" shape came from the prototype-chain lookup bug.
+    return tokens.length === 0 || tokens[tokens.length - 1]!.startsWith("-")
   }
 
   async function serializeAlwaysReply<T>(s: State, fn: () => Promise<T>) {
