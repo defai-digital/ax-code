@@ -330,6 +330,7 @@ export namespace Log {
     options: { keep?: number } = {},
   ): Promise<{ removed: number; kept: number }> {
     const keep = options.keep ?? KEEP_STAMPED_LOGS
+    if (!Number.isSafeInteger(keep) || keep < 0) throw new RangeError("Log retention must be a non-negative integer")
     const files = (
       await Glob.scan("*.log", {
         cwd: dir,
@@ -340,16 +341,17 @@ export namespace Log {
       .filter((file) => isManagedLogName(path.basename(file)))
       .sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
 
-    const filesByName = new Map(files.map((file) => [path.basename(file), file]))
-    const logs = files.filter((file) => !path.basename(file).endsWith(".json.log"))
-    const keepLogs = new Set(logs.slice(-keep))
+    const companionPath = (file: string) =>
+      file.endsWith(".json.log") ? `${file.slice(0, -".json.log".length)}.log` : file
+    // Rank runs by either representation: an empty text log may already have
+    // been pruned while its JSON diagnostics still belong in the retention set.
+    const logs = [...new Set(files.map(companionPath))].sort()
+    const keepLogs = new Set(keep === 0 ? [] : logs.slice(-keep))
     const newest = logs[logs.length - 1]
     let removed = 0
 
     for (const file of files) {
-      const name = path.basename(file)
-      const companionName = name.endsWith(".json.log") ? `${name.slice(0, -".json.log".length)}.log` : name
-      const companion = filesByName.get(companionName) ?? file
+      const companion = companionPath(file)
       const retained = keepLogs.has(companion)
       let empty = false
       try {
@@ -358,8 +360,12 @@ export namespace Log {
         continue
       }
       if (retained && !(empty && companion !== newest)) continue
-      await fs.unlink(file).catch(() => {})
-      removed += 1
+      try {
+        await fs.unlink(file)
+        removed += 1
+      } catch {
+        // Concurrent cleanup or filesystem errors must not inflate the count.
+      }
     }
 
     return { removed, kept: files.length - removed }

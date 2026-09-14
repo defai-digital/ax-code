@@ -45,11 +45,13 @@ Revoke trust for the current server fingerprint:
 ax-code mcp untrust <name>
 ```
 
-Remove a configured server from project or global config:
+Remove a configured server from the current project's config:
 
 ```bash
 ax-code mcp remove <name> --force
 ```
+
+Add `--global` to remove from global config instead. Removal stays within the selected scope and fails if the server is absent there. Omit `--force` to review the target path before confirming.
 
 Trust is stored outside the repository and is scoped to the current project plus the server fingerprint. Changing material MCP config, such as command, URL, OAuth mode, headers, or explicit environment values, invalidates previous trust.
 

@@ -9,7 +9,7 @@ import { Instance } from "../../project/instance"
 import { Installation } from "../../installation"
 import path from "path"
 import { Global } from "../../global"
-import { modify, applyEdits, parse as parseJsonc } from "jsonc-parser"
+import { modify, applyEdits, parse as parseJsonc, type ParseError } from "jsonc-parser"
 import { Filesystem } from "../../util/filesystem"
 import { FileLock } from "../../util/filelock"
 import { Lock } from "../../util/lock"
@@ -593,6 +593,13 @@ async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: s
   return configPath
 }
 
+function hasMcpName(text: string, name: string, configPath: string): boolean {
+  const errors: ParseError[] = []
+  const parsed = parseJsonc(text, errors, { allowTrailingComma: true })
+  if (errors.length > 0 || !isRecord(parsed)) throw new Error(`Invalid config file: ${configPath}`)
+  return isRecord(parsed.mcp) && Object.hasOwn(parsed.mcp, name)
+}
+
 async function removeMcpFromConfig(name: string, configPath: string) {
   using _process = await Lock.write(configPath)
   using _crossProcess = await FileLock.acquire(configPath)
@@ -600,6 +607,9 @@ async function removeMcpFromConfig(name: string, configPath: string) {
     throw new Error(`Config file not found: ${configPath}`)
   }
   const text = await Filesystem.readText(configPath)
+  if (!hasMcpName(text, name, configPath)) {
+    throw new Error(`MCP server "${name}" is not configured in ${configPath}`)
+  }
   const edits = modify(text, ["mcp", name], undefined, {
     formattingOptions: { tabSize: 2, insertSpaces: true },
   })
@@ -637,28 +647,18 @@ export const McpRemoveCommand = cmd({
         UI.empty()
         prompts.intro("Remove MCP server")
 
-        const [projectConfigPath, globalConfigPath] = await Promise.all([
-          resolveConfigPath(Instance.worktree),
-          resolveConfigPath(Global.Path.config, true),
-        ])
-        const preferred = args.global ? globalConfigPath : projectConfigPath
-        const fallback = args.global ? projectConfigPath : globalConfigPath
+        const configPath = await resolveConfigPath(args.global ? Global.Path.config : Instance.worktree, args.global)
 
         const hasName = async (configPath: string) => {
           if (!(await Filesystem.exists(configPath))) return false
-          const parsed = parseJsonc(await Filesystem.readText(configPath))
-          return Boolean(isRecord(parsed) && isRecord(parsed.mcp) && name in parsed.mcp)
+          return hasMcpName(await Filesystem.readText(configPath), name, configPath)
         }
 
-        let configPath = preferred
         if (!(await hasName(configPath))) {
-          if (fallback !== preferred && (await hasName(fallback))) configPath = fallback
-          else {
-            prompts.log.error(`MCP server "${name}" is not configured in ${preferred}`)
-            prompts.outro("Done")
-            process.exitCode = 1
-            return
-          }
+          prompts.log.error(`MCP server "${name}" is not configured in ${configPath}`)
+          prompts.outro("Done")
+          process.exitCode = 1
+          return
         }
 
         if (!args.force) {

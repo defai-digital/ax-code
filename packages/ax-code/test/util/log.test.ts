@@ -1,10 +1,50 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
 describe("Log.prune", () => {
+  test.each([-1, 1.5, NaN, Infinity])("rejects invalid retention count %s", async (keep) => {
+    await using tmp = await tmpdir()
+    await expect(Log.prune(tmp.path, { keep })).rejects.toThrow("non-negative integer")
+  })
+
+  test("does not count failed deletions as removed logs", async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "2026-04-22T015403-649-runtime-old.log")
+    await fs.writeFile(file, "old")
+    const unlink = vi.spyOn(fs, "unlink").mockRejectedValue(new Error("access denied"))
+    try {
+      expect(await Log.prune(tmp.path, { keep: 0 })).toEqual({ removed: 0, kept: 1 })
+      expect(await fs.readFile(file, "utf8")).toBe("old")
+    } finally {
+      unlink.mockRestore()
+    }
+  })
+
+  test("retains recent JSON diagnostics across repeated pruning of empty text logs", async () => {
+    await using tmp = await tmpdir()
+    const stem = "2026-04-22T015403-649-runtime-json"
+    await fs.writeFile(path.join(tmp.path, `${stem}.log`), "")
+    await fs.writeFile(path.join(tmp.path, `${stem}.json.log`), '{"message":"diagnostic"}\n')
+    await fs.writeFile(path.join(tmp.path, "2026-04-22T015405-000-runtime-new.log"), "new")
+
+    await Log.prune(tmp.path)
+    await Log.prune(tmp.path)
+
+    expect(await fs.readFile(path.join(tmp.path, `${stem}.json.log`), "utf8")).toContain("diagnostic")
+  })
+
+  test("keep zero removes all managed logs and preserves unrelated files", async () => {
+    await using tmp = await tmpdir()
+    await fs.writeFile(path.join(tmp.path, "2026-04-22T015403-649-runtime-old.log"), "old")
+    await fs.writeFile(path.join(tmp.path, "dev.log"), "unmanaged")
+
+    expect(await Log.prune(tmp.path, { keep: 0 })).toEqual({ removed: 1, kept: 0 })
+    expect(await fs.readdir(tmp.path)).toEqual(["dev.log"])
+  })
+
   test("removes old stamped logs including json.log pairs and empty files", async () => {
     await using tmp = await tmpdir()
     const names = [
