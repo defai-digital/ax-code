@@ -51,27 +51,6 @@ export const MATRIX_RAIN_LEVEL_RGB: readonly (readonly [number, number, number])
   [205, 255, 220],
 ]
 
-/**
- * Color at a possibly fractional ramp level, clamped to the table. Integer
- * levels return the table entry exactly, which is what the rain's per-cell
- * brightness indexes; the logo passes a fractional level so its color slides
- * smoothly from the green tail to the white head.
- */
-export function matrixRainRampRgb(level: number): [number, number, number] {
-  const last = MATRIX_RAIN_LEVEL_RGB.length - 1
-  const clamped = Math.min(last, Math.max(0, level))
-  const lower = Math.floor(clamped)
-  const upper = Math.min(last, lower + 1)
-  const t = clamped - lower
-  const from = MATRIX_RAIN_LEVEL_RGB[lower]
-  const to = MATRIX_RAIN_LEVEL_RGB[upper]
-  return [
-    Math.round(from[0] + (to[0] - from[0]) * t),
-    Math.round(from[1] + (to[1] - from[1]) * t),
-    Math.round(from[2] + (to[2] - from[2]) * t),
-  ]
-}
-
 /** Injectable randomness so frames are deterministic in tests. */
 export type MatrixRainRandom = () => number
 

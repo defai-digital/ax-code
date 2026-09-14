@@ -23,7 +23,6 @@ import {
   createStartupLogoGlyphs,
   easeOutLogoDrop,
   initialStartupRainPhase,
-  matrixRainRampRgb,
   matrixRainRows,
   resolveStartupRainPhase,
   shouldAutoPlayMatrixRain,
@@ -509,6 +508,27 @@ describe("startup logo drop", () => {
     ).toBe("CD")
   })
 
+  test("lands the exact mark once the drop settles", () => {
+    const glyphs = createStartupLogoGlyphs({ lines: logo, random: () => 0.3 })
+    const frame = startupLogoFrame({
+      glyphs,
+      elapsedMs: STARTUP_LOGO_DURATION_MS,
+      blockLeft: 13,
+      blockTop: 9,
+      width: 80,
+      height: 24,
+    })
+    const rendered = frame.rows.map((row) =>
+      row
+        .map((run) => run.text)
+        .join("")
+        .slice(13)
+        .trimEnd(),
+    )
+    expect(frame.top).toBe(9)
+    expect(rendered).toEqual(logo.map((line) => line.trimEnd()))
+  })
+
   test("keeps every frame inside the terminal and ASCII-only", () => {
     const glyphs = createStartupLogoGlyphs({ lines: logo, random: () => 0.4 })
     for (let elapsed = 0; elapsed <= STARTUP_LOGO_DURATION_MS; elapsed += STARTUP_LOGO_TICK_MS) {
@@ -527,26 +547,14 @@ describe("startup logo drop", () => {
 describe("startup logo color", () => {
   test("shares the rain brightness ramp", () => {
     expect(MATRIX_RAIN_LEVEL_RGB.length).toBe(MATRIX_RAIN_LEVELS + 1)
-    expect(matrixRainRampRgb(0)).toEqual([0, 0, 0])
-    expect(matrixRainRampRgb(MATRIX_RAIN_LEVELS)).toEqual([205, 255, 220])
-  })
-
-  test("returns table entries exactly at integer levels", () => {
-    for (let level = 0; level <= MATRIX_RAIN_LEVELS; level++) {
-      expect(matrixRainRampRgb(level)).toEqual([...MATRIX_RAIN_LEVEL_RGB[level]])
-    }
-  })
-
-  test("interpolates fractional levels and clamps out-of-range ones", () => {
-    expect(matrixRainRampRgb(1.5)).toEqual([0, 115, 13])
-    expect(matrixRainRampRgb(-5)).toEqual([0, 0, 0])
-    expect(matrixRainRampRgb(99)).toEqual([205, 255, 220])
+    expect(MATRIX_RAIN_LEVEL_RGB[0]).toEqual([0, 0, 0])
+    expect(MATRIX_RAIN_LEVEL_RGB[MATRIX_RAIN_LEVELS]).toEqual([205, 255, 220])
   })
 
   test("maps fall progress onto the ramp", () => {
     expect(startupLogoDropLevel(0)).toBe(1)
+    expect(startupLogoDropLevel(0.5)).toBe(2.5)
     expect(startupLogoDropLevel(1)).toBe(MATRIX_RAIN_LEVELS)
-    expect(matrixRainRampRgb(startupLogoDropLevel(0))).toEqual(matrixRainRampRgb(1))
   })
 
   test("each character warms from green to the white head as it lands", () => {
