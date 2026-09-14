@@ -97,7 +97,7 @@ describe("tui dialog action dispatch", () => {
   test("provider type select replaces the dialog instead of remounting DialogSelect in place", async () => {
     const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
 
-    expect(dialogProvider).toContain('title="Provider type"')
+    expect(dialogProvider).toContain('title={t("provider.type")}')
     expect(dialogProvider).toContain("dialog.replace(() => (")
     expect(dialogProvider).toContain("providerDialogOptionsForType(")
     expect(dialogProvider).not.toMatch(/<Show when=\{category\(\)\}/)

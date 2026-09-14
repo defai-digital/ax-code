@@ -78,7 +78,7 @@ describe("tui provider dialog SDK-error handling", () => {
 
   test("CodeMethod derives the inline error from the payload, not a static string", async () => {
     const src = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
-    const block = sliceFrom(src, 'placeholder="Authorization code"', 1400)
+    const block = sliceFrom(src, 'placeholder={t("provider.authCode")}', 1400)
     expect(block).toContain("const result = await sdk.client.provider.oauth.callback(")
     expect(block).toContain('setError(sdkErrorMessage(result.error, "Invalid code"))')
     // The signal now carries a message string, rendered in the description.

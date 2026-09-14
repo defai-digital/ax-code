@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { TextAttributes } from "ax-tui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
@@ -5,7 +6,6 @@ import { createStore } from "solid-js/store"
 import { For } from "solid-js"
 import { useKeyboard } from "ax-tui/solid"
 import { useToast } from "./toast"
-import { Locale } from "@/util/locale"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "tui.dialog-confirm" })
@@ -21,6 +21,7 @@ export type DialogConfirmProps = {
 export type DialogConfirmResult = boolean | undefined
 
 export function DialogConfirm(props: DialogConfirmProps) {
+  const { t } = useLanguage()
   const dialog = useDialog()
   const toast = useToast()
   const { theme } = useTheme()
@@ -54,10 +55,10 @@ export function DialogConfirm(props: DialogConfirmProps) {
       evt.preventDefault()
       evt.stopPropagation()
       if (store.active === "confirm") {
-        runDialogConfirmAction(() => props.onConfirm?.(), `Failed to confirm ${props.title.toLowerCase()}`)
+        runDialogConfirmAction(() => props.onConfirm?.(), t("error.confirm", { title: props.title }))
       }
       if (store.active === "cancel") {
-        runDialogConfirmAction(() => props.onCancel?.(), `Failed to cancel ${props.title.toLowerCase()}`)
+        runDialogConfirmAction(() => props.onCancel?.(), t("error.cancel", { title: props.title }))
       }
       dialog.clear()
     }
@@ -90,16 +91,16 @@ export function DialogConfirm(props: DialogConfirmProps) {
               onMouseDown={() => setStore("active", key)}
               onMouseUp={() => {
                 if (key === "confirm") {
-                  runDialogConfirmAction(() => props.onConfirm?.(), `Failed to confirm ${props.title.toLowerCase()}`)
+                  runDialogConfirmAction(() => props.onConfirm?.(), t("error.confirm", { title: props.title }))
                 }
                 if (key === "cancel") {
-                  runDialogConfirmAction(() => props.onCancel?.(), `Failed to cancel ${props.title.toLowerCase()}`)
+                  runDialogConfirmAction(() => props.onCancel?.(), t("error.cancel", { title: props.title }))
                 }
                 dialog.clear()
               }}
             >
               <text fg={key === store.active ? theme.selectedListItemText : theme.textMuted}>
-                {Locale.titlecase(key === "cancel" ? (props.label ?? key) : key)}
+                {key === "cancel" ? (props.label ?? t("common.cancel")) : t("common.confirm")}
               </text>
             </box>
           )}

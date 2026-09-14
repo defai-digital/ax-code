@@ -33,7 +33,8 @@
     "build:node-tui": "tsx script/build-node-tui.ts",
     "tui:startup-smoke": "tsx script/tui-startup-smoke.ts",
     "dev": "node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node ./src/index-node-tui.ts",
-    "db": "pnpm exec drizzle-kit"
+    "db": "pnpm exec drizzle-kit",
+    "check:tui-locales": "tsx script/check-tui-locales.ts && node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node script/check-tui-locales-render.tsx"
   },
   "exports": {
     "./*": "./src/*.ts"

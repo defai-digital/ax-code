@@ -347,9 +347,9 @@ describe("AX Code TUI stability guardrails", () => {
     expect(permission).toContain('"permission prompt once-reply failed"')
     expect(permission).toContain('"permission prompt always-reply failed"')
     expect(permission).toContain('"permission prompt reject failed"')
-    expect(permission).toContain('"Failed to allow permission once"')
-    expect(permission).toContain('"Failed to allow permission permanently"')
-    expect(permission).toContain('"Failed to reject permission"')
+    expect(permission).toContain('t("permission.failOnce")')
+    expect(permission).toContain('t("permission.failAlways")')
+    expect(permission).toContain('t("permission.failReject")')
   })
 
   test("handles dialog message revert failures without leaking stale prompt state", async () => {

@@ -13564,6 +13564,7 @@ export type SessionPromptAsyncResponse = SessionPromptAsyncResponses[keyof Sessi
 /** Request payload shape for `POST /session/{sessionID}/command_async` — Send async command */
 export type SessionCommandAsyncData = {
   body?: {
+    system?: string
     messageID?: string
     agent?: string
     model?: string
@@ -13649,6 +13650,7 @@ export type SessionCommandAsyncResponse = SessionCommandAsyncResponses[keyof Ses
 /** Request payload shape for `POST /session/{sessionID}/command` — Send command */
 export type SessionCommandData = {
   body?: {
+    system?: string
     messageID?: string
     agent?: string
     model?: string

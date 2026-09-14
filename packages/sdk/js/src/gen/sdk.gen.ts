@@ -4897,6 +4897,7 @@ export class Session2 extends HeyApiClient {
       sourceTaskID?: string
       resumeOnRestart?: boolean
       followup?: boolean
+      system?: string
       messageID?: string
       agent?: string
       model?: string
@@ -4918,6 +4919,7 @@ export class Session2 extends HeyApiClient {
             { in: "query", key: "sourceTaskID" },
             { in: "query", key: "resumeOnRestart" },
             { in: "query", key: "followup" },
+            { in: "body", key: "system" },
             { in: "body", key: "messageID" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },
@@ -4952,6 +4954,7 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      system?: string
       messageID?: string
       agent?: string
       model?: string
@@ -4969,6 +4972,7 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "body", key: "system" },
             { in: "body", key: "messageID" },
             { in: "body", key: "agent" },
             { in: "body", key: "model" },

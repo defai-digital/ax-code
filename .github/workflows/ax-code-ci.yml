@@ -321,5 +321,8 @@ jobs:
           AX_TEST_FILES: test/script/node-launcher.test.ts,test/script/source-launcher.test.ts
         run: pnpm exec vitest run --retry=0
 
+      - name: Validate TUI locales and native setup dialogs
+        run: pnpm --dir packages/ax-code run check:tui-locales
+
       - name: TUI startup smoke
         run: pnpm --dir packages/ax-code run tui:startup-smoke -- --bin "$GITHUB_WORKSPACE/.tmp/tui-smoke-bin/ax-code"

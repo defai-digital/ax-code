@@ -1,3 +1,4 @@
+import { useLanguage } from "../context/language"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect, type DialogSelectOption, type DialogSelectRef } from "@tui/ui/dialog-select"
 import {
@@ -41,6 +42,7 @@ export type CommandOption = DialogSelectOption<string> & {
 }
 
 function init() {
+  const { t } = useLanguage()
   const [registrations, setRegistrations] = createSignal<Accessor<CommandOption[]>[]>([])
   const [suspendCount, setSuspendCount] = createSignal(0)
   const dialog = useDialog()
@@ -84,7 +86,7 @@ function init() {
       .map((option) => ({
         ...option,
         value: `suggested:${option.value}`,
-        category: "Suggested",
+        category: t("common.suggested"),
       })),
   )
   // Real-usage-based "Recent" section. Only includes commands the user
@@ -106,7 +108,7 @@ function init() {
     for (const value of top) {
       const option = byValue.get(value)
       if (!option) continue
-      out.push({ ...option, value: `recent:${option.value}`, category: "Recent" } as CommandOption)
+      out.push({ ...option, value: `recent:${option.value}`, category: t("common.recent") } as CommandOption)
     }
     return out
   })
@@ -256,5 +258,5 @@ function DialogCommand(props: {
     if (ref?.filter) return props.options
     return [...props.recentOptions, ...props.suggestedOptions, ...props.options]
   }
-  return <DialogSelect ref={(r) => (ref = r)} title="Commands" options={list()} />
+  return <DialogSelect ref={(r) => (ref = r)} title={useLanguage().t("common.commands")} options={list()} />
 }

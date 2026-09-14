@@ -1,3 +1,4 @@
+import { english, type Translate, type MessageKey } from "../../../i18n"
 // Pure view models for the Council and Arena tool renderers.
 //
 // Both tools emit rich metadata that the transcript previously discarded
@@ -8,8 +9,7 @@
 // - pure (no Solid, no ax-tui imports) so they can be unit tested directly;
 // - defensive (metadata arrives as `unknown`; missing/unknown fields degrade
 //   to a muted "Unknown" view instead of throwing);
-// - ASCII-only in their output, because these strings land in positioned TUI
-//   rows where CJK-ambiguous glyph widths misalign the layout.
+// - localized only at presentation time; raw evidence and identities are preserved.
 
 import { truncateToCellWidth } from "../last-input-view-model"
 
@@ -97,16 +97,16 @@ function memberLabel(id: string): string {
   return truncateToCellWidth(short, ID_BUDGET)
 }
 
-function capList(items: string[], max: number): string[] {
+function capList(items: string[], max: number, t: Translate): string[] {
   if (items.length <= max) return items
-  return [...items.slice(0, max), `+${items.length - max} more`]
+  return [...items.slice(0, max), t("ensemble.more", { count: items.length - max })]
 }
 
-function degradedCouncil(): CouncilView {
+function degradedCouncil(t: Translate): CouncilView {
   return {
     kind: "council",
     tone: "muted",
-    statusLabel: "Unknown",
+    statusLabel: t("common.unknown"),
     membersLabel: null,
     chips: [],
     roster: [],
@@ -115,11 +115,11 @@ function degradedCouncil(): CouncilView {
   }
 }
 
-function degradedArena(): ArenaView {
+function degradedArena(t: Translate): ArenaView {
   return {
     kind: "arena",
     tone: "muted",
-    statusLabel: "Unknown",
+    statusLabel: t("common.unknown"),
     modeLabel: null,
     strategyLabel: null,
     ranked: [],
@@ -129,32 +129,32 @@ function degradedArena(): ArenaView {
   }
 }
 
-const COUNCIL_STATUS: Record<string, { label: string; tone: EnsembleTone }> = {
-  ok: { label: "Complete", tone: "ok" },
-  incomplete: { label: "Incomplete", tone: "warn" },
-  disabled: { label: "Disabled", tone: "muted" },
-  context_rejected: { label: "Context too large", tone: "error" },
-  budget_rejected: { label: "Budget exceeded", tone: "error" },
-  no_members: { label: "No members available", tone: "error" },
-  insufficient_members: { label: "Need ≥2 members", tone: "error" },
+const COUNCIL_STATUS: Record<string, { label: MessageKey; tone: EnsembleTone }> = {
+  ok: { label: "ensemble.complete", tone: "ok" },
+  incomplete: { label: "ensemble.incomplete", tone: "warn" },
+  disabled: { label: "ensemble.disabled", tone: "muted" },
+  context_rejected: { label: "ensemble.context", tone: "error" },
+  budget_rejected: { label: "ensemble.budgetExceeded", tone: "error" },
+  no_members: { label: "ensemble.noMembers", tone: "error" },
+  insufficient_members: { label: "ensemble.twoMembers", tone: "error" },
 }
 
-const COUNCIL_CHIPS: Array<{ key: string; label: string; tone: EnsembleTone }> = [
-  { key: "consensusCount", label: "consensus", tone: "ok" },
-  { key: "majorityCount", label: "majority", tone: "ok" },
-  { key: "minorityCount", label: "minority", tone: "warn" },
-  { key: "singletonCount", label: "singleton", tone: "muted" },
+const COUNCIL_CHIPS: Array<{ key: string; label: MessageKey; tone: EnsembleTone }> = [
+  { key: "consensusCount", label: "ensemble.consensus", tone: "ok" },
+  { key: "majorityCount", label: "ensemble.majority", tone: "ok" },
+  { key: "minorityCount", label: "ensemble.minority", tone: "warn" },
+  { key: "singletonCount", label: "ensemble.singleton", tone: "muted" },
 ]
 
-export function councilView(metadata: unknown, _input?: unknown): CouncilView {
-  if (!isRecord(metadata)) return degradedCouncil()
+export function councilView(metadata: unknown, _input?: unknown, t: Translate = english): CouncilView {
+  if (!isRecord(metadata)) return degradedCouncil(t)
 
   const status = stringField(metadata, "status")
-  const mapped = (status ? COUNCIL_STATUS[status] : undefined) ?? { label: "Unknown", tone: "muted" as const }
+  const mapped = (status ? COUNCIL_STATUS[status] : undefined) ?? { label: "common.unknown", tone: "muted" as const }
 
   const total = countField(metadata, "totalMembers")
   const successful = countField(metadata, "successfulMembers")
-  const membersLabel = total > 0 ? `${successful}/${total} members` : null
+  const membersLabel = total > 0 ? t("ensemble.memberCount", { successful, total }) : null
 
   let chips = COUNCIL_CHIPS.map((chip) => ({
     label: chip.label,
@@ -165,11 +165,11 @@ export function councilView(metadata: unknown, _input?: unknown): CouncilView {
   chips = chips.toSorted((a, b) => b.count - a.count)
   // A lone singleton is not "agreement" — relabel it so the row does not
   // imply the tier system fired when there was really one unshared finding.
-  if (chips.length === 1 && chips[0]!.label === "singleton") {
-    chips = [{ label: "single answer", count: chips[0]!.count, tone: "muted" }]
+  if (chips.length === 1 && chips[0]!.label === "ensemble.singleton") {
+    chips = [{ label: "ensemble.singleAnswer", count: chips[0]!.count, tone: "muted" }]
   }
 
-  const roster = capList([...new Set(stringList(metadata, "memberIds"))].map(memberLabel), MAX_ROSTER)
+  const roster = capList([...new Set(stringList(metadata, "memberIds"))].map(memberLabel), MAX_ROSTER, t)
 
   // Root causes first: why members were skipped, then why the run was capped.
   const notes = uniqueNonEmpty([...stringList(metadata, "selectionErrors"), ...stringList(metadata, "budgetReasons")])
@@ -177,53 +177,54 @@ export function councilView(metadata: unknown, _input?: unknown): CouncilView {
   if (stopReason && /error|reject|fail|abort/i.test(stopReason)) notes.push(stopReason)
 
   const rounds = countField(metadata, "debateRoundsRun")
-  const debateLabel = rounds > 0 ? `${rounds} debate round${rounds === 1 ? "" : "s"}` : null
+  const debateLabel =
+    rounds > 0 ? t(rounds === 1 ? "ensemble.roundOne" : "ensemble.roundMany", { count: rounds }) : null
 
   return {
     kind: "council",
     tone: mapped.tone,
-    statusLabel: mapped.label,
+    statusLabel: t(mapped.label),
     membersLabel,
-    chips,
+    chips: chips.map((chip) => ({ ...chip, label: t(chip.label) })),
     roster,
     notes,
     debateLabel,
   }
 }
 
-const ARENA_STATUS: Record<string, { label: string; tone: EnsembleTone }> = {
-  ok: { label: "Complete", tone: "ok" },
-  incomplete: { label: "Incomplete", tone: "warn" },
-  no_successful_candidate: { label: "No valid proposals", tone: "error" },
-  no_verified_candidate: { label: "No verified candidate", tone: "warn" },
-  disabled: { label: "Disabled", tone: "muted" },
-  context_rejected: { label: "Context too large", tone: "error" },
-  budget_rejected: { label: "Budget rejected", tone: "error" },
-  insufficient_members: { label: "Needs 2+ models", tone: "warn" },
-  not_git: { label: "Requires a git repo", tone: "error" },
-  no_base_commit: { label: "Requires a base commit", tone: "error" },
-  dirty_worktree: { label: "Worktree not clean", tone: "error" },
+const ARENA_STATUS: Record<string, { label: MessageKey; tone: EnsembleTone }> = {
+  ok: { label: "ensemble.complete", tone: "ok" },
+  incomplete: { label: "ensemble.incomplete", tone: "warn" },
+  no_successful_candidate: { label: "ensemble.noProposals", tone: "error" },
+  no_verified_candidate: { label: "ensemble.noVerified", tone: "warn" },
+  disabled: { label: "ensemble.disabled", tone: "muted" },
+  context_rejected: { label: "ensemble.context", tone: "error" },
+  budget_rejected: { label: "ensemble.budgetRejected", tone: "error" },
+  insufficient_members: { label: "ensemble.twoModels", tone: "warn" },
+  not_git: { label: "ensemble.git", tone: "error" },
+  no_base_commit: { label: "ensemble.baseCommit", tone: "error" },
+  dirty_worktree: { label: "ensemble.dirty", tone: "error" },
 }
 
-const ARENA_STRATEGY: Record<string, string> = {
-  verify_first: "Verify first",
-  diversity: "Diversity",
-  hybrid_score: "Hybrid score",
+const ARENA_STRATEGY: Record<string, MessageKey> = {
+  verify_first: "ensemble.verifyFirst",
+  diversity: "ensemble.diversity",
+  hybrid_score: "ensemble.hybrid",
 }
 
-export function arenaView(metadata: unknown, _input?: unknown): ArenaView {
-  if (!isRecord(metadata)) return degradedArena()
+export function arenaView(metadata: unknown, _input?: unknown, t: Translate = english): ArenaView {
+  if (!isRecord(metadata)) return degradedArena(t)
 
   const status = stringField(metadata, "status")
   const mode = stringField(metadata, "mode")
-  let mapped = (status ? ARENA_STATUS[status] : undefined) ?? { label: "Unknown", tone: "muted" as const }
+  let mapped = (status ? ARENA_STATUS[status] : undefined) ?? { label: "common.unknown", tone: "muted" as const }
   // Both modes report status "ok"; the meaningful distinction is whether the
   // candidates were execution-verified (implement) or only ranked (plan).
-  if (status === "ok") mapped = { label: mode === "implement" ? "Verified" : "Ranked", tone: "ok" }
+  if (status === "ok") mapped = { label: mode === "implement" ? "ensemble.verified" : "ensemble.ranked", tone: "ok" }
 
-  const modeLabel = mode === "implement" ? "Implement" : mode === "plan" ? "Plan" : null
+  const modeLabel = mode === "implement" ? t("ensemble.implement") : mode === "plan" ? t("common.plan") : null
   const strategy = stringField(metadata, "strategy")
-  const strategyLabel = strategy ? (ARENA_STRATEGY[strategy] ?? strategy) : null
+  const strategyLabel = strategy ? (ARENA_STRATEGY[strategy] ? t(ARENA_STRATEGY[strategy]) : strategy) : null
 
   // Count the real contestants before the display cap: capList's trailing
   // "+N more" sentinel must never inflate the count or be numbered as a rank.
@@ -232,21 +233,28 @@ export function arenaView(metadata: unknown, _input?: unknown): ArenaView {
   const uniqueRanked = rankedIds.map(memberLabel)
   const ranked = uniqueRanked.slice(0, MAX_RANKED)
   const rankedOverflow = uniqueRanked.length - ranked.length
-  const rankedLabel = rankedIds.length > 0 ? `${rankedIds.length} contestant${rankedIds.length === 1 ? "" : "s"}` : null
+  const rankedLabel =
+    rankedIds.length > 0
+      ? t(rankedIds.length === 1 ? "ensemble.contestantOne" : "ensemble.contestantMany", { count: rankedIds.length })
+      : null
 
   const errorCount = countField(metadata, "errorCount")
   const worktrees = stringList(metadata, "worktrees")
   const notes = uniqueNonEmpty([
     ...stringList(metadata, "selectionErrors"),
-    errorCount > 0 ? `${errorCount} member error${errorCount === 1 ? "" : "s"}` : undefined,
+    errorCount > 0
+      ? t(errorCount === 1 ? "ensemble.errorOne" : "ensemble.errorMany", { count: errorCount })
+      : undefined,
     ...stringList(metadata, "budgetReasons"),
-    worktrees.length > 0 ? `${worktrees.length} worktree${worktrees.length === 1 ? "" : "s"}` : undefined,
+    worktrees.length > 0
+      ? t(worktrees.length === 1 ? "ensemble.worktreeOne" : "ensemble.worktreeMany", { count: worktrees.length })
+      : undefined,
   ])
 
   return {
     kind: "arena",
     tone: mapped.tone,
-    statusLabel: mapped.label,
+    statusLabel: t(mapped.label),
     modeLabel,
     strategyLabel,
     ranked,
