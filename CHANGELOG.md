@@ -6,6 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.16.7] - 2026-09-14
+
+### Changed
+
+- Publish the paired SDK 2.5.20.
+- Reduce repeated read, grep, and glob output in model requests while preserving complete evidence and tool execution.
+
+### Fixed
+
+- Preserve per-request isolation, network and tool restrictions across autonomous continuations, compaction replay, command summaries, shell turns, and background result handoffs. Retain system instructions, structured output, and reasoning settings when continuing the same request.
+- Carry parent isolation, disabled tools, and session-level permission denials into foreground, background, parallel, and resumed subagents without inheriting tool grants or overwriting persistent child restrictions.
+- Reject subagent results that arrive after cancellation and prevent cancelled tasks from starting finalization calls.
+- Preserve response settings on in-flight steering and background task control messages, skip compaction markers when recovering handoff settings, and hide unusable background controls from parallel subagents.
+- Keep primary-agent-only tools denied in persistent child permissions, require an unambiguous Yes before leaving plan mode, and give debug tool runs a valid user-message parent.
+- Keep synthetic agent-loop wrap-up prompts out of the visible transcript.
+- Populate AX Trust GLM model cards from their first-party catalog identities.
+
 ## [7.16.6] - 2026-09-14
 
 ### Changed
