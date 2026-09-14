@@ -144,6 +144,17 @@ describe("GoalPlanBaseline", () => {
       }),
     ).toThrow(/origin\/main/)
     expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("grep -F '${GIT} diff origin/main..HEAD' script.sh"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).not.toThrow()
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(
+        contract('git diff HEAD -- README.md && grep -F "${GIT} diff origin/main..HEAD" script.sh'),
+        { objective: "refactor the core runtime then test and commit" },
+      ),
+    ).not.toThrow()
+    expect(() =>
       GoalPlanBaseline.prepareAssurance(contract("$GIT diff HEAD -- origin/generated"), {
         objective: "keep the diff in scope",
       }),

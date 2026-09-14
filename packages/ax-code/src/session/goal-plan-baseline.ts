@@ -109,15 +109,22 @@ export namespace GoalPlanBaseline {
   }
 }
 
-const GIT_INVOCATION = /\bgit\b|\bmerge-base\b|\$(?:\{GIT\}|GIT\b)/
+const GIT_COMMAND = /\bgit\b|\bmerge-base\b/
+const GIT_WRAPPER = /\$(?:\{GIT\}|GIT\b)/
 const GIT_PATHSPEC_PREFIX = /(?:\bgit|\$\{GIT\}|\$GIT\b)(?:\s+[^\s]+)*\s--\s.*$/
 
 function looksLikeGitCommand(command: string) {
-  return GIT_INVOCATION.test(command)
+  return GIT_COMMAND.test(command) || GIT_WRAPPER.test(unquotedShellText(command))
 }
 
 function isGitRevisionSegment(part: string) {
-  return GIT_INVOCATION.test(part)
+  return GIT_COMMAND.test(part) || GIT_WRAPPER.test(unquotedShellText(part))
+}
+
+function unquotedShellText(command: string) {
+  // $GIT / ${GIT} in quotes is data (grep patterns), not an invocation.
+  // Literal `git` still matches inside quotes so `sh -c 'git diff …'` stays gated.
+  return command.replace(/'[^']*'|"[^"]*"/g, " ")
 }
 
 function gitRevisionText(command: string) {
