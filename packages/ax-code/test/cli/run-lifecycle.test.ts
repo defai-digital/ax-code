@@ -396,7 +396,7 @@ test("TUI renderer routes native trace traps through terminal cleanup", async ()
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/context/exit.tsx"), "utf-8")
 
   expect(src).toContain('"SIGTRAP"')
-  expect(src).toContain("registerShutdownSignals(() => void exit(), { signals: TUI_EXIT_SIGNALS })")
+  expect(src).toContain("registerShutdownSignals(() => exit(), { signals: TUI_EXIT_SIGNALS })")
 })
 
 test("TUI worker always forces exit after uncaught exceptions", async () => {

@@ -91,9 +91,24 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
         // Publish the task before invoking a handler that can itself request exit.
         task = Promise.resolve().then(async () => {
           if (playFlourish) await runFlourish()
+          let failure: { error: unknown } | undefined
+          const recordFailure = (error: unknown) => {
+            failure ??= { error }
+            process.exitCode = 1
+          }
+          // Each cleanup stage is independent: renderer failure must not leave
+          // queued input for the shell, hide the exit reason or strand a backend.
           try {
             await destroyTuiRenderer(renderer)
+          } catch (error) {
+            recordFailure(error)
+          }
+          try {
             win32FlushInputBuffer()
+          } catch (error) {
+            recordFailure(error)
+          }
+          try {
             if (exitReason !== undefined) {
               const formatted = FormatError(exitReason) ?? FormatUnknownError(exitReason)
               if (formatted) process.stderr.write(formatted + "\n")
@@ -101,17 +116,14 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
             const text = store.get()
             if (text) process.stdout.write(text + "\n")
           } catch (error) {
-            process.exitCode = 1
-            throw error
-          } finally {
-            // Renderer/terminal failures must not strand the owned backend.
-            try {
-              await input.onExit?.()
-            } catch (error) {
-              process.exitCode = 1
-              throw error
-            }
+            recordFailure(error)
           }
+          try {
+            await input.onExit?.()
+          } catch (error) {
+            recordFailure(error)
+          }
+          if (failure) throw failure.error
         })
         return task
       },

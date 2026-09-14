@@ -165,4 +165,27 @@ describe("TUI exit lifecycle", () => {
     await expect(exit()).rejects.toBe(error)
     expect(process.exitCode).toBe(1)
   })
+  test("renderer failure still flushes queued input and prints the exit reason", async () => {
+    const { exit, onExit } = setup()
+    const teardownError = new Error("Renderer teardown failed")
+    mocks.destroy.mockRejectedValue(teardownError)
+    await expect(exit(new Error("Original backend failure"))).rejects.toBe(teardownError)
+    expect(mocks.flush).toHaveBeenCalledTimes(1)
+    expect(process.stderr.write).toHaveBeenCalled()
+    expect(onExit).toHaveBeenCalledTimes(1)
+  })
+
+  test("multiple cleanup failures retain the first error and still run all cleanup", async () => {
+    const { exit, onExit } = setup()
+    const first = new Error("Renderer failed first")
+    mocks.destroy.mockRejectedValue(first)
+    mocks.flush.mockImplementation(() => {
+      throw new Error("Input flush failed")
+    })
+    onExit.mockRejectedValue(new Error("Backend cleanup failed"))
+    await expect(exit()).rejects.toBe(first)
+    expect(mocks.flush).toHaveBeenCalledTimes(1)
+    expect(onExit).toHaveBeenCalledTimes(1)
+    expect(process.exitCode).toBe(1)
+  })
 })
