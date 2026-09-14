@@ -12,12 +12,6 @@ changes belong to AX Coder.
 
 - Prepare AX Code 7.16.6 and SDK 2.5.19.
 
-### Added
-
-- Play the Matrix rain overlay once when the TUI starts, on by default and disabled with the "Matrix rain on startup" command toggle; it still honors `animations_enabled` and the compiled-runtime policy.
-
-### Changed
-
 - Align the left session navigation rail and compact Sessions bar with the right sidebar: carded Project and Across workspaces sections, subtler dividers, padded pending chips, and muted cached-state copy.
 - Default the left navigation rail to 30 columns (24/30/36 still selectable), slim the right session sidebar by four columns, and use `/navigation` and `/sidebar` for the same hide action. The sidebar footer shows `/sidebar` without a Sidebar prefix.
 - Make `/sidebar` hide the right session sidebar on click, and highlight Details, Width, Clear, `/navigation`, and `/sidebar` on hover.
@@ -27,9 +21,37 @@ changes belong to AX Coder.
 - Reorder the implicit session default SKU chain to deepseek-flash, glm-5.3-flash, qwen3.8-flash, MiniMax-M3, grok-4.6, claude-sonnet-5, gpt-6, gemini-3.8-flash, then qwen3.8-27b.
 - Give the right session sidebar a Width control matching the left rail, with shared 20/24/30/36/40-column presets. Navigation defaults to 30 columns and the sidebar defaults to 36.
 - Add Clear on the left session navigation rail (`/navigation-clear`) to hide historical rows from that list without deleting sessions; `/sessions` still resumes them. Clearing asks for confirmation first.
-- Require Node.js 26 across the repo, SDK, and JSR publish manifests (was Node 24).
+
+## [7.16.5] - 2026-09-13
+
+### Changed
+
+- Prepare AX Code 7.16.5 and SDK 2.5.18.
 
 ### Fixed
+
+- Keep weekly schedules active across missing daylight-saving occurrences and preserve local daily/weekly wall-clock times instead of normalizing them into a different hour.
+- Release scheduled-task admission locks before awaiting the full run so successor requests can observe pending timeout cancellation instead of hanging.
+
+## [7.16.4] - 2026-09-13
+
+### Added
+
+- Play the Matrix rain overlay once when the TUI starts, on by default and disabled with the "Matrix rain on startup" command toggle; it still honors `animations_enabled` and the compiled-runtime policy.
+
+### Changed
+
+- Require Node.js 26 across the repo, SDK, and JSR publish manifests (was Node 24).
+- Publish the paired SDK 2.5.17 runtime contracts.
+- Add project-scoped persistent runtimes and durable follow-up queue controls, with unified session navigation.
+
+### Fixed
+
+- Isolate branded Node executable copies from the installed runtime to prevent hardlink aliasing and cache edits from affecting it.
+- Preserve main-module identity, script arguments, and child/worker isolation when the Node FFI runner launches generic scripts.
+- Keep historical AX Engine artifact metadata readable offline after provider catalog changes, without allowing excluded models to activate.
+- Prevent parser workers from reinitializing the Node TUI CLI through inherited preloads.
+- Correct scheduled-task timeout completion, bash path preflight, and Council cancellation handling.
 
 - Build the workspace SDK before `pnpm dev` and `pnpm cli` so a fresh checkout can run the TUI from source without a manual `pnpm --dir packages/sdk/js run build`.
 - Launch the source-mode TUI on Windows by gating the in-place `process.execve` on the platform instead of feature detection: Node 26 defines `process.execve` on Windows but calling it throws `ERR_FEATURE_UNAVAILABLE_ON_PLATFORM`.

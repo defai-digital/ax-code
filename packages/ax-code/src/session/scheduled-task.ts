@@ -1540,15 +1540,30 @@ function tzOccurrenceAlreadyPassed(from: number, fmt: Intl.DateTimeFormat, match
   return false
 }
 
+function nextLocalCalendarRun(parts: { hour: number; minute: number }, from: number, weekday?: number) {
+  const start = new Date(from)
+  for (let offset = 0; offset < (weekday === undefined ? 3 : 15); offset++) {
+    // Construct each calendar occurrence independently. Date normalizes a DST
+    // gap forward; reject that shifted time rather than carrying it to later days.
+    const candidate = new Date(
+      start.getFullYear(),
+      start.getMonth(),
+      start.getDate() + offset,
+      parts.hour,
+      parts.minute,
+    )
+    if (candidate.getHours() !== parts.hour || candidate.getMinutes() !== parts.minute) continue
+    if (weekday !== undefined && candidate.getDay() !== weekday) continue
+    if (candidate.getTime() > from) return candidate.getTime()
+  }
+  return undefined
+}
+
 function nextDailyRun(time: string, from: number, timezone?: string) {
   const parts = parseTimeOfDay(time)
   if (!parts) return undefined
   if (!timezone) {
-    const candidate = new Date(from)
-    candidate.setSeconds(0, 0)
-    candidate.setHours(parts.hour, parts.minute, 0, 0)
-    if (candidate.getTime() <= from) candidate.setDate(candidate.getDate() + 1)
-    return candidate.getTime()
+    return nextLocalCalendarRun(parts, from)
   }
   const fmt = makeTzFormatter(timezone)
   const currentDate = tzDateKey(tzComponents(from, fmt))
@@ -1569,13 +1584,9 @@ function nextDailyRun(time: string, from: number, timezone?: string) {
 
 function nextWeeklyRun(day: number, time: string, from: number, timezone?: string) {
   if (!timezone) {
-    const next = nextDailyRun(time, from)
-    if (next === undefined) return undefined
-    const candidate = new Date(next)
-    const delta = (day - candidate.getDay() + 7) % 7
-    candidate.setDate(candidate.getDate() + delta)
-    if (candidate.getTime() <= from) candidate.setDate(candidate.getDate() + 7)
-    return candidate.getTime()
+    const parts = parseTimeOfDay(time)
+    if (!parts) return undefined
+    return nextLocalCalendarRun(parts, from, day)
   }
   const parts = parseTimeOfDay(time)
   if (!parts) return undefined
@@ -1587,7 +1598,9 @@ function nextWeeklyRun(day: number, time: string, from: number, timezone?: strin
     (value) => value.weekday === day && value.hour === parts.hour && value.minute === parts.minute,
   )
   let ms = from - (from % 60_000) + 60_000
-  for (let i = 0; i < 8 * 24 * 60; i++, ms += 60_000) {
+  // A missing spring-forward occurrence can put the next weekly run nearly
+  // fourteen days away. Keep searching instead of disabling future dispatch.
+  for (let i = 0; i < 15 * 24 * 60; i++, ms += 60_000) {
     const c = tzComponents(ms, fmt)
     if (c.weekday !== day || c.hour !== parts.hour || c.minute !== parts.minute) continue
     if (alreadyPassed && tzDateKey(c) === currentDate) continue

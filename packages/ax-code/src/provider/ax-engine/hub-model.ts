@@ -148,6 +148,11 @@ export function evaluateHubModel(model: HubModel, catalog: Record<string, Models
 
 export function hubModelDefinition(model: HubModel, decision: HubModelDecision): AxEngineModelDefinition | undefined {
   if (decision.policy !== "eligible") return undefined
+  return hubArtifactMetadata(model, decision)
+}
+
+/** Local artifact identity and estimates do not grant discovery or activation eligibility. */
+export function hubArtifactMetadata(model: HubModel, decision: HubModelDecision): AxEngineModelDefinition | undefined {
   const totalBytes = model.siblings.reduce((sum, file) => sum + (file.size ?? 0), 0)
   const weights = model.siblings.filter((file) => file.rfilename.endsWith(".safetensors"))
   if (!weights.length || weights.some((file) => !file.size) || !Number.isSafeInteger(totalBytes)) return undefined
