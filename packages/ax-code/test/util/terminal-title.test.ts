@@ -39,15 +39,15 @@ describe("terminal title", () => {
     expect(axCodeTerminalTitleSequence()).not.toContain("]0;")
   })
 
-  test("busy titles cycle the AX-CODE dot-matrix morph before AX-Code", () => {
+  test("busy titles pulse the A/X dot-matrix morph before AX-Code", () => {
     expect(composeAxCodeTerminalTitle({ working: false })).toBe("AX-Code")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("⡮⠭⢵ AX-Code") // A
-    expect(AX_CODE_TITLE_SPINNER_FRAMES).toHaveLength(77)
+    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("⡮⢵ AX-Code") // A
+    expect(AX_CODE_TITLE_SPINNER_FRAMES).toHaveLength(26)
     for (const frame of AX_CODE_TITLE_SPINNER_FRAMES) {
-      expect([...frame]).toHaveLength(3)
+      expect([...frame]).toHaveLength(2)
     }
-    // Every glyph of "AX-CODE" appears somewhere in the cycle.
-    for (const glyph of ["⡮⠭⢵", "⡁⠶⢈", "⠠⠤⠄", "⢎⣉⡁", "⢎⣉⡱", "⣏⣉⡱", "⣯⣭⣍"]) {
+    // Both brand letters appear as held frames somewhere in the cycle.
+    for (const glyph of ["⡮⢵", "⡱⢎"]) {
       expect(AX_CODE_TITLE_SPINNER_FRAMES).toContain(glyph)
     }
   })
@@ -57,7 +57,7 @@ describe("terminal title", () => {
     for (let i = 0; i < frames.length; i++) {
       const current = frames[i] ?? ""
       const next = frames[(i + 1) % frames.length] ?? ""
-      const changed = [0, 1, 2].filter((cell) => current.charCodeAt(cell) !== next.charCodeAt(cell))
+      const changed = [0, 1].filter((cell) => current.charCodeAt(cell) !== next.charCodeAt(cell))
       expect(changed.length).toBeLessThanOrEqual(1)
       if (changed.length === 1) {
         const xor = current.charCodeAt(changed[0] ?? 0) ^ next.charCodeAt(changed[0] ?? 0)

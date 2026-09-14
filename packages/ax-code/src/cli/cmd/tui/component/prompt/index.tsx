@@ -40,7 +40,6 @@ import { Clipboard } from "../../util/clipboard"
 import { TuiEvent } from "../../event"
 import { Locale } from "@/util/locale"
 import { formatDuration } from "@/util/format"
-import { AX_CODE_TITLE_SPINNER_FRAMES, AX_CODE_TITLE_SPINNER_INTERVAL_MS } from "@/util/terminal-title"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogAlert } from "../../ui/dialog-alert"
 import { useToast } from "../../ui/toast"
@@ -61,7 +60,7 @@ import {
   sanitizePromptInput,
   windowsClipboardTextPaste,
 } from "./view-model"
-import { AxTuiSpinner } from "../spinner"
+import { FooterStickmanSpinner } from "../footer-stickman"
 import { summarizedPasteViews } from "./paste-view-model"
 import {
   footerContextGauge,
@@ -894,18 +893,13 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     return `Ask anything... "${PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]}"`
   })
 
-  // Footer busy liveness reuses the AX brand glyph from the terminal title: a
-  // 6x4 dot matrix that spells "AX-CODE" one glyph at a time. Sharing the frame
-  // set keeps the tab and the footer in sync and avoids a second, competing
-  // animation. The prior 8-cell bidirectional "Knight Rider" scanner was
-  // visually loud and used Ambiguous-width block glyphs (U+25A0) that drift
-  // CJK layouts; the waveform carried no information the label/elapsed/token
-  // text does not.
-  const spinnerDef = createMemo(() => ({
-    frames: [...AX_CODE_TITLE_SPINNER_FRAMES],
-    interval: AX_CODE_TITLE_SPINNER_INTERVAL_MS,
-    color: local.agent.color(local.agent.current().name),
-  }))
+  // Footer busy glyph: a 5x8 matchstick man (two braille rows) that walks a
+  // couple of steps, punches, and kicks. It deliberately does NOT share a frame
+  // set with the terminal-tab A/X morph: the tab is a single OSC line, while
+  // this glyph needs two rows, so the two surfaces animate independently.
+  // Braille is Narrow-width, unlike the Ambiguous-width block glyphs (U+25A0)
+  // the old 8-cell "Knight Rider" scanner used, which drift CJK layouts.
+  const spinnerColor = createMemo(() => local.agent.color(local.agent.current().name))
 
   // Context-window usage for the footer gauge (ADR-086). Undefined — and
   // therefore not rendered — unless auto-compaction is disabled: those
@@ -1458,11 +1452,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                       </text>
                     }
                   >
-                    <AxTuiSpinner
-                      color={spinnerDef().color}
-                      frames={spinnerDef().frames}
-                      interval={spinnerDef().interval}
-                    />
+                    <FooterStickmanSpinner color={spinnerColor()} />
                   </Show>
                   <Show when={busyStatus()?.stale}>
                     <text fg={theme.warning}>!</text>

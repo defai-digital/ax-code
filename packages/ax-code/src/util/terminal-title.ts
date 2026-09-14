@@ -11,46 +11,31 @@
  * TUI once it mounts, so the tab is claimed within milliseconds of exec.
  */
 
+import { brailleDotBit } from "./braille"
+
 export const AX_CODE_TERMINAL_TITLE = "AX-Code"
 
-// Busy-tab activity glyph: a 6-column by 4-row dot matrix (three full 8-dot
-// braille cells). The pattern cycles through the letters of "AX-CODE" — one
-// glyph at a time, held for a few frames — and morphs between them one dot
-// flip per frame, so a busy session quietly spells out the brand in the tab
-// and in the footer. Unlike Codex's perimeter 2x3 spinner.
+// Busy-tab activity glyph: a 4-column by 4-row dot matrix (two full 8-dot
+// braille cells). It morphs back and forth between "A" and "X" — the AX brand
+// mark — one dot flip per frame, so a busy session shows a small brand pulse
+// in the tab. The footer shows a larger 6x6 glyph on its own surface
+// (component/footer-animal.tsx); the two surfaces deliberately do not share a
+// frame set, because an OSC tab title cannot span the two rows a 6x6 glyph
+// needs. Braille is CJK-safe (Narrow width); the previous "Knight Rider"
+// scanner used Ambiguous-width block glyphs that drift CJK layouts.
 const TITLE_GLYPH_ROWS = 4
-const TITLE_GLYPH_COLUMNS = 6
+const TITLE_GLYPH_COLUMNS = 4
 
-// Glyphs drawn as #/. row-major in the 6x4 matrix. Four dot rows is the most
-// that fits a single terminal row (a braille cell is 2x4), so rounded letters
-// share strokes rather than getting a taller grid.
-const TITLE_GLYPH_A = [".####.", "#....#", "######", "#....#"]
-const TITLE_GLYPH_X = ["#....#", "..##..", "..##..", "#....#"]
-const TITLE_GLYPH_HYPHEN = ["......", "......", ".####.", "......"]
-const TITLE_GLYPH_C = [".####.", "#.....", "#.....", ".####."]
-const TITLE_GLYPH_O = [".####.", "#....#", "#....#", ".####."]
-const TITLE_GLYPH_D = ["#####.", "#....#", "#....#", "#####."]
-const TITLE_GLYPH_E = ["######", "#.....", "#####.", "######"]
+// "A" and "X" drawn as #/. row-major in the 4x4 matrix. Four dot rows is the
+// most a single terminal line can hold (a braille cell is 2x4).
+const TITLE_GLYPH_A = [".##.", "#..#", "####", "#..#"]
+const TITLE_GLYPH_X = ["#..#", ".##.", ".##.", "#..#"]
 
-// "AX-CODE", one glyph per position, in reading order.
-const TITLE_GLYPH_WORD = [
-  TITLE_GLYPH_A,
-  TITLE_GLYPH_X,
-  TITLE_GLYPH_HYPHEN,
-  TITLE_GLYPH_C,
-  TITLE_GLYPH_O,
-  TITLE_GLYPH_D,
-  TITLE_GLYPH_E,
-]
+// A -> X, then back to A, so the mark pulses between the two letters.
+const TITLE_GLYPH_SEQUENCE = [TITLE_GLYPH_A, TITLE_GLYPH_X]
 
 // Frames each glyph is held before the next morph begins.
 const TITLE_GLYPH_DWELL_FRAMES = 3
-
-// Braille dot bit for a (row, column-within-a-2x4-cell) coordinate.
-function brailleDotBit(row: number, column: number): number {
-  if (row === 3) return column === 0 ? 0x40 : 0x80
-  return (column === 0 ? 0x01 : 0x08) << row
-}
 
 function titleGlyphDots(rows: readonly string[]): Set<number> {
   const dots = new Set<number>()
@@ -77,11 +62,11 @@ function encodeTitleGlyph(dots: ReadonlySet<number>): string {
 }
 
 // Frame path: hold each glyph, then morph to the next one dot at a time.
-// Consecutive frames differ by at most one dot, so the spelling reads as one
+// Consecutive frames differ by at most one dot, so the morph reads as one
 // travelling change rather than a redraw. The last morph lands back on the
 // first glyph, so the cycle repeats seamlessly.
 function titleGlyphMorphFrames(): string[] {
-  const glyphs = TITLE_GLYPH_WORD.map(titleGlyphDots)
+  const glyphs = TITLE_GLYPH_SEQUENCE.map(titleGlyphDots)
   const frames: string[] = []
   for (let i = 0; i < glyphs.length; i++) {
     const current = glyphs[i]!
@@ -102,7 +87,7 @@ function titleGlyphMorphFrames(): string[] {
 
 export const AX_CODE_TITLE_SPINNER_FRAMES = titleGlyphMorphFrames()
 
-// 77 frames (7 glyphs x 3 dwell + 56 morphs) spell AX-CODE in ~5.4s.
+// 26 frames (2 glyphs x 3 dwell + 20 one-dot morphs) pulse A <-> X in ~1.8s.
 export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 70
 
 export function composeAxCodeTerminalTitle(input: { working: boolean; frame?: number }) {
