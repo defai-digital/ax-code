@@ -114,6 +114,46 @@ describe("bounded grep context", () => {
     })
   })
 
+  test("a clamped long line does not mark the whole result truncated", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "long-line.ts")
+    await writeFile(file, "needle " + "x".repeat(2_500) + "\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await GrepTool.init()
+        // A single clamped source line drops no match or context line, so the
+        // context path must agree with the non-context path: not truncated.
+        // `truncated` is the "results were capped" signal, and the clamped line
+        // is already marked with a trailing ellipsis in the output.
+        const plain = await tool.execute({ pattern: "needle", path: file }, ctx)
+        const context = await tool.execute({ pattern: "needle", path: file, context: 2 }, ctx)
+        expect(plain.metadata.truncated).toBe(false)
+        expect(context.metadata.truncated).toBe(false)
+        expect(CanonicalOutput.Grep.parse(context.data).matches).toHaveLength(1)
+        expect(context.output).toContain("...")
+      },
+    })
+  })
+
+  test("keeps a clamped line well-formed when the cut lands mid-surrogate", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "emoji-cut.ts")
+    // Padding puts the rocket's high surrogate exactly at the MAX_LINE_LENGTH cut.
+    await writeFile(file, "needle " + "A".repeat(1_992) + "\u{1F680}" + "B".repeat(50) + "\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await GrepTool.init()
+        const result = await tool.execute({ pattern: "needle", context: 1 }, ctx)
+        const [match] = CanonicalOutput.Grep.parse(result.data).matches
+        expect(match?.text).toBeDefined()
+        // A lone surrogate is invalid UTF-16 and would render as U+FFFD.
+        expect(match!.text.isWellFormed()).toBe(true)
+      },
+    })
+  })
+
   test("enforces line, UTF-8 byte, and oversized record budgets", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "large.ts")

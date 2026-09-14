@@ -64,8 +64,17 @@ export async function searchWithContext(
     if (isMatch && data.matches.length >= params.limit) return false
     const file = decode(record.data.path)
     const source = decode(record.data.lines).replace(/\r?\n$/, "")
-    const text = source.slice(0, MAX_LINE_LENGTH)
-    data.truncated ||= text.length < source.length
+    // A clamped source line is not a dropped result: it stays in the output with
+    // a trailing ellipsis, so it must not set the whole-result `truncated` flag.
+    // The non-context grep path reports truncated=false for the same input, and
+    // `truncated` means "results were capped", not "a line was shortened".
+    let text = source.slice(0, MAX_LINE_LENGTH)
+    if (text.length < source.length) {
+      // Do not split a surrogate pair at the cut: a lone surrogate is invalid
+      // UTF-16 and renders as a replacement glyph in the tool output.
+      const last = text.charCodeAt(text.length - 1)
+      if (last >= 0xd800 && last <= 0xdbff) text = text.slice(0, -1)
+    }
     const entry = { path: file, line: record.data.line_number, text, isMatch }
     const rendered = `${file}:${entry.line}${isMatch ? ":" : "-"} ${text}${text.length < source.length ? "..." : ""}`
     const size = Buffer.byteLength(rendered) + 1
