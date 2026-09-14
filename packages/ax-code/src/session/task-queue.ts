@@ -1222,12 +1222,25 @@ export namespace TaskQueue {
     return paused
   }
 
+  // Every status a cancellation may still need to stop. `list()` is capped and
+  // ordered by position, so a long-lived session's finished rows can outnumber
+  // active ones and fill the window; selecting by status keeps the cap on rows
+  // that can actually be cancelled.
+  const CANCELLABLE_STATUSES: readonly Status[] = [
+    "queued",
+    "waiting_for_idle",
+    "running",
+    "blocked_permission",
+    "blocked_question",
+    "paused",
+  ]
+
   export async function cancelForSession(
     sessionID: SessionID,
     error?: string,
     options?: { preservePausedFollowups?: boolean },
   ): Promise<Info[]> {
-    const items = await list({ sessionID, limit: 500 })
+    const items = await list({ sessionID, statuses: [...CANCELLABLE_STATUSES], limit: 500 })
     const cancelled: Info[] = []
     for (const item of items) {
       if (item.status === "completed" || item.status === "failed" || item.status === "cancelled") continue

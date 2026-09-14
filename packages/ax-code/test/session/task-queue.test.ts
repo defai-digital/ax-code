@@ -339,6 +339,39 @@ describe("TaskQueue", () => {
     })
   })
 
+  test("cancelForSession reaches active items hidden behind a full window of finished rows", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "Queue cancel window" })
+        // list() is capped and ordered by position, so a long-lived session's
+        // finished rows can fill the whole window and hide the live one.
+        for (let index = 0; index < 500; index++) {
+          const finished = await TaskQueue.enqueue({
+            sessionID: session.id,
+            kind: "subagent",
+            title: `Finished child ${index}`,
+            payload: { source: "task" },
+          })
+          await TaskQueue.setStatus({ id: finished.id, status: "completed" })
+        }
+        const running = await TaskQueue.enqueue({
+          sessionID: session.id,
+          kind: "subagent",
+          title: "Running child",
+          payload: { source: "task" },
+        })
+        await TaskQueue.setStatus({ id: running.id, status: "running" })
+
+        const cancelled = await TaskQueue.cancelForSession(session.id)
+        expect(cancelled.map((item) => item.id)).toEqual([running.id])
+        expect((await TaskQueue.get(running.id)).status).toBe("cancelled")
+      },
+    })
+  })
+
   test("loop-completion cancel preserves executor-owned queue items", async () => {
     await using tmp = await tmpdir({ git: true })
 

@@ -38,7 +38,17 @@ export async function executeShellCommand(
     // If no queued callbacks, cancel (the default)
     const callbacks = controller.queuedCallbacks(input.sessionID)
     if (callbacks.length === 0) {
-      controller.cancel(input.sessionID)
+      // Detached disposal: an unawaited rejection here would surface as an
+      // unhandled rejection after the shell command has already returned.
+      void controller.cancel(input.sessionID).catch((error) => {
+        log.warn("shell command cleanup cancel failed", {
+          command: "session.prompt.shell",
+          status: "error",
+          errorCode: "SHELL_CLEANUP_CANCEL_FAILED",
+          sessionID: input.sessionID,
+          error,
+        })
+      })
     } else {
       // Otherwise, trigger the session loop to process queued items
       controller.resumeLoop({ sessionID: input.sessionID, resume_existing: true }).catch((error) => {
@@ -210,6 +220,11 @@ export async function executeShellCommand(
           error,
         })
       })
+      // The kill request is best-effort. Without a bounded grace period a
+      // child (or an inherited stdio pipe) that ignores it leaves waitForExit
+      // pending forever, so the session stays busy instead of reporting the
+      // timeout. Reuses the same 5s bound the abort path already relies on.
+      abortTimeoutHandler()
     }
   }, SHELL_TIMEOUT)
   let abortTimer: ReturnType<typeof setTimeout> | undefined
@@ -228,7 +243,7 @@ export async function executeShellCommand(
     proc.stderr?.off("error", onStderrError)
   }
 
-  const abortTimeoutHandler = () => {
+  function abortTimeoutHandler() {
     abortTimer = setTimeout(() => {
       if (!exited) {
         rejectPromise?.(new Error("Shell abort timed out while waiting for process to exit"))
