@@ -2,7 +2,7 @@ Fast file pattern matching that works with any codebase size.
 
 Usage:
 - pattern is a glob such as "**/*.js" or "src/**/*.ts".
-- The path parameter optionally scopes the search to a directory; omit it to use the current workspace directory.
+- The path parameter optionally scopes the search to a directory; omit it to use the current workspace directory. Patterns are relative to that root, which may already be a package inside a repository. Do not repeat its repository prefix.
 - Returns absolute file paths sorted by modification time, most recently modified first.
 - Results are capped at 100; truncated output says so. Tighten the pattern or path instead of paging.
 
@@ -10,9 +10,9 @@ Examples:
 - pattern "**/*.test.ts" finds test files at any depth.
 - pattern "*.json" with path "/repo/config" finds top-level JSON files in one directory.
 
-Batch multiple speculative patterns as parallel calls in a single message rather than searching one pattern at a time.
+Batch independent known patterns when useful. After an empty result, check the search root before repeating similar patterns.
 
 When NOT to use:
 - Searching file contents — use Grep.
 - Exploring an unfamiliar layout — use the list tool.
-- Open-ended searches needing multiple rounds of globbing and grepping — use the Task tool instead.
+- Complex open-ended investigations — consider one bounded explore task with existing evidence.

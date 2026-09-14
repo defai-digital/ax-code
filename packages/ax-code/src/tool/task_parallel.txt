@@ -1,6 +1,6 @@
 Launch multiple specialized agents in parallel for independent research or exploration digs.
 
-Use this when several digs do not depend on each other (for example: explore auth, explore billing, and explore infra at the same time). Prefer explore / read-only agents.
+Use this when several digs have distinct deliverables and non-overlapping discovery scopes (for example: auth, billing, and infra). Name the owned paths or subsystem in each brief and share existing evidence. Use one investigator for a single call path; do not split one cache or performance question into agents that all inspect the same implementation. Explicit independent review may revisit evidence to answer a distinct verification question. Prefer explore / read-only agents.
 
 Do NOT use this tool as a substitute for multi-provider **council** or **arena**. Those tools fan out to multiple LLM providers; task_parallel only runs local agents. If the user asked for council/arena, call those tools first with a short context brief — do not open multi-explore digs first.
 

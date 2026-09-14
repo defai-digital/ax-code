@@ -25,13 +25,21 @@ $env:AX_CODE_MEMORY_PROFILE = "low"
 ax-code
 ```
 
-| Behavior                                      | Normal                             | Low                                                                               |
-| --------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------- |
-| Speculative language-server bootstrap prewarm | Enabled                            | Skipped; analysis starts on demand                                                |
-| Previous-source-text cache per LSP client     | 16 MiB retained-content accounting | 4 MiB retained-content accounting                                                 |
-| Concurrent LSP initialization                 | Existing server scheduling         | One initialization at a time per backend process                                  |
-| Concurrent semantic operations                | Existing server budgets            | Two awaited semantic operations per backend process, plus existing server budgets |
-| Healthy idle language servers                 | Existing lifecycle                 | Eligible for shutdown after five idle minutes, checked about once per minute      |
+| Behavior                                             | Normal                              | Low                                                                               |
+| ---------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------- |
+| Speculative language-server startup and read prewarm | Opt-in with `AX_CODE_LSP_PREWARM=1` | Skipped, including when the prewarm variable is set                               |
+| Previous-source-text cache per LSP client            | 16 MiB retained-content accounting  | 4 MiB retained-content accounting                                                 |
+| Concurrent LSP initialization                        | Existing server scheduling          | One initialization at a time per backend process                                  |
+| Concurrent semantic operations                       | Existing server budgets             | Two awaited semantic operations per backend process, plus existing server budgets |
+| Healthy idle language servers                        | Existing lifecycle                  | Eligible for shutdown after five idle minutes, checked about once per minute      |
+
+Language servers start on demand by default in both profiles. Startup and ordinary file reads do not trigger speculative semantic prewarming. Explicit semantic navigation, diagnostics and indexing still start the necessary analysis, so the first semantic request can take longer. To restore speculative startup/read prewarming on a host with adequate headroom, set both variables before starting:
+
+```bash
+AX_CODE_MEMORY_PROFILE=normal AX_CODE_LSP_PREWARM=1 ax-code
+```
+
+Only the exact value `1` enables speculative prewarming; `low` always suppresses it. Existing servers are not terminated by this setting, and it is not a global ban on LSP startup: edits requiring diagnostics and explicit semantic/indexing operations still use language servers. Low-mode idle reclamation remains separate.
 
 The source cache also has a 1,000-entry limit. Its accounting includes a conservative string/key allowance; it is not a V8 heap or RSS limit. A file that cannot fit still synchronizes its full current contents with the language server. Cache eviction does not close a document while a request may need it.
 

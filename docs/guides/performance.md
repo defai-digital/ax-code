@@ -4,7 +4,7 @@ Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-09-06
+Last reviewed: 2026-09-13
 
 Owner: ax-code runtime
 
@@ -73,3 +73,26 @@ tests and repair attempts. A smaller request or faster local snapshot alone does
 
 Use [harness controls and verified evaluation](harness-controls.md) to try context recovery, MCP discovery, read-only
 recipes, and matched fixture comparisons with independent verification.
+
+## Understand request size
+
+New `llm.request` events in `ax-code replay YOUR_SESSION_ID --mode export` include `requestBytes` when request provenance is available:
+
+| Field             | Meaning                                                                                 |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| `encoding`        | `canonical-json-utf8`: byte length of the existing canonical fingerprint representation |
+| `system`          | The separately assembled system-message array                                           |
+| `messages`        | The complete assembled message array, including system messages                         |
+| `toolDefinitions` | Active tool names, descriptions and resolved input schemas                              |
+
+`system` is already represented within `messages`; do not add them together. Array framing is included. Binary values use the existing digest representation, so these sizes are neither network payload sizes nor resident-memory measurements. They are not token counts: provider token usage and cache counters remain the source for model input accounting. A context-pack summary covers a narrower stage and is not total model input. Legacy events omit this field; failed provenance remains explicitly unavailable.
+
+Only sizes and the existing hashes/metadata are recorded by this diagnostic. No additional prompt bodies or credentials are saved. It reuses the canonical serialization needed for each hash rather than tokenizing the request. Compare sizes at matching turns when deciding whether system instructions, tool definitions, or growing history need attention. The coding profile above can reduce tool definitions without changing reasoning effort; full remains available for the capabilities it adds.
+
+## Avoid redundant exploration
+
+For a known-file lookup or simple count, use a focused search or one aggregate command. Resolve paths against the current workspace directory; a session started inside a package already has that package as its search root. Built-in grep uses ripgrep's default regex syntax without lookaround or backreferences.
+
+Use one investigator for one call path. Parallel read-only tasks should have distinct deliverables and owned paths or subsystems, with existing evidence supplied in their briefs. Independent review can revisit evidence for a separate verification question. Repeating discovery in multiple fresh contexts costs model rounds even when the evidence cache hits; cache hits do not bypass current-content validation or permissions.
+
+Language servers now start on demand by default. See [Memory usage](memory-usage.md) for speculative prewarming opt-in and the tradeoff with first semantic-query latency. Prompt guidance and local tests do not establish a particular reduction in live model calls or physical RAM.

@@ -77,6 +77,12 @@ export namespace RequestProvenance {
     systemMessageCount: number
     toolCount: number
     toolNames: string[]
+    requestBytes: {
+      encoding: "canonical-json-utf8"
+      system: number
+      messages: number
+      toolDefinitions: number
+    }
     systemHash: string
     messagesHash: string
     toolDefinitionsHash: string
@@ -92,6 +98,13 @@ export namespace RequestProvenance {
 
   export function fingerprint(value: unknown): string {
     return sha256(JSON.stringify(canonicalize(value)))
+  }
+
+  function measure(value: unknown) {
+    // Reuse the existing canonical serialization; never retain request bodies
+    // in the manifest. This is not a provider tokenizer or wire-size measure.
+    const serialized = JSON.stringify(canonicalize(value))
+    return { hash: sha256(serialized), bytes: Buffer.byteLength(serialized, "utf8") }
   }
 
   export async function build(input: Input): Promise<Manifest> {
@@ -127,9 +140,12 @@ export namespace RequestProvenance {
       variant: input.options.variant,
       providerOptions: input.options.providerOptions,
     }
-    const systemHash = fingerprint(input.systemMessages)
-    const messagesHash = fingerprint(input.messages)
-    const toolDefinitionsHash = fingerprint(toolDefinitions)
+    const system = measure(input.systemMessages)
+    const messages = measure(input.messages)
+    const definitions = measure(toolDefinitions)
+    const systemHash = system.hash
+    const messagesHash = messages.hash
+    const toolDefinitionsHash = definitions.hash
     const optionsHash = fingerprint(options)
     const requestHash = fingerprint({
       boundary: "ai-sdk-pre-adapter",
@@ -152,6 +168,12 @@ export namespace RequestProvenance {
       systemMessageCount: input.systemMessages.length,
       toolCount: toolNames.length,
       toolNames,
+      requestBytes: {
+        encoding: "canonical-json-utf8",
+        system: system.bytes,
+        messages: messages.bytes,
+        toolDefinitions: definitions.bytes,
+      },
       systemHash,
       messagesHash,
       toolDefinitionsHash,

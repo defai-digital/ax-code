@@ -26,7 +26,7 @@ import {
   BOOTSTRAP_PREWARM_MAX_LANGUAGES,
   BOOTSTRAP_PREWARM_TIMEOUT_MS,
   INDEXER_SEMANTIC_METHODS,
-  memoryProfile,
+  speculativeLspPrewarmEnabled,
 } from "@ax-code/ax-code-intel/prewarm-profile"
 
 const BOOTSTRAP_TIMEOUT_MS = 30_000
@@ -189,10 +189,9 @@ export async function InstanceBootstrap() {
     label: "provider warmup",
     task: () => Provider.warmup({ swallow: false }),
   })
-  // Keep startup responsive: warm only a few representative semantic
-  // servers in the background so the first real semantic/index request
-  // does not pay the full cold-start penalty.
-  if (memoryProfile() !== "low") {
+  // Default to on-demand semantic startup. Opt-in prewarming trades extra
+  // residency for lower first-query latency; low mode suppresses speculation.
+  if (speculativeLspPrewarmEnabled()) {
     background({
       service: "LSP.prewarmWorkspace",
       label: "lsp semantic prewarm",

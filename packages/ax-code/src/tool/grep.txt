@@ -1,6 +1,8 @@
 Fast content search that works with any codebase size.
 
 Usage:
+- Lookaround (including negative lookahead) and backreferences are unsupported. Use a simpler expression and inspect the bounded matches.
+- Relative path values use the current workspace directory, which may already be a package below the repository root.
 - pattern is a regular expression (ripgrep syntax): "log.*Error", "function\s+\w+".
 - Braces are special in regex; escape a literal brace as \{ (e.g. "\{\}" matches "{}").
 - The include parameter filters files (e.g. "*.js", "*.{ts,tsx}"); path scopes the search to a file or directory. Prefer the known file or narrowest relevant directory.
@@ -16,6 +18,6 @@ Examples:
 
 There is no count mode: to count or aggregate matches, run `rg` via the Bash tool (e.g. `rg -c "pattern"`).
 
-If a search returns "No files found", loosen the pattern or drop the include filter before concluding the code does not exist.
+If a search returns "No files found", check the search root and include filter before widening the pattern or concluding the code does not exist.
 
-When you are doing an open-ended search that may require multiple rounds of globbing and grepping, use the Task tool instead.
+For a complex open-ended investigation, consider one bounded explore task with the evidence already collected.

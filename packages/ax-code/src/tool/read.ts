@@ -3,6 +3,7 @@ import * as fs from "fs/promises"
 import * as path from "path"
 import { Tool } from "./tool"
 import { LSP } from "@ax-code/ax-code-intel"
+import { speculativeLspPrewarmEnabled } from "@ax-code/ax-code-intel/prewarm-profile"
 import { FileTime } from "../file/time"
 import DESCRIPTION from "./read.txt"
 import { Instance } from "../project/instance"
@@ -31,6 +32,7 @@ function readError(name: string, message: string, cause?: unknown) {
 }
 
 function warmSemanticLsp(filepath: string, signal?: AbortSignal) {
+  if (!speculativeLspPrewarmEnabled()) return
   const directory = Instance.directory
   let cancelled = false
   const handle = (err: unknown) => {

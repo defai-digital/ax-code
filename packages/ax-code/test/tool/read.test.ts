@@ -607,7 +607,78 @@ root_type Monster;`
 })
 
 describe("tool.read lsp", () => {
+  test.each(["normal", "low"])("semantic queries still start a real server on demand in %s mode", async (profile) => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", profile)
+    vi.stubEnv("AX_CODE_LSP_PREWARM", undefined)
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } }
+    const item = { name: "main", kind: 12, uri: "file:///workspace/test.txt", range, selectionRange: range }
+    await using tmp = await tmpdir({
+      config: {
+        lsp: {
+          fake: {
+            command: [process.execPath, LSP_FILE],
+            extensions: [".txt"],
+            env: {
+              FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ callHierarchyProvider: true }),
+              FAKE_LSP_PREPARE_CALL_HIERARCHY: JSON.stringify([item]),
+            },
+          },
+        },
+      },
+      init: async (dir) => {
+        await writeFile(path.join(dir, "test.txt"), "main()")
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const file = path.join(tmp.path, "test.txt")
+        const read = await ReadTool.init()
+        expect((await read.execute({ filePath: file }, ctx)).output).toContain("main()")
+        await sleep(20)
+        expect(await LSP.status()).toEqual([])
+        const result = await LSP.prepareCallHierarchy({ file, line: 0, character: 0 })
+        expect(result).toEqual([item])
+        expect(await LSP.status()).toContainEqual(expect.objectContaining({ id: "fake", status: "connected" }))
+      },
+    })
+  })
+
+  test.each([
+    ["normal", undefined],
+    ["low", undefined],
+    ["low", "1"],
+  ])("plain reads skip speculative LSP in %s mode with prewarm=%s", async (profile, prewarm) => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", profile)
+    vi.stubEnv("AX_CODE_LSP_PREWARM", prewarm)
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await writeFile(path.join(dir, "test.ts"), "export const value = 1")
+      },
+    })
+    const hasClients = vi.spyOn(LSP, "hasClients").mockResolvedValue(true)
+    const touch = vi.spyOn(LSP, "touchFile").mockResolvedValue(1)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const read = await ReadTool.init()
+          expect((await read.execute({ filePath: path.join(tmp.path, "test.ts") }, ctx)).output).toContain("value = 1")
+          await sleep(20)
+          expect(hasClients).not.toHaveBeenCalled()
+          expect(touch).not.toHaveBeenCalled()
+        },
+      })
+    } finally {
+      hasClients.mockRestore()
+      touch.mockRestore()
+    }
+  })
+
   test("activates lsp while reading a file", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "normal")
+    vi.stubEnv("AX_CODE_LSP_PREWARM", "1")
     // The fixture deliberately launches a project-provided LSP process, which
     // requires the same explicit checkout trust as it does in production.
     vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
@@ -652,6 +723,8 @@ describe("tool.read lsp", () => {
   })
 
   test("does not wait for opportunistic lsp warmup", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "normal")
+    vi.stubEnv("AX_CODE_LSP_PREWARM", "1")
     await using tmp = await tmpdir({
       init: async (dir) => {
         await writeFile(path.join(dir, "test.txt"), "hello world")
@@ -690,6 +763,8 @@ describe("tool.read lsp", () => {
   })
 
   test("continues when opportunistic lsp warmup fails", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "normal")
+    vi.stubEnv("AX_CODE_LSP_PREWARM", "1")
     await using tmp = await tmpdir({
       init: async (dir) => {
         await writeFile(path.join(dir, "test.txt"), "hello world")
@@ -716,6 +791,8 @@ describe("tool.read lsp", () => {
   })
 
   test("skips opportunistic lsp warmup when no semantic server matches", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "normal")
+    vi.stubEnv("AX_CODE_LSP_PREWARM", "1")
     await using tmp = await tmpdir({
       init: async (dir) => {
         await writeFile(path.join(dir, "notes.txt"), "hello world")
@@ -744,6 +821,8 @@ describe("tool.read lsp", () => {
   })
 
   test("skips deferred lsp warmup after instance disposal", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "normal")
+    vi.stubEnv("AX_CODE_LSP_PREWARM", "1")
     await using tmp = await tmpdir({
       init: async (dir) => {
         await writeFile(path.join(dir, "test.txt"), "hello world")

@@ -115,7 +115,7 @@ $env:AX_CODE_MEMORY_PROFILE = "low"
 ax-code
 ```
 
-Use `auto` (default) to restore detection or `normal` to retain normal prewarming and concurrency. The evidence cache uses bounded memory by default; RocksDB is opt-in. These controls preserve model selection and required checks; they do not certify arbitrary projects for low-RAM hardware. See [Memory usage](docs/guides/memory-usage.md) for limits and workload guidance.
+Use `auto` (default) to restore detection or `normal` for normal cache and concurrency budgets. Both profiles start semantic analysis on demand; ordinary reads do not prewarm language servers. On a host with sufficient headroom, `AX_CODE_MEMORY_PROFILE=normal AX_CODE_LSP_PREWARM=1 ax-code` restores speculative startup/read prewarming to reduce first-query latency. The evidence cache uses bounded memory by default; RocksDB is opt-in. These controls preserve model selection and required checks; they do not certify arbitrary projects for low-RAM hardware. See [Memory usage](docs/guides/memory-usage.md) for limits and workload guidance.
 
 ## Get started
 

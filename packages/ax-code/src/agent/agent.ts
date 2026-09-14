@@ -208,7 +208,7 @@ export namespace Agent {
       general: {
         name: "general",
         displayName: "Assistant",
-        description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
+        description: `General-purpose agent for researching complex questions and executing multi-step tasks. Give it one bounded deliverable and existing evidence; parallel tasks must own distinct scopes.`,
         prompt: PROMPT_GENERAL,
         permission: Permission.merge(
           defaults,

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { memoryProfile, LOW_MEMORY_IDLE_MS } from "../src/prewarm-profile"
+import { memoryProfile, LOW_MEMORY_IDLE_MS, speculativeLspPrewarmEnabled } from "../src/prewarm-profile"
 import { ContentCache } from "../src/content-cache"
 import { ClientActivity } from "../src/client-activity"
 import { WorkQueue, memoryWork } from "../src/memory-work"
@@ -16,6 +16,18 @@ function deferred() {
 afterEach(() => vi.unstubAllEnvs())
 
 describe("memory profile", () => {
+  test.each([
+    ["normal", undefined, false],
+    ["normal", "0", false],
+    ["normal", "true", false],
+    ["normal", "1", true],
+    ["low", undefined, false],
+    ["low", "1", false],
+  ])("speculative prewarm with profile=%s and opt-in=%s is %s", (profile, optIn, expected) => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", profile)
+    vi.stubEnv("AX_CODE_LSP_PREWARM", optIn)
+    expect(speculativeLspPrewarmEnabled()).toBe(expected)
+  })
   test("selects low at the physical 8 GiB boundary with an explicit override", () => {
     const gib = 1024 ** 3
     expect(memoryProfile({ totalBytes: 8 * gib, override: "auto" })).toBe("low")

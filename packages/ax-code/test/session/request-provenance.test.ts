@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { createHash } from "node:crypto"
 import { jsonSchema, tool } from "ai"
 import z from "zod"
 import { RequestProvenance } from "../../src/session/request-provenance"
@@ -13,6 +14,55 @@ function definition(description: string, inputSchema: z.ZodType) {
 }
 
 describe("session.request-provenance", () => {
+  test("records UTF-8 component sizes without changing existing request identity or persisting content", async () => {
+    const system = [{ content: "private-\u{1F642}", role: "system" }]
+    const messages = [...system, { content: "private-\u00E9", role: "user" }]
+    const schema = { properties: {}, type: "object" as const }
+    const definitions = [{ description: "private-\u{1F642}", name: "read", schema }]
+    const manifest = await RequestProvenance.build({
+      providerID: "test",
+      modelID: "test",
+      systemMessages: system,
+      messages,
+      tools: { read: { description: definitions[0].description, inputSchema: jsonSchema(schema) } },
+      activeToolNames: ["read"],
+      options: {},
+    })
+    // Fixtures have sorted keys, allowing an independent canonical JSON oracle.
+    const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
+    expect(manifest.systemHash).toBe(hash(system))
+    expect(manifest.messagesHash).toBe(hash(messages))
+    expect(manifest.toolDefinitionsHash).toBe(hash(definitions))
+    expect(manifest.requestHash).toBe(
+      hash({
+        boundary: "ai-sdk-pre-adapter",
+        messagesHash: manifest.messagesHash,
+        modelID: "test",
+        optionsHash: manifest.optionsHash,
+        providerID: "test",
+        systemHash: manifest.systemHash,
+        toolDefinitionsHash: manifest.toolDefinitionsHash,
+        toolNames: ["read"],
+      }),
+    )
+    expect(manifest.requestBytes).toEqual({
+      encoding: "canonical-json-utf8",
+      system: Buffer.byteLength(JSON.stringify(system)),
+      messages: Buffer.byteLength(JSON.stringify(messages)),
+      toolDefinitions: Buffer.byteLength(JSON.stringify(definitions)),
+    })
+    expect(manifest.requestBytes.system).toBeGreaterThan(JSON.stringify(system).length)
+    const event = ReplayEvent.parse({
+      type: "llm.request",
+      sessionID: "ses_sizes",
+      model: "test/test",
+      messageCount: 1,
+      ...manifest,
+    })
+    expect(event).toMatchObject({ requestBytes: manifest.requestBytes })
+    expect(JSON.stringify(event)).not.toContain("private-")
+  })
+
   test("builds deterministic raw-prompt-free evidence from an assembled request", async () => {
     const input = {
       providerID: "test-provider",

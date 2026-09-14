@@ -22,6 +22,12 @@ export function memoryProfile(input: { override?: string; totalBytes?: number } 
   return Number.isFinite(bytes) && bytes > 0 && bytes <= 8 * 1024 ** 3 ? "low" : "normal"
 }
 
+// Speculation can start heavyweight child processes even for a plain file
+// read. Explicit semantic/indexer requests remain available in every profile.
+export function speculativeLspPrewarmEnabled() {
+  return process.env.AX_CODE_LSP_PREWARM === "1" && memoryProfile() === "normal"
+}
+
 export const LOW_MEMORY_IDLE_MS = 5 * 60_000
 export function sourceCacheBytes() {
   return (memoryProfile() === "low" ? 4 : 16) * 1024 ** 2

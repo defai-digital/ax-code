@@ -51,6 +51,14 @@ export const LLMRequestEvent = Base.extend({
   systemMessageCount: z.number().int().optional(),
   toolCount: z.number().int().optional(),
   toolNames: z.string().array().optional(),
+  requestBytes: z
+    .object({
+      encoding: z.literal("canonical-json-utf8"),
+      system: z.number().int().nonnegative(),
+      messages: z.number().int().nonnegative(),
+      toolDefinitions: z.number().int().nonnegative(),
+    })
+    .optional(),
   systemHash: z.string().optional(),
   messagesHash: z.string().optional(),
   toolDefinitionsHash: z.string().optional(),
