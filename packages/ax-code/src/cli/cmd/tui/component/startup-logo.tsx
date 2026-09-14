@@ -1,14 +1,15 @@
-import { createMemo, createSignal, onCleanup, onMount } from "solid-js"
-import { RGBA } from "ax-tui"
+import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js"
+import { RGBA, TextAttributes } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
-import { Logo } from "@tui/component/logo"
 import { logo } from "@/cli/logo"
 import {
   STARTUP_LOGO_DROP_DURATION_MS,
   STARTUP_LOGO_DURATION_MS,
   STARTUP_LOGO_TICK_MS,
   bindHiddenTerminalCursor,
+  matrixRainRampRgb,
+  startupLogoDropLevel,
   startupLogoDropOffset,
   startupLogoDropProgress,
   startupLogoPadding,
@@ -61,6 +62,13 @@ export function StartupLogo(props: { durationMs?: number; onDone: () => void }) 
     }),
   )
 
+  // Same brightness ramp the rain trails use: the mark starts on the dim
+  // green tail and brightens to the white head as it falls into place.
+  const dropColor = createMemo(() => {
+    const [r, g, b] = matrixRainRampRgb(startupLogoDropLevel(startupLogoDropProgress(elapsedMs())))
+    return RGBA.fromInts(r, g, b)
+  })
+
   let elapsed = 0
   const stopInterval = scheduleTuiInterval(
     () => {
@@ -100,7 +108,13 @@ export function StartupLogo(props: { durationMs?: number; onDone: () => void }) 
       onMouseDown={() => props.onDone()}
     >
       <box position="absolute" left={paddingLeft()} top={dropOffset()} width={LOGO_WIDTH} height={logo.length}>
-        <Logo />
+        <For each={logo}>
+          {(line) => (
+            <text fg={dropColor()} attributes={TextAttributes.BOLD}>
+              {line}
+            </text>
+          )}
+        </For>
       </box>
     </box>
   )

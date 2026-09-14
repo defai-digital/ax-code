@@ -34,6 +34,40 @@ export const MATRIX_RAIN_MAX_SPEED = 1.1
 export const MATRIX_RAIN_TAIL_MUTATION_CHANCE = 0.35
 export const MATRIX_RAIN_RESPAWN_GAP = 20
 
+/**
+ * Brightness ramp shared by every startup flourish. Index 0 is blank and index
+ * MATRIX_RAIN_LEVELS is the head, so rain trails fade out of the same green the
+ * dropping logo warms up from.
+ */
+export const MATRIX_RAIN_LEVEL_RGB: readonly (readonly [number, number, number])[] = [
+  [0, 0, 0],
+  [0, 80, 0],
+  [0, 150, 25],
+  [0, 215, 70],
+  [205, 255, 220],
+]
+
+/**
+ * Color at a possibly fractional ramp level, clamped to the table. Integer
+ * levels return the table entry exactly, which is what the rain's per-cell
+ * brightness indexes; the logo passes a fractional level so its color slides
+ * smoothly from the green tail to the white head.
+ */
+export function matrixRainRampRgb(level: number): [number, number, number] {
+  const last = MATRIX_RAIN_LEVEL_RGB.length - 1
+  const clamped = Math.min(last, Math.max(0, level))
+  const lower = Math.floor(clamped)
+  const upper = Math.min(last, lower + 1)
+  const t = clamped - lower
+  const from = MATRIX_RAIN_LEVEL_RGB[lower]
+  const to = MATRIX_RAIN_LEVEL_RGB[upper]
+  return [
+    Math.round(from[0] + (to[0] - from[0]) * t),
+    Math.round(from[1] + (to[1] - from[1]) * t),
+    Math.round(from[2] + (to[2] - from[2]) * t),
+  ]
+}
+
 /** Injectable randomness so frames are deterministic in tests. */
 export type MatrixRainRandom = () => number
 
@@ -335,6 +369,16 @@ export function startupLogoDropOffset(input: {
   const center = Math.max(0, Math.floor((input.terminalHeight - input.contentHeight) / 2))
   const aboveScreen = -input.contentHeight
   return Math.round(aboveScreen + (center - aboveScreen) * easeOutLogoDrop(input.progress))
+}
+
+/**
+ * Ramp level for the dropping logo: it starts on the dim green tail and
+ * brightens to the white head as it lands, so the mark arrives with the color a
+ * falling drop's head would have.
+ */
+export function startupLogoDropLevel(progress: number): number {
+  const clamped = Math.min(1, Math.max(0, progress))
+  return 1 + clamped * (MATRIX_RAIN_LEVELS - 1)
 }
 
 export function startupRainCoversChrome(phase: StartupRainPhase): boolean {

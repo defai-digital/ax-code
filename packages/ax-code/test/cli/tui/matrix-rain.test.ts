@@ -5,6 +5,7 @@ import {
   MATRIX_RAIN_COLUMN_SPACING,
   MATRIX_RAIN_DURATION_MS,
   MATRIX_RAIN_GLYPHS,
+  MATRIX_RAIN_LEVEL_RGB,
   MATRIX_RAIN_LEVELS,
   MATRIX_RAIN_MAX_DURATION_MS,
   MATRIX_RAIN_MIN_DURATION_MS,
@@ -19,12 +20,14 @@ import {
   createMatrixRain,
   easeOutLogoDrop,
   initialStartupRainPhase,
+  matrixRainRampRgb,
   matrixRainRows,
   resolveStartupRainPhase,
   shouldAutoPlayMatrixRain,
   decideMatrixRainOnStart,
   shouldPlayMatrixRainOnStart,
   shouldStopMatrixRain,
+  startupLogoDropLevel,
   startupLogoDropOffset,
   startupLogoDropProgress,
   startupLogoPadding,
@@ -456,5 +459,50 @@ describe("startup logo drop", () => {
     expect(src).toContain("startupLogoDropOffset")
     expect(src).toContain("scheduleTuiInterval")
     expect(src).toContain('overflow="hidden"')
+  })
+})
+
+describe("startup logo color", () => {
+  test("shares the rain brightness ramp", () => {
+    expect(MATRIX_RAIN_LEVEL_RGB.length).toBe(MATRIX_RAIN_LEVELS + 1)
+    expect(matrixRainRampRgb(0)).toEqual([0, 0, 0])
+    expect(matrixRainRampRgb(MATRIX_RAIN_LEVELS)).toEqual([205, 255, 220])
+  })
+
+  test("returns table entries exactly at integer levels", () => {
+    for (let level = 0; level <= MATRIX_RAIN_LEVELS; level++) {
+      expect(matrixRainRampRgb(level)).toEqual([...MATRIX_RAIN_LEVEL_RGB[level]])
+    }
+  })
+
+  test("interpolates fractional levels and clamps out-of-range ones", () => {
+    expect(matrixRainRampRgb(1.5)).toEqual([0, 115, 13])
+    expect(matrixRainRampRgb(-5)).toEqual([0, 0, 0])
+    expect(matrixRainRampRgb(99)).toEqual([205, 255, 220])
+  })
+
+  test("the mark starts green and lands on the white head", () => {
+    expect(startupLogoDropLevel(0)).toBe(1)
+    expect(startupLogoDropLevel(1)).toBe(MATRIX_RAIN_LEVELS)
+    expect(matrixRainRampRgb(startupLogoDropLevel(0))).toEqual(matrixRainRampRgb(1))
+    expect(matrixRainRampRgb(startupLogoDropLevel(1))).toEqual(matrixRainRampRgb(MATRIX_RAIN_LEVELS))
+  })
+
+  test("brightens monotonically as it drops", () => {
+    let previous = Number.NEGATIVE_INFINITY
+    for (let step = 0; step <= 10; step++) {
+      const level = startupLogoDropLevel(step / 10)
+      expect(level).toBeGreaterThanOrEqual(previous)
+      previous = level
+    }
+  })
+
+  test("both overlays read the one shared ramp", () => {
+    const dir = "../../../src/cli/cmd/tui/component"
+    const rain = readFileSync(path.join(import.meta.dirname, dir, "matrix-rain.tsx"), "utf8")
+    const logo = readFileSync(path.join(import.meta.dirname, dir, "startup-logo.tsx"), "utf8")
+    expect(rain).toContain("MATRIX_RAIN_LEVEL_RGB")
+    expect(logo).toContain("matrixRainRampRgb")
+    expect(logo).toContain("startupLogoDropLevel")
   })
 })

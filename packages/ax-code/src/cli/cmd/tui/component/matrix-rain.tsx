@@ -4,6 +4,7 @@ import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import {
   MATRIX_RAIN_DURATION_MS,
+  MATRIX_RAIN_LEVEL_RGB,
   MATRIX_RAIN_TICK_MS,
   bindHiddenTerminalCursor,
   createMatrixRain,
@@ -22,14 +23,9 @@ function useHiddenTerminalCursor() {
 
 // Brightness ramp: index 0 is blank, index MATRIX_RAIN_LEVELS is the head.
 // Deliberately a small fixed palette so consecutive cells collapse into few
-// spans and the per-frame escape sequence volume stays bounded.
-const LEVEL_COLORS: RGBA[] = [
-  RGBA.fromInts(0, 0, 0),
-  RGBA.fromInts(0, 80, 0),
-  RGBA.fromInts(0, 150, 25),
-  RGBA.fromInts(0, 215, 70),
-  RGBA.fromInts(205, 255, 220),
-]
+// spans and the per-frame escape sequence volume stays bounded. The table is
+// shared with the startup logo, which warms up along the same ramp.
+const LEVEL_COLORS: RGBA[] = MATRIX_RAIN_LEVEL_RGB.map(([r, g, b]) => RGBA.fromInts(r, g, b))
 
 const BACKGROUND = RGBA.fromInts(0, 0, 0)
 
