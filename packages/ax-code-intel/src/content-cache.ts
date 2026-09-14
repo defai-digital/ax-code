@@ -28,7 +28,8 @@ export class ContentCache {
   }
   set(key: string, text: string) {
     this.delete(key)
-    const bytes = Math.max(Buffer.byteLength(text), text.length * 2) + key.length * 2 + 128
+    const bytes =
+      Math.max(Buffer.byteLength(text), text.length * 2) + Math.max(Buffer.byteLength(key), key.length * 2) + 128
     if (bytes > this.maxBytes) return
     while (this.entries.size && (this.bytes + bytes > this.maxBytes || this.entries.size >= this.maxEntries)) {
       this.delete(this.entries.keys().next().value!)

@@ -54,6 +54,12 @@ describe("source cache retention", () => {
     cache.clear()
     expect(cache.bytes).toBe(0)
   })
+  test("counts multibyte cache keys against the retention budget", () => {
+    const cache = new ContentCache(300)
+    cache.set("資料".repeat(40), "x")
+    expect(cache.size).toBe(0)
+    expect(cache.bytes).toBe(0)
+  })
 })
 
 describe("LSP admission and idle safety", () => {
