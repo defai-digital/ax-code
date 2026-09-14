@@ -110,7 +110,11 @@ export namespace GoalPlanBaseline {
 }
 
 function looksLikeGitCommand(command: string) {
-  return /\bgit\b|\bmerge-base\b/.test(command)
+  return /\bgit\b|\bmerge-base\b|\$GIT\b/.test(command)
+}
+
+function isGitRevisionSegment(part: string) {
+  return /\bgit\b|\bmerge-base\b|\$GIT\b|\b(?:diff|log|show|rev-list|rev-parse)\b/.test(part)
 }
 
 function gitRevisionText(command: string) {
@@ -118,7 +122,7 @@ function gitRevisionText(command: string) {
   // in a later command must not be treated as a git revision.
   return command
     .split(/\s*(?:&&|\|\||;|\||&)\s*/)
-    .filter((part) => /\bgit\b|\bmerge-base\b/.test(part))
+    .filter((part) => isGitRevisionSegment(part))
     .map((part) =>
       part.replace(/\bgit(?:\s+[^\s]+)*\s--\s.*$/, (matched) => {
         const cut = matched.search(/\s--\s/)

@@ -133,6 +133,11 @@ describe("GoalPlanBaseline", () => {
         { objective: "keep the diff in scope", snapshot: { head, divergedFromTracking: [], dirty: [] } },
       ),
     ).not.toThrow()
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("GIT=git; $GIT diff --name-only origin/main..HEAD"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
   })
 
   test("rewrites {BASELINE} to the plan-time HEAD SHA", () => {
