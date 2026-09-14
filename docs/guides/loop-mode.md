@@ -49,7 +49,9 @@ Rules:
 runs a dedicated plan writer that stores a reviewable contract under
 `.ax-code/goals/` (or the AX data directory when the project is not a git
 worktree). If planning fails the goal stays paused — `/goal resume` retries
-it. Goal completion remains verification-gated: the agent cannot mark a goal
+it. Git range checks that measure this goal's diff use the plan-time HEAD
+(`{BASELINE}`), not `origin/main`, unless the objective names that remote.
+Goal completion remains verification-gated: the agent cannot mark a goal
 complete after edits without a passing verification run, and when a plan
 exists it must also supply evidence for every acceptance criterion.
 

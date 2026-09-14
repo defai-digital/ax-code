@@ -5,6 +5,7 @@ import { toErrorMessage } from "../util/error-message"
 import { withTimeout } from "../util/timeout"
 import { asRecordOrUndefined } from "../util/record"
 import { GoalPlan } from "./goal-plan"
+import { GoalPlanBaseline } from "./goal-plan-baseline"
 import type { SessionID } from "./schema"
 import type { ModelID, ProviderID } from "../provider/schema"
 
@@ -54,6 +55,9 @@ export namespace GoalPlanWriter {
     const { Provider } = await import("../provider/provider")
 
     const model = input.model ?? (await Provider.defaultModel())
+    const gitContext = await GoalPlanBaseline.snapshot(Instance.directory)
+      .then((snap) => GoalPlanBaseline.promptContext(snap))
+      .catch(() => undefined)
     const child = await Session.create({
       parentID: input.sessionID,
       title: "Goal plan writer",
@@ -79,7 +83,7 @@ export namespace GoalPlanWriter {
           parts: [
             {
               type: "text",
-              text: `OBJECTIVE:\n${input.objective}`,
+              text: GoalPlanBaseline.writerUserText(input.objective, gitContext),
             },
           ],
         }),

@@ -54,6 +54,19 @@ state that in the checklist. Do not wrap failures with `|| true` or replace a
 check with a command that only prints success. A command's exit code can only
 prove the assertions that command actually makes.
 
+Fit every check to the CURRENT environment in CONTEXT. Keep the gating set
+small and finishable: inflating the contract is what makes a goal uncompletable.
+A check that is already failing before any goal work is invalid unless OBJECTIVE
+is to fix that failure — record pre-existing dirty or diverged paths under
+Risks, do not freeze them as gates.
+
+For "what this goal changed" git ranges, the before-state is `{BASELINE}` (the
+plan-time HEAD SHA from CONTEXT). Never use origin/*, @{u}, merge-base with a
+remote-tracking ref, or origin/main..HEAD unless OBJECTIVE names that remote.
+submit_goal_plan rewrites `{BASELINE}` to the SHA and rejects remote-tracking
+before-states that OBJECTIVE did not name. You have no shell: do not invent a
+revision; use CONTEXT.
+
 For migrations, inspect relevant UI/API flows, database definitions and executable
 logic (triggers, procedures, jobs), configuration branches, schema/data mappings,
 old/new parity and deployment state. Include relevant checks; do not treat UI or

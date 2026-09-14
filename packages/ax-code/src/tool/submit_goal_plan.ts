@@ -1,6 +1,10 @@
 import z from "zod"
 import { GoalPlan } from "@/session/goal-plan"
 import { GoalAssurance } from "@/session/goal-assurance"
+import { GoalPlanBaseline } from "@/session/goal-plan-baseline"
+import { SessionGoal } from "@/session/goal"
+import type { SessionID } from "@/session/schema"
+import { Instance } from "@/project/instance"
 import { Tool } from "./tool"
 import DESCRIPTION from "./submit_goal_plan.txt"
 
@@ -40,15 +44,21 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       .describe("code-change only. Ordered implementation steps. Not a completion gate."),
     risks: z.array(z.string().min(1)).optional().describe("Internal contradictions or environment limits."),
     assurance: GoalAssurance.Schema.optional().describe(
-      "Required for new code-change plans. Frozen source references and executable checks covering every AC id. Commands run from the workspace root through verify_project goalCheck; scripts must assert the declared target environment. Source paths bound fingerprinting; include implementation, configuration and checks.",
+      "Required for new code-change plans. Frozen source references and executable checks covering every AC id. Commands run from the workspace root through verify_project goalCheck; scripts must assert the declared target environment. Source paths bound fingerprinting; include implementation, configuration and checks. Use {BASELINE} for the plan-time HEAD SHA in git ranges; remote-tracking before-states are rejected unless the objective names that remote.",
     ),
   }),
-  async execute(params) {
+  async execute(params, ctx) {
     if (params.kind === "code-change" && !params.assurance) {
       throw new Error(
         "Code-change plans require assurance with executable checks covering every acceptance id. Declare project-owned verification commands and source references; do not invent successful observations.",
       )
     }
+    const assurance = params.assurance
+      ? GoalPlanBaseline.prepareAssurance(params.assurance, {
+          objective: await objectiveFor(ctx.sessionID),
+          snapshot: await snapshotForWorkspace(),
+        })
+      : params.assurance
     const contract = GoalPlan.fromFields({
       kind: params.kind,
       title: params.title,
@@ -59,7 +69,7 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       implementationApproach: params.implementationApproach,
       taskChecklist: params.taskChecklist,
       risks: params.risks,
-      assurance: params.assurance,
+      assurance,
     })
     const markdown = GoalPlan.render(contract)
     // The persisted plan must stay readable by the capped reader in
@@ -92,3 +102,22 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
     }
   },
 })
+
+async function objectiveFor(sessionID: SessionID) {
+  try {
+    const { Session } = await import("@/session")
+    const session = await Session.get(sessionID)
+    const goal = await SessionGoal.get(session.parentID ?? session.id)
+    return goal?.objective ?? ""
+  } catch {
+    return ""
+  }
+}
+
+async function snapshotForWorkspace() {
+  try {
+    return await GoalPlanBaseline.snapshot(Instance.directory)
+  } catch {
+    return undefined
+  }
+}

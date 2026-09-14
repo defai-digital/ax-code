@@ -3,6 +3,11 @@ import { SubmitGoalPlanTool } from "../../src/tool/submit_goal_plan"
 import { GoalPlan } from "../../src/session/goal-plan"
 import { MessageID } from "../../src/session/schema"
 import type { GoalAssurance } from "../../src/session/goal-assurance"
+import { Instance } from "../../src/project/instance"
+import { Session } from "../../src/session"
+import { SessionGoal } from "../../src/session/goal"
+import { git } from "../../src/util/git"
+import { tmpdir } from "../fixture/fixture"
 
 const assurance: GoalAssurance.Contract = {
   version: 1,
@@ -178,5 +183,143 @@ describe("submit_goal_plan", () => {
     expect(result.metadata.truncated).toBe(false)
     expect(result.output).toContain("## Assumed scope")
     expect(() => GoalPlan.parse(result.output)).not.toThrow()
+  })
+
+  test("rejects a remote-tracking git before-state unless the objective names that remote", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await SubmitGoalPlanTool.init()
+        const ctx = {
+          sessionID: "ses_test" as any,
+          messageID: MessageID.ascending(),
+          agent: "goal-plan-writer",
+          abort: new AbortController().signal,
+          messages: [],
+          extra: {},
+          metadata() {},
+          async ask() {},
+        }
+        await expect(
+          tool.execute(
+            {
+              kind: "code-change",
+              assurance: {
+                ...assurance,
+                checks: [
+                  {
+                    ...assurance.checks[0],
+                    command: "sh -c 'b=$(git merge-base HEAD origin/main); git diff --name-only $b..HEAD'",
+                  },
+                ],
+              },
+              title: "Refactor core",
+              acceptance: ["The change stays in scope"],
+              verification: [{ tag: "gating", action: "inspect the diff", observation: "only declared paths" }],
+              nonGoals: ["unrelated refactors"],
+              assumedScope: "src",
+              implementationApproach: "Keep it small",
+              taskChecklist: ["Implement", "Verify"],
+            },
+            ctx,
+          ),
+        ).rejects.toThrow(/origin\/main/)
+      },
+    })
+  })
+
+  test("rewrites {BASELINE} to HEAD and freezes that SHA", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const head = (await git(["rev-parse", "HEAD"], { cwd: tmp.path })).text().trim()
+        const session = await Session.create({})
+        await SessionGoal.create({ sessionID: session.id, objective: "keep the diff in scope then test and commit" })
+        const tool = await SubmitGoalPlanTool.init()
+        const result = await tool.execute(
+          {
+            kind: "code-change",
+            assurance: {
+              ...assurance,
+              checks: [
+                {
+                  ...assurance.checks[0],
+                  command: "sh -c 'git diff --name-only {BASELINE}..HEAD'",
+                },
+              ],
+            },
+            title: "Keep the diff in scope",
+            acceptance: ["Changed paths stay in scope"],
+            verification: [{ tag: "gating", action: "inspect the diff", observation: "only declared paths" }],
+            nonGoals: ["unrelated refactors"],
+            assumedScope: "src",
+            implementationApproach: "Keep it small",
+            taskChecklist: ["Implement", "Verify"],
+          },
+          {
+            sessionID: session.id,
+            messageID: MessageID.ascending(),
+            agent: "goal-plan-writer",
+            abort: new AbortController().signal,
+            messages: [],
+            extra: {},
+            metadata() {},
+            async ask() {},
+          },
+        )
+        expect(result.output).toContain(`git diff --name-only ${head}..HEAD`)
+        expect(result.output).not.toContain("{BASELINE}")
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("uses the parent session objective when the writer is a child", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        await SessionGoal.create({ sessionID: parent.id, objective: "push the fix to origin/main" })
+        const child = await Session.create({ parentID: parent.id, title: "Goal plan writer" })
+        const tool = await SubmitGoalPlanTool.init()
+        const result = await tool.execute(
+          {
+            kind: "code-change",
+            assurance: {
+              ...assurance,
+              checks: [
+                {
+                  ...assurance.checks[0],
+                  command: "sh -c 'git diff --name-only origin/main..HEAD'",
+                },
+              ],
+            },
+            title: "Push the fix",
+            acceptance: ["HEAD matches origin/main"],
+            verification: [{ tag: "gating", action: "compare HEAD to origin/main", observation: "they match" }],
+            nonGoals: ["unrelated refactors"],
+            assumedScope: "src",
+            implementationApproach: "Keep it small",
+            taskChecklist: ["Implement", "Verify"],
+          },
+          {
+            sessionID: child.id,
+            messageID: MessageID.ascending(),
+            agent: "goal-plan-writer",
+            abort: new AbortController().signal,
+            messages: [],
+            extra: {},
+            metadata() {},
+            async ask() {},
+          },
+        )
+        expect(result.output).toContain("origin/main")
+        await Session.remove(child.id)
+        await Session.remove(parent.id)
+      },
+    })
   })
 })

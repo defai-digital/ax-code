@@ -2,7 +2,7 @@
 
 Status: Current
 Scope: Goal acceptance checks and source freshness
-Last reviewed: 2026-09-08
+Last reviewed: 2026-09-14
 Owner: AX Code runtime maintainers
 
 Code-change plans produced by the goal planner declare executable acceptance
@@ -85,6 +85,15 @@ validated scope, source references, check ids and declared targets in its contin
 goal context. Missing or altered contracts produce a restore notice. Generated
 conversation summaries remain fallible; declared references and target labels
 are requirements, not independently observed facts.
+
+Git ranges that measure what this goal changed must use `{BASELINE}` as the
+before-state. The planner rewrites that placeholder to the HEAD SHA captured
+when the plan is submitted, so pre-existing commits ahead of `origin/main` or
+a dirty working tree cannot make the goal uncompletable. Remote-tracking refs
+(`origin/main`, `@{u}`, `refs/remotes/…`) are rejected as that before-state
+unless the goal objective names the remote. Record already-diverged or dirty
+paths under Risks; do not freeze a gating check that is already failing unless
+the objective is to fix that failure.
 
 ## Freshness and limits
 
