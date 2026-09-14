@@ -1,4 +1,4 @@
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import { once } from "node:events"
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -103,7 +103,8 @@ test("native diagnostic pulls are lazy, expose pending state, and recover after 
     await withTimeout(refreshed, 3000)
     expect(client.diagnosticsDegraded).toBe(true)
     expect(client.diagnostics.has(source)).toBe(false)
-    await expect.poll(() => client.diagnosticsDegraded, { timeout: 3000 }).toBe(false)
+    await collect([client])
+    expect(client.diagnosticsDegraded).toBe(false)
     expect(client.diagnostics.get(source)).toEqual([])
     const diagnostic = {
       range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
@@ -329,6 +330,116 @@ test("timed-out close delivery frees local state but never reports a complete in
   } finally {
     release()
     send?.mockRestore()
+    await client.shutdown()
+  }
+})
+
+test("server refresh storms preserve stale coverage without renewing the idle lease", async () => {
+  await using tmp = await tmpdir()
+  const source = path.join(tmp.path, "source.ts")
+  await fs.writeFile(source, "export const answer = 42\n")
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./fixture/fake-lsp-server.js", import.meta.url))], {
+    env: { ...process.env, FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ diagnosticProvider: true }) },
+  })
+  const client = await LSPClient.create({ serverID: "typescript", root: tmp.path, server: { process: child } })
+  const report = { kind: "full", items: [] }
+  try {
+    await client.connection.sendRequest("test/diagnostics", { report })
+    await client.notify.open({ path: source, waitForDiagnostics: true })
+    // Let the foreground edit's debounce finish before measuring server-only traffic.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    await expect.poll(() => client.activity.busy).toBe(0)
+    const before = await client.connection.sendRequest<{ requests: number }>("test/diagnostics", {
+      report,
+      refreshIntervalMs: 20,
+    })
+    const lastUse = client.activity.lastUse
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(client.activity.busy).toBe(0)
+    expect(client.activity.lastUse).toBe(lastUse)
+    expect(client.diagnosticsDegraded).toBe(true)
+    expect(client.diagnostics.has(source)).toBe(false)
+    const after = await client.connection.sendRequest<{ requests: number }>("test/diagnostics", {
+      report,
+      refreshIntervalMs: 0,
+    })
+    expect(after.requests).toBe(before.requests)
+    expect(await collect([client])).toEqual({ [source]: [] })
+    expect(client.diagnosticsDegraded).toBe(false)
+  } finally {
+    await client.shutdown()
+  }
+})
+
+test.each([
+  { name: "typescript-go", version: "7.0.2", reopen: true },
+  { name: "typescript-go", version: "7.1.0", reopen: false },
+  { name: "custom", version: "7.0.2", reopen: false },
+])("saved-document compatibility is limited to the affected native server ($name $version)", async (serverInfo) => {
+  await using tmp = await tmpdir()
+  const source = path.join(tmp.path, "source.ts")
+  await fs.writeFile(source, "export const answer = 42\n")
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./fixture/fake-lsp-server.js", import.meta.url))], {
+    env: {
+      ...process.env,
+      FAKE_LSP_SERVER_INFO: JSON.stringify(serverInfo),
+      FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({
+        diagnosticProvider: { interFileDependencies: true },
+        textDocumentSync: { openClose: true, change: 2, save: true },
+      }),
+    },
+  })
+  const client = await LSPClient.create({ serverID: "typescript", root: tmp.path, server: { process: child } })
+  try {
+    await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] } })
+    await client.notify.open({ path: source, waitForDiagnostics: true })
+    const originalNotify = client.connection.sendNotification.bind(client.connection)
+    const notify = vi.spyOn(client.connection, "sendNotification")
+    const timeline: string[] = []
+    let interleaved: Promise<unknown> | undefined
+    const originalRequest = client.connection.sendRequest.bind(client.connection)
+    vi.spyOn(client.connection, "sendRequest").mockImplementation(((method: any, ...args: any[]) => {
+      timeline.push(method)
+      return originalRequest(method, ...args)
+    }) as typeof client.connection.sendRequest)
+    notify.mockImplementation(((method: any, ...args: any[]) => {
+      timeline.push(method)
+      if (method === "textDocument/didClose")
+        queueMicrotask(() => {
+          interleaved = client.connection.sendRequest("test/initializeParams")
+        })
+      return originalNotify(method, ...args)
+    }) as typeof client.connection.sendNotification)
+    await fs.writeFile(source, "export const answer = 43\n")
+    await Promise.all(Array.from({ length: 8 }, () => client.notify.open({ path: source, waitForDiagnostics: true })))
+    const sync = notify.mock.calls.filter(([method]) => String(method).startsWith("textDocument/"))
+    expect(sync.map(([method]) => method)).toEqual(
+      serverInfo.reopen
+        ? ["textDocument/didClose", "textDocument/didOpen", "textDocument/didSave"]
+        : ["textDocument/didChange", "textDocument/didSave"],
+    )
+    if (serverInfo.reopen) {
+      await interleaved
+      expect(timeline[timeline.indexOf("textDocument/didClose") + 1]).toBe("textDocument/didOpen")
+      expect(sync[1]?.[1]).toMatchObject({ textDocument: { version: 1, text: "export const answer = 43\n" } })
+      // Failure between close and open must not permit a false clean result.
+      notify.mockImplementation((async (method: any, ...params: any[]) => {
+        if (method === "textDocument/didOpen") throw new Error("replacement delivery failed")
+        return originalNotify(method, ...params)
+      }) as typeof client.connection.sendNotification)
+      await fs.writeFile(source, "export const answer = 44\n")
+      await expect(client.notify.open({ path: source, waitForDiagnostics: true })).rejects.toThrow(
+        "replacement delivery failed",
+      )
+      expect(client.diagnosticsDegraded).toBe(true)
+      await expect(collect([client])).rejects.toThrow("incomplete")
+      const sent = notify.mock.calls.length
+      await expect(client.notify.open({ path: source })).rejects.toThrow("restart the language server")
+      expect(notify.mock.calls).toHaveLength(sent)
+    }
+    notify.mockRestore()
+  } finally {
+    vi.restoreAllMocks()
     await client.shutdown()
   }
 })

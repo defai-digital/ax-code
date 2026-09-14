@@ -362,8 +362,8 @@ export namespace LSPClient {
 
     let pullsDiagnostics = false
     connection.onNotification("textDocument/publishDiagnostics", (params) => {
-      activity.touch()
       if (pullsDiagnostics) return
+      activity.touch()
       const filePath = diagnosticPathFromUri(params.uri)
       if (!filePath) {
         l.debug("skipping diagnostics for non-file URI", { uri: params.uri })
@@ -450,7 +450,7 @@ export namespace LSPClient {
             },
           },
         },
-      }) as Promise<{ capabilities?: Record<string, unknown> }>,
+      }) as Promise<{ capabilities?: Record<string, unknown>; serverInfo?: { name?: string; version?: string } }>,
       45_000,
     ).catch((err) => {
       l.error("initialize error", { error: err })
@@ -465,6 +465,14 @@ export namespace LSPClient {
     const runtimeCapabilityHints = capabilityHintsFromInitialize(initializeResult?.capabilities)
     pullsDiagnostics =
       input.serverID === "typescript" && capabilityEnabled(initializeResult?.capabilities?.diagnosticProvider)
+    // TypeScript 7.0.2 can retain the previous project snapshot when native
+    // file-watch events race with a saved didChange. A protocol close/open
+    // commits the replacement synchronously in that server. Keep this narrow:
+    // other servers and versions retain their negotiated incremental sync.
+    const reopenChangedDocuments =
+      pullsDiagnostics &&
+      initializeResult.serverInfo?.name === "typescript-go" &&
+      initializeResult.serverInfo.version === "7.0.2"
     const staleDiagnostics = new Set<string>()
     let diagnosticGeneration = 0
     // Negotiated document sync mode. Ranged (incremental) didChange payloads
@@ -544,16 +552,19 @@ export namespace LSPClient {
     // TypeScript diagnostics depend on other files. Invalidate the inventory
     // on document and server refresh events; callers explicitly pull what
     // they need. Never report an in-flight or stale inventory as complete.
-    function invalidateDiagnostics() {
+    function invalidateDiagnostics(eager = true) {
       if (!pullsDiagnostics) return
       diagnosticGeneration++
       for (const filePath of Object.keys(files)) staleDiagnostics.add(filePath)
       diagnostics.clear()
-      scheduleDiagnosticRefresh()
+      if (eager) scheduleDiagnosticRefresh()
     }
     if (pullsDiagnostics) {
       connection.onRequest("workspace/diagnostic/refresh", () => {
-        invalidateDiagnostics()
+        // Server background refreshes are not foreground use. Eagerly pulling
+        // here can create a refresh/pull loop that continually renews the idle
+        // lease. Preserve stale coverage until the next explicit collection.
+        invalidateDiagnostics(false)
         return null
       })
     }
@@ -750,6 +761,8 @@ export namespace LSPClient {
           // send duplicate didChange notifications with the same version
           // number. Unrelated paths still run in parallel.
           return withPathLock(normalized, async () => {
+            if (incompleteClose)
+              throw new Error("LSP document synchronization is incomplete; restart the language server")
             // If a previously-tracked file has disappeared from disk, treat
             // the touch as a close so we don't leak stale entries in files,
             // diagnostics, and lastContent. Caller gets false ("nothing sent
@@ -812,7 +825,20 @@ export namespace LSPClient {
               noteWorkspaceChange()
 
               try {
-                if (documentSync.change !== 0) {
+                if (reopenChangedDocuments && documentSync.openClose) {
+                  log.info("textDocument reopen (native snapshot compatibility)", { path: normalized, version: next })
+                  // Queue both frames before yielding so an unrelated request
+                  // cannot observe the temporary closed-document state. The
+                  // JSON-RPC writer serializes writes in admission order.
+                  await Promise.all([
+                    connection.sendNotification("textDocument/didClose", {
+                      textDocument: { uri: pathToFileURL(normalized).href },
+                    }),
+                    connection.sendNotification("textDocument/didOpen", {
+                      textDocument: { uri: pathToFileURL(normalized).href, languageId, version: next, text },
+                    }),
+                  ])
+                } else if (documentSync.change !== 0) {
                   // Ranged incremental changes are only protocol-legal when
                   // the server negotiated TextDocumentSyncKind.Incremental.
                   // Full servers receive one range-less replacement. Also
@@ -863,6 +889,9 @@ export namespace LSPClient {
                   })
                 }
               } catch (error) {
+                // A failed close/open can leave the server without the document.
+                // Retain incomplete coverage until this client is restarted.
+                if (reopenChangedDocuments && documentSync.openClose) incompleteClose = true
                 wait?.cancel()
                 throw error
               }

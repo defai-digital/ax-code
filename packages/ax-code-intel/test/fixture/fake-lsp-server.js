@@ -8,6 +8,7 @@ let initializeParams
 let diagnosticReport = null
 let holdDiagnostics = false
 let diagnosticRequests = 0
+let diagnosticRefreshTimer
 const heldDiagnostics = []
 const initializeCapabilities = (() => {
   const raw = process.env.FAKE_LSP_CAPABILITIES_JSON
@@ -120,7 +121,11 @@ function handle(raw) {
   if (data.method === "initialize") {
     initializeParams = data.params
     const respond = () => {
-      send({ jsonrpc: "2.0", id: data.id, result: { capabilities: initializeCapabilities } })
+      send({
+        jsonrpc: "2.0",
+        id: data.id,
+        result: { capabilities: initializeCapabilities, serverInfo: parseJsonEnv("FAKE_LSP_SERVER_INFO", undefined) },
+      })
       initializeResponded = true
       maybeSendReady()
     }
@@ -142,6 +147,13 @@ function handle(raw) {
   }
   if (data.method === "test/diagnostics") {
     diagnosticReport = data.params.report
+    if (data.params.refreshIntervalMs !== undefined) {
+      clearInterval(diagnosticRefreshTimer)
+      diagnosticRefreshTimer =
+        data.params.refreshIntervalMs > 0
+          ? setInterval(() => sendRequest("workspace/diagnostic/refresh", {}), data.params.refreshIntervalMs)
+          : undefined
+    }
     holdDiagnostics = data.params.hold === true
     if (!holdDiagnostics) {
       for (const id of heldDiagnostics.splice(0)) send({ jsonrpc: "2.0", id, result: diagnosticReport })
