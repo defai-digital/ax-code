@@ -1,6 +1,6 @@
 # Local evidence cache
 
-Status: Default enabled
+Status: Memory enabled by default; RocksDB opt-in
 
 Scope: current-state
 
@@ -8,16 +8,16 @@ Last reviewed: 2026-09-13
 
 Owner: ax-code runtime
 
-AX Code can use an optional RocksDB cache alongside its existing SQLite storage. SQLite retains complete session history and verification records. The cache contains disposable rendered text and syntactic symbols; it does not change permissions or count as fresh verification.
+AX Code uses a bounded in-memory evidence cache by default, with optional RocksDB persistence alongside its existing SQLite storage. SQLite retains complete session history and verification records. The cache contains disposable rendered text and syntactic symbols; it does not change permissions or count as fresh verification.
 
-Evidence reuse is enabled by default and prefers RocksDB. Source installations build its native support with:
+The default memory mode does not open a RocksDB database. To opt into persistence in a source installation, build its native support and select RocksDB explicitly:
 
 ```sh
 pnpm build:native fs
-pnpm run dev
+AX_CODE_EVIDENCE_CACHE=rocksdb pnpm run dev
 ```
 
-Use `AX_CODE_EVIDENCE_CACHE=memory` for bounded in-process reuse without persistent storage. Missing native support, a database lock held by another runtime, or a cache failure falls back to memory with a diagnostic. Standard filesystem addon builds include RocksDB. Release builds verify the packaged addon can write and reopen its cache. Native operations run off the JavaScript event loop.
+`AX_CODE_EVIDENCE_CACHE=memory` explicitly selects the default bounded in-process reuse without persistent storage. In RocksDB mode, missing native support, a database lock held by another runtime, or a cache failure falls back to memory with a diagnostic. Standard filesystem addon builds include RocksDB for explicit opt-in. Release builds verify the packaged addon can write and reopen its cache. Native operations run off the JavaScript event loop.
 
 Text reads up to 1 MiB validate current source bytes and reuse the rendered range when its content, path, range and format match. Larger files, external reads, directories and attachments do not enter the read cache. Repository instructions and file-read stamps remain live. Syntactic extraction can reuse symbols for identical source and language; these symbols do not establish semantic references or callers.
 
@@ -25,9 +25,9 @@ With either cache mode, repeated complete text read results already visible in t
 
 Cache hits save rendering or parsing; they do not eliminate source validation reads or model-requested tool calls. To combine dependent discovery into fewer model round trips, explicitly enable the existing `experimental.read_only_recipes` option and use `read_recipe` with bounded selections. Use `code_intelligence` with `operation: "buildContext"` for a bounded structural overview. Neither option is enabled automatically by the cache.
 
-The cache lives under the normal AX Code cache directory in `evidence-v1`, with a separate database per project instance directory. RocksDB admission is limited to 1024 entries and 32 MiB of logical values; physical disk usage also includes encoding, logs and compaction overhead. In-memory reuse is limited to 128 entries and 4 MiB. Entries expire after 24 hours and are validated on lookup. Capacity eviction may clear the disposable native entries as a batch. No existing SQLite data is migrated or backfilled.
+When selected, the persistent cache lives under the normal AX Code cache directory in `evidence-v1`, with a separate database per project instance directory. RocksDB admission is limited to 1024 entries and 32 MiB of logical values; physical disk usage also includes encoding, logs and compaction overhead. Both modes limit in-memory reuse to 128 entries and 4 MiB of serialized values per project instance per process; this is not a total process RAM limit. Memory entries are cleared on instance disposal and do not survive process exit. Entries expire after 24 hours and are validated on lookup. Capacity eviction may clear the disposable native entries as a batch. No existing SQLite data is migrated or backfilled.
 
-To disable both storage reuse and model-input deduplication, set `AX_CODE_EVIDENCE_CACHE=off` and restart AX Code. An unset or empty value uses RocksDB; an unrecognized nonempty value disables the cache. No SQLite rollback is needed. Stop runtimes before manually removing `evidence-v1`; do not remove RocksDB lock files while a runtime is using the cache.
+To disable both storage reuse and model-input deduplication, set `AX_CODE_EVIDENCE_CACHE=off` and restart AX Code. An unset or empty value uses memory; an unrecognized nonempty value disables the cache. Restart existing runtimes to apply the new default, and remove any explicit `rocksdb` override to use memory. Existing persistent cache files are retained. No SQLite rollback is needed. Stop runtimes before manually removing `evidence-v1`; do not remove RocksDB lock files while a runtime is using the cache.
 
 For local native qualification after building the feature:
 

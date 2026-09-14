@@ -49,6 +49,6 @@ describe("tui stability phase wiring (ADR-047)", () => {
     expect(body).not.toContain("delete store.session_status")
     expect(body).not.toContain("removeByID(store.session")
     expect(body).toContain("delete store.message[sessionID]")
-    expect(body).toContain("delete store.part[message.id]")
+    expect(body).toContain("clearProjectionSession(store, sessionID)")
   })
 })

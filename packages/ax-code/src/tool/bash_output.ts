@@ -7,7 +7,8 @@ import { formatDuration } from "../util/format"
 
 function formatStatus(info: BackgroundShell.Info) {
   const exit = info.exitCode === null ? "" : ` (exit ${info.exitCode})`
-  return `${info.status}${exit}`
+  const integrity = info.outputStatus === "complete" ? "" : `; output ${info.outputStatus}`
+  return `${info.status}${exit}${integrity}`
 }
 
 export const BashOutputTool = Tool.define("bash_output", {
@@ -44,7 +45,10 @@ export const BashOutputTool = Tool.define("bash_output", {
           output: "No background shells in this session.",
         }
       }
-      const lines = shells.map((s) => `${s.id}: ${formatStatus(s)} — ${s.description} — ${s.command}`)
+      const lines = shells.map(
+        (s) =>
+          `${s.id}: ${formatStatus(s)} — ${s.description} — ${s.command}${s.metadataTruncated ? " [metadata preview truncated]" : ""}`,
+      )
       const metadata: Metadata = { shells }
       return {
         title: "background shells",
@@ -60,7 +64,7 @@ export const BashOutputTool = Tool.define("bash_output", {
     })
     if (!result) {
       throw new Error(
-        `No background shell with ID "${params.shell_id}" in this session. Call bash_output without shell_id to list available shells.`,
+        `No background shell with ID "${params.shell_id}" in this session. Finished records may have been consumed or evicted by retention limits; unavailable output is not verification evidence. Call bash_output without shell_id to list available shells.`,
       )
     }
 
@@ -83,7 +87,12 @@ export const BashOutputTool = Tool.define("bash_output", {
     const header = [
       `<status>${formatStatus(result.info)}</status>`,
       `<elapsed>${formatDuration(Math.floor(elapsedMs / 1_000)) || "0s"}</elapsed>`,
-      result.dropped ? "<notice>oldest unread output was dropped (buffer limit)</notice>" : "",
+      result.info.outputStatus !== "complete"
+        ? `<notice>output integrity: ${result.info.outputStatus}. Unread output was dropped, expired, or could not be stored/read. This is incomplete verification evidence, regardless of the command exit code.</notice>`
+        : "",
+      result.info.metadataTruncated
+        ? "<notice>command or description metadata preview was truncated; execution was unchanged.</notice>"
+        : "",
       filterInvalid !== undefined
         ? `<notice>invalid filter regex ${JSON.stringify(filterInvalid)}; returning unfiltered output</notice>`
         : "",

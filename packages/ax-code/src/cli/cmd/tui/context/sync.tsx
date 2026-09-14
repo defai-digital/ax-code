@@ -205,6 +205,8 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     >({
       listen: sdk.event.listen,
       getAutonomous: () => store.autonomous,
+      getActiveSessionID: () => store.active_session,
+      getTranscriptGeneration: () => store.transcript_generation,
       getAutoReplyRequests: () => store.superLong,
       batch,
       setStore,

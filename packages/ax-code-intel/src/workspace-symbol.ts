@@ -2,6 +2,8 @@ import type { Symbol } from "./protocol"
 import { participantStatus } from "./envelope"
 import type { LSPClient } from "./client"
 import { Log } from "./internal/log"
+import { memoryWork } from "./memory-work"
+import { memoryProfile } from "./prewarm-profile"
 import { withTimeout } from "./internal/timeout"
 import { isMethodNotFound } from "./envelope-runner"
 import * as LSPPerf from "./perf"
@@ -114,68 +116,77 @@ export async function queryClients(input: {
   const normalizedLimit = Number.isFinite(input.limit) ? Math.max(0, Math.floor(input.limit)) : 0
   const outcomes = await Promise.all(
     input.clients.map(async (client) => {
-      let response: unknown
+      const releaseActivity = client.activity?.retain()
       try {
-        response = await withTimeout(
-          client.connection.sendRequest("workspace/symbol", {
-            query: input.query,
-          }),
-          input.timeoutMs,
-        )
-      } catch (err) {
-        // A linter LSP attached to the same file type may not implement
-        // workspace/symbol. Treat MethodNotFound as "not participating",
-        // not as a partial-completeness downgrade.
-        if (isMethodNotFound(err)) {
-          return { serverID: client.serverID, participates: false, failed: false, symbols: [] as Symbol[] }
-        }
-        log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
-        return { serverID: client.serverID, participates: false, failed: true, symbols: [] as Symbol[] }
-      }
-
-      const rawItems =
-        response === null || response === undefined ? [] : Array.isArray(response) ? response : [response]
-      const parsed = normalizeWorkspaceSymbols(response)
-      const candidates = parsed.filter(isRelevant).slice(0, normalizedLimit)
-      let failed =
-        (response !== null && response !== undefined && !Array.isArray(response)) ||
-        rawItems.some((item) => !isWorkspaceSymbol(item))
-
-      const resolved = await Promise.all(
-        candidates.map(async (symbol): Promise<Symbol | undefined> => {
-          if (isResolvedWorkspaceSymbol(symbol)) return symbol
+        return await memoryWork("semantic", async () => {
+          let response: unknown
           try {
-            const value = await withTimeout(
-              client.connection.sendRequest("workspaceSymbol/resolve", symbol),
+            response = await withTimeout(
+              client.connection.sendRequest("workspace/symbol", {
+                query: input.query,
+              }),
               input.timeoutMs,
             )
-            if (isResolvedWorkspaceSymbol(value)) return value
-            failed = true
-            log.warn("LSP client returned an unresolved workspace symbol", { serverID: client.serverID })
-            return undefined
           } catch (err) {
-            failed = true
-            log.warn("LSP client failed to resolve a workspace symbol", { serverID: client.serverID, err })
-            return undefined
+            // A linter LSP attached to the same file type may not implement
+            // workspace/symbol. Treat MethodNotFound as "not participating",
+            // not as a partial-completeness downgrade.
+            if (isMethodNotFound(err)) {
+              return { serverID: client.serverID, participates: false, failed: false, symbols: [] as Symbol[] }
+            }
+            log.warn("LSP client failed in workspaceSymbol", { serverID: client.serverID, err })
+            return { serverID: client.serverID, participates: false, failed: true, symbols: [] as Symbol[] }
           }
-        }),
-      )
 
-      if (
-        (response !== null && response !== undefined && !Array.isArray(response)) ||
-        rawItems.length !== parsed.length
-      ) {
-        log.warn("LSP client returned malformed workspace symbols", {
-          serverID: client.serverID,
-          invalid: rawItems.length - parsed.length,
+          const rawItems =
+            response === null || response === undefined ? [] : Array.isArray(response) ? response : [response]
+          const parsed = normalizeWorkspaceSymbols(response)
+          const candidates = parsed.filter(isRelevant).slice(0, normalizedLimit)
+          let failed =
+            (response !== null && response !== undefined && !Array.isArray(response)) ||
+            rawItems.some((item) => !isWorkspaceSymbol(item))
+
+          const resolveSymbol = async (symbol: (typeof candidates)[number]): Promise<Symbol | undefined> => {
+            if (isResolvedWorkspaceSymbol(symbol)) return symbol
+            try {
+              const value = await withTimeout(
+                client.connection.sendRequest("workspaceSymbol/resolve", symbol),
+                input.timeoutMs,
+              )
+              if (isResolvedWorkspaceSymbol(value)) return value
+              failed = true
+              log.warn("LSP client returned an unresolved workspace symbol", { serverID: client.serverID })
+              return undefined
+            } catch (err) {
+              failed = true
+              log.warn("LSP client failed to resolve a workspace symbol", { serverID: client.serverID, err })
+              return undefined
+            }
+          }
+          const resolved: Array<Symbol | undefined> = []
+          if (memoryProfile() === "low") {
+            for (const symbol of candidates) resolved.push(await resolveSymbol(symbol))
+          } else resolved.push(...(await Promise.all(candidates.map(resolveSymbol))))
+
+          if (
+            (response !== null && response !== undefined && !Array.isArray(response)) ||
+            rawItems.length !== parsed.length
+          ) {
+            log.warn("LSP client returned malformed workspace symbols", {
+              serverID: client.serverID,
+              invalid: rawItems.length - parsed.length,
+            })
+          }
+
+          return {
+            serverID: client.serverID,
+            participates: true,
+            failed,
+            symbols: resolved.filter((symbol): symbol is Symbol => symbol !== undefined),
+          }
         })
-      }
-
-      return {
-        serverID: client.serverID,
-        participates: true,
-        failed,
-        symbols: resolved.filter((symbol): symbol is Symbol => symbol !== undefined),
+      } finally {
+        releaseActivity?.()
       }
     }),
   )

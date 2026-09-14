@@ -4,6 +4,9 @@ Retrieves output from a shell started with bash run_in_background.
 - Call without shell_id to list all background shells for this session and their statuses.
 - Use the optional filter parameter (a JavaScript regular expression) to return only matching lines — helpful when tailing verbose logs for errors or specific markers.
 - A finished shell is forgotten once its remaining output has been read.
+- Unread output is a transient private disk spool, capped at 2 MiB per shell and 64 MiB reserved per process. Oldest unread text rolls off at the shell limit. Disk pressure expires older finished output; finished output also expires after 30 minutes. At most 16 finished records per session and 64 per process are retained. Unknown IDs can indicate consumed or evicted records.
+- Output integrity (complete / dropped / expired / storage_error) is separate from command status and exit code. Loss and storage errors remain visible even when a filter excludes all output. Incomplete output is not complete verification evidence; rerun the necessary check or use a project-owned durable log. These temporary spools are not crash-durable.
+- At most 16 shells per session and 32 per process may run at once; capacity limits reject new work without killing running commands. Command and description listings use bounded previews when necessary.
 - By default this call waits up to 30s for new output or exit. Do not poll it in a tight loop. Pass timeout_ms=0 only when you need a non-blocking status check.
 - timeout_ms accepts 0 through 120000 (at most 2 minutes per call). A command can take longer than one wait; another waited call uses the same range.
 - The elapsed time is measured from command start, not from the latest poll; it stops increasing once the command finishes. Elapsed time and the wait limit are not estimates of remaining work.

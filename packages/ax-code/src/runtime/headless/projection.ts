@@ -3,8 +3,20 @@ import { Binary } from "@ax-code/util/binary"
 import { Permission } from "@/permission"
 import type { HeadlessRuntimeEvent, HeadlessRuntimeProbeKey, HeadlessRuntimeStatusEvent } from "./event"
 
+import {
+  admitsProjectionPart,
+  rememberProjectionMessage,
+  rememberProjectionPart,
+  rememberProjectionDelta,
+  forgetProjectionMessage,
+  forgetProjectionPart,
+  clearProjectionSession,
+  getProjectionDelta,
+  setProjectionDelta,
+  clearProjectionDelta,
+} from "./projection-retention"
+
 const DEFAULT_MAX_SESSION_MESSAGES = 100
-const pendingPartDeltaText = new WeakMap<object, Map<string, Map<string, string>>>()
 
 export interface HeadlessProjectionState<
   TSession extends { id: string },
@@ -30,6 +42,7 @@ export interface HeadlessProjectionState<
   session: TSession[]
   message: Record<string, TMessage[]>
   part: Record<string, TPart[]>
+  message_reload?: Record<string, boolean>
   vcs: { branch: string } | undefined
 }
 
@@ -384,10 +397,7 @@ function deleteSessionState<
     const scoped = item as TTaskQueueItem & { sessionID?: string }
     return scoped.sessionID !== sessionID
   })
-  for (const message of state.message[sessionID] ?? []) {
-    delete state.part[message.id]
-    clearPendingMessageDeltaText(state, message.id)
-  }
+  clearProjectionSession(state, sessionID)
   delete state.permission[sessionID]
   delete state.question[sessionID]
   delete state.todo[sessionID]
@@ -415,9 +425,9 @@ function upsertMessage<
 ) {
   const list = state.message[message.sessionID] ?? []
   upsertByID(list, message)
+  rememberProjectionMessage(state, list[Binary.search(list, message.id, (entry) => entry.id).index])
   for (const removed of shiftOverflow(list, maxSessionMessages)) {
-    delete state.part[removed.id]
-    clearPendingMessageDeltaText(state, removed.id)
+    forgetProjectionMessage(state, removed.id, message.sessionID)
   }
   state.message[message.sessionID] = list
 }
@@ -437,8 +447,7 @@ function removeMessage<
   messageID: string,
 ) {
   removeByID(state.message[sessionID] ?? [], messageID)
-  delete state.part[messageID]
-  clearPendingMessageDeltaText(state, messageID)
+  forgetProjectionMessage(state, messageID)
 }
 
 function upsertPart<
@@ -451,11 +460,13 @@ function upsertPart<
   TRisk,
   TGoal,
 >(state: HeadlessProjectionState<TSession, TTodo, TDiff, TStatus, TMessage, TPart, TRisk, TGoal>, part: TPart) {
+  if (!admitsProjectionPart(state, part)) return
   const list = state.part[part.messageID] ?? []
   const result = Binary.search(list, part.id, (entry) => entry.id)
   if (result.found) mergePartSnapshotInPlace(state, list[result.index], part)
   else list.splice(result.index, 0, part)
   state.part[part.messageID] = list
+  rememberProjectionPart(state, list[result.index])
 }
 
 function appendPartTextDelta<
@@ -496,7 +507,8 @@ function appendPartTextDelta<
   }
   if (next === current) return
   part.text = next
-  setPendingPartDeltaText(state, messageID, partID, next)
+  setProjectionDelta(state, messageID, partID, next)
+  rememberProjectionDelta(state, messageID, partID, next.slice(current.length), current.slice(-1))
 }
 
 function removePart<
@@ -514,17 +526,17 @@ function removePart<
   partID: string,
 ) {
   removeByID(state.part[messageID] ?? [], partID)
-  clearPendingPartDeltaText(state, messageID, partID)
+  forgetProjectionPart(state, messageID, partID)
 }
 
 function mergePartSnapshotInPlace<TPart extends { id: string; messageID: string }>(
-  state: object,
+  state: { message: Record<string, Array<{ id: string }>>; part: Record<string, unknown[]> },
   existing: TPart,
   incoming: TPart,
 ) {
   const previous = (existing as { text?: unknown }).text
   const next = (incoming as { text?: unknown }).text
-  const pending = getPendingPartDeltaText(state, incoming.messageID, incoming.id)
+  const pending = getProjectionDelta(state, incoming.messageID, incoming.id)
   const terminal = typeof (incoming as { time?: { end?: unknown } }).time?.end === "number"
   // Only protect text actually extended by a delta and not yet acknowledged
   // by an equal/newer snapshot. Otherwise a legitimate prefix rollback would
@@ -544,42 +556,8 @@ function mergePartSnapshotInPlace<TPart extends { id: string; messageID: string 
     existing[key] = incoming[key]
   }
   if (Object.prototype.hasOwnProperty.call(incoming, "text") && !preservePendingDelta) {
-    clearPendingPartDeltaText(state, incoming.messageID, incoming.id)
+    clearProjectionDelta(state, incoming.messageID, incoming.id)
   }
-}
-
-function getPendingPartDeltaText(state: object, messageID: string, partID: string) {
-  return pendingPartDeltaText.get(state)?.get(messageID)?.get(partID)
-}
-
-function setPendingPartDeltaText(state: object, messageID: string, partID: string, text: string) {
-  let messages = pendingPartDeltaText.get(state)
-  if (!messages) {
-    messages = new Map()
-    pendingPartDeltaText.set(state, messages)
-  }
-  let parts = messages.get(messageID)
-  if (!parts) {
-    parts = new Map()
-    messages.set(messageID, parts)
-  }
-  parts.set(partID, text)
-}
-
-function clearPendingPartDeltaText(state: object, messageID: string, partID: string) {
-  const messages = pendingPartDeltaText.get(state)
-  const parts = messages?.get(messageID)
-  if (!messages || !parts) return
-  parts.delete(partID)
-  if (parts.size === 0) messages.delete(messageID)
-  if (messages.size === 0) pendingPartDeltaText.delete(state)
-}
-
-function clearPendingMessageDeltaText(state: object, messageID: string) {
-  const messages = pendingPartDeltaText.get(state)
-  if (!messages) return
-  messages.delete(messageID)
-  if (messages.size === 0) pendingPartDeltaText.delete(state)
 }
 
 function removeByID<T extends { id: string }>(list: T[], id: string) {

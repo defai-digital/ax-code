@@ -547,6 +547,12 @@ export function Session() {
       () => route.sessionID,
       (sessionID) => {
         const generation = ++sessionSyncGeneration
+        sync.set(
+          produce((draft) => {
+            draft.transcript_generation++
+            draft.active_session = sessionID
+          }),
+        )
         runInitialSessionSync(sessionID, generation, createSessionEntrySyncRetryState())
         // ADR-047 D3: when this sessionID effect re-runs or the session route
         // unmounts, drop heavy transcript projection for the left session and
@@ -559,6 +565,10 @@ export function Session() {
           sync.set(
             produce((draft) => {
               applySessionLeavePrune(draft, sessionID)
+              if (draft.active_session === sessionID) {
+                draft.active_session = undefined
+                draft.transcript_generation++
+              }
             }),
           )
         })
@@ -1574,6 +1584,28 @@ export function Session() {
                 <box paddingLeft={2} paddingBottom={1}>
                   <text fg={theme.textMuted}>
                     ▲ Showing the most recent {messages().length} messages — earlier history is not loaded
+                  </text>
+                </box>
+              </Show>
+              <Show when={sync.data.message_memory_limited[route.sessionID]}>
+                <box paddingLeft={2} paddingBottom={1}>
+                  <text fg={theme.warning}>
+                    Transcript memory budget exceeded: keeping the newest whole message or Undo history.
+                  </text>
+                </box>
+              </Show>
+              <Show when={sync.data.message_reload[route.sessionID]}>
+                <box paddingLeft={2} paddingBottom={1}>
+                  <text fg={theme.warning}>Some pending transcript updates were released to limit memory.</text>
+                  <text
+                    fg={theme.text}
+                    onMouseUp={() =>
+                      void sync.session
+                        .sync(route.sessionID, { force: true })
+                        .catch(() => toast.show({ message: "Failed to reload transcript", variant: "error" }))
+                    }
+                  >
+                    Reload transcript from saved history
                   </text>
                 </box>
               </Show>

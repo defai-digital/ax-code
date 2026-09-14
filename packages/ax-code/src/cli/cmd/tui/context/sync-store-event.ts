@@ -1,3 +1,5 @@
+import { enforceTranscriptBudget } from "@/runtime/headless/projection-retention"
+import { retainTranscriptEvent, transcriptEventSession } from "./sync-transcript-event"
 import type { PermissionRequest, QuestionRequest } from "@ax-code/sdk/v2"
 import { produce, type SetStoreFunction } from "solid-js/store"
 import { executeHeadlessProjectionEffects } from "@/runtime/headless/effects"
@@ -73,6 +75,7 @@ export interface DispatchStoreBackedSyncEventInput<
   refreshProviders?: () => Promise<void> | void
   onWarn: (label: string, error: unknown) => void
   maxSessionMessages: number
+  getActiveSessionID?: () => string | undefined
 }
 
 export function dispatchStoreBackedSyncEvent<
@@ -118,6 +121,9 @@ function dispatchHeadlessProjectionEvent<
     void Promise.resolve(input.refreshProviders?.()).catch((error) => input.onWarn("refresh providers", error))
     if (input.event.type === "provider.updated") return true
   }
+
+  // Recheck after the coalescing window: navigation may have changed.
+  if (input.getActiveSessionID && !retainTranscriptEvent(input.event, input.getActiveSessionID())) return true
 
   // Route projection updates through the shared headless reducer first.
   // Runtime probes and bootstrap still have TUI adapter scheduler/lifecycle
@@ -198,6 +204,17 @@ function dispatchHeadlessProjectionEvent<
                 ? Math.max(input.maxSessionMessages, (draft.message[messageSessionID]?.length ?? 0) + 1)
                 : input.maxSessionMessages,
           }).effects
+          const transcriptSessionID =
+            transcriptEventSession(input.event) ??
+            (input.event.type === "session.updated" ? input.event.properties.info.id : undefined)
+          if (input.getActiveSessionID && transcriptSessionID && transcriptSessionID === input.getActiveSessionID()) {
+            enforceTranscriptBudget(draft, transcriptSessionID, {
+              maxMessages: input.maxSessionMessages,
+              preserve: !!draft.session.find(
+                (session) => session.id === transcriptSessionID && (session as { revert?: unknown }).revert,
+              ),
+            })
+          }
         }),
       )
       executeHeadlessProjectionEffects(effects, {

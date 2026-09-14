@@ -21,6 +21,8 @@ import * as LSPDocumentSymbol from "./document-symbol"
 import * as LSPReferences from "./references"
 import { LSPServerConfig } from "./server-config"
 import { uniqueStrings } from "./internal/string-list"
+import { memoryProfile, LOW_MEMORY_IDLE_MS } from "./prewarm-profile"
+import { memoryWork } from "./memory-work"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -157,6 +159,8 @@ export namespace LSP {
             broken: new Map<string, LSPBrokenServer.BrokenEntry>(),
             servers,
             clients,
+            reaped: false,
+            spawnAbort: new AbortController(),
             rootCache: new Map<string, string | null>(),
             spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
             spawningProcesses: new Set<ChildProcessWithoutNullStreams>(),
@@ -181,6 +185,8 @@ export namespace LSP {
           broken: new Map<string, LSPBrokenServer.BrokenEntry>(),
           servers,
           clients,
+          reaped: false,
+          spawnAbort: new AbortController(),
           rootCache: new Map<string, string | null>(),
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
           spawningProcesses: new Set<ChildProcessWithoutNullStreams>(),
@@ -206,6 +212,19 @@ export namespace LSP {
         // loop is in flight.
         s.healthCheck = setInterval(() => {
           if (s.clients.length === 0) return
+          if (memoryProfile() === "low") {
+            const now = performance.now()
+            for (const client of [...s.clients]) {
+              if (!client.ping()) continue
+              const lastUse = Math.max(s.clientLastUse.get(client) ?? 0, client.activity?.lastUse ?? now)
+              if (!client.activity?.idle(now, LOW_MEMORY_IDLE_MS) || now - lastUse < LOW_MEMORY_IDLE_MS) continue
+              s.clients.splice(s.clients.indexOf(client), 1)
+              s.reaped = true
+              log.info("reaping idle lsp client", { serverID: client.serverID, root: client.root })
+              void client.shutdown().catch((error) => log.warn("idle lsp shutdown failed", { error }))
+              codeIntelHost().publishUpdated()
+            }
+          }
           const dead: LSPClient.Info[] = []
           for (const client of s.clients) {
             if (!client.ping()) dead.push(client)
@@ -235,6 +254,7 @@ export namespace LSP {
       },
       async (state) => {
         state.disposed = true
+        state.spawnAbort.abort(new Error("LSP instance disposed"))
         state.rootCacheUnsubscribe?.()
         if (state.healthCheck) clearInterval(state.healthCheck)
         // Interrupt initialization before awaiting it. Some language servers
@@ -316,6 +336,7 @@ export namespace LSP {
 
   function markClientUsed(s: State, client: LSPClient.Info) {
     s.clientLastUse.set(client, performance.now())
+    client.activity?.touch()
   }
 
   function evictExcessClients(s: State, serverID: string) {
@@ -326,6 +347,9 @@ export namespace LSP {
       (client) => s.clientLastUse.get(client) ?? 0,
     )
     for (const client of evictions) {
+      // A selected/queued client is still in use. Retry excess eviction on
+      // future registrations; never trade a valid request for a strict cap.
+      if (client.activity?.busy) continue
       const idx = s.clients.indexOf(client)
       if (idx >= 0) s.clients.splice(idx, 1)
       log.info("evicting least-recently-used lsp client", {
@@ -364,6 +388,7 @@ export namespace LSP {
     root: string,
     key: string,
   ): Promise<LSPClient.Info | undefined> {
+    if (s.disposed) return undefined
     let handle: LSPServer.Handle | undefined
     const spawnStarted = performance.now()
     try {
@@ -489,7 +514,7 @@ export namespace LSP {
       return false
     }
 
-    const task = scheduleClient(s, server, root, key)
+    const task = memoryWork("spawn", () => scheduleClient(s, server, root, key), s.spawnAbort.signal)
     s.spawning.set(key, task)
     task
       .finally(() => {
@@ -824,7 +849,7 @@ export namespace LSP {
       const notifyStarted = performance.now()
       const { count: opened, ok: notifyOk } = await LSPClientNotify.openAll(clients, {
         path: input,
-        waitForDiagnostics,
+        waitForDiagnostics: waitForDiagnostics || (memoryProfile() === "low" && selection.freshSpawnCount > 0),
       })
       LSPPerf.finishPhase("touch.notify", notifyStarted, notifyOk)
       return opened
@@ -864,7 +889,14 @@ export namespace LSP {
   // to limit to a single file; omit to get everything.
   export async function diagnosticsAggregated(file?: string): Promise<SemanticEnvelope<NormalizedDiagnostic[]>> {
     const s = await state()
-    return LSPDiagnostics.aggregateEnvelope(s.clients, file)
+    const envelope = await LSPDiagnostics.aggregateEnvelope(s.clients, file)
+    // Idle reclamation loses workspace-wide diagnostic inventory. A new file
+    // touch cannot prove that every former document has been reanalyzed.
+    if (s.reaped) {
+      envelope.degraded = true
+      if (envelope.completeness === "full") envelope.completeness = "partial"
+    }
+    return envelope
   }
 
   export async function hoverEnvelope(input: {

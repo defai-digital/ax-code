@@ -38,6 +38,8 @@ describe("background command timing feedback", () => {
             description: "Count project files",
             status: "running",
             exitCode: null,
+            outputStatus: "complete",
+            metadataTruncated: false,
             startedAt: 100_000,
             endedAt: null,
           },
@@ -71,6 +73,8 @@ describe("background command timing feedback", () => {
             description: "Count project files",
             status: "completed",
             exitCode: 0,
+            outputStatus: "complete",
+            metadataTruncated: false,
             startedAt: 100_000,
             endedAt: 109_000,
           },
@@ -84,4 +88,39 @@ describe("background command timing feedback", () => {
       },
     })
   })
+
+  test.each(["dropped", "expired", "storage_error"] as const)(
+    "%s integrity survives filtering and zero process exit",
+    async (outputStatus) => {
+      await using tmp = await tmpdir({ git: true })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tool = await BashOutputTool.init()
+          vi.spyOn(BackgroundShell, "waitAndRead").mockResolvedValue({
+            output: "partial log",
+            dropped: true,
+            info: {
+              id: "bash_integrity",
+              sessionID: ctx.sessionID,
+              command: "check",
+              description: "Check",
+              status: "completed",
+              exitCode: 0,
+              outputStatus,
+              metadataTruncated: false,
+              startedAt: 0,
+              endedAt: 1000,
+            },
+          })
+          const result = await tool.execute({ shell_id: "bash_integrity", filter: "no-matching-line" }, ctx)
+          expect(result.output).toContain("completed (exit 0)")
+          expect(result.output).toContain(`output integrity: ${outputStatus}`)
+          expect(result.output).toContain("incomplete verification evidence")
+          expect(result.output).not.toContain("partial log")
+          expect(result.metadata.shell?.exitCode).toBe(0)
+        },
+      })
+    },
+  )
 })

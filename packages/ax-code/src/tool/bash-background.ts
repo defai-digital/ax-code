@@ -1,5 +1,6 @@
 import type { ChildProcess } from "child_process"
 import { StringDecoder } from "string_decoder"
+import { BackgroundOutputSpool } from "./background-output-spool"
 import { Log } from "../util/log"
 import { Shell } from "@/shell/shell"
 import { Bus } from "@/bus"
@@ -24,17 +25,16 @@ export namespace BackgroundShell {
     onExit?(info: Info): void
   }
 
-  // Per-shell unread output cap (in string length units). Once the unread
-  // portion exceeds this, the oldest unread output is dropped (with a
-  // marker) — background commands can stream logs indefinitely and must
-  // not grow RSS unbounded.
-  const MAX_UNREAD_BYTES = 2 * 1024 * 1024
-  const MAX_OBSERVER_BACKLOG_BYTES = 256 * 1024
+  const MAX_OBSERVER_BACKLOG_BYTES = 64 * 1024
+  const MAX_OBSERVER_BACKLOG_RECORDS = 128
+  const MAX_GLOBAL_OBSERVER_BYTES = 2 * 1024 * 1024
   const MAX_SHELLS_PER_SESSION = 16
-  // Finished shells whose output was never read are retained so the model
-  // can still fetch their result, but only this many per session — beyond
-  // that the oldest are evicted so an unread pile-up cannot leak memory.
+  const MAX_ACTIVE_SHELLS = 32
   const MAX_FINISHED_PER_SESSION = 16
+  const MAX_FINISHED_SHELLS = 64
+  const FINISHED_TTL_MS = 30 * 60 * 1000
+  const MAX_COMMAND_PREVIEW_BYTES = 8 * 1024
+  const MAX_DESCRIPTION_PREVIEW_BYTES = 1024
 
   export interface Info {
     id: string
@@ -45,14 +45,14 @@ export namespace BackgroundShell {
     exitCode: number | null
     startedAt: number
     endedAt: number | null
+    /** Output integrity is independent of command exit status and remains sticky across reads. */
+    outputStatus: BackgroundOutputSpool["integrity"]
+    metadataTruncated: boolean
   }
 
-  interface Entry extends Info {
-    proc: ChildProcess
-    buffer: string
-    /** Byte length already returned through read(); offset into `buffer`. */
-    readOffset: number
-    dropped: boolean
+  interface Entry extends Omit<Info, "outputStatus"> {
+    proc?: ChildProcess
+    spool: BackgroundOutputSpool
     exited: boolean
     killRequested: boolean
     onExited?: () => void
@@ -60,30 +60,68 @@ export namespace BackgroundShell {
     observerBacklog: Array<{ stream: OutputStream; text: string }>
     observerBacklogBytes: number
     observerBacklogReplayed: boolean
+    observerBacklogDropped: boolean
   }
 
   const shells = new Map<string, Entry>()
   let counter = 0
+  let observerBytes = 0
+  let retentionTimer: ReturnType<typeof setInterval> | undefined
 
   export function assertCapacity(sessionID: string) {
     const active = list(sessionID).filter((s) => s.status === "running")
-    if (active.length >= MAX_SHELLS_PER_SESSION) {
+    if (
+      active.length >= MAX_SHELLS_PER_SESSION ||
+      list().filter((s) => s.status === "running").length >= MAX_ACTIVE_SHELLS
+    ) {
       throw new Error(
-        `Too many running background shells (${active.length}). ` +
+        `Too many running background shells (limit ${MAX_SHELLS_PER_SESSION} per session, ${MAX_ACTIVE_SHELLS} per process). ` +
           `Use kill_shell to terminate ones you no longer need, or wait for them to finish.`,
       )
     }
   }
 
+  function clearBacklog(entry: Entry) {
+    observerBytes -= entry.observerBacklogBytes
+    entry.observerBacklog = []
+    entry.observerBacklogBytes = 0
+  }
+
+  function forget(entry: Entry) {
+    entry.spool.dispose()
+    clearBacklog(entry)
+    shells.delete(entry.id)
+    if (!shells.size && retentionTimer) {
+      clearInterval(retentionTimer)
+      retentionTimer = undefined
+    }
+  }
+
+  function expireFinished() {
+    for (const entry of shells.values()) {
+      if (entry.endedAt === null || Date.now() - entry.endedAt < FINISHED_TTL_MS) continue
+      entry.spool.expire()
+      if (entry.observerBacklog.length) entry.observerBacklogDropped = true
+      clearBacklog(entry)
+    }
+  }
+
   function evictFinished(sessionID: string) {
     const finished = [...shells.values()]
-      .filter((s) => s.sessionID === sessionID && s.status !== "running")
+      .filter((s) => s.status !== "running")
       .sort((a, b) => (a.endedAt ?? 0) - (b.endedAt ?? 0))
-    while (finished.length > MAX_FINISHED_PER_SESSION) {
-      const oldest = finished.shift()!
-      shells.delete(oldest.id)
-      log.info("evicted unread finished background shell", { id: oldest.id, sessionID })
-    }
+    const sessionFinished = finished.filter((s) => s.sessionID === sessionID)
+    while (sessionFinished.length > MAX_FINISHED_PER_SESSION) forget(sessionFinished.shift()!)
+    const remaining = finished.filter((s) => shells.has(s.id))
+    while (remaining.length > MAX_FINISHED_SHELLS) forget(remaining.shift()!)
+  }
+
+  function preview(text: string, limit: number) {
+    // Slice before encoding so an arbitrarily long command does not create a retained/temporary duplicate.
+    const bytes = Buffer.from(text.slice(0, limit))
+    let end = Math.min(bytes.length, limit)
+    while (end < bytes.length && end > 0 && (bytes[end] & 0xc0) === 0x80) end--
+    return { text: bytes.toString("utf8", 0, end), truncated: text.length > limit || end < bytes.length }
   }
 
   export function register(input: {
@@ -93,23 +131,25 @@ export namespace BackgroundShell {
     proc: ChildProcess
     onExited?: () => void
   }): Info {
+    const proc = input.proc
     assertCapacity(input.sessionID)
     evictFinished(input.sessionID)
     counter += 1
     const id = `bash_${counter}`
+    const command = preview(input.command, MAX_COMMAND_PREVIEW_BYTES)
+    const description = preview(input.description, MAX_DESCRIPTION_PREVIEW_BYTES)
     const entry: Entry = {
       id,
       sessionID: input.sessionID,
-      command: input.command,
-      description: input.description,
+      command: command.text,
+      description: description.text,
+      metadataTruncated: command.truncated || description.truncated,
       status: "running",
       exitCode: null,
       startedAt: Date.now(),
       endedAt: null,
-      proc: input.proc,
-      buffer: "",
-      readOffset: 0,
-      dropped: false,
+      proc,
+      spool: new BackgroundOutputSpool(),
       exited: false,
       killRequested: false,
       onExited: input.onExited,
@@ -117,33 +157,28 @@ export namespace BackgroundShell {
       observerBacklog: [],
       observerBacklogBytes: 0,
       observerBacklogReplayed: false,
+      observerBacklogDropped: false,
     }
     shells.set(id, entry)
+    retentionTimer ??= setInterval(expireFinished, 60_000).unref()
 
     const appendText = (stream: OutputStream, text: string) => {
-      if (!text) return
-      entry.buffer += text
-      // Discard output the model has already consumed, then clamp the
-      // unread remainder so a chatty process cannot grow memory forever.
-      if (entry.readOffset > 0 && entry.buffer.length > MAX_UNREAD_BYTES) {
-        entry.buffer = entry.buffer.slice(entry.readOffset)
-        entry.readOffset = 0
-      }
-      if (entry.buffer.length - entry.readOffset > MAX_UNREAD_BYTES) {
-        entry.buffer = entry.buffer.slice(entry.buffer.length - MAX_UNREAD_BYTES)
-        entry.readOffset = 0
-        entry.dropped = true
-      }
-      if (
-        entry.observers.size === 0 &&
-        !entry.observerBacklogReplayed &&
-        entry.observerBacklogBytes < MAX_OBSERVER_BACKLOG_BYTES
-      ) {
-        const remaining = MAX_OBSERVER_BACKLOG_BYTES - entry.observerBacklogBytes
-        const replayText = text.slice(0, remaining)
-        if (replayText) {
-          entry.observerBacklog.push({ stream, text: replayText })
-          entry.observerBacklogBytes += replayText.length
+      if (!text || entry.status !== "running" || shells.get(id) !== entry) return
+      entry.spool.append(text)
+      if (entry.observers.size === 0 && !entry.observerBacklogReplayed) {
+        const remaining = Math.min(
+          MAX_OBSERVER_BACKLOG_BYTES - entry.observerBacklogBytes,
+          MAX_GLOBAL_OBSERVER_BYTES - observerBytes,
+        )
+        const replay = preview(text, Math.max(0, remaining))
+        if (replay.text && entry.observerBacklog.length < MAX_OBSERVER_BACKLOG_RECORDS) {
+          const bytes = Buffer.byteLength(replay.text)
+          entry.observerBacklog.push({ stream, text: replay.text })
+          entry.observerBacklogBytes += bytes
+          observerBytes += bytes
+          if (replay.truncated) entry.observerBacklogDropped = true
+        } else {
+          entry.observerBacklogDropped = true
         }
       }
       for (const observer of entry.observers) {
@@ -162,33 +197,33 @@ export namespace BackgroundShell {
     // the boundary. StringDecoder buffers the partial sequence instead.
     const stdoutDecoder = new StringDecoder("utf8")
     const stderrDecoder = new StringDecoder("utf8")
-    input.proc.stdout?.on("data", (chunk: Buffer) => appendText("stdout", stdoutDecoder.write(chunk)))
-    input.proc.stderr?.on("data", (chunk: Buffer) => appendText("stderr", stderrDecoder.write(chunk)))
+    proc.stdout?.on("data", (chunk: Buffer) => appendText("stdout", stdoutDecoder.write(chunk)))
+    proc.stderr?.on("data", (chunk: Buffer) => appendText("stderr", stderrDecoder.write(chunk)))
 
     // bash_input writes can race with process exit: EPIPE then arrives
     // asynchronously on the stdin stream. Log-and-swallow here so a stray
     // EPIPE never becomes an uncaught exception; write() reports failures
     // to its own caller through a dedicated one-shot listener.
-    input.proc.stdin?.on("error", (error) => {
+    proc.stdin?.on("error", (error) => {
       log.warn("background shell stdin error", { id, error: error instanceof Error ? error.message : error })
     })
 
-    input.proc.once("exit", () => {
+    proc.once("exit", () => {
       entry.exited = true
       // Grandchildren spawned by the command inherit the pipe FDs and can
       // hold 'close' open indefinitely; destroy after one I/O cycle so the
       // streams drain, mirroring the foreground bash path.
       setImmediate(() => {
-        input.proc.stdout?.destroy()
-        input.proc.stderr?.destroy()
+        proc.stdout?.destroy()
+        proc.stderr?.destroy()
       })
     })
 
-    input.proc.once("close", () => {
+    proc.once("close", () => {
       appendText("stdout", stdoutDecoder.end())
       appendText("stderr", stderrDecoder.end())
-      const status = entry.killRequested ? "killed" : input.proc.exitCode === 0 ? "completed" : "failed"
-      finish(entry, status, input.proc.exitCode)
+      const status = entry.killRequested ? "killed" : proc.exitCode === 0 ? "completed" : "failed"
+      finish(entry, status, proc.exitCode)
       // Best-effort UX: the close event can fire outside the Instance async
       // context (where Bus state is unavailable), and a throw here would be
       // an uncaught exception inside an EventEmitter handler.
@@ -204,12 +239,12 @@ export namespace BackgroundShell {
       }
     })
 
-    input.proc.once("error", (error) => {
+    proc.once("error", (error) => {
       appendText("stderr", `\n[background shell error] ${error instanceof Error ? error.message : String(error)}`)
-      finish(entry, "failed", input.proc.exitCode)
+      finish(entry, "failed", proc.exitCode)
     })
 
-    log.info("background shell started", { id, pid: input.proc.pid, sessionID: input.sessionID })
+    log.info("background shell started", { id, pid: proc.pid, sessionID: input.sessionID })
     return toInfo(entry)
   }
 
@@ -219,7 +254,10 @@ export namespace BackgroundShell {
     entry.status = status
     entry.exitCode = exitCode
     entry.endedAt = Date.now()
+    entry.spool.finishedAt = entry.endedAt
     entry.onExited?.()
+    entry.onExited = undefined
+    entry.proc = undefined
     const info = toInfo(entry)
     for (const observer of entry.observers) {
       try {
@@ -232,6 +270,7 @@ export namespace BackgroundShell {
       }
     }
     entry.observers.clear()
+    evictFinished(entry.sessionID)
     log.info("background shell finished", { id: entry.id, status, exitCode })
   }
 
@@ -245,10 +284,13 @@ export namespace BackgroundShell {
       exitCode: entry.exitCode,
       startedAt: entry.startedAt,
       endedAt: entry.endedAt,
+      outputStatus: entry.spool.integrity,
+      metadataTruncated: entry.metadataTruncated,
     }
   }
 
   export function get(id: string, sessionID?: string): Info | undefined {
+    expireFinished()
     const entry = shells.get(id)
     if (!entry) return undefined
     if (sessionID !== undefined && entry.sessionID !== sessionID) return undefined
@@ -256,6 +298,7 @@ export namespace BackgroundShell {
   }
 
   export function list(sessionID?: string): Info[] {
+    expireFinished()
     return [...shells.values()].filter((s) => sessionID === undefined || s.sessionID === sessionID).map(toInfo)
   }
 
@@ -265,6 +308,7 @@ export namespace BackgroundShell {
    * between BashTool returning and its caller attaching the observer.
    */
   export function observe(id: string, sessionID: string, observer: Observer): (() => void) | undefined {
+    expireFinished()
     const entry = shells.get(id)
     if (!entry || entry.sessionID !== sessionID) return undefined
 
@@ -281,8 +325,17 @@ export namespace BackgroundShell {
           })
         }
       }
-      entry.observerBacklog = []
-      entry.observerBacklogBytes = 0
+      clearBacklog(entry)
+      if (entry.observerBacklogDropped) {
+        try {
+          observer.onOutput?.(
+            "stderr",
+            "\n[background observer replay truncated or expired; inspect bash_output integrity]\n",
+          )
+        } catch (error) {
+          log.warn("background shell observer notice failed", { id, error: String(error) })
+        }
+      }
     }
     if (entry.status !== "running") {
       try {
@@ -307,11 +360,12 @@ export namespace BackgroundShell {
     sessionID: string,
     opts: { timeoutMs: number; signal?: AbortSignal },
   ): Promise<{ info: Info; output: string; dropped: boolean } | undefined> {
+    expireFinished()
     const entry = shells.get(id)
     if (!entry || entry.sessionID !== sessionID) return undefined
     if (opts.signal?.aborted) throw abortError()
 
-    const hasUnread = entry.readOffset < entry.buffer.length
+    const hasUnread = entry.spool.unreadBytes > 0 || entry.spool.integrity === "storage_error"
     if (entry.status === "running" && !hasUnread && opts.timeoutMs > 0) {
       await new Promise<void>((resolve, reject) => {
         let settled = false
@@ -331,13 +385,13 @@ export namespace BackgroundShell {
         opts.signal?.addEventListener("abort", onAbort, { once: true })
         // Ignore already-consumed observer backlog so a second wait is not
         // woken by output read() already returned. Only future output/exit.
-        const unreadAtSubscribe = entry.buffer.length
         unsub = observe(id, sessionID, {
           onOutput: () => {
-            if (entry.buffer.length > unreadAtSubscribe || entry.readOffset < entry.buffer.length) settle()
+            if (entry.spool.unreadBytes > 0 || entry.spool.integrity === "storage_error") settle()
           },
           onExit: () => settle(),
         })
+        if (settled) unsub?.()
       })
       if (opts.signal?.aborted) throw abortError()
     }
@@ -351,17 +405,14 @@ export namespace BackgroundShell {
 
   /** Return output produced since the previous read() for this shell. */
   export function read(id: string, sessionID?: string): { info: Info; output: string; dropped: boolean } | undefined {
+    expireFinished()
     const entry = shells.get(id)
     if (!entry) return undefined
     if (sessionID !== undefined && entry.sessionID !== sessionID) return undefined
-    const output = entry.buffer.slice(entry.readOffset)
-    const dropped = entry.dropped
-    entry.readOffset = entry.buffer.length
-    entry.dropped = false
-    // A finished shell whose output has been fully consumed can be
-    // forgotten — nothing else will ever be written to it.
-    if (entry.status !== "running") shells.delete(id)
-    return { info: toInfo(entry), output, dropped }
+    const { output, dropped } = entry.spool.read()
+    const info = toInfo(entry)
+    if (entry.status !== "running") forget(entry)
+    return { info, output, dropped }
   }
 
   /**
@@ -372,6 +423,7 @@ export namespace BackgroundShell {
    * that read until end-of-input (e.g. `cat`) can finish.
    */
   export async function write(id: string, sessionID: string, data: string, opts: { eof?: boolean }): Promise<Info> {
+    expireFinished()
     const entry = shells.get(id)
     if (!entry || entry.sessionID !== sessionID) {
       throw new Error(
@@ -383,7 +435,7 @@ export namespace BackgroundShell {
         `Background shell "${id}" is ${entry.status} — stdin is closed. Its output remains readable via bash_output.`,
       )
     }
-    const stdin = entry.proc.stdin
+    const stdin = entry.proc?.stdin
     if (!stdin || stdin.destroyed || stdin.writableEnded || !stdin.writable) {
       throw new Error(`Background shell "${id}" stdin is no longer writable (the process may have just exited).`)
     }
@@ -416,13 +468,15 @@ export namespace BackgroundShell {
   }
 
   export async function kill(id: string, sessionID?: string): Promise<Info | undefined> {
+    expireFinished()
     const entry = shells.get(id)
     if (!entry) return undefined
     if (sessionID !== undefined && entry.sessionID !== sessionID) return undefined
     if (entry.status === "running") {
       entry.killRequested = true
-      await Shell.killTree(entry.proc, { exited: () => entry.exited })
-      finish(entry, "killed", entry.proc.exitCode)
+      const proc = entry.proc!
+      await Shell.killTree(proc, { exited: () => entry.exited })
+      finish(entry, "killed", proc.exitCode)
     }
     return toInfo(entry)
   }
@@ -433,16 +487,28 @@ export namespace BackgroundShell {
       if (entry.sessionID !== sessionID) continue
       if (entry.status === "running") {
         entry.killRequested = true
-        await Shell.killTree(entry.proc, { exited: () => entry.exited }).catch(() => undefined)
-        finish(entry, "killed", entry.proc.exitCode)
+        const proc = entry.proc!
+        await Shell.killTree(proc, { exited: () => entry.exited }).catch(() => undefined)
+        finish(entry, "killed", proc.exitCode)
       }
-      shells.delete(entry.id)
+      forget(entry)
+    }
+  }
+
+  export function retentionStatsForTests() {
+    expireFinished()
+    return {
+      shells: shells.size,
+      observerBytes,
+      observerRecords: [...shells.values()].reduce((n, s) => n + s.observerBacklog.length, 0),
+      ...BackgroundOutputSpool.statsForTests(),
     }
   }
 
   /** Test-only: forget all shells without killing anything. */
   export function resetForTests() {
-    shells.clear()
+    for (const entry of shells.values()) forget(entry)
+    BackgroundOutputSpool.reset()
     counter = 0
   }
 }

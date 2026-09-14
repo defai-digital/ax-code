@@ -235,7 +235,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential python3
 
-      - name: Build and verify default evidence cache
+      - name: Build and verify optional persistent evidence cache
         uses: ./.github/actions/build-evidence-cache
 
       - name: Build SDK

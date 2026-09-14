@@ -13,8 +13,8 @@ afterEach(async () => {
 })
 
 test.each([
-  [undefined, "rocksdb"],
-  ["", "rocksdb"],
+  [undefined, "memory"],
+  ["", "memory"],
   ["rocksdb", "rocksdb"],
   ["memory", "memory"],
   ["off", "off"],
@@ -54,7 +54,30 @@ test("memory cache validates shape, expires entries, bounds bytes and isolates p
   })
 })
 
-test("absent or locked native store falls back; invalid/off mode never opens it", async () => {
+test.each([undefined, "", "memory"])("memory mode %s reuses data without loading native storage", async (mode) => {
+  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", mode)
+  const loader = vi.spyOn(NativeAddon, "fs")
+  await using tmp = await tmpdir()
+  const key = EvidenceCache.key("memory-default")
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      await EvidenceCache.put(key, "value")
+      expect(await EvidenceCache.get(key, z.string())).toBe("value")
+      expect(await EvidenceCache.stats()).toMatchObject({ backend: "memory", hits: 1 })
+    },
+  })
+  await Instance.disposeAll()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      expect(await EvidenceCache.get(key, z.string())).toBeUndefined()
+    },
+  })
+  expect(loader).not.toHaveBeenCalled()
+})
+
+test("absent native store falls back; invalid/off mode never opens it", async () => {
   const loader = vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -66,10 +89,11 @@ test("absent or locked native store falls back; invalid/off mode never opens it"
         expect((await EvidenceCache.stats()).backend).toBe("off")
       }
       expect(loader).not.toHaveBeenCalled()
-      vi.stubEnv("AX_CODE_EVIDENCE_CACHE", undefined)
+      vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "rocksdb")
       await EvidenceCache.put(EvidenceCache.key("fallback"), "value")
       expect(await EvidenceCache.get(EvidenceCache.key("fallback"), z.string())).toBe("value")
       expect((await EvidenceCache.stats()).backend).toBe("memory")
+      expect(loader).toHaveBeenCalledOnce()
     },
   })
 })

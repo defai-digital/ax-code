@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import { mkdir, writeFile, readFile } from "fs/promises"
 import path from "path"
 import {
@@ -20,6 +20,7 @@ import { tmpdir } from "../fixture/fixture"
 
 afterEach(async () => {
   await resetDatabase()
+  vi.unstubAllEnvs()
 })
 
 describe("cli doctor PATH launchers", () => {
@@ -79,6 +80,11 @@ test("doctor distinguishes evidence cache capability from project ownership", ()
   expect(getEvidenceCacheCheck("rocksdb", false).detail).toContain("memory fallback")
   expect(getEvidenceCacheCheck("memory", false).detail).toBe("Memory only")
   expect(getEvidenceCacheCheck("off", true).detail).toBe("Disabled (off)")
+})
+
+test.each([undefined, ""])("doctor reports memory by default for %s", (value) => {
+  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", value)
+  expect(getEvidenceCacheCheck()).toMatchObject({ status: "ok", detail: "Memory only" })
 })
 
 describe("cli doctor runtime check", () => {

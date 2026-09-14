@@ -60,6 +60,10 @@ export interface SyncStoreState {
   // True when a session has more history than the TUI loads (the message
   // fetch is capped). The transcript shows a truncation notice instead of
   // silently presenting the tail as the whole conversation.
+  transcript_generation: number
+  active_session?: string
+  message_memory_limited: Record<string, boolean>
+  message_reload: Record<string, boolean>
   message_truncated: Record<string, boolean>
   part: Record<string, Part[]>
   lsp: LspStatus[]
@@ -133,6 +137,9 @@ export function createInitialSyncState(): SyncStoreState {
     session_diff: {},
     todo: {},
     message: {},
+    transcript_generation: 0,
+    message_memory_limited: {},
+    message_reload: {},
     message_truncated: {},
     part: {},
     lsp: [],

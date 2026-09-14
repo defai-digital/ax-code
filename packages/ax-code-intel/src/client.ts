@@ -15,6 +15,9 @@ import { NamedError } from "@ax-code/util/error"
 import { withTimeout } from "./internal/timeout"
 import { Filesystem } from "./internal/filesystem"
 import { Lock } from "./internal/lock"
+import { ContentCache } from "./content-cache"
+import { ClientActivity } from "./client-activity"
+import { sourceCacheBytes } from "./prewarm-profile"
 
 // Local-only content fingerprint. The hash never leaves the process — it
 // only compares the previous text content against the current one to skip
@@ -306,6 +309,15 @@ export namespace LSPClient {
       new StreamMessageWriter(input.server.process.stdin as any),
     )
 
+    const activity = new ClientActivity()
+    const sendRequest = connection.sendRequest.bind(connection)
+    connection.sendRequest = ((...args: Parameters<typeof sendRequest>) =>
+      activity.run(() => sendRequest(...args))) as typeof connection.sendRequest
+
+    const sendNotification = connection.sendNotification.bind(connection)
+    connection.sendNotification = ((...args: Parameters<typeof sendNotification>) =>
+      activity.run(() => sendNotification(...args))) as typeof connection.sendNotification
+
     const diagnostics = new Map<string, Diagnostic[]>()
     const serverLanguageId = input.languageId
     let closing = false
@@ -343,6 +355,7 @@ export namespace LSPClient {
     }
 
     connection.onNotification("textDocument/publishDiagnostics", (params) => {
+      activity.touch()
       const filePath = diagnosticPathFromUri(params.uri)
       if (!filePath) {
         l.debug("skipping diagnostics for non-file URI", { uri: params.uri })
@@ -461,38 +474,15 @@ export namespace LSPClient {
     // keeps unrelated LSP clients from serializing each other.
     const pathLockPrefix = `lsp-client:${input.serverID}:${input.root}:${randomUUID()}`
     async function withPathLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
-      using _lock = await Lock.write(`${pathLockPrefix}:${filepath}`, { timeoutMs: 60_000 })
-      return await fn()
+      return activity.run(async () => {
+        using _lock = await Lock.write(`${pathLockPrefix}:${filepath}`, { timeoutMs: 60_000 })
+        return await fn()
+      })
     }
 
-    // Per-file snapshot of the last text we sent to the server, used both
-    // for the hash-skip path (quick equality check) and for computing
-    // incremental diffs on the next didChange. We keep the full text rather
-    // than just a fingerprint so we can reproduce the server's notion of
-    // the document and diff against it line-by-line.
-    //
-    // Memory budget: capped at MAX_CACHED_DIAGNOSTICS entries with
-    // insertion-order LRU eviction. Without the cap, every file the
-    // server ever opened stayed resident for the lifetime of the LSP
-    // client, which on large worktrees (2000+ files) reached tens of MB
-    // per client × multiple clients (BUG-007). Each `setLastContent`
-    // promotes the entry to the most-recently-used position by deleting
-    // and re-inserting it.
-    const lastContent = new Map<string, { hash: string; length: number; text: string }>()
-
-    function contentFingerprint(text: string) {
-      return { hash: fingerprintHash(text), length: text.length, text }
-    }
-
+    const lastContent = new ContentCache(sourceCacheBytes())
     function setLastContent(filePath: string, text: string) {
-      // Promote to MRU position (Map iterates in insertion order).
-      lastContent.delete(filePath)
-      lastContent.set(filePath, contentFingerprint(text))
-      while (lastContent.size > MAX_CACHED_DIAGNOSTICS) {
-        const oldest = lastContent.keys().next().value
-        if (oldest === undefined) break
-        lastContent.delete(oldest)
-      }
+      lastContent.set(filePath, text)
     }
 
     function contentUnchanged(filePath: string, text: string) {
@@ -593,6 +583,10 @@ export namespace LSPClient {
     }
 
     const result = {
+      activity,
+      get cachedContentBytes() {
+        return lastContent.bytes
+      },
       root: input.root,
       get serverID() {
         return input.serverID
@@ -789,7 +783,7 @@ export namespace LSPClient {
         const normalizedPath = Filesystem.normalizePath(
           path.isAbsolute(input.path) ? input.path : path.resolve(codeIntelHost().projectRoot(), input.path),
         )
-        return await diagnosticsWaitStarted({ path: normalizedPath })
+        return await activity.run(() => diagnosticsWaitStarted({ path: normalizedPath }))
       },
       // Liveness check. Uses signal 0 (kill -0), which doesn't actually
       // send a signal — it just asks the kernel whether the process still
@@ -812,6 +806,8 @@ export namespace LSPClient {
       async shutdown() {
         l.info("shutting down")
         closing = true
+        lastContent.clear()
+        diagnostics.clear()
         // Wrap end() and dispose() so a broken-stream throw from
         // either one cannot prevent us from reaching process kill.
         // Without this, a crashed LSP server leaves its child process

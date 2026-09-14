@@ -422,6 +422,49 @@ describe("LSPClient interop", () => {
     })
   })
 
+  test("oversized low-profile text bypasses cache and preserves exact full synchronization", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "low")
+    await using tmp = await tmpdir()
+    const absolutePath = path.join(tmp.path, "large.ts")
+    const original = "x".repeat(2 * 1024 * 1024)
+    await fs.writeFile(absolutePath, original)
+    const handle = spawnFakeServer({ FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ textDocumentSync: 2 }) })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const client = await LSPClient.create({ serverID: "fake", server: handle, root: tmp.path })
+        try {
+          await client.notify.open({ path: absolutePath })
+          expect(client.cachedContentBytes).toBe(0)
+          const updated = original + "updated"
+          await fs.writeFile(absolutePath, updated)
+          const spy = vi.spyOn(client.connection, "sendNotification")
+          await client.notify.open({ path: absolutePath })
+          const change = spy.mock.calls.find((call) => call[0] === "textDocument/didChange")
+          expect(change?.[1]).toMatchObject({ contentChanges: [{ text: updated }] })
+          expect(client.cachedContentBytes).toBe(0)
+        } finally {
+          await client.shutdown()
+          vi.unstubAllEnvs()
+        }
+      },
+    })
+  })
+
+  test("underlying requests remain busy until the server answers", async () => {
+    const handle = spawnFakeServer()
+    const client = await LSPClient.create({ serverID: "fake", server: handle, root: process.cwd() })
+    try {
+      const request = client.connection.sendRequest("workspace/symbol", { query: "fixture" })
+      expect(client.activity.busy).toBeGreaterThan(0)
+      expect(client.activity.idle(performance.now() + 600_000, 300_000)).toBe(false)
+      await request
+      expect(client.activity.busy).toBe(0)
+    } finally {
+      await client.shutdown()
+    }
+  })
+
   test("notify.open sends full-document didChange when the server is full-sync only", async () => {
     await using tmp = await tmpdir()
     const file = path.join(tmp.path, "index.ts")

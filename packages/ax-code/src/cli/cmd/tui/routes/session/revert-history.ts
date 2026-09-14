@@ -1,3 +1,4 @@
+import { refreshProjectionSizes, enforceTranscriptBudget } from "@/runtime/headless/projection-retention"
 import { mergeSorted } from "../../context/sync-util"
 
 type Entry = { info: { id: string; role: string }; parts: unknown[] }
@@ -55,4 +56,6 @@ export function mergeRevertHistory<M extends { id: string }, P>(
     older.map((item) => item.info),
   )
   for (const item of older) store.part[item.info.id] = item.parts
+  refreshProjectionSizes(store, sessionID)
+  enforceTranscriptBudget(store, sessionID, { preserve: true })
 }

@@ -5,6 +5,7 @@ import { participantStatus, type SemanticEnvelope } from "./envelope"
 import * as LSPPerf from "./perf"
 import { LspScheduler } from "./scheduler"
 import type { ClientOptions, ClientSelection } from "./selection"
+import { memoryWork } from "./memory-work"
 
 const log = Log.create({ service: "lsp" })
 
@@ -87,28 +88,35 @@ async function runWithEnvelopeUncollapsed<TClient, TPayload>(input: {
   try {
     perClient = await Promise.all(
       clients.map(async (client) => {
-        let release: () => void
+        const releaseActivity = client.activity?.retain()
         try {
-          release = await LspScheduler.Budget.acquire(client.serverID)
-        } catch (err) {
-          failures++
-          log.warn("LSP budget acquire failed in runWithEnvelope", {
-            serverID: client.serverID,
-            err: toErrorMessage(err),
+          return await memoryWork("semantic", async () => {
+            let release: () => void
+            try {
+              release = await LspScheduler.Budget.acquire(client.serverID)
+            } catch (err) {
+              failures++
+              log.warn("LSP budget acquire failed in runWithEnvelope", {
+                serverID: client.serverID,
+                err: toErrorMessage(err),
+              })
+              return undefined
+            }
+            try {
+              const result = await input.call(client)
+              participatingServerIDs.push(client.serverID)
+              return result
+            } catch (err) {
+              if (isMethodNotFound(err)) return undefined
+              failures++
+              log.warn("LSP client failed in runWithEnvelope", { serverID: client.serverID, err })
+              return undefined
+            } finally {
+              release()
+            }
           })
-          return undefined
-        }
-        try {
-          const result = await input.call(client)
-          participatingServerIDs.push(client.serverID)
-          return result
-        } catch (err) {
-          if (isMethodNotFound(err)) return undefined
-          failures++
-          log.warn("LSP client failed in runWithEnvelope", { serverID: client.serverID, err })
-          return undefined
         } finally {
-          release()
+          releaseActivity?.()
         }
       }),
     )

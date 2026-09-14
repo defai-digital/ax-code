@@ -1,3 +1,9 @@
+import {
+  clearProjectionSession,
+  refreshProjectionSizes,
+  enforceTranscriptBudget,
+  forgetProjectionMessage,
+} from "@/runtime/headless/projection-retention"
 import { mergeSorted, removeByID, upsert } from "./sync-util"
 
 export interface SyncedMessageParts<TMessage, TPart> {
@@ -72,6 +78,8 @@ export function applySessionSyncSnapshot<
   },
 ) {
   upsert(store.session, snapshot.session)
+  const reload = (store as { message_reload?: Record<string, boolean> }).message_reload
+  if (reload) delete reload[sessionID]
 
   const existingMessages = store.message[sessionID] ?? []
   const previousMessageIDs = new Set(existingMessages.map((message) => message.id))
@@ -92,14 +100,18 @@ export function applySessionSyncSnapshot<
   if (snapshot.risk !== undefined) store.session_risk[sessionID] = snapshot.risk
   for (const messageID of previousMessageIDs) {
     if (!nextMessageIDs.has(messageID)) {
-      delete store.part[messageID]
+      forgetProjectionMessage(store, messageID)
     }
   }
   for (const message of snapshot.messages) {
+    // Authoritative replacement invalidates old part sizes and delta guards.
+    forgetProjectionMessage(store, message.info.id)
     store.part[message.info.id] = message.parts
   }
   store.session_diff[sessionID] = snapshot.diff
   if (snapshot.goal !== undefined) store.session_goal[sessionID] = snapshot.goal
+  refreshProjectionSizes(store, sessionID)
+  enforceTranscriptBudget(store, sessionID, { preserve: !!(snapshot.session as { revert?: unknown }).revert })
 }
 
 /**
@@ -153,10 +165,7 @@ export function applySessionDeleteCleanup<
 ) {
   removeByID(store.session, sessionID)
 
-  const removedMessages = store.message[sessionID] ?? []
-  for (const message of removedMessages) {
-    delete store.part[message.id]
-  }
+  clearProjectionSession(store, sessionID)
 
   delete store.permission[sessionID]
   delete store.question[sessionID]
@@ -184,10 +193,7 @@ export function applySessionLeavePrune<TMessage extends { id: string }, TPart, T
   },
   sessionID: string,
 ) {
-  const removedMessages = store.message[sessionID] ?? []
-  for (const message of removedMessages) {
-    delete store.part[message.id]
-  }
+  clearProjectionSession(store, sessionID)
 
   delete store.session_risk[sessionID]
   delete store.session_goal[sessionID]
@@ -217,6 +223,8 @@ export function pruneOrphanSessionRecords(store: {
   todo?: Record<string, unknown>
   message?: Record<string, Array<{ id: string }>>
   message_truncated?: Record<string, unknown>
+  message_reload?: Record<string, unknown>
+  message_memory_limited?: Record<string, unknown>
   part?: Record<string, unknown>
 }) {
   const live = new Set(store.session.map((session) => session.id))
@@ -231,6 +239,8 @@ export function pruneOrphanSessionRecords(store: {
     store.todo,
     store.message,
     store.message_truncated,
+    store.message_reload,
+    store.message_memory_limited,
   ]
 
   for (const bag of bags) {
@@ -238,12 +248,28 @@ export function pruneOrphanSessionRecords(store: {
     for (const id of Object.keys(bag)) {
       if (live.has(id)) continue
       if (bag === store.message && store.part) {
-        const removedMessages = store.message?.[id] ?? []
-        for (const message of removedMessages) {
-          delete store.part[message.id]
-        }
+        clearProjectionSession(
+          store as { message: Record<string, Array<{ id: string }>>; part: Record<string, unknown[]> },
+          id,
+        )
       }
       delete bag[id]
+    }
+  }
+  if (store.message && store.part) {
+    const orphanOwners = new Set<string>()
+    for (const parts of Object.values(store.part)) {
+      if (!Array.isArray(parts)) continue
+      for (const part of parts) {
+        const owner = (part as { sessionID?: string })?.sessionID
+        if (owner && !live.has(owner)) orphanOwners.add(owner)
+      }
+    }
+    for (const sessionID of orphanOwners) {
+      clearProjectionSession(
+        store as { message: Record<string, Array<{ id: string }>>; part: Record<string, unknown[]> },
+        sessionID,
+      )
     }
   }
 }

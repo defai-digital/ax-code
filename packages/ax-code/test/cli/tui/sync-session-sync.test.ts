@@ -343,4 +343,55 @@ describe("tui sync session sync", () => {
     expect(store.session_diff.ses_prog).toEqual([{ path: "enriched.ts" }])
     expect(store.session_goal.ses_prog).toEqual({ objective: "ship" })
   })
+
+  test("progressive enrichment preserves a new reload notice until a full transcript reload", async () => {
+    type Store = SessionSyncStoreState<Session, Todo, Message, Part, Diff, Risk, Goal> & {
+      message_reload: Record<string, boolean>
+    }
+    const [store, setStore] = createStore<Store>({
+      session: [],
+      todo: {},
+      message: {},
+      part: {},
+      session_diff: {},
+      session_risk: {},
+      session_goal: {},
+      message_reload: {},
+    })
+    let releaseDiff!: (value: { data: Diff[] }) => void
+    const pendingDiff = new Promise<{ data: Diff[] }>((resolve) => {
+      releaseDiff = resolve
+    })
+    let markDiffStarted!: () => void
+    const diffStarted = new Promise<void>((resolve) => {
+      markDiffStarted = resolve
+    })
+    let first = true
+    const controller = createStoreBackedSessionSyncController<Session, Todo, Message, Part, Diff, Risk, Goal, Store>({
+      timeoutMs: 10000,
+      withTimeout: async (_label, promise) => promise,
+      setStore,
+      fetchSession: async (id) => ({ data: { id, title: "Session" } }),
+      fetchMessages: async () => ({ data: [{ info: { id: "m1" }, parts: [{ id: "p1" }] }] }),
+      fetchTodo: async () => ({ data: [] }),
+      fetchDiff: async () => {
+        if (!first) return { data: [] }
+        first = false
+        markDiffStarted()
+        return pendingDiff
+      },
+    })
+    const flight = controller.sync("session")
+    await diffStarted
+    expect(store.message.session).toHaveLength(1)
+    // Model a pending overflow after core paint but before enrichment completes.
+    setStore("message_reload", "session", true)
+    releaseDiff({ data: [{ path: "changed.ts" }] })
+    await flight
+    expect(store.session_diff.session).toEqual([{ path: "changed.ts" }])
+    expect(store.message_reload.session).toBe(true)
+    await controller.sync("session", { force: true })
+    expect(store.message_reload.session).toBeUndefined()
+    expect(store.part.m1).toEqual([{ id: "p1" }])
+  })
 })

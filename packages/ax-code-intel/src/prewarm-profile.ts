@@ -1,3 +1,4 @@
+import { totalmem } from "node:os"
 import type { LSPServer } from "./server"
 
 // Conservative semantic warmup profile:
@@ -12,3 +13,16 @@ export const INDEX_PREWARM_MAX_LANGUAGES = 8
 export const BOOTSTRAP_PREWARM_MAX_FILES = 4
 export const BOOTSTRAP_PREWARM_MAX_LANGUAGES = 4
 export const BOOTSTRAP_PREWARM_TIMEOUT_MS = 15_000
+
+// Physical RAM chooses a default, not a process or machine-wide memory ceiling.
+export function memoryProfile(input: { override?: string; totalBytes?: number } = {}): "low" | "normal" {
+  const override = input.override ?? process.env.AX_CODE_MEMORY_PROFILE
+  if (override === "low" || override === "normal") return override
+  const bytes = input.totalBytes ?? totalmem()
+  return Number.isFinite(bytes) && bytes > 0 && bytes <= 8 * 1024 ** 3 ? "low" : "normal"
+}
+
+export const LOW_MEMORY_IDLE_MS = 5 * 60_000
+export function sourceCacheBytes() {
+  return (memoryProfile() === "low" ? 4 : 16) * 1024 ** 2
+}

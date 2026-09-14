@@ -26,8 +26,8 @@ afterEach(async () => {
   vi.unstubAllEnvs()
 })
 
-test("exact reads reuse rendering but validate dirty same-mtime rewrites and ranges", async () => {
-  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "memory")
+test("default reads reuse rendering but validate dirty same-mtime rewrites and ranges", async () => {
+  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", undefined)
   await using tmp = await tmpdir({
     init: async (dir) => fs.writeFile(path.join(dir, "source.ts"), "export const before = 1\nsecond\n"),
   })

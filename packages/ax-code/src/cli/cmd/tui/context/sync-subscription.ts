@@ -1,3 +1,4 @@
+import { retainTranscriptEvent } from "./sync-transcript-event"
 import {
   dispatchStoreBackedSyncEvent,
   type DispatchStoreBackedSyncEventInput,
@@ -29,6 +30,8 @@ export function subscribeStoreBackedSyncEvents<
 >(input: {
   listen: (handler: (event: SyncEventEnvelope<unknown>) => void) => () => void
   getAutonomous: () => boolean
+  getActiveSessionID?: () => string | undefined
+  getTranscriptGeneration?: () => number
   // When true, autonomous permission/question requests are auto-replied even
   // in the TUI (Super-Long runs unsupervised); plain autonomous keeps
   // interactive supervision.
@@ -136,9 +139,14 @@ export function subscribeStoreBackedSyncEvents<
 }) {
   const dispatch = input.dispatch ?? dispatchStoreBackedSyncEvent
 
+  const transcriptGeneration = Symbol("transcriptGeneration")
+  let lastGeneration = input.getTranscriptGeneration?.()
   const applyEvent = (event: SyncEvent<TSession, TTodo, TDiff, TStatus, TMessage, TPart>) => {
+    const generation = (event as { [transcriptGeneration]?: number })[transcriptGeneration]
+    if (generation !== undefined && generation !== input.getTranscriptGeneration?.()) return
     dispatch({
       event,
+      getActiveSessionID: input.getActiveSessionID,
       autonomous: input.getAutonomous(),
       autoReplyRequests: input.getAutoReplyRequests?.(),
       setStore: input.setStore,
@@ -183,7 +191,14 @@ export function subscribeStoreBackedSyncEvents<
 
   const unsubscribe = input.listen((envelope) => {
     try {
-      coalescer.push(envelope.details as StreamEventLike)
+      if (input.getActiveSessionID && !retainTranscriptEvent(envelope.details, input.getActiveSessionID())) return
+      const generation = input.getTranscriptGeneration?.()
+      if (generation !== lastGeneration) {
+        coalescer.flush()
+        lastGeneration = generation
+      }
+      const event = envelope.details as StreamEventLike
+      coalescer.push(generation === undefined ? event : { ...event, [transcriptGeneration]: generation })
     } catch (error) {
       input.onHandlerError({
         type: eventType(envelope.details),

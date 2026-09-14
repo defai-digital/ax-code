@@ -26,6 +26,7 @@ import {
   BOOTSTRAP_PREWARM_MAX_LANGUAGES,
   BOOTSTRAP_PREWARM_TIMEOUT_MS,
   INDEXER_SEMANTIC_METHODS,
+  memoryProfile,
 } from "@ax-code/ax-code-intel/prewarm-profile"
 
 const BOOTSTRAP_TIMEOUT_MS = 30_000
@@ -191,20 +192,22 @@ export async function InstanceBootstrap() {
   // Keep startup responsive: warm only a few representative semantic
   // servers in the background so the first real semantic/index request
   // does not pay the full cold-start penalty.
-  background({
-    service: "LSP.prewarmWorkspace",
-    label: "lsp semantic prewarm",
-    timeoutMs: BOOTSTRAP_PREWARM_TIMEOUT_MS,
-    task: (signal) =>
-      LSP.prewarmWorkspace({
-        mode: "semantic",
-        methods: [...INDEXER_SEMANTIC_METHODS],
-        maxFiles: BOOTSTRAP_PREWARM_MAX_FILES,
-        maxLanguages: BOOTSTRAP_PREWARM_MAX_LANGUAGES,
-        preferredFiles: safeWarmupHints(),
-        signal,
-      }),
-  })
+  if (memoryProfile() !== "low") {
+    background({
+      service: "LSP.prewarmWorkspace",
+      label: "lsp semantic prewarm",
+      timeoutMs: BOOTSTRAP_PREWARM_TIMEOUT_MS,
+      task: (signal) =>
+        LSP.prewarmWorkspace({
+          mode: "semantic",
+          methods: [...INDEXER_SEMANTIC_METHODS],
+          maxFiles: BOOTSTRAP_PREWARM_MAX_FILES,
+          maxLanguages: BOOTSTRAP_PREWARM_MAX_LANGUAGES,
+          preferredFiles: safeWarmupHints(),
+          signal,
+        }),
+    })
+  }
   background({
     service: "File.init",
     label: "file init",

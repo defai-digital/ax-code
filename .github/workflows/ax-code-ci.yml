@@ -56,7 +56,7 @@ permissions:
 
 jobs:
   evidence-native:
-    name: Default evidence cache (${{ matrix.os }})
+    name: Native evidence cache (${{ matrix.os }})
     timeout-minutes: 45
     strategy:
       fail-fast: false

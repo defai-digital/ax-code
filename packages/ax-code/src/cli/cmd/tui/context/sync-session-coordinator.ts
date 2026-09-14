@@ -27,6 +27,7 @@ type InFlightEntry = {
   promise: Promise<void>
   /** Epoch observed when this flight began; clear/reset bumps epoch. */
   startedEpoch: number
+  invalidated?: boolean
 }
 
 export type SessionSyncSnapshotApplyMode = "full" | "enrichment"
@@ -53,6 +54,7 @@ export function createSessionSyncController<TSnapshot>(input: {
    * (ADR-047 leave prune + re-enter).
    */
   const epoch = new Map<string, number>()
+  let nextEpoch = 0
   /** In-flight sync promises so concurrent callers await the same flight. */
   const inFlight = new Map<string, InFlightEntry>()
 
@@ -61,7 +63,7 @@ export function createSessionSyncController<TSnapshot>(input: {
   }
 
   function bumpEpoch(sessionID: string) {
-    const next = currentEpoch(sessionID) + 1
+    const next = ++nextEpoch
     epoch.set(sessionID, next)
     return next
   }
@@ -101,14 +103,19 @@ export function createSessionSyncController<TSnapshot>(input: {
   return {
     clear(sessionID) {
       fullSyncedSessions.delete(sessionID)
-      bumpEpoch(sessionID)
+      const flight = inFlight.get(sessionID)
+      if (flight) {
+        flight.invalidated = true
+        bumpEpoch(sessionID)
+      } else epoch.delete(sessionID)
     },
     reset() {
       fullSyncedSessions.clear()
-      // Bump every session that has ever synced or is in-flight so late
-      // applySnapshot cannot re-mark fullSynced after reset. Keep the epoch
-      // map (do not zero it) so in-flight work started at epoch 0 goes stale.
-      for (const sessionID of new Set([...epoch.keys(), ...inFlight.keys()])) {
+      // Only in-flight work needs an invalidation token. Globally unique
+      // tokens prevent ABA reuse without retaining every visited session.
+      epoch.clear()
+      for (const [sessionID, flight] of inFlight) {
+        flight.invalidated = true
         bumpEpoch(sessionID)
       }
     },
@@ -127,7 +134,7 @@ export function createSessionSyncController<TSnapshot>(input: {
           if (!options?.force && fullSyncedSessions.has(sessionID)) return
           // clear/reset invalidated the flight we joined — start a fresh one
           // (leave prune + re-enter). Force refresh also continues.
-          if (options?.force || existing.startedEpoch !== currentEpoch(sessionID)) {
+          if (options?.force || existing.invalidated) {
             continue
           }
           // Flight finished for this epoch without fullSynced (missing/error
@@ -135,11 +142,12 @@ export function createSessionSyncController<TSnapshot>(input: {
           return
         }
 
-        const startedEpoch = currentEpoch(sessionID)
+        const startedEpoch = bumpEpoch(sessionID)
         const flight = runSync(sessionID, options, startedEpoch).finally(() => {
           const current = inFlight.get(sessionID)
           if (current?.promise === flight) {
             inFlight.delete(sessionID)
+            epoch.delete(sessionID)
           }
         })
         inFlight.set(sessionID, { promise: flight, startedEpoch })

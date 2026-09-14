@@ -237,4 +237,30 @@ describe("tui sync session coordinator", () => {
     await controller.sync("ses_reenter")
     expect(fetches).toEqual(["ses_reenter", "ses_reenter"])
   })
+
+  test("concurrent missing snapshots do not refetch after their epoch is released", async () => {
+    let calls = 0
+    let release: (() => void) | undefined
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const controller = createSessionSyncController({
+      async fetchSnapshot() {
+        calls++
+        await pending
+        return undefined
+      },
+      applySnapshot() {
+        throw new Error("Missing snapshots cannot apply")
+      },
+    })
+    const first = controller.sync("missing")
+    const second = controller.sync("missing")
+    release?.()
+    await Promise.all([first, second])
+    expect(calls).toBe(1)
+    controller.clear("missing")
+    await controller.sync("missing")
+    expect(calls).toBe(2)
+  })
 })
