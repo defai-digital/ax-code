@@ -6,6 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.17.10] - 2026-09-14
+
+### Changed
+
+- Publish the paired SDK 2.5.23.
+
+### Fixed
+
+- Keep MCP server removal within the selected project or global configuration, reject malformed configuration, and report missing server names accurately.
+- Preserve retained JSON diagnostics when their empty text logs have been pruned, honor zero log retention, and count only successful file deletions.
+
 ## [7.17.9] - 2026-09-14
 
 ### Changed
