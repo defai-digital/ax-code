@@ -5,7 +5,7 @@ import type { ModelMessage } from "ai"
 import { Instance } from "../../src/project/instance"
 import { ReadTool } from "../../src/tool/read"
 import { EvidenceCache } from "../../src/evidence/cache"
-import { projectReadEvidence } from "../../src/session/evidence-projection"
+import { projectToolEvidence } from "../../src/session/evidence-projection"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 
@@ -60,7 +60,7 @@ test.runIf(process.env.AX_TEST_EVIDENCE_NATIVE === "1")(
               })
             }
             const elapsedMs = performance.now() - start
-            const projection = mode === "off" ? { messages, omittedBytes: 0 } : projectReadEvidence(messages)
+            const projection = mode === "off" ? { messages, omittedBytes: 0 } : projectToolEvidence(messages)
             const stats = await EvidenceCache.stats()
             expect(stats.backend).toBe(mode)
             expect(stats.hits).toBe(mode === "off" ? 0 : 9)

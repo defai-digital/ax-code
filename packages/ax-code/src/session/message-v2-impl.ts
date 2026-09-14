@@ -25,7 +25,7 @@ import { PromptIsolationPolicy } from "./prompt-runtime-policy"
 import { BlastRadius } from "./blast-radius"
 import { MediaProjection } from "./media-projection"
 import { evidenceCacheMode } from "../evidence/mode"
-import { projectReadEvidence } from "./evidence-projection"
+import { projectToolEvidence } from "./evidence-projection"
 
 export namespace MessageV2 {
   const log = Log.create({ service: "session.message" })
@@ -781,9 +781,9 @@ export namespace MessageV2 {
       result.push(...converted)
     }
     if (evidenceCacheMode() !== "off") {
-      const projection = projectReadEvidence(result)
+      const projection = projectToolEvidence(result)
       if (projection.duplicates)
-        log.debug("read evidence projected", {
+        log.debug("tool evidence projected", {
           duplicates: projection.duplicates,
           omittedBytes: projection.omittedBytes,
         })
