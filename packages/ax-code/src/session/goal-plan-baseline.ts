@@ -373,6 +373,13 @@ function commandSubstitutions(input: string) {
       index += 2
       continue
     }
+    if ((char === "<" || char === ">") && input[index + 1] === "(") {
+      const [inner, next] = readBalancedParen(input, index + 2)
+      found.push(inner)
+      index = next
+      justClosedSubstitution = true
+      continue
+    }
     if (char === "#") {
       const glued = justClosedSubstitution
       justClosedSubstitution = false
