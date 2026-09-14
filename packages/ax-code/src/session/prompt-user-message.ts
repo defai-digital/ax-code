@@ -54,10 +54,13 @@ export async function createAutonomousTextContinuation(args: {
   messages: readonly MessageV2.WithParts[]
   text: string
 }) {
+  // Loop injections (wrap-up, checkpoint, recovery) must reach the model but
+  // must not render as a user turn. `toModelMessages` keeps synthetic text;
+  // the TUI UserMessage path hides it.
   await createAutonomousUserContinuation({
     sessionID: args.sessionID,
     messages: args.messages,
-    parts: [{ type: "text", text: args.text }],
+    parts: [{ type: "text", text: args.text, synthetic: true }],
   })
 }
 

@@ -50,7 +50,7 @@ describe("prompt user message helpers", () => {
             modelID: "gpt-5.4",
           },
         })
-        expect(users[1]!.parts).toEqual([expect.objectContaining({ type: "text", text: "continue" })])
+        expect(users[1]!.parts).toEqual([expect.objectContaining({ type: "text", text: "continue", synthetic: true })])
       },
     })
   })
