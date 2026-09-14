@@ -187,8 +187,8 @@ function commandWord(segment: string) {
   return { value: current.value, rest: words.slice(index + 1) }
 }
 
-const SHELL_VALUE_OPTIONS = new Set(["-o", "--rcfile", "--init-file"])
-const SHELL_OPTIONAL_VALUE_FLAGS = new Set(["-O", "-W"])
+const SHELL_VALUE_OPTIONS = new Set(["--rcfile", "--init-file"])
+const SHELL_OPTIONAL_VALUE_FLAGS = new Set(["-o", "-O", "-W"])
 
 function dashCScript(args: ShellWord[]) {
   for (let index = 0; index < args.length; index++) {
@@ -377,7 +377,7 @@ function commandSubstitutions(input: string) {
       const glued = justClosedSubstitution
       justClosedSubstitution = false
       const previous = index === 0 ? "" : input[index - 1]!
-      if (!glued && (index === 0 || /[\s;&|]/.test(previous) || previous === ")")) {
+      if (!glued && (index === 0 || /[\s;&|]/.test(previous))) {
         while (index < input.length && input[index] !== "\n") index++
         continue
       }
