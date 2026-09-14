@@ -1,9 +1,43 @@
 export namespace BashArity {
   export function prefix(tokens: string[]) {
-    for (let len = tokens.length; len > 0; len--) {
-      const prefix = tokens.slice(0, len).join(" ")
-      const arity = ARITY[prefix]
-      if (arity !== undefined) return tokens.slice(0, arity)
+    // Flags never count as tokens (see the dictionary rules below): match on
+    // the subcommand tokens only, and slice the original tokens through the
+    // arity-th non-flag token so the result still matches the command text
+    // it was built from (the always pattern is wildcard-matched against the
+    // full command string). Counting flags as subcommands used to widen the
+    // grant to every subcommand behind the same leading flag, e.g. approving
+    // `git --no-pager log` once produced `git --no-pager *`, which then
+    // matched `git --no-pager push --force`.
+    const significant: number[] = []
+    for (let i = 0; i < tokens.length; i++) {
+      if (!tokens[i]!.startsWith("-")) significant.push(i)
+    }
+    for (let len = significant.length; len > 0; len--) {
+      const prefix = significant
+        .slice(0, len)
+        .map((i) => tokens[i]!)
+        .join(" ")
+      // Own-property lookup only: without this guard a command literally
+      // named after an Object.prototype member (toString, constructor,
+      // __proto__, ...) hit the inherited value instead of a dictionary
+      // entry and sliced to a degenerate empty prefix.
+      if (!Object.hasOwn(ARITY, prefix)) continue
+      const arity = ARITY[prefix]!
+      let cut = Math.min(arity, significant.length)
+      // When the cut token directly follows a flag it is likely that flag's
+      // value rather than the subcommand the arity points at (e.g.
+      // `git -C <dir> <sub>`, `docker -H <host> <sub>`). Extend past it so
+      // the grant binds the subcommand instead of wildcarding past it. For
+      // boolean flags this only narrows the grant (safe direction), and the
+      // full original prefix (flags included) still matches the exact
+      // command text the user approved.
+      while (
+        cut < significant.length &&
+        significant[cut - 1]! > 0 &&
+        tokens[significant[cut - 1]! - 1]!.startsWith("-")
+      )
+        cut++
+      return tokens.slice(0, significant[cut - 1]! + 1)
     }
     if (tokens.length === 0) return []
     return tokens.slice(0, 1)

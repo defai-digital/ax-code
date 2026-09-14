@@ -31,3 +31,33 @@ test("edge cases", () => {
   expect(BashArity.prefix(["single"])).toEqual(["single"])
   expect(BashArity.prefix(["git"])).toEqual(["git"])
 })
+
+test("flags never count as tokens", () => {
+  // A leading global flag must not widen the always grant to every
+  // subcommand behind the same flag: approving `git --no-pager log` once
+  // must grant "git --no-pager log *", not "git --no-pager *".
+  expect(BashArity.prefix(["git", "--no-pager", "log"])).toEqual(["git", "--no-pager", "log"])
+  expect(BashArity.prefix(["git", "-C", "/tmp", "checkout", "."])).toEqual(["git", "-C", "/tmp", "checkout"])
+  expect(BashArity.prefix(["git", "-c", "user.name=x", "commit", "-m", "hi"])).toEqual([
+    "git",
+    "-c",
+    "user.name=x",
+    "commit",
+  ])
+  expect(BashArity.prefix(["docker", "-H", "tcp://remote:2375", "ps"])).toEqual([
+    "docker",
+    "-H",
+    "tcp://remote:2375",
+    "ps",
+  ])
+  expect(BashArity.prefix(["python", "-m", "http.server"])).toEqual(["python", "-m", "http.server"])
+  // Flag positions are preserved so the pattern still matches the exact
+  // command text the user approved.
+  expect(BashArity.prefix(["git", "--no-pager", "log"]).join(" ") + " *").toBe("git --no-pager log *")
+})
+
+test("prototype-chain names do not produce a degenerate empty prefix", () => {
+  expect(BashArity.prefix(["toString", "foo"])).toEqual(["toString"])
+  expect(BashArity.prefix(["constructor", "x"])).toEqual(["constructor"])
+  expect(BashArity.prefix(["__proto__", "y"])).toEqual(["__proto__"])
+})
