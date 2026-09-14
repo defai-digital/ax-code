@@ -115,3 +115,49 @@ need assertions in the project command. A receipt records an observation at its
 execution time; it does not prove external state has remained unchanged. Rerun
 affected checks after changing configuration, databases or deployments. AX Code
 does not automatically discover all legacy behavior or certify migration parity.
+
+## Planning context and model selection
+
+Goal planning inherits the selected session model through both `/goal` and the
+`create_goal` tool. Compatible caller variants are preserved. The read-only writer
+receives recent original user requirements and attachment references, with a
+16 KiB record budget. An oversized record stops inclusion of older records, with a notice, so older
+requirements cannot silently replace an omitted correction; inline
+media content is not treated as inspected evidence. Provide inspectable source
+files for requirements that are only present in media.
+
+## Progress and blockers
+
+`get_goal` includes current check status (passed, failed, stale, running or missing)
+and recent tool evidence IDs. The completion gate still requires current successful
+receipts. A blocked update requires a blocker kind, reason, required external change,
+original evidence IDs, and confirmation that no independent work remains. Blocker
+reasons are model declarations supported by inspectable records, not a certification
+that an external service remains unavailable.
+
+Finished turns that repeatedly produce no new successful tool evidence receive
+recovery guidance, then pause the goal with unfinished work disclosed. New research
+results can count without source edits; todo rewrites and repeated identical results
+do not. This is a bounded heuristic, not proof of semantic progress. `/goal resume`
+starts another attempt. Tool calls generated for an earlier goal cannot terminate
+its replacement. A tool-created goal is available to status updates after the model
+has received the creation result in its next step.
+
+## Revise an existing plan
+
+Use `/goal revise <correction>` to explicitly revise an active, paused or blocked
+frozen goal. Completed work and exhausted budgets require a new goal. The previous
+plan and digest remain intact. The revised plan gets a fresh identity and a local
+prepared revision record linking both digests and the correction. The current
+goal identity determines which candidate was actually installed; failed concurrent
+candidates may remain on disk for inspection. Old receipts remain in
+history and cannot satisfy the new revision. Token budget and accrued usage carry
+over; revision does not grant a fresh spending budget.
+
+Revision cancels the current run and pauses the goal while preparing the new plan.
+If planning fails, the previous contract remains resumable; a previously blocked
+goal keeps that status. A user pause or cancellation during planning prevents
+activation. A concurrent replacement
+prevents the candidate from taking over. Model tools cannot silently revise frozen
+requirements. Review the resulting plan and its acceptance criteria; an executable
+command alone does not establish that its assertions cover the corrected request.

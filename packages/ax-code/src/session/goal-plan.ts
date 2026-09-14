@@ -382,6 +382,22 @@ export namespace GoalPlan {
     return { contract, path: file }
   }
 
+  export async function recordRevision(input: {
+    sessionID: SessionID
+    previousCreated: number
+    created: number
+    reason: string
+    previousDigest: string
+    digest: string
+  }) {
+    const file = digestPathFor(input.sessionID, input.created).replace(/\.sha256$/, ".revision.json")
+    await fs.promises.writeFile(file, JSON.stringify({ version: 1, phase: "prepared", ...input }, null, 2) + "\n", {
+      encoding: "utf8",
+      flag: "wx",
+    })
+    return file
+  }
+
   export async function copyForFork(input: { from: SessionID; fromCreated: number; to: SessionID; toCreated: number }) {
     const fromPlan = pathFor(input.from, input.fromCreated)
     const fromDigest = digestPathFor(input.from, input.fromCreated)

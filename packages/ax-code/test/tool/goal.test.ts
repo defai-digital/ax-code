@@ -14,7 +14,7 @@ function toolContext(sessionID: string, _directory: string) {
     agent: "build",
     abort: new AbortController().signal,
     messages: [],
-    extra: {},
+    extra: { model: { id: "test-model", providerID: "test" } },
     metadata() {},
     async ask() {},
   }

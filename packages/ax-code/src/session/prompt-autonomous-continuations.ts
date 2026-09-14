@@ -60,7 +60,7 @@ export namespace AutonomousContinuationPrompt {
       next +
       (input.contractContext ? `${input.contractContext}\n` : "") +
       `\nDo not summarize the goal as complete unless it is actually complete. If complete, use update_goal with ` +
-      `status "complete" and acceptanceEvidence for every AC id; if genuinely blocked after repeated attempts, use update_goal with status "blocked". ` +
+      `status "complete" and acceptanceEvidence for every AC id; if genuinely blocked after repeated attempts, use get_goal for evidence IDs, then update_goal with status "blocked" and an evidenced blocker naming the required external change. ` +
       `This is goal auto-continuation ${input.continuation}.`
     )
   }

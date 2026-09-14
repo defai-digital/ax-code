@@ -130,3 +130,20 @@ test("assurance is round-trip stable and cannot omit or fabricate acceptance cov
     ),
   ).toThrow(/single line/)
 })
+
+test("checkpoint classifies current, failed, missing and stale receipts without weakening completion", () => {
+  expect(GoalCheckVerification.inspect({ ...base, messages: [message()] })[0].status).toBe("passed")
+  expect(GoalCheckVerification.inspect({ ...base, messages: [] })[0].status).toBe("missing")
+  expect(
+    GoalCheckVerification.inspect({ ...base, messages: [message({ ...receipt, passed: false, exitCode: 1 })] })[0]
+      .status,
+  ).toBe("failed")
+  expect(
+    GoalCheckVerification.inspect({
+      ...base,
+      source: { ...source, dirtyDigest: "content-v1:changed" },
+      messages: [message()],
+    })[0].status,
+  ).toBe("stale")
+  expect(GoalCheckVerification.inspect({ ...base, created: 200, messages: [message()] })[0].status).toBe("stale")
+})

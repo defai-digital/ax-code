@@ -1,6 +1,7 @@
 type GoalArgumentDecision =
   | { action: "view" | "pause" | "resume" | "clear" }
   | { action: "error"; message: string }
+  | { action: "revise"; correction: string }
   | {
       action: "create"
       objective: string
@@ -14,6 +15,12 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
   if (lower === "pause") return { action: "pause" }
   if (lower === "resume") return { action: "resume" }
   if (lower === "clear") return { action: "clear" }
+  if (lower === "revise")
+    return {
+      action: "error",
+      message: "Use /goal revise <correction> to revise the frozen plan while retaining its history and budget.",
+    }
+  if (lower.startsWith("revise ")) return { action: "revise", correction: text.slice(7).trim() }
   // "status" is a common way to ask for the current goal; without this alias
   // it would silently CREATE a goal whose objective is the word "status".
   if (lower === "status") return { action: "view" }

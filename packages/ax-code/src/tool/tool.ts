@@ -43,6 +43,9 @@ export namespace Tool {
     agent: string
     abort: AbortSignal
     callID?: string
+    /** Shared binding captured before model execution; only create_goal may advance it. */
+    goalBinding?: Readonly<{ created: number | undefined }>
+    onGoalCreated?: (created: number) => void
     extra?: { [key: string]: any }
     messages: MessageV2.WithParts[]
     metadata(input: { title?: string; metadata?: M }): void

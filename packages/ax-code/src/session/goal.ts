@@ -1,4 +1,5 @@
 import z from "zod"
+import { Instance } from "../project/instance"
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { eq, sql } from "@/storage/db"
@@ -12,6 +13,12 @@ import { toErrorMessage } from "../util/error-message"
 
 export namespace SessionGoal {
   const log = Log.create({ service: "session.goal" })
+  const identityClock = Instance.state(() => ({ last: 0 }))
+
+  export function reserveCreated(after = 0) {
+    const clock = identityClock()
+    return (clock.last = Math.max(Date.now(), clock.last + 1, after + 1))
+  }
 
   export const Status = z.enum(["active", "paused", "complete", "blocked", "budget_limited"])
   export type Status = z.infer<typeof Status>
@@ -154,7 +161,7 @@ export namespace SessionGoal {
       throw new Error("Goal token budget must be a positive integer")
     }
     const status = input.status ?? "active"
-    const now = Date.now()
+    const now = reserveCreated()
     const values = {
       session_id: input.sessionID,
       objective,
@@ -215,19 +222,53 @@ export namespace SessionGoal {
   export async function setStatus(input: {
     sessionID: SessionID
     status: Status
-    expected?: { created: number; status: Status }
+    expected?: { created: number; status: Status; updated?: number }
   }): Promise<Info> {
     const now = Date.now()
     const store = SessionShard.storeFor(input.sessionID, { write: true })
     const goal = store.transaction((db) => {
       const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
       if (!row) throw new Error("No goal is set for this session")
-      if (input.expected && (row.time_created !== input.expected.created || row.status !== input.expected.status)) {
+      if (
+        input.expected &&
+        (row.time_created !== input.expected.created ||
+          row.status !== input.expected.status ||
+          (input.expected.updated !== undefined && row.time_updated !== input.expected.updated))
+      ) {
         throw new Error("The goal changed during verification; verify the current goal before updating it")
       }
       assertCanSetStatus(row, input.status)
       db.update(SessionGoalTable)
-        .set({ status: input.status, time_updated: now })
+        .set({ status: input.status, time_updated: Math.max(now, (row.time_updated ?? 0) + 1) })
+        .where(eq(SessionGoalTable.session_id, input.sessionID))
+        .run()
+      return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()!)
+    })
+    publish(goal)
+    return goal
+  }
+
+  export async function installRevision(input: {
+    sessionID: SessionID
+    expected: { created: number; status: Status; updated?: number }
+    created: number
+    objective: string
+  }) {
+    const store = SessionShard.storeFor(input.sessionID, { write: true })
+    const goal = store.transaction((db) => {
+      const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()
+      if (
+        !row ||
+        row.time_created !== input.expected.created ||
+        row.status !== input.expected.status ||
+        (input.expected.updated !== undefined && row.time_updated !== input.expected.updated)
+      ) {
+        throw new Error("The goal changed while preparing its revision; the current goal was preserved")
+      }
+      if (input.created <= row.time_created || !GoalPlan.hasValidContract(input.sessionID, input.created))
+        throw new Error("The revision needs a fresh identity and valid frozen contract")
+      db.update(SessionGoalTable)
+        .set({ objective: input.objective, time_created: input.created, time_updated: Date.now(), status: "paused" })
         .where(eq(SessionGoalTable.session_id, input.sessionID))
         .run()
       return fromRow(db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, input.sessionID)).get()!)
