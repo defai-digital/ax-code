@@ -12,7 +12,13 @@ import { tmpdir } from "../fixture/fixture"
 afterEach(() => vi.restoreAllMocks())
 
 test.each([false, true])("child admission retains parent session denials (parallel: %s)", async (parallel) => {
-  await using tmp = await tmpdir({ git: true, config: { provider: { openai: { options: { apiKey: "test-key" } } } } })
+  await using tmp = await tmpdir({
+    git: true,
+    config: {
+      provider: { openai: { options: { apiKey: "test-key" } } },
+      experimental: { primary_tools: ["webfetch"] },
+    },
+  })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
@@ -69,8 +75,13 @@ test.each([false, true])("child admission retains parent session denials (parall
       const children = await Session.children(parent.id)
       expect(children).toHaveLength(1)
       expect(Permission.evaluate("bash", "printf unsafe", children[0]!.permission ?? []).action).toBe("deny")
+      expect(Permission.evaluate("webfetch", "https://example.test", children[0]!.permission ?? []).action).toBe("deny")
       expect(result.output).not.toContain("AssertionError")
       if (!parallel) {
+        await Session.setPermission({
+          sessionID: children[0]!.id,
+          permission: [...(children[0]!.permission ?? []), { permission: "read", pattern: "*", action: "allow" }],
+        })
         const laterDenial = { permission: "read", pattern: "*secret*", action: "deny" as const }
         await Session.setPermission({ sessionID: parent.id, permission: [denied, laterDenial] })
         const tool = await TaskTool.init()

@@ -639,7 +639,7 @@ export namespace SessionPrompt {
         ...logExtras,
       })
       // Reuse the in-loop message list: createAutonomousTextContinuation only
-      // needs the last user (agent/model). Avoid a full Session.messages()
+      // needs the last user execution settings. Avoid a full Session.messages()
       // reload of the entire history on every auto-continuation.
       await createAutonomousTextContinuation({
         sessionID,

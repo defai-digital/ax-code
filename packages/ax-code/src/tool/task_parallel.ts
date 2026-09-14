@@ -154,7 +154,7 @@ async function runOneTask(input: {
           ]),
       ...(config.experimental?.primary_tools?.map((t) => ({
         pattern: "*",
-        action: "allow" as const,
+        action: "deny" as const,
         permission: t,
       })) ?? []),
       ...constraints.permissionDenials,

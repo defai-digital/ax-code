@@ -122,11 +122,20 @@ export function parseToolParams(input?: string): ToolParams {
   return decodeToolParamsValue(parsed)
 }
 
-async function createToolContext(agent: Agent.Info) {
+export async function createToolContext(agent: Agent.Info) {
   const session = await Session.create({ title: `Debug tool run (${agent.name})` })
+  const userID = MessageID.ascending()
   const messageID = MessageID.ascending()
   const model = agent.model ?? (await Provider.defaultModel())
   const now = Date.now()
+  await Session.updateMessage({
+    id: userID,
+    sessionID: session.id,
+    role: "user",
+    agent: agent.name,
+    model,
+    time: { created: now },
+  })
   const message: MessageV2.Assistant = {
     id: messageID,
     sessionID: session.id,
@@ -134,7 +143,7 @@ async function createToolContext(agent: Agent.Info) {
     time: {
       created: now,
     },
-    parentID: messageID,
+    parentID: userID,
     modelID: model.modelID,
     providerID: model.providerID,
     mode: "debug",

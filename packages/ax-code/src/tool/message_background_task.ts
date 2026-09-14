@@ -97,7 +97,9 @@ async function persistControlMessage(input: {
   text: string
 }) {
   const messages = await Session.messages({ sessionID: input.sessionID })
-  const lastUser = [...messages].reverse().find((message) => message.info.role === "user")
+  const lastUser = messages.findLast(
+    (message) => message.info.role === "user" && !message.parts.some((part) => part.type === "compaction"),
+  )
   // Redelivery rewrites the same row via upsert; keep the original
   // time.created so the message's recorded send time does not drift to the
   // last retry.
@@ -107,13 +109,21 @@ async function persistControlMessage(input: {
       throw e
     },
   )
+  const sourceUser =
+    existing?.info.role === "user" ? existing.info : lastUser?.info.role === "user" ? lastUser.info : undefined
   const user = (await Session.updateMessage({
     id: input.messageID,
     sessionID: input.sessionID,
     role: "user",
     time: { created: existing?.info.role === "user" ? existing.info.time.created : Date.now() },
-    agent: lastUser?.info.role === "user" ? lastUser.info.agent : (input.item.agent ?? "build"),
-    model: lastUser?.info.role === "user" ? lastUser.info.model : queueModel(input.item.model),
+    agent: sourceUser?.agent ?? input.item.agent ?? "build",
+    model: sourceUser?.model ?? queueModel(input.item.model),
+    tools: sourceUser?.tools,
+    isolation: sourceUser?.isolation,
+    system: sourceUser?.system,
+    format: sourceUser?.format,
+    variant: sourceUser?.variant,
+    requestedDepth: sourceUser?.requestedDepth,
   })) as MessageV2.User
   await Session.updatePart({
     id: input.partID,

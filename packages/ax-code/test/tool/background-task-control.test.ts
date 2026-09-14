@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
+import { SessionCompaction } from "../../src/session/compaction"
 import { Session } from "../../src/session"
 import { MessageID, PartID, TaskQueueID, type SessionID } from "../../src/session/schema"
 import { TaskQueue } from "../../src/session/task-queue"
@@ -337,3 +338,40 @@ describe("tool.message_background_task", () => {
     })
   })
 })
+
+test.each([false, true])(
+  "background control messages retain child settings during compaction (%s)",
+  async (compacting) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        stubNudge()
+        const parent = await Session.create({})
+        const { child, item } = await enqueueBackgroundSubagent({
+          parent: parent.id,
+          initialPrompt: "Inspect the source.",
+        })
+        const source = (await Session.messages({ sessionID: child.id }))[0]!.info
+        if (source.role !== "user") throw new Error("Expected child user message")
+        const settings = {
+          tools: { bash: false },
+          isolation: { mode: "read-only" as const, network: false },
+          format: { type: "json_schema" as const, schema: { type: "object" }, retryCount: 2 },
+          system: "Keep the workspace unchanged.",
+          variant: "high",
+          requestedDepth: "deep" as const,
+        }
+        await Session.updateMessage({ ...source, ...settings })
+        if (compacting)
+          await SessionCompaction.create({ sessionID: child.id, agent: source.agent, model: source.model, auto: true })
+        await (
+          await MessageBackgroundTaskTool.init()
+        ).execute({ task_id: item.id, message: "Inspect the next file." }, toolContext(parent.id))
+        const delivered = controlTexts(await Session.messages({ sessionID: child.id }), "Inspect the next file.")
+        expect(delivered).toHaveLength(1)
+        expect(delivered[0]!.info).toMatchObject(settings)
+      },
+    })
+  },
+)
