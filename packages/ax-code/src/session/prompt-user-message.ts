@@ -46,6 +46,14 @@ export async function createAutonomousUserContinuation(args: {
     parts: args.parts,
     agent: lastUserInfo?.agent,
     model: lastUserInfo?.model,
+    // Loop-generated turns continue the same request, including its restrictions
+    // and response contract. Dropping these fields restores broader defaults.
+    tools: lastUserInfo?.tools,
+    isolation: lastUserInfo?.isolation,
+    format: lastUserInfo?.format,
+    system: lastUserInfo?.system,
+    variant: lastUserInfo?.variant,
+    requestedDepth: lastUserInfo?.requestedDepth,
   })
 }
 

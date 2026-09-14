@@ -3,12 +3,13 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { createAutonomousTextContinuation, createUserMessage } from "../../src/session/prompt-user-message"
 import { ModelID, ProviderID } from "../../src/provider/schema"
+import { resolvePromptIsolationPolicy } from "../../src/session/prompt-runtime-policy"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(() => vi.unstubAllEnvs())
 
 describe("prompt user message helpers", () => {
-  test("autonomous text continuations preserve the previous user agent and model", async () => {
+  test("autonomous text continuations preserve the previous user execution contract", async () => {
     await using tmp = await tmpdir({
       git: true,
       config: {
@@ -31,6 +32,12 @@ describe("prompt user message helpers", () => {
             providerID: "openai" as any,
             modelID: "gpt-5.4" as any,
           },
+          tools: { bash: false, edit: false },
+          isolation: { mode: "read-only", network: false },
+          system: "Keep the workspace unchanged.",
+          format: { type: "json_schema", schema: { type: "object" }, retryCount: 2 },
+          variant: "high",
+          requestedDepth: "deep",
           parts: [{ type: "text", text: "start" }],
         })
 
@@ -50,6 +57,24 @@ describe("prompt user message helpers", () => {
             modelID: "gpt-5.4",
           },
         })
+        expect(users[1]!.info).toMatchObject({
+          tools: { bash: false, edit: false },
+          isolation: { mode: "read-only", network: false },
+          system: "Keep the workspace unchanged.",
+          format: { type: "json_schema", schema: { type: "object" }, retryCount: 2 },
+          variant: "high",
+          requestedDepth: "deep",
+        })
+        const continued = users[1]!.info
+        if (continued.role !== "user") throw new Error("Expected a user continuation")
+        expect(
+          resolvePromptIsolationPolicy({
+            config: { mode: "full-access", network: true },
+            policy: continued.isolation,
+            directory: tmp.path,
+            worktree: tmp.path,
+          }),
+        ).toMatchObject({ mode: "read-only", network: false })
         expect(users[1]!.parts).toEqual([expect.objectContaining({ type: "text", text: "continue", synthetic: true })])
       },
     })
