@@ -21,7 +21,7 @@ test("retries a transient dependency failure before starting offline tests", asy
   const delay = vi.fn().mockResolvedValue(undefined)
   await prepareTestNative({ cacheDir: tmp.path, target: "linux-x64", prepare, delay })
   expect(prepare).toHaveBeenCalledTimes(3)
-  expect(delay).toHaveBeenCalledExactlyOnceWith(500)
+  expect(delay).toHaveBeenCalledExactlyOnceWith(2000)
 })
 
 test("bounds retries and propagates an unavailable dependency", async () => {
@@ -30,8 +30,24 @@ test("bounds retries and propagates an unavailable dependency", async () => {
   const prepare = vi.fn().mockRejectedValue(error)
   const delay = vi.fn().mockResolvedValue(undefined)
   await expect(prepareTestNative({ cacheDir: tmp.path, target: "linux-x64", prepare, delay })).rejects.toBe(error)
-  expect(prepare).toHaveBeenCalledTimes(3)
-  expect(delay.mock.calls).toEqual([[500], [1000]])
+  expect(prepare).toHaveBeenCalledTimes(4)
+  expect(delay.mock.calls).toEqual([[2000], [5000], [10000]])
+})
+
+test("recovers from repeated gateway timeouts and still verifies the offline cache", async () => {
+  await using tmp = await tmpdir()
+  const error = new Error("Cannot download ax-tui native artifact (504): https://example.test/LICENSE")
+  const prepare = vi
+    .fn()
+    .mockRejectedValueOnce(error)
+    .mockRejectedValueOnce(error)
+    .mockRejectedValueOnce(error)
+    .mockResolvedValue({ libraryPath: "library", licensePath: "license" })
+  const delay = vi.fn().mockResolvedValue(undefined)
+  await expect(prepareTestNative({ cacheDir: tmp.path, target: "linux-x64", prepare, delay })).resolves.toBe(tmp.path)
+  expect(delay.mock.calls).toEqual([[2000], [5000], [10000]])
+  expect(prepare).toHaveBeenCalledTimes(5)
+  expect(prepare).toHaveBeenLastCalledWith("linux-x64", { cacheDir: tmp.path, offline: true })
 })
 
 test.each([

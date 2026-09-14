@@ -3,6 +3,7 @@ import { setTimeout as sleep } from "node:timers/promises"
 import type { NativeLibraryPaths, NativeLibraryOptions, NativeTarget } from "ax-tui/native"
 
 type Prepare = (target: NativeTarget, options: NativeLibraryOptions) => Promise<NativeLibraryPaths>
+const DOWNLOAD_RETRY_DELAYS_MS = [2_000, 5_000, 10_000] as const
 
 export function nativeTarget(): NativeTarget {
   const platform = process.platform
@@ -43,9 +44,12 @@ export async function prepareTestNative(input: {
       await prepare(target, { cacheDir, offline: true })
       return cacheDir
     } catch (error) {
-      if (attempt >= 3 || !transientNativeDownload(error)) throw error
-      console.warn(`TUI native dependency download failed transiently; retry ${attempt}/2`)
-      await delay(attempt * 500)
+      const waitMs = DOWNLOAD_RETRY_DELAYS_MS[attempt - 1]
+      if (waitMs === undefined || !transientNativeDownload(error)) throw error
+      console.warn(
+        `TUI native dependency download failed transiently; retry ${attempt}/${DOWNLOAD_RETRY_DELAYS_MS.length} in ${waitMs}ms`,
+      )
+      await delay(waitMs)
     }
   }
 }

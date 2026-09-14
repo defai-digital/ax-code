@@ -232,6 +232,12 @@ jobs:
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build
 
+      - name: Cache manifest-verified TUI native dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .internal/reports/testing/native-cache
+          key: ax-tui-native-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}
+
       - name: Install deterministic search dependency
         shell: bash
         run: |
