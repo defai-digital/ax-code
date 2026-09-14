@@ -187,6 +187,8 @@ function commandWord(segment: string) {
   return { value: current.value, rest: words.slice(index + 1) }
 }
 
+const SHELL_VALUE_OPTIONS = new Set(["-o", "-O", "-W", "--rcfile", "--init-file"])
+
 function dashCScript(args: ShellWord[]) {
   for (let index = 0; index < args.length; index++) {
     const value = args[index]!.value
@@ -196,7 +198,13 @@ function dashCScript(args: ShellWord[]) {
       if (args[next]?.value === "--") next++
       return args[next]?.value
     }
-    if (!value.startsWith("-")) return undefined
+    if (value.startsWith("--rcfile=") || value.startsWith("--init-file=")) continue
+    if (SHELL_VALUE_OPTIONS.has(value)) {
+      index++
+      continue
+    }
+    if (value.startsWith("-")) continue
+    return undefined
   }
   return undefined
 }
@@ -335,6 +343,12 @@ function commandSubstitutions(input: string) {
         index = next
         continue
       }
+      if (char === "`") {
+        const [inner, next] = readBacktick(input, index + 1)
+        found.push(inner)
+        index = next
+        continue
+      }
       index++
       continue
     }
@@ -352,6 +366,10 @@ function commandSubstitutions(input: string) {
       index += 2
       continue
     }
+    if (char === "#" && (index === 0 || /[\s;&|<>()]/.test(input[index - 1]!))) {
+      while (index < input.length && input[index] !== "\n") index++
+      continue
+    }
     if (char === "$" && input[index + 1] === "(") {
       const [inner, next] = readBalancedParen(input, index + 2)
       found.push(inner)
@@ -359,23 +377,29 @@ function commandSubstitutions(input: string) {
       continue
     }
     if (char === "`") {
-      index++
-      let inner = ""
-      while (index < input.length && input[index] !== "`") {
-        if (input[index] === "\\" && index + 1 < input.length) {
-          inner += input[index + 1]
-          index += 2
-          continue
-        }
-        inner += input[index++]
-      }
-      if (index < input.length) index++
+      const [inner, next] = readBacktick(input, index + 1)
       found.push(inner)
+      index = next
       continue
     }
     index++
   }
   return found
+}
+
+function readBacktick(input: string, start: number): [string, number] {
+  let inner = ""
+  let index = start
+  while (index < input.length && input[index] !== "`") {
+    if (input[index] === "\\" && index + 1 < input.length) {
+      inner += input[index + 1]
+      index += 2
+      continue
+    }
+    inner += input[index++]
+  }
+  if (index < input.length) index++
+  return [inner, index]
 }
 
 function readBalancedParen(input: string, start: number): [string, number] {
