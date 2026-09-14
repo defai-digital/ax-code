@@ -10,6 +10,7 @@ import {
   MATRIX_RAIN_MIN_DURATION_MS,
   MATRIX_RAIN_ON_START_DEFAULT,
   advanceMatrixRain,
+  bindHiddenTerminalCursor,
   completeStartupRain,
   createMatrixRain,
   initialStartupRainPhase,
@@ -208,6 +209,53 @@ describe("matrix rain auto-play gate", () => {
     expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: false })).toBe(false)
     expect(shouldStopMatrixRain({ dialogOpen: true, hasSelection: false })).toBe(true)
     expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: true })).toBe(true)
+  })
+})
+
+describe("matrix rain cursor hide", () => {
+  test("hides the terminal cursor after each frame and restores on unbind", () => {
+    const calls: Array<{ kind: string; args: unknown[] }> = []
+    const post: Array<(buffer: unknown, deltaTime: number) => void> = []
+    const renderer = {
+      setCursorPosition(x: number, y: number, visible?: boolean) {
+        calls.push({ kind: "cursor", args: [x, y, visible] })
+      },
+      addPostProcessFn(fn: (buffer: unknown, deltaTime: number) => void) {
+        post.push(fn)
+      },
+      removePostProcessFn(fn: (buffer: unknown, deltaTime: number) => void) {
+        const index = post.indexOf(fn)
+        if (index >= 0) post.splice(index, 1)
+      },
+      requestRender() {
+        calls.push({ kind: "render", args: [] })
+      },
+    }
+
+    const unbind = bindHiddenTerminalCursor(renderer)
+    expect(calls).toEqual([
+      { kind: "cursor", args: [0, 0, false] },
+      { kind: "render", args: [] },
+    ])
+    expect(post).toHaveLength(1)
+
+    calls.length = 0
+    post[0]?.({}, 16)
+    expect(calls).toEqual([{ kind: "cursor", args: [0, 0, false] }])
+
+    calls.length = 0
+    unbind()
+    expect(post).toHaveLength(0)
+    expect(calls).toEqual([{ kind: "render", args: [] }])
+  })
+
+  test("both overlays hide the cursor while they cover the screen", () => {
+    const src = readFileSync(
+      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/matrix-rain.tsx"),
+      "utf8",
+    )
+    expect(src).toContain("bindHiddenTerminalCursor")
+    expect(src.match(/^\s+useHiddenTerminalCursor\(\)$/gm)?.length).toBe(2)
   })
 })
 

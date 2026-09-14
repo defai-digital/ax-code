@@ -274,3 +274,27 @@ export function startupRainCoversChrome(phase: StartupRainPhase): boolean {
 export function shouldStopMatrixRain(input: { dialogOpen: boolean; hasSelection: boolean }): boolean {
   return input.dialogOpen || input.hasSelection
 }
+
+/** Renderer surface used to hide the terminal cursor while rain covers the screen. */
+export interface MatrixRainCursorRenderer {
+  setCursorPosition(x: number, y: number, visible?: boolean): void
+  addPostProcessFn(fn: (buffer: unknown, deltaTime: number) => void): void
+  removePostProcessFn(fn: (buffer: unknown, deltaTime: number) => void): void
+  requestRender(): void
+}
+
+/**
+ * Hide the focused prompt's terminal cursor for as long as the overlay is up.
+ * The textarea stays focused (keys still reach it); the overlay just wins the
+ * cursor bit after each frame's renderables run.
+ */
+export function bindHiddenTerminalCursor(renderer: MatrixRainCursorRenderer): () => void {
+  const hide = () => renderer.setCursorPosition(0, 0, false)
+  renderer.addPostProcessFn(hide)
+  hide()
+  renderer.requestRender()
+  return () => {
+    renderer.removePostProcessFn(hide)
+    renderer.requestRender()
+  }
+}

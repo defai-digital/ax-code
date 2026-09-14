@@ -1,15 +1,24 @@
-import { For, createSignal, onCleanup } from "solid-js"
+import { For, createSignal, onCleanup, onMount } from "solid-js"
 import { RGBA } from "ax-tui"
-import { useKeyboard, useTerminalDimensions } from "ax-tui/solid"
+import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import {
   MATRIX_RAIN_DURATION_MS,
   MATRIX_RAIN_TICK_MS,
+  bindHiddenTerminalCursor,
   createMatrixRain,
   matrixRainRows,
   tickMatrixRain,
   type MatrixRainState,
 } from "./matrix-rain-view-model"
+
+function useHiddenTerminalCursor() {
+  const renderer = useRenderer()
+  onMount(() => {
+    const unbind = bindHiddenTerminalCursor(renderer)
+    onCleanup(unbind)
+  })
+}
 
 // Brightness ramp: index 0 is blank, index MATRIX_RAIN_LEVELS is the head.
 // Deliberately a small fixed palette so consecutive cells collapse into few
@@ -26,6 +35,7 @@ const BACKGROUND = RGBA.fromInts(0, 0, 0)
 
 /** Opaque cover so the main chrome never paints before startup rain. */
 export function MatrixRainCover() {
+  useHiddenTerminalCursor()
   const dimensions = useTerminalDimensions()
   return (
     <box
@@ -41,6 +51,7 @@ export function MatrixRainCover() {
 }
 
 export function MatrixRain(props: { durationMs?: number; onDone: () => void }) {
+  useHiddenTerminalCursor()
   const dimensions = useTerminalDimensions()
   const durationMs = props.durationMs ?? MATRIX_RAIN_DURATION_MS
 
