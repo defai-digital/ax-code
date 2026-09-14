@@ -340,6 +340,7 @@ export namespace Log {
       .filter((file) => isManagedLogName(path.basename(file)))
       .sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
 
+    const filesByName = new Map(files.map((file) => [path.basename(file), file]))
     const logs = files.filter((file) => !path.basename(file).endsWith(".json.log"))
     const keepLogs = new Set(logs.slice(-keep))
     const newest = logs[logs.length - 1]
@@ -347,9 +348,8 @@ export namespace Log {
 
     for (const file of files) {
       const name = path.basename(file)
-      const companion = name.endsWith(".json.log")
-        ? path.join(path.dirname(file), `${name.slice(0, -".json.log".length)}.log`)
-        : file
+      const companionName = name.endsWith(".json.log") ? `${name.slice(0, -".json.log".length)}.log` : name
+      const companion = filesByName.get(companionName) ?? file
       const retained = keepLogs.has(companion)
       let empty = false
       try {

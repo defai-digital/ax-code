@@ -127,6 +127,7 @@ async function serveNode(opts: ServeOptions): Promise<ServerHandle> {
       // and an EventEmitter 'error' with no listener is an uncaught exception
       // that would take down every live session.
       httpServer.removeListener("error", onError)
+      // @scan-suppress race_scan
       httpServer.on("error", (error) => {
         log.warn("http server error after listen", { error })
       })

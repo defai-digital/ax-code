@@ -46,20 +46,21 @@ export async function listenIpc(opts: IpcServerOptions): Promise<IpcServerHandle
   })
 
   await new Promise<void>((resolve, reject) => {
+    function onError(err: Error) {
+      reject(err)
+    }
+    server.once("error", onError)
     server.listen(socketPath, () => {
-      // Bind failures are routed to `reject` above. Keep a listener afterwards
-      // so a later server-level 'error' is logged instead of crashing.
+      // Bind failures already used once("error"). Keep a listener afterwards so
+      // a later server-level 'error' is logged instead of crashing.
       server.off("error", onError)
+      // @scan-suppress race_scan
       server.on("error", (error) => {
         log.error("ipc server error after listen", { error })
       })
       onListening?.(socketPath)
       resolve()
     })
-    server.once("error", onError)
-    function onError(err: Error) {
-      reject(err)
-    }
   })
 
   return {
