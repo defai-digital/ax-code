@@ -781,6 +781,105 @@ describe("SessionGoal", () => {
     })
   })
 
+  test("recovers goal binding after a transient initial storage read failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({ sessionID: session.id, objective: "finish the durable goal" })
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+        let streams = 0
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async () => {
+          streams++
+          if (streams >= 2) {
+            await SessionGoal.setStatus({ sessionID: session.id, status: "complete" })
+          }
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: `text_${streams}` }
+              yield { type: "text-delta", id: `text_${streams}`, text: `turn ${streams}` }
+              yield { type: "text-end", id: `text_${streams}` }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any
+        }) as any)
+
+        const getSpy = vi.spyOn(SessionGoal, "get").mockRejectedValueOnce(new Error("transient storage read"))
+        try {
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: model.providerID, modelID: model.id },
+            parts: [{ type: "text", text: "start work" }],
+          })
+
+          expect(streamSpy?.mock.calls.length ?? 0).toBeGreaterThanOrEqual(2)
+          expect((await SessionGoal.get(session.id))?.status).toBe("complete")
+        } finally {
+          getSpy.mockRestore()
+        }
+        await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("prose-only active goal recovers then pauses before the global ceiling", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await SessionGoal.create({ sessionID: session.id, objective: "finish the durable goal" })
+        modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+        let streams = 0
+        streamSpy = vi.spyOn(LLM, "stream").mockImplementation((async () => {
+          streams++
+          return {
+            fullStream: (async function* () {
+              yield { type: "start" }
+              yield { type: "start-step" }
+              yield { type: "text-start", id: `text_${streams}` }
+              yield { type: "text-delta", id: `text_${streams}`, text: `turn ${streams}` }
+              yield { type: "text-end", id: `text_${streams}` }
+              yield {
+                type: "finish-step",
+                finishReason: "stop",
+                usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+              }
+              yield { type: "finish" }
+            })(),
+          } as any
+        }) as any)
+
+        await SessionPrompt.prompt({
+          sessionID: session.id,
+          agent: "build",
+          model: { providerID: model.providerID, modelID: model.id },
+          parts: [{ type: "text", text: "start work" }],
+        })
+
+        expect(
+          (await Session.messages({ sessionID: session.id })).filter(
+            (m) => m.info.role === "assistant" && !m.info.summary,
+          ),
+        ).toHaveLength(4)
+        expect((await SessionGoal.get(session.id))?.status).toBe("paused")
+
+        await Session.remove(session.id)
+      },
+    })
+  })
+
   test("/goal resume restarts the prompt loop after a pause", async () => {
     // Regression: resume is an activation that flips status back to "active",
     // so it must re-enter the prompt loop the same way /goal <objective>

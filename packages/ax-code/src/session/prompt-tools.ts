@@ -218,6 +218,7 @@ interface ResolveToolsInput {
   bypassAgentCheck: boolean
   messages: MessageV2.WithParts[]
   isolation?: Isolation.State
+  goalBinding?: { created: number | undefined }
 }
 
 export function shouldBypassAgentCheck(parts: MessageV2.Part[] | undefined): boolean {
@@ -351,6 +352,7 @@ export async function estimateRegistryToolSchemaTokens(input: {
  */
 export async function resolveTools(input: ResolveToolsInput) {
   using _ = log.time("resolveTools")
+  const boundGoal = input.goalBinding ? { ...input.goalBinding } : undefined
   const tools: Record<string, AITool> = {}
   const isolation =
     input.isolation ?? Isolation.resolve((await Config.get()).isolation, Instance.directory, Instance.worktree)
@@ -380,6 +382,12 @@ export async function resolveTools(input: ResolveToolsInput) {
     exposeDispatcher = false,
   ): Tool.Context => ({
     sessionID: input.session.id,
+    goalBinding: boundGoal,
+    onGoalCreated: input.goalBinding
+      ? (created) => {
+          input.goalBinding!.created = created
+        }
+      : undefined,
     // The AI SDK normally passes an AbortSignal, but `abortSignal` is
     // typed as optional. Fall back to a fresh never-firing controller
     // signal so tools that read `context.abort.aborted` /

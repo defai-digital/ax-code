@@ -5,6 +5,8 @@ import { toErrorMessage } from "../util/error-message"
 import { withTimeout } from "../util/timeout"
 import { asRecordOrUndefined } from "../util/record"
 import { GoalPlan } from "./goal-plan"
+import { goalPlanningContext } from "./goal-planning-context"
+import type { GoalContextPart } from "./goal-planning-context"
 import { GoalPlanBaseline } from "./goal-plan-baseline"
 import type { SessionID } from "./schema"
 import type { ModelID, ProviderID } from "../provider/schema"
@@ -25,13 +27,22 @@ export namespace GoalPlanWriter {
     sessionID: SessionID
     objective: string
     model?: { providerID: ProviderID; modelID: ModelID }
+    variant?: string
+    abort?: AbortSignal
+    contextParts?: readonly GoalContextPart[]
+    context?: string
   }
 
   export type WriteFn = (input: Input) => Promise<string>
 
   const state = Instance.state(() => ({
     write: defaultWrite as WriteFn,
+    objectives: new Map<SessionID, string>(),
   }))
+
+  export function objectiveFor(sessionID: SessionID) {
+    return state().objectives.get(sessionID)
+  }
 
   export function setWrite(fn: WriteFn) {
     state().write = fn
@@ -42,7 +53,11 @@ export namespace GoalPlanWriter {
   }
 
   export async function write(input: Input) {
-    return state().write(input)
+    input.abort?.throwIfAborted()
+    const { Session } = await import(".")
+    const context =
+      input.context ?? goalPlanningContext(await Session.messages({ sessionID: input.sessionID }), input.contextParts)
+    return state().write({ ...input, context })
   }
 
   export function stubWrite(objective = "complete the requested work"): WriteFn {
@@ -55,6 +70,8 @@ export namespace GoalPlanWriter {
     const { Provider } = await import("../provider/provider")
 
     const model = input.model ?? (await Provider.defaultModel())
+    const parentContext =
+      input.context ?? goalPlanningContext(await Session.messages({ sessionID: input.sessionID }), input.contextParts)
     const gitContext = await GoalPlanBaseline.snapshot(Instance.directory)
       .then((snap) => GoalPlanBaseline.promptContext(snap))
       .catch(() => undefined)
@@ -73,23 +90,34 @@ export namespace GoalPlanWriter {
         submit_goal_plan: "allow",
       }),
     })
+    const cancel = () => {
+      void SessionPrompt.cancel(child.id).catch(() => undefined)
+    }
+    input.abort?.addEventListener("abort", cancel, { once: true })
+    state().objectives.set(child.id, input.objective)
     try {
+      input.abort?.throwIfAborted()
       await withTimeout(
         SessionPrompt.prompt({
           sessionID: child.id,
           agent: WRITER_AGENT,
           agentRouting: "preserve",
           model,
+          variant: input.variant,
           parts: [
             {
               type: "text",
-              text: GoalPlanBaseline.writerUserText(input.objective, gitContext),
+              text: GoalPlanBaseline.writerUserText(
+                input.objective,
+                [gitContext, parentContext].filter(Boolean).join("\n\n"),
+              ),
             },
           ],
         }),
         WRITER_TIMEOUT_MS,
         "Goal plan writer timed out",
       )
+      input.abort?.throwIfAborted()
       const markdown = await extractSubmittedPlan(child.id)
       if (!markdown) {
         throw new GoalPlan.Error(
@@ -102,6 +130,7 @@ export namespace GoalPlanWriter {
       await SessionPrompt.cancel(child.id).catch((cancelError) => {
         log.warn("failed to cancel goal plan writer", { error: toErrorMessage(cancelError) })
       })
+      input.abort?.throwIfAborted()
       if (error instanceof GoalPlan.Error) throw error
       // The deadline can fire while the writer is winding down after a
       // successful submit_goal_plan (the loop only ends when the model stops
@@ -113,6 +142,9 @@ export namespace GoalPlanWriter {
         "writer",
         `Goal plan writer failed: ${toErrorMessage(error)}. The goal is paused — /goal resume retries planning, or /goal clear to discard.`,
       )
+    } finally {
+      input.abort?.removeEventListener("abort", cancel)
+      state().objectives.delete(child.id)
     }
   }
 

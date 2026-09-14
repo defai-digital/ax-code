@@ -66,6 +66,8 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       prepared = await GoalPlanOrchestration.resumeWithPlan({
         sessionID: input.sessionID,
         model,
+        contextParts: input.parts,
+        variant: input.variant,
       })
     } catch (error) {
       return goalControlMessage(input, toErrorMessage(error, "Goal command failed."))
@@ -84,6 +86,51 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
             objective: prepared.goal.objective,
             path: prepared.path,
           }),
+        },
+        ...(input.parts ?? []),
+      ],
+    })
+  }
+  if (parsed.action === "revise") {
+    const model = await commandModel({ model: input.model, sessionID: input.sessionID })
+    const { SessionPrompt } = await import("./prompt")
+    let prepared: Awaited<ReturnType<typeof GoalPlanOrchestration.revise>>
+    try {
+      const target = await GoalPlanOrchestration.revisionTarget(input.sessionID, parsed.correction)
+      await SessionPrompt.cancel(input.sessionID)
+      prepared = await GoalPlanOrchestration.revise({
+        expectedCreated: target.existing.time.created,
+        sessionID: input.sessionID,
+        correction: parsed.correction,
+        model,
+        contextParts: input.parts,
+        variant: input.variant,
+      })
+    } catch (error) {
+      return goalControlMessage(
+        input,
+        toErrorMessage(error, "Goal revision failed; the previous contract is retained."),
+      )
+    }
+    await goalControlMessage(
+      input,
+      [
+        "Goal plan revised. Previous contract and receipts are retained; all checks need fresh receipts for this revision.",
+        `Previous plan: ${prepared.revision?.previousPath}`,
+        `Current plan: ${prepared.path}`,
+        ...(prepared.revision?.changes.length ? prepared.revision.changes : ["Acceptance criteria are unchanged."]),
+      ].join("\n"),
+    )
+    return prompt({
+      sessionID: input.sessionID,
+      agent: input.agent,
+      model,
+      variant: input.variant,
+      system: input.system,
+      parts: [
+        {
+          type: "text",
+          text: GoalPlanOrchestration.implementerPrompt({ objective: prepared.goal.objective, path: prepared.path }),
         },
         ...(input.parts ?? []),
       ],
@@ -108,12 +155,21 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
   const model = await commandModel({ model: input.model, sessionID: input.sessionID })
   let prepared: Awaited<ReturnType<typeof GoalPlanOrchestration.activate>>
   try {
+    const current = await SessionGoal.get(input.sessionID)
+    if (current?.status === "active" || current?.status === "paused")
+      throw new Error("This session already has an active goal; pause, clear or revise it first")
+    if (parsed.tokenBudget !== undefined && (!Number.isSafeInteger(parsed.tokenBudget) || parsed.tokenBudget <= 0))
+      throw new Error("Goal token budget must be a positive integer")
+    const { SessionPrompt } = await import("./prompt")
+    await SessionPrompt.cancel(input.sessionID)
     prepared = await GoalPlanOrchestration.activate({
       sessionID: input.sessionID,
       objective: parsed.objective,
       tokenBudget: parsed.tokenBudget,
       replace: false,
       model,
+      contextParts: input.parts,
+      variant: input.variant,
     })
   } catch (error) {
     return goalControlMessage(input, toErrorMessage(error, "Goal command failed."))

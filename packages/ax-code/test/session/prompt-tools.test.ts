@@ -680,6 +680,52 @@ describe("session.prompt-tools", () => {
     expect(ask.mock.calls.some(([request]) => request.permission === "isolation_escalation")).toBe(false)
   })
 
+  test("goal binding is frozen per model step while creation advances only future steps", async () => {
+    await using tmp = await tmpdir()
+    const observed: (number | undefined)[] = []
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "probe",
+        description: "goal binding probe",
+        parameters: z.object({ create: z.boolean().optional() }),
+        execute: async (args: { create?: boolean }, ctx: any) => {
+          observed.push(ctx.goalBinding?.created)
+          if (args.create) ctx.onGoalCreated?.(200)
+          return { title: "", output: "ok", metadata: {} }
+        },
+      },
+    ] as any)
+    vi.spyOn(MCP, "tools").mockResolvedValue({})
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const goalBinding = { created: 100 }
+        const input = {
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] },
+          session: { id: "ses_binding", permission: [] },
+          model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } },
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          goalBinding,
+          processor: { message: { id: "msg_binding" }, partFromToolCall: () => undefined },
+        } as any
+        const first = await resolveTools(input)
+        const options = { toolCallId: "binding", abortSignal: new AbortController().signal }
+        await (first.probe.execute as any)({ create: true }, options)
+        expect(goalBinding.created).toBe(200)
+        await (first.probe.execute as any)({}, options)
+        const second = await resolveTools(input)
+        await (second.probe.execute as any)({}, options)
+        expect(observed).toEqual([100, 100, 200])
+      },
+    })
+  })
+
   test("does not expose the Batch dispatcher capability to ordinary tools", async () => {
     await using tmp = await tmpdir()
     let exposed: unknown

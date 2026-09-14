@@ -1,4 +1,5 @@
 import z from "zod"
+import { GoalPlanWriter } from "@/session/goal-plan-writer"
 import { GoalPlan } from "@/session/goal-plan"
 import { GoalAssurance } from "@/session/goal-assurance"
 import { GoalPlanBaseline } from "@/session/goal-plan-baseline"
@@ -105,6 +106,8 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
 
 async function objectiveFor(sessionID: SessionID) {
   try {
+    const writerObjective = GoalPlanWriter.objectiveFor(sessionID)
+    if (writerObjective !== undefined) return writerObjective
     const { Session } = await import("@/session")
     const session = await Session.get(sessionID)
     const goal = await SessionGoal.get(session.parentID ?? session.id)

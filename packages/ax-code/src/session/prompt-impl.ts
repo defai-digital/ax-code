@@ -19,6 +19,8 @@ import { ScopedFlag } from "../flag/scoped"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
 import { GoalPlan } from "./goal-plan"
+import { goalCheckpoint } from "./goal-checkpoint"
+import { goalProgress } from "./goal-progress"
 import { Config } from "@/config/config"
 import { fn } from "@/util/fn"
 import { assertWorkSessionSendable } from "./work-session"
@@ -439,7 +441,12 @@ export namespace SessionPrompt {
     // Seed the budget wrap-up state from the durable goal status (see the
     // declaration comment). A transient read failure seeds "none", which at
     // worst repeats one wrap-up turn — never silently drops a goal.
-    const initialGoal = await SessionGoal.get(sessionID).catch(() => undefined)
+    let goalBindingReadFailed = false
+    const initialGoal = await SessionGoal.get(sessionID).catch(() => {
+      goalBindingReadFailed = true
+      return undefined
+    })
+    const goalBinding = { created: initialGoal?.time.created }
     if (initialGoal?.status === "budget_limited") goalBudgetWrapUp = "concluded"
     const {
       sessionStepLimit,
@@ -669,7 +676,24 @@ export namespace SessionPrompt {
       // A transient read failure must degrade to "no goal this step" (the loop
       // re-reads next iteration) rather than abort the whole long run, matching
       // the seeded reads below.
-      const activeGoal = await SessionGoal.get(sessionID).catch(() => undefined)
+      let goalReadSucceeded = true
+      const activeGoal = await SessionGoal.get(sessionID).catch(() => {
+        goalReadSucceeded = false
+        return undefined
+      })
+      if (goalReadSucceeded && goalBindingReadFailed) {
+        goalBinding.created = activeGoal?.time.created
+        goalBindingReadFailed = false
+      }
+      if (goalReadSucceeded && goalBinding.created !== activeGoal?.time.created) {
+        Session.publishError({
+          sessionID,
+          message:
+            "The goal changed outside this run. The old run stopped without updating the replacement; resume the current goal to continue.",
+        })
+        reason = "aborted"
+        break
+      }
       // Re-read the flag every iteration: Super-Long state is already
       // observed live (the routes flip env-backed state mid-run), so
       // autonomous must be too — otherwise a mid-run "Manual" toggle has no
@@ -1290,6 +1314,7 @@ export namespace SessionPrompt {
               model,
               tools: lastUser.tools,
               processor,
+              goalBinding,
               bypassAgentCheck: shouldBypassAgentCheck(lastUserParts),
               messages: msgs,
               isolation: resolvePromptIsolationPolicy({
@@ -1778,8 +1803,43 @@ export namespace SessionPrompt {
           reason = "completed"
           break
         }
+        const goalMessages = goal?.status === "active" ? await Session.messages({ sessionID }) : msgs
+        const progress = goal?.status === "active" ? goalProgress(goalMessages, goal.time.created) : undefined
         const goalGuidance =
-          goal && goal.status !== "complete" ? GoalPlan.continuationGuidance(sessionID, goal.time.created) : undefined
+          goal && goal.status !== "complete"
+            ? ((await goalCheckpoint(goal, goalMessages)) ?? { context: "" })
+            : undefined
+        if (progress?.action === "pause" && goal?.status === "active") {
+          try {
+            await SessionGoal.setStatus({
+              sessionID,
+              status: "paused",
+              expected: { created: goal.time.created, status: goal.status, updated: goal.time.updated },
+            })
+          } catch (error) {
+            const current = await SessionGoal.get(sessionID)
+            if (
+              current?.time.created === goal.time.created &&
+              current.status === goal.status &&
+              current.time.updated === goal.time.updated
+            )
+              throw error
+            reason = "aborted"
+            break
+          }
+          Session.publishError({
+            sessionID,
+            message:
+              "Goal paused after repeated finished turns without new tool evidence despite recovery guidance. Work is unfinished. Review the latest check status and resume with /goal resume.",
+          })
+          reason = "stalled"
+          break
+        }
+        if (progress?.action === "recover" && goalGuidance) {
+          goalGuidance.context =
+            (goalGuidance.context ?? "") +
+            "\nGoal recovery: recent finished turns produced no new successful tool evidence. Use the next checklist step and check status to choose a concrete action; change the failed strategy. If the task is analysis, record new source evidence or finish with acceptanceEvidence. Do not repeat promises or rewrite todos as progress."
+        }
         const goalTransition = handlePromptLoopGoalContinuation({
           sessionID,
           goal: goal

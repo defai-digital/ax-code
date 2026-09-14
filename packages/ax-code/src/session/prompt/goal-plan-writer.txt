@@ -8,7 +8,7 @@ is submit_goal_plan.
 
 ## Inputs
 
-OBJECTIVE is provided in the user message. If it names a specific product,
+OBJECTIVE is provided in the user message. PARENT TASK CONTEXT contains recent user requirements and attachment references. Preserve those constraints and apply newer explicit corrections. Omitted records or unavailable attachment content are unknowns, not permission to invent requirements. If it names a specific product,
 algorithm, protocol, or "clone of X" and web access is available, research the
 defining mechanics before writing criteria. A generic archetype ("a todo app")
 does not need web research.
