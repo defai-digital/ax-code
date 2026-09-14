@@ -1114,7 +1114,6 @@ interface AutoMethodProps {
   authorization: ProviderAuthAuthorization
 }
 function AutoMethod(props: AutoMethodProps) {
-  const { t } = useLanguage()
   const { theme } = useTheme()
   const sdk = useSDK()
   const dialog = useDialog()
@@ -1251,7 +1250,6 @@ interface ApiMethodProps {
   title: string
 }
 function ApiMethod(props: ApiMethodProps) {
-  const { t } = useLanguage()
   const dialog = useDialog()
   const sdk = useSDK()
   const sync = useSync()
