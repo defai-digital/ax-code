@@ -33,7 +33,7 @@ import { isNonEmptyRecord } from "@/util/record"
 import { SuperLongPolicy } from "./super-long-policy"
 import { SuperLongRuntime } from "./super-long-runtime"
 import { longAgentProfileForModel } from "@/provider/agent-optimization-profile"
-import { getModelCapabilities } from "@/provider/model-capabilities"
+import { findRegisteredModelCapabilities, getModelCapabilities } from "@/provider/model-capabilities"
 import { PromptCachePolicy } from "@/provider/prompt-cache-policy"
 import { LongAgentContextPacker } from "@/context/long-agent-packer"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
@@ -81,6 +81,8 @@ export namespace LLM {
     abort: AbortSignal
     messages: ModelMessage[]
     small?: boolean
+    /** Structured failure count captured before synthetic request reminders. */
+    toolFailureCount?: number
     tools: Record<string, Tool>
     retries?: number
     toolChoice?: "auto" | "required" | "none"
@@ -167,10 +169,12 @@ export namespace LLM {
             `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
           )
 
+    const toolFailureCount = input.toolFailureCount ?? ReasoningPolicy.failureCount(input.messages)
     const reasoningPolicyDecision = ReasoningPolicy.decide({
       small: input.small,
       autonomous: ScopedFlag.autonomous(),
       requestedDepth: input.user.requestedDepth,
+      failureCount: toolFailureCount,
       userVariant: input.user.variant,
       model: input.model,
       agent: input.agent,
@@ -308,16 +312,19 @@ export namespace LLM {
       input.model,
       input.small ? ProviderTransform.applySmallOverrides(input.model, merged, provider?.options ?? {}) : merged,
     )
-    // Phase 4: build and inject a long-agent context pack for Super-Long runs.
-    // The token budget follows the model profile (wide for Qwen3.7-Max,
-    // narrow otherwise) — the pack itself is provider-agnostic prompt text.
+    // Context packing is prompt text, independent of cache transport and
+    // marathon deadlines. Explicit Super-Long still supports narrow models.
     // Keep existing system instructions outside the pack to avoid duplicating
     // the provider prompt.
-    if (superLongEnabled) {
+    const contextPackEnabled =
+      superLongEnabled || (!input.small && autonomousEnabled && longAgentProfile.contextPackingBudget === "wide")
+    if (contextPackEnabled) {
       const task = extractLastUserTask(input.messages)
       const touchedFiles = extractTouchedFiles(input.messages)
       const packResult = LongAgentContextPacker.pack({
-        tokenBudget: longAgentProfile.contextPackTokenBudget,
+        // This pack supplements history. Never duplicate a context-window-sized
+        // task into the request, even when the profile permits a wide pack.
+        tokenBudget: Math.min(longAgentProfile.contextPackTokenBudget, 2_048),
         task: task ?? undefined,
         touchedFiles,
         toolConstraints:
@@ -472,6 +479,20 @@ export namespace LLM {
         model: providerModelKey({ providerID: input.model.providerID, modelID: input.model.id }),
         messageCount: input.messages.length,
         temperature: params.temperature,
+        capabilityResolution: {
+          boundary: "policy-selection" as const,
+          protocol: input.model.api.npm,
+          registry: findRegisteredModelCapabilities(input.model.id, input.model.providerID)
+            ? ("matched" as const)
+            : ("unmatched" as const),
+          promptCacheEligible,
+          preserveThinkingEligible: longAgentProfile.preserveThinkingEligible,
+          contextWindow: input.model.limit.context,
+          contextPackEnabled,
+          superLongEnabled,
+          reasoning: ReasoningPolicy.diagnostics(reasoningPolicyDecision),
+          consecutiveToolFailures: toolFailureCount,
+        },
       }
       try {
         const provenance = await RequestProvenance.build({

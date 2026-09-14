@@ -5,6 +5,7 @@ import z from "zod"
 import { Process } from "@/util/process"
 import { Hash } from "@/util/hash"
 import { parseJsonStrict } from "@/util/json-value"
+import { harnessMetrics } from "./harness-metrics"
 import { HarnessEval } from "./harness-eval"
 
 export namespace HarnessCapture {
@@ -56,15 +57,35 @@ export namespace HarnessCapture {
     .strict()
   export type Manifest = z.infer<typeof Manifest>
 
-  async function execute(argv: string[], cwd: string, env: NodeJS.ProcessEnv, timeoutMs: number, abort?: AbortSignal) {
+  async function execute(
+    argv: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+    timeoutMs: number,
+    abort?: AbortSignal,
+    capture = false,
+  ) {
     abort?.throwIfAborted()
     const child = Process.spawn(argv, {
       cwd,
       env,
       detached: process.platform !== "win32",
-      stdout: "ignore",
+      stdout: capture ? "pipe" : "ignore",
       stderr: "ignore",
     })
+    const metrics = capture ? harnessMetrics() : undefined
+    child.stdout?.on("data", (chunk: Buffer) => metrics?.write(chunk))
+    let streamEnded = !capture
+    const drained = child.stdout
+      ? new Promise<void>((resolve) => {
+          child.stdout!.once("end", () => {
+            streamEnded = true
+            resolve()
+          })
+          child.stdout!.once("close", resolve)
+          child.stdout!.once("error", () => resolve())
+        })
+      : Promise.resolve()
     let outcome: "timeout" | "cancelled" | undefined
     let killing: Promise<void> | undefined
     const stop = (reason: "timeout" | "cancelled") => {
@@ -80,7 +101,12 @@ export namespace HarnessCapture {
     try {
       const code = await child.exited
       await killing
-      return { outcome: outcome ?? (code === 0 ? ("completed" as const) : ("failed" as const)), code }
+      await drained
+      return {
+        outcome: outcome ?? (code === 0 ? ("completed" as const) : ("failed" as const)),
+        code,
+        metrics: metrics?.finish(streamEnded && !outcome),
+      }
     } finally {
       clearTimeout(timer)
       abort?.removeEventListener("abort", onAbort)
@@ -174,28 +200,30 @@ export namespace HarnessCapture {
             })
             const start = performance.now()
             let outcome: HarnessEval.Run["outcome"] = "failed"
+            let metrics: ReturnType<ReturnType<typeof harnessMetrics>["finish"]> = { metricsStatus: "unavailable" }
             try {
-              outcome = (
-                await execute(
-                  [
-                    ...manifest.command,
-                    "run",
-                    "--dir",
-                    root,
-                    "--model",
-                    manifest.model,
-                    "--sandbox",
-                    "workspace-write",
-                    "--format",
-                    "json",
-                    task.prompt,
-                  ],
+              const attempt = await execute(
+                [
+                  ...manifest.command,
+                  "run",
+                  "--dir",
                   root,
-                  env,
-                  manifest.timeoutMs,
-                  options.abort,
-                )
-              ).outcome
+                  "--model",
+                  manifest.model,
+                  "--sandbox",
+                  "workspace-write",
+                  "--format",
+                  "json",
+                  task.prompt,
+                ],
+                root,
+                env,
+                manifest.timeoutMs,
+                options.abort,
+                true,
+              )
+              outcome = attempt.outcome
+              metrics = attempt.metrics ?? metrics
             } catch (error) {
               if (options.abort?.aborted) outcome = "cancelled"
               // Spawn failures are retained as failed samples, not dropped pairs.
@@ -224,6 +252,7 @@ export namespace HarnessCapture {
               verified,
               elapsedMs,
               verificationMs,
+              ...metrics,
             })
             runs.push(run)
             await options.record?.(run)

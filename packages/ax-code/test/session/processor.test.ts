@@ -1855,3 +1855,64 @@ describe("session.processor", () => {
     })
   })
 })
+
+test("keeps persisted tool failure signals when tail reminders append a user message", async () => {
+  await using tmp = await tmpdir({ git: true, config: { experimental: { tail_reminders: true } } })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { processor, streamInput } = await createProcessorFixture(tmp.path)
+      await Session.updateParts([
+        {
+          type: "text",
+          id: PartID.ascending(),
+          messageID: streamInput.user.id,
+          sessionID: streamInput.sessionID,
+          text: "Read the file",
+        },
+        {
+          type: "text",
+          id: PartID.ascending(),
+          messageID: streamInput.user.id,
+          sessionID: streamInput.sessionID,
+          text: "Keep working.",
+          synthetic: true,
+          metadata: { axDynamicReminder: true },
+        },
+        ...[0, 1].map((i) => ({
+          type: "tool" as const,
+          id: PartID.ascending(),
+          messageID: processor.message.id,
+          sessionID: streamInput.sessionID,
+          tool: "read",
+          callID: `failed-${i}`,
+          state: { status: "error" as const, input: {}, error: "File missing", time: { start: 1, end: 2 } },
+        })),
+      ])
+      const request = await preparePromptRequest({
+        sessionID: streamInput.sessionID,
+        messages: await Session.messages({ sessionID: streamInput.sessionID }),
+        lastUser: streamInput.user,
+        step: 2,
+        isLastStep: false,
+        agent: streamInput.agent,
+        model,
+        cache: {},
+        structuredPrompt: "",
+        systemOverride: [],
+      })
+      expect(request.requestMessages.at(-1)).toMatchObject({
+        role: "user",
+        content: expect.stringContaining("Keep working."),
+      })
+      expect(request.toolFailureCount).toBe(2)
+      streamSpy = vi.spyOn(LLM, "stream").mockResolvedValue(successfulTextStream())
+      await processor.process({
+        ...streamInput,
+        messages: request.requestMessages,
+        toolFailureCount: request.toolFailureCount,
+      })
+      expect(streamSpy.mock.calls[0][0].toolFailureCount).toBe(2)
+    },
+  })
+})

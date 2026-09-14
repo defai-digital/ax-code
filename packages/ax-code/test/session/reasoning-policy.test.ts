@@ -478,3 +478,65 @@ describe("ReasoningPolicy", () => {
     )
   })
 })
+
+describe("execution-driven recovery", () => {
+  const result = (type: string) => ({
+    role: "tool",
+    content: [{ type: "tool-result", output: { type, value: "tool output" } }],
+  })
+  test("counts consecutive structured failures and respects success and user boundaries", () => {
+    expect(ReasoningPolicy.failureCount([result("error-text"), result("error-json")])).toBe(2)
+    expect(ReasoningPolicy.failureCount([result("error-text"), result("text")])).toBe(0)
+    expect(ReasoningPolicy.failureCount([result("text"), result("error-text")])).toBe(1)
+    expect(ReasoningPolicy.failureCount([result("error-text"), { role: "user", content: "Two tools failed" }])).toBe(0)
+    expect(ReasoningPolicy.failureCount(Array.from({ length: 200 }, () => result("error-text")))).toBe(128)
+  })
+  test("reports unsupported requested effort without inventing wire options", () => {
+    const decision = ReasoningPolicy.decide({
+      model: { capabilities: { reasoning: true }, variants: {} },
+      agent: buildAgent,
+      messages: [],
+      failureCount: 2,
+    })
+    expect(ReasoningPolicy.diagnostics(decision)).toMatchObject({
+      requestedDepth: "deep",
+      selectedDepth: "standard",
+      reason: "repeated_failure",
+      unappliedReason: "unsupported_effort",
+    })
+    expect(decision.options).toEqual({})
+  })
+})
+
+test("a medium-only fallback does not claim deep reasoning was applied", () => {
+  expect(
+    ReasoningPolicy.decide({
+      model: { capabilities: { reasoning: true }, variants: { medium: { reasoningEffort: "medium" } } },
+      agent: buildAgent,
+      messages: [],
+      failureCount: 2,
+    }),
+  ).toMatchObject({
+    depth: "standard",
+    requestedDepth: "deep",
+    unappliedReason: "unsupported_effort",
+    options: { reasoningEffort: "medium" },
+    checkpoint: false,
+  })
+})
+
+test("recovery intent is recorded even when reasoning and variants are unavailable", () => {
+  expect(
+    ReasoningPolicy.decide({
+      model: { capabilities: { reasoning: false } },
+      agent: buildAgent,
+      messages: [],
+      failureCount: 2,
+    }),
+  ).toMatchObject({
+    requestedDepth: "deep",
+    reason: "repeated_failure",
+    unappliedReason: "unsupported_effort",
+    options: {},
+  })
+})

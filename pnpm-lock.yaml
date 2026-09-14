@@ -12,6 +12,9 @@ catalogs:
     "@actions/github":
       specifier: 6.0.1
       version: 6.0.1
+    "@ai-sdk/anthropic":
+      specifier: 3.0.66
+      version: 3.0.66
     "@ai-sdk/provider-utils":
       specifier: 4.0.33
       version: 4.0.33
@@ -463,6 +466,9 @@ importers:
         specifier: "catalog:"
         version: 3.24.5(zod@4.3.6)
     devDependencies:
+      "@ai-sdk/anthropic":
+        specifier: "catalog:"
+        version: 3.0.66(zod@4.3.6)
       "@octokit/webhooks-types":
         specifier: "catalog:"
         version: 7.6.1
@@ -7882,7 +7888,6 @@ snapshots:
       "@ai-sdk/provider": 3.0.8
       "@ai-sdk/provider-utils": 4.0.33(zod@4.3.6)
       zod: 4.3.6
-    optional: true
 
   "@ai-sdk/azure@3.0.51(zod@4.3.6)":
     dependencies:

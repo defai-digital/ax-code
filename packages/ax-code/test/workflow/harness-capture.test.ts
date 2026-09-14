@@ -55,3 +55,81 @@ test("retains timed-out attempts and rejects traversal or already-passing fixtur
     HarnessCapture.run({ ...manifest, tasks: [{ ...task, files: [{ path: "result.txt", content: "correct" }] }] }),
   ).rejects.toThrow("must fail")
 })
+
+test("captures runtime JSON usage from a real child stdout stream", async () => {
+  await using tmp = await tmpdir()
+  const driver = path.join(tmp.path, "metrics.mjs")
+  await fs.writeFile(
+    driver,
+    `console.log(JSON.stringify({ type: 'step_finish', part: { type: 'step-finish', id: 's1', tokens: { input: 17, output: 5, reasoning: 3, cache: { read: 9 } } } }));`,
+  )
+  const report = await HarnessCapture.run({
+    model: "fake/same-model",
+    runtimeRevision: "metrics-fixture",
+    command: [process.execPath, driver],
+    repetitions: 1,
+    arms: [{ name: "a" }, { name: "b" }],
+    tasks: [task],
+  })
+  expect(report.runs).toHaveLength(2)
+  for (const run of report.runs)
+    expect(run).toMatchObject({
+      outcome: "completed",
+      verified: false,
+      metricsStatus: "observed",
+      inputTokens: 17,
+      outputTokens: 5,
+      reasoningTokens: 3,
+      cacheReadTokens: 9,
+      toolCalls: 0,
+      toolErrors: 0,
+    })
+})
+
+test("retains complete usage and tool outcomes from a nonzero process exit", async () => {
+  await using tmp = await tmpdir()
+  const driver = path.join(tmp.path, "failed-metrics.mjs")
+  await fs.writeFile(
+    driver,
+    `console.log(JSON.stringify({ type: 'step_finish', part: { type: 'step-finish', id: 's1', tokens: { input: 17, output: 5, reasoning: 3, cache: { read: 9 } } } })); console.log(JSON.stringify({ type: 'tool_use', part: { type: 'tool', id: 't1', state: { status: 'error' } } })); process.exitCode = 1;`,
+  )
+  const report = await HarnessCapture.run({
+    model: "fake/same-model",
+    runtimeRevision: "failed-metrics-fixture",
+    command: [process.execPath, driver],
+    repetitions: 1,
+    arms: [{ name: "a" }, { name: "b" }],
+    tasks: [task],
+  })
+  for (const run of report.runs)
+    expect(run).toMatchObject({
+      outcome: "failed",
+      verified: false,
+      metricsStatus: "observed",
+      inputTokens: 17,
+      toolCalls: 1,
+      toolErrors: 1,
+    })
+  expect(report.comparison?.baseline.metrics.inputTokens.observedCount).toBe(1)
+})
+
+test("withholds totals when a descendant keeps stdout open after its parent exits", async () => {
+  await using tmp = await tmpdir()
+  const driver = path.join(tmp.path, "inherited-stdout.mjs")
+  await fs.writeFile(
+    driver,
+    `import { spawn } from 'node:child_process'; console.log(JSON.stringify({ type: 'step_finish', part: { type: 'step-finish', id: 's1', tokens: { input: 17, output: 5, reasoning: 3, cache: { read: 9 } } } })); const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 500)'], { stdio: ['ignore', 'inherit', 'ignore'] }); child.unref();`,
+  )
+  const report = await HarnessCapture.run({
+    model: "fake/same-model",
+    runtimeRevision: "stdout-fixture",
+    command: [process.execPath, driver],
+    repetitions: 1,
+    arms: [{ name: "a" }, { name: "b" }],
+    tasks: [task],
+  })
+  for (const run of report.runs) {
+    expect(run).toMatchObject({ outcome: "completed", metricsStatus: "partial" })
+    expect(run).not.toHaveProperty("inputTokens")
+  }
+})

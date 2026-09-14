@@ -1,3 +1,4 @@
+import { ReasoningPolicy } from "../control-plane/reasoning-policy"
 import type { Agent } from "../agent/agent"
 import { NativePerf } from "../perf/native"
 import { Plugin } from "../plugin"
@@ -77,18 +78,21 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
       mediaProjection,
       preserveUserMedia: input.lastUser.id,
     })
-    return [
-      ...modelMessages,
-      ...(projection.reminder ? [{ role: "user" as const, content: projection.reminder }] : []),
-      ...(input.isLastStep
-        ? [
-            {
-              role: "assistant" as const,
-              content: MAX_STEPS,
-            },
-          ]
-        : []),
-    ]
+    return {
+      toolFailureCount: ReasoningPolicy.failureCount(modelMessages),
+      messages: [
+        ...modelMessages,
+        ...(projection.reminder ? [{ role: "user" as const, content: projection.reminder }] : []),
+        ...(input.isLastStep
+          ? [
+              {
+                role: "assistant" as const,
+                content: MAX_STEPS,
+              },
+            ]
+          : []),
+      ],
+    }
   }
   const mediaProjection = input.mediaProjection ?? "normal"
   const [baseSystem, requestMessages] = await Promise.all([
@@ -111,11 +115,12 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
     requestMessagesSource,
     format,
     system,
-    requestMessages,
+    requestMessages: requestMessages.messages,
+    toolFailureCount: requestMessages.toolFailureCount,
     mediaCount: MessageV2.requestMediaCount(requestMessagesSource),
     protectedMediaCount: MessageV2.requestMediaCount(
       requestMessagesSource.filter((message) => message.info.id === input.lastUser.id),
     ),
-    projectMessages: convertMessages,
+    projectMessages: async (mode: MediaProjection.Mode) => (await convertMessages(mode)).messages,
   }
 }

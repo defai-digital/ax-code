@@ -37,9 +37,9 @@ export function classifyTaskForModelRoute(input: {
 /**
  * Get long-agent profile based on model capabilities.
  *
- * Uses the capability registry to determine the optimal profile:
- * - Models with long-agent support get the "wide" profile (128k context, thinking enabled)
- * - Other models get the "narrow" profile (8k context, thinking disabled)
+ * Uses registered restrictions and observed model metadata for context packing.
+ * Cache and preserved-thinking eligibility still require registry qualification.
+ * Profile budgets describe the extra context pack, not the full conversation limit.
  *
  * This replaces the previous model-specific hardcoding (e.g., `isQwen37MaxModel()`)
  * with a capability-based approach.
@@ -59,7 +59,7 @@ export function longAgentProfileForModel(
     return {
       contextPackingBudget: "wide",
       contextPackTokenBudget: caps.contextWindow >= 128_000 ? 128_000 : 64_000,
-      thinkingEnabled: caps.thinking === "supported" || caps.thinking === "experimental",
+      thinkingEnabled: true,
       preserveThinkingEligible: caps.preserveThinking === "supported" || caps.preserveThinking === "experimental",
       promptCacheEligible: caps.promptCache === "supported" || caps.promptCache === "experimental",
       verificationLoopEnabled: true,

@@ -759,25 +759,25 @@ export function getModelCapabilities(
 }
 
 /**
- * Check if a model supports long-agent optimization.
- *
- * Long-agent optimization requires:
- * - Large context window (>= 64k tokens)
- * - Thinking support (for complex reasoning)
- * - Prompt caching (for efficiency)
- *
- * @param modelId - The model identifier
- * @param providerId - Optional provider ID
- * @returns true if the model supports long-agent optimization
- *
- * @example
- * ```typescript
- * if (supportsLongAgent(modelId, providerId)) {
- *   // Apply long-agent profile
- * }
- * ```
+ * Context packing needs reasoning, tools, and sufficient context, independently
+ * of cache transport support. Positive catalog flags qualify unknown models for
+ * prompt text only; registered restrictions and explicit negative flags win.
  */
 export function supportsLongAgent(modelId: string, providerId?: string, observed?: ObservedModelCapabilities): boolean {
+  const registered = findRegisteredModelCapabilities(modelId, providerId)
+  const caps = getModelCapabilities(modelId, providerId, observed)
+  const available = (state: ModelCapabilities["thinking"]) => state === "supported" || state === "experimental"
+  return (
+    caps.contextWindow >= 64_000 &&
+    observed?.thinking !== false &&
+    observed?.toolCalling !== false &&
+    (registered ? available(caps.thinking) : observed?.thinking === true) &&
+    (registered ? available(caps.toolCalling) : observed?.toolCalling === true)
+  )
+}
+
+/** Preserve the established automatic marathon policy; metadata is not cache qualification. */
+export function supportsSuperLong(modelId: string, providerId?: string, observed?: ObservedModelCapabilities): boolean {
   const caps = getModelCapabilities(modelId, providerId, observed)
   return (
     caps.contextWindow >= 64_000 &&

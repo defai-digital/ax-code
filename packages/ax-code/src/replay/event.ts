@@ -71,6 +71,25 @@ export const LLMRequestEvent = Base.extend({
   reasoningDepth: z.string().optional(),
   variant: z.string().optional(),
   provenanceErrorCode: z.literal("manifest_unavailable").optional(),
+  capabilityResolution: z
+    .object({
+      boundary: z.literal("policy-selection"),
+      protocol: z.string(),
+      registry: z.enum(["matched", "unmatched"]),
+      promptCacheEligible: z.boolean(),
+      preserveThinkingEligible: z.boolean(),
+      contextWindow: z.number().nonnegative(),
+      contextPackEnabled: z.boolean(),
+      superLongEnabled: z.boolean(),
+      consecutiveToolFailures: z.number().int().min(0).max(128),
+      reasoning: z.object({
+        selectedDepth: z.enum(["fast", "standard", "deep", "xdeep"]),
+        requestedDepth: z.enum(["fast", "standard", "deep", "xdeep"]).optional(),
+        reason: z.string().optional(),
+        unappliedReason: z.enum(["explicit_override", "unsupported_effort"]).optional(),
+      }),
+    })
+    .optional(),
 })
 
 export const LLMResponseEvent = Base.extend({

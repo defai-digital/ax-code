@@ -4,7 +4,7 @@ Status: Active
 
 Scope: current-state
 
-Last reviewed: 2026-09-07
+Last reviewed: 2026-09-14
 
 Owner: ax-code runtime
 
@@ -145,3 +145,29 @@ attempts stay in success-rate denominators. Latency medians and paired ratios ar
 success. P95 requires 20 successful observations within a task/model/cohort/arm cell; mixed-cell aggregates omit it.
 The cohort hashes the manifest, but runtime revision and external provider/config/cache conditions still require
 operator control. A small smoke run cannot establish general speed superiority or justify changing defaults.
+
+## Capability selection and recovery diagnostics
+
+Autonomous requests can include a long-agent context pack when the model has at least 64,000 tokens of context,
+reasoning support, and tool support. For models without a registry entry, all three must be declared in the resolved
+model metadata. The supplemental pack has a 2,048-token character-estimate cap; it is not the conversation window. Explicit negative declarations and registered restrictions prevent admission. This prompt-text
+optimization does not establish cache or preserved-thinking compatibility, or change automatic Super-Long deadlines
+and pacing. Those retain their existing qualification and override rules.
+
+Two consecutive structured tool failures after the latest user message (counted before synthetic tail reminders) request deeper reasoning on the next model
+call when a usable effort variant exists. A successful tool result resets the count. Explicit user effort and configured
+reasoning options retain precedence. This changes effort selection, not retry limits or tool permissions.
+
+Local `llm.request` replay events include `capabilityResolution`: protocol, context window, whether a context pack or
+Super-Long mode was selected, consecutive tool failures, and reasoning selection or an unapplied reason.
+`boundary: "policy-selection"` describes AX Code's decision; plugins and provider SDKs can still alter the final request.
+Explicit GPT-6 effort values are preserved; the API requires `low` or higher rather than `none` or `minimal`.
+The event retains request hashes rather than prompt or credential bodies. An absent effort variant does not imply
+that provider-default thinking is disabled.
+
+Paired harness capture reads the CLI's JSON `step_finish` and `tool_use` events for input, output, reasoning and cache-read
+tokens, completed tool calls, and tool errors. Duplicate part IDs count once. `metricsStatus` is `observed`, `partial`, or
+`unavailable`; truncated or malformed streams and interrupted attempts withhold totals. Comparisons report each metric's
+observed and missing run counts and median, including failed attempts where observations exist. Missing values remain
+missing. These counters describe emitted runtime events, not provider billing, child-session usage, or native CLI-internal tools. A complete observed stream with no terminal tool events reports zero tool calls. Oracle
+verification remains the source of task success; usage alone does not establish successful recovery or better quality.

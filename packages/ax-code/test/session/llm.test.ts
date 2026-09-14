@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
-import { tool, type ModelMessage } from "ai"
+import { tool, convertToModelMessages, type ModelMessage } from "ai"
 import z from "zod"
 import { LLM } from "../../src/session/llm"
 import { Instance } from "../../src/project/instance"
@@ -16,7 +16,9 @@ import type { MessageV2 } from "../../src/session/message-v2"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { createStructuredOutputTool } from "../../src/session/prompt-helpers"
 import { SuperLongRuntime } from "../../src/session/super-long-runtime"
+import { LLMRequestEvent } from "../../src/replay/event"
 import { Recorder } from "../../src/replay/recorder"
+import { ScopedFlag } from "../../src/flag/scoped"
 import { RequestProvenance } from "../../src/session/request-provenance"
 
 describe("session.llm.hasToolCalls", () => {
@@ -268,6 +270,181 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 }
 
 describe("session.llm.stream", () => {
+  test("selects GPT-6 through the first-party provider and sends tools to Responses", async () => {
+    const providerID = ProviderID.make("openai")
+    const modelID = ModelID.make("gpt-6-astra")
+    const request = waitRequest(
+      "/responses",
+      new Response('{"error":{"message":"intercepted"}}', {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+    await using tmp = await tmpdir({
+      config: {
+        enabled_providers: [providerID],
+        provider: {
+          [providerID]: {
+            options: { apiKey: "test", baseURL: `${state.server.url.origin}/v1` },
+            models: {
+              [modelID]: {
+                name: "GPT-6 Astra",
+                reasoning: true,
+                tool_call: true,
+                limit: { context: 200_000, output: 32_000 },
+              },
+            },
+          },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const model = await Provider.getModel(providerID, modelID)
+        vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(true)
+        const sessionID = SessionID.make("session-gpt6-wire")
+        const stream = await LLM.stream({
+          sessionID,
+          model,
+          user: {
+            id: MessageID.make("user-gpt6"),
+            sessionID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "test",
+            model: { providerID, modelID },
+          },
+          agent: {
+            name: "test",
+            mode: "primary",
+            options: { store: false },
+            temperature: 0.5,
+            topP: 0.8,
+            permission: [],
+          },
+          messages: [{ role: "user", content: "Read the file" }],
+          system: [],
+          abort: new AbortController().signal,
+          tools: { read: tool({ inputSchema: z.object({}), description: "Read a file" }) },
+        })
+        const errors: unknown[] = []
+        for await (const event of stream.fullStream) if (event.type === "error") errors.push(event.error)
+        expect(errors).toHaveLength(1)
+        const body = (await request).body
+        expect(body.model).toBe(modelID)
+        expect(body.tools).toMatchObject([{ type: "function", name: "read" }])
+        expect(body.reasoning).toEqual({ effort: "high" })
+        expect(body).not.toHaveProperty("forceReasoning")
+        expect(body.include).toContain("reasoning.encrypted_content")
+        expect(body).not.toHaveProperty("temperature")
+        expect(body).not.toHaveProperty("top_p")
+      },
+    })
+  })
+
+  test.each([
+    { failures: 0, variant: undefined, effort: "medium", autonomous: false },
+    { failures: 2, variant: undefined, effort: "high", autonomous: false },
+    { failures: 2, variant: "low", effort: "low", autonomous: false },
+    { failures: 0, variant: undefined, effort: "high", autonomous: true },
+    { failures: 2, variant: undefined, effort: "high", autonomous: false, tail: true },
+    { failures: 0, variant: undefined, effort: "high", autonomous: true, large: true },
+  ])(
+    "sends recovery effort $effort after $failures tool failures (override $variant)",
+    async ({ failures, variant, effort, autonomous, tail, large }) => {
+      vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(autonomous)
+      const providerID = ProviderID.make("recovery-gateway")
+      const modelID = ModelID.make("gpt-6-astra")
+      const request = waitRequest(
+        "/chat/completions",
+        new Response(createChatStream("Recovered"), {
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      )
+      await using tmp = await tmpdir({
+        config: {
+          enabled_providers: [providerID],
+          provider: {
+            [providerID]: {
+              npm: "@ai-sdk/openai-compatible",
+              options: { apiKey: "test", baseURL: `${state.server.url.origin}/v1` },
+              models: {
+                [modelID]: {
+                  name: "Recovery fixture",
+                  reasoning: true,
+                  tool_call: true,
+                  limit: { context: 200_000, output: 32_000 },
+                  variants: {
+                    low: { reasoningEffort: "low" },
+                    medium: { reasoningEffort: "medium" },
+                    high: { reasoningEffort: "high" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = await Provider.getModel(providerID, modelID)
+          const sessionID = SessionID.make("session-recovery-wire")
+          // Use the same AI SDK conversion as persisted AX tool errors.
+          const messages = await convertToModelMessages([
+            {
+              role: "user",
+              parts: [{ type: "text", text: large ? "large-task-token ".repeat(1500) : "Get the file" }],
+            },
+            ...Array.from({ length: failures }, (_, i) => ({
+              id: `assistant-${i}`,
+              role: "assistant" as const,
+              parts: [
+                {
+                  type: "tool-read" as const,
+                  state: "output-error" as const,
+                  toolCallId: `call-${i}`,
+                  input: {},
+                  errorText: "File missing",
+                },
+              ],
+            })),
+          ])
+          const stream = await LLM.stream({
+            sessionID,
+            model,
+            user: {
+              id: MessageID.make("user-recovery"),
+              sessionID,
+              role: "user",
+              time: { created: Date.now() },
+              agent: "test",
+              model: { providerID, modelID },
+              variant,
+            },
+            agent: { name: "test", mode: "primary", options: {}, permission: [] },
+            system: [],
+            messages: tail ? [...messages, { role: "user", content: "Synthetic reminder" }] : messages,
+            toolFailureCount: tail ? failures : undefined,
+            abort: new AbortController().signal,
+            tools: { read: tool({ inputSchema: z.object({}), description: "Read a file" }) },
+          })
+          for await (const _ of stream.fullStream) {
+          }
+          const body = (await request).body
+          expect(body.reasoning_effort).toBe(effort)
+          const serialized = JSON.stringify(body.messages)
+          expect(serialized.includes("Long-Agent Context Pack")).toBe(autonomous)
+          if (large) expect(serialized.split("large-task-token").length).toBeLessThan(1600)
+          expect(serialized).not.toContain("operating in Super-Long mode")
+          expect(body).not.toHaveProperty("preserve_thinking")
+          expect(body).not.toHaveProperty("cache_control")
+        },
+      })
+    },
+  )
+
   test.each(["required", "auto"] as const)(
     "uses compatible DeepSeek thinking settings for %s tool choice through a gateway",
     async (toolChoice) => {
@@ -342,6 +519,7 @@ describe("session.llm.stream", () => {
   )
 
   test("sends OpenRouter headers and strips generic reasoningEffort parameters", async () => {
+    vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(false)
     const providerID = "openrouter"
     const modelID = "openai/gpt-5.4"
     const fixture = await loadFixture(providerID, modelID)
@@ -453,6 +631,13 @@ describe("session.llm.stream", () => {
         })
         if (!provenance || provenance.type !== "llm.request") throw new Error("missing provenance event")
         expect(provenance.requestHash).toMatch(/^[a-f0-9]{64}$/)
+        expect(LLMRequestEvent.parse(provenance).capabilityResolution).toMatchObject({
+          boundary: "policy-selection",
+          contextPackEnabled: false,
+          superLongEnabled: false,
+          consecutiveToolFailures: 0,
+          reasoning: { selectedDepth: "standard", unappliedReason: "explicit_override" },
+        })
 
         const fallbackRequest = waitRequest(
           "/chat/completions",

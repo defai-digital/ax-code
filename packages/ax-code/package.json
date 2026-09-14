@@ -46,6 +46,7 @@
     }
   },
   "devDependencies": {
+    "@ai-sdk/anthropic": "catalog:",
     "@ax-code/script": "workspace:*",
     "@octokit/webhooks-types": "catalog:",
     "@parcel/watcher-darwin-arm64": "2.5.1",

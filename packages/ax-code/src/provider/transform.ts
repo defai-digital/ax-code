@@ -796,7 +796,7 @@ export namespace ProviderTransform {
     return (
       /claude-opus-?4-[5-8](?:$|[^0-9])/.test(id) ||
       /claude-sonnet-?4-6(?:$|[^0-9])/.test(id) ||
-      /claude-(?:fable|mythos|sonnet)-?5(?:$|[^0-9])/.test(id) ||
+      /claude-(?:fable|mythos|sonnet|opus)-?5(?:$|[^0-9])/.test(id) ||
       id.includes("claude-mythos-preview")
     )
   }
@@ -808,7 +808,7 @@ export namespace ProviderTransform {
 
   function usesAnthropicAdaptiveThinking(model: Provider.Model) {
     const id = `${model.id} ${model.api.id}`.toLowerCase().replaceAll(".", "-")
-    return /claude-(?:opus-?4-[6-8]|sonnet-?4-6)(?:$|[^0-9])/.test(id)
+    return /claude-(?:opus-?4-[6-8]|sonnet-?4-6|opus-?5)(?:$|[^0-9])/.test(id)
   }
 
   function alibabaThinkingBudget(model: Provider.Model, requested?: unknown) {
@@ -1152,6 +1152,16 @@ export namespace ProviderTransform {
     toolChoice?: "auto" | "required" | "none",
   ): Record<string, any> {
     let result = options
+    // The installed SDK predates GPT-6. Its documented override enables
+    // Responses reasoning serialization and removes unsupported sampling.
+    // Restrict this to the first-party protocol, never infer gateway support.
+    if (
+      model.providerID === "openai" &&
+      model.api.npm === "@ai-sdk/openai" &&
+      /^gpt-6(?:$|-)/i.test(modelIdFinalSegment(model.api.id))
+    ) {
+      result = { ...result, forceReasoning: true }
+    }
     if (isAlibabaThinkingModel(model)) {
       // Strip incompatible thinking shapes (Anthropic block, reasoning-effort
       // variants) that user config or other transforms may have layered in,

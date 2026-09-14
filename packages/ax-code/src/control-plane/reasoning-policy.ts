@@ -37,6 +37,8 @@ export namespace ReasoningPolicy {
     objective?: string
     options: Record<string, unknown>
     checkpoint: boolean
+    requestedDepth?: Depth
+    unappliedReason?: "explicit_override" | "unsupported_effort"
   }
 
   export type Input = {
@@ -65,30 +67,27 @@ export namespace ReasoningPolicy {
 
     // User-selected effort is applied later from model.variants[userVariant].
     // Sentinel values ("auto", bare "default") mean Auto, not a wire override.
-    if (explicitUserVariant(input)) return emptyStandard()
+    if (explicitUserVariant(input))
+      return { ...emptyStandard(), requestedDepth: input.requestedDepth, unappliedReason: "explicit_override" }
 
     if (
       hasExplicitReasoning(input.model.options) ||
       hasExplicitReasoning(input.agent.options) ||
       hasExplicitReasoning(input.providerOptions)
     )
-      return emptyStandard()
-
-    // Apply Auto/escalation when the model reasons natively OR publishes effort
-    // variants (CLI providers report reasoning=false but still accept --effort).
-    if (!canTuneEffort(input.model)) return emptyStandard()
+      return { ...emptyStandard(), requestedDepth: input.requestedDepth, unappliedReason: "explicit_override" }
 
     if (input.requestedDepth) {
-      return decisionForDepth(input, input.requestedDepth, "explicit_request") ?? auto(input)
+      return resolveDepth(input, input.requestedDepth, "explicit_request")
     }
     if ((input.failureCount ?? 0) >= 2) {
-      return decisionForDepth(input, "deep", "repeated_failure") ?? auto(input)
+      return resolveDepth(input, "deep", "repeated_failure")
     }
     if (input.uncertainty === "high") {
-      return decisionForDepth(input, "deep", "high_uncertainty") ?? auto(input)
+      return resolveDepth(input, "deep", "high_uncertainty")
     }
     if (input.blastRadius === "high") {
-      return decisionForDepth(input, "deep", "high_blast_radius") ?? auto(input)
+      return resolveDepth(input, "deep", "high_blast_radius")
     }
 
     const objectiveText = objective(input.messages)
@@ -106,14 +105,51 @@ export namespace ReasoningPolicy {
       return auto(input)
     }
 
-    return (
-      decisionForDepth(
-        input,
-        "deep",
-        input.autonomous ? "autonomous_mode" : input.agent.name === "plan" ? "plan_mode" : "planning_risk_signal",
-        objectiveText,
-      ) ?? auto(input)
+    return resolveDepth(
+      input,
+      "deep",
+      input.autonomous ? "autonomous_mode" : input.agent.name === "plan" ? "plan_mode" : "planning_risk_signal",
+      objectiveText,
     )
+  }
+
+  /** Only structured execution results count; tool/user prose cannot trigger recovery. */
+  export function failureCount(messages: ReasoningPolicyMessage[]): number {
+    let failures = 0
+    let remaining = 128
+    for (let i = messages.length - 1; i >= Math.max(0, messages.length - 128); i--) {
+      const message = messages[i]
+      if (message.role === "user") break
+      if (message.role !== "tool" || !Array.isArray(message.content)) continue
+      for (let j = message.content.length - 1; j >= 0 && remaining-- > 0; j--) {
+        const part = message.content[j]
+        if (!part || part.type !== "tool-result") continue
+        const type = part.output?.type
+        if (type === "error-text" || type === "error-json") failures++
+        else return failures
+      }
+      if (remaining <= 0) break
+    }
+    return failures
+  }
+
+  /** Policy selection only; plugins and the SDK can still transform wire options. */
+  export function diagnostics(decision: Decision) {
+    return {
+      selectedDepth: decision.depth,
+      requestedDepth: decision.requestedDepth,
+      reason: decision.reason,
+      unappliedReason: decision.unappliedReason,
+    }
+  }
+
+  function resolveDepth(input: Input, depth: Depth, reason: Reason, objectiveText?: string): Decision {
+    const selected = decisionForDepth(input, depth, reason, objectiveText)
+    return {
+      ...(selected ?? auto(input, reason)),
+      requestedDepth: depth,
+      ...(!selected || selected.depth !== depth ? { unappliedReason: "unsupported_effort" as const } : {}),
+    }
   }
 
   export function objective(messages: ReasoningPolicyMessage[]): string {
@@ -186,12 +222,6 @@ export namespace ReasoningPolicy {
     return variant
   }
 
-  function canTuneEffort(model: ReasoningPolicyModel): boolean {
-    if (model.capabilities?.reasoning) return true
-    // CLI / gateway models may publish effort variants without reasoning=true.
-    return Boolean(selectAutoBaseline(model.variants) || selectDeepOptions(model.variants))
-  }
-
   function decisionForDepth(
     input: Input,
     depth: Depth,
@@ -213,7 +243,7 @@ export namespace ReasoningPolicy {
   }
 
   function selectDeepOptions(variants: ReasoningPolicyModel["variants"]): Record<string, unknown> | undefined {
-    return usableVariant(variants?.deep) ?? usableVariant(variants?.high) ?? usableVariant(variants?.medium)
+    return usableVariant(variants?.deep) ?? usableVariant(variants?.high)
   }
 
   function selectVariant(

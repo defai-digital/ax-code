@@ -19,6 +19,9 @@ export namespace HarnessEval {
       outputTokens: counter.optional(),
       cacheReadTokens: counter.optional(),
       toolCalls: counter.optional(),
+      toolErrors: counter.optional(),
+      reasoningTokens: counter.optional(),
+      metricsStatus: z.enum(["observed", "partial", "unavailable"]).optional(),
     })
     .strict()
     .refine((run) => !run.verified || run.outcome === "completed", "Only completed runs can be verified")
@@ -60,6 +63,19 @@ export namespace HarnessEval {
       successfulElapsedP95Ms:
         homogeneous && durations.length >= 20 ? durations[Math.ceil(durations.length * 0.95) - 1] : null,
       failures,
+      metrics: Object.fromEntries(
+        (["inputTokens", "outputTokens", "reasoningTokens", "cacheReadTokens", "toolCalls", "toolErrors"] as const).map(
+          (key) => {
+            const values = runs
+              .filter((run) => run.metricsStatus !== "partial" && run.metricsStatus !== "unavailable")
+              .flatMap((run) => (run[key] === undefined ? [] : [run[key]!]))
+            return [
+              key,
+              { observedCount: values.length, missingCount: runs.length - values.length, median: median(values) },
+            ]
+          },
+        ),
+      ),
     }
   }
 
@@ -112,6 +128,7 @@ export namespace HarnessEval {
       ratioSampleCount: ratios.length,
       medianCandidateOverBaselineElapsedRatio: median(ratios),
       limitations: [
+        "Usage and tool metrics cover observed runtime events, not provider billing; missing or partial observations are withheld, never zero-filled. Failures remain in metric coverage and quality denominators.",
         "Latency summaries condition on verified success; inspect success rates and every failure before interpreting speed.",
         "Paired ratios exclude zero baseline durations and non-finite ratios.",
         "P95 requires at least 20 verified observations per task/model/cohort/arm cell and is withheld for mixed-cell aggregates; it is descriptive only; no statistical significance or default promotion is implied.",

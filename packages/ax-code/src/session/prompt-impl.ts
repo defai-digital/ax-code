@@ -1338,6 +1338,7 @@ export namespace SessionPrompt {
           sessionID,
           system: request.system,
           messages: request.requestMessages,
+          toolFailureCount: request.toolFailureCount,
           tools,
           model,
           toolChoice,

@@ -1,4 +1,4 @@
-import { getModelCapabilities, supportsLongAgent, type ObservedModelCapabilities } from "@/provider/model-capabilities"
+import { getModelCapabilities, supportsSuperLong, type ObservedModelCapabilities } from "@/provider/model-capabilities"
 import { isDedicatedPrivateGpuProviderID } from "@/provider/private-gpu/presets"
 import { Env } from "@/util/env"
 import { isLocalHostname } from "@/util/local-host"
@@ -158,7 +158,7 @@ export namespace SuperLongPolicy {
    * 3. Model capability (auto-enable for models with long-agent support)
    *
    * This replaces the previous model-specific check (`isQwen37MaxModel()`) with
-   * a capability-based approach using `supportsLongAgent()`.
+   * a capability-based approach using `supportsSuperLong()`.
    */
   export function state(input: {
     modelID: string
@@ -174,7 +174,7 @@ export namespace SuperLongPolicy {
       return { enabled: input.config.enabled, source: "config" }
     }
     // Use capability-based check instead of model-specific check
-    return { enabled: supportsLongAgent(input.modelID, input.providerID, input.observed), source: "model-default" }
+    return { enabled: supportsSuperLong(input.modelID, input.providerID, input.observed), source: "model-default" }
   }
 
   export function runtimeState(input: {

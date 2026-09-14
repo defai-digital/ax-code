@@ -213,7 +213,9 @@ export function supportsOpenAIGptModels(probes: readonly string[]) {
   if (probes.some((probe) => probe.includes("gpt-oss"))) return true
   if (probes.some((probe) => probe.includes("gpt-5.5") || probe.includes("gpt-5-5") || probe.includes("gpt55")))
     return false
-  return probes.some((probe) => probe.includes("gpt-4") || probe.includes("gpt-5"))
+  return probes.some(
+    (probe) => probe.includes("gpt-4") || probe.includes("gpt-5") || /(?:^|[\s/])gpt-6(?:$|[-\s])/.test(probe),
+  )
 }
 
 export function supportsGlmModels(probes: readonly string[]) {
