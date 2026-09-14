@@ -88,6 +88,35 @@ The output format above is verbatim from these commands; the session IDs and tas
 
 **Keep repository knowledge durable.** `ax-code wiki` compiles a source-backed wiki: deterministic page planning, source-hash change detection, protected manual sections, atomic writes, and lint checks including dead links. Page prose is model-generated from cited source; the planning, validation, and incremental-update framework around it is deterministic.
 
+## Hardware requirements
+
+Choose hardware for the repository tools as well as AX Code. These are capacity-planning guidelines, not certified performance limits; the 8 GB baseline has not been validated by a physical-machine load test.
+
+| Workload                                                                             | Minimum planning baseline                                                                  | Recommended target                                                                                       |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Cloud/API models (including CLIs using remote models), one session, small repository | 8 GB system RAM; expect limited headroom for a browser, build and language server          | 16 GB RAM, modern 4-core or better CPU, SSD                                                              |
+| Large TypeScript/Rust repositories, concurrent builds or several agents/sessions     | Start from the 16 GB cloud target; 8 GB is not a suitable planning baseline                | 32 GB or more RAM; size for your actual language servers and builds                                      |
+| Local inference                                                                      | The selected model/runtime requirements, plus RAM for AX Code, repository tools and the OS | Budget model weights, KV cache/context and runtime overhead separately; cloud figures above do not apply |
+
+Supported packaged CPU/OS targets are Apple Silicon macOS, Windows x64/ARM64 and Ubuntu 24.04+ amd64/arm64. Cloud inference does not require a local GPU. Reserve SSD space for the runtime, repository, dependencies, session history and temporary command output; 10 GB of free space is a starting headroom target, not a disk-usage cap. Large builds and local model downloads need substantially more.
+
+AX Code automatically selects the `low` memory profile on hosts reporting at most 8 GiB of physical RAM. It skips speculative language-server prewarming, limits concurrent analysis work and stops idle language servers; analysis still starts on demand and may take longer. It does not impose a machine-wide RAM limit. A language server, compiler, browser or local model can still exhaust an 8 GB system. Hosts below 8 GB are not recommended for interactive coding.
+
+To select the profile explicitly on macOS/Linux:
+
+```bash
+AX_CODE_MEMORY_PROFILE=low ax-code
+```
+
+On PowerShell:
+
+```powershell
+$env:AX_CODE_MEMORY_PROFILE = "low"
+ax-code
+```
+
+Use `auto` (default) to restore detection or `normal` to retain normal prewarming and concurrency. The evidence cache uses bounded memory by default; RocksDB is opt-in. These controls preserve model selection and required checks; they do not certify arbitrary projects for low-RAM hardware. See [Memory usage](docs/guides/memory-usage.md) for limits and workload guidance.
+
 ## Get started
 
 ### macOS (Apple Silicon)
