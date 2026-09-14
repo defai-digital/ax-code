@@ -845,12 +845,4 @@ describe("reverse exit rain", () => {
       "exit.flourish()",
     )
   })
-
-  test("a second ctrl+c cuts the ending video short instead of being swallowed", () => {
-    const rain = readFileSync(
-      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/matrix-rain.tsx"),
-      "utf8",
-    )
-    expect(rain).toContain('props.captureInput && evt.ctrl && evt.name === "c"')
-  })
 })

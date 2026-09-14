@@ -309,7 +309,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // (`matrix_rain_on_task_complete`).
   const [matrixPlaying, setMatrixPlaying] = createSignal(false)
   const [startupRainPhase, setStartupRainPhase] = createSignal(initialStartupRainPhase())
-  const playMatrixRain = () => setMatrixPlaying(true)
+  let exiting = false
+  const playMatrixRain = () => {
+    if (!exiting) setMatrixPlaying(true)
+  }
   const endMatrixRain = (reason: MatrixRainDoneReason = "timeout") => {
     batch(() => {
       setMatrixPlaying(false)
@@ -352,11 +355,23 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     })
   }
   const playExitMatrixRain = () => {
+    exiting = true
+    // Cancel every startup phase before KV readiness or a playback callback
+    // can start another overlay above the ending video.
+    batch(() => {
+      setStartupRainPhase(completeStartupRain())
+      setMatrixPlaying(false)
+    })
     if (!shouldPlayExitMatrixRain({ animationsEnabled: kv.get("animations_enabled", true) })) return Promise.resolve()
     return playReverseMatrixRain()
   }
   exit.onFlourish(playExitMatrixRain)
-  onCleanup(() => exit.onFlourish(undefined))
+  onCleanup(() => {
+    exit.onFlourish(undefined)
+    settleReverseRain?.()
+    settleReverseRain = undefined
+    reverseRainDone = undefined
+  })
   createEffect(() => {
     // Selection is not checked here on purpose: a selection can only appear
     // under the overlays through the keys they pass through, and the overlays

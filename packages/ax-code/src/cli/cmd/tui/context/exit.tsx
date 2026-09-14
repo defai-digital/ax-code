@@ -34,6 +34,8 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
     // Requested by the explicit-quit path and consumed by the teardown that
     // follows, so a second exit call cannot replay the animation.
     let flourishRequested = false
+    let exitReason: unknown
+    const flourishAbort = new AbortController()
     const store = {
       set: (value?: string) => {
         const prev = message
@@ -48,46 +50,79 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
       get: () => message,
     }
     const runFlourish = async () => {
-      if (!flourishRequested) return
-      flourishRequested = false
-      if (!flourishHandler) return
+      const handler = flourishHandler
+      if (!handler || flourishAbort.signal.aborted) return
+      let timer: ReturnType<typeof setTimeout> | undefined
+      let stop: (() => void) | undefined
+      const interrupted = new Promise<void>((resolve) => {
+        stop = resolve
+        flourishAbort.signal.addEventListener("abort", stop, { once: true })
+        // Cosmetic work must never hold terminal or backend cleanup indefinitely.
+        timer = setTimeout(resolve, 5_000)
+        timer.unref?.()
+      })
       try {
-        await flourishHandler()
+        await Promise.race([
+          Promise.resolve().then(() => {
+            if (!flourishAbort.signal.aborted) return handler()
+          }),
+          interrupted,
+        ])
       } catch (error) {
         Log.Default.warn("tui.exit.flourish failed", { error })
+      } finally {
+        clearTimeout(timer)
+        if (stop) flourishAbort.signal.removeEventListener("abort", stop)
       }
     }
     const exit: Exit = Object.assign(
       (reason?: unknown) => {
-        if (task) return task
-        task = (async () => {
-          // Abnormal exits carry a reason (a bootstrap failure); they must
-          // return the terminal as fast as possible and never animate.
-          if (!reason) await runFlourish()
-          await destroyTuiRenderer(renderer)
-          win32FlushInputBuffer()
-          if (reason) {
-            // A reason means the exit is abnormal (e.g. sync bootstrap
-            // failure) — make sure the process exit code reflects that
-            // instead of the default 0.
+        if (reason !== undefined) {
+          exitReason ??= reason
+          process.exitCode = 1
+        }
+        if (task) {
+          // Signals, failures and a direct second exit bypass cosmetic work.
+          flourishAbort.abort()
+          return task
+        }
+        const playFlourish = flourishRequested && reason === undefined
+        flourishRequested = false
+        // Publish the task before invoking a handler that can itself request exit.
+        task = Promise.resolve().then(async () => {
+          if (playFlourish) await runFlourish()
+          try {
+            await destroyTuiRenderer(renderer)
+            win32FlushInputBuffer()
+            if (exitReason !== undefined) {
+              const formatted = FormatError(exitReason) ?? FormatUnknownError(exitReason)
+              if (formatted) process.stderr.write(formatted + "\n")
+            }
+            const text = store.get()
+            if (text) process.stdout.write(text + "\n")
+          } catch (error) {
             process.exitCode = 1
-            const formatted = FormatError(reason) ?? FormatUnknownError(reason)
-            if (formatted) {
-              process.stderr.write(formatted + "\n")
+            throw error
+          } finally {
+            // Renderer/terminal failures must not strand the owned backend.
+            try {
+              await input.onExit?.()
+            } catch (error) {
+              process.exitCode = 1
+              throw error
             }
           }
-          const text = store.get()
-          if (text) process.stdout.write(text + "\n")
-          await input.onExit?.()
-        })()
+        })
         return task
       },
       {
         message: store,
         onFlourish: (handler: (() => Promise<void>) | undefined) => {
           flourishHandler = handler
+          if (!handler) flourishAbort.abort()
         },
         flourish: () => {
+          if (task) return task
           flourishRequested = true
           return exit()
         },
@@ -98,8 +133,11 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
     // (destroyTuiRenderer → disableTuiMouseTracking → flushTuiStdout).
     // Without this, the terminal is left in alt-screen + raw mode + mouse
     // tracking on anything other than a clean React unmount or SIGHUP.
-    const unregister = registerShutdownSignals(() => void exit(), { signals: TUI_EXIT_SIGNALS })
-    onCleanup(unregister)
+    const unregister = registerShutdownSignals(() => exit(), { signals: TUI_EXIT_SIGNALS })
+    onCleanup(() => {
+      unregister()
+      flourishAbort.abort()
+    })
     return exit
   },
 })

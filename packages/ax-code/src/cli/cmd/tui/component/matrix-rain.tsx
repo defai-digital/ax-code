@@ -1,5 +1,5 @@
 import { For, createSignal, onCleanup, onMount } from "solid-js"
-import { RGBA, TextAttributes } from "ax-tui"
+import { RGBA, TextAttributes, type KeyEvent, type PasteEvent } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { MATRIX_RAIN_LEVEL_COLORS } from "./matrix-rain-palette"
@@ -85,34 +85,38 @@ export function MatrixRain(props: {
     stopTimeout()
   })
 
-  // Only Escape is consumed. Ordinary keys keep flowing to the prompt, so the
-  // overlay never eats a keystroke the user did not aim at it — which includes
-  // keyboard selections: the moment one exists under the cover, yield instead
-  // of hiding it.
+  // Shutdown input must run before already registered global shortcuts, not
+  // merely before focused renderables. Paste has a separate dispatch channel.
+  onMount(() => {
+    if (!props.captureInput) return
+    const consume = (evt: KeyEvent | PasteEvent) => {
+      evt.preventDefault()
+      evt.stopPropagation()
+    }
+    const keypress = (evt: KeyEvent) => {
+      consume(evt)
+      if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) props.onDone("skip")
+    }
+    renderer.keyInput.prependListener("keypress", keypress)
+    renderer.keyInput.prependListener("keyrelease", consume)
+    renderer.keyInput.prependListener("paste", consume)
+    onCleanup(() => {
+      renderer.keyInput.off("keypress", keypress)
+      renderer.keyInput.off("keyrelease", consume)
+      renderer.keyInput.off("paste", consume)
+    })
+  })
+
+  // Opening playback preserves ordinary input and yields to selection.
   useKeyboard((evt) => {
+    if (props.captureInput) return
     if (evt.name === "escape") {
       evt.preventDefault()
       evt.stopPropagation()
       props.onDone("skip")
       return
     }
-    // The exit flourish swallows keys so nothing can start work while the app
-    // is already shutting down, but ctrl+c stays an escape hatch: pressing it
-    // again is how people force an immediate quit.
-    if (props.captureInput && evt.ctrl && evt.name === "c") {
-      evt.preventDefault()
-      evt.stopPropagation()
-      props.onDone("skip")
-      return
-    }
-    if (renderer.hasSelection) {
-      props.onDone("skip")
-      return
-    }
-    if (props.captureInput) {
-      evt.preventDefault()
-      evt.stopPropagation()
-    }
+    if (renderer.hasSelection) props.onDone("skip")
   })
 
   return (

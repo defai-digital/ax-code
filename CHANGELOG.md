@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.17.9] - 2026-09-14
+
+### Changed
+
+- Publish the paired SDK 2.5.22.
+- Add a randomized falling wordmark after opening rain, tune the rain animation, and play a reverse rain animation for explicit exits.
+- List `/exit` in the slash menu and show a clickable `/sidebar` entry when the session sidebar is collapsed.
+
+### Fixed
+
+- Interrupt exit animations on shutdown signals, failures, or component removal, and bound stalled animation waits so terminal and backend cleanup can finish.
+- Keep renderer and backend cleanup single-use under reentrant exit requests, release the backend after terminal cleanup failures, and preserve unsuccessful exit status.
+- Capture ending-video keyboard, key-release, and paste events before existing shortcuts and focused inputs, including when a selection is present.
+- Cancel startup rain and logo playback when exiting so late startup readiness and task completion cannot start another opening overlay.
+
 ## [7.17.8] - 2026-09-14
 
 ### Changed
