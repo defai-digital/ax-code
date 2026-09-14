@@ -98,7 +98,9 @@ import { MatrixRain, MatrixRainCover, type MatrixRainDoneReason } from "./compon
 import { StartupLogo } from "./component/startup-logo"
 import {
   MATRIX_RAIN_ON_START_DEFAULT,
+  MATRIX_RAIN_REVERSE_DURATION_MS,
   shouldAutoPlayMatrixRain,
+  shouldPlayExitMatrixRain,
   initialStartupRainPhase,
   resolveStartupRainPhase,
   completeStartupRain,
@@ -320,6 +322,41 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const endStartupLogo = () => {
     if (startupRainShowsLogo(startupRainPhase())) setStartupRainPhase(completeStartupRain())
   }
+  // Reverse (bottom-to-top) rain. An explicit quit plays it before the
+  // renderer tears down; the palette's "Play Ending Video" entry previews the
+  // same overlay. The preview is always allowed — it is a deliberate request —
+  // while the exit flourish honors the shared animation policy so quitting
+  // stays immediate when animations are off.
+  const [reverseRainPlaying, setReverseRainPlaying] = createSignal(false)
+  let reverseRainDone: Promise<void> | undefined
+  let settleReverseRain: (() => void) | undefined
+  const playReverseMatrixRain = (): Promise<void> => {
+    const existing = reverseRainDone
+    // A caller that arrives mid-run — quitting during the palette preview —
+    // waits for the run already on screen instead of cutting it off.
+    if (existing) return existing
+    const created = new Promise<void>((resolve) => {
+      settleReverseRain = resolve
+    })
+    reverseRainDone = created
+    setReverseRainPlaying(true)
+    return created
+  }
+  const endReverseMatrixRain = () => {
+    batch(() => {
+      setReverseRainPlaying(false)
+      const settle = settleReverseRain
+      settleReverseRain = undefined
+      reverseRainDone = undefined
+      settle?.()
+    })
+  }
+  const playExitMatrixRain = () => {
+    if (!shouldPlayExitMatrixRain({ animationsEnabled: kv.get("animations_enabled", true) })) return Promise.resolve()
+    return playReverseMatrixRain()
+  }
+  exit.onFlourish(playExitMatrixRain)
+  onCleanup(() => exit.onFlourish(undefined))
   createEffect(() => {
     // Selection is not checked here on purpose: a selection can only appear
     // under the overlays through the keys they pass through, and the overlays
@@ -1038,6 +1075,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       onSnapshot: props.onSnapshot,
       terminalSuspend,
       playMatrixRain,
+      playReverseMatrixRain,
       terminalWidth: () => dimensions().width,
     }),
   )
@@ -1283,6 +1321,14 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       </Show>
       <Show when={matrixPlaying()}>
         <MatrixRain onDone={endMatrixRain} />
+      </Show>
+      <Show when={reverseRainPlaying()}>
+        <MatrixRain
+          direction="up"
+          durationMs={MATRIX_RAIN_REVERSE_DURATION_MS}
+          captureInput
+          onDone={endReverseMatrixRain}
+        />
       </Show>
       <Show when={startupRainShowsLogo(startupRainPhase())}>
         <StartupLogo onDone={endStartupLogo} />

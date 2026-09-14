@@ -522,7 +522,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
       draftLifecycle.submitted()
       props.onSubmit?.()
     },
-    exit,
+    // A typed `exit`/`quit`/`:q` is an explicit quit, so it plays the ending
+    // video; ctrl+c reaches the same flourish through the app_exit keybinding.
+    exit: () => void exit.flourish(),
     sessionID: () => props.sessionID,
     workspaceID: () => props.workspaceID,
     get autocomplete() {
@@ -1150,7 +1152,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                     // textarea's own handlers.
                     e.preventDefault()
                     try {
-                      await exit()
+                      // An explicit ctrl+c exit plays the ending video before
+                      // the renderer tears down; pressing it again skips it.
+                      await exit.flourish()
                     } catch (error) {
                       log.warn("tui.prompt.onKeyDown: exit failed", { error })
                     }

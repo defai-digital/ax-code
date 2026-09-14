@@ -12,6 +12,8 @@ import {
   MATRIX_RAIN_MAX_DURATION_MS,
   MATRIX_RAIN_MIN_DURATION_MS,
   MATRIX_RAIN_ON_START_DEFAULT,
+  MATRIX_RAIN_RESPAWN_GAP,
+  MATRIX_RAIN_REVERSE_DURATION_MS,
   STARTUP_LOGO_DURATION_MS,
   STARTUP_LOGO_FALL_DURATION_MS,
   STARTUP_LOGO_FALL_JITTER_MS,
@@ -25,11 +27,13 @@ import {
   createStartupLogoGlyphs,
   easeOutLogoDrop,
   initialStartupRainPhase,
+  matrixRainCellLevel,
   matrixRainRows,
   resolveStartupRainPhase,
   shouldAutoPlayMatrixRain,
   decideMatrixRainOnStart,
   shouldPlayMatrixRainOnStart,
+  shouldPlayExitMatrixRain,
   shouldStopMatrixRain,
   startupLogoDropLevel,
   startupLogoFrame,
@@ -682,5 +686,167 @@ describe("startup logo color", () => {
     expect(palette).toContain("MATRIX_RAIN_LEVEL_RGB")
     expect(rain).toContain("MATRIX_RAIN_LEVEL_COLORS")
     expect(logoOverlay).toContain("MATRIX_RAIN_LEVEL_COLORS")
+  })
+})
+
+describe("reverse exit rain", () => {
+  test("plays for the requested three seconds", () => {
+    expect(MATRIX_RAIN_REVERSE_DURATION_MS).toBe(3_000)
+  })
+
+  test("defaults to the startup fall", () => {
+    expect(createMatrixRain({ ...GRID, random: seeded(1) }).direction).toBe("down")
+  })
+
+  test("rises a column head by its own speed", () => {
+    const state = createMatrixRain({ ...GRID, random: seeded(5), direction: "up" })
+    const before = state.columns[0]!
+    const next = advanceMatrixRain(state)
+    const after = next.columns[0]!
+    expect(after.head).toBeCloseTo(before.head - before.speed, 10)
+    expect(next.direction).toBe("up")
+  })
+
+  test("starts every column at or below the top edge", () => {
+    const state = createMatrixRain({ ...GRID, random: seeded(29), direction: "up" })
+    expect(state.columns.every((column) => column.head >= 0)).toBe(true)
+  })
+
+  test("trails below a rising head, green at the top and white at the bottom", () => {
+    const up: MatrixRainState = {
+      width: 3,
+      height: 9,
+      direction: "up",
+      random: () => 0,
+      columns: [{ x: 1, head: 4, speed: 0.5, length: 4, chars: ["A", "B", "C", "D"], heavy: false }],
+    }
+    const down: MatrixRainState = { ...up, direction: "down" }
+    const lit = (state: MatrixRainState, y: number) => matrixRainRows(state)[y]!.filter((run) => run.level > 0)
+
+    // Reverse rain: the leading cell is at row 4 and the trail falls below it.
+    expect(lit(up, 4)[0]?.text).toBe("A")
+    expect(lit(up, 5)[0]?.text).toBe("B")
+    expect(lit(up, 6)[0]?.text).toBe("C")
+    expect(lit(up, 7)[0]?.text).toBe("D")
+    expect(lit(up, 3)).toHaveLength(0)
+    expect(lit(up, 8)).toHaveLength(0)
+
+    // Green at the top of the streak, white at the bottom: brightness grows
+    // downward, the opposite of the falling rain's white head / green tail.
+    expect(lit(up, 4)[0]!.level).toBe(1)
+    expect(lit(up, 7)[0]!.level).toBe(MATRIX_RAIN_LEVELS)
+    expect(lit(up, 4)[0]!.level).toBeLessThan(lit(up, 5)[0]!.level)
+    expect(lit(up, 5)[0]!.level).toBeLessThan(lit(up, 6)[0]!.level)
+    expect(lit(up, 6)[0]!.level).toBeLessThan(lit(up, 7)[0]!.level)
+
+    // The startup rain is the same streak mirrored: white head, green above.
+    expect(lit(down, 4)[0]?.text).toBe("A")
+    expect(lit(down, 3)[0]?.text).toBe("B")
+    expect(lit(down, 2)[0]?.text).toBe("C")
+    expect(lit(down, 1)[0]?.text).toBe("D")
+    expect(lit(down, 4)[0]!.level).toBe(MATRIX_RAIN_LEVELS)
+    expect(lit(down, 1)[0]!.level).toBe(1)
+  })
+
+  test("inverts the brightness ramp for the reverse rain", () => {
+    const length = 4
+    expect(matrixRainCellLevel("down", 0, length)).toBe(MATRIX_RAIN_LEVELS)
+    expect(matrixRainCellLevel("down", length - 1, length)).toBe(1)
+    expect(matrixRainCellLevel("up", 0, length)).toBe(1)
+    expect(matrixRainCellLevel("up", length - 1, length)).toBe(MATRIX_RAIN_LEVELS)
+    // Both ramps stay inside the shared brightness range at every offset of a
+    // real trail length.
+    for (let offset = 0; offset < 14; offset++) {
+      for (const direction of ["down", "up"] as const) {
+        const level = matrixRainCellLevel(direction, offset, 14)
+        expect(level).toBeGreaterThanOrEqual(1)
+        expect(level).toBeLessThanOrEqual(MATRIX_RAIN_LEVELS)
+      }
+    }
+  })
+
+  test("recycles columns at the top and keeps every frame valid", () => {
+    let state = createMatrixRain({ width: 40, height: 10, random: seeded(9), direction: "up" })
+    for (let tick = 0; tick < 400; tick++) {
+      state = advanceMatrixRain(state)
+      const rows = matrixRainRows(state)
+      expect(rows).toHaveLength(10)
+      for (const row of rows) {
+        expect(row.map((run) => run.text).join("")).toHaveLength(40)
+      }
+      // A respawned column re-enters from below the bottom edge, never from
+      // above the top one.
+      for (const column of state.columns) {
+        expect(column.head).toBeLessThanOrEqual(state.height + MATRIX_RAIN_RESPAWN_GAP)
+      }
+    }
+  })
+
+  test("preserves the direction across a resize", () => {
+    const state = createMatrixRain({ ...GRID, random: seeded(19), direction: "up" })
+    const resized = tickMatrixRain(state, { width: 40, height: 12 })
+    expect(resized.direction).toBe("up")
+    expect(resized.columns.every((column) => column.head >= 0)).toBe(true)
+  })
+
+  test("honors the animation preference and the compiled runtime", () => {
+    expect(shouldPlayExitMatrixRain({ animationsEnabled: true, runtime: "source" })).toBe(true)
+    expect(shouldPlayExitMatrixRain({ animationsEnabled: true, runtime: "node-bundled" })).toBe(true)
+    expect(shouldPlayExitMatrixRain({ animationsEnabled: false, runtime: "source" })).toBe(false)
+    expect(shouldPlayExitMatrixRain({ animationsEnabled: true, runtime: "compiled" })).toBe(false)
+  })
+
+  test("the app plays the reverse rain before an explicit exit tears down", () => {
+    const dir = "../../../src/cli/cmd/tui"
+    const app = readFileSync(path.join(import.meta.dirname, dir, "app.tsx"), "utf8")
+    expect(app).toContain("MATRIX_RAIN_REVERSE_DURATION_MS")
+    expect(app).toContain('direction="up"')
+    expect(app).toContain("exit.onFlourish")
+    // One shared run: a quit that lands while the video is already on screen
+    // waits for it instead of tearing the renderer down mid-animation.
+    expect(app).toContain("if (existing) return existing")
+    expect(readFileSync(path.join(import.meta.dirname, dir, "context/exit.tsx"), "utf8")).toContain("onFlourish")
+  })
+
+  test("typed exit and the /exit command request the flourish", () => {
+    const dir = "../../../src/cli/cmd/tui"
+    expect(readFileSync(path.join(import.meta.dirname, dir, "component/prompt/index.tsx"), "utf8")).toContain(
+      "exit.flourish",
+    )
+    expect(readFileSync(path.join(import.meta.dirname, dir, "app-commands.ts"), "utf8")).toContain("exit.flourish")
+  })
+
+  test("the palette previews the reverse rain alongside the rain", () => {
+    const dir = "../../../src/cli/cmd/tui"
+    const commands = readFileSync(path.join(import.meta.dirname, dir, "app-commands.ts"), "utf8")
+    expect(commands).toContain('value: "app.matrix.play_reverse"')
+    expect(commands).toContain("playReverseMatrixRain()")
+    expect(readFileSync(path.join(import.meta.dirname, dir, "app.tsx"), "utf8")).toContain("playReverseMatrixRain,")
+  })
+
+  test("the palette uses the video wording", () => {
+    const commands = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app-commands.ts"), "utf8")
+    expect(commands).toContain("Play Opening Video")
+    expect(commands).toContain("Play Ending Video")
+    expect(commands).toContain("Enable OV/EV on task completion")
+    expect(commands).toContain("Disable OV/EV on task completion")
+  })
+
+  test("ctrl+c plays the ending video before the app ends", () => {
+    const dir = "../../../src/cli/cmd/tui"
+    expect(readFileSync(path.join(import.meta.dirname, dir, "component/prompt/index.tsx"), "utf8")).toContain(
+      "await exit.flourish()",
+    )
+    expect(readFileSync(path.join(import.meta.dirname, dir, "routes/session/index.tsx"), "utf8")).toContain(
+      "exit.flourish()",
+    )
+  })
+
+  test("a second ctrl+c cuts the ending video short instead of being swallowed", () => {
+    const rain = readFileSync(
+      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/matrix-rain.tsx"),
+      "utf8",
+    )
+    expect(rain).toContain('props.captureInput && evt.ctrl && evt.name === "c"')
   })
 })

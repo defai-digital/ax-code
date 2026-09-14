@@ -18,6 +18,10 @@ export const MATRIX_RAIN_MIN_DURATION_MS = 2_500
 export const MATRIX_RAIN_MAX_DURATION_MS = 5_000
 export const MATRIX_RAIN_DURATION_MS = 2_500
 export const MATRIX_RAIN_TICK_MS = 90
+// Reverse (bottom-to-top) playback for the explicit-exit flourish. Fixed at the
+// requested three seconds: long enough to read as the session winding down,
+// short enough that quitting still feels immediate.
+export const MATRIX_RAIN_REVERSE_DURATION_MS = 3_000
 
 // Startup sequence: rain -> logo drop -> app. Every character of the mark
 // falls on its own schedule: a random stagger delay decides who leaves first
@@ -64,6 +68,12 @@ export const MATRIX_RAIN_LEVEL_RGB: readonly (readonly [number, number, number])
 /** Injectable randomness so frames are deterministic in tests. */
 export type MatrixRainRandom = () => number
 
+/**
+ * Travel direction. `down` is the startup rain (drops fall from the top edge);
+ * `up` is the reverse rain used on explicit exit (drops rise from the bottom).
+ */
+export type MatrixRainDirection = "down" | "up"
+
 export interface MatrixRainColumn {
   /** Column x position in cells. */
   x: number
@@ -84,11 +94,13 @@ export interface MatrixRainState {
   height: number
   columns: MatrixRainColumn[]
   random: MatrixRainRandom
+  /** Which way the drops travel; preserved across ticks and resizes. */
+  direction: MatrixRainDirection
 }
 
 export interface MatrixRainRun {
   text: string
-  /** 0 = blank; 1..MATRIX_RAIN_LEVELS = brightness, head is brightest. */
+  /** 0 = blank; 1..MATRIX_RAIN_LEVELS = brightness (see matrixRainCellLevel). */
   level: number
   /** Draw bold; set for cells belonging to a heavy column. */
   bold: boolean
@@ -147,24 +159,46 @@ function columnPosition(random: MatrixRainRandom, slot: number, width: number): 
   return Math.min(width - 1, slot + jitter)
 }
 
-export function createMatrixRain(input: { width: number; height: number; random?: MatrixRainRandom }): MatrixRainState {
+export function createMatrixRain(input: {
+  width: number
+  height: number
+  random?: MatrixRainRandom
+  direction?: MatrixRainDirection
+}): MatrixRainState {
   const width = Math.max(1, Math.floor(input.width))
   const height = Math.max(1, Math.floor(input.height))
   const random = input.random ?? Math.random
-  // Stagger initial heads so columns start dropping immediately instead of
-  // all entering from the top edge on the same tick.
+  const direction = input.direction ?? "down"
+  // Stagger initial heads so columns start moving immediately instead of all
+  // entering from the same edge on the same tick.
   const columns = columnSlots(width).map((slot) =>
-    makeColumn(random, columnPosition(random, slot, width), between(random, -Math.max(4, height * 0.6), height)),
+    makeColumn(random, columnPosition(random, slot, width), initialHead(random, height, direction)),
   )
-  return { width, height, columns, random }
+  return { width, height, columns, random, direction }
+}
+
+/**
+ * Starting head for a new column. Down rain staggers from above the top edge
+ * (negative rows) into the screen; the reverse rain mirrors that range so some
+ * columns are already rising on the first frame while the rest enter from below.
+ */
+function initialHead(random: MatrixRainRandom, height: number, direction: MatrixRainDirection): number {
+  const spread = Math.max(4, height * 0.6)
+  return direction === "up" ? between(random, 0, height + spread) : between(random, -spread, height)
 }
 
 export function advanceMatrixRain(state: MatrixRainState): MatrixRainState {
+  const up = state.direction === "up"
   const columns = state.columns.map((column) => {
-    const head = column.head + column.speed
-    if (head - column.length > state.height) {
-      // Column has run off the bottom; restart it above the screen.
-      return makeColumn(state.random, column.x, -between(state.random, 1, MATRIX_RAIN_RESPAWN_GAP))
+    const head = column.head + (up ? -column.speed : column.speed)
+    // A column is spent once its whole trail has left the screen it travels
+    // toward — the bottom edge going down, the top edge going up — and then
+    // re-enters from the opposite edge.
+    if (up ? head + column.length < 0 : head - column.length > state.height) {
+      const respawn = up
+        ? state.height + between(state.random, 1, MATRIX_RAIN_RESPAWN_GAP)
+        : -between(state.random, 1, MATRIX_RAIN_RESPAWN_GAP)
+      return makeColumn(state.random, column.x, respawn)
     }
     const pool = glyphPool(column.heavy)
     const chars = column.chars.slice()
@@ -184,13 +218,30 @@ function levelFor(offset: number, length: number): number {
 }
 
 /**
+ * Brightness of one trail cell. The falling rain keeps the classic look: the
+ * head is the white cell and the trail above it fades to green. The reverse
+ * rain mirrors the streak on screen instead of the ramp, so it still reads
+ * green at the top and white at the bottom — its ramp runs against the offset,
+ * whose 0 is the leading (top) cell.
+ */
+export function matrixRainCellLevel(direction: MatrixRainDirection, offset: number, length: number): number {
+  const level = levelFor(offset, length)
+  return direction === "up" ? MATRIX_RAIN_LEVELS + 1 - level : level
+}
+
+/**
  * Advance one tick against the current terminal size. A resize rebuilds the
  * columns from scratch rather than rescaling them, so no glyph is ever drawn
  * outside the new width.
  */
 export function tickMatrixRain(state: MatrixRainState, size: { width: number; height: number }): MatrixRainState {
   if (state.width !== size.width || state.height !== size.height) {
-    return createMatrixRain({ width: size.width, height: size.height, random: state.random })
+    return createMatrixRain({
+      width: size.width,
+      height: size.height,
+      random: state.random,
+      direction: state.direction,
+    })
   }
   return advanceMatrixRain(state)
 }
@@ -221,10 +272,13 @@ export function matrixRainRows(state: MatrixRainState): MatrixRainRun[][] {
     const bold = new Array<boolean>(state.width).fill(false)
     for (const column of state.columns) {
       if (column.x < 0 || column.x >= state.width) continue
-      const offset = Math.floor(column.head) - y
+      // The head is offset 0 and the trail counts away from it. Down rain
+      // trails above a falling head; the reverse rain trails below a rising
+      // head, so the sign of the offset flips with the direction.
+      const offset = state.direction === "up" ? y - Math.floor(column.head) : Math.floor(column.head) - y
       if (offset < 0 || offset >= column.length) continue
       chars[column.x] = column.chars[offset] ?? " "
-      levels[column.x] = levelFor(offset, column.length)
+      levels[column.x] = matrixRainCellLevel(state.direction, offset, column.length)
       bold[column.x] = column.heavy
     }
     rows.push(mergeRuns(chars, levels, bold, state.width))
@@ -278,6 +332,15 @@ export function shouldPlayMatrixRainOnStart(input: {
     dialogOpen: false,
     hasSelection: false,
   })
+}
+
+/**
+ * Whether an explicit-quit flourish (the reverse rain) may play. It needs no
+ * opt-in flag of its own — the rain is bound to an explicit quit — but it still
+ * honors the shared animation policy, so `animations_enabled` turns it off.
+ */
+export function shouldPlayExitMatrixRain(input: { animationsEnabled: boolean; runtime?: RuntimeMode }): boolean {
+  return shouldUseTuiAnimations({ userEnabled: input.animationsEnabled, runtime: input.runtime })
 }
 
 /**

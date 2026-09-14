@@ -59,12 +59,13 @@ export type AppCommandsInput = {
     options?: { signal?: AbortSignal },
   ) => Promise<unknown>
   sandbox: AppCommandSandbox
-  exit: () => void
+  exit: (() => void) & { flourish?: () => void }
   persistentRuntime?: boolean
   renderer: any
   onSnapshot?: () => Promise<string[]>
   terminalSuspend: { suspend: (input: { suspend: () => void; resume: () => void }) => void }
   playMatrixRain: () => void
+  playReverseMatrixRain: () => void
   terminalWidth: () => number
 }
 
@@ -98,6 +99,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     onSnapshot,
     terminalSuspend,
     playMatrixRain,
+    playReverseMatrixRain,
   } = input
 
   return [
@@ -565,7 +567,12 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         aliases: ["quit", "q"],
         hidden: true,
       },
-      onSelect: () => exit(),
+      onSelect: () => {
+        // An explicit quit plays the app-registered flourish (the reverse
+        // rain) before teardown; a bare exit stub stays immediate.
+        if (exit.flourish) void exit.flourish()
+        else exit()
+      },
       category: "System",
     },
     {
@@ -656,8 +663,8 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Play Matrix rain",
-      description: "Preview the ASCII digital-rain overlay for a few seconds",
+      title: "Play Opening Video",
+      description: "Preview the opening ASCII digital-rain animation",
       value: "app.matrix.play",
       category: "System",
       onSelect: (dialog) => {
@@ -666,9 +673,19 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
+      title: "Play Ending Video",
+      description: "Preview the ending bottom-to-top rain that plays when you exit",
+      value: "app.matrix.play_reverse",
+      category: "System",
+      onSelect: (dialog) => {
+        dialog.clear()
+        playReverseMatrixRain()
+      },
+    },
+    {
       title: kv.get("matrix_rain_on_task_complete", false)
-        ? "Disable Matrix rain on task completion"
-        : "Enable Matrix rain on task completion",
+        ? "Disable OV/EV on task completion"
+        : "Enable OV/EV on task completion",
       description: "Play the overlay once a scheduled task run completes",
       value: "app.toggle.matrix_rain",
       category: "System",

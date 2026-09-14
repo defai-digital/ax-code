@@ -10,6 +10,7 @@ import {
   createMatrixRain,
   matrixRainRows,
   tickMatrixRain,
+  type MatrixRainDirection,
   type MatrixRainState,
 } from "./matrix-rain-view-model"
 
@@ -43,7 +44,15 @@ export function MatrixRainCover() {
 /** `timeout` = played to completion; `skip` = the user dismissed it early. */
 export type MatrixRainDoneReason = "timeout" | "skip"
 
-export function MatrixRain(props: { durationMs?: number; onDone: (reason: MatrixRainDoneReason) => void }) {
+export function MatrixRain(props: {
+  durationMs?: number
+  /** `up` is the reverse rain used by the exit flourish; defaults to the startup fall. */
+  direction?: MatrixRainDirection
+  /** Swallow keys while the overlay is up. The exit flourish sets this so a
+   * keystroke cannot start new work while the app is already shutting down. */
+  captureInput?: boolean
+  onDone: (reason: MatrixRainDoneReason) => void
+}) {
   useHiddenTerminalCursor()
   const renderer = useRenderer()
   const dimensions = useTerminalDimensions()
@@ -52,6 +61,7 @@ export function MatrixRain(props: { durationMs?: number; onDone: (reason: Matrix
   let state: MatrixRainState = createMatrixRain({
     width: dimensions().width,
     height: dimensions().height,
+    direction: props.direction,
   })
   const [rows, setRows] = createSignal(matrixRainRows(state))
 
@@ -86,7 +96,23 @@ export function MatrixRain(props: { durationMs?: number; onDone: (reason: Matrix
       props.onDone("skip")
       return
     }
-    if (renderer.hasSelection) props.onDone("skip")
+    // The exit flourish swallows keys so nothing can start work while the app
+    // is already shutting down, but ctrl+c stays an escape hatch: pressing it
+    // again is how people force an immediate quit.
+    if (props.captureInput && evt.ctrl && evt.name === "c") {
+      evt.preventDefault()
+      evt.stopPropagation()
+      props.onDone("skip")
+      return
+    }
+    if (renderer.hasSelection) {
+      props.onDone("skip")
+      return
+    }
+    if (props.captureInput) {
+      evt.preventDefault()
+      evt.stopPropagation()
+    }
   })
 
   return (
