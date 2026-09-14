@@ -5,10 +5,8 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, test } from "vitest"
 import {
   AX_CODE_TERMINAL_TITLE,
-  AX_CODE_TITLE_SPINNER_FRAMES,
   axCodeTerminalTitleSequence,
   claimAxCodeTerminalTitle,
-  composeAxCodeTerminalTitle,
   sanitizeAxCodeTerminalTitle,
   shouldClaimAxCodeTerminalTitleAtEntry,
 } from "../../src/util/terminal-title"
@@ -37,35 +35,6 @@ describe("terminal title", () => {
     expect(axCodeTerminalTitleSequence("AX-Code")).toBe(TITLE_SEQUENCE)
     // Apple Terminal.app clears the tab on OSC 0 and then shows the job name.
     expect(axCodeTerminalTitleSequence()).not.toContain("]0;")
-  })
-
-  test("busy titles pulse the A/X dot-matrix morph before AX-Code", () => {
-    expect(composeAxCodeTerminalTitle({ working: false })).toBe("AX-Code")
-    expect(composeAxCodeTerminalTitle({ working: true, frame: 0 })).toBe("⡮⢵ AX-Code") // A
-    expect(AX_CODE_TITLE_SPINNER_FRAMES).toHaveLength(26)
-    for (const frame of AX_CODE_TITLE_SPINNER_FRAMES) {
-      expect([...frame]).toHaveLength(2)
-    }
-    // Both brand letters appear as held frames somewhere in the cycle.
-    for (const glyph of ["⡮⢵", "⡱⢎"]) {
-      expect(AX_CODE_TITLE_SPINNER_FRAMES).toContain(glyph)
-    }
-  })
-
-  test("holds each glyph and flips at most one dot per frame", () => {
-    const frames = AX_CODE_TITLE_SPINNER_FRAMES
-    for (let i = 0; i < frames.length; i++) {
-      const current = frames[i] ?? ""
-      const next = frames[(i + 1) % frames.length] ?? ""
-      const changed = [0, 1].filter((cell) => current.charCodeAt(cell) !== next.charCodeAt(cell))
-      expect(changed.length).toBeLessThanOrEqual(1)
-      if (changed.length === 1) {
-        const xor = current.charCodeAt(changed[0] ?? 0) ^ next.charCodeAt(changed[0] ?? 0)
-        // One braille dot == exactly one bit in the cell's 8-dot mask.
-        expect(xor).toBeGreaterThan(0)
-        expect(xor & (xor - 1)).toBe(0)
-      }
-    }
   })
 
   test("sanitizes control characters out of OSC payloads", () => {

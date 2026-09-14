@@ -7,95 +7,15 @@
  * and Kimi to "Kimi Code"; AX Code keeps a single static "AX-Code" so the tab
  * never shows the Node launcher ("node") or a long argv / session-title string.
  *
+ * The tab is deliberately static while busy: the animated A/X brand pulse lives
+ * in the footer busy indicator (component/footer-animation) because an OSC tab
+ * title cannot span the braille matrix. Do not re-add a per-frame tab title.
+ *
  * Written at TUI entry (before the CLI module graph loads) and again from the
  * TUI once it mounts, so the tab is claimed within milliseconds of exec.
  */
 
-import { brailleDotBit } from "./braille"
-
 export const AX_CODE_TERMINAL_TITLE = "AX-Code"
-
-// Busy-tab activity glyph: a 4-column by 4-row dot matrix (two full 8-dot
-// braille cells). It morphs back and forth between "A" and "X" — the AX brand
-// mark — one dot flip per frame, so a busy session shows a small brand pulse
-// in the tab. The footer shows two random animal emoji reshuffled every three
-// seconds (component/footer-animation); the two surfaces deliberately do not
-// share a frame set. Braille is CJK-safe (Narrow width); the previous
-// "Knight Rider" scanner used Ambiguous-width block glyphs that drift CJK
-// layouts.
-const TITLE_GLYPH_ROWS = 4
-const TITLE_GLYPH_COLUMNS = 4
-
-// "A" and "X" drawn as #/. row-major in the 4x4 matrix. Four dot rows is the
-// most a single terminal line can hold (a braille cell is 2x4).
-const TITLE_GLYPH_A = [".##.", "#..#", "####", "#..#"]
-const TITLE_GLYPH_X = ["#..#", ".##.", ".##.", "#..#"]
-
-// A -> X, then back to A, so the mark pulses between the two letters.
-const TITLE_GLYPH_SEQUENCE = [TITLE_GLYPH_A, TITLE_GLYPH_X]
-
-// Frames each glyph is held before the next morph begins.
-const TITLE_GLYPH_DWELL_FRAMES = 3
-
-function titleGlyphDots(rows: readonly string[]): Set<number> {
-  const dots = new Set<number>()
-  rows.forEach((row, r) => {
-    for (let c = 0; c < TITLE_GLYPH_COLUMNS; c++) {
-      if (row.charAt(c) === "#") dots.add(r * TITLE_GLYPH_COLUMNS + c)
-    }
-  })
-  return dots
-}
-
-function encodeTitleGlyph(dots: ReadonlySet<number>): string {
-  let glyph = ""
-  for (let cell = 0; cell < TITLE_GLYPH_COLUMNS / 2; cell++) {
-    let mask = 0
-    for (let r = 0; r < TITLE_GLYPH_ROWS; r++) {
-      for (let c = 0; c < 2; c++) {
-        if (dots.has(r * TITLE_GLYPH_COLUMNS + cell * 2 + c)) mask |= brailleDotBit(r, c)
-      }
-    }
-    glyph += String.fromCharCode(0x2800 + mask)
-  }
-  return glyph
-}
-
-// Frame path: hold each glyph, then morph to the next one dot at a time.
-// Consecutive frames differ by at most one dot, so the morph reads as one
-// travelling change rather than a redraw. The last morph lands back on the
-// first glyph, so the cycle repeats seamlessly.
-function titleGlyphMorphFrames(): string[] {
-  const glyphs = TITLE_GLYPH_SEQUENCE.map(titleGlyphDots)
-  const frames: string[] = []
-  for (let i = 0; i < glyphs.length; i++) {
-    const current = glyphs[i]!
-    const next = glyphs[(i + 1) % glyphs.length]!
-    for (let hold = 0; hold < TITLE_GLYPH_DWELL_FRAMES; hold++) frames.push(encodeTitleGlyph(current))
-    const morph = new Set(current)
-    for (const dot of [...current].filter((dot) => !next.has(dot))) {
-      morph.delete(dot)
-      frames.push(encodeTitleGlyph(morph))
-    }
-    for (const dot of [...next].filter((dot) => !current.has(dot))) {
-      morph.add(dot)
-      frames.push(encodeTitleGlyph(morph))
-    }
-  }
-  return frames
-}
-
-export const AX_CODE_TITLE_SPINNER_FRAMES = titleGlyphMorphFrames()
-
-// 26 frames (2 glyphs x 3 dwell + 20 one-dot morphs) pulse A <-> X in ~1.8s.
-export const AX_CODE_TITLE_SPINNER_INTERVAL_MS = 70
-
-export function composeAxCodeTerminalTitle(input: { working: boolean; frame?: number }) {
-  if (!input.working) return AX_CODE_TERMINAL_TITLE
-  const frames = AX_CODE_TITLE_SPINNER_FRAMES
-  const glyph = frames[(input.frame ?? 0) % frames.length]
-  return `${glyph} ${AX_CODE_TERMINAL_TITLE}`
-}
 
 const HELP_OR_VERSION = new Set(["-h", "--help", "-v", "--version"])
 

@@ -41,6 +41,7 @@ const DIALOG_COMMAND_SRC = path.join(TUI_ROOT, "component/dialog-command.tsx")
 const THEME_DIALOG_SRC = path.join(TUI_ROOT, "component/dialog-theme-list.tsx")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")
 const PROMPT_SRC = path.join(TUI_ROOT, "component/prompt/index.tsx")
+const FOOTER_ANIMATION_SRC = path.join(TUI_ROOT, "component/footer-animation.tsx")
 const PROMPT_HELPERS_SRC = path.join(TUI_ROOT, "component/prompt/prompt-helpers.ts")
 const AUTOCOMPLETE_SRC = path.join(TUI_ROOT, "component/prompt/autocomplete.tsx")
 const PROMPT_HISTORY_SRC = path.join(TUI_ROOT, "component/prompt/history.tsx")
@@ -244,10 +245,10 @@ describe("AX Code TUI stability guardrails", () => {
     expect(app).toContain("clearTuiTerminalTitle")
     expect(app).toContain("setTuiTerminalProgress")
     expect(app).toContain("AX_CODE_TERMINAL_TITLE")
-    expect(app).toContain("composeAxCodeTerminalTitle")
-    expect(app).toContain("setTitleSpinnerFrame")
-    // Busy tabs prefix a 4x4 A/X morph, then AX-Code; do not resurrect
-    // the old session-title suffix.
+    // The tab title is static "AX-Code"; the A/X morph lives in the footer
+    // (component/footer-animation), not in a per-frame tab title.
+    expect(app).not.toContain("composeAxCodeTerminalTitle")
+    expect(app).not.toContain("setTitleSpinnerFrame")
     expect(app).not.toContain("TITLE_SPINNER_FRAMES")
     expect(app).not.toContain("AX Code | ")
     // The progress keepalive interval is module state in renderer.ts, outside
@@ -1122,21 +1123,22 @@ describe("AX Code TUI stability guardrails", () => {
     expect(prompt).toContain('type === "native-spinner"')
   })
 
-  test("keeps the footer busy glyph separate from the terminal-tab morph", async () => {
+  test("keeps the footer A/X pixel morph owned by the footer component", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const footer = await fs.readFile(FOOTER_ANIMATION_SRC, "utf8")
 
-    // The footer busy indicator is two random animal emoji reshuffled every
-    // three seconds (component/footer-animation) - no frame set at all, and
-    // deliberately separate from the terminal-tab 4x4 A/X morph. The local
+    // The footer busy indicator is the A/X brand mark drawn in braille (the
+    // only CJK-safe dot-matrix family) by component/footer-animation. The local
     // 8-cell "Knight Rider" scanner (createFrames/createColors), its
-    // Ambiguous-width block glyphs, and ax-tui's one-line <spinner> must not
-    // come back.
+    // Ambiguous-width block glyphs, ax-tui's one-line <spinner>, and astral
+    // emoji must not come back.
     expect(prompt).toContain("FooterAnimationSpinner")
-    expect(prompt).not.toContain("AX_CODE_TITLE_SPINNER_FRAMES")
-    expect(prompt).not.toContain("AxTuiSpinner")
-    expect(prompt).not.toContain("createFrames")
-    expect(prompt).not.toContain("createColors")
-    expect(prompt).not.toContain("ui/spinner")
+    expect(footer).toContain("brailleDotBit")
+    expect([...footer].some((char) => (char.codePointAt(0) ?? 0) >= 0x1f000)).toBe(false)
+    for (const banned of ["AxTuiSpinner", "createFrames", "createColors", "ui/spinner"]) {
+      expect(footer).not.toContain(banned)
+      expect(prompt).not.toContain(banned)
+    }
   })
 
   test("keeps session route view namespaces distinct from core session namespaces", async () => {

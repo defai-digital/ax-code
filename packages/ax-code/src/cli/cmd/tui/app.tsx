@@ -67,11 +67,7 @@ import { TuiConfig } from "@/config/tui"
 import { DiagnosticLog } from "@/debug/diagnostic-log"
 import { Log } from "@/util/log"
 import { GITHUB_NEW_ISSUE_URL } from "@/constants/project"
-import {
-  AX_CODE_TERMINAL_TITLE,
-  AX_CODE_TITLE_SPINNER_INTERVAL_MS,
-  composeAxCodeTerminalTitle,
-} from "@/util/terminal-title"
+import { AX_CODE_TERMINAL_TITLE } from "@/util/terminal-title"
 import {
   clearTuiTerminalTitle,
   destroyTuiRenderer,
@@ -508,11 +504,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   }
 
   // While a session is working, show a busy indicator in the terminal tab
-  // via OSC 9;4 (Windows Terminal / ConEmu / Ghostty / WezTerm). The tab
-  // text stays "AX-Code", with a leading 4x4 matrix that morphs the letter
-  // "A" into "X" while the agent works.
-  const [titleSpinnerFrame, setTitleSpinnerFrame] = createSignal(0)
-
+  // via OSC 9;4 (Windows Terminal / ConEmu / Ghostty / WezTerm). The tab text
+  // stays a static "AX-Code": the animated A/X brand pulse lives in the footer
+  // busy indicator (component/footer-animation), not in the tab title.
   createEffect(() => {
     setTuiTerminalProgress(terminalTitleEnabled() && sessionWorking(), renderProfile)
   })
@@ -524,23 +518,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   onCleanup(() => setTuiTerminalProgress(false, renderProfile))
 
   createEffect(() => {
-    if (!terminalTitleEnabled() || !renderProfile.allowTerminalTitle || !sessionWorking()) {
-      setTitleSpinnerFrame(0)
-      return
-    }
-    const timer = setInterval(() => setTitleSpinnerFrame((frame) => frame + 1), AX_CODE_TITLE_SPINNER_INTERVAL_MS)
-    onCleanup(() => clearInterval(timer))
-  })
-
-  createEffect(() => {
     if (!terminalTitleEnabled()) {
       clearTuiTerminalTitle(renderProfile)
       return
     }
-    setTuiTerminalTitle(
-      composeAxCodeTerminalTitle({ working: sessionWorking(), frame: titleSpinnerFrame() }),
-      renderProfile,
-    )
+    setTuiTerminalTitle(AX_CODE_TERMINAL_TITLE, renderProfile)
   })
 
   // Terminal-native notifications (OSC 9 / BEL fallback, ported from
