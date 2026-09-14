@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot } from "solid-js"
+import { InternalKeyHandler, KeyEvent, PasteEvent, parseKeypress } from "ax-tui"
 
 const mocks = vi.hoisted(() => ({
+  renderer: undefined as unknown as { keyInput: InternalKeyHandler },
   destroy: vi.fn(async () => {}),
   flush: vi.fn(),
   signal: undefined as ((signal: NodeJS.Signals) => void | Promise<void>) | undefined,
@@ -10,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../../src/cli/cmd/tui/context/helper", () => ({
   createSimpleContext: (input: { init: (props: unknown) => unknown }) => ({ provider: input.init }),
 }))
-vi.mock("ax-tui/solid", () => ({ useRenderer: () => ({}) }))
+vi.mock("ax-tui/solid", () => ({ useRenderer: () => mocks.renderer }))
 vi.mock("../../../src/cli/cmd/tui/renderer", () => ({ destroyTuiRenderer: mocks.destroy }))
 vi.mock("../../../src/cli/cmd/tui/win32", () => ({ win32FlushInputBuffer: mocks.flush }))
 vi.mock("../../../src/util/signals", () => ({
@@ -28,6 +30,7 @@ const disposals: (() => void)[] = []
 let previousExitCode: typeof process.exitCode
 
 beforeEach(() => {
+  mocks.renderer = { keyInput: new InternalKeyHandler() }
   mocks.destroy.mockReset().mockResolvedValue(undefined)
   mocks.flush.mockReset()
   previousExitCode = process.exitCode
@@ -187,5 +190,53 @@ describe("TUI exit lifecycle", () => {
     expect(mocks.flush).toHaveBeenCalledTimes(1)
     expect(onExit).toHaveBeenCalledTimes(1)
     expect(process.exitCode).toBe(1)
+  })
+  test("exit immediately blocks the remainder of an input batch", async () => {
+    const { exit } = setup()
+    const shortcut = vi.fn()
+    const paste = vi.fn()
+    mocks.renderer.keyInput.on("keypress", shortcut)
+    mocks.renderer.keyInput.on("paste", paste)
+    const pending = exit()
+    mocks.renderer.keyInput.emit("keypress", new KeyEvent(parseKeypress("\r")!))
+    mocks.renderer.keyInput.emit("paste", new PasteEvent(Buffer.from("late input")))
+    expect(shortcut).not.toHaveBeenCalled()
+    expect(paste).not.toHaveBeenCalled()
+    await pending
+  })
+
+  test("settled playback cannot reopen input before renderer teardown", async () => {
+    const { exit } = setup()
+    const animation = Promise.withResolvers<void>()
+    exit.onFlourish(() => animation.promise)
+    const shortcut = vi.fn()
+    const paste = vi.fn()
+    mocks.renderer.keyInput.on("keypress", shortcut)
+    mocks.renderer.keyInput.on("paste", paste)
+    const pending = exit.flourish()
+    await Promise.resolve()
+    await Promise.resolve()
+    // App hides the animation and settles its promise during synchronous
+    // parser dispatch, before the exit continuation can destroy the renderer.
+    animation.resolve()
+    mocks.renderer.keyInput.emit("keypress", new KeyEvent(parseKeypress("\r")!))
+    mocks.renderer.keyInput.emit("paste", new PasteEvent(Buffer.from("late input")))
+    expect(shortcut).not.toHaveBeenCalled()
+    expect(paste).not.toHaveBeenCalled()
+    await pending
+    expect(mocks.renderer.keyInput.listenerCount("keypress")).toBe(1)
+    expect(mocks.renderer.keyInput.listenerCount("paste")).toBe(1)
+    expect(mocks.renderer.keyInput.listenerCount("keyrelease")).toBe(0)
+  })
+
+  test.each(["\x03", "\x1b"])("shutdown dismissal %j works without a mounted animation", async (raw) => {
+    const { exit, onExit } = setup()
+    exit.onFlourish(() => new Promise(() => {}))
+    const pending = exit.flourish()
+    await Promise.resolve()
+    await Promise.resolve()
+    mocks.renderer.keyInput.emit("keypress", new KeyEvent(parseKeypress(raw)!))
+    await vi.waitFor(() => expect(onExit).toHaveBeenCalledTimes(1), { timeout: 200 })
+    await pending
   })
 })

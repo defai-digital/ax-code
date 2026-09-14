@@ -1,7 +1,8 @@
 import { For, createSignal, onCleanup, onMount } from "solid-js"
-import { RGBA, TextAttributes, type KeyEvent, type PasteEvent } from "ax-tui"
+import { RGBA, TextAttributes } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
+import { captureTuiInput } from "@tui/util/capture-input"
 import { MATRIX_RAIN_LEVEL_COLORS } from "./matrix-rain-palette"
 import {
   MATRIX_RAIN_DURATION_MS,
@@ -89,22 +90,7 @@ export function MatrixRain(props: {
   // merely before focused renderables. Paste has a separate dispatch channel.
   onMount(() => {
     if (!props.captureInput) return
-    const consume = (evt: KeyEvent | PasteEvent) => {
-      evt.preventDefault()
-      evt.stopPropagation()
-    }
-    const keypress = (evt: KeyEvent) => {
-      consume(evt)
-      if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) props.onDone("skip")
-    }
-    renderer.keyInput.prependListener("keypress", keypress)
-    renderer.keyInput.prependListener("keyrelease", consume)
-    renderer.keyInput.prependListener("paste", consume)
-    onCleanup(() => {
-      renderer.keyInput.off("keypress", keypress)
-      renderer.keyInput.off("keyrelease", consume)
-      renderer.keyInput.off("paste", consume)
-    })
+    onCleanup(captureTuiInput(renderer.keyInput, () => props.onDone("skip")))
   })
 
   // Opening playback preserves ordinary input and yields to selection.

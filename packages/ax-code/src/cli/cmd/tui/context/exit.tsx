@@ -6,6 +6,7 @@ import { win32FlushInputBuffer } from "../win32"
 import { destroyTuiRenderer } from "../renderer"
 import { registerShutdownSignals } from "@/util/signals"
 import { Log } from "@/util/log"
+import { captureTuiInput } from "../util/capture-input"
 type Exit = ((reason?: unknown) => Promise<void>) & {
   message: {
     set: (value?: string) => () => void
@@ -36,6 +37,7 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
     let flourishRequested = false
     let exitReason: unknown
     const flourishAbort = new AbortController()
+    let releaseInput = () => {}
     const store = {
       set: (value?: string) => {
         const prev = message
@@ -86,45 +88,50 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
           flourishAbort.abort()
           return task
         }
+        // Keep admission closed for the entire shutdown, including the rest of
+        // the input batch that dismisses and unmounts the animation.
+        releaseInput = captureTuiInput(renderer.keyInput, () => flourishAbort.abort())
         const playFlourish = flourishRequested && reason === undefined
         flourishRequested = false
         // Publish the task before invoking a handler that can itself request exit.
-        task = Promise.resolve().then(async () => {
-          if (playFlourish) await runFlourish()
-          let failure: { error: unknown } | undefined
-          const recordFailure = (error: unknown) => {
-            failure ??= { error }
-            process.exitCode = 1
-          }
-          // Each cleanup stage is independent: renderer failure must not leave
-          // queued input for the shell, hide the exit reason or strand a backend.
-          try {
-            await destroyTuiRenderer(renderer)
-          } catch (error) {
-            recordFailure(error)
-          }
-          try {
-            win32FlushInputBuffer()
-          } catch (error) {
-            recordFailure(error)
-          }
-          try {
-            if (exitReason !== undefined) {
-              const formatted = FormatError(exitReason) ?? FormatUnknownError(exitReason)
-              if (formatted) process.stderr.write(formatted + "\n")
+        task = Promise.resolve()
+          .then(async () => {
+            if (playFlourish) await runFlourish()
+            let failure: { error: unknown } | undefined
+            const recordFailure = (error: unknown) => {
+              failure ??= { error }
+              process.exitCode = 1
             }
-            const text = store.get()
-            if (text) process.stdout.write(text + "\n")
-          } catch (error) {
-            recordFailure(error)
-          }
-          try {
-            await input.onExit?.()
-          } catch (error) {
-            recordFailure(error)
-          }
-          if (failure) throw failure.error
-        })
+            // Each cleanup stage is independent: renderer failure must not leave
+            // queued input for the shell, hide the exit reason or strand a backend.
+            try {
+              await destroyTuiRenderer(renderer)
+            } catch (error) {
+              recordFailure(error)
+            }
+            try {
+              win32FlushInputBuffer()
+            } catch (error) {
+              recordFailure(error)
+            }
+            try {
+              if (exitReason !== undefined) {
+                const formatted = FormatError(exitReason) ?? FormatUnknownError(exitReason)
+                if (formatted) process.stderr.write(formatted + "\n")
+              }
+              const text = store.get()
+              if (text) process.stdout.write(text + "\n")
+            } catch (error) {
+              recordFailure(error)
+            }
+            try {
+              await input.onExit?.()
+            } catch (error) {
+              recordFailure(error)
+            }
+            if (failure) throw failure.error
+          })
+          .finally(() => releaseInput())
         return task
       },
       {
@@ -149,6 +156,7 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
     onCleanup(() => {
       unregister()
       flourishAbort.abort()
+      releaseInput()
     })
     return exit
   },
