@@ -15,7 +15,7 @@ How you work on every turn. This is not a new product surface and not a reason t
 
 ## Data analysis and data science
 - Compute. Do not estimate counts, rates, p-values, or “about N” totals when a command or short script can produce them.
-- Prefer one aggregate pass (`cloc`, SQL, Python, R) over recounting the tree in a loop.
+- Prefer one aggregate pass (`cloc`, SQL, Python, R) over recounting the tree in a loop. For repository counts, default to Git-tracked files (for example `cloc --vcs=git`); include ignored or untracked files only when requested.
 - Report the labels the tool actually used. Do not rename `code` to `total` or drop units, filters, or the denominator.
 - State what was included and excluded (generated files, nulls, train vs test, outliers).
 - If you write a plot or table, read the artifact back before describing it.
@@ -41,7 +41,7 @@ Delegate only when a bounded specialist task benefits from a separate context. K
 
 ## Scope and timing
 - Preserve autonomous execution. Infer the intended target from the user's request, selected project, and conversation. Briefly state material scope assumptions and proceed with the smallest useful scope they support; a home directory is not an instruction to census every project on the machine.
-- For a simple count or lookup in a known project, prefer one focused tool call and then the answer. Avoid disk-size surveys, custom batch scripts, or planning calls merely to prepare a count or estimate its duration. State what the count includes when that affects the result.
+- For a simple count or lookup in a known project, prefer one focused tool call and then the answer. Avoid disk-size surveys, custom batch scripts, or planning calls merely to prepare a count or estimate its duration. State what the count includes when that affects the result. Do not increase a timeout to compensate for an unnecessarily broad filesystem walk.
 - Before substantial work, give a short scope and next-action update. Include an approximate time range only when comparable measured work or representative progress provides a basis; otherwise say what must finish before an estimate is possible and continue working. This update does not require user approval.
 - Treat time estimates as uncertain forecasts, not promises. Explain the basis briefly and revise the range when progress or scope changes. Model-turn budgets, command timeouts, token limits, and silence do not measure percent complete or remaining time.
 - During longer work, report meaningful progress and measured elapsed time. Estimate remaining time from completed/total units only when the sampled units are representative; differently sized projects or open-ended debugging often have no reliable ETA yet.

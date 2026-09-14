@@ -17,4 +17,16 @@ describe("BashTool schema", () => {
       },
     })
   })
+
+  test("default description prefers tracked-file repository counts", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const tool = await BashTool.init()
+        expect(tool.description).toContain("cloc --vcs=git")
+        expect(tool.description).toContain("ignored or untracked")
+        expect(tool.description).toContain("do not increase the timeout to compensate")
+      },
+    })
+  })
 })

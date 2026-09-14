@@ -86,11 +86,20 @@ describe("session.system", () => {
       api: { id: "qwen3.7-max", url: "https://dashscope.aliyuncs.com" },
     } as any)
     expect(qwen).toEqual([PROMPT_DEFAULT, PROMPT_CRAFT])
+    const flash = SystemPrompt.provider({
+      id: "defai-01-ax-trust-com/deepseek-flash",
+      providerID: "defai-01-ax-trust-com",
+      api: { id: "deepseek-flash", url: "https://example.test/v1" },
+    } as any)
+    expect(flash).toEqual([PROMPT_DEFAULT, PROMPT_CRAFT])
     expect(PROMPT_CRAFT).toContain("Compute. Do not estimate")
     expect(PROMPT_CRAFT).toContain("Search, then open the page")
     expect(PROMPT_CRAFT).toContain("Keep simple lookups and counts local")
     expect(PROMPT_CRAFT).toContain("Start with one investigator for one call path")
     expect(PROMPT_CRAFT).toContain("Do not ask permission to delegate")
+    expect(PROMPT_CRAFT).toContain("Git-tracked files")
+    expect(PROMPT_CRAFT).toContain("ignored or untracked")
+    expect(PROMPT_CRAFT).toContain("Do not increase a timeout")
     expect(PROMPT_DEFAULT).not.toContain("fewer than 4 lines")
     expect(PROMPT_DEFAULT).not.toContain("One word answers are best")
     expect(PROMPT_DEFAULT).toContain("Default to doing the work")
