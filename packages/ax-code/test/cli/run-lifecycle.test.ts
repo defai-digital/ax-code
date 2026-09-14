@@ -12,6 +12,7 @@ import {
   RunCommand,
 } from "../../src/cli/cmd/run"
 import { tmpdir } from "../fixture/fixture"
+import { Provider } from "../../src/provider/provider"
 
 test("run command fallback tool formatter handles non-json-safe input", () => {
   const input: Record<string, unknown> = { count: 1n }
@@ -99,6 +100,35 @@ test("run command follows an explicit model to the connected provider serving th
   })
   expect(kept).toBe(providers)
   expect(refreshes).toBe(0)
+})
+
+test.each([
+  ["deepseek", "deepseek-flash"],
+  ["glm", "glm-5.3-flash"],
+  ["qwen", "qwen3.8-flash"],
+])("run resolves %s to Flash on a connected gateway", async (family, modelID) => {
+  const requested = Provider.parseModel(family)
+  const providers = [
+    { id: requested.providerID, models: { [modelID]: {} } },
+    { id: "gateway", models: { [modelID]: {} } },
+  ]
+  const input = { providers, connected: ["gateway"], ...requested }
+  expect(resolveRunModel(input)).toEqual({ providerID: "gateway", modelID })
+  expect(resolveRunModel({ ...input, ...Provider.parseModel(`gateway/${family}`) })).toEqual({
+    providerID: "gateway",
+    modelID,
+  })
+  const refresh = async () => {
+    throw new Error("A connected Flash model must not trigger discovery")
+  }
+  expect(await refreshRunProvidersOnModelMiss({ ...input, refresh })).toBe(providers)
+  expect(resolveRunModel({ ...input, connected: [] })).toBeUndefined()
+  expect(
+    resolveRunModel({
+      ...input,
+      providers: [{ id: "gateway", models: { "deepseek-v4-pro": {}, "glm-5.3": {}, "qwen3.8-max": {} } }],
+    }),
+  ).toBeUndefined()
 })
 
 test("run command validates an explicit model before creating a session", async () => {

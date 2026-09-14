@@ -28,6 +28,30 @@ imply that every model is free or available on every account.
 
 ## Runtime choices
 
+### Selecting a model without a version
+
+Both the TUI and `ax-code run` accept these case-insensitive `--model` family names:
+
+| Family     | Model            |
+| ---------- | ---------------- |
+| `deepseek` | `deepseek-flash` |
+| `glm`      | `glm-5.3-flash`  |
+| `qwen`     | `qwen3.8-flash`  |
+
+For example, `ax-code --model glm` opens the TUI with GLM Flash, and
+`ax-code run --model qwen "Review this change"` requests Qwen Flash.
+Family names resolve through the native provider or a connected gateway serving
+the same model. You can also name the provider: `--model my-gateway/glm`.
+Use a full ID such as `my-gateway/glm-5.3` to request a specific version or tier.
+
+Omitting `--model` preserves configured, agent, session, and recent model choices.
+When no usable choice exists, the shared fallback order starts with DeepSeek Flash,
+GLM Flash, then Qwen Flash across connected providers. Provider setup has its own
+defaults: Alibaba Coding Plan uses `qwen3-coder-plus`; Alibaba Token Plan uses
+`qwen3.8-flash`.
+
+### Connecting a runtime
+
 The choices in `/connect` are ordered **API Cloud Provider**, **CLI Provider**,
 **AX-Engine runtime**, **Local LLM runtime**, **Private GPU cloud**, and **AX Trust**.
 AX-Engine runtime opens local model selection and runtime management directly.

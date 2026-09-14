@@ -1,11 +1,24 @@
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { modelSelectableForProvider, skuKey } from "./model-selectability"
 
+const FAMILY_DEFAULTS = {
+  deepseek: { providerID: "deepseek", modelID: "deepseek-flash" },
+  glm: { providerID: "zai", modelID: "glm-5.3-flash" },
+  qwen: { providerID: "alibaba-token-plan", modelID: "qwen3.8-flash" },
+} as const
+
+/** Expand only unversioned family names; explicit model IDs stay verbatim. */
+export function modelFamilyDefault(name: string) {
+  const family = name.trim().toLowerCase()
+  if (family === "deepseek" || family === "glm" || family === "qwen") return FAMILY_DEFAULTS[family]
+  return undefined
+}
+
 /** Session default when the user does not pass --model / config.model. */
 export const IMPLICIT_DEFAULT_MODEL_SKUS = [
-  "deepseek-flash",
-  "glm-5.3-flash",
-  "qwen3.8-flash",
+  FAMILY_DEFAULTS.deepseek.modelID,
+  FAMILY_DEFAULTS.glm.modelID,
+  FAMILY_DEFAULTS.qwen.modelID,
   "MiniMax-M3",
   "grok-4.6",
   "claude-sonnet-5",
@@ -24,10 +37,10 @@ type SelectableProvider = {
 
 export function preferredDefaultSkuForProvider(providerID: string): string | undefined {
   if (providerID === AX_ENGINE_PROVIDER_ID) return undefined
-  if (providerID === "deepseek" || providerID.startsWith("deepseek-")) return "deepseek-flash"
-  if (providerID.startsWith("zai") || providerID.startsWith("zhipuai")) return "glm-5.3-flash"
+  if (providerID === "deepseek" || providerID.startsWith("deepseek-")) return FAMILY_DEFAULTS.deepseek.modelID
+  if (providerID.startsWith("zai") || providerID.startsWith("zhipuai")) return FAMILY_DEFAULTS.glm.modelID
   if (providerID === "alibaba-coding-plan" || providerID === "alibaba-coding-plan-cn") return "qwen3-coder-plus"
-  if (providerID.startsWith("alibaba")) return "qwen3.8-flash"
+  if (providerID.startsWith("alibaba")) return FAMILY_DEFAULTS.qwen.modelID
   if (providerID.startsWith("minimax")) return "MiniMax-M3"
   if (providerID === "meta") return "muse-spark-1.3"
   if (providerID === "google" || providerID === "google-vertex") return "gemini-3.8-flash"
