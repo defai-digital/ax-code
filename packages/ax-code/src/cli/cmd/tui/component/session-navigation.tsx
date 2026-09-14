@@ -1,6 +1,7 @@
 import type { RGBA } from "ax-tui"
 import { createMemo, For, Show, type Setter } from "solid-js"
 import { useKV } from "@tui/context/kv"
+import { NAVIGATION_WIDTH_DEFAULT, chromeWidth } from "../chrome-width"
 import { navigationPanelInnerWidth, navigationRailInnerWidth } from "../navigation/navigation-layout"
 import {
   activeNavigationSessions,
@@ -92,6 +93,7 @@ export function SessionNavigation(props: {
   const slots = createMemo(() => new Map(local.session.slots().map((id, index) => [id, index + 1])))
   const innerWidth = () => navigationRailInnerWidth(props.width)
   const panelWidth = () => navigationPanelInnerWidth(props.width)
+  const preferredWidth = () => chromeWidth(kv.get("navigation_width"), NAVIGATION_WIDTH_DEFAULT)
 
   function clearNavigationList() {
     void confirmNavigationClear({
@@ -253,12 +255,14 @@ export function SessionNavigation(props: {
         <RailRule width={innerWidth()} color={theme.borderSubtle} />
         <box flexShrink={0} flexDirection="row" gap={2}>
           <ChromeAction onMouseUp={() => command.trigger("session.navigation.info")}>Details</ChromeAction>
-          <ChromeAction
-            onMouseUp={() => command.trigger("session.navigation.width")}
-          >{`Width ${props.width}`}</ChromeAction>
           <ChromeAction onMouseUp={clearNavigationList}>Clear</ChromeAction>
         </box>
-        <ChromeAction onMouseUp={() => command.trigger("session.navigation")}>/navigation</ChromeAction>
+        <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap">
+          <ChromeAction onMouseUp={() => command.trigger("session.navigation")}>/navigation</ChromeAction>
+          <ChromeAction
+            onMouseUp={() => command.trigger("session.navigation.width")}
+          >{`Width ${preferredWidth()}`}</ChromeAction>
+        </box>
       </box>
     </box>
   )

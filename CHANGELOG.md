@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Offer 20/24/28/30/32/36/40-column session chrome widths, default the left navigation rail to 28 columns and the right sidebar to 32, and place the navigation Width action beside `/navigation`.
+
 ## [7.17.10] - 2026-09-14
 
 ### Changed

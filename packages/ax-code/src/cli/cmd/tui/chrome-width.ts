@@ -1,6 +1,6 @@
-export const CHROME_WIDTHS = [20, 24, 30, 36, 40] as const
-export const NAVIGATION_WIDTH_DEFAULT = 30
-export const SIDEBAR_WIDTH_DEFAULT = 36
+export const CHROME_WIDTHS = [20, 24, 28, 30, 32, 36, 40] as const
+export const NAVIGATION_WIDTH_DEFAULT = 28
+export const SIDEBAR_WIDTH_DEFAULT = 32
 
 export type ChromeWidth = (typeof CHROME_WIDTHS)[number]
 

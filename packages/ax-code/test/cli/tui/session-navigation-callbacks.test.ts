@@ -191,7 +191,7 @@ describe("session navigation callbacks", () => {
     const tree = mount(() => SessionNavigation(navigationProps()))
     click(tree, "workspace")
     click(tree, "Details")
-    click(tree, "Width 24")
+    click(tree, "Width 28")
     expect(mocked.trigger.mock.calls).toEqual([
       ["session.navigation.info"],
       ["session.navigation.info"],
@@ -199,6 +199,15 @@ describe("session navigation callbacks", () => {
     ])
     expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()
+  })
+
+  test("shows the persisted navigation width preference instead of the clamped rail", () => {
+    mocked.kv.navigation_width = 40
+    const tree = mount(() => SessionNavigation(navigationProps()))
+    expect(text(tree)).toContain("Width 40")
+    expect(text(tree)).not.toContain("Width 24")
+    click(tree, "Width 40")
+    expect(mocked.trigger).toHaveBeenCalledExactlyOnceWith("session.navigation.width")
   })
 
   test("clears historical rows from the rail without deleting or opening sessions", async () => {
@@ -474,10 +483,10 @@ describe("navigation recovery entry and width selection", () => {
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
-  test.each([20, 24, 30, 36, 40])("persists the %i-column width preset and closes the picker", (width) => {
+  test.each([20, 24, 28, 30, 32, 36, 40])("persists the %i-column width preset and closes the picker", (width) => {
     const tree = mount(DialogNavigationWidth)
     const options = tree.props.options as { title: string; value: number }[]
-    expect(options.map((option) => option.value)).toEqual([20, 24, 30, 36, 40])
+    expect(options.map((option) => option.value)).toEqual([20, 24, 28, 30, 32, 36, 40])
     expect(mocked.setSize).toHaveBeenCalledWith("medium")
     const select = tree.props.onSelect as (option: { title: string; value: number }) => void
     select(options.find((option) => option.value === width)!)
@@ -489,25 +498,28 @@ describe("navigation recovery entry and width selection", () => {
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
-  test("defaults the sidebar width picker to 36 columns", () => {
-    expect(mount(DialogSidebarWidth).props.current).toBe(36)
-    expect(mount(DialogNavigationWidth).props.current).toBe(30)
+  test("defaults the sidebar width picker to 32 columns", () => {
+    expect(mount(DialogSidebarWidth).props.current).toBe(32)
+    expect(mount(DialogNavigationWidth).props.current).toBe(28)
   })
 
-  test.each([20, 24, 30, 36, 40])("persists the %i-column sidebar width preset and closes the picker", (width) => {
-    const tree = mount(DialogSidebarWidth)
-    const options = tree.props.options as { title: string; value: number }[]
-    expect(options.map((option) => option.value)).toEqual([20, 24, 30, 36, 40])
-    expect(tree.props.title).toBe("Sidebar width")
-    const select = tree.props.onSelect as (option: { title: string; value: number }) => void
-    select(options.find((option) => option.value === width)!)
-    expect(mocked.setKV).toHaveBeenCalledExactlyOnceWith("sidebar_width", width)
-    expect(mocked.clear).toHaveBeenCalledOnce()
-    disposals.pop()!()
-    expect(mount(DialogSidebarWidth).props.current).toBe(width)
-    expect(mocked.navigate).not.toHaveBeenCalled()
-    expect(mocked.reply).not.toHaveBeenCalled()
-  })
+  test.each([20, 24, 28, 30, 32, 36, 40])(
+    "persists the %i-column sidebar width preset and closes the picker",
+    (width) => {
+      const tree = mount(DialogSidebarWidth)
+      const options = tree.props.options as { title: string; value: number }[]
+      expect(options.map((option) => option.value)).toEqual([20, 24, 28, 30, 32, 36, 40])
+      expect(tree.props.title).toBe("Sidebar width")
+      const select = tree.props.onSelect as (option: { title: string; value: number }) => void
+      select(options.find((option) => option.value === width)!)
+      expect(mocked.setKV).toHaveBeenCalledExactlyOnceWith("sidebar_width", width)
+      expect(mocked.clear).toHaveBeenCalledOnce()
+      disposals.pop()!()
+      expect(mount(DialogSidebarWidth).props.current).toBe(width)
+      expect(mocked.navigate).not.toHaveBeenCalled()
+      expect(mocked.reply).not.toHaveBeenCalled()
+    },
+  )
 })
 
 function sessionPicker(navigation: boolean) {

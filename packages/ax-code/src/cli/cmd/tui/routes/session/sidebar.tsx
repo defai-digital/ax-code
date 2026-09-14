@@ -36,6 +36,7 @@ import {
 import { DialogPrompt } from "../../ui/dialog-prompt"
 import { useDialog } from "../../ui/dialog"
 
+import { SIDEBAR_WIDTH_DEFAULT, chromeWidth } from "../../chrome-width"
 import { computeSidebarWidth } from "./layout"
 import { sidebarGraphIndexStatusText } from "./sidebar-index-view-model"
 import { sidebarLocalInferenceView } from "./sidebar-local-inference-view-model"
@@ -1095,11 +1096,11 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <span style={{ fg: theme.text }}>{directory().split("/").at(-1)}</span>
               </Show>
             </text>
-            <box flexShrink={0} flexDirection="row" gap={2}>
+            <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap">
               <ChromeAction onMouseUp={() => command.trigger("session.sidebar.toggle")}>/sidebar</ChromeAction>
               <ChromeAction
                 onMouseUp={() => command.trigger("session.sidebar.width")}
-              >{`Width ${sidebarWidth()}`}</ChromeAction>
+              >{`Width ${chromeWidth(kv.get("sidebar_width"), SIDEBAR_WIDTH_DEFAULT)}`}</ChromeAction>
             </box>
             <ModeChips />
             <GoalChip sessionID={props.sessionID} />
