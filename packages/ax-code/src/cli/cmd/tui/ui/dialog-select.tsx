@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { InputRenderable, RGBA, ScrollBoxRenderable, TextAttributes } from "ax-tui"
 import { useTheme, selectedForeground } from "@tui/context/theme"
 import { batch, createEffect, createMemo, For, Show, type JSX, on, onCleanup } from "solid-js"
@@ -65,6 +66,7 @@ export type DialogSelectRef<T> = {
 }
 
 export function DialogSelect<T>(props: DialogSelectProps<T>) {
+  const { t } = useLanguage()
   const dialog = useDialog()
   const toast = useToast()
   const { theme } = useTheme()
@@ -381,7 +383,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
               )
               onCleanup(cancel)
             }}
-            placeholder={props.placeholder ?? "Search"}
+            placeholder={props.placeholder ?? t("common.search")}
           />
         </box>
       </box>
@@ -389,7 +391,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
         when={grouped().length > 0}
         fallback={
           <box paddingLeft={4} paddingRight={4} paddingTop={1}>
-            <text fg={theme.textMuted}>No results found</text>
+            <text fg={theme.textMuted}>{t("common.noResults")}</text>
           </box>
         }
       >

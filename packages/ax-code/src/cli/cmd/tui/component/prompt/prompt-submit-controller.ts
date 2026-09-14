@@ -1,3 +1,4 @@
+import { english, type Translate, type MessageKey } from "../../i18n"
 import { produce } from "solid-js/store"
 import type { Session } from "@ax-code/sdk/v2"
 import type { TextareaRenderable } from "ax-tui"
@@ -53,6 +54,8 @@ type PromptSubmitSdk = Pick<ReturnType<typeof useSDK>, "url" | "directory" | "ba
 }
 
 export type PromptSubmitHost = {
+  t?: Translate
+  conversationSystem?: () => string | undefined
   input: PromptSubmitComposer
   store: PromptSubmitStore
   setStore: <Key extends keyof PromptSubmitStore>(key: Key, value: PromptSubmitStore[Key]) => void
@@ -112,6 +115,7 @@ export type PromptSubmitHost = {
 }
 
 export function createPromptSubmitController(host: PromptSubmitHost) {
+  const t = host.t ?? english
   let submitAbort: AbortController | undefined
   let submitRunID = 0
   let submitInFlight = false
@@ -152,7 +156,19 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     const message = errorMessage(error)
     host.log.error(`${action} failed`, { error })
     host.toast.show({
-      message: `${action} failed: ${message}`,
+      message: t("error.request", {
+        action: t(
+          (
+            {
+              "Prompt submission": "error.promptAction",
+              "Command submission": "error.commandAction",
+              "Shell command submission": "error.shellAction",
+              "Session creation": "error.sessionAction",
+            } as Record<string, MessageKey>
+          )[action] ?? "error.promptAction",
+        ),
+        message,
+      }),
       variant: "error",
     })
   }
@@ -166,7 +182,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     )
   }
 
-  function cancelPendingSubmit(message = "Prompt submission cancelled") {
+  function cancelPendingSubmit(message = t("error.cancelled")) {
     if (!host.submitPending() && !submitInFlight) return false
     submitRunID++
     if (cancelRouteHandoff) {
@@ -357,6 +373,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     submitInFlight = true
     setSubmitPending(true)
     const variant = local.model.variant.current()
+    const conversationSystem = currentMode === "shell" ? undefined : host.conversationSystem?.()
     const fingerprint = JSON.stringify({
       sessionID,
       text: submitText,
@@ -365,6 +382,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       agent: local.agent.current().name,
       variant,
       mode: currentMode,
+      system: conversationSystem,
     })
     const retry = retrySubmission?.fingerprint === fingerprint ? retrySubmission : undefined
     const messageID = retry?.messageID ?? MessageID.ascending()
@@ -551,6 +569,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
             model: providerModelKey(selectedModel),
             messageID,
             variant,
+            system: conversationSystem,
             parts: nonTextParts
               .filter((x: PromptInfo["parts"][number]) => x.type === "file")
               .map((x) => ({
@@ -573,6 +592,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
             agent: local.agent.current().name,
             model: selectedModel,
             variant,
+            system: conversationSystem,
             parts: [
               {
                 id: PartID.ascending(),

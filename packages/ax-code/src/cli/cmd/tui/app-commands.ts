@@ -1,3 +1,4 @@
+import { english, type Translate } from "./i18n"
 import { Flag } from "@/flag/flag"
 import { WorkMode } from "@/mode/work-mode"
 import { effortChangeMessage } from "@/provider/effort-label"
@@ -29,6 +30,7 @@ export type AppCommandSandbox = {
 }
 
 export type AppCommandsInput = {
+  t?: Translate
   dialogs: TuiDialogLoaders
   sync: any
   kv: any
@@ -70,6 +72,7 @@ export type AppCommandsInput = {
 }
 
 export function appCommands(input: AppCommandsInput): CommandOption[] {
+  const t = input.t ?? english
   const {
     dialogs,
     sync,
@@ -104,10 +107,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
 
   return [
     {
-      title: "Switch session",
+      title: t("command.switchSession"),
       value: "session.list",
       keybind: "session_list",
-      category: "Session",
+      category: t("common.session"),
       suggested: sync.data.session.length > 0,
       slash: {
         name: "sessions",
@@ -118,31 +121,31 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Open pending requests",
+      title: t("command.pending"),
       value: "session.attention",
-      category: "Session",
+      category: t("common.session"),
       slash: { name: "attention" },
       onSelect: () => {
         void dialogs.showAttentionDialog()
       },
     },
     {
-      title: "Show current project and session details",
+      title: t("command.details"),
       value: "session.navigation.info",
-      category: "Session",
+      category: t("common.session"),
       slash: { name: "navigation-info" },
       onSelect: () => {
         const sessionID = route.data.type === "session" ? route.data.sessionID : undefined
         void dialogs.showNavigationInfo(
           sdk.directory ?? sync.data.path.directory ?? "Unavailable",
-          sessionID ? (sync.session.get(sessionID)?.title ?? sessionID) : "New session",
+          sessionID ? (sync.session.get(sessionID)?.title ?? sessionID) : t("command.newSession"),
         )
       },
     },
     {
-      title: "Toggle recent / active navigation sessions",
+      title: t("command.navigationFilter"),
       value: "session.navigation.filter",
-      category: "Session",
+      category: t("common.session"),
       slash: { name: "navigation-filter" },
       onSelect: () => {
         kv.set("navigation_filter", navigationFilter(kv.get("navigation_filter")) === "recent" ? "active" : "recent")
@@ -150,27 +153,27 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Set session navigation width",
+      title: t("command.navigationWidth"),
       value: "session.navigation.width",
-      category: "Session",
+      category: t("common.session"),
       slash: { name: "navigation-width" },
       onSelect: () => {
         void dialogs.showNavigationWidthDialog()
       },
     },
     {
-      title: "Set session sidebar width",
+      title: t("command.sidebarWidth"),
       value: "session.sidebar.width",
-      category: "Session",
+      category: t("common.session"),
       slash: { name: "sidebar-width" },
       onSelect: () => {
         void dialogs.showSidebarWidthDialog()
       },
     },
     {
-      title: "Clear session navigation list",
+      title: t("command.clearNavigation"),
       value: "session.navigation.clear",
-      category: "Session",
+      category: t("common.session"),
       slash: { name: "navigation-clear" },
       onSelect: async () => {
         await confirmNavigationClear({
@@ -182,12 +185,12 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     {
       title:
         input.terminalWidth() < NAVIGATION_DOCK_MIN_WIDTH
-          ? "Open session navigation"
+          ? t("command.openNavigation")
           : kv.get("navigation_visible", true)
-            ? "Hide session navigation"
-            : "Show session navigation",
+            ? t("command.hideNavigation")
+            : t("command.showNavigation"),
       value: "session.navigation",
-      category: "Session",
+      category: t("common.session"),
       slash: { name: "navigation" },
       onSelect: () => {
         if (input.terminalWidth() < NAVIGATION_DOCK_MIN_WIDTH) {
@@ -201,9 +204,9 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     ...(Flag.AX_CODE_EXPERIMENTAL_WORKSPACES
       ? [
           {
-            title: "Manage workspaces",
+            title: t("command.workspaces"),
             value: "workspace.list",
-            category: "Workspace",
+            category: t("category.workspace"),
             suggested: true,
             onSelect: () => {
               void dialogs.showWorkspaceListDialog()
@@ -212,11 +215,11 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         ]
       : []),
     {
-      title: "New session",
+      title: t("command.newSession"),
       suggested: route.data.type === "session",
       value: "session.new",
       keybind: "session_new",
-      category: "Session",
+      category: t("common.session"),
       slash: {
         name: "new",
         aliases: ["clear"],
@@ -253,21 +256,21 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         { keybind: "session_quick_switch_9", slot: 9 },
       ] as const
     ).map(({ keybind: kb, slot }) => ({
-      title: `Switch to pinned session ${slot}`,
+      title: t("command.pinned", { slot }),
       value: `session.quick_switch.${slot}`,
       keybind: kb,
-      category: "Session",
+      category: t("common.session"),
       onSelect: () => {
         local.session.quickSwitch(slot)
         dialog.clear()
       },
     })),
     {
-      title: "Switch model",
+      title: t("command.switchModel"),
       value: "model.list",
       keybind: "model_list",
       suggested: true,
-      category: "Agent",
+      category: t("category.agent"),
       slash: {
         name: "model",
         aliases: ["models"],
@@ -277,50 +280,50 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Model cycle",
+      title: t("command.modelCycle"),
       value: "model.cycle_recent",
       keybind: "model_cycle_recent",
-      category: "Agent",
+      category: t("category.agent"),
       hidden: true,
       onSelect: () => {
         local.model.cycle(1)
       },
     },
     {
-      title: "Model cycle reverse",
+      title: t("command.modelReverse"),
       value: "model.cycle_recent_reverse",
       keybind: "model_cycle_recent_reverse",
-      category: "Agent",
+      category: t("category.agent"),
       hidden: true,
       onSelect: () => {
         local.model.cycle(-1)
       },
     },
     {
-      title: "Favorite cycle",
+      title: t("command.favoriteCycle"),
       value: "model.cycle_favorite",
       keybind: "model_cycle_favorite",
-      category: "Agent",
+      category: t("category.agent"),
       hidden: true,
       onSelect: () => {
         local.model.cycleFavorite(1)
       },
     },
     {
-      title: "Favorite cycle reverse",
+      title: t("command.favoriteReverse"),
       value: "model.cycle_favorite_reverse",
       keybind: "model_cycle_favorite_reverse",
-      category: "Agent",
+      category: t("category.agent"),
       hidden: true,
       onSelect: () => {
         local.model.cycleFavorite(-1)
       },
     },
     {
-      title: "Switch agent",
+      title: t("command.switchAgent"),
       value: "agent.list",
       keybind: "agent_list",
-      category: "Agent",
+      category: t("category.agent"),
       slash: {
         name: "agent",
         aliases: ["agents"],
@@ -331,9 +334,9 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Toggle MCPs",
+      title: t("command.mcp"),
       value: "mcp.list",
-      category: "Agent",
+      category: t("category.agent"),
       slash: {
         name: "mcp",
       },
@@ -342,9 +345,9 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Scheduled tasks",
+      title: t("command.scheduled"),
       value: "scheduled.list",
-      category: "Agent",
+      category: t("category.agent"),
       slash: {
         name: "schedule",
         aliases: ["scheduled"],
@@ -354,19 +357,19 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Agent cycle",
+      title: t("command.agentCycle"),
       value: "agent.cycle",
       keybind: "agent_cycle",
-      category: "Agent",
+      category: t("category.agent"),
       hidden: true,
       onSelect: () => {
         local.agent.move(1)
       },
     },
     {
-      title: "Set effort",
+      title: t("command.effort"),
       value: "effort.list",
-      category: "Agent",
+      category: t("category.agent"),
       slash: {
         name: "effort",
         aliases: ["variant", "thinking"],
@@ -377,10 +380,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Effort cycle",
+      title: t("command.effortCycle"),
       value: "variant.cycle",
       keybind: "variant_cycle",
-      category: "Agent",
+      category: t("category.agent"),
       hidden: true,
       onSelect: () => {
         const variants = local.model.variant.list()
@@ -401,17 +404,17 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Agent cycle reverse",
+      title: t("command.agentReverse"),
       value: "agent.cycle.reverse",
       keybind: "agent_cycle_reverse",
-      category: "Agent",
+      category: t("category.agent"),
       hidden: true,
       onSelect: () => {
         local.agent.move(-1)
       },
     },
     {
-      title: "Connect provider",
+      title: t("command.connect"),
       value: "provider.connect",
       suggested: !connected(),
       slash: {
@@ -420,10 +423,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       onSelect: () => {
         void dialogs.showProviderDialog()
       },
-      category: "Provider",
+      category: t("category.provider"),
     },
     {
-      title: "Manage providers",
+      title: t("command.providers"),
       value: "provider.manage",
       slash: {
         name: "providers",
@@ -431,10 +434,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       onSelect: () => {
         void dialogs.showProvidersDialog()
       },
-      category: "Provider",
+      category: t("category.provider"),
     },
     {
-      title: "View status",
+      title: t("command.status"),
       keybind: "status_view",
       value: "ax-code.status",
       slash: {
@@ -443,10 +446,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       onSelect: () => {
         void dialogs.showStatusDialog()
       },
-      category: "System",
+      category: t("category.system"),
     },
     {
-      title: "Switch theme",
+      title: t("command.theme"),
       value: "theme.switch",
       keybind: "theme_list",
       slash: {
@@ -457,29 +460,29 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       onSelect: () => {
         void dialogs.showThemeListDialog()
       },
-      category: "System",
+      category: t("category.system"),
     },
     {
-      title: "Toggle Theme Mode",
+      title: t("command.themeMode"),
       value: "theme.switch_mode",
       onSelect: (dialog) => {
         setMode(mode() === "dark" ? "light" : "dark")
         dialog.clear()
       },
-      category: "System",
+      category: t("category.system"),
     },
     {
-      title: locked() ? "Unlock Theme Mode" : "Lock Theme Mode",
+      title: locked() ? t("command.unlockTheme") : t("command.lockTheme"),
       value: "theme.mode.lock",
       onSelect: (dialog) => {
         if (locked()) unlock()
         else lock()
         dialog.clear()
       },
-      category: "System",
+      category: t("category.system"),
     },
     {
-      title: "Help",
+      title: t("command.help"),
       value: "help.show",
       slash: {
         name: "help",
@@ -487,10 +490,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       onSelect: () => {
         void dialogs.showHelpDialog()
       },
-      category: "System",
+      category: t("category.system"),
     },
     {
-      title: "Open docs",
+      title: t("command.docs"),
       value: "docs.open",
       onSelect: () => {
         void import("open")
@@ -504,7 +507,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
           })
         dialog.clear()
       },
-      category: "System",
+      category: t("category.system"),
     },
     {
       title: "Open Web UI",
@@ -514,7 +517,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         hidden: true,
       },
       description: "Start or open the AX Code browser UI",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         dialog.clear()
         void launchWebUi({ openBrowser: true })
@@ -544,7 +547,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         hidden: true,
       },
       description: "Get guidance for AX Code Desktop dashboards and workflow supervision",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         const result = resolveDesktopHandoff({
           platform: process.platform,
@@ -560,7 +563,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: input.persistentRuntime ? "Disconnect (keep runtime working)" : "Exit the app",
+      title: input.persistentRuntime ? t("command.detach") : t("command.exit"),
       value: "app.exit",
       slash: {
         name: "exit",
@@ -572,11 +575,11 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         if (exit.flourish) void exit.flourish()
         else exit()
       },
-      category: "System",
+      category: t("category.system"),
     },
     {
-      title: "Toggle debug panel",
-      category: "System",
+      title: t("command.debug"),
+      category: t("category.system"),
       value: "app.debug",
       onSelect: (dialog) => {
         renderer.toggleDebugOverlay()
@@ -584,8 +587,8 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Toggle console",
-      category: "System",
+      title: t("command.console"),
+      category: t("category.system"),
       value: "app.console",
       onSelect: (dialog) => {
         renderer.console.toggle()
@@ -593,8 +596,8 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Write heap snapshot",
-      category: "System",
+      title: t("command.heap"),
+      category: t("category.system"),
       value: "app.heap_snapshot",
       onSelect: async (dialog) => {
         // Defense in depth: a failed snapshot must never float an unhandled
@@ -622,10 +625,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       ? []
       : [
           {
-            title: "Suspend terminal",
+            title: t("command.suspend"),
             value: "terminal.suspend",
             keybind: "terminal_suspend",
-            category: "System",
+            category: t("category.system"),
             hidden: true,
             onSelect: () => {
               // Lifecycle-managed SIGCONT (ADR-047 D2). Disposed on App cleanup and
@@ -638,10 +641,10 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
           },
         ]),
     {
-      title: terminalTitleEnabled() ? "Disable terminal title" : "Enable terminal title",
+      title: terminalTitleEnabled() ? t("command.titleOff") : t("command.titleOn"),
       value: "terminal.title.toggle",
       keybind: "terminal_title_toggle",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         setTerminalTitleEnabled((prev) => {
           const next = !prev
@@ -653,29 +656,29 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: kv.get("animations_enabled", true) ? "Disable animations" : "Enable animations",
+      title: kv.get("animations_enabled", true) ? t("command.animationsOff") : t("command.animationsOn"),
       value: "app.toggle.animations",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         kv.set("animations_enabled", !kv.get("animations_enabled", true))
         dialog.clear()
       },
     },
     {
-      title: "Play Opening Video",
+      title: t("command.opening"),
       description: "Preview the opening ASCII digital-rain animation",
       value: "app.matrix.play",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         dialog.clear()
         playMatrixRain()
       },
     },
     {
-      title: "Play Ending Video",
+      title: t("command.ending"),
       description: "Preview the ending bottom-to-top rain that plays when you exit",
       value: "app.matrix.play_reverse",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         dialog.clear()
         playReverseMatrixRain()
@@ -687,7 +690,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         : "Enable OV/EV on task completion",
       description: "Play the overlay once a scheduled task run completes",
       value: "app.toggle.matrix_rain",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         kv.set("matrix_rain_on_task_complete", !kv.get("matrix_rain_on_task_complete", false))
         dialog.clear()
@@ -699,26 +702,26 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         : "Enable Matrix rain on startup",
       description: "Play the overlay once when the TUI launches",
       value: "app.toggle.matrix_rain_on_start",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         kv.set("matrix_rain_on_start", !kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT))
         dialog.clear()
       },
     },
     {
-      title: kv.get("nerd_font_enabled", false) ? "Disable Nerd Font glyphs" : "Enable Nerd Font glyphs",
+      title: kv.get("nerd_font_enabled", false) ? t("command.nerdOff") : t("command.nerdOn"),
       description: "Recommended terminal font: Cascadia Code Nerd Font",
       value: "app.toggle.nerd_font",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         kv.set("nerd_font_enabled", !kv.get("nerd_font_enabled", false))
         dialog.clear()
       },
     },
     {
-      title: kv.get("diff_wrap_mode", "word") === "word" ? "Disable diff wrapping" : "Enable diff wrapping",
+      title: kv.get("diff_wrap_mode", "word") === "word" ? t("command.wrapOff") : t("command.wrapOn"),
       value: "app.toggle.diffwrap",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         const current = kv.get("diff_wrap_mode", "word")
         kv.set("diff_wrap_mode", current === "word" ? "none" : "word")
@@ -726,29 +729,29 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: sync.data.smartLlm ? "Turn fast-model routing off" : "Turn fast-model routing on",
+      title: sync.data.smartLlm ? t("command.fastOff") : t("command.fastOn"),
       value: "app.toggle.smart_llm",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         smartLlmToggle.toggle()
         dialog.clear()
       },
     },
     {
-      title: `Cycle run mode (current: ${runModeLabel(currentRunMode())})`,
+      title: t("command.runMode", { mode: runModeLabel(currentRunMode()) }),
       value: "app.cycle.run_mode",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         setRunMode(nextRunMode(currentRunMode()))
         dialog.clear()
       },
     },
     {
-      title: `Choose work mode (current: ${WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)))})`,
+      title: t("command.workMode", { mode: WorkMode.label(WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))) }),
       description:
         "Agent: one agent · Council: multi-model advisory review (needs ≥2 providers) · Arena: best-of-N comparison (opt-in)",
       value: "app.cycle.work_mode",
-      category: "Agent",
+      category: t("category.agent"),
       slash: {
         name: "work-mode",
         aliases: ["workmode"],
@@ -758,9 +761,9 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Return to Agent work mode",
+      title: t("command.agentMode"),
       value: "app.clear.work_mode",
-      category: "Agent",
+      category: t("category.agent"),
       hidden: WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT)) === WorkMode.DEFAULT,
       onSelect: (dialog) => {
         kv.set("work_mode", WorkMode.DEFAULT)
@@ -773,27 +776,27 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
     {
-      title: sync.data.autonomous ? "Turn autonomous off" : "Turn autonomous on",
+      title: sync.data.autonomous ? t("command.autoOff") : t("command.autoOn"),
       value: "app.toggle.autonomous",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         setRunMode(currentRunMode() === "none" ? "auto" : "none")
         dialog.clear()
       },
     },
     {
-      title: currentRunMode() === "super-long" ? "Turn Super-Long off" : "Turn Super-Long on (implies autonomous)",
+      title: currentRunMode() === "super-long" ? t("command.longOff") : t("command.longOn"),
       value: "app.toggle.super_long",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         setRunMode(currentRunMode() === "super-long" ? "auto" : "super-long")
         dialog.clear()
       },
     },
     {
-      title: sync.data.isolation.mode === "full-access" ? "Turn sandbox on" : "Turn sandbox off",
+      title: sync.data.isolation.mode === "full-access" ? t("command.sandboxOn") : t("command.sandboxOff"),
       value: "app.toggle.sandbox",
-      category: "System",
+      category: t("category.system"),
       onSelect: (dialog) => {
         const previousMode = sync.data.isolation.mode
         if (previousMode === "read-only" || previousMode === "workspace-write") {

@@ -1,3 +1,4 @@
+import { useLanguage } from "../../context/language"
 import { usePromptRef } from "@tui/context/prompt"
 import { createSessionPromptDraftLifecycle, promptDraftKey } from "./session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
@@ -116,6 +117,7 @@ export function Prompt(props: PromptProps) {
 }
 
 function SessionPrompt(props: PromptProps & { draftKey: string }) {
+  const language = useLanguage()
   let input: TextareaRenderable
   let anchor: BoxRenderable
   let autocomplete: AutocompleteRef
@@ -410,7 +412,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     if (dialog.stack.length > 0) return
     void submit().catch((error) => {
       log.warn("tui.prompt.submit: rejected", { error })
-      toast.show({ variant: "error", message: "Failed to submit prompt" })
+      toast.show({ variant: "error", message: language.t("error.submit") })
     })
   }
 
@@ -505,6 +507,8 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   )
 
   const submitController = createPromptSubmitController({
+    conversationSystem: language.system,
+    t: language.t,
     get input() {
       return input
     },
@@ -551,7 +555,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
   })
   submit = submitController.submit
 
-  function cancelPendingSubmit(message = "Prompt submission cancelled") {
+  function cancelPendingSubmit(message = language.t("error.cancelled")) {
     return submitController.cancelPendingSubmit(message)
   }
 

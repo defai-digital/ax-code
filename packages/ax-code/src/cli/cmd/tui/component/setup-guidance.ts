@@ -1,3 +1,4 @@
+import { english, type Translate } from "../i18n"
 export type SetupGuidance = {
   state: "loading" | "failed" | "connect" | "model" | "selected"
   message?: string
@@ -6,32 +7,34 @@ export type SetupGuidance = {
   modelCommand: "provider.connect" | "model.list"
 }
 
-export function setupGuidance(input: {
-  providerLoaded: boolean
-  providerFailed: boolean
-  modelReady: boolean
-  providers: readonly { id: string; models: Record<string, unknown> }[]
-  model?: { providerID: string; modelID: string }
-  sessionLoaded: boolean
-  sessionCount: number
-}): SetupGuidance {
+export function setupGuidance(
+  input: {
+    providerLoaded: boolean
+    providerFailed: boolean
+    modelReady: boolean
+    providers: readonly { id: string; models: Record<string, unknown> }[]
+    model?: { providerID: string; modelID: string }
+    sessionLoaded: boolean
+    sessionCount: number
+  },
+  t: Translate = english,
+): SetupGuidance {
   const modelCommand = input.providers.length ? "model.list" : "provider.connect"
   const base = { showIntroduction: false, modelCommand } as const
   if (input.providerFailed)
     return {
       ...base,
       state: "failed",
-      message: "Providers could not load.",
-      action: { label: "/status - check connection", command: "ax-code.status" },
+      message: t("setup.failed"),
+      action: { label: t("setup.status"), command: "ax-code.status" },
     }
-  if (!input.providerLoaded || !input.modelReady)
-    return { ...base, state: "loading", message: "Loading providers and models..." }
+  if (!input.providerLoaded || !input.modelReady) return { ...base, state: "loading", message: t("setup.loading") }
   if (!input.providers.length)
     return {
       ...base,
       state: "connect",
-      message: "Connect a provider to start.",
-      action: { label: "/connect - choose a provider", command: "provider.connect" },
+      message: t("setup.connectMessage"),
+      action: { label: t("setup.connect"), command: "provider.connect" },
     }
   const selected =
     input.model &&
@@ -40,8 +43,8 @@ export function setupGuidance(input: {
     return {
       ...base,
       state: "model",
-      message: "Choose a model to start.",
-      action: { label: "/models - choose a model", command: "model.list" },
+      message: t("setup.modelMessage"),
+      action: { label: t("setup.model"), command: "model.list" },
     }
   return { ...base, state: "selected", showIntroduction: input.sessionLoaded && input.sessionCount === 0 }
 }

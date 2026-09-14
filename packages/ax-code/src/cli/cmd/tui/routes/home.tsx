@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { setupGuidance } from "../component/setup-guidance"
 import { SetupGuidanceView } from "../component/setup-guidance-view"
 import { useContentDimensions } from "@tui/context/content-dimensions"
@@ -39,6 +40,7 @@ let startupPromptConsumed = false
 let homeDefaultWorkModeApplied = false
 
 export function Home() {
+  const { t } = useLanguage()
   const sync = useSync()
   const { theme } = useTheme()
   const nav = useRoute()
@@ -71,15 +73,18 @@ export function Home() {
   })
 
   const guidance = createMemo(() =>
-    setupGuidance({
-      providerLoaded: sync.data.provider_loaded,
-      providerFailed: sync.data.provider_failed,
-      modelReady: local.model.ready,
-      providers: sync.data.provider,
-      model: local.model.current(),
-      sessionLoaded: sync.data.session_loaded,
-      sessionCount: sync.data.session.length,
-    }),
+    setupGuidance(
+      {
+        providerLoaded: sync.data.provider_loaded,
+        providerFailed: sync.data.provider_failed,
+        modelReady: local.model.ready,
+        providers: sync.data.provider,
+        model: local.model.current(),
+        sessionLoaded: sync.data.session_loaded,
+        sessionCount: sync.data.session.length,
+      },
+      t,
+    ),
   )
   const modelLoading = createMemo(
     () => !sync.data.provider_failed && (!sync.data.provider_loaded || !local.model.ready),
@@ -177,7 +182,7 @@ export function Home() {
     <>
       <box flexGrow={1} minHeight={0} paddingTop={1} paddingLeft={2} paddingRight={2}>
         <text fg={theme.accent} flexShrink={0} selectable={false}>
-          New task
+          {t("home.newTask")}
         </text>
         <Show when={!modelLoading() && !compact()}>
           <box flexDirection="row" flexShrink={0}>
@@ -195,13 +200,13 @@ export function Home() {
           <SetupGuidanceView guidance={guidance()} compact={compact()} />
           <Show when={guidance().state === "selected" && (!guidance().showIntroduction || compact())}>
             <text flexShrink={0} fg={theme.textMuted} wrapMode="word">
-              Describe a task to start a new conversation.
+              {t("home.describe")}
             </text>
           </Show>
           <Show when={!compact()}>
             <box flexShrink={0} marginTop={1} onMouseUp={() => command.trigger("session.list")}>
               <text fg={theme.accent} selectable={false} wrapMode="word">
-                /sessions - resume an existing session
+                {t("home.sessions")}
               </text>
             </box>
           </Show>

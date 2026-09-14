@@ -1,3 +1,5 @@
+import { useLanguage } from "../context/language"
+import { providerTypePresentation } from "./provider-type-presentation"
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useLocal } from "@tui/context/local"
@@ -96,7 +98,7 @@ function runProviderDialogAction(input: {
   // Return the promise so DialogSelect's confirmInFlight latch spans the full
   // connect/disconnect/replace flow (including nested action menus). Fire-and-
   // forget here used to release the parent latch before the nested "already
-  // connected" menu mounted, so a residual Enter auto-selected "Use saved key"
+  // connected" menu mounted, so a residual Enter auto-selected t("provider.savedKey")
   // and skipped Disconnect / Replace key entirely.
   return Promise.resolve()
     .then(input.run)
@@ -256,6 +258,7 @@ export async function setProviderDisabled(input: {
 }
 
 export function createDialogProviderOptions() {
+  const { t } = useLanguage()
   const sync = useSync()
   const dialog = useDialog()
   const sdk = useSDK()
@@ -485,20 +488,20 @@ export function createDialogProviderOptions() {
                             title={`${provider.name} — connected`}
                             options={[
                               {
-                                title: "Select a model",
+                                title: t("provider.selectModel"),
                                 value: "use" as const,
                                 description: "Use models discovered from /models",
                               },
                               {
-                                title: "Replace endpoint",
+                                title: t("provider.replaceEndpoint"),
                                 value: "replace" as const,
                                 description:
                                   privateGpuBaseURLPreset(provider.id, sync.data.config) || "Enter a new URL and token",
                               },
                               {
-                                title: "Disconnect",
+                                title: t("common.disconnect"),
                                 value: "remove" as const,
-                                description: "Remove saved credentials and endpoint",
+                                description: t("provider.removeEndpoint"),
                               },
                             ]}
                             onSelect={(option) => resolve(option.value)}
@@ -658,19 +661,19 @@ export function createDialogProviderOptions() {
                             title={`${provider.name} — connected`}
                             options={[
                               {
-                                title: "Select a model",
+                                title: t("provider.selectModel"),
                                 value: "use" as const,
-                                description: "Use discovered local models",
+                                description: t("provider.localModels"),
                               },
                               {
-                                title: "Change endpoint",
+                                title: t("provider.changeEndpoint"),
                                 value: "endpoint" as const,
                                 description: localRuntimeEndpointPreset(provider.id, sync.data.config),
                               },
                               {
-                                title: "Disable",
+                                title: t("provider.disable"),
                                 value: "disable" as const,
-                                description: "Turn off temporarily — keeps endpoint config",
+                                description: t("provider.keepEndpoint"),
                               },
                             ]}
                             onSelect={(option) => resolve(option.value)}
@@ -730,19 +733,19 @@ export function createDialogProviderOptions() {
                             title={`${provider.name} — connected`}
                             options={[
                               {
-                                title: "Use CLI default",
+                                title: t("provider.cliDefault"),
                                 value: "use" as const,
-                                description: "Uses your CLI configuration",
+                                description: t("provider.cliConfig"),
                               },
                               {
-                                title: "Disable",
+                                title: t("provider.disable"),
                                 value: "disable" as const,
-                                description: "Turn off temporarily — keeps the connection",
+                                description: t("provider.keepConnection"),
                               },
                               {
-                                title: "Disconnect",
+                                title: t("common.disconnect"),
                                 value: "disconnect" as const,
-                                description: "Remove this CLI provider",
+                                description: t("provider.removeCli"),
                               },
                             ]}
                             onSelect={(option) => resolve(option.value)}
@@ -804,24 +807,24 @@ export function createDialogProviderOptions() {
                           title={`${provider.name} — already connected`}
                           options={[
                             {
-                              title: "Use saved key",
+                              title: t("provider.savedKey"),
                               value: "use" as const,
-                              description: "Select a model from this provider",
+                              description: t("provider.chooseFrom"),
                             },
                             {
-                              title: "Replace key",
+                              title: t("provider.replaceKey"),
                               value: "replace" as const,
-                              description: "Enter a new API key",
+                              description: t("provider.newKey"),
                             },
                             {
-                              title: "Disable",
+                              title: t("provider.disable"),
                               value: "disable" as const,
-                              description: "Turn off temporarily — keeps credentials",
+                              description: t("provider.keepCredentials"),
                             },
                             {
-                              title: "Disconnect",
+                              title: t("common.disconnect"),
                               value: "remove" as const,
-                              description: "Remove saved credentials",
+                              description: t("provider.removeCredentials"),
                             },
                           ]}
                           onSelect={(option) => resolve(option.value)}
@@ -874,7 +877,7 @@ export function createDialogProviderOptions() {
                     dialog.replace(
                       () => (
                         <DialogSelect
-                          title="Select auth method"
+                          title={t("provider.authMethod")}
                           options={methods.map((x, index) => ({
                             title: x.label,
                             value: index,
@@ -961,6 +964,7 @@ export function createDialogProviderOptions() {
 }
 
 export function DialogProvider() {
+  const { t } = useLanguage()
   const options = createDialogProviderOptions()
   const dialog = useDialog()
   const sync = useSync()
@@ -977,13 +981,14 @@ export function DialogProvider() {
   const typeOptions = createMemo(() => {
     const categoryOverrides = providerDialogCategoryOverrides(sync.data.config)
     // Widened from the providerDialogTypeOptions return type so the synthetic
-    // "Disabled" entry (not a real connect category) can be appended.
+    // t("ensemble.disabled") entry (not a real connect category) can be appended.
     const types: { title: string; value: string; description?: string; hint?: string; onSelect(): void }[] =
       providerDialogTypeOptions(
         options().map((option) => option.value),
         categoryOverrides,
       ).map((type) => ({
         ...type,
+        ...providerTypePresentation(type.value, t),
         onSelect() {
           if (type.value === "ax-engine") {
             return options()
@@ -996,7 +1001,7 @@ export function DialogProvider() {
           // type), so type select looked like a no-op.
           dialog.replace(() => (
             <DialogSelect
-              title={providerConnectCategoryMeta(type.value).label}
+              title={providerTypePresentation(type.value, t).title ?? providerConnectCategoryMeta(type.value).label}
               options={providerDialogOptionsForType(options(), type.value, categoryOverrides).map((option) =>
                 option.value === PROVIDER_DIALOG_CHANGE_TYPE_VALUE
                   ? {
@@ -1013,18 +1018,18 @@ export function DialogProvider() {
       }))
     if (disabledProviders().length > 0) {
       types.push({
-        title: "Disabled",
+        title: t("ensemble.disabled"),
         value: "__disabled__",
         description: `${disabledProviders().length} provider${disabledProviders().length === 1 ? "" : "s"} turned off — re-enable or disconnect`,
         hint: undefined,
         onSelect() {
           dialog.replace(() => (
             <DialogSelect
-              title="Disabled providers"
+              title={t("provider.disabledList")}
               options={disabledProviders().map((providerID) => ({
                 title: providerID,
                 value: providerID,
-                description: "Currently disabled — credentials kept",
+                description: t("provider.disabledHint"),
                 onSelect() {
                   return runProviderDialogAction({
                     providerID,
@@ -1039,14 +1044,14 @@ export function DialogProvider() {
                               title={`${providerID} — disabled`}
                               options={[
                                 {
-                                  title: "Enable",
+                                  title: t("provider.enable"),
                                   value: "enable" as const,
-                                  description: "Turn back on — uses saved credentials",
+                                  description: t("provider.enableHint"),
                                 },
                                 {
-                                  title: "Disconnect",
+                                  title: t("common.disconnect"),
                                   value: "disconnect" as const,
-                                  description: "Remove saved credentials",
+                                  description: t("provider.removeCredentials"),
                                 },
                               ]}
                               onSelect={(option) => resolve(option.value)}
@@ -1099,7 +1104,7 @@ export function DialogProvider() {
     return types
   })
 
-  return <DialogSelect title="Provider type" options={typeOptions()} />
+  return <DialogSelect title={t("provider.type")} options={typeOptions()} />
 }
 
 interface AutoMethodProps {
@@ -1109,6 +1114,7 @@ interface AutoMethodProps {
   authorization: ProviderAuthAuthorization
 }
 function AutoMethod(props: AutoMethodProps) {
+  const { t } = useLanguage()
   const { theme } = useTheme()
   const sdk = useSDK()
   const dialog = useDialog()
@@ -1191,6 +1197,7 @@ interface CodeMethodProps {
   authorization: ProviderAuthAuthorization
 }
 function CodeMethod(props: CodeMethodProps) {
+  const { t } = useLanguage()
   const { theme } = useTheme()
   const sdk = useSDK()
   const sync = useSync()
@@ -1200,7 +1207,7 @@ function CodeMethod(props: CodeMethodProps) {
   return (
     <DialogPrompt
       title={props.title}
-      placeholder="Authorization code"
+      placeholder={t("provider.authCode")}
       autoClose={false}
       onConfirm={async (value) => {
         // Keep the prompt open until auth resolves. On failure, stay open and
@@ -1244,6 +1251,7 @@ interface ApiMethodProps {
   title: string
 }
 function ApiMethod(props: ApiMethodProps) {
+  const { t } = useLanguage()
   const dialog = useDialog()
   const sdk = useSDK()
   const sync = useSync()

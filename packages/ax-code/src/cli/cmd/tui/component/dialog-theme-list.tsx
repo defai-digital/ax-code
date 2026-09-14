@@ -1,9 +1,11 @@
+import { useLanguage } from "@tui/context/language"
 import { DialogSelect, type DialogSelectRef } from "../ui/dialog-select"
 import { useTheme } from "../context/theme"
 import { useDialog } from "../ui/dialog"
 import { createMemo, onCleanup, onMount } from "solid-js"
 
 export function DialogThemeList() {
+  const { t } = useLanguage()
   const theme = useTheme()
   const options = createMemo(() =>
     Object.keys(theme.all())
@@ -28,7 +30,7 @@ export function DialogThemeList() {
 
   return (
     <DialogSelect
-      title="Themes"
+      title={t("common.theme")}
       options={options()}
       current={initial}
       onMove={(opt) => {

@@ -88,6 +88,7 @@ export async function executePromptCommand(input: CommandInput, prompt: PromptRu
     agentRouting: command.agent ? "preserve" : undefined,
     parts: prepared.parts,
     variant: input.variant,
+    system: input.system,
   })
 
   Bus.publishDetached(Command.Event.Executed, {

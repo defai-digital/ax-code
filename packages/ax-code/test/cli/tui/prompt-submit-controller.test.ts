@@ -394,3 +394,36 @@ describe("prompt editor disposal during navigation", () => {
     expect(host.route.navigate).not.toHaveBeenCalled()
   })
 })
+
+describe("TUI conversation language payload", () => {
+  test.each(["zh-TW", "zh-CN", "ja", "ko"] as const)(
+    "%s preference keeps prompt and command arguments verbatim",
+    async (locale) => {
+      const { conversationInstruction } = await import("../../../src/cli/cmd/tui/i18n")
+      for (const workMode of ["agent", "council", "arena"] as const) {
+        const text =
+          "Review authentication; do not edit. \u4e0d\u8981\u4fee\u6539\u6a94\u6848. Keep `file.ts` and $HOME verbatim."
+        const fixture = setup({ mode: "normal", workMode, text })
+        fixture.host.conversationSystem = () => conversationInstruction(locale)
+        await fixture.controller.submit()
+        expect(fixture.requests).toHaveLength(1)
+        const body = await fixture.requests[0].json()
+        expect(body.system).toBe(conversationInstruction(locale))
+        if (workMode === "agent") expect(body.parts[0].text).toBe(text)
+        else {
+          const routed = WorkMode.routeInput(workMode, text)
+          expect(routed.kind).toBe("command")
+          if (routed.kind === "command") expect(body.arguments).toBe(routed.arguments)
+        }
+      }
+    },
+  )
+  test("shell commands receive no conversation instruction", async () => {
+    const fixture = setup({ mode: "shell", workMode: "agent", text: "echo $HOME" })
+    fixture.host.conversationSystem = () => "Reply in Japanese."
+    await fixture.controller.submit()
+    const body = await fixture.requests[0].json()
+    expect(body.command).toBe("echo $HOME")
+    expect(body.system).toBeUndefined()
+  })
+})
