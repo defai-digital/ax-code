@@ -377,7 +377,8 @@ function commandSubstitutions(input: string) {
       const glued = justClosedSubstitution
       justClosedSubstitution = false
       const previous = index === 0 ? "" : input[index - 1]!
-      if (!glued && (index === 0 || /[\s;&|]/.test(previous))) {
+      const grouping = previous === ")" && !isEscapedAt(input, index - 1)
+      if (!glued && (index === 0 || /[\s;&|]/.test(previous) || grouping)) {
         while (index < input.length && input[index] !== "\n") index++
         continue
       }
@@ -400,6 +401,12 @@ function commandSubstitutions(input: string) {
     index++
   }
   return found
+}
+
+function isEscapedAt(input: string, index: number) {
+  let slashes = 0
+  for (let cursor = index - 1; cursor >= 0 && input[cursor] === "\\"; cursor--) slashes++
+  return slashes % 2 === 1
 }
 
 function readBacktick(input: string, start: number): [string, number] {

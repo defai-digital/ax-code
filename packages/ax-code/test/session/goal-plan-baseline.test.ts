@@ -246,6 +246,16 @@ describe("GoalPlanBaseline", () => {
       }),
     ).toThrow(/origin\/main/)
     expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract('(printf ok)# comment \'\necho "$(git diff fork/topic..HEAD)"'), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/fork\/topic/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract('(printf ok)# comment \'\necho "$(git diff origin/main..HEAD)"'), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
       GoalPlanBaseline.prepareAssurance(contract("$GIT diff HEAD -- origin/generated"), {
         objective: "keep the diff in scope",
       }),
