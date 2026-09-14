@@ -1064,6 +1064,32 @@ test("parseModel preserves dotted custom provider IDs", () => {
   })
 })
 
+test.each([
+  ["deepseek", "deepseek", "deepseek-flash"],
+  ["glm", "zai", "glm-5.3-flash"],
+  ["qwen", "alibaba-token-plan", "qwen3.8-flash"],
+  [" GLM ", "zai", "glm-5.3-flash"],
+  ["gateway/deepseek", "gateway", "deepseek-flash"],
+  ["gateway/GLM", "gateway", "glm-5.3-flash"],
+  ["gateway:qwen", "gateway", "qwen3.8-flash"],
+])("parseModel expands the unversioned family %s", (input, providerID, modelID) => {
+  expect(Provider.parseModel(input)).toEqual({ providerID, modelID })
+})
+
+test.each(["deepseek-v4-pro", "glm-5.3", "qwen3.8-max", "vendor/glm", "qwen3.8-flash-next"])(
+  "parseModel preserves the explicit model ID %s",
+  (modelID) => {
+    expect(Provider.parseModel(`gateway/${modelID}`)).toEqual({ providerID: "gateway", modelID })
+  },
+)
+
+test("parseModel preserves structured model identities", () => {
+  expect(Provider.parseModel({ providerID: "local-llm", modelID: "glm" })).toEqual({
+    providerID: "local-llm",
+    modelID: "glm",
+  })
+})
+
 test("parseModel rejects a bare provider without a model id", () => {
   expect(() => Provider.parseModel("openai")).toThrow('expected "provider/model"')
 })

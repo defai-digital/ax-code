@@ -424,7 +424,7 @@ export const RunCommand = cmd({
       .option("model", {
         type: "string",
         alias: ["m"],
-        describe: "model to use in the format of provider/model",
+        describe: "model to use: provider/model, or deepseek, glm, qwen (Flash defaults)",
       })
       .option("agent", {
         type: "string",

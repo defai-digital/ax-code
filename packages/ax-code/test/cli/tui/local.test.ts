@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { Provider } from "../../../src/provider/provider"
 import {
   RECENT_MODEL_LIMIT,
   SESSION_MODEL_LIMIT,
@@ -401,6 +402,21 @@ describe("pruneModelPreferences migration", () => {
 })
 
 describe("resolvePinnedModelPreference", () => {
+  test.each([
+    ["deepseek", "deepseek-flash"],
+    ["glm", "glm-5.3-flash"],
+    ["qwen", "qwen3.8-flash"],
+  ])("resolves the %s startup family to Flash on a connected gateway", (family, modelID) => {
+    const providers = [{ id: "gateway", models: { [modelID]: { capabilities: { toolcall: true } } } }]
+    for (const input of [family, `gateway/${family}`]) {
+      expect(resolvePinnedModelPreference(providers, Provider.parseModel(input))).toEqual({
+        providerID: "gateway",
+        modelID,
+      })
+      expect(resolvePinnedModelPreference([], Provider.parseModel(input))).toBeUndefined()
+    }
+  })
+
   const providers = [
     {
       id: "127.0.0.1",

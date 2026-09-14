@@ -43,6 +43,7 @@ import { isNonChatModelID, modelSelectableForProvider, sameSkuOnConnectedProvide
 import {
   defaultModelIDForProvider,
   IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE,
+  modelFamilyDefault,
   pickImplicitDefaultModel,
 } from "./implicit-default"
 import {
@@ -1686,12 +1687,16 @@ export namespace Provider {
             : undefined
       return validate(providerID, modelID, source)
     }
+    const family = modelFamilyDefault(model)
+    if (family) return validate(family.providerID, family.modelID, model)
+
     // Auto-correct "provider:model" → "provider/model"
     if (!model.includes("/") && model.includes(":")) {
       model = model.replace(":", "/")
     }
     const [providerID, ...rest] = model.split("/")
-    return validate(providerID, rest.join("/"), model)
+    const modelID = rest.join("/")
+    return validate(providerID, modelFamilyDefault(modelID)?.modelID ?? modelID, model)
   }
 
   export const ModelNotFoundError = NamedError.create(
