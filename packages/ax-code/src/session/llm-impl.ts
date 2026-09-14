@@ -411,6 +411,7 @@ export namespace LLM {
       input.small
         ? ProviderTransform.applySmallOverrides(input.model, params.options, provider?.options ?? {})
         : params.options,
+      input.model.capabilities.toolcall !== false ? input.toolChoice : "none",
     )
     const providerOptions = ProviderTransform.providerOptions(input.model, paramsOptions)
 

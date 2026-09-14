@@ -268,6 +268,79 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 }
 
 describe("session.llm.stream", () => {
+  test.each(["required", "auto"] as const)(
+    "uses compatible DeepSeek thinking settings for %s tool choice through a gateway",
+    async (toolChoice) => {
+      const providerID = ProviderID.make("deepseek-review-gateway")
+      const modelID = ModelID.make("deepseek-v4-pro")
+      const request = waitRequest(
+        "/chat/completions",
+        new Response(createChatStream("Hello"), { headers: { "Content-Type": "text/event-stream" } }),
+      )
+      await using tmp = await tmpdir({
+        config: {
+          enabled_providers: [providerID],
+          provider: {
+            [providerID]: {
+              npm: "@ai-sdk/openai-compatible",
+              options: { apiKey: "test-key", baseURL: `${state.server.url.origin}/v1` },
+              models: {
+                [modelID]: {
+                  name: "DeepSeek V4 Pro",
+                  reasoning: true,
+                  tool_call: true,
+                  limit: { context: 1_000_000, output: 32_000 },
+                },
+              },
+            },
+          },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const resolved = await Provider.getModel(providerID, modelID)
+          const sessionID = SessionID.make("session-deepseek-required")
+          const stream = await LLM.stream({
+            sessionID,
+            model: resolved,
+            user: {
+              id: MessageID.make("user-deepseek-required"),
+              sessionID,
+              role: "user",
+              time: { created: Date.now() },
+              agent: "test",
+              model: { providerID, modelID },
+            },
+            agent: {
+              name: "test",
+              mode: "primary",
+              options: { thinking: { type: "enabled" }, reasoningEffort: "high", reasoning_effort: "high" },
+              permission: [{ permission: "*", pattern: "*", action: "allow" }],
+            },
+            system: ["Return the structured result."],
+            abort: new AbortController().signal,
+            messages: [{ role: "user", content: "Return the result" }],
+            tools: { result: tool({ description: "Return the result", inputSchema: z.object({ value: z.string() }) }) },
+            toolChoice,
+          })
+          for await (const _ of stream.fullStream) {
+          }
+          const capture = await request
+          expect(capture.body.tool_choice).toBe(toolChoice)
+          expect(capture.body.thinking).toEqual({ type: toolChoice === "required" ? "disabled" : "enabled" })
+          if (toolChoice === "required") {
+            expect(capture.body).not.toHaveProperty("reasoningEffort")
+            expect(capture.body).not.toHaveProperty("reasoning_effort")
+          } else {
+            expect(capture.body.reasoning_effort).toBe("high")
+          }
+          expect(capture.body.tools).toHaveLength(1)
+        },
+      })
+    },
+  )
+
   test("sends OpenRouter headers and strips generic reasoningEffort parameters", async () => {
     const providerID = "openrouter"
     const modelID = "openai/gpt-5.4"

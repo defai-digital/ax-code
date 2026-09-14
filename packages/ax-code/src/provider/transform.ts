@@ -99,7 +99,7 @@ export namespace ProviderTransform {
 
     // DeepSeek requires a reasoning part on every assistant message, even when
     // empty. OpenCode injects one; without it some DeepSeek endpoints 400.
-    if (isDeepSeekFamily(model)) msgs = padDeepSeekReasoning(msgs)
+    if (isDeepSeekFamily(model)) msgs = padDeepSeekReasoning(msgs, model)
 
     // Whether we need to strip reasoning parts from assistant messages.
     //
@@ -144,6 +144,8 @@ export namespace ProviderTransform {
         // top-level position. Otherwise the parts are simply dropped (the
         // provider rejects reasoning_content, so there is nothing to carry).
         if (field) {
+          // Preserve already-normalized history when there are no new reasoning
+          // bytes; a second normalization must not erase the original field.
           // Always set the interleaved field, including when empty. DeepSeek
           // (and some GLM/Kimi routes) reject a missing reasoning_content on
           // follow-up assistant turns even if this turn had no thinking.
@@ -156,7 +158,7 @@ export namespace ProviderTransform {
               ...msg.providerOptions,
               openaiCompatible: {
                 ...existing,
-                [field]: reasoningText,
+                [field]: reasoningText || (typeof existing?.[field] === "string" ? existing[field] : ""),
               },
             },
           }
@@ -647,9 +649,31 @@ export namespace ProviderTransform {
     return `${segment} ${model.api.id}`.toLowerCase().includes("deepseek")
   }
 
-  function padDeepSeekReasoning(msgs: ModelMessage[]): ModelMessage[] {
+  function padDeepSeekReasoning(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
     return msgs.map((msg) => {
       if (msg.role !== "assistant") return msg
+      const parts = Array.isArray(msg.content) ? msg.content : []
+      const reasoning = parts.filter((part) => part.type === "reasoning")
+      // The compatible SDK omits empty reasoning parts on the wire. Preserve
+      // the explicit field even when gateway discovery omitted interleaved
+      // metadata, and retain history already normalized into provider options.
+      if (
+        model.api.npm === "@ai-sdk/openai-compatible" &&
+        !rejectsReasoningContentOnInput(model) &&
+        !reasoning.some((part) => part.text.length > 0)
+      ) {
+        const existing = msg.providerOptions?.openaiCompatible
+        msg = {
+          ...msg,
+          providerOptions: {
+            ...msg.providerOptions,
+            openaiCompatible: {
+              ...existing,
+              reasoning_content: typeof existing?.reasoning_content === "string" ? existing.reasoning_content : "",
+            },
+          },
+        }
+      }
       if (Array.isArray(msg.content)) {
         if (msg.content.some((part) => part.type === "reasoning")) return msg
         return { ...msg, content: [...msg.content, { type: "reasoning", text: "" }] }
@@ -1122,7 +1146,11 @@ export namespace ProviderTransform {
     return model.api.id.toLowerCase().startsWith("qwen")
   }
 
-  export function sanitizeOptions(model: Provider.Model, options: Record<string, any>): Record<string, any> {
+  export function sanitizeOptions(
+    model: Provider.Model,
+    options: Record<string, any>,
+    toolChoice?: "auto" | "required" | "none",
+  ): Record<string, any> {
     let result = options
     if (isAlibabaThinkingModel(model)) {
       // Strip incompatible thinking shapes (Anthropic block, reasoning-effort
@@ -1173,6 +1201,21 @@ export namespace ProviderTransform {
     if (model.providerID === "groq" || model.providerID === "openrouter") {
       const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
       return rest
+    }
+    // DeepSeek V4 / Flash reject forced tool choice in thinking mode (HTTP
+    // 400). Keep the required-tool contract and disable thinking for this
+    // request after all option merges. Match the upstream API id as well as
+    // the display id so custom gateways retain the same behavior. Older R1
+    // and unrelated OpenAI-compatible deployments do not share this switch.
+    if (
+      toolChoice === "required" &&
+      model.api.npm === "@ai-sdk/openai-compatible" &&
+      [model.id, model.api.id].some((id) =>
+        /^deepseek-(?:flash|v4-(?:pro|flash))(?:$|[.-])/i.test(modelIdFinalSegment(id)),
+      )
+    ) {
+      const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
+      return { ...rest, thinking: { type: "disabled" } }
     }
     return result
   }
