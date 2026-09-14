@@ -10,14 +10,17 @@ import {
   MATRIX_RAIN_MAX_DURATION_MS,
   MATRIX_RAIN_MIN_DURATION_MS,
   MATRIX_RAIN_ON_START_DEFAULT,
-  STARTUP_LOGO_DROP_DURATION_MS,
   STARTUP_LOGO_DURATION_MS,
+  STARTUP_LOGO_FALL_DURATION_MS,
+  STARTUP_LOGO_FALL_JITTER_MS,
   STARTUP_LOGO_HOLD_DURATION_MS,
+  STARTUP_LOGO_STAGGER_MS,
   STARTUP_LOGO_TICK_MS,
   advanceMatrixRain,
   bindHiddenTerminalCursor,
   completeStartupRain,
   createMatrixRain,
+  createStartupLogoGlyphs,
   easeOutLogoDrop,
   initialStartupRainPhase,
   matrixRainRampRgb,
@@ -28,14 +31,17 @@ import {
   shouldPlayMatrixRainOnStart,
   shouldStopMatrixRain,
   startupLogoDropLevel,
-  startupLogoDropOffset,
-  startupLogoDropProgress,
+  startupLogoFrame,
+  startupLogoGlyphLevel,
+  startupLogoGlyphProgress,
+  startupLogoGlyphRow,
   startupLogoPadding,
   startupRainAfterPlayback,
   startupRainCoversChrome,
   startupRainShowsLogo,
   tickMatrixRain,
 } from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
+import { logo } from "../../../src/cli/logo"
 
 // Deterministic PRNG (mulberry32) so frames are reproducible in assertions.
 function seeded(seed: number) {
@@ -371,8 +377,31 @@ describe("startup rain chrome cover", () => {
 })
 
 describe("startup logo beat", () => {
-  test("splits a short drop plus hold that stays under the rain duration", () => {
-    expect(STARTUP_LOGO_DURATION_MS).toBe(STARTUP_LOGO_DROP_DURATION_MS + STARTUP_LOGO_HOLD_DURATION_MS)
+  test("app plays rain, then the logo, then the working screen", () => {
+    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app.tsx"), "utf8")
+    expect(app).toContain("startupRainAfterPlayback")
+    expect(app).toContain("startupRainShowsLogo")
+    expect(app).toContain("StartupLogo")
+  })
+
+  test("the logo overlay hides the cursor and clips the drop", () => {
+    const src = readFileSync(
+      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/startup-logo.tsx"),
+      "utf8",
+    )
+    expect(src).toContain("bindHiddenTerminalCursor")
+    expect(src).toContain('overflow="hidden"')
+  })
+})
+
+describe("startup logo drop", () => {
+  test("splits the intro into stagger, fall, jitter and hold", () => {
+    expect(STARTUP_LOGO_DURATION_MS).toBe(
+      STARTUP_LOGO_STAGGER_MS +
+        STARTUP_LOGO_FALL_DURATION_MS +
+        STARTUP_LOGO_FALL_JITTER_MS +
+        STARTUP_LOGO_HOLD_DURATION_MS,
+    )
     expect(STARTUP_LOGO_HOLD_DURATION_MS).toBeGreaterThan(0)
     expect(STARTUP_LOGO_DURATION_MS).toBeLessThan(MATRIX_RAIN_MIN_DURATION_MS)
   })
@@ -391,74 +420,107 @@ describe("startup logo beat", () => {
     })
   })
 
-  test("app plays rain, then the logo, then the working screen", () => {
-    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app.tsx"), "utf8")
-    expect(app).toContain("startupRainAfterPlayback")
-    expect(app).toContain("startupRainShowsLogo")
-    expect(app).toContain("StartupLogo")
+  test("uses a tick short enough to read as motion", () => {
+    expect(STARTUP_LOGO_TICK_MS).toBeGreaterThan(0)
+    expect(STARTUP_LOGO_TICK_MS).toBeLessThan(STARTUP_LOGO_FALL_DURATION_MS / 5)
   })
 
-  test("the logo overlay hides the terminal cursor while it covers the screen", () => {
-    const src = readFileSync(
-      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/startup-logo.tsx"),
-      "utf8",
-    )
-    expect(src).toContain("bindHiddenTerminalCursor")
-  })
-})
-
-describe("startup logo drop", () => {
-  const LANDING = { contentHeight: 5, terminalHeight: 24 } as const
-
-  test("emerges from fully above the top edge and lands centered", () => {
-    expect(startupLogoDropOffset({ ...LANDING, progress: 0 })).toBe(-LANDING.contentHeight)
-    expect(startupLogoDropOffset({ ...LANDING, progress: 1 })).toBe(9)
+  test("builds one glyph per visible character, ignoring padding", () => {
+    const glyphs = createStartupLogoGlyphs({ lines: ["AB C   ", " D  "], random: () => 0.5 })
+    expect(glyphs.map((glyph) => glyph.char)).toEqual(["A", "B", "C", "D"])
+    expect(glyphs.map((glyph) => [glyph.row, glyph.col])).toEqual([
+      [0, 0],
+      [0, 1],
+      [0, 3],
+      [1, 1],
+    ])
   })
 
-  test("falls monotonically and never travels past the landing", () => {
-    let previous = Number.NEGATIVE_INFINITY
-    for (let step = 0; step <= 20; step++) {
-      const offset = startupLogoDropOffset({ ...LANDING, progress: step / 20 })
-      expect(offset).toBeGreaterThanOrEqual(previous)
-      expect(offset).toBeGreaterThanOrEqual(-LANDING.contentHeight)
-      expect(offset).toBeLessThanOrEqual(9)
-      previous = offset
+  test("randomizes start order and speed across characters", () => {
+    let seed = 1
+    const random = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return seed / 2147483648
+    }
+    const glyphs = createStartupLogoGlyphs({ lines: ["ABCDEFGH", "IJKLMNOP"], random })
+    expect(new Set(glyphs.map((glyph) => glyph.delayMs)).size).toBeGreaterThan(1)
+    expect(new Set(glyphs.map((glyph) => glyph.fallMs)).size).toBeGreaterThan(1)
+    for (const glyph of glyphs) {
+      expect(glyph.delayMs).toBeGreaterThanOrEqual(0)
+      expect(glyph.delayMs).toBeLessThanOrEqual(STARTUP_LOGO_STAGGER_MS)
+      expect(glyph.fallMs).toBeGreaterThanOrEqual(STARTUP_LOGO_FALL_DURATION_MS)
+      expect(glyph.fallMs).toBeLessThanOrEqual(STARTUP_LOGO_FALL_DURATION_MS + STARTUP_LOGO_FALL_JITTER_MS)
     }
   })
 
-  test("eases out so most of the drop is covered early", () => {
-    expect(easeOutLogoDrop(0.5)).toBeCloseTo(0.875, 10)
-    const halfway = startupLogoDropOffset({ ...LANDING, progress: 0.5 })
-    expect(halfway).toBeGreaterThan(4)
-    expect(halfway).toBeLessThan(9)
+  test("starts above the top edge and lands on its resting row", () => {
+    const glyph = { char: "A", row: 0, col: 0, delayMs: 0, fallMs: STARTUP_LOGO_FALL_DURATION_MS }
+    expect(startupLogoGlyphRow({ glyph, elapsedMs: 0, blockTop: 9 })).toBe(-1)
+    expect(startupLogoGlyphRow({ glyph, elapsedMs: STARTUP_LOGO_DURATION_MS, blockTop: 9 })).toBe(9)
   })
 
-  test("clamps progress outside the drop window", () => {
-    expect(startupLogoDropProgress(-100)).toBe(0)
-    expect(startupLogoDropProgress(0)).toBe(0)
-    expect(startupLogoDropProgress(STARTUP_LOGO_DROP_DURATION_MS * 2)).toBe(1)
-    expect(startupLogoDropOffset({ ...LANDING, progress: -1 })).toBe(-LANDING.contentHeight)
-    expect(startupLogoDropOffset({ ...LANDING, progress: 5 })).toBe(9)
+  test("waits out its own delay before moving", () => {
+    const glyph = { char: "A", row: 0, col: 0, delayMs: 100, fallMs: 200 }
+    expect(startupLogoGlyphProgress(glyph, 100)).toBe(0)
+    expect(startupLogoGlyphProgress(glyph, 200)).toBeCloseTo(0.5, 10)
+    expect(startupLogoGlyphProgress(glyph, 300)).toBe(1)
   })
 
-  test("lands at row zero when the terminal is shorter than the logo", () => {
-    expect(startupLogoDropOffset({ progress: 1, contentHeight: 12, terminalHeight: 8 })).toBe(0)
-    expect(startupLogoDropOffset({ progress: 0, contentHeight: 12, terminalHeight: 8 })).toBe(-12)
+  test("descends monotonically and never travels past its row", () => {
+    const glyph = { char: "A", row: 2, col: 0, delayMs: 40, fallMs: 300 }
+    let previous = Number.NEGATIVE_INFINITY
+    for (let elapsed = 0; elapsed <= STARTUP_LOGO_DURATION_MS; elapsed += 20) {
+      const row = startupLogoGlyphRow({ glyph, elapsedMs: elapsed, blockTop: 9 })
+      expect(row).toBeGreaterThanOrEqual(previous)
+      expect(row).toBeLessThanOrEqual(11)
+      previous = row
+    }
   })
 
-  test("uses a tick short enough to read as motion", () => {
-    expect(STARTUP_LOGO_TICK_MS).toBeGreaterThan(0)
-    expect(STARTUP_LOGO_TICK_MS).toBeLessThan(STARTUP_LOGO_DROP_DURATION_MS / 5)
+  test("draws nothing while the mark is still above the screen", () => {
+    const glyphs = createStartupLogoGlyphs({ lines: ["AB", "CD"], random: () => 0 })
+    const early = startupLogoFrame({ glyphs, elapsedMs: 0, blockLeft: 0, blockTop: 2, width: 20, height: 10 })
+    expect(early.rows).toHaveLength(0)
   })
 
-  test("the overlay animates the offset instead of a fixed padding", () => {
-    const src = readFileSync(
-      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/startup-logo.tsx"),
-      "utf8",
-    )
-    expect(src).toContain("startupLogoDropOffset")
-    expect(src).toContain("scheduleTuiInterval")
-    expect(src).toContain('overflow="hidden"')
+  test("lands every character on its own row", () => {
+    const glyphs = createStartupLogoGlyphs({ lines: ["AB", "CD"], random: () => 0 })
+    const landed = startupLogoFrame({
+      glyphs,
+      elapsedMs: STARTUP_LOGO_DURATION_MS,
+      blockLeft: 0,
+      blockTop: 2,
+      width: 20,
+      height: 10,
+    })
+    expect(landed.top).toBe(2)
+    expect(landed.rows).toHaveLength(2)
+    expect(
+      landed.rows[0]
+        .map((run) => run.text)
+        .join("")
+        .trimEnd(),
+    ).toBe("AB")
+    expect(
+      landed.rows[1]
+        .map((run) => run.text)
+        .join("")
+        .trimEnd(),
+    ).toBe("CD")
+  })
+
+  test("keeps every frame inside the terminal and ASCII-only", () => {
+    const glyphs = createStartupLogoGlyphs({ lines: logo, random: () => 0.4 })
+    for (let elapsed = 0; elapsed <= STARTUP_LOGO_DURATION_MS; elapsed += STARTUP_LOGO_TICK_MS) {
+      const frame = startupLogoFrame({ glyphs, elapsedMs: elapsed, blockLeft: 13, blockTop: 9, width: 80, height: 24 })
+      expect(frame.top).toBeGreaterThanOrEqual(0)
+      expect(frame.top + frame.rows.length).toBeLessThanOrEqual(24)
+      for (const row of frame.rows) {
+        const text = row.map((run) => run.text).join("")
+        expect(text).toHaveLength(80)
+        expect(text).toMatch(/^[ -~]*$/)
+      }
+    }
   })
 })
 
@@ -481,28 +543,25 @@ describe("startup logo color", () => {
     expect(matrixRainRampRgb(99)).toEqual([205, 255, 220])
   })
 
-  test("the mark starts green and lands on the white head", () => {
+  test("maps fall progress onto the ramp", () => {
     expect(startupLogoDropLevel(0)).toBe(1)
     expect(startupLogoDropLevel(1)).toBe(MATRIX_RAIN_LEVELS)
     expect(matrixRainRampRgb(startupLogoDropLevel(0))).toEqual(matrixRainRampRgb(1))
-    expect(matrixRainRampRgb(startupLogoDropLevel(1))).toEqual(matrixRainRampRgb(MATRIX_RAIN_LEVELS))
   })
 
-  test("brightens monotonically as it drops", () => {
-    let previous = Number.NEGATIVE_INFINITY
-    for (let step = 0; step <= 10; step++) {
-      const level = startupLogoDropLevel(step / 10)
-      expect(level).toBeGreaterThanOrEqual(previous)
-      previous = level
-    }
+  test("each character warms from green to the white head as it lands", () => {
+    const glyph = { char: "A", row: 0, col: 0, delayMs: 0, fallMs: 200 }
+    expect(Math.round(startupLogoGlyphLevel(glyph, 0))).toBe(1)
+    expect(Math.round(startupLogoGlyphLevel(glyph, 200))).toBe(MATRIX_RAIN_LEVELS)
   })
 
-  test("both overlays read the one shared ramp", () => {
+  test("both overlays colorize from the one shared ramp", () => {
     const dir = "../../../src/cli/cmd/tui/component"
+    const palette = readFileSync(path.join(import.meta.dirname, dir, "matrix-rain-palette.ts"), "utf8")
     const rain = readFileSync(path.join(import.meta.dirname, dir, "matrix-rain.tsx"), "utf8")
-    const logo = readFileSync(path.join(import.meta.dirname, dir, "startup-logo.tsx"), "utf8")
-    expect(rain).toContain("MATRIX_RAIN_LEVEL_RGB")
-    expect(logo).toContain("matrixRainRampRgb")
-    expect(logo).toContain("startupLogoDropLevel")
+    const logoOverlay = readFileSync(path.join(import.meta.dirname, dir, "startup-logo.tsx"), "utf8")
+    expect(palette).toContain("MATRIX_RAIN_LEVEL_RGB")
+    expect(rain).toContain("MATRIX_RAIN_LEVEL_COLORS")
+    expect(logoOverlay).toContain("MATRIX_RAIN_LEVEL_COLORS")
   })
 })

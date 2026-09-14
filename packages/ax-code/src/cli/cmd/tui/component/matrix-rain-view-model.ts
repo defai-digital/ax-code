@@ -13,12 +13,16 @@ export const MATRIX_RAIN_MAX_DURATION_MS = 5_000
 export const MATRIX_RAIN_DURATION_MS = 3_500
 export const MATRIX_RAIN_TICK_MS = 90
 
-// Startup sequence: rain -> logo drop -> app. The mark falls from the top
-// edge to the vertical center (ease-out, so it lands instead of stopping
-// dead), holds for a beat, then hands the screen to the working UI.
-export const STARTUP_LOGO_DROP_DURATION_MS = 450
-export const STARTUP_LOGO_HOLD_DURATION_MS = 300
-export const STARTUP_LOGO_DURATION_MS = STARTUP_LOGO_DROP_DURATION_MS + STARTUP_LOGO_HOLD_DURATION_MS
+// Startup sequence: rain -> logo drop -> app. Every character of the mark
+// falls on its own schedule: a random stagger delay decides who leaves first
+// and a small speed jitter stops the fall looking uniform, so the word
+// assembles out of the rain instead of sliding down as one block.
+export const STARTUP_LOGO_FALL_DURATION_MS = 350
+export const STARTUP_LOGO_FALL_JITTER_MS = 120
+export const STARTUP_LOGO_STAGGER_MS = 300
+export const STARTUP_LOGO_HOLD_DURATION_MS = 260
+export const STARTUP_LOGO_DURATION_MS =
+  STARTUP_LOGO_STAGGER_MS + STARTUP_LOGO_FALL_DURATION_MS + STARTUP_LOGO_FALL_JITTER_MS + STARTUP_LOGO_HOLD_DURATION_MS
 export const STARTUP_LOGO_TICK_MS = 30
 
 // Rain columns are spaced out rather than one per cell. This keeps the lit
@@ -175,6 +179,18 @@ export function tickMatrixRain(state: MatrixRainState, size: { width: number; he
   return advanceMatrixRain(state)
 }
 
+/** Merge adjacent equal-brightness cells into one run to bound span count. */
+function mergeRuns(chars: string[], levels: number[], width: number): MatrixRainRun[] {
+  const runs: MatrixRainRun[] = []
+  let start = 0
+  for (let x = 1; x <= width; x++) {
+    if (x < width && levels[x] === levels[start]) continue
+    runs.push({ text: chars.slice(start, x).join(""), level: levels[start] ?? 0 })
+    start = x
+  }
+  return runs
+}
+
 /**
  * Render one frame as per-row color runs. Rows are top-to-bottom; cells with
  * the same brightness are merged into a single run so the renderer emits a
@@ -192,14 +208,7 @@ export function matrixRainRows(state: MatrixRainState): MatrixRainRun[][] {
       chars[column.x] = column.chars[offset] ?? " "
       levels[column.x] = levelFor(offset, column.length)
     }
-    const runs: MatrixRainRun[] = []
-    let start = 0
-    for (let x = 1; x <= state.width; x++) {
-      if (x < state.width && levels[x] === levels[start]) continue
-      runs.push({ text: chars.slice(start, x).join(""), level: levels[start] ?? 0 })
-      start = x
-    }
-    rows.push(runs)
+    rows.push(mergeRuns(chars, levels, state.width))
   }
   return rows
 }
@@ -348,27 +357,109 @@ export function easeOutLogoDrop(progress: number): number {
   return 1 - Math.pow(1 - clamped, 3)
 }
 
-/** Drop progress in [0, 1] from elapsed milliseconds. */
-export function startupLogoDropProgress(elapsedMs: number): number {
-  if (STARTUP_LOGO_DROP_DURATION_MS <= 0) return 1
-  return Math.min(1, Math.max(0, elapsedMs / STARTUP_LOGO_DROP_DURATION_MS))
+/**
+ * One character of the mark plus the random schedule it falls on. `row`/`col`
+ * are its resting place inside the block.
+ */
+export interface StartupLogoGlyph {
+  char: string
+  row: number
+  col: number
+  /** Random start delay inside the stagger window. */
+  delayMs: number
+  /** Random fall duration for this character. */
+  fallMs: number
 }
 
 /**
- * Vertical offset of the falling logo block, in rows from the top of the
- * screen. It starts fully above the top edge (`-contentHeight`, entirely
- * hidden) and lands on the centered row, so the mark emerges into view like a
- * drop rather than appearing in place. The ends are fixed by `progress`'s
- * clamps, so an overshooting tick or a resize cannot travel past the landing.
+ * Build the per-character drop schedule. Trailing padding is layout only, so
+ * blanks never become glyphs; each character draws its own delay and fall
+ * duration, which is what randomizes who lands first.
  */
-export function startupLogoDropOffset(input: {
-  progress: number
-  contentHeight: number
-  terminalHeight: number
-}): number {
-  const center = Math.max(0, Math.floor((input.terminalHeight - input.contentHeight) / 2))
-  const aboveScreen = -input.contentHeight
-  return Math.round(aboveScreen + (center - aboveScreen) * easeOutLogoDrop(input.progress))
+export function createStartupLogoGlyphs(input: { lines: string[]; random?: MatrixRainRandom }): StartupLogoGlyph[] {
+  const random = input.random ?? Math.random
+  const glyphs: StartupLogoGlyph[] = []
+  input.lines.forEach((line, row) => {
+    const text = line.trimEnd()
+    for (let col = 0; col < text.length; col++) {
+      const char = text[col]
+      if (char === " ") continue
+      glyphs.push({
+        char,
+        row,
+        col,
+        delayMs: between(random, 0, STARTUP_LOGO_STAGGER_MS),
+        fallMs: between(
+          random,
+          STARTUP_LOGO_FALL_DURATION_MS,
+          STARTUP_LOGO_FALL_DURATION_MS + STARTUP_LOGO_FALL_JITTER_MS,
+        ),
+      })
+    }
+  })
+  return glyphs
+}
+
+/** Fall progress in [0, 1] for one glyph, its start delay included. */
+export function startupLogoGlyphProgress(glyph: StartupLogoGlyph, elapsedMs: number): number {
+  if (glyph.fallMs <= 0) return 1
+  return Math.min(1, Math.max(0, (elapsedMs - glyph.delayMs) / glyph.fallMs))
+}
+
+/**
+ * Screen row of a glyph at `elapsedMs`. Characters enter from just above the
+ * top edge (`-1`) and ease onto their resting row, so each one arrives rather
+ * than stopping dead. The clamps keep a late tick from travelling past it.
+ */
+export function startupLogoGlyphRow(input: { glyph: StartupLogoGlyph; elapsedMs: number; blockTop: number }): number {
+  const target = input.blockTop + input.glyph.row
+  return Math.round(-1 + (target + 1) * easeOutLogoDrop(startupLogoGlyphProgress(input.glyph, input.elapsedMs)))
+}
+
+/** Ramp level for a glyph: dim green while falling, white head once landed. */
+export function startupLogoGlyphLevel(glyph: StartupLogoGlyph, elapsedMs: number): number {
+  return startupLogoDropLevel(startupLogoGlyphProgress(glyph, elapsedMs))
+}
+
+/**
+ * Render the mark for one tick as per-row color runs over the screen rows it
+ * currently occupies. Characters still above the top edge are simply not
+ * drawn, so no clipping is needed and every returned row is inside the
+ * terminal.
+ */
+export function startupLogoFrame(input: {
+  glyphs: StartupLogoGlyph[]
+  elapsedMs: number
+  blockLeft: number
+  blockTop: number
+  width: number
+  height: number
+}): { top: number; rows: MatrixRainRun[][] } {
+  const placed = input.glyphs
+    .map((glyph) => ({
+      col: input.blockLeft + glyph.col,
+      row: startupLogoGlyphRow({ glyph, elapsedMs: input.elapsedMs, blockTop: input.blockTop }),
+      char: glyph.char,
+      level: Math.round(startupLogoGlyphLevel(glyph, input.elapsedMs)),
+    }))
+    .filter((cell) => cell.row >= 0 && cell.row < input.height && cell.col >= 0 && cell.col < input.width)
+
+  if (placed.length === 0) return { top: 0, rows: [] }
+
+  const top = Math.min(...placed.map((cell) => cell.row))
+  const bottom = Math.max(...placed.map((cell) => cell.row))
+  const rows: MatrixRainRun[][] = []
+  for (let y = top; y <= bottom; y++) {
+    const chars: string[] = new Array(input.width).fill(" ")
+    const levels = new Array<number>(input.width).fill(0)
+    for (const cell of placed) {
+      if (cell.row !== y) continue
+      chars[cell.col] = cell.char
+      levels[cell.col] = Math.max(levels[cell.col], cell.level)
+    }
+    rows.push(mergeRuns(chars, levels, input.width))
+  }
+  return { top, rows }
 }
 
 /**

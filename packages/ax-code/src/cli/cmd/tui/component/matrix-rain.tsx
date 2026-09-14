@@ -2,9 +2,9 @@ import { For, createSignal, onCleanup, onMount } from "solid-js"
 import { RGBA } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
+import { MATRIX_RAIN_LEVEL_COLORS } from "./matrix-rain-palette"
 import {
   MATRIX_RAIN_DURATION_MS,
-  MATRIX_RAIN_LEVEL_RGB,
   MATRIX_RAIN_TICK_MS,
   bindHiddenTerminalCursor,
   createMatrixRain,
@@ -20,12 +20,6 @@ function useHiddenTerminalCursor() {
     onCleanup(unbind)
   })
 }
-
-// Brightness ramp: index 0 is blank, index MATRIX_RAIN_LEVELS is the head.
-// Deliberately a small fixed palette so consecutive cells collapse into few
-// spans and the per-frame escape sequence volume stays bounded. The table is
-// shared with the startup logo, which warms up along the same ramp.
-const LEVEL_COLORS: RGBA[] = MATRIX_RAIN_LEVEL_RGB.map(([r, g, b]) => RGBA.fromInts(r, g, b))
 
 const BACKGROUND = RGBA.fromInts(0, 0, 0)
 
@@ -103,7 +97,7 @@ export function MatrixRain(props: { durationMs?: number; onDone: (reason: Matrix
         {(row) => (
           <text>
             {row.map((run) =>
-              run.level === 0 ? run.text : <span style={{ fg: LEVEL_COLORS[run.level] }}>{run.text}</span>,
+              run.level === 0 ? run.text : <span style={{ fg: MATRIX_RAIN_LEVEL_COLORS[run.level] }}>{run.text}</span>,
             )}
           </text>
         )}

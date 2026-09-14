@@ -1,17 +1,15 @@
 import { For, createMemo, createSignal, onCleanup, onMount } from "solid-js"
-import { RGBA, TextAttributes } from "ax-tui"
+import { RGBA } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { logo } from "@/cli/logo"
+import { MATRIX_RAIN_LEVEL_COLORS } from "./matrix-rain-palette"
 import {
-  STARTUP_LOGO_DROP_DURATION_MS,
   STARTUP_LOGO_DURATION_MS,
   STARTUP_LOGO_TICK_MS,
   bindHiddenTerminalCursor,
-  matrixRainRampRgb,
-  startupLogoDropLevel,
-  startupLogoDropOffset,
-  startupLogoDropProgress,
+  createStartupLogoGlyphs,
+  startupLogoFrame,
   startupLogoPadding,
 } from "./matrix-rain-view-model"
 
@@ -21,13 +19,17 @@ const BACKGROUND = RGBA.fromInts(0, 0, 0)
 // the horizontal centering exact regardless of that trailing padding.
 const LOGO_WIDTH = logo.reduce((max, line) => Math.max(max, line.trimEnd().length), 0)
 
+// The drop schedule is drawn once per launch, so every run assembles the mark
+// in a different order.
+const GLYPHS = createStartupLogoGlyphs({ lines: logo })
+
 /**
- * Brand beat between the startup rain and the working screen: the ASCII logo
- * falls in from above the top edge, eases into the vertical center, holds,
- * then hands off.
- * Covers the screen so the main chrome never flashes before the app is
- * revealed. Escape or a click skips straight to the app; ordinary keys still
- * reach the prompt behind it.
+ * Brand beat between the startup rain and the working screen: every character
+ * of the ASCII mark drops on its own randomized schedule and warms from the
+ * green tail to the white head as it lands, then the mark holds for a beat
+ * before handing off. Covers the screen so the main chrome never flashes
+ * before the app is revealed. Escape or a click skips straight to the app;
+ * ordinary keys still reach the prompt behind it.
  */
 export function StartupLogo(props: { durationMs?: number; onDone: () => void }) {
   const renderer = useRenderer()
@@ -38,43 +40,35 @@ export function StartupLogo(props: { durationMs?: number; onDone: () => void }) 
     onCleanup(unbind)
   })
 
-  // Horizontal centering is static; only the vertical offset animates.
-  const paddingLeft = createMemo(
-    () =>
-      startupLogoPadding({
-        contentWidth: LOGO_WIDTH,
-        contentHeight: logo.length,
-        width: dimensions().width,
-        height: dimensions().height,
-      }).paddingLeft,
-  )
-
-  // The mark falls from above the top edge to the centered row. Ticks stay
-  // short so the fall reads as motion, and stop once it has landed to idle the
-  // render. The offset is negative while it is still above the screen, which
-  // the clipping parent hides.
-  const [elapsedMs, setElapsedMs] = createSignal(0)
-  const dropOffset = createMemo(() =>
-    startupLogoDropOffset({
-      progress: startupLogoDropProgress(elapsedMs()),
+  const anchor = createMemo(() =>
+    startupLogoPadding({
+      contentWidth: LOGO_WIDTH,
       contentHeight: logo.length,
-      terminalHeight: dimensions().height,
+      width: dimensions().width,
+      height: dimensions().height,
     }),
   )
 
-  // Same brightness ramp the rain trails use: the mark starts on the dim
-  // green tail and brightens to the white head as it falls into place.
-  const dropColor = createMemo(() => {
-    const [r, g, b] = matrixRainRampRgb(startupLogoDropLevel(startupLogoDropProgress(elapsedMs())))
-    return RGBA.fromInts(r, g, b)
-  })
+  // Rebuilding a frame per tick is cheap: the schedule is fixed and only the
+  // positions and brightness of the same glyphs change.
+  const [elapsedMs, setElapsedMs] = createSignal(0)
+  const frame = createMemo(() =>
+    startupLogoFrame({
+      glyphs: GLYPHS,
+      elapsedMs: elapsedMs(),
+      blockLeft: anchor().paddingLeft,
+      blockTop: anchor().paddingTop,
+      width: dimensions().width,
+      height: dimensions().height,
+    }),
+  )
 
   let elapsed = 0
   const stopInterval = scheduleTuiInterval(
     () => {
       elapsed += STARTUP_LOGO_TICK_MS
       setElapsedMs(elapsed)
-      if (elapsed >= STARTUP_LOGO_DROP_DURATION_MS) stopInterval()
+      if (elapsed >= STARTUP_LOGO_DURATION_MS) stopInterval()
     },
     { name: "startup-logo-tick", delayMs: STARTUP_LOGO_TICK_MS, unref: true },
   )
@@ -107,11 +101,19 @@ export function StartupLogo(props: { durationMs?: number; onDone: () => void }) 
       overflow="hidden"
       onMouseDown={() => props.onDone()}
     >
-      <box position="absolute" left={paddingLeft()} top={dropOffset()} width={LOGO_WIDTH} height={logo.length}>
-        <For each={logo}>
-          {(line) => (
-            <text fg={dropColor()} attributes={TextAttributes.BOLD}>
-              {line}
+      <box position="absolute" left={0} top={frame().top} width={dimensions().width}>
+        <For each={frame().rows}>
+          {(row) => (
+            <text>
+              <For each={row}>
+                {(run) =>
+                  run.level === 0 ? (
+                    run.text
+                  ) : (
+                    <span style={{ fg: MATRIX_RAIN_LEVEL_COLORS[run.level] }}>{run.text}</span>
+                  )
+                }
+              </For>
             </text>
           )}
         </For>
