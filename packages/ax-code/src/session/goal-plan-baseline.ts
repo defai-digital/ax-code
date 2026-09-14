@@ -109,39 +109,83 @@ export namespace GoalPlanBaseline {
   }
 }
 
-const GIT_COMMAND = /\bgit\b|\bmerge-base\b/
-const GIT_WRAPPER = /\$(?:\{GIT\}|GIT\b)/
-const GIT_PATHSPEC_PREFIX = /(?:\bgit|\$\{GIT\}|\$GIT\b)(?:\s+[^\s]+)*\s--\s.*$/
+const COMMAND_SPLIT = /\s*(?:&&|\|\||;|\||&)\s*/
+const GIT_TOKENS = new Set(["git", "merge-base", "$GIT", "${GIT}"])
+const NESTED_SHELL = new Set(["sh", "bash", "zsh", "ksh", "dash", "eval"])
+const MAX_NEST = 4
 
-function looksLikeGitCommand(command: string) {
-  return GIT_COMMAND.test(command) || GIT_WRAPPER.test(unquotedShellText(command))
+function looksLikeGitCommand(command: string, depth = 0) {
+  return command.split(COMMAND_SPLIT).some((part) => isGitRevisionSegment(part, depth))
 }
 
-function isGitRevisionSegment(part: string) {
-  return GIT_COMMAND.test(part) || GIT_WRAPPER.test(unquotedShellText(part))
+function isGitRevisionSegment(part: string, depth = 0): boolean {
+  const token = unwrapQuotes(firstCommandToken(part))
+  if (GIT_TOKENS.has(token)) return true
+  if (depth >= MAX_NEST || !NESTED_SHELL.has(token)) return false
+  return quotedPayloads(afterFirstToken(stripLeadingAssignments(part.trim()))).some((script) =>
+    looksLikeGitCommand(script, depth + 1),
+  )
 }
 
-function unquotedShellText(command: string) {
-  // $GIT / ${GIT} in quotes is data (grep patterns), not an invocation.
-  // Literal `git` still matches inside quotes so `sh -c 'git diff …'` stays gated.
-  return command.replace(/'[^']*'|"[^"]*"/g, " ")
-}
-
-function gitRevisionText(command: string) {
-  // Only git / $GIT / ${GIT} / merge-base segments contribute before-states.
-  // Later Unix `diff`/`grep origin/main` must not be treated as a git revision.
+function gitRevisionText(command: string, depth = 0): string {
+  if (depth > MAX_NEST) return ""
   return command
-    .split(/\s*(?:&&|\|\||;|\||&)\s*/)
-    .filter((part) => isGitRevisionSegment(part))
-    .map(stripGitPathspec)
+    .split(COMMAND_SPLIT)
+    .flatMap((part) => revisionTextsForSegment(part, depth))
     .join(" ")
 }
 
+function revisionTextsForSegment(part: string, depth: number): string[] {
+  const token = unwrapQuotes(firstCommandToken(part))
+  if (GIT_TOKENS.has(token)) return [stripGitPathspec(part)]
+  if (depth >= MAX_NEST || !NESTED_SHELL.has(token)) return []
+  return quotedPayloads(afterFirstToken(stripLeadingAssignments(part.trim()))).map((script) =>
+    gitRevisionText(script, depth + 1),
+  )
+}
+
 function stripGitPathspec(part: string) {
-  return part.replace(GIT_PATHSPEC_PREFIX, (matched) => {
-    const cut = matched.search(/\s--\s/)
-    return cut === -1 ? matched : matched.slice(0, cut)
-  })
+  if (!GIT_TOKENS.has(unwrapQuotes(firstCommandToken(part)))) return part
+  const cut = part.search(/\s--\s/)
+  return cut === -1 ? part : part.slice(0, cut)
+}
+
+function firstCommandToken(part: string) {
+  const rest = stripLeadingAssignments(part.trim())
+  return rest.match(/^('[^']*'|"[^"]*"|\S+)/)?.[0] ?? ""
+}
+
+function afterFirstToken(part: string) {
+  return part.replace(/^('[^']*'|"[^"]*"|\S+)\s*/, "")
+}
+
+function unwrapQuotes(token: string) {
+  if (
+    token.length >= 2 &&
+    ((token.startsWith("'") && token.endsWith("'")) || (token.startsWith('"') && token.endsWith('"')))
+  ) {
+    return token.slice(1, -1)
+  }
+  return token
+}
+
+function stripLeadingAssignments(text: string) {
+  let rest = text
+  const assignment = /^[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"[^"]*"|\S+)\s+/
+  while (assignment.test(rest)) {
+    rest = rest.replace(assignment, "")
+  }
+  return rest
+}
+
+function quotedPayloads(text: string) {
+  const found: string[] = []
+  const pattern = /'([^']*)'|"([^"]*)"/g
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text))) {
+    found.push(match[1] ?? match[2] ?? "")
+  }
+  return found
 }
 
 function remoteBeforeStateError(checkId: string, refs: string[]) {

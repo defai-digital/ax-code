@@ -155,7 +155,32 @@ describe("GoalPlanBaseline", () => {
       ),
     ).not.toThrow()
     expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract('"$GIT" diff --name-only origin/main..HEAD'), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("sh -c '$GIT diff --name-only origin/main..HEAD'"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("eval '$GIT diff --name-only origin/main..HEAD'"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
       GoalPlanBaseline.prepareAssurance(contract("$GIT diff HEAD -- origin/generated"), {
+        objective: "keep the diff in scope",
+      }),
+    ).not.toThrow()
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract('"$GIT" diff HEAD -- origin/generated'), {
+        objective: "keep the diff in scope",
+      }),
+    ).not.toThrow()
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("sh -c '$GIT diff HEAD -- origin/generated'"), {
         objective: "keep the diff in scope",
       }),
     ).not.toThrow()
