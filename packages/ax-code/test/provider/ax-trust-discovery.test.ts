@@ -9,6 +9,7 @@ import { ProviderID, ModelID } from "../../src/provider/schema"
 import { Auth } from "../../src/auth"
 import { Bus } from "../../src/bus"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
+import { exactCatalogFallbackModels } from "../../src/provider/ax-trust-discovery"
 import { modelDisplayInfo } from "../../src/cli/cmd/tui/component/model-vision-label"
 
 afterEach(() => {
@@ -278,6 +279,103 @@ test.each([undefined, false] as const)(
           }
           const unknown = await Provider.getModel(ProviderID.make(id), ModelID.make("my-deepseek-flash"))
           expect(unknown.capabilities.input.image).toBe(false)
+        },
+      })
+    } finally {
+      await Auth.remove(id)
+    }
+  },
+)
+
+test("exact catalog fallbacks keep first-party IDs and ignore prefixes", () => {
+  const fallbacks = exactCatalogFallbackModels({
+    deepseek: {
+      models: {
+        "deepseek-flash": {
+          id: "deepseek-flash",
+          name: "DeepSeek V4.1 Flash",
+          family: "deepseek-flash",
+          reasoning: true,
+          interleaved: { field: "reasoning_content" },
+        } as any,
+      },
+    },
+    zhipuai: {
+      models: {
+        "glm-5.3": {
+          id: "glm-5.3",
+          name: "GLM-5.3",
+          family: "glm",
+          reasoning: true,
+          interleaved: { field: "reasoning_content" },
+        } as any,
+      },
+    },
+    openrouter: {
+      models: {
+        "glm-5.3": {
+          id: "glm-5.3",
+          name: "Reseller GLM",
+          family: "other",
+          reasoning: false,
+        } as any,
+      },
+    },
+  })
+  expect(fallbacks["glm-5.3"]).toMatchObject({ name: "GLM-5.3", family: "glm", reasoning: true })
+  expect(fallbacks["deepseek-flash"]).toMatchObject({ family: "deepseek-flash" })
+  expect(fallbacks["my-glm-5.3"]).toBeUndefined()
+})
+
+test.each([undefined, false] as const)(
+  "fills exact GLM metadata and preserves advertised attachment=%s",
+  async (attachment) => {
+    vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+    await using api = await endpoint((_req, res) => {
+      res.end(
+        JSON.stringify({
+          data: [
+            {
+              id: "glm-5.3",
+              ...(attachment === undefined
+                ? {}
+                : {
+                    name: "Restricted GLM",
+                    capabilities: { attachment, reasoning: false, toolcall: false },
+                    limit: { context: 32000, output: 2000 },
+                  }),
+            },
+            { id: "my-glm-5.3" },
+          ],
+        }),
+      )
+    })
+    const id = "ax-trust-glm-fallback"
+    await using tmp = await tmpdir({ config: config(id, api.url) })
+    await Auth.set(id, { type: "api", key: "test-token" })
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await Provider.ready()
+          const model = await Provider.getModel(ProviderID.make(id), ModelID.make("glm-5.3"))
+          if (attachment === undefined) {
+            expect(model.name).toBe("GLM-5.3")
+            expect(model.family).toBe("glm")
+            expect(model.limit).toEqual({ context: 1_000_000, output: 131_072 })
+            expect(model.capabilities).toMatchObject({
+              reasoning: true,
+              toolcall: true,
+              interleaved: { field: "reasoning_content" },
+            })
+          } else {
+            expect(model.name).toBe("Restricted GLM")
+            expect(model.limit).toEqual({ context: 32000, output: 2000 })
+            expect(model.capabilities).toMatchObject({ reasoning: false, toolcall: false, attachment: false })
+          }
+          const unknown = await Provider.getModel(ProviderID.make(id), ModelID.make("my-glm-5.3"))
+          expect(unknown.family).toBe("")
+          expect(unknown.capabilities.interleaved).toBe(false)
         },
       })
     } finally {
