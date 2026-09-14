@@ -1125,7 +1125,7 @@ describe("AX Code TUI stability guardrails", () => {
   test("keeps the footer busy glyph separate from the terminal-tab morph", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
-    // The footer shows a two-line 5x8 matchstick man (component/footer-stickman)
+    // The footer shows a two-line 8x5 matchstick man (component/footer-stickman)
     // while the OSC tab title keeps a single-line 4x4 A/X morph. They
     // deliberately do not share a frame set: the tab cannot span the two rows
     // the stickman needs. The local 8-cell "Knight Rider" scanner

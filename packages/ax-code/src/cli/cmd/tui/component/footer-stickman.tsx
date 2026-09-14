@@ -3,12 +3,12 @@ import type { RGBA } from "ax-tui"
 import { scheduleTuiInterval } from "@tui/util/timer"
 import { encodeBrailleLines } from "@/util/braille"
 
-// Footer busy glyph: a 5x8 dot matrix rendered as two braille lines (a braille
-// cell is 2x4, so eight rows need two terminal rows). It is a matchstick man
-// who walks two steps, throws a punch, then kicks — one recognizable figure in
-// motion, which reads far better at this size than morphing across many
-// subjects. Frames cycle directly rather than morphing one dot at a time: a
-// figure should step between poses, not dissolve.
+// Footer busy glyph: an 8x5 dot matrix rendered as two braille lines (a
+// braille cell is 2x4, so even a five-row glyph needs two terminal rows). It is
+// a matchstick man who walks two steps, throws a punch, then kicks — one
+// recognizable figure in motion, which reads far better at this size than
+// morphing across many subjects. Frames cycle directly rather than morphing one
+// dot at a time: a figure should step between poses, not dissolve.
 //
 // The terminal tab keeps its own single-line 4x4 "A"/"X" morph
 // (util/terminal-title.ts). The two surfaces deliberately do not share a frame
@@ -17,10 +17,10 @@ import { encodeBrailleLines } from "@/util/braille"
 // why this renders its own two-line column instead of reusing AxTuiSpinner.
 //
 // Braille is East Asian Width "Narrow" and CJK-safe.
-const STICKMAN_WALK_A = [".###.", ".###.", "..#..", ".##.#", "..#..", "..#..", "..##.", "##..."]
-const STICKMAN_WALK_B = [".###.", ".###.", "..#..", "#.##.", "..#..", "..#..", ".##..", "...##"]
-const STICKMAN_PUNCH = [".###.", ".###.", "..#..", ".#.##", "..#..", "..#..", ".#.#.", "#...#"]
-const STICKMAN_KICK = [".###.", ".###.", "..#..", ".#.#.", "..#..", ".##..", ".#...", "#..##"]
+const STICKMAN_WALK_A = ["...##...", "...##...", ".##..#..", "...##...", ".#...##."]
+const STICKMAN_WALK_B = ["...##...", "...##...", "..#..##.", "...##...", "##...#.."]
+const STICKMAN_PUNCH = ["...##...", "...##...", "#..####.", "...##...", "..#..#.."]
+const STICKMAN_KICK = ["...##...", "...##...", ".#.##.#.", "..##....", "##....#."]
 
 // Two walking steps, then a punch and a kick.
 const FOOTER_STICKMAN_SEQUENCE = [

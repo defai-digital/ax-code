@@ -893,7 +893,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     return `Ask anything... "${PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]}"`
   })
 
-  // Footer busy glyph: a 5x8 matchstick man (two braille rows) that walks a
+  // Footer busy glyph: an 8x5 matchstick man (two braille rows) that walks a
   // couple of steps, punches, and kicks. It deliberately does NOT share a frame
   // set with the terminal-tab A/X morph: the tab is a single OSC line, while
   // this glyph needs two rows, so the two surfaces animate independently.
