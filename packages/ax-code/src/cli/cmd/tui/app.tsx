@@ -93,13 +93,16 @@ import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
 import { createTuiDialogLoaders } from "./tui-dialogs"
 import { appCommands, type AppCommandSandbox } from "./app-commands"
-import { MatrixRain, MatrixRainCover } from "./component/matrix-rain"
+import { MatrixRain, MatrixRainCover, type MatrixRainDoneReason } from "./component/matrix-rain"
+import { StartupLogo } from "./component/startup-logo"
 import {
   MATRIX_RAIN_ON_START_DEFAULT,
   shouldAutoPlayMatrixRain,
   initialStartupRainPhase,
   resolveStartupRainPhase,
   completeStartupRain,
+  startupRainAfterPlayback,
+  startupRainShowsLogo,
   startupRainCoversChrome,
   shouldStopMatrixRain,
 } from "./component/matrix-rain-view-model"
@@ -304,11 +307,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const [matrixPlaying, setMatrixPlaying] = createSignal(false)
   const [startupRainPhase, setStartupRainPhase] = createSignal(initialStartupRainPhase())
   const playMatrixRain = () => setMatrixPlaying(true)
-  const endMatrixRain = () => {
+  const endMatrixRain = (reason: MatrixRainDoneReason = "timeout") => {
     batch(() => {
       setMatrixPlaying(false)
-      if (startupRainPhase() === "rain") setStartupRainPhase(completeStartupRain())
+      if (startupRainPhase() !== "rain") return
+      // Startup rain hands off to the brand logo; an explicit skip goes
+      // straight to the working screen. Completion plays are already in "app".
+      setStartupRainPhase(reason === "skip" ? completeStartupRain() : startupRainAfterPlayback())
     })
+  }
+  const endStartupLogo = () => {
+    if (startupRainShowsLogo(startupRainPhase())) setStartupRainPhase(completeStartupRain())
   }
   createEffect(() => {
     if (!shouldStopMatrixRain({ dialogOpen: dialog.stack.length > 0, hasSelection: false })) return
@@ -1260,6 +1269,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       </Show>
       <Show when={matrixPlaying()}>
         <MatrixRain onDone={endMatrixRain} />
+      </Show>
+      <Show when={startupRainShowsLogo(startupRainPhase())}>
+        <StartupLogo onDone={endStartupLogo} />
       </Show>
     </box>
   )

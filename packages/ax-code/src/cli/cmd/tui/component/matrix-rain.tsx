@@ -50,7 +50,10 @@ export function MatrixRainCover() {
   )
 }
 
-export function MatrixRain(props: { durationMs?: number; onDone: () => void }) {
+/** `timeout` = played to completion; `skip` = the user dismissed it early. */
+export type MatrixRainDoneReason = "timeout" | "skip"
+
+export function MatrixRain(props: { durationMs?: number; onDone: (reason: MatrixRainDoneReason) => void }) {
   useHiddenTerminalCursor()
   const dimensions = useTerminalDimensions()
   const durationMs = props.durationMs ?? MATRIX_RAIN_DURATION_MS
@@ -70,7 +73,7 @@ export function MatrixRain(props: { durationMs?: number; onDone: () => void }) {
     { name: "matrix-rain-tick", delayMs: MATRIX_RAIN_TICK_MS, unref: true },
   )
 
-  const stopTimeout = scheduleTuiTimeout(() => props.onDone(), {
+  const stopTimeout = scheduleTuiTimeout(() => props.onDone("timeout"), {
     name: "matrix-rain-timeout",
     delayMs: durationMs,
     unref: true,
@@ -87,7 +90,7 @@ export function MatrixRain(props: { durationMs?: number; onDone: () => void }) {
     if (evt.name !== "escape") return
     evt.preventDefault()
     evt.stopPropagation()
-    props.onDone()
+    props.onDone("skip")
   })
 
   return (
@@ -98,7 +101,7 @@ export function MatrixRain(props: { durationMs?: number; onDone: () => void }) {
       width={dimensions().width}
       height={dimensions().height}
       backgroundColor={BACKGROUND}
-      onMouseDown={() => props.onDone()}
+      onMouseDown={() => props.onDone("skip")}
     >
       <For each={rows()}>
         {(row) => (

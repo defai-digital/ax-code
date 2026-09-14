@@ -9,10 +9,15 @@ import {
   MATRIX_RAIN_MAX_DURATION_MS,
   MATRIX_RAIN_MIN_DURATION_MS,
   MATRIX_RAIN_ON_START_DEFAULT,
+  STARTUP_LOGO_DROP_DURATION_MS,
+  STARTUP_LOGO_DURATION_MS,
+  STARTUP_LOGO_HOLD_DURATION_MS,
+  STARTUP_LOGO_TICK_MS,
   advanceMatrixRain,
   bindHiddenTerminalCursor,
   completeStartupRain,
   createMatrixRain,
+  easeOutLogoDrop,
   initialStartupRainPhase,
   matrixRainRows,
   resolveStartupRainPhase,
@@ -20,7 +25,12 @@ import {
   decideMatrixRainOnStart,
   shouldPlayMatrixRainOnStart,
   shouldStopMatrixRain,
+  startupLogoDropOffset,
+  startupLogoDropProgress,
+  startupLogoPadding,
+  startupRainAfterPlayback,
   startupRainCoversChrome,
+  startupRainShowsLogo,
   tickMatrixRain,
 } from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
 
@@ -330,6 +340,7 @@ describe("startup rain chrome cover", () => {
     expect(initialStartupRainPhase("compiled")).toBe("app")
     expect(startupRainCoversChrome("hold")).toBe(true)
     expect(startupRainCoversChrome("rain")).toBe(true)
+    expect(startupRainCoversChrome("logo")).toBe(true)
     expect(startupRainCoversChrome("app")).toBe(false)
   })
 
@@ -345,7 +356,105 @@ describe("startup rain chrome cover", () => {
     expect(resolveStartupRainPhase({ ...hold, dialogOpen: true })).toBe("app")
     expect(resolveStartupRainPhase({ ...hold, phase: "rain", ready: true })).toBe("rain")
     expect(resolveStartupRainPhase({ ...hold, phase: "rain", ready: true, dialogOpen: true })).toBe("app")
+    expect(resolveStartupRainPhase({ ...hold, phase: "logo", ready: true })).toBe("logo")
+    expect(resolveStartupRainPhase({ ...hold, phase: "logo", ready: true, dialogOpen: true })).toBe("app")
     expect(resolveStartupRainPhase({ ...hold, phase: "app", ready: true })).toBe("app")
     expect(completeStartupRain()).toBe("app")
+    expect(startupRainAfterPlayback()).toBe("logo")
+    expect(startupRainShowsLogo("logo")).toBe(true)
+    expect(startupRainShowsLogo("rain")).toBe(false)
+    expect(startupRainShowsLogo("app")).toBe(false)
+  })
+})
+
+describe("startup logo beat", () => {
+  test("splits a short drop plus hold that stays under the rain duration", () => {
+    expect(STARTUP_LOGO_DURATION_MS).toBe(STARTUP_LOGO_DROP_DURATION_MS + STARTUP_LOGO_HOLD_DURATION_MS)
+    expect(STARTUP_LOGO_HOLD_DURATION_MS).toBeGreaterThan(0)
+    expect(STARTUP_LOGO_DURATION_MS).toBeLessThan(MATRIX_RAIN_MIN_DURATION_MS)
+  })
+
+  test("centers the logo block, flooring an odd gap", () => {
+    expect(startupLogoPadding({ contentWidth: 53, contentHeight: 5, width: 80, height: 24 })).toEqual({
+      paddingTop: 9,
+      paddingLeft: 13,
+    })
+  })
+
+  test("clamps to zero in a terminal smaller than the logo", () => {
+    expect(startupLogoPadding({ contentWidth: 53, contentHeight: 5, width: 40, height: 3 })).toEqual({
+      paddingTop: 0,
+      paddingLeft: 0,
+    })
+  })
+
+  test("app plays rain, then the logo, then the working screen", () => {
+    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app.tsx"), "utf8")
+    expect(app).toContain("startupRainAfterPlayback")
+    expect(app).toContain("startupRainShowsLogo")
+    expect(app).toContain("StartupLogo")
+  })
+
+  test("the logo overlay hides the terminal cursor while it covers the screen", () => {
+    const src = readFileSync(
+      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/startup-logo.tsx"),
+      "utf8",
+    )
+    expect(src).toContain("bindHiddenTerminalCursor")
+  })
+})
+
+describe("startup logo drop", () => {
+  const LANDING = { contentHeight: 5, terminalHeight: 24 } as const
+
+  test("emerges from fully above the top edge and lands centered", () => {
+    expect(startupLogoDropOffset({ ...LANDING, progress: 0 })).toBe(-LANDING.contentHeight)
+    expect(startupLogoDropOffset({ ...LANDING, progress: 1 })).toBe(9)
+  })
+
+  test("falls monotonically and never travels past the landing", () => {
+    let previous = Number.NEGATIVE_INFINITY
+    for (let step = 0; step <= 20; step++) {
+      const offset = startupLogoDropOffset({ ...LANDING, progress: step / 20 })
+      expect(offset).toBeGreaterThanOrEqual(previous)
+      expect(offset).toBeGreaterThanOrEqual(-LANDING.contentHeight)
+      expect(offset).toBeLessThanOrEqual(9)
+      previous = offset
+    }
+  })
+
+  test("eases out so most of the drop is covered early", () => {
+    expect(easeOutLogoDrop(0.5)).toBeCloseTo(0.875, 10)
+    const halfway = startupLogoDropOffset({ ...LANDING, progress: 0.5 })
+    expect(halfway).toBeGreaterThan(4)
+    expect(halfway).toBeLessThan(9)
+  })
+
+  test("clamps progress outside the drop window", () => {
+    expect(startupLogoDropProgress(-100)).toBe(0)
+    expect(startupLogoDropProgress(0)).toBe(0)
+    expect(startupLogoDropProgress(STARTUP_LOGO_DROP_DURATION_MS * 2)).toBe(1)
+    expect(startupLogoDropOffset({ ...LANDING, progress: -1 })).toBe(-LANDING.contentHeight)
+    expect(startupLogoDropOffset({ ...LANDING, progress: 5 })).toBe(9)
+  })
+
+  test("lands at row zero when the terminal is shorter than the logo", () => {
+    expect(startupLogoDropOffset({ progress: 1, contentHeight: 12, terminalHeight: 8 })).toBe(0)
+    expect(startupLogoDropOffset({ progress: 0, contentHeight: 12, terminalHeight: 8 })).toBe(-12)
+  })
+
+  test("uses a tick short enough to read as motion", () => {
+    expect(STARTUP_LOGO_TICK_MS).toBeGreaterThan(0)
+    expect(STARTUP_LOGO_TICK_MS).toBeLessThan(STARTUP_LOGO_DROP_DURATION_MS / 5)
+  })
+
+  test("the overlay animates the offset instead of a fixed padding", () => {
+    const src = readFileSync(
+      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/startup-logo.tsx"),
+      "utf8",
+    )
+    expect(src).toContain("startupLogoDropOffset")
+    expect(src).toContain("scheduleTuiInterval")
+    expect(src).toContain('overflow="hidden"')
   })
 })

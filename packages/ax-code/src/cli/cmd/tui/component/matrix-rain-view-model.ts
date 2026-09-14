@@ -13,6 +13,14 @@ export const MATRIX_RAIN_MAX_DURATION_MS = 5_000
 export const MATRIX_RAIN_DURATION_MS = 3_500
 export const MATRIX_RAIN_TICK_MS = 90
 
+// Startup sequence: rain -> logo drop -> app. The mark falls from the top
+// edge to the vertical center (ease-out, so it lands instead of stopping
+// dead), holds for a beat, then hands the screen to the working UI.
+export const STARTUP_LOGO_DROP_DURATION_MS = 450
+export const STARTUP_LOGO_HOLD_DURATION_MS = 300
+export const STARTUP_LOGO_DURATION_MS = STARTUP_LOGO_DROP_DURATION_MS + STARTUP_LOGO_HOLD_DURATION_MS
+export const STARTUP_LOGO_TICK_MS = 30
+
 // Rain columns are spaced out rather than one per cell. This keeps the lit
 // cell count (and therefore terminal output per frame) proportional to
 // height / spacing instead of height * width, which is what makes a full
@@ -231,10 +239,12 @@ export function decideMatrixRainOnStart(input: {
 
 /**
  * Startup chrome cover. `hold` hides the main screen until kv can honor a
- * persisted opt-out; `rain` keeps it covered while the overlay plays; `app`
- * is the normal UI. Compiled runtimes never animate, so they start in `app`.
+ * persisted opt-out; `rain` keeps it covered while the overlay plays; `logo`
+ * holds the centered brand mark between the rain and the working screen;
+ * `app` is the normal UI. Compiled runtimes never animate, so they start in
+ * `app`.
  */
-export type StartupRainPhase = "hold" | "rain" | "app"
+export type StartupRainPhase = "hold" | "rain" | "logo" | "app"
 
 export function initialStartupRainPhase(runtime?: RuntimeMode): StartupRainPhase {
   return shouldUseTuiAnimations({ runtime }) ? "hold" : "app"
@@ -250,7 +260,7 @@ export function resolveStartupRainPhase(input: {
 }): StartupRainPhase {
   if (input.phase === "app") return "app"
   if (input.dialogOpen) return "app"
-  if (input.phase === "rain") return "rain"
+  if (input.phase === "rain" || input.phase === "logo") return input.phase
   if (!input.ready) return "hold"
   return decideMatrixRainOnStart({
     ready: true,
@@ -262,8 +272,69 @@ export function resolveStartupRainPhase(input: {
     : "app"
 }
 
+/** Hand the screen to the working UI — used after the logo beat and on skip. */
 export function completeStartupRain(): StartupRainPhase {
   return "app"
+}
+
+/**
+ * Where a finished startup rain goes next. Rain that played to completion
+ * shows the brand logo; an explicit skip bypasses it via
+ * `completeStartupRain`.
+ */
+export function startupRainAfterPlayback(): StartupRainPhase {
+  return "logo"
+}
+
+export function startupRainShowsLogo(phase: StartupRainPhase): boolean {
+  return phase === "logo"
+}
+
+/**
+ * Center the logo block in the terminal. Offsets are floored so the block sits
+ * marginally high/left rather than clipping the bottom/right on an odd gap,
+ * and clamped at zero so a terminal narrower than the logo starts at column 0
+ * instead of pushing the mark off screen.
+ */
+export function startupLogoPadding(input: {
+  contentWidth: number
+  contentHeight: number
+  width: number
+  height: number
+}): { paddingTop: number; paddingLeft: number } {
+  return {
+    paddingTop: Math.max(0, Math.floor((input.height - input.contentHeight) / 2)),
+    paddingLeft: Math.max(0, Math.floor((input.width - input.contentWidth) / 2)),
+  }
+}
+
+/** Cubic ease-out: a fast fall that decelerates into the landing. */
+export function easeOutLogoDrop(progress: number): number {
+  const clamped = Math.min(1, Math.max(0, progress))
+  return 1 - Math.pow(1 - clamped, 3)
+}
+
+/** Drop progress in [0, 1] from elapsed milliseconds. */
+export function startupLogoDropProgress(elapsedMs: number): number {
+  if (STARTUP_LOGO_DROP_DURATION_MS <= 0) return 1
+  return Math.min(1, Math.max(0, elapsedMs / STARTUP_LOGO_DROP_DURATION_MS))
+}
+
+/**
+ * Vertical offset of the falling logo block, in rows from the top of the
+ * screen. It starts fully above the top edge (`-contentHeight`, entirely
+ * hidden) and lands on the centered row, so the mark emerges into view like a
+ * drop rather than appearing in place. The ends are fixed by `progress`'s
+ * clamps, so an overshooting tick or a resize cannot travel past the landing.
+ */
+export function startupLogoDropOffset(input: {
+  progress: number
+  contentHeight: number
+  terminalHeight: number
+}): number {
+  const center = Math.max(0, Math.floor((input.terminalHeight - input.contentHeight) / 2))
+  const aboveScreen = -input.contentHeight
+  return Math.round(aboveScreen + (center - aboveScreen) * easeOutLogoDrop(input.progress))
 }
 
 export function startupRainCoversChrome(phase: StartupRainPhase): boolean {
