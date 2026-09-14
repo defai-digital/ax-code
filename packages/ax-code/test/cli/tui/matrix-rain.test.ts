@@ -5,6 +5,8 @@ import {
   MATRIX_RAIN_COLUMN_SPACING,
   MATRIX_RAIN_DURATION_MS,
   MATRIX_RAIN_GLYPHS,
+  MATRIX_RAIN_HEAVY_GLYPHS,
+  MATRIX_RAIN_LIGHT_GLYPHS,
   MATRIX_RAIN_LEVEL_RGB,
   MATRIX_RAIN_LEVELS,
   MATRIX_RAIN_MAX_DURATION_MS,
@@ -40,6 +42,7 @@ import {
   startupRainShowsLogo,
   tickMatrixRain,
 } from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
+import type { MatrixRainRun, MatrixRainState } from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
 import { logo } from "../../../src/cli/logo"
 
 // Deterministic PRNG (mulberry32) so frames are reproducible in assertions.
@@ -55,6 +58,21 @@ function seeded(seed: number) {
 }
 
 const GRID = { width: 80, height: 24 } as const
+
+/**
+ * Every rendered row must stay inside the design budget: a column lights at most
+ * one cell per row, so a row has at most `columns` lit cells and at most two
+ * runs per lit cell (the blank run on either side). Asserting `columns + 1`
+ * instead would be wrong — a row with several lit columns legitimately has more
+ * runs than that, and that false bound used to pass only for one lucky seed.
+ */
+function expectRowBudget(state: MatrixRainState, rows: MatrixRainRun[][]): void {
+  for (const row of rows) {
+    const lit = row.reduce((total, run) => total + (run.level > 0 ? run.text.length : 0), 0)
+    expect(lit).toBeLessThanOrEqual(state.columns.length)
+    expect(row.length).toBeLessThanOrEqual(2 * state.columns.length + 1)
+  }
+}
 
 describe("matrix rain glyph set", () => {
   test("uses ASCII only", () => {
@@ -97,34 +115,108 @@ describe("matrix rain frames", () => {
     }
   })
 
-  test("merges adjacent cells of equal brightness into single runs", () => {
+  test("merges adjacent cells sharing brightness and weight into single runs", () => {
     const state = createMatrixRain({ ...GRID, random: seeded(3) })
-    for (const run of matrixRainRows(state)[Math.floor(GRID.height / 2)] ?? []) {
+    const rows = matrixRainRows(state)
+    for (const run of rows[Math.floor(GRID.height / 2)] ?? []) {
       expect(run.text.length).toBeGreaterThan(0)
     }
-    // Run count is bounded by the column count plus one, which is the whole
-    // point of spacing columns: per-frame span count stays independent of width.
-    for (const row of matrixRainRows(state)) {
-      expect(row.length).toBeLessThanOrEqual(state.columns.length + 1)
+    for (const row of rows) {
       for (let i = 1; i < row.length; i++) {
-        expect(row[i]!.level).not.toBe(row[i - 1]!.level)
+        expect([row[i]!.level, row[i]!.bold]).not.toEqual([row[i - 1]!.level, row[i - 1]!.bold])
       }
+    }
+    // Spacing columns is what keeps the per-frame span count proportional to the
+    // column count rather than to the terminal width.
+    expectRowBudget(state, rows)
+  })
+
+  test("keeps one column per lane so the lit cell count stays bounded", () => {
+    const state = createMatrixRain({ ...GRID, random: seeded(11) })
+    const xs = state.columns.map((column) => column.x)
+    expect(xs.length).toBe(Math.floor(GRID.width / MATRIX_RAIN_COLUMN_SPACING))
+    for (let i = 0; i < xs.length; i++) {
+      expect(xs[i]!).toBeGreaterThanOrEqual(0)
+      expect(xs[i]!).toBeLessThan(GRID.width)
+      // Lanes never overlap, so jitter cannot make two columns collide or swap.
+      if (i > 0) expect(xs[i]!).toBeGreaterThan(xs[i - 1]!)
     }
   })
 
-  test("spaces columns so the lit cell count stays bounded", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(11) })
-    const xs = state.columns.map((column) => column.x).sort((a, b) => a - b)
-    expect(xs.length).toBeGreaterThan(0)
-    for (let i = 1; i < xs.length; i++) {
-      expect(xs[i]! - xs[i - 1]!).toBeGreaterThanOrEqual(MATRIX_RAIN_COLUMN_SPACING)
+  test("jitters each column inside its own lane", () => {
+    const state = createMatrixRain({ ...GRID, random: seeded(23) })
+    const spacing = MATRIX_RAIN_COLUMN_SPACING
+    const count = Math.floor(GRID.width / spacing)
+    const span = (count - 1) * spacing
+    const offset = Math.max(0, Math.floor((GRID.width - span - 1) / 2))
+    const jitters = state.columns.map((column, index) => column.x - offset - index * spacing)
+    for (const jitter of jitters) {
+      expect(jitter).toBeGreaterThanOrEqual(0)
+      expect(jitter).toBeLessThan(spacing)
     }
+    // One shared offset would still read as a grid, so the jitter must vary.
+    expect(new Set(jitters).size).toBeGreaterThan(1)
   })
 
   test("is deterministic for a fixed random source", () => {
     const first = matrixRainRows(createMatrixRain({ ...GRID, random: seeded(42) }))
     const second = matrixRainRows(createMatrixRain({ ...GRID, random: seeded(42) }))
     expect(second).toEqual(first)
+  })
+})
+
+describe("matrix rain column weight", () => {
+  test("splits the glyph set into disjoint ASCII pools", () => {
+    expect(MATRIX_RAIN_HEAVY_GLYPHS.length).toBeGreaterThan(0)
+    expect(MATRIX_RAIN_LIGHT_GLYPHS.length).toBeGreaterThan(0)
+    expect(MATRIX_RAIN_GLYPHS).toBe(MATRIX_RAIN_HEAVY_GLYPHS + MATRIX_RAIN_LIGHT_GLYPHS)
+    const heavy = new Set(MATRIX_RAIN_HEAVY_GLYPHS)
+    for (const char of MATRIX_RAIN_LIGHT_GLYPHS) expect(heavy.has(char)).toBe(false)
+    for (const char of MATRIX_RAIN_GLYPHS) expect(char.codePointAt(0)).toBeLessThan(0x80)
+  })
+
+  test("gives some columns each weight", () => {
+    const state = createMatrixRain({ ...GRID, random: seeded(31) })
+    expect(new Set(state.columns.map((column) => column.heavy))).toEqual(new Set([true, false]))
+  })
+
+  test("keeps every column inside its own pool for its whole life", () => {
+    let state = createMatrixRain({ ...GRID, random: seeded(37) })
+    for (let tick = 0; tick < 200; tick++) {
+      for (const column of state.columns) {
+        const pool = column.heavy ? MATRIX_RAIN_HEAVY_GLYPHS : MATRIX_RAIN_LIGHT_GLYPHS
+        for (const char of column.chars) expect(pool).toContain(char)
+      }
+      state = advanceMatrixRain(state)
+    }
+  })
+
+  test("marks only cells of heavy columns bold", () => {
+    let state = createMatrixRain({ ...GRID, random: seeded(41) })
+    let sawBold = false
+    for (let tick = 0; tick < 60; tick++) {
+      for (const row of matrixRainRows(state)) {
+        for (const run of row) {
+          if (!run.bold) continue
+          sawBold = true
+          for (const char of run.text) expect(MATRIX_RAIN_HEAVY_GLYPHS).toContain(char)
+        }
+      }
+      state = advanceMatrixRain(state)
+    }
+    expect(sawBold).toBe(true)
+  })
+
+  test("keeps every row inside the lit-cell budget over time", () => {
+    // These seeds are the ones whose dense rows exceed `columns + 1` runs, so the
+    // test proves the corrected bound instead of passing on a sparse frame.
+    for (const seed of [42, 43, 48]) {
+      let state = createMatrixRain({ ...GRID, random: seeded(seed) })
+      for (let tick = 0; tick < 60; tick++) {
+        expectRowBudget(state, matrixRainRows(state))
+        state = advanceMatrixRain(state)
+      }
+    }
   })
 })
 
@@ -186,9 +278,10 @@ describe("matrix rain resize", () => {
 })
 
 describe("matrix rain duration", () => {
-  test("stays inside the requested 3 to 5 second window", () => {
-    expect(MATRIX_RAIN_MIN_DURATION_MS).toBeGreaterThanOrEqual(3_000)
+  test("stays inside the requested 2.5 to 5 second window", () => {
+    expect(MATRIX_RAIN_MIN_DURATION_MS).toBeGreaterThanOrEqual(2_500)
     expect(MATRIX_RAIN_MAX_DURATION_MS).toBeLessThanOrEqual(5_000)
+    expect(MATRIX_RAIN_DURATION_MS).toBe(2_500)
     expect(MATRIX_RAIN_DURATION_MS).toBeGreaterThanOrEqual(MATRIX_RAIN_MIN_DURATION_MS)
     expect(MATRIX_RAIN_DURATION_MS).toBeLessThanOrEqual(MATRIX_RAIN_MAX_DURATION_MS)
   })

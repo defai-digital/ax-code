@@ -4,13 +4,19 @@ import type { RuntimeMode } from "@/installation/runtime-mode"
 // ASCII-only glyph set. The TUI lays out positioned rows by cell width, and
 // East Asian Width "Ambiguous"/"Wide" glyphs (the katakana in the classic
 // Matrix effect) break that math. Every code point here is < 0x80.
-export const MATRIX_RAIN_GLYPHS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz<>*+=-:.@#$%&"
+// Glyph pools by ink weight. A terminal cell cannot change font size, so a
+// denser glyph is what makes a column read as a bigger drop than one drawn from
+// the sparse pool. Both pools stay ASCII-only for the same reason as above.
+export const MATRIX_RAIN_HEAVY_GLYPHS = "#@%&$WMNB8Q0"
+export const MATRIX_RAIN_LIGHT_GLYPHS = ".:-'_^+;<>i!l|~,"
+export const MATRIX_RAIN_GLYPHS = MATRIX_RAIN_HEAVY_GLYPHS + MATRIX_RAIN_LIGHT_GLYPHS
 
 // The overlay is a short, dismissible flourish: long enough to read as rain,
-// short enough to never feel like the terminal has been taken hostage.
-export const MATRIX_RAIN_MIN_DURATION_MS = 3_000
+// short enough to never feel like the terminal has been taken hostage. The
+// floor tracks the requested startup playback length, which is the default.
+export const MATRIX_RAIN_MIN_DURATION_MS = 2_500
 export const MATRIX_RAIN_MAX_DURATION_MS = 5_000
-export const MATRIX_RAIN_DURATION_MS = 3_500
+export const MATRIX_RAIN_DURATION_MS = 2_500
 export const MATRIX_RAIN_TICK_MS = 90
 
 // Startup sequence: rain -> logo drop -> app. Every character of the mark
@@ -25,10 +31,12 @@ export const STARTUP_LOGO_DURATION_MS =
   STARTUP_LOGO_STAGGER_MS + STARTUP_LOGO_FALL_DURATION_MS + STARTUP_LOGO_FALL_JITTER_MS + STARTUP_LOGO_HOLD_DURATION_MS
 export const STARTUP_LOGO_TICK_MS = 30
 
-// Rain columns are spaced out rather than one per cell. This keeps the lit
-// cell count (and therefore terminal output per frame) proportional to
-// height / spacing instead of height * width, which is what makes a full
-// screen animation affordable without a bespoke native renderable.
+// Rain columns are spread across fixed lanes, one per `spacing` cells, rather
+// than one per cell. That keeps the lit cell count (and therefore terminal
+// output per frame) proportional to height / spacing instead of height * width,
+// which is what makes a full screen animation affordable without a bespoke
+// native renderable. Each column then jitters inside its own lane, so the drops
+// stop lining up on a visible grid without moving that bound.
 export const MATRIX_RAIN_COLUMN_SPACING = 3
 export const MATRIX_RAIN_LEVELS = 4
 export const MATRIX_RAIN_MIN_TRAIL = 4
@@ -36,6 +44,8 @@ export const MATRIX_RAIN_MAX_TRAIL = 14
 export const MATRIX_RAIN_MIN_SPEED = 0.35
 export const MATRIX_RAIN_MAX_SPEED = 1.1
 export const MATRIX_RAIN_TAIL_MUTATION_CHANCE = 0.35
+// Share of columns that draw from the dense pool and render bold.
+export const MATRIX_RAIN_HEAVY_COLUMN_CHANCE = 0.35
 export const MATRIX_RAIN_RESPAWN_GAP = 20
 
 /**
@@ -65,6 +75,8 @@ export interface MatrixRainColumn {
   length: number
   /** Glyph per trail offset, index 0 is the head. */
   chars: string[]
+  /** Dense pool plus bold, so this column reads as a bigger drop. */
+  heavy: boolean
 }
 
 export interface MatrixRainState {
@@ -78,15 +90,21 @@ export interface MatrixRainRun {
   text: string
   /** 0 = blank; 1..MATRIX_RAIN_LEVELS = brightness, head is brightest. */
   level: number
+  /** Draw bold; set for cells belonging to a heavy column. */
+  bold: boolean
 }
 
 function between(random: MatrixRainRandom, min: number, max: number): number {
   return min + random() * (max - min)
 }
 
-function glyph(random: MatrixRainRandom): string {
-  const index = Math.min(MATRIX_RAIN_GLYPHS.length - 1, Math.floor(random() * MATRIX_RAIN_GLYPHS.length))
-  return MATRIX_RAIN_GLYPHS[index] ?? " "
+function glyphPool(heavy: boolean): string {
+  return heavy ? MATRIX_RAIN_HEAVY_GLYPHS : MATRIX_RAIN_LIGHT_GLYPHS
+}
+
+function glyph(random: MatrixRainRandom, pool: string): string {
+  const index = Math.min(pool.length - 1, Math.floor(random() * pool.length))
+  return pool[index] ?? " "
 }
 
 function makeColumn(random: MatrixRainRandom, x: number, head: number): MatrixRainColumn {
@@ -94,21 +112,39 @@ function makeColumn(random: MatrixRainRandom, x: number, head: number): MatrixRa
     MATRIX_RAIN_MIN_TRAIL,
     Math.floor(between(random, MATRIX_RAIN_MIN_TRAIL, MATRIX_RAIN_MAX_TRAIL + 1)),
   )
+  // Ink weight is drawn once and kept for the column's whole life, so a big
+  // drop never flickers between weights mid-fall.
+  const heavy = random() < MATRIX_RAIN_HEAVY_COLUMN_CHANCE
+  const pool = glyphPool(heavy)
   return {
     x,
     head,
+    heavy,
     speed: between(random, MATRIX_RAIN_MIN_SPEED, MATRIX_RAIN_MAX_SPEED),
     length,
-    chars: Array.from({ length }, () => glyph(random)),
+    chars: Array.from({ length }, () => glyph(random, pool)),
   }
 }
 
-function columnPositions(width: number): number[] {
+/** Lane starts: evenly spaced and centred, one column may live in each. */
+function columnSlots(width: number): number[] {
   const spacing = MATRIX_RAIN_COLUMN_SPACING
   const count = Math.max(1, Math.floor(width / spacing))
   const span = (count - 1) * spacing
   const offset = Math.max(0, Math.floor((width - span - 1) / 2))
   return Array.from({ length: count }, (_, index) => offset + index * spacing)
+}
+
+/**
+ * Where a column actually sits inside its lane. The jitter never leaves the
+ * lane, so columns keep one apiece, stay in order and never collide — the
+ * per-frame lit-cell bound is unchanged — while the rows stop lining up on a
+ * visible grid. Clamping to the last cell covers the rightmost lane, whose
+ * lane end can reach the terminal edge.
+ */
+function columnPosition(random: MatrixRainRandom, slot: number, width: number): number {
+  const jitter = Math.floor(random() * MATRIX_RAIN_COLUMN_SPACING)
+  return Math.min(width - 1, slot + jitter)
 }
 
 export function createMatrixRain(input: { width: number; height: number; random?: MatrixRainRandom }): MatrixRainState {
@@ -117,8 +153,8 @@ export function createMatrixRain(input: { width: number; height: number; random?
   const random = input.random ?? Math.random
   // Stagger initial heads so columns start dropping immediately instead of
   // all entering from the top edge on the same tick.
-  const columns = columnPositions(width).map((x) =>
-    makeColumn(random, x, between(random, -Math.max(4, height * 0.6), height)),
+  const columns = columnSlots(width).map((slot) =>
+    makeColumn(random, columnPosition(random, slot, width), between(random, -Math.max(4, height * 0.6), height)),
   )
   return { width, height, columns, random }
 }
@@ -130,11 +166,12 @@ export function advanceMatrixRain(state: MatrixRainState): MatrixRainState {
       // Column has run off the bottom; restart it above the screen.
       return makeColumn(state.random, column.x, -between(state.random, 1, MATRIX_RAIN_RESPAWN_GAP))
     }
+    const pool = glyphPool(column.heavy)
     const chars = column.chars.slice()
-    chars[0] = glyph(state.random)
+    chars[0] = glyph(state.random, pool)
     if (chars.length > 1 && state.random() < MATRIX_RAIN_TAIL_MUTATION_CHANCE) {
       const index = 1 + Math.floor(state.random() * (chars.length - 1))
-      chars[index] = glyph(state.random)
+      chars[index] = glyph(state.random, pool)
     }
     return { ...column, head, chars }
   })
@@ -158,13 +195,14 @@ export function tickMatrixRain(state: MatrixRainState, size: { width: number; he
   return advanceMatrixRain(state)
 }
 
-/** Merge adjacent equal-brightness cells into one run to bound span count. */
-function mergeRuns(chars: string[], levels: number[], width: number): MatrixRainRun[] {
+/** Merge adjacent cells sharing brightness and weight into one run, so the
+ * per-frame span count stays bounded. */
+function mergeRuns(chars: string[], levels: number[], bold: boolean[], width: number): MatrixRainRun[] {
   const runs: MatrixRainRun[] = []
   let start = 0
   for (let x = 1; x <= width; x++) {
-    if (x < width && levels[x] === levels[start]) continue
-    runs.push({ text: chars.slice(start, x).join(""), level: levels[start] ?? 0 })
+    if (x < width && levels[x] === levels[start] && bold[x] === bold[start]) continue
+    runs.push({ text: chars.slice(start, x).join(""), level: levels[start] ?? 0, bold: bold[start] ?? false })
     start = x
   }
   return runs
@@ -180,14 +218,16 @@ export function matrixRainRows(state: MatrixRainState): MatrixRainRun[][] {
   for (let y = 0; y < state.height; y++) {
     const chars: string[] = new Array(state.width).fill(" ")
     const levels = new Array<number>(state.width).fill(0)
+    const bold = new Array<boolean>(state.width).fill(false)
     for (const column of state.columns) {
       if (column.x < 0 || column.x >= state.width) continue
       const offset = Math.floor(column.head) - y
       if (offset < 0 || offset >= column.length) continue
       chars[column.x] = column.chars[offset] ?? " "
       levels[column.x] = levelFor(offset, column.length)
+      bold[column.x] = column.heavy
     }
-    rows.push(mergeRuns(chars, levels, state.width))
+    rows.push(mergeRuns(chars, levels, bold, state.width))
   }
   return rows
 }
@@ -431,12 +471,13 @@ export function startupLogoFrame(input: {
   for (let y = top; y <= bottom; y++) {
     const chars: string[] = new Array(input.width).fill(" ")
     const levels = new Array<number>(input.width).fill(0)
+    const bold = new Array<boolean>(input.width).fill(false)
     for (const cell of placed) {
       if (cell.row !== y) continue
       chars[cell.col] = cell.char
       levels[cell.col] = Math.max(levels[cell.col], cell.level)
     }
-    rows.push(mergeRuns(chars, levels, input.width))
+    rows.push(mergeRuns(chars, levels, bold, input.width))
   }
   return { top, rows }
 }

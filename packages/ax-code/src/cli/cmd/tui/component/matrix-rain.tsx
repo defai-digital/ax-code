@@ -1,5 +1,5 @@
 import { For, createSignal, onCleanup, onMount } from "solid-js"
-import { RGBA } from "ax-tui"
+import { RGBA, TextAttributes } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { MATRIX_RAIN_LEVEL_COLORS } from "./matrix-rain-palette"
@@ -97,7 +97,18 @@ export function MatrixRain(props: { durationMs?: number; onDone: (reason: Matrix
         {(row) => (
           <text>
             {row.map((run) =>
-              run.level === 0 ? run.text : <span style={{ fg: MATRIX_RAIN_LEVEL_COLORS[run.level] }}>{run.text}</span>,
+              run.level === 0 ? (
+                run.text
+              ) : (
+                <span
+                  style={{
+                    fg: MATRIX_RAIN_LEVEL_COLORS[run.level],
+                    attributes: run.bold ? TextAttributes.BOLD : undefined,
+                  }}
+                >
+                  {run.text}
+                </span>
+              ),
             )}
           </text>
         )}
