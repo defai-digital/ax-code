@@ -47,7 +47,12 @@ export async function listenIpc(opts: IpcServerOptions): Promise<IpcServerHandle
 
   await new Promise<void>((resolve, reject) => {
     server.listen(socketPath, () => {
+      // Bind failures are routed to `reject` above. Keep a listener afterwards
+      // so a later server-level 'error' is logged instead of crashing.
       server.off("error", onError)
+      server.on("error", (error) => {
+        log.error("ipc server error after listen", { error })
+      })
       onListening?.(socketPath)
       resolve()
     })

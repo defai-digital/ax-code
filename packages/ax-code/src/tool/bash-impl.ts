@@ -8,6 +8,7 @@ import DESCRIPTION_AX_ENGINE from "./bash-ax-engine.txt"
 import { Log } from "../util/log"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { Instance } from "../project/instance"
+import { defer } from "@/util/defer"
 import { lazy } from "@/util/lazy"
 import { Language } from "web-tree-sitter"
 import fs from "fs/promises"
@@ -455,6 +456,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       if (!tree) {
         throw new Error("Failed to parse command")
       }
+      // web-tree-sitter Trees own memory outside the V8 heap and have no
+      // FinalizationRegistry: only delete() frees them. bash is a hot tool, so
+      // leaking one tree per call grows the WASM heap for the process lifetime.
+      // Mirrors the ownership pattern in code-intelligence/syntactic.ts.
+      using _parsedCommandTree = defer(() => tree.delete())
       // Admission and spawning must inspect the same plugin-adjusted environment.
       const shellEnv = await Plugin.trigger(
         "shell.env",
@@ -878,6 +884,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             const p = await parser()
             const innerTree = p.parse(innerCmd)
             if (innerTree) {
+              using _innerCommandTree = defer(() => innerTree.delete())
               if (innerTree.rootNode.descendantsOfType("variable_assignment").length > 0) shellEnvironmentChanges = true
               for (const innerNode of innerTree.rootNode.descendantsOfType("command")) {
                 if (!innerNode) continue
@@ -1453,11 +1460,15 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
             output += "\n\n[output truncated at 10MB]"
             truncated = true
           }
+          // Check the interval first: Buffer.byteLength(output) scans the whole
+          // accumulated string, so measuring it on every chunk makes a verbose
+          // command O(n^2). Both early returns are no-publish paths, so the
+          // published snapshots are unchanged.
+          const now = Date.now()
+          if (now - lastPublishedAt < METADATA_PUBLISH_INTERVAL_MS) return
           const outputMetadataBytes = Buffer.byteLength(output, "utf8")
           const isPastCap = outputMetadataBytes > MAX_METADATA_LENGTH
           if (isPastCap && lastPublishedBytes > MAX_METADATA_LENGTH) return
-          const now = Date.now()
-          if (now - lastPublishedAt < METADATA_PUBLISH_INTERVAL_MS) return
           publishMetadata(isPastCap ? truncateBashMetadata(output, MAX_METADATA_LENGTH) : output)
           lastPublishedBytes = outputMetadataBytes
           lastPublishedAt = now

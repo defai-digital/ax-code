@@ -19,6 +19,7 @@
  */
 import type { Hono } from "hono"
 import type { UpgradeWebSocket } from "hono/ws"
+import { Log } from "@/util/log"
 
 export interface ServerHandle {
   port: number
@@ -105,6 +106,8 @@ async function serveBun(opts: ServeOptions): Promise<ServerHandle> {
   }
 }
 
+const log = Log.create({ service: "http-server" })
+
 async function serveNode(opts: ServeOptions): Promise<ServerHandle> {
   const { hostname, port } = opts
   const { serve } = await import("@hono/node-server")
@@ -119,7 +122,14 @@ async function serveNode(opts: ServeOptions): Promise<ServerHandle> {
 
   return await new Promise<ServerHandle>((resolve, reject) => {
     const httpServer = serve({ fetch: resolveFetch(opts), hostname, port }, (info) => {
+      // Bind failures are routed to `reject` above. Keep a listener afterwards:
+      // Node emits a server-level 'error' for accept-time failures (e.g. EMFILE)
+      // and an EventEmitter 'error' with no listener is an uncaught exception
+      // that would take down every live session.
       httpServer.removeListener("error", onError)
+      httpServer.on("error", (error) => {
+        log.warn("http server error after listen", { error })
+      })
       resolve({
         port: info.port,
         hostname,
