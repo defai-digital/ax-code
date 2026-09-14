@@ -691,6 +691,8 @@ When constructing the summary, try to stick to this template:
             tools: original.tools,
             system: original.system,
             variant: original.variant,
+            isolation: original.isolation,
+            requestedDepth: original.requestedDepth,
           }
           // Route through the shard store that owns this session's rows:
           // a registry `Database.transaction` would write the replay message
@@ -744,6 +746,8 @@ When constructing the summary, try to stick to this template:
             tools: sourceUser?.tools,
             system: sourceUser?.system,
             variant: sourceUser?.variant,
+            isolation: sourceUser?.isolation,
+            requestedDepth: sourceUser?.requestedDepth,
           }
           const overflowNotice =
             input.triggerReason === "request_too_large"

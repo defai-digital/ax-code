@@ -280,14 +280,12 @@ describe("tool.task", () => {
         } as MessageV2.Assistant)
 
         const controller = new AbortController()
-        const originalGet = MessageV2.get
-        const getSpy = vi.spyOn(MessageV2, "get").mockImplementation((async (
-          ...args: Parameters<typeof originalGet>
-        ) => {
-          setTimeout(() => controller.abort(), 0)
-          await new Promise((resolve) => setTimeout(resolve, 10))
-          return originalGet(...args)
-        }) as any)
+        const originalCreate = Session.create
+        const createSpy = vi.spyOn(Session, "create").mockImplementation(async (...args) => {
+          const child = await originalCreate(...args)
+          controller.abort()
+          return child
+        })
 
         const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
         const promptSpy = vi.spyOn(SessionPrompt, "prompt")
@@ -312,11 +310,12 @@ describe("tool.task", () => {
               } as any,
             ),
           ).rejects.toThrow(/AbortError|Aborted/)
-          expect(cancelSpy).toHaveBeenCalledTimes(1)
+          expect(cancelSpy).toHaveBeenCalled()
+          expect(await Session.children(parent.id)).toEqual([])
           expect(String(cancelSpy.mock.calls[0]?.[0] ?? "")).toMatch(/^ses_/)
           expect(promptSpy).not.toHaveBeenCalled()
         } finally {
-          getSpy.mockRestore()
+          createSpy.mockRestore()
           cancelSpy.mockRestore()
           promptSpy.mockRestore()
         }
@@ -770,7 +769,8 @@ describe("tool.task", () => {
           time: { created: Date.now() },
           agent: "build",
           model: { providerID: "test" as any, modelID: "test-model" as any },
-          tools: {},
+          tools: { bash: false, edit: false, read: true },
+          isolation: { mode: "read-only", network: false },
           mode: "build",
         } as any)
         const assistant = await Session.updateMessage({
@@ -847,11 +847,19 @@ describe("tool.task", () => {
           expect(queued.kind).toBe("subagent")
           expect(queued.sessionID).toBe(taskID)
           expect(queued.title).toBe("Explore the repo")
+          expect(queued.payload.body).toMatchObject({
+            isolation: { mode: "read-only", network: false },
+            tools: { bash: false, edit: false },
+          })
           expect(["queued", "waiting_for_idle", "running", "completed"]).toContain(queued.status)
 
           await vi.waitFor(() => {
             expect(childFinished).toBe(true)
             expect(promptSpy).toHaveBeenCalled()
+            expect(promptSpy.mock.calls[0]![0]).toMatchObject({
+              isolation: { mode: "read-only", network: false },
+              tools: { bash: false, edit: false },
+            })
           })
           await vi.waitFor(async () => {
             const latest = await TaskQueue.get(TaskQueueID.make(queueID))
@@ -1069,7 +1077,8 @@ describe("tool.task", () => {
           time: { created: Date.now() },
           agent: "build",
           model: { providerID: "test" as any, modelID: "test-model" as any },
-          tools: {},
+          tools: { bash: false, edit: false, read: true },
+          isolation: { mode: "read-only", network: false },
           mode: "build",
         } as any)
         const assistant = await Session.updateMessage({
@@ -1132,8 +1141,11 @@ describe("tool.task", () => {
             expect(input).toMatchObject({
               agent: "explore",
               agentRouting: "preserve",
+              isolation: { mode: "read-only", network: false },
+              tools: { bash: false, edit: false },
             })
           }
+          for (const [input] of promptSpy.mock.calls) expect(input.tools?.read).not.toBe(true)
           expect(result.output).toContain("no bugs found")
         } finally {
           promptSpy.mockRestore()

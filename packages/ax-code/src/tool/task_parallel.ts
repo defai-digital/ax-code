@@ -1,3 +1,4 @@
+import { taskParentConstraints } from "./task-constraints"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task_parallel.txt"
 import z from "zod"
@@ -106,6 +107,7 @@ async function runOneTask(input: {
   model: { modelID: ModelID; providerID: ProviderID }
   config: Awaited<ReturnType<typeof Config.get>>
   agent: Agent.Info
+  constraints: Awaited<ReturnType<typeof taskParentConstraints>>
 }): Promise<{
   description: string
   subagent_type: string
@@ -114,7 +116,7 @@ async function runOneTask(input: {
   text: string
   error?: string
 }> {
-  const { params, ctx, model, config, agent } = input
+  const { params, ctx, model, config, agent, constraints } = input
   // Same fan-out gate as tool/task.ts (ADR-005 deny-by-default; ADR-057 D2):
   // the LAST rule naming `task` decides, regardless of pattern — a scoped
   // allow like `task: { general: "allow" }` counts, wildcard `*` rules are
@@ -169,18 +171,22 @@ async function runOneTask(input: {
   using _ = defer(() => ctx.abort.removeEventListener("abort", cancel))
 
   const taskTools = {
+    ...constraints.tools,
     todowrite: false,
     todoread: false,
     task: false,
     task_parallel: false,
     // No fan-out means no background tasks to wait on — hide waitfor too.
     waitfor: false,
+    list_background_tasks: false,
+    message_background_task: false,
     ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
   }
 
   try {
     if (ctx.abort.aborted) throw new DOMException("Aborted", "AbortError")
     const promptParts = await resolvePromptParts(params.prompt)
+    if (ctx.abort.aborted) throw new DOMException("Aborted", "AbortError")
     let result = await withTimeout(
       SessionPrompt.prompt({
         messageID: MessageID.ascending(),
@@ -189,12 +195,14 @@ async function runOneTask(input: {
         agent: agent.name,
         agentRouting: "preserve",
         tools: taskTools,
+        isolation: constraints.isolation,
         parts: promptParts,
       }),
       SUBAGENT_TIMEOUT_MS,
       `Subagent timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes`,
     )
 
+    if (ctx.abort.aborted) throw new DOMException("Aborted", "AbortError")
     let text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
     const firstError = assistantError(result)
     if (text.trim().length === 0 && !firstError) {
@@ -207,6 +215,7 @@ async function runOneTask(input: {
             agent: agent.name,
             agentRouting: "preserve",
             tools: { ...taskTools, task: false, task_parallel: false },
+            isolation: constraints.isolation,
             parts: [
               {
                 type: "text",
@@ -221,6 +230,7 @@ async function runOneTask(input: {
           SUBAGENT_FINALIZE_TIMEOUT_MS,
           `Subagent finalization timed out after ${SUBAGENT_FINALIZE_TIMEOUT_MS / 60_000} minutes`,
         )
+        if (ctx.abort.aborted) throw new DOMException("Aborted", "AbortError")
         text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
       } catch (error) {
         if (ctx.abort.aborted || isAbortError(error)) throw error
@@ -351,6 +361,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       const msg = await MessageV2.get({ sessionID: toolCtx.sessionID, messageID: toolCtx.messageID })
       if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
 
+      const constraints = await taskParentConstraints(msg.info)
       const config = await Config.get()
       const defaultModel = {
         modelID: msg.info.modelID,
@@ -374,6 +385,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             model: (await agentModel(agent)) ?? defaultModel,
             config,
             agent,
+            constraints,
           }),
         ),
       )

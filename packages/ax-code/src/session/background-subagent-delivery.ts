@@ -136,21 +136,30 @@ async function persistParentHandoff(
   claim: Extract<TaskQueue.ResultDeliveryClaim, { owner: "handoff" }>,
 ) {
   const messages = await Session.messages({ sessionID: parentSessionID })
-  const lastUser = [...messages].reverse().find((message) => message.info.role === "user")
-  const model = lastUser?.info.role === "user" ? lastUser.info.model : queueModel(item.model)
+  const lastUser = messages.findLast(
+    (message) => message.info.role === "user" && !message.parts.some((part) => part.type === "compaction"),
+  )
   const existing = await MessageV2.get({ sessionID: parentSessionID, messageID: claim.messageID }).catch(
     (error: unknown) => {
       if (NotFoundError.isInstance(error)) return undefined
       throw error
     },
   )
+  const sourceUser =
+    existing?.info.role === "user" ? existing.info : lastUser?.info.role === "user" ? lastUser.info : undefined
   const user = (await Session.updateMessage({
     id: claim.messageID,
     sessionID: parentSessionID,
     role: "user",
     time: { created: existing?.info.role === "user" ? existing.info.time.created : Date.now() },
-    agent: lastUser?.info.role === "user" ? lastUser.info.agent : (item.agent ?? "build"),
-    model,
+    agent: sourceUser?.agent ?? item.agent ?? "build",
+    model: sourceUser?.model ?? queueModel(item.model),
+    tools: sourceUser?.tools,
+    isolation: sourceUser?.isolation,
+    system: sourceUser?.system,
+    format: sourceUser?.format,
+    variant: sourceUser?.variant,
+    requestedDepth: sourceUser?.requestedDepth,
   })) as MessageV2.User
   await Session.updatePart({
     id: claim.partID,

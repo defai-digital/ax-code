@@ -11,7 +11,7 @@ import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Provider } from "../../src/provider/provider"
-import { MessageID } from "../../src/session/schema"
+import { MessageID, PartID } from "../../src/session/schema"
 
 Log.init({ print: false })
 
@@ -561,7 +561,11 @@ describe("session.compaction-fallback classifier", () => {
   })
 })
 
-test.each([false, true])("opt-in compaction retains source evidence and user settings (auto: %s)", async (auto) => {
+test.each([
+  { auto: false, overflow: false },
+  { auto: true, overflow: false },
+  { auto: true, overflow: true },
+])("opt-in compaction retains source evidence and user settings (%j)", async ({ auto, overflow }) => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -576,8 +580,17 @@ test.each([false, true])("opt-in compaction retains source evidence and user set
         tools: { bash: false },
         system: "Preserve the requested migration boundaries.",
         variant: "high",
+        isolation: { mode: "read-only" as const, network: false },
+        requestedDepth: "deep" as const,
       }
       await Session.updateMessage({ ...user, ...settings })
+      await Session.updatePart({
+        id: PartID.ascending(),
+        messageID: user.id,
+        sessionID: session.id,
+        type: "text",
+        text: "Inspect the project without modifying files.",
+      })
       if (auto) {
         await SessionCompaction.create({ sessionID: session.id, agent: user.agent, model: user.model, auto })
       }
@@ -594,6 +607,7 @@ test.each([false, true])("opt-in compaction retains source evidence and user set
             sessionID: session.id,
             abort: new AbortController().signal,
             auto,
+            overflow,
           }),
         ).toBe("continue")
         const messages = await Session.messages({ sessionID: session.id })

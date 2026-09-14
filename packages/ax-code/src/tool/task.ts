@@ -1,3 +1,4 @@
+import { taskParentConstraints } from "./task-constraints"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task.txt"
 import z from "zod"
@@ -141,6 +142,7 @@ async function startBackgroundSubagent(input: {
   agent: Agent.Info
   model: { modelID: string; providerID: string }
   taskTools: Record<string, boolean>
+  isolation: Awaited<ReturnType<typeof taskParentConstraints>>["isolation"]
   promptParts: Awaited<ReturnType<typeof resolvePromptParts>>
   ensureNotAborted: () => void
 }) {
@@ -172,6 +174,7 @@ async function startBackgroundSubagent(input: {
         model,
         tools: taskTools,
         toolsScope: "turn",
+        isolation: input.isolation,
         agentRouting: "preserve",
       },
     },
@@ -349,6 +352,12 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       const taskRules = agent.permission.filter((rule) => rule.permission === "task")
       const canFanOut = taskRules.findLast(() => true)?.action === "allow"
 
+      const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
+      ensureNotAborted()
+      if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
+      const constraints = await taskParentConstraints(msg.info)
+      ensureNotAborted()
+
       const session = await iife(async () => {
         if (params.task_id) {
           const found = await Session.get(SessionID.make(params.task_id)).catch((e) => {
@@ -399,9 +408,6 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       })
       subagentSessionID = session.id
       if (ctx.abort.aborted || aborted) cancelSubagent()
-      const msg = await MessageV2.get({ sessionID: ctx.sessionID, messageID: ctx.messageID })
-      ensureNotAborted()
-      if (msg.info.role !== "assistant") throw new Error("Not an assistant message")
 
       // A subagent pinned to a disabled provider (native deepseek after the
       // SKU moved behind a custom gateway) runs on the parent's model instead
@@ -412,6 +418,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
       }
 
       const taskTools = {
+        ...constraints.tools,
         todowrite: false,
         todoread: false,
         // Agents that cannot fan out cannot start background tasks either, so
@@ -437,6 +444,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         const messageID = MessageID.ascending()
         ensureNotAborted()
         const promptParts = await resolvePromptParts(params.prompt)
+        ensureNotAborted()
 
         if (params.background) {
           return await startBackgroundSubagent({
@@ -446,6 +454,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
             agent,
             model,
             taskTools,
+            isolation: constraints.isolation,
             promptParts,
             ensureNotAborted,
           })
@@ -462,12 +471,14 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
             agent: agent.name,
             agentRouting: "preserve",
             tools: taskTools,
+            isolation: constraints.isolation,
             parts: promptParts,
           }),
           SUBAGENT_TIMEOUT_MS,
           `Subagent timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes — provider may be unresponsive`,
         )
 
+        ensureNotAborted()
         let text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
         const firstError = assistantError(result)
         if (text.trim().length === 0 && !firstError) {
@@ -484,6 +495,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
                 },
                 agent: agent.name,
                 agentRouting: "preserve",
+                isolation: constraints.isolation,
                 tools: {
                   ...taskTools,
                   task: false,
@@ -502,6 +514,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
               SUBAGENT_FINALIZE_TIMEOUT_MS,
               `Subagent finalization timed out after ${SUBAGENT_FINALIZE_TIMEOUT_MS / 60_000} minutes`,
             )
+            ensureNotAborted()
           } catch (error) {
             if (ctx.abort.aborted || aborted) throw error
             finalizeError = errorDetails(error)

@@ -70,7 +70,8 @@ describe("task_parallel prompt routing", () => {
           time: { created: Date.now() },
           agent: "build",
           model: { providerID: "test" as any, modelID: "test-model" as any },
-          tools: {},
+          tools: { bash: false, edit: false, read: true },
+          isolation: { mode: "read-only", network: false },
           mode: "build",
         } as any)
         const assistant = await Session.updateMessage({
@@ -137,8 +138,11 @@ describe("task_parallel prompt routing", () => {
             expect(input).toMatchObject({
               agent: "explore",
               agentRouting: "preserve",
+              isolation: { mode: "read-only", network: false },
+              tools: { bash: false, edit: false, list_background_tasks: false, message_background_task: false },
             })
           }
+          for (const [input] of promptSpy.mock.calls) expect(input.tools?.read).not.toBe(true)
           expect(result.output).toContain("no bugs found")
         } finally {
           promptSpy.mockRestore()

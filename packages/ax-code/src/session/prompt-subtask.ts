@@ -205,6 +205,12 @@ export async function executeSubtask(task: MessageV2.SubtaskPart, ctx: SubtaskCo
       },
       agent: lastUser.agent,
       model: lastUser.model,
+      tools: lastUser.tools,
+      isolation: lastUser.isolation,
+      system: lastUser.system,
+      format: lastUser.format,
+      variant: lastUser.variant,
+      requestedDepth: lastUser.requestedDepth,
     }
     await Session.updateMessage(summaryUserMsg)
     await Session.updatePart({

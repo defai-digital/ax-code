@@ -6,6 +6,7 @@ import {
   deliverBackgroundSubagentHandoff,
   recoverBackgroundSubagentHandoffs,
 } from "../../src/session/background-subagent-delivery"
+import { SessionCompaction } from "../../src/session/compaction"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
 import { syntheticTextPart } from "../../src/session/prompt-message-builders"
@@ -257,5 +258,43 @@ describe("background subagent result delivery", () => {
         expect(await handoffParts(parent.id)).toHaveLength(0)
       },
     })
+  })
+})
+
+test.each([false, true])("background handoffs retain user settings during compaction (%s)", async (compacting) => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const parent = await Session.create({})
+      const task = await createCompletedBackgroundTask(parent.id, tmp.path, "Inspection complete.")
+      const settings = {
+        tools: { bash: false, edit: false },
+        isolation: { mode: "read-only" as const, network: false },
+        system: "Keep the current workspace unchanged.",
+        format: { type: "json_schema" as const, schema: { type: "object" }, retryCount: 2 },
+        variant: "high",
+        requestedDepth: "deep" as const,
+      }
+      const source = await Session.updateMessage({
+        id: MessageID.ascending(),
+        sessionID: parent.id,
+        role: "user",
+        time: { created: Date.now() },
+        agent: "build",
+        model: { providerID: "test" as never, modelID: "test-model" as never },
+        ...settings,
+      })
+      if (source.role !== "user") throw new Error("Expected user source")
+      if (compacting)
+        await SessionCompaction.create({ sessionID: parent.id, agent: source.agent, model: source.model, auto: true })
+      vi.spyOn(SessionPrompt, "loop").mockResolvedValue(undefined as never)
+      await deliverBackgroundSubagentHandoff({ item: task.item, outcome: task.outcome })
+      const users = (await Session.messages({ sessionID: parent.id })).filter((m) => m.info.role === "user")
+      expect(users).toHaveLength(compacting ? 3 : 2)
+      expect(users.at(-1)!.info.id).not.toBe(source.id)
+      expect(users.at(-1)!.info).toMatchObject(settings)
+      expect(users.at(-1)!.parts[0]).toMatchObject({ type: "text", synthetic: true })
+    },
   })
 })

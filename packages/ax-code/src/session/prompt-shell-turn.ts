@@ -3,6 +3,7 @@ import { Session } from "."
 import { MessageV2 } from "./message-v2"
 import { MessageID, PartID, type SessionID } from "./schema"
 import { sessionAssistantPath, textPart, zeroTokenUsage } from "./prompt-message-builders"
+import { providerModelEquals } from "../provider/model-key"
 import type { ModelID, ProviderID } from "../provider/schema"
 
 export async function createShellTurnMessages(input: {
@@ -17,6 +18,10 @@ export async function createShellTurnMessages(input: {
   msg: MessageV2.Assistant
   part: MessageV2.ToolPart
 }> {
+  const prior = (await Session.messages({ sessionID: input.sessionID })).findLast(
+    (message) => message.info.role === "user" && !message.parts.some((part) => part.type === "compaction"),
+  )
+  const source = prior?.info.role === "user" ? prior.info : undefined
   const userMsg: MessageV2.User = {
     id: MessageID.ascending(),
     sessionID: input.sessionID,
@@ -25,6 +30,12 @@ export async function createShellTurnMessages(input: {
     },
     role: "user",
     agent: input.agent,
+    tools: source?.tools,
+    isolation: source?.isolation,
+    system: source?.system,
+    format: source?.format,
+    requestedDepth: source?.requestedDepth,
+    variant: source && providerModelEquals(source.model, input.model) ? source.variant : undefined,
     model: {
       providerID: input.model.providerID,
       modelID: input.model.modelID,
