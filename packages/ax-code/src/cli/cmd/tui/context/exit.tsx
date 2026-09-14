@@ -154,9 +154,10 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
     // tracking on anything other than a clean React unmount or SIGHUP.
     const unregister = registerShutdownSignals(() => exit(), { signals: TUI_EXIT_SIGNALS })
     onCleanup(() => {
+      // Tree disposal can precede renderer teardown; the exit task owns input
+      // release so queued events stay blocked across that handoff.
       unregister()
       flourishAbort.abort()
-      releaseInput()
     })
     return exit
   },

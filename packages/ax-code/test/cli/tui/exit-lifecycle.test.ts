@@ -239,4 +239,18 @@ describe("TUI exit lifecycle", () => {
     await vi.waitFor(() => expect(onExit).toHaveBeenCalledTimes(1), { timeout: 200 })
     await pending
   })
+  test("provider disposal keeps shutdown input blocked until teardown", async () => {
+    const { exit } = setup()
+    const shortcut = vi.fn()
+    mocks.renderer.keyInput.on("keypress", shortcut)
+    exit.onFlourish(() => new Promise(() => {}))
+    const pending = exit.flourish()
+    await Promise.resolve()
+    await Promise.resolve()
+    disposals[0]()
+    mocks.renderer.keyInput.emit("keypress", new KeyEvent(parseKeypress("\r")!))
+    expect(shortcut).not.toHaveBeenCalled()
+    await pending
+    expect(mocks.renderer.keyInput.listenerCount("keypress")).toBe(1)
+  })
 })
