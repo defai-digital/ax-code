@@ -7,6 +7,7 @@ import {
   JSR_README_SOURCE,
   JSR_RUNTIME_COMPAT,
   assertJsrScoreMetadata,
+  jsrAuthorizationUrl,
 } from "../script/jsr-package-settings.ts"
 
 type PackageManifest = {
@@ -98,5 +99,13 @@ describe("JSR package contract", () => {
         total: 17,
       }),
     ).not.toThrow()
+  })
+
+  test("accepts only https jsr.io authorization URLs", () => {
+    expect(jsrAuthorizationUrl("https://jsr.io/auth")).toBe("https://jsr.io/auth")
+    expect(jsrAuthorizationUrl("https://jsr.io/auth?code=Ab_1")).toBe("https://jsr.io/auth?code=Ab_1")
+    expect(() => jsrAuthorizationUrl("https://evil.test/auth")).toThrow(/jsr\.io/)
+    expect(() => jsrAuthorizationUrl("http://jsr.io/auth")).toThrow(/https:\/\/jsr\.io/)
+    expect(readFileSync(resolve(packageRoot, "script/jsr-package-settings.ts"), "utf8")).not.toMatch(/\bspawn\b/)
   })
 })

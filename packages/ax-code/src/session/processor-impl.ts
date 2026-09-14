@@ -457,7 +457,7 @@ export namespace SessionProcessor {
             let usedTools = false
             let receivedFinish = false
             const requestStartedAt = Date.now()
-            let stepStartTime = Date.now()
+            let stepStartTime = 0
             let stepParts: Array<
               | { type: "text"; text: string }
               | { type: "reasoning"; text: string }

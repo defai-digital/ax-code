@@ -46,17 +46,24 @@ export namespace RuntimeRegistry {
   }
 
   export async function read(file: string): Promise<Record | undefined> {
-    const stat = await fs.lstat(file).catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") return undefined
-      throw error
-    })
-    if (!stat) return undefined
-    if (!stat.isFile() || stat.size > 16_384 || (process.platform !== "win32" && stat.mode & 0o077)) {
-      throw new Error("Unsafe runtime registry record; expected a private regular file")
+    const handle = await fs
+      .open(file, constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW))
+      .catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return undefined
+        throw error
+      })
+    if (!handle) return undefined
+    try {
+      const stat = await handle.stat()
+      if (!stat.isFile() || stat.size > 16_384 || (process.platform !== "win32" && stat.mode & 0o077)) {
+        throw new Error("Unsafe runtime registry record; expected a private regular file")
+      }
+      const parsed = parseJsonResult(await handle.readFile({ encoding: "utf8" }))
+      if (!parsed.ok) throw new Error("Invalid runtime registry record")
+      return Record.parse(parsed.value)
+    } finally {
+      await handle.close()
     }
-    const parsed = parseJsonResult(await fs.readFile(file, "utf8"))
-    if (!parsed.ok) throw new Error("Invalid runtime registry record")
-    return Record.parse(parsed.value)
   }
 
   export function headers(record: Record) {
@@ -123,7 +130,7 @@ export namespace RuntimeRegistry {
 
   export async function start(directory: string, command: { command: string; args: string[] }) {
     const where = await location(directory)
-    using lock = await FileLock.acquire(where.file, { timeoutMs: 100_000, staleMs: 120_000 })
+    using _lock = await FileLock.acquire(where.file, { timeoutMs: 100_000, staleMs: 120_000 })
     const previous = await read(where.file)
     if (previous) {
       if (previous.directory !== where.directory) throw new Error("Runtime registry project mismatch")
@@ -185,7 +192,7 @@ export namespace RuntimeRegistry {
 
   export async function stop(directory: string) {
     const where = await location(directory)
-    using lock = await FileLock.acquire(where.file, { timeoutMs: 100_000, staleMs: 120_000 })
+    using _lock = await FileLock.acquire(where.file, { timeoutMs: 100_000, staleMs: 120_000 })
     const record = await read(where.file)
     if (!record) return false
     if (record.directory !== where.directory) throw new Error("Runtime registry project mismatch")

@@ -205,28 +205,37 @@ export namespace SkillCandidate {
     }
     if (candidate.promotion.digest !== digest) throw new Error("Candidate content changed after promotion began")
     const file = target(name, true)
-    if (fs.existsSync(file)) {
-      if (Hash.fast(readOwn(file)) !== digest) throw new Error("Promoted skill content conflict")
-    } else {
-      if (candidate.promotion.status === "active") throw new Error("Promoted skill was removed externally")
+    if (candidate.promotion.status !== "active") {
       if (!candidate.validation) throw new Error("Independent validation is required before promotion")
       const sourceState = await cleanSourceState()
       for (const ref of [candidate.source, candidate.validation]) {
         if ((await citation(ref, sourceState)).digest !== ref.digest) throw new Error("Verification evidence changed")
       }
-      // Revalidate every directory after asynchronous source checks.
       target(name, false)
+    }
+    try {
       const fd = fs.openSync(
         file,
         fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY | fs.constants.O_NOFOLLOW,
         0o644,
       )
       try {
+        if (candidate.promotion.status === "active") throw new Error("Promoted skill was removed externally")
         fs.writeFileSync(fd, text)
         fs.fsyncSync(fd)
+      } catch (error) {
+        try {
+          fs.unlinkSync(file)
+        } catch {
+          // Exclusive create left an empty file; ignore cleanup races.
+        }
+        throw error
       } finally {
         fs.closeSync(fd)
       }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+      if (Hash.fast(readOwn(file)) !== digest) throw new Error("Promoted skill content conflict")
     }
     candidate.promotion.status = "active"
     await Storage.write(key(name), candidate)

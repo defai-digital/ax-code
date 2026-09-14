@@ -1,6 +1,5 @@
 import crypto from "node:crypto"
 import path from "node:path"
-import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 
 /**
@@ -102,10 +101,27 @@ async function checkScore(): Promise<void> {
   console.log(`JSR score metadata is complete (total=${score.total})`)
 }
 
-function openUrl(url: string): void {
-  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open"
-  const argv = process.platform === "win32" ? ["/c", "start", url] : [url]
-  spawn(command, argv, { detached: true, stdio: "ignore" }).unref()
+export function jsrAuthorizationUrl(url: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    throw new Error("JSR authorization URL is not valid")
+  }
+  if (parsed.protocol !== "https:" || parsed.hostname !== "jsr.io" || parsed.username || parsed.password) {
+    throw new Error("JSR authorization URL must be an https://jsr.io address")
+  }
+  if (!/^\/[A-Za-z0-9/_-]*$/.test(parsed.pathname) || parsed.hash) {
+    throw new Error("JSR authorization URL path is not allowed")
+  }
+  const safe = new URL("https://jsr.io")
+  safe.pathname = parsed.pathname
+  if (parsed.searchParams.has("code")) {
+    const code = parsed.searchParams.get("code") ?? ""
+    if (!/^[A-Za-z0-9_-]+$/.test(code)) throw new Error("JSR authorization code is not allowed")
+    safe.searchParams.set("code", code)
+  }
+  return safe.toString()
 }
 
 async function authorize(): Promise<string> {
@@ -123,11 +139,11 @@ async function authorize(): Promise<string> {
   const code = typeof auth.code === "string" ? auth.code : ""
   const exchangeToken = stringField(auth, "exchangeToken")
   const pollInterval = typeof auth.pollInterval === "number" ? auth.pollInterval : 2
-  const approveUrl =
-    code && !verificationUrl.includes(code) ? `${verificationUrl}?code=${encodeURIComponent(code)}` : verificationUrl
+  const approveUrl = jsrAuthorizationUrl(
+    code && !verificationUrl.includes(code) ? `${verificationUrl}?code=${encodeURIComponent(code)}` : verificationUrl,
+  )
   console.log(`Approve JSR access: ${approveUrl}`)
   if (code) console.log(`Authorization code: ${code}`)
-  openUrl(approveUrl)
 
   const deadline = Date.now() + 5 * 60 * 1000
   while (Date.now() < deadline) {

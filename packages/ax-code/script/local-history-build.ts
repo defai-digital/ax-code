@@ -1,17 +1,12 @@
 import fs from "fs"
 import path from "path"
-import { createHash } from "node:crypto"
 import { createRequire } from "module"
 import { fileURLToPath } from "url"
 import { spawnSync } from "node:child_process"
 import esbuild from "esbuild"
 import { SkillLint } from "./check-skills"
-import { collectPackageRuntimeDependencies, resolveInstalledPackagePath } from "./build-deps"
 import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
-import { readText, writeText } from "./fs-compat"
-import { resolveLegacyNodeGypPython } from "./node-gyp-python"
-import { unixNodeLauncherScript, windowsNodeLauncherScript } from "./node-launcher"
-import { copyTuiDistPackage, toTuiDistPackageJson, withoutTuiTransformDependencies } from "./tui-dist"
+import { readText } from "./fs-compat"
 import pkg from "../package.json"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
@@ -23,13 +18,6 @@ import pkg from "../package.json"
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const dir = path.resolve(__dirname, "..")
 const require = createRequire(import.meta.url)
-const { writeRuntimeManifest } = require(path.join(__dirname, "..", "..", "..", "script", "runtime-manifest.cjs")) as {
-  writeRuntimeManifest: (runtimeRoot: string) => {
-    files: Array<
-      { path: string; type: "file"; size: number; sha256: string } | { path: string; type: "symlink"; target: string }
-    >
-  }
-}
 process.chdir(dir)
 
 function buildChannelForVersion(version: string) {
@@ -44,7 +32,6 @@ const buildVersion = (process.env.AX_CODE_VERSION ?? pkg.version).replace(/^v/, 
 // silently embeds AX_CODE_CHANNEL="latest" and the shipped binary checks the
 // wrong auto-update channel (Installation.CHANNEL, src/installation/index.ts).
 const buildChannel = process.env.AX_CODE_CHANNEL ?? buildChannelForVersion(buildVersion)
-const appleCodesignIdentity = process.env.AX_CODE_APPLE_CODESIGN_IDENTITY?.trim()
 const solidStoreClientEntry = require.resolve("solid-js/store/dist/store.js")
 const solidWebClientEntry = require.resolve("solid-js/web/dist/web.js")
 
@@ -57,7 +44,6 @@ const archFlagIndex = process.argv.indexOf("--arch")
 const arch = (archFlagIndex >= 0 ? process.argv[archFlagIndex + 1] : process.arch) as "x64" | "arm64"
 if (arch !== "x64" && arch !== "arm64") throw new Error(`Unsupported Node TUI distribution architecture: ${arch}`)
 const platform = process.platform === "win32" ? "windows" : process.platform
-const release = process.argv.includes("--release")
 const legacyName = `${pkg.name}-${platform}-${arch}`
 const outRoot = path.join(dir, "dist", legacyName)
 const outBin = path.join(outRoot, "bin")
@@ -160,8 +146,6 @@ function resolveBundledNodeRuntime(targetArch: "x64" | "arm64") {
   )
 }
 
-const bundledNodeRuntime = process.arch === arch ? resolveBundledNodeRuntime(arch) : undefined
-
 const migrationDirs = (await fs.promises.readdir(path.join(dir, "migration"), { withFileTypes: true }))
   .filter((e) => e.isDirectory() && /^\d{14}/.test(e.name))
   .map((e) => e.name)
@@ -197,7 +181,7 @@ console.log(`Loaded ${builtinSkills.length} built-in skills`)
 await fs.promises.mkdir(outBin, { recursive: true })
 await fs.promises.mkdir(outLib, { recursive: true })
 
-const result = await esbuild.build({
+await esbuild.build({
   entryPoints: [path.join(dir, "src/index-node-tui.ts")],
   bundle: true,
   platform: "node",

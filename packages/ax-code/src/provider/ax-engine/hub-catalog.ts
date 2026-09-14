@@ -1,4 +1,5 @@
 import fs from "node:fs/promises"
+import { constants } from "node:fs"
 import path from "node:path"
 import z from "zod"
 import { NamedError } from "@ax-code/util/error"
@@ -88,9 +89,14 @@ async function fetchJSON(url: URL, fetcher: typeof fetch, signal: AbortSignal) {
 }
 
 async function readCached(file: string) {
-  const stat = await fs.stat(file)
-  if (!stat.isFile() || stat.size > MAX_JSON_BYTES) throw catalogError("Invalid metadata cache file")
-  return parseJsonStrict(await fs.readFile(file, "utf8"))
+  const handle = await fs.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const stat = await handle.stat()
+    if (!stat.isFile() || stat.size > MAX_JSON_BYTES) throw catalogError("Invalid metadata cache file")
+    return parseJsonStrict(await handle.readFile({ encoding: "utf8" }))
+  } finally {
+    await handle.close()
+  }
 }
 
 export type HubCatalogView = {

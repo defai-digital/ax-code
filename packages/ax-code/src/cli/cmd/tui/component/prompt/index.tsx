@@ -3,19 +3,7 @@ import { usePromptRef } from "@tui/context/prompt"
 import { createSessionPromptDraftLifecycle, promptDraftKey } from "./session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { BoxRenderable, TextareaRenderable, MouseEvent, KeyEvent, MouseButton } from "ax-tui"
-import {
-  createEffect,
-  createMemo,
-  onMount,
-  createSignal,
-  onCleanup,
-  on,
-  untrack,
-  Show,
-  Switch,
-  Match,
-  For,
-} from "solid-js"
+import { createEffect, createMemo, onMount, createSignal, onCleanup, on, Show, Switch, Match, For } from "solid-js"
 import { providerModelEquals } from "@/provider/model-key"
 import { shouldAdoptMessageModelFromHistory } from "@tui/context/local-util"
 import { effortDisplay } from "@/provider/effort-label"

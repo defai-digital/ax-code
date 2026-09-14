@@ -48,7 +48,6 @@ import { applyAxTrustPromptCacheHeader, shouldSendAxTrustPromptCacheKey } from "
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 import { RequestProvenance } from "./request-provenance"
 import { RequestTiming } from "./request-timing"
-import { NativePerf } from "@/perf/native"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })

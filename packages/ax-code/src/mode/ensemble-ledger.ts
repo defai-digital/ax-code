@@ -82,9 +82,8 @@ export namespace EnsembleLedger {
         using _lock = await FileLock.acquire(target)
         await fs.mkdir(path.dirname(target), { recursive: true })
         await fs.appendFile(target, serialized, "utf8")
-        const stat = await fs.stat(target).catch(() => undefined)
-        if (stat && stat.size > MAX_BYTES) {
-          const raw = await fs.readFile(target, "utf8")
+        const raw = await fs.readFile(target, "utf8")
+        if (Buffer.byteLength(raw, "utf8") > MAX_BYTES) {
           await fs.writeFile(target, truncateToCap(raw, MAX_BYTES, RETAIN_BYTES), "utf8")
         }
       } catch (error) {

@@ -87,39 +87,42 @@ export async function currentSourceState(
       seen.add(absolute)
       if (++count > MAX_FILES) throw new Error("Source file count exceeds fingerprint limit")
       const normalized = path.relative(root, absolute).split(path.sep).join("/")
-      let stat
+      const flags = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
+      let handle
       try {
-        stat = await fs.lstat(absolute)
+        handle = await fs.open(absolute, flags)
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
-        hash.update(JSON.stringify([normalized, "missing"]))
-        return
-      }
-      // Do not follow source symlinks or parent-directory symlinks into external
-      // files. Such a checkout needs explicit project verification of that data.
-      if (stat.isSymbolicLink() || (await fs.realpath(absolute)) !== absolute) {
-        throw new Error("Linked source cannot be fingerprinted within the workspace")
-      }
-      if (stat.isDirectory()) {
-        if (vcs === "git") throw new Error("Nested Git source requires an explicit verification scope")
-        hash.update(JSON.stringify([normalized, "directory"]))
-        const children = (await fs.readdir(absolute)).sort()
-        for (const child of children) {
-          const childPath = assertContained(root, path.join(absolute, child))
-          const childRelative = path.relative(root, childPath)
-          if (child === ".git" || childRelative.split(path.sep).join("/") === ".ax-code/goals") continue
-          await visit(childRelative, depth + 1)
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === "ENOENT") {
+          hash.update(JSON.stringify([normalized, "missing"]))
+          return
         }
-        return
+        if (code === "ELOOP" || code === "EMLINK") {
+          throw new Error("Linked source cannot be fingerprinted within the workspace")
+        }
+        throw error
       }
-      if (!stat.isFile()) throw new Error("Special source files cannot be fingerprinted")
-      bytes += stat.size
-      if (bytes > MAX_BYTES) throw new Error("Source bytes exceed fingerprint limit")
-      hash.update(JSON.stringify([normalized, stat.mode & 0o111, stat.size]))
-      const handle = await fs.open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
       try {
-        const opened = await handle.stat()
-        if (opened.ino !== stat.ino || opened.dev !== stat.dev) throw new Error("Source changed before fingerprinting")
+        const stat = await handle.stat()
+        if (stat.isSymbolicLink() || (await fs.realpath(absolute)) !== absolute) {
+          throw new Error("Linked source cannot be fingerprinted within the workspace")
+        }
+        if (stat.isDirectory()) {
+          if (vcs === "git") throw new Error("Nested Git source requires an explicit verification scope")
+          hash.update(JSON.stringify([normalized, "directory"]))
+          const children = (await fs.readdir(absolute)).sort()
+          for (const child of children) {
+            const childPath = assertContained(root, path.join(absolute, child))
+            const childRelative = path.relative(root, childPath)
+            if (child === ".git" || childRelative.split(path.sep).join("/") === ".ax-code/goals") continue
+            await visit(childRelative, depth + 1)
+          }
+          return
+        }
+        if (!stat.isFile()) throw new Error("Special source files cannot be fingerprinted")
+        bytes += stat.size
+        if (bytes > MAX_BYTES) throw new Error("Source bytes exceed fingerprint limit")
+        hash.update(JSON.stringify([normalized, stat.mode & 0o111, stat.size]))
         const buffer = Buffer.alloc(64 * 1024)
         let read = 0
         while (true) {
