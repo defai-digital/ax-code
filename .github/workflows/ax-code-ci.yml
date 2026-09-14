@@ -232,6 +232,16 @@ jobs:
       - name: Build Plugin
         run: pnpm --dir packages/plugin run build
 
+      - name: Install deterministic search dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends ripgrep
+          fi
+          rg --version
+
       - name: Run deterministic ax-code tests
         shell: bash
         env:
