@@ -261,6 +261,26 @@ export namespace SessionGoal {
     publish(undefined, sessionID)
   }
 
+  async function removeCopiedGoal(sessionID: SessionID, expected: Info) {
+    const store = SessionShard.storeFor(sessionID, { write: true })
+    const removedCreated = store.transaction((db) => {
+      const row = db.select().from(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).get()
+      if (
+        !row ||
+        row.time_created !== expected.time.created ||
+        row.objective !== expected.objective ||
+        row.tokens_used !== expected.tokensUsed
+      ) {
+        return undefined
+      }
+      db.delete(SessionGoalTable).where(eq(SessionGoalTable.session_id, sessionID)).run()
+      return row.time_created
+    })
+    if (removedCreated === undefined) return
+    await GoalPlan.remove(sessionID, removedCreated).catch(() => undefined)
+    publish(undefined, sessionID)
+  }
+
   /**
    * Clone the goal onto a forked session. The fork inherits the full
    * message history, so status, budget, and usage counters carry over
@@ -294,14 +314,21 @@ export namespace SessionGoal {
       }
     })
     if (!copied) return undefined
-    await GoalPlan.copyForFork({
-      from: input.from,
-      fromCreated: copied.fromCreated,
-      to: input.to,
-      toCreated: copied.goal.time.created,
-    }).catch((error) => {
+    try {
+      await GoalPlan.copyForFork({
+        from: input.from,
+        fromCreated: copied.fromCreated,
+        to: input.to,
+        toCreated: copied.goal.time.created,
+      })
+    } catch (error) {
       log.warn("failed to copy goal plan to forked session", { error: toErrorMessage(error) })
-    })
+      // A goal row without its contract is treated as pre-v1 and can complete
+      // without acceptance evidence or assurance checks. Drop only the row we
+      // inserted — a successor goal on the same session must survive.
+      await removeCopiedGoal(input.to, copied.goal)
+      return undefined
+    }
     publish(copied.goal)
     return copied.goal
   }

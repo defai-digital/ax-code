@@ -5,7 +5,11 @@ const SNAPSHOT_TIMEOUT_MS = 2_000
 const MAX_PATHS = 30
 export const BASELINE_PLACEHOLDER = "{BASELINE}"
 
-const REMOTE_REF = /origin\/[\w./-]+|@\{\s*u(?:pstream)?\s*\}|refs\/remotes\/[\w./-]+/gi
+const UNAMBIGUOUS_REF = /@\{\s*u(?:pstream)?\s*\}|refs\/remotes\/[\w./-]+/gi
+const GIT_REMOTE = /(?:origin|upstream)\/[\w./-]+/gi
+const RANGE = /([^\s.;|&]+)\.\.\.?([^\s.;|&]+)/g
+const MERGE_BASE = /merge-base(?:\s+--[^\s]+)*\s+([^\s]+)\s+([^\s]+)/gi
+const ALLOWED_REV = /^(?:HEAD(?:[~^][^\s.]*)?|\{BASELINE\}|[0-9a-f]{7,40})$/i
 
 export namespace GoalPlanBaseline {
   export type Snapshot = {
@@ -88,14 +92,39 @@ export namespace GoalPlanBaseline {
   }
 
   export function assertGoalScopedGitRanges(command: string, checkId: string, objective: string) {
-    const refs = uniqueRefs(command)
-    if (refs.length === 0) return
-    if (objectiveAllowsRemote(objective, refs)) return
-    throw new Error(
-      `Assurance check "${checkId}" uses remote-tracking ref ${refs.map((ref) => `"${ref}"`).join(", ")} as a git before-state. ` +
-        `Unless the objective names that remote, use ${BASELINE_PLACEHOLDER} (the plan-time HEAD SHA) so pre-existing divergence cannot make the goal uncompletable. Resubmit.`,
-    )
+    const unambiguous = uniqueMatches(command, UNAMBIGUOUS_REF)
+    if (unambiguous.length > 0 && !objectiveAllowsRemote(objective, unambiguous)) {
+      throw remoteBeforeStateError(checkId, unambiguous)
+    }
+    if (!looksLikeGitCommand(command)) return
+    const text = revisionText(command)
+    const remotes = uniqueMatches(text, GIT_REMOTE)
+    if (remotes.length > 0 && !objectiveAllowsRemote(objective, remotes)) {
+      throw remoteBeforeStateError(checkId, remotes)
+    }
+    const before = [...rangeBeforeStates(text), ...mergeBaseRevs(text)].filter((rev) => !ALLOWED_REV.test(rev))
+    if (before.length === 0) return
+    if (objectiveAllowsRemote(objective, before)) return
+    throw remoteBeforeStateError(checkId, before)
   }
+}
+
+function looksLikeGitCommand(command: string) {
+  return /\bgit\b|\bmerge-base\b/.test(command)
+}
+
+function revisionText(command: string) {
+  // Strip only the pathspec of each git invocation so a later `&& git diff
+  // origin/main..HEAD` is still visible. A single cut at the first `--`
+  // would hide it.
+  return command.replace(/\s--\s.*?(?=\s*(?:&&|\|\||;|\||&|$))/g, " ")
+}
+
+function remoteBeforeStateError(checkId: string, refs: string[]) {
+  return new Error(
+    `Assurance check "${checkId}" uses remote-tracking ref ${refs.map((ref) => `"${ref}"`).join(", ")} as a git before-state. ` +
+      `Unless the objective names that remote, use ${BASELINE_PLACEHOLDER} (the plan-time HEAD SHA) so pre-existing divergence cannot make the goal uncompletable. Resubmit.`,
+  )
 }
 
 function rewriteBaseline(command: string, snapshot: GoalPlanBaseline.Snapshot | undefined) {
@@ -122,11 +151,38 @@ function objectiveAllowsRemote(objective: string, refs: string[]) {
   return refs.every((ref) => text.includes(ref.toLowerCase()))
 }
 
-function uniqueRefs(command: string) {
-  REMOTE_REF.lastIndex = 0
-  const found = command.match(REMOTE_REF) ?? []
-  REMOTE_REF.lastIndex = 0
+function uniqueMatches(command: string, pattern: RegExp) {
+  pattern.lastIndex = 0
+  const found = command.match(pattern) ?? []
+  pattern.lastIndex = 0
   return [...new Set(found)]
+}
+
+function rangeBeforeStates(command: string) {
+  RANGE.lastIndex = 0
+  const found: string[] = []
+  let match: RegExpExecArray | null
+  while ((match = RANGE.exec(command))) {
+    if (match[1]) found.push(stripRev(match[1]))
+  }
+  RANGE.lastIndex = 0
+  return [...new Set(found)]
+}
+
+function mergeBaseRevs(command: string) {
+  MERGE_BASE.lastIndex = 0
+  const found: string[] = []
+  let match: RegExpExecArray | null
+  while ((match = MERGE_BASE.exec(command))) {
+    if (match[1]) found.push(stripRev(match[1]))
+    if (match[2]) found.push(stripRev(match[2]))
+  }
+  MERGE_BASE.lastIndex = 0
+  return [...new Set(found)]
+}
+
+function stripRev(rev: string) {
+  return rev.replace(/^['"]+|['"]+$/g, "")
 }
 
 function parseAheadBehind(text: string | undefined): [number | undefined, number | undefined] {

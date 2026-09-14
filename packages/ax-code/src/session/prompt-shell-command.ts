@@ -282,11 +282,22 @@ export async function executeShellCommand(
       })
     })
     if (abort.aborted && !aborted) {
+      // Abort won after the line-65 check and before listeners were attached,
+      // so the abort event will not fire. Arm the grace timer before killTree:
+      // awaiting a hung taskkill/group-kill would skip the timer entirely and
+      // leave the session busy. Matches the timeout path (void kill + timer).
       aborted = true
-      await kill()
-    }
-    if (abort.aborted && !exited) {
       abortTimeoutHandler()
+      void kill().catch((error) => {
+        log.warn("shell abort kill failed", {
+          command: "session.prompt.shell",
+          status: "error",
+          errorCode: "SHELL_ABORT_KILL_FAILED",
+          shell,
+          args,
+          error,
+        })
+      })
     }
     await waitForExit
   } finally {

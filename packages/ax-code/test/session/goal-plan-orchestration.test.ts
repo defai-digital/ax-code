@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Instance } from "../../src/project/instance"
@@ -233,6 +233,67 @@ describe("GoalPlanOrchestration", () => {
         await expect(fs.stat(planPath)).rejects.toMatchObject({ code: "ENOENT" })
         expect((await SessionGoal.get(session.id))?.status).toBe("paused")
         await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("a failed plan copy does not leave a fork completable without the contract", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        await GoalPlanOrchestration.activate({
+          sessionID: session.id,
+          objective: "keep the forked contract",
+        })
+        const fork = await Session.create({})
+        const copySpy = vi.spyOn(GoalPlan, "copyForFork").mockRejectedValue(new Error("disk full"))
+        try {
+          const copied = await SessionGoal.copyTo({ from: session.id, to: fork.id })
+          expect(copied).toBeUndefined()
+          expect(await SessionGoal.get(fork.id)).toBeUndefined()
+        } finally {
+          copySpy.mockRestore()
+          GoalPlanWriter.resetWrite()
+          await Session.remove(fork.id)
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
+  test("a failed plan copy does not delete a successor goal on the fork", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        await GoalPlanOrchestration.activate({
+          sessionID: session.id,
+          objective: "keep the forked contract",
+        })
+        const fork = await Session.create({})
+        const copySpy = vi.spyOn(GoalPlan, "copyForFork").mockImplementation(async () => {
+          await SessionGoal.create({
+            sessionID: fork.id,
+            objective: "replacement goal",
+            replace: true,
+          })
+          throw new Error("disk full")
+        })
+        try {
+          const copied = await SessionGoal.copyTo({ from: session.id, to: fork.id })
+          expect(copied).toBeUndefined()
+          expect((await SessionGoal.get(fork.id))?.objective).toBe("replacement goal")
+        } finally {
+          copySpy.mockRestore()
+          GoalPlanWriter.resetWrite()
+          await Session.remove(fork.id)
+          await Session.remove(session.id)
+        }
       },
     })
   })

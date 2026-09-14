@@ -50,6 +50,74 @@ describe("GoalPlanBaseline", () => {
     ).toThrow(/@\{u\}/)
   })
 
+  test("rejects upstream/main and other non-HEAD range before-states", () => {
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("git diff --name-only upstream/main..HEAD"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/upstream\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("git merge-base HEAD fork/topic"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/fork\/topic/)
+  })
+
+  test("allows a rewritten SHA range with a pathspec that contains a slash", () => {
+    const head = "0bdde3c78c9e8936f3f3be7a66ad44c2c2c52932"
+    const prepared = GoalPlanBaseline.prepareAssurance(
+      contract(`git diff --name-only ${BASELINE_PLACEHOLDER}..HEAD -- packages/ax-code`),
+      { objective: "keep the diff in scope", snapshot: { head, divergedFromTracking: [], dirty: [] } },
+    )
+    expect(prepared.checks[0]?.command).toBe(`git diff --name-only ${head}..HEAD -- packages/ax-code`)
+  })
+
+  test("allows a quoted {BASELINE} after rewrite in merge-base --is-ancestor", () => {
+    const head = "0bdde3c78c9e8936f3f3be7a66ad44c2c2c52932"
+    const prepared = GoalPlanBaseline.prepareAssurance(
+      contract(`git merge-base --is-ancestor "${BASELINE_PLACEHOLDER}" HEAD`),
+      { objective: "verify changed files", snapshot: { head, divergedFromTracking: [], dirty: [] } },
+    )
+    expect(prepared.checks[0]?.command).toBe(`git merge-base --is-ancestor "${head}" HEAD`)
+  })
+
+  test("rejects a quoted non-HEAD range before-state", () => {
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract('git diff --name-only "fork/topic".."HEAD"'), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/fork\/topic/)
+  })
+
+  test("does not treat non-git commands or pathspecs as git before-states", () => {
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("echo foo..bar"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).not.toThrow()
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("pnpm exec vitest run test/upstream/component.test.ts"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).not.toThrow()
+    const head = "0bdde3c78c9e8936f3f3be7a66ad44c2c2c52932"
+    const prepared = GoalPlanBaseline.prepareAssurance(
+      contract(`git diff --name-only ${BASELINE_PLACEHOLDER}..HEAD -- origin/generated`),
+      { objective: "keep the diff in scope", snapshot: { head, divergedFromTracking: [], dirty: [] } },
+    )
+    expect(prepared.checks[0]?.command).toContain("-- origin/generated")
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("sh -c 'git diff -- foo && git diff origin/main..HEAD'"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("sh -c 'git diff HEAD -- README.md | git diff origin/main..HEAD'"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+  })
+
   test("rewrites {BASELINE} to the plan-time HEAD SHA", () => {
     const head = "0bdde3c78c9e8936f3f3be7a66ad44c2c2c52932"
     const prepared = GoalPlanBaseline.prepareAssurance(contract(`git diff --name-only ${BASELINE_PLACEHOLDER}..HEAD`), {
