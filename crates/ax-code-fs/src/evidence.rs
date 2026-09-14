@@ -320,7 +320,12 @@ mod tests {
     fn directory() -> std::path::PathBuf {
         use std::sync::atomic::{AtomicU64, Ordering};
         static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-        let base = std::fs::canonicalize(std::env::temp_dir()).unwrap();
+        let base = std::env::temp_dir();
+        // Resolve Unix temporary-directory symlinks for private-directory admission.
+        // Windows canonicalize adds a verbatim prefix that RocksDB cannot append
+        // its slash-separated filenames to; the Node caller uses regular paths.
+        #[cfg(unix)]
+        let base = std::fs::canonicalize(base).unwrap();
         base.join(format!(
             "ax-evidence-{}-{}-{}",
             std::process::id(),

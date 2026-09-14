@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import path from "path"
-import { writeFile } from "fs/promises"
+import { mkdir, writeFile } from "fs/promises"
 import { GlobTool } from "../../src/tool/glob"
 import { NativeAddon } from "../../src/native/addon"
 import { Instance } from "../../src/project/instance"
@@ -19,6 +19,32 @@ afterEach(async () => {
 })
 
 describe("tool.glob", () => {
+  test("native relative results resolve against the requested search directory", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const search = path.join(tmp.path, "nested")
+    await mkdir(search)
+    const target = path.join(search, "found.ts")
+    await writeFile(target, "export {}")
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
+      globFiles: vi.fn(() => JSON.stringify([{ path: "found.ts", mtime: 1, size: 9 }])),
+    } as any)
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const glob = await GlobTool.init()
+          const result = await glob.execute({ pattern: "*.ts", path: search }, ctx)
+          expect(result.metadata.count).toBe(1)
+          expect(result.data).toEqual({ paths: [target], truncated: false })
+          expect(result.output).toBe(target)
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
+    }
+  })
+
   test("JS fallback keeps vanished matches with mtime 0", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

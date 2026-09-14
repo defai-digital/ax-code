@@ -67,10 +67,12 @@ export const GlobTool = Tool.define("glob", {
         const json = NativePerf.run("fs.globFiles", { search, pattern: params.pattern, limit: NATIVE_SCAN_LIMIT }, () =>
           native.globFiles(search, params.pattern, NATIVE_SCAN_LIMIT),
         )
-        const entries = parseNativeGlobEntries(json).filter(
-          (item) =>
-            !Filesystem.contains(Instance.directory, search) || Filesystem.contains(Instance.directory, item.path),
-        )
+        const entries = parseNativeGlobEntries(json)
+          .map((item) => ({ ...item, path: path.resolve(search, item.path) }))
+          .filter(
+            (item) =>
+              !Filesystem.contains(Instance.directory, search) || Filesystem.contains(Instance.directory, item.path),
+          )
         entries.sort((a, b) => b.mtime - a.mtime)
         const truncated = entries.length > RESULT_LIMIT
         const visible = truncated ? entries.slice(0, RESULT_LIMIT) : entries

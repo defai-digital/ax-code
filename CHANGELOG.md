@@ -15,6 +15,8 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Resolve native glob results against the requested search directory so existing files remain visible when searching another project or a nested directory.
+- Make native filesystem tests compare Windows paths correctly and keep evidence-cache test fixtures compatible with the Node caller's path format.
 - Preserve per-request isolation, network and tool restrictions across autonomous continuations, compaction replay, command summaries, shell turns, and background result handoffs. Retain system instructions, structured output, and reasoning settings when continuing the same request.
 - Carry parent isolation, disabled tools, and session-level permission denials into foreground, background, parallel, and resumed subagents without inheriting tool grants or overwriting persistent child restrictions.
 - Reject subagent results that arrive after cancellation and prevent cancelled tasks from starting finalization calls.

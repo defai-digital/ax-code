@@ -1266,7 +1266,11 @@ mod tests {
 
         let results = walk_files(dir.to_str().unwrap().into(), "{}".into()).unwrap();
 
-        assert!(results.contains(&"src/main.rs".to_string()));
+        assert!(
+            results
+                .iter()
+                .any(|p| Path::new(p) == Path::new("src/main.rs"))
+        );
         assert!(results.contains(&"README.md".to_string()));
 
         cleanup(&dir);
@@ -1308,8 +1312,16 @@ mod tests {
         let opts = serde_json::json!({"glob": ["**/*.rs"]}).to_string();
         let results = walk_files(dir.to_str().unwrap().into(), opts).unwrap();
 
-        assert!(results.contains(&"src/lib.rs".to_string()));
-        assert!(!results.contains(&"src/notes.txt".to_string()));
+        assert!(
+            results
+                .iter()
+                .any(|p| Path::new(p) == Path::new("src/lib.rs"))
+        );
+        assert!(
+            !results
+                .iter()
+                .any(|p| Path::new(p) == Path::new("src/notes.txt"))
+        );
         assert!(!results.contains(&"README.md".to_string()));
 
         cleanup(&dir);
@@ -1348,10 +1360,22 @@ mod tests {
         // hidden: false should still exclude node_modules/dist/build
         let results = walk_files(dir.to_str().unwrap().into(), "{}".into()).unwrap();
 
-        assert!(results.contains(&"src/main.rs".to_string()));
+        assert!(
+            results
+                .iter()
+                .any(|p| Path::new(p) == Path::new("src/main.rs"))
+        );
         assert!(!results.iter().any(|p| p.contains("node_modules")));
-        assert!(!results.iter().any(|p| p.contains("dist/")));
-        assert!(!results.iter().any(|p| p.contains("build/")));
+        assert!(
+            !results
+                .iter()
+                .any(|p| Path::new(p).components().any(|c| c.as_os_str() == "dist"))
+        );
+        assert!(
+            !results
+                .iter()
+                .any(|p| Path::new(p).components().any(|c| c.as_os_str() == "build"))
+        );
 
         cleanup(&dir);
     }
@@ -1374,8 +1398,16 @@ mod tests {
             .iter()
             .map(|e| e["path"].as_str().unwrap())
             .collect();
-        assert!(paths.contains(&"src/main.rs"));
-        assert!(paths.contains(&"src/lib.rs"));
+        assert!(
+            paths
+                .iter()
+                .any(|p| Path::new(p) == Path::new("src/main.rs"))
+        );
+        assert!(
+            paths
+                .iter()
+                .any(|p| Path::new(p) == Path::new("src/lib.rs"))
+        );
         assert!(!paths.contains(&"data.json"));
 
         cleanup(&dir);
