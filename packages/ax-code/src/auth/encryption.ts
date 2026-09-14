@@ -98,6 +98,17 @@ export function __resetInstallSecretCacheForTests() {
   installSecret = undefined
 }
 
+/** Test-only: clear process-local decrypt outcomes and attempt counters. */
+export function __resetDecryptCacheForTests() {
+  decryptCache.clear()
+  decryptAttemptCount = 0
+}
+
+/** Test-only: number of decryptDetailed attempts that missed the outcome cache. */
+export function __decryptAttemptCountForTests() {
+  return decryptAttemptCount
+}
+
 /** Legacy machine ID (hostname-platform-arch only) — used as fallback for decryption. */
 function legacyMachineId(): string {
   return `${os.hostname()}-${os.platform()}-${os.arch()}`
@@ -172,6 +183,14 @@ function candidatePasswords(): string[] {
 // sensitive than the decrypted plaintexts already held by those callers.
 const KEY_CACHE_LIMIT = 512
 const keyCache = new Map<string, Buffer>()
+const DECRYPT_CACHE_LIMIT = 256
+type DecryptCacheEntry = { ok: true; plaintext: string; usedFallbackDerivation: boolean } | { ok: false }
+const decryptCache = new Map<string, DecryptCacheEntry>()
+let decryptAttemptCount = 0
+
+function decryptIdentity(value: EncryptedValue): string {
+  return `${value.version ?? 0}|${value.encrypted}|${value.iv}|${value.salt ?? ""}|${value.tag}`
+}
 
 function deriveKeyWithPassword(password: string, salt: Buffer, iterations: number): Buffer {
   const cacheKey = `${password}|${salt.toString("base64")}|${iterations}`
@@ -234,6 +253,14 @@ export function decrypt(value: EncryptedValue): string {
  * machine ID.
  */
 function decryptDetailed(value: EncryptedValue): { plaintext: string; usedFallbackDerivation: boolean } {
+  const identity = decryptIdentity(value)
+  const cached = decryptCache.get(identity)
+  if (cached) {
+    if (!cached.ok) throw new Error("decryption failed — all key derivation attempts exhausted")
+    return { plaintext: cached.plaintext, usedFallbackDerivation: cached.usedFallbackDerivation }
+  }
+
+  decryptAttemptCount += 1
   const encrypted = decodeBase64Field(value.encrypted, "encrypted")
   const iv = decodeBase64Field(value.iv, "iv", IV_LENGTH)
   const tag = decodeBase64Field(value.tag, "tag", AUTH_TAG_LENGTH)
@@ -247,36 +274,52 @@ function decryptDetailed(value: EncryptedValue): { plaintext: string; usedFallba
 
   const passwords = candidatePasswords()
   const primaryIterations = value.version >= 2 ? PBKDF2_ITERATIONS_V2 : PBKDF2_ITERATIONS
+  const remember = (entry: DecryptCacheEntry) => {
+    if (decryptCache.size >= DECRYPT_CACHE_LIMIT) decryptCache.clear()
+    decryptCache.set(identity, entry)
+  }
 
   // Pass 1: the derivation a current build would have used, across every
   // known machine ID. This recovers entries written under a previous
   // hostname without paying for legacy-iteration attempts on the hot path.
   for (const [index, password] of passwords.entries()) {
     try {
-      return {
+      const result = {
         plaintext: decryptWithPassword(password, encrypted, iv, salt, tag, primaryIterations),
         usedFallbackDerivation: index !== 0,
       }
+      remember({ ok: true, ...result })
+      return result
     } catch {
       log.debug(`key derivation attempt failed (machine id #${index}, current iterations)`)
     }
   }
 
   // Pass 2: legacy iteration counts (pre-v2 builds and ax-cli imports).
+  // Version 2 entries declare their stretching; do not brute-force 100k/600k
+  // candidates for ciphertext that cannot be the current machine identity.
+  if (value.version !== undefined && value.version >= 2) {
+    remember({ ok: false })
+    throw new Error("decryption failed — all key derivation attempts exhausted")
+  }
+
   for (const password of passwords) {
     for (const iterations of [PBKDF2_ITERATIONS, PBKDF2_LEGACY_ITERATIONS]) {
       if (iterations === primaryIterations) continue
       try {
-        return {
+        const result = {
           plaintext: decryptWithPassword(password, encrypted, iv, salt, tag, iterations),
           usedFallbackDerivation: true,
         }
+        remember({ ok: true, ...result })
+        return result
       } catch {
         log.debug("key derivation attempt failed (legacy iterations)")
       }
     }
   }
 
+  remember({ ok: false })
   throw new Error("decryption failed — all key derivation attempts exhausted")
 }
 
@@ -368,7 +411,7 @@ export function decryptField<T extends Record<string, unknown>>(obj: T, field: s
     }
     return { ...obj, [field]: plaintext }
   } catch (err) {
-    log.warn(`failed to decrypt field "${field}" — credential may need to be re-entered`, {
+    log.debug(`failed to decrypt field "${field}" — credential may need to be re-entered`, {
       err: toErrorMessage(err),
     })
     return { ...obj, [field]: undefined }

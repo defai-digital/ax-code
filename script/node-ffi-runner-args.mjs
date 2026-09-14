@@ -1,4 +1,5 @@
 import fs from "node:fs"
+import os from "node:os"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
@@ -106,4 +107,15 @@ export function toNodeOptionsImportSpecifier(value, options = {}) {
   // as a real file relative to cwd (`src/index-node-tui.ts`).
   if (!absolute && !dottedRelative && !exists(resolved)) return value
   return pathToFileURL(resolved).href
+}
+
+/**
+ * Default V8 compile cache so the bundled CLI is not reparsed on every launch.
+ * Honor an explicit NODE_COMPILE_CACHE; otherwise use the XDG/user cache dir.
+ */
+export function withCompileCache(env = process.env, options = {}) {
+  if (env.NODE_COMPILE_CACHE) return env
+  const home = options.home ?? os.homedir()
+  const cacheHome = env.XDG_CACHE_HOME || path.join(home, ".cache")
+  return { ...env, NODE_COMPILE_CACHE: path.join(cacheHome, "ax-code", "compile-cache") }
 }

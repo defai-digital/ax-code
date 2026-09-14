@@ -316,7 +316,20 @@ export namespace Log {
     }
   }
 
-  async function cleanup(dir: string) {
+  export const KEEP_STAMPED_LOGS = 20
+
+  export function isManagedLogName(name: string): boolean {
+    if (name.endsWith(".json.log")) {
+      return isStampedLogName(`${name.slice(0, -".json.log".length)}.log`)
+    }
+    return isStampedLogName(name)
+  }
+
+  export async function prune(
+    dir: string,
+    options: { keep?: number } = {},
+  ): Promise<{ removed: number; kept: number }> {
+    const keep = options.keep ?? KEEP_STAMPED_LOGS
     const files = (
       await Glob.scan("*.log", {
         cwd: dir,
@@ -324,19 +337,36 @@ export namespace Log {
         include: "file",
       })
     )
-      .filter((file) => {
-        const name = path.basename(file)
-        return isStampedLogName(name)
-      })
-      // fast-glob returns results in arbitrary (filesystem-dependent) order, not
-      // sorted by name — without this sort, `slice(0, -5)` below could delete the
-      // newest logs and keep stale ones instead of the intended "keep the 5 most
-      // recent". The stamped filename format sorts lexicographically by time.
+      .filter((file) => isManagedLogName(path.basename(file)))
       .sort((a, b) => path.basename(a).localeCompare(path.basename(b)))
-    if (files.length <= 5) return
 
-    const filesToDelete = files.slice(0, -5)
-    await Promise.all(filesToDelete.map((file) => fs.unlink(file).catch(() => {})))
+    const logs = files.filter((file) => !path.basename(file).endsWith(".json.log"))
+    const keepLogs = new Set(logs.slice(-keep))
+    const newest = logs[logs.length - 1]
+    let removed = 0
+
+    for (const file of files) {
+      const name = path.basename(file)
+      const companion = name.endsWith(".json.log")
+        ? path.join(path.dirname(file), `${name.slice(0, -".json.log".length)}.log`)
+        : file
+      const retained = keepLogs.has(companion)
+      let empty = false
+      try {
+        empty = (await fs.stat(file)).size === 0
+      } catch {
+        continue
+      }
+      if (retained && !(empty && companion !== newest)) continue
+      await fs.unlink(file).catch(() => {})
+      removed += 1
+    }
+
+    return { removed, kept: files.length - removed }
+  }
+
+  async function cleanup(dir: string) {
+    await prune(dir).catch(() => {})
   }
 
   function formatError(error: Error, depth = 0): string {

@@ -32,6 +32,13 @@ async function withWiki<T>(args: CommonArgs, fn: (input: { root: string; config:
   return bootstrap(root, async () => fn({ root, config: await resolveWikiRuntimeConfig(args) }))
 }
 
+export function wikiStatusExitCode(status: Pick<WikiStatus, "exists" | "healthy" | "freshness">): number {
+  // A missing wiki is a successful status report, not a command failure.
+  if (!status.exists) return 0
+  if (!status.healthy || status.freshness !== "fresh") return 1
+  return 0
+}
+
 function printStatus(status: WikiStatus, json: boolean) {
   if (json) {
     console.log(JSON.stringify(status, null, 2))
@@ -79,7 +86,7 @@ export const WikiStatusCommand = cmd({
         config: engineConfig(config),
       })
       printStatus(status, args.json === true)
-      if (!status.healthy || status.freshness !== "fresh") process.exitCode = 1
+      process.exitCode = wikiStatusExitCode(status)
     })
   },
 })

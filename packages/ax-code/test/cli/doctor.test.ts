@@ -5,7 +5,9 @@ import {
   doctorProjectContext,
   formatNativeFlag,
   getDuplicateProjectIdentityCheck,
+  getFeatureFlagsCheck,
   getIsolationPolicyCheck,
+  getNativeAddonsCheck,
   getPathLauncherCheck,
   getRuntimeCheck,
   getEvidenceCacheCheck,
@@ -70,6 +72,33 @@ describe("cli doctor native flag formatting", () => {
   test("annotates enabled flags whose native addon failed to load", () => {
     expect(formatNativeFlag("NATIVE_FS", true)).toBe("NATIVE_FS=on")
     expect(formatNativeFlag("NATIVE_FS", false)).toBe("NATIVE_FS=on (addon missing — using TS fallback)")
+  })
+
+  test("warns when some native addons fall back to TypeScript", () => {
+    const check = getNativeAddonsCheck(new Map([["fs", true]]))
+    expect(check.status).toBe("warn")
+    expect(check.detail).toContain("1/4 installed (fs)")
+    expect(check.detail).toContain("missing index-core, diff, parser")
+    expect(check.detail).toContain("TypeScript fallbacks")
+  })
+
+  test("is ok only when every native addon loaded", () => {
+    const check = getNativeAddonsCheck(
+      new Map([
+        ["index-core", true],
+        ["fs", true],
+        ["diff", true],
+        ["parser", true],
+      ]),
+    )
+    expect(check.status).toBe("ok")
+    expect(check.detail).toContain("4/4 installed")
+  })
+
+  test("warns feature flags that mention a missing addon", () => {
+    const check = getFeatureFlagsCheck(["NATIVE_FS=on", "NATIVE_INDEX=on (addon missing — using TS fallback)"])
+    expect(check?.status).toBe("warn")
+    expect(check?.detail).toContain("addon missing")
   })
 })
 

@@ -174,7 +174,7 @@ async function findRepoRoot(): Promise<string> {
   const startCwd = Filesystem.callerCwd()
   const result = await git(["rev-parse", "--show-toplevel"], { cwd: startCwd })
   if (result.exitCode !== 0) {
-    throw new Error("Not a git repository. Run `ax-code release check` from within ax-code.")
+    throw new Error("Not a git repository. Run this from a git worktree of the ax-code project.")
   }
   return result.text().trim()
 }

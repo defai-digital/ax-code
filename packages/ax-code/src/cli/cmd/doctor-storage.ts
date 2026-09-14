@@ -16,6 +16,7 @@ type DatabaseFileInfo = {
 }
 
 const LARGE_WAL_BYTES = DurableStoragePolicy.journalSizeLimitBytes
+const LARGE_DATABASE_BYTES = 256 * 1024 * 1024
 
 export async function getDoctorDatabaseCheck(input: {
   databasePath: string
@@ -73,10 +74,18 @@ export async function getDoctorDatabaseCheck(input: {
   const alternatePath =
     databaseName === "ax-code.db" ? localPath : databaseName === "ax-code-local.db" ? bundledPath : undefined
 
+  if (current.exists && current.size !== undefined) {
+    details.push(`size ${formatStorageBytes(current.size)}`)
+    if (current.size >= LARGE_DATABASE_BYTES) {
+      markWarn()
+      details.push("database is large; run `ax-code session prune` then `ax-code db vacuum` to reclaim space")
+    }
+  }
+
   if (alternatePath && (await inspect(alternatePath)).exists) {
     markWarn()
     details.push(
-      `${databaseModeLabel(path.basename(alternatePath))} also exists at ${alternatePath}; source/dev and packaged installs do not share session state`,
+      `${databaseModeLabel(path.basename(alternatePath))} also exists at ${alternatePath}; source/dev and packaged installs do not share session state. Remove the unused file after confirming which install you use, or run \`ax-code db vacuum\` on the active database`,
     )
   }
 

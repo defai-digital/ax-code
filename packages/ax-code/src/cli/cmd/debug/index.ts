@@ -1,4 +1,5 @@
 import { Global } from "../../../global"
+import { Log } from "../../../util/log"
 import { bootstrap } from "../../bootstrap"
 import { cmd } from "../cmd"
 import { ConfigCommand } from "./config"
@@ -30,6 +31,7 @@ export const DebugCommand = cmd({
       .command(SnapshotCommand)
       .command(AgentCommand)
       .command(PathsCommand)
+      .command(PruneLogsCommand)
       .command({
         command: "wait",
         describe: "wait indefinitely (for debugging)",
@@ -53,5 +55,14 @@ const PathsCommand = cmd({
     for (const [key, value] of Object.entries(Global.Path)) {
       console.log(key.padEnd(10), value)
     }
+  },
+})
+
+const PruneLogsCommand = cmd({
+  command: "prune-logs",
+  describe: "delete old and empty diagnostic log files",
+  handler: async () => {
+    const result = await Log.prune(Global.Path.log)
+    console.log(`Removed ${result.removed} log file(s); kept ${result.kept} in ${Global.Path.log}`)
   },
 })

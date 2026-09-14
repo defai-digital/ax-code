@@ -146,11 +146,34 @@ const MigrateCommand = cmd({
   },
 })
 
+const VacuumCommand = cmd({
+  command: "vacuum",
+  describe: "reclaim unused SQLite pages with VACUUM and PRAGMA optimize",
+  handler: async () => {
+    const db = await openDatabase(Database.Path, { readonly: false })
+    try {
+      db.exec("VACUUM")
+      db.exec("PRAGMA optimize")
+      UI.println(`Vacuumed ${Database.Path}`)
+    } catch (err) {
+      UI.error(toErrorMessage(err))
+      process.exitCode = 1
+    } finally {
+      db.close()
+    }
+  },
+})
+
 export const DbCommand = cmd({
   command: "db",
   describe: "database tools",
   builder: (yargs: Argv) => {
-    return yargs.command(QueryCommand).command(PathCommand).command(MigrateCommand).demandCommand()
+    return yargs
+      .command(QueryCommand)
+      .command(PathCommand)
+      .command(MigrateCommand)
+      .command(VacuumCommand)
+      .demandCommand()
   },
   handler: () => {},
 })

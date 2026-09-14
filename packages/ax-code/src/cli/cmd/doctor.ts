@@ -182,6 +182,43 @@ export function formatNativeFlag(name: string, addonLoaded: boolean): string {
   return addonLoaded ? `${name}=on` : `${name}=on (addon missing — using TS fallback)`
 }
 
+const NATIVE_ADDON_NAMES = ["index-core", "fs", "diff", "parser"] as const
+
+export function getNativeAddonsCheck(loaded: ReadonlyMap<string, boolean>): DoctorCheck {
+  const installed = NATIVE_ADDON_NAMES.filter((name) => loaded.get(name))
+  const missing = NATIVE_ADDON_NAMES.filter((name) => !loaded.get(name))
+  if (missing.length === 0) {
+    return {
+      name: "Native addons",
+      status: "ok",
+      detail: `${installed.length}/${NATIVE_ADDON_NAMES.length} installed (${installed.join(", ")})`,
+    }
+  }
+  if (installed.length === 0) {
+    return {
+      name: "Native addons",
+      status: "warn",
+      detail:
+        'None installed — using TypeScript fallbacks (run "pnpm build:native" at the repo root, or reinstall the runtime, for faster indexing/search)',
+    }
+  }
+  return {
+    name: "Native addons",
+    status: "warn",
+    detail: `${installed.length}/${NATIVE_ADDON_NAMES.length} installed (${installed.join(", ")}); missing ${missing.join(", ")} — using TypeScript fallbacks. Rebuild native addons or reinstall the runtime.`,
+  }
+}
+
+export function getFeatureFlagsCheck(flags: string[]): DoctorCheck | undefined {
+  if (flags.length === 0) return undefined
+  const missingAddon = flags.some((flag) => flag.includes("addon missing"))
+  return {
+    name: "Feature flags",
+    status: missingAddon ? "warn" : "ok",
+    detail: flags.join(", "),
+  }
+}
+
 export function getAxEngineDoctorCheck(status: Awaited<ReturnType<typeof getAxEngineStatus>>): DoctorCheck {
   const configuredOrPrepared = status.model.present || status.server.running || status.dependency.available
   const relevant = isPlausiblySupportedHost() || configuredOrPrepared
@@ -495,16 +532,8 @@ export const DoctorCommand: CommandModule = {
       { name: "parser", load: () => NativeAddon.parser() },
     ]
     const addonLoaded = new Map(addons.map((a) => [a.name, !!a.load()]))
-    const installed = addons.filter((a) => addonLoaded.get(a.name)).map((a) => a.name)
     checks.push(getEvidenceCacheCheck())
-    checks.push({
-      name: "Native addons",
-      status: installed.length > 0 ? "ok" : "warn",
-      detail:
-        installed.length > 0
-          ? `${installed.length}/${addons.length} installed (${installed.join(", ")})`
-          : 'None installed — using TypeScript fallbacks (run "pnpm build:native" at the repo root for faster indexing/search)',
-    })
+    checks.push(getNativeAddonsCheck(addonLoaded))
 
     // 10. Stale ax-code processes — multiple instances can block startup,
     // exhaust the port, or corrupt the shared SQLite database.
@@ -627,9 +656,8 @@ export const DoctorCommand: CommandModule = {
     if (Flag.AX_CODE_NATIVE_DIFF) flags.push(formatNativeFlag("NATIVE_DIFF", addonLoaded.get("diff") ?? false))
     if (Flag.AX_CODE_NATIVE_PARSER) flags.push(formatNativeFlag("NATIVE_PARSER", addonLoaded.get("parser") ?? false))
     if (Flag.AX_CODE_DEBUG_ENGINE_NATIVE_SCAN) flags.push("DEBUG_ENGINE_NATIVE_SCAN=on")
-    if (flags.length > 0) {
-      checks.push({ name: "Feature flags", status: "ok", detail: flags.join(", ") })
-    }
+    const featureFlags = getFeatureFlagsCheck(flags)
+    if (featureFlags) checks.push(featureFlags)
 
     // Print results
     console.log("\n  ax-code doctor\n")

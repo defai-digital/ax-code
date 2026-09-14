@@ -243,6 +243,7 @@ Everyday use:
 | `ax-code providers login` | Configure provider credentials                                  |
 | `ax-code models`          | List available provider/model IDs                               |
 | `ax-code mcp add`         | Add a local or remote MCP server                                |
+| `ax-code mcp remove`      | Remove a configured MCP server                                  |
 | `ax-code agent create`    | Generate a custom project or global agent                       |
 | `ax-code serve`           | Start the local HTTP/OpenAPI server                             |
 | `ax-code doctor`          | Diagnose install, runtime, storage, and auth                    |

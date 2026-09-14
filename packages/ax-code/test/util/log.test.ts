@@ -4,6 +4,35 @@ import path from "path"
 import { Log } from "../../src/util/log"
 import { tmpdir } from "../fixture/fixture"
 
+describe("Log.prune", () => {
+  test("removes old stamped logs including json.log pairs and empty files", async () => {
+    await using tmp = await tmpdir()
+    const names = [
+      "2026-04-22T015403-649-runtime-old.log",
+      "2026-04-22T015403-649-runtime-old.json.log",
+      "2026-04-22T015404-000-runtime-empty.log",
+      "2026-04-22T015405-000-runtime-new.log",
+      "2026-04-22T015405-000-runtime-new.json.log",
+    ]
+    await fs.writeFile(path.join(tmp.path, names[0]), "old")
+    await fs.writeFile(path.join(tmp.path, names[1]), "{}")
+    await fs.writeFile(path.join(tmp.path, names[2]), "")
+    await fs.writeFile(path.join(tmp.path, names[3]), "new")
+    await fs.writeFile(path.join(tmp.path, names[4]), "{}")
+
+    const result = await Log.prune(tmp.path, { keep: 1 })
+    expect(result.removed).toBe(3)
+    const remaining = (await fs.readdir(tmp.path)).sort()
+    expect(remaining).toEqual([names[4], names[3]])
+  })
+
+  test("treats json.log files as managed companions of stamped logs", () => {
+    expect(Log.isManagedLogName("2026-04-22T015403-649-main-run1.log")).toBe(true)
+    expect(Log.isManagedLogName("2026-04-22T015403-649-main-run1.json.log")).toBe(true)
+    expect(Log.isManagedLogName("dev.log")).toBe(false)
+  })
+})
+
 describe("Log.stampedName", () => {
   test("keeps component-scoped names distinct within the same second", () => {
     const now = new Date("2026-04-22T01:54:03.649Z")

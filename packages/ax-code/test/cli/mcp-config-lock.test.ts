@@ -14,4 +14,12 @@ test("MCP config writes use process and cross-process locks", async () => {
   const fileLock = block.indexOf("using _crossProcess = await FileLock.acquire(configPath)")
   expect(processLock).toBeGreaterThan(-1)
   expect(fileLock).toBeGreaterThan(processLock)
+
+  const removeStart = src.indexOf("async function removeMcpFromConfig")
+  const removeEnd = src.indexOf("export const McpRemoveCommand", removeStart)
+  expect(removeStart).toBeGreaterThan(-1)
+  expect(removeEnd).toBeGreaterThan(removeStart)
+  const removeBlock = src.slice(removeStart, removeEnd)
+  expect(removeBlock.indexOf("using _process = await Lock.write(configPath)")).toBeGreaterThan(-1)
+  expect(removeBlock.indexOf("using _crossProcess = await FileLock.acquire(configPath)")).toBeGreaterThan(-1)
 })

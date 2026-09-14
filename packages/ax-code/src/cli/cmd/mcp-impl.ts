@@ -9,7 +9,7 @@ import { Instance } from "../../project/instance"
 import { Installation } from "../../installation"
 import path from "path"
 import { Global } from "../../global"
-import { modify, applyEdits } from "jsonc-parser"
+import { modify, applyEdits, parse as parseJsonc } from "jsonc-parser"
 import { Filesystem } from "../../util/filesystem"
 import { FileLock } from "../../util/filelock"
 import { Lock } from "../../util/lock"
@@ -85,6 +85,7 @@ export const McpCommand = cmd({
   builder: (yargs) =>
     yargs
       .command(McpAddCommand)
+      .command(McpRemoveCommand)
       .command(McpListCommand)
       .command(McpAuthCommand)
       .command(McpLogoutCommand)
@@ -591,6 +592,93 @@ async function addMcpToConfig(name: string, mcpConfig: Config.Mcp, configPath: s
 
   return configPath
 }
+
+async function removeMcpFromConfig(name: string, configPath: string) {
+  using _process = await Lock.write(configPath)
+  using _crossProcess = await FileLock.acquire(configPath)
+  if (!(await Filesystem.exists(configPath))) {
+    throw new Error(`Config file not found: ${configPath}`)
+  }
+  const text = await Filesystem.readText(configPath)
+  const edits = modify(text, ["mcp", name], undefined, {
+    formattingOptions: { tabSize: 2, insertSpaces: true },
+  })
+  await Filesystem.write(configPath, applyEdits(text, edits))
+  return configPath
+}
+
+export const McpRemoveCommand = cmd({
+  command: "remove <name>",
+  aliases: ["rm"],
+  describe: "remove an MCP server from project or global config",
+  builder: (yargs) =>
+    yargs
+      .positional("name", {
+        describe: "name of the MCP server",
+        type: "string",
+        demandOption: true,
+      })
+      .option("force", {
+        type: "boolean",
+        default: false,
+        describe: "skip confirmation",
+      })
+      .option("global", {
+        type: "boolean",
+        default: false,
+        describe: "remove from global config instead of the current project",
+      }),
+  async handler(args) {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const name = args.name
+        if (!name) return
+        UI.empty()
+        prompts.intro("Remove MCP server")
+
+        const [projectConfigPath, globalConfigPath] = await Promise.all([
+          resolveConfigPath(Instance.worktree),
+          resolveConfigPath(Global.Path.config, true),
+        ])
+        const preferred = args.global ? globalConfigPath : projectConfigPath
+        const fallback = args.global ? projectConfigPath : globalConfigPath
+
+        const hasName = async (configPath: string) => {
+          if (!(await Filesystem.exists(configPath))) return false
+          const parsed = parseJsonc(await Filesystem.readText(configPath))
+          return Boolean(isRecord(parsed) && isRecord(parsed.mcp) && name in parsed.mcp)
+        }
+
+        let configPath = preferred
+        if (!(await hasName(configPath))) {
+          if (fallback !== preferred && (await hasName(fallback))) configPath = fallback
+          else {
+            prompts.log.error(`MCP server "${name}" is not configured in ${preferred}`)
+            prompts.outro("Done")
+            process.exitCode = 1
+            return
+          }
+        }
+
+        if (!args.force) {
+          const confirm = await prompts.confirm({
+            message: `Remove MCP server "${name}" from ${configPath}?`,
+            initialValue: false,
+          })
+          if (prompts.isCancel(confirm) || !confirm) {
+            prompts.outro("Cancelled")
+            return
+          }
+        }
+
+        await removeMcpFromConfig(name, configPath)
+        prompts.log.success(`MCP server "${name}" removed from ${configPath}`)
+        prompts.outro("Done")
+      },
+    })
+  },
+})
 
 export const McpAddCommand = cmd({
   command: "add",

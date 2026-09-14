@@ -9,6 +9,7 @@ import {
   prepareNodeArgs,
   splitNodeLaunchArgs,
   toNodeOptionsImportSpecifier,
+  withCompileCache,
 } from "./node-ffi-runner-args.mjs"
 
 describe("node FFI runner arguments", () => {
@@ -45,6 +46,18 @@ describe("node FFI runner arguments", () => {
     const args = ["--env-file=.env", "--env-file-if-exists=.env", "src/index.ts"]
 
     expect(prepareNodeArgs(args, { exists: () => false })).toEqual(args)
+  })
+})
+
+describe("withCompileCache", () => {
+  test("defaults NODE_COMPILE_CACHE under the user cache dir", () => {
+    const env = withCompileCache({ HOME: "/home/dev" }, { home: "/home/dev" })
+    expect(env.NODE_COMPILE_CACHE).toBe(path.join("/home/dev", ".cache", "ax-code", "compile-cache"))
+  })
+
+  test("preserves an explicit NODE_COMPILE_CACHE", () => {
+    const env = withCompileCache({ NODE_COMPILE_CACHE: "/tmp/custom-cache" }, { home: "/home/dev" })
+    expect(env.NODE_COMPILE_CACHE).toBe("/tmp/custom-cache")
   })
 })
 

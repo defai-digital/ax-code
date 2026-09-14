@@ -57,6 +57,20 @@ describe("getDoctorDatabaseCheck", () => {
     expect(check.detail).toContain("SHM 32 KiB")
   })
 
+  test("warns when the active database is unusually large", async () => {
+    const check = await getDoctorDatabaseCheck({
+      databasePath: "/tmp/ax-code/ax-code.db",
+      inspect: async (target) => ({
+        exists: target === "/tmp/ax-code/ax-code.db",
+        size: 256 * 1024 * 1024,
+      }),
+    })
+
+    expect(check.status).toBe("warn")
+    expect(check.detail).toContain("size 256 MiB")
+    expect(check.detail).toContain("ax-code db vacuum")
+  })
+
   test("warns when the active WAL is unusually large", async () => {
     const largeWalBytes = DurableStoragePolicy.journalSizeLimitBytes
     const check = await getDoctorDatabaseCheck({

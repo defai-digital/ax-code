@@ -1,9 +1,17 @@
 import path from "path"
 import os from "os"
-import { expect, test } from "vitest"
+import { afterEach, expect, test } from "vitest"
 import { createCipheriv, pbkdf2Sync, randomBytes } from "crypto"
 import { readFileSync } from "fs"
-import { decrypt, decryptField, encrypt, isEncrypted, type EncryptedValue } from "../../src/auth/encryption"
+import {
+  decrypt,
+  decryptField,
+  encrypt,
+  isEncrypted,
+  __decryptAttemptCountForTests,
+  __resetDecryptCacheForTests,
+  type EncryptedValue,
+} from "../../src/auth/encryption"
 import { Global } from "../../src/global"
 
 // Mirrors the constants in src/auth/encryption.ts for constructing
@@ -26,6 +34,10 @@ function machineId() {
   return `${os.hostname()}-${os.platform()}-${os.arch()}-${secret}`
 }
 
+afterEach(() => {
+  __resetDecryptCacheForTests()
+})
+
 function encryptV1(plaintext: string): EncryptedValue {
   const salt = randomBytes(SALT_LENGTH)
   const iv = randomBytes(IV_LENGTH)
@@ -42,12 +54,14 @@ function encryptV1(plaintext: string): EncryptedValue {
 }
 
 test("encrypt writes version 2 when an install secret exists and round-trips", () => {
+  __resetDecryptCacheForTests()
   const value = encrypt("super-secret-key")
   expect(value.version).toBe(2)
   expect(decrypt(value)).toBe("super-secret-key")
 })
 
 test("decrypt still reads v1 entries written with full-iteration PBKDF2", () => {
+  __resetDecryptCacheForTests()
   const v1 = encryptV1("legacy-key")
   expect(decrypt(v1)).toBe("legacy-key")
 })
@@ -65,6 +79,7 @@ test("decrypt rejects encrypted auth fields with invalid fixed lengths", () => {
 })
 
 test("decryptField marks v1 entries for re-encryption", () => {
+  __resetDecryptCacheForTests()
   const obj = { type: "api", key: encryptV1("legacy-key") } as Record<string, unknown>
   const result = decryptField(obj, "key")
   expect(result.key).toBe("legacy-key")
@@ -84,6 +99,7 @@ test("isEncrypted accepts both versions", () => {
 })
 
 test("decrypt recovers v2 entries written under a previous hostname", () => {
+  __resetDecryptCacheForTests()
   // macOS toggles between the mDNS name ("host.local") and transient
   // DHCP-assigned hostnames; entries written under the other form must
   // still decrypt and be flagged for re-encryption under the current one.
@@ -109,6 +125,19 @@ test("decrypt recovers v2 entries written under a previous hostname", () => {
   const result = decryptField({ type: "api", key: value } as Record<string, unknown>, "key")
   expect(result.key).toBe("previous-hostname-key")
   expect(result.__needsReEncrypt).toBe(true)
+})
+
+test("failed v2 decrypts are cached for the process lifetime", () => {
+  __resetDecryptCacheForTests()
+  const value = encrypt("fresh-key")
+  const broken: EncryptedValue = { ...value, tag: Buffer.alloc(16, 7).toString("base64") }
+  expect(() => decrypt(broken)).toThrow("decryption failed")
+  const afterFirst = __decryptAttemptCountForTests()
+  expect(afterFirst).toBeGreaterThan(0)
+  expect(() => decrypt(broken)).toThrow("decryption failed")
+  expect(__decryptAttemptCountForTests()).toBe(afterFirst)
+  expect(decryptField({ type: "api", key: broken } as Record<string, unknown>, "key").key).toBeUndefined()
+  expect(__decryptAttemptCountForTests()).toBe(afterFirst)
 })
 
 test("logs a warning and falls back to legacy machine id when install secret is unavailable", async () => {

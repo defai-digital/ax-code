@@ -6,6 +6,22 @@ import { Config } from "../../src/config/config"
 import { parseJsonPayload } from "../../src/util/json-value"
 import path from "node:path"
 
+test("WebMCP CLI reports a missing origin instead of exiting silently", async () => {
+  const messages: string[] = []
+  await yargs()
+    .exitProcess(false)
+    .fail((msg, err) => {
+      if (msg) messages.push(msg)
+      if (err) messages.push(err.message)
+    })
+    .command(McpCommand)
+    .parseAsync(["mcp", "webmcp"])
+    .catch((err) => {
+      messages.push(err instanceof Error ? err.message : String(err))
+    })
+  expect(messages.join("\n")).toMatch(/Missing required argument: origin/i)
+})
+
 test("WebMCP CLI prints disabled config without connecting or writing user configuration", async () => {
   const output = vi.spyOn(process.stdout, "write").mockReturnValue(true)
   try {

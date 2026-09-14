@@ -100,7 +100,7 @@ describe("node FFI runner process branding", () => {
   test("source runner spawns the TUI child under the AX-Code basename", () => {
     const runner = readFileSync(path.join(import.meta.dirname, "node-ffi-runner.mjs"), "utf8")
     expect(runner).toContain("resolveBrandedNodePath(runtime.path)")
-    expect(runner).toContain("brandedSpawnOptions(process.env)")
+    expect(runner).toContain("brandedSpawnOptions(launchEnv)")
     expect(runner).toContain("axCodeJobTitleOsc()")
     // Windows defines process.execve but it throws ERR_FEATURE_UNAVAILABLE_ON_PLATFORM,
     // so the in-place exec is gated on the platform instead of feature detection.

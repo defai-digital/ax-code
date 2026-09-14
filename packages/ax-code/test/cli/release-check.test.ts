@@ -66,6 +66,12 @@ function find(results: CheckResult[], id: string): CheckResult {
 // ───── legacy surface (back-compat) ───────────────────────────────
 
 describe("release check command (legacy surface)", () => {
+  test("outside a git repo the error names a worktree instead of repeating the command", async () => {
+    const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/release/check.ts"), "utf8")
+    expect(src).toContain("Run this from a git worktree of the ax-code project.")
+    expect(src).not.toContain("Run `ax-code release check` from within ax-code.")
+  })
+
   test("decodes only release package name and version strings", () => {
     expect(decodeReleasePackageJsonValue({ name: "ax-code", version: "2.21.5", private: true })).toEqual({
       name: "ax-code",

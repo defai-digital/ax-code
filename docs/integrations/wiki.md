@@ -110,8 +110,9 @@ the source scan. Freshness is a point-in-time source check, not validation of ev
 for artifact validation.
 
 Stale or unverified wikis remain available for navigation, with an explicit instruction to verify current original
-source before relying on implementation claims. Verification errors produce `unknown`, and `wiki status` exits
-unsuccessfully when freshness cannot be confirmed.
+source before relying on implementation claims. Verification errors produce `unknown`. `wiki status` exits 0 when no
+wiki directory exists (the missing wiki is the report). When a wiki is present, it exits unsuccessfully if the wiki is
+unhealthy or freshness is not `fresh`.
 
 Wiki evidence is bounded: each selected source contributes at most its first 32,000 bytes within the page budget,
 with truncation marked for the generator. GraphContext can add selected snippets, but each snippet is limited to

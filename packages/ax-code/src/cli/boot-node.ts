@@ -124,15 +124,16 @@ export function cli(argv = hideBin(process.argv)) {
 
   cli = cli
     .fail((msg, err) => {
+      if (err) throw err
+      if (msg) process.stderr.write(`${msg}\n`)
       if (
         msg?.startsWith("Unknown argument") ||
         msg?.startsWith("Not enough non-option arguments") ||
-        msg?.startsWith("Invalid values:")
+        msg?.startsWith("Invalid values:") ||
+        msg?.startsWith("Missing required argument")
       ) {
-        if (err) throw err
         cli.showHelp("log")
       }
-      if (err) throw err
       process.exit(1)
     })
     .strict()

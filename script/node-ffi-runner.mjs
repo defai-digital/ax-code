@@ -8,6 +8,7 @@ import {
   prepareNodeArgs,
   splitNodeLaunchArgs,
   toNodeOptionsImportSpecifier,
+  withCompileCache,
 } from "./node-ffi-runner-args.mjs"
 import {
   AX_CODE_SPAWN_ARGV0,
@@ -130,7 +131,8 @@ try {
 const launchArgs = prepareNodeArgs(process.argv.slice(2))
 const tuiArgs = [...ffiArgs, ...launchArgs]
 const brandedPath = resolveBrandedNodePath(runtime.path)
-const spawnOptions = brandedSpawnOptions(process.env)
+const launchEnv = withCompileCache(process.env)
+const spawnOptions = brandedSpawnOptions(launchEnv)
 
 // POSIX TUIs must remain the PTY's foreground process-group leader. Replace
 // this selector process in place instead of leaving a Node parent between the
@@ -157,10 +159,10 @@ if (process.platform !== "win32" && typeof process.execve === "function") {
   if (!entry || path.resolve(entry) !== tuiEntry) {
     const argv = [AX_CODE_SPAWN_ARGV0, ...tuiArgs]
     try {
-      process.execve(brandedPath, argv, process.env)
+      process.execve(brandedPath, argv, launchEnv)
     } catch (error) {
       if (brandedPath === runtime.path) throw error
-      process.execve(runtime.path, argv, process.env)
+      process.execve(runtime.path, argv, launchEnv)
     }
   }
   const { nodeOptionsFlags, argvFlags } = partitionExecveFlags(nodeFlags)
@@ -185,7 +187,7 @@ if (process.platform !== "win32" && typeof process.execve === "function") {
     }
     optionsFlags.push(flag)
   }
-  const childEnv = { ...process.env, AX_CODE_LAUNCH_NODE_OPTIONS: process.env.NODE_OPTIONS ?? "" }
+  const childEnv = { ...launchEnv, AX_CODE_LAUNCH_NODE_OPTIONS: process.env.NODE_OPTIONS ?? "" }
   const augmented = [...ffiArgs, ...optionsFlags]
   if (entry) augmented.push("--import", toNodeOptionsImportSpecifier(entry))
   if (process.env.NODE_OPTIONS) augmented.push(process.env.NODE_OPTIONS)

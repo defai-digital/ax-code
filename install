@@ -671,6 +671,10 @@ esac
 launch_node() {
   node_cmd="$1"
   shift
+  if [ -z "${NODE_COMPILE_CACHE-}" ]; then
+    NODE_COMPILE_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/ax-code/compile-cache"
+    export NODE_COMPILE_CACHE
+  fi
   if [ "$launch_modern" -eq 1 ]; then
     AX_CODE_LAUNCH_NODE_OPTIONS="${NODE_OPTIONS-}"
     import_entry="$entry"
