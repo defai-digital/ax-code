@@ -1,5 +1,6 @@
 import { toErrorMessage } from "./error-message"
 import { Process } from "./process"
+import { sleep } from "./timeout"
 
 export interface GitResult {
   exitCode: number
@@ -13,8 +14,6 @@ export interface GitResult {
 // aborted before doing work. Concurrent worktree operations (e.g. removing one
 // worktree while another's bootstrap runs `git worktree add`) hit these.
 const LOCK_CONTENTION = /(index\.lock|\.lock': File exists|cannot lock ref|another git process|Unable to create)/i
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
  * Run a git command.

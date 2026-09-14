@@ -1,4 +1,5 @@
 import { inheritTaskPermissionDenials, taskParentConstraints } from "./task-constraints"
+import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task.txt"
 import z from "zod"
@@ -51,39 +52,6 @@ async function fireSubagentStop(input: { sessionID: string; agent: string; statu
   } catch (error) {
     log.warn("SubagentStop lifecycle hooks failed", { sessionID: input.sessionID, error })
   }
-}
-
-function assistantError(result: Awaited<ReturnType<typeof SessionPrompt.prompt>>) {
-  if (result.info.role !== "assistant") return undefined
-  return result.info.error
-}
-
-function assistantErrorMessage(error: NonNullable<MessageV2.Assistant["error"]>) {
-  const data = error.data as { message?: unknown } | undefined
-  return typeof data?.message === "string" ? data.message : error.name
-}
-
-function errorDetails(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name || "Error",
-      message: error.message || error.name || "Unknown error",
-    }
-  }
-  if (typeof error === "string") {
-    return {
-      name: "Error",
-      message: error,
-    }
-  }
-  return {
-    name: "Error",
-    message: "Unknown error",
-  }
-}
-
-function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === "AbortError"
 }
 
 function needsRecoveredResultReview(text: string) {

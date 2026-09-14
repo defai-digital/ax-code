@@ -1,4 +1,5 @@
 import { taskParentConstraints } from "./task-constraints"
+import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task_parallel.txt"
 import z from "zod"
@@ -24,33 +25,6 @@ const MAX_PARALLEL = 8
 const SUBAGENT_TIMEOUT_MS = 10 * 60 * 1000
 const SUBAGENT_FINALIZE_TIMEOUT_MS = 2 * 60 * 1000
 const log = Log.create({ service: "task-parallel-tool" })
-
-function assistantError(result: Awaited<ReturnType<typeof SessionPrompt.prompt>>) {
-  if (result.info.role !== "assistant") return undefined
-  return result.info.error
-}
-
-function assistantErrorMessage(error: NonNullable<MessageV2.Assistant["error"]>) {
-  const data = error.data as { message?: unknown } | undefined
-  return typeof data?.message === "string" ? data.message : error.name
-}
-
-function errorDetails(error: unknown) {
-  if (error instanceof Error) {
-    return {
-      name: error.name || "Error",
-      message: error.message || error.name || "Unknown error",
-    }
-  }
-  if (typeof error === "string") {
-    return { name: "Error", message: error }
-  }
-  return { name: "Error", message: "Unknown error" }
-}
-
-function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === "AbortError"
-}
 
 /** Latest user text in the transcript (for ensemble vs digs routing). */
 function lastUserText(messages: MessageV2.WithParts[]): string {
