@@ -14,59 +14,77 @@ function runProbe(command, args, options = {}, timeoutMs = 60000) {
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     })
-    let stdout = "",
-      stderr = "",
-      bytes = 0,
-      failure
-    const stop = (error) => {
-      if (failure) return
-      failure = error
-      if (!child.pid) return
-      if (process.platform === "win32") {
-        spawnSync("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
-          windowsHide: true,
-          timeout: 10000,
-          stdio: "ignore",
+    const stdout = [],
+      stderr = []
+    let bytes = 0,
+      failure,
+      settled = false,
+      cleanupTimer
+    const finish = (status, signal) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      clearTimeout(cleanupTimer)
+      child.stdout.destroy()
+      child.stderr.destroy()
+      if (failure) {
+        child.unref()
+        reject(failure)
+      } else
+        resolve({
+          status,
+          signal,
+          stdout: Buffer.concat(stdout).toString("utf8"),
+          stderr: Buffer.concat(stderr).toString("utf8"),
         })
-      } else {
-        try {
-          process.kill(-child.pid, "SIGKILL")
-        } catch (cause) {
-          if (cause.code !== "ESRCH") failure = new AggregateError([error, cause], "Probe process cleanup failed")
-        }
+    }
+    const stop = (error) => {
+      if (failure || settled) return
+      failure = error
+      clearTimeout(timer)
+      if (!child.pid) {
+        finish()
+        return
       }
-      child.kill("SIGKILL")
+      // Closing inherited pipes is independently bounded even if an escaped
+      // descendant survives the group kill or Windows tree termination fails.
+      cleanupTimer = setTimeout(() => finish(), 2000)
+      try {
+        if (process.platform === "win32") {
+          const killed = spawnSync("taskkill.exe", ["/pid", String(child.pid), "/t", "/f"], {
+            windowsHide: true,
+            timeout: 10000,
+            stdio: "ignore",
+          })
+          if (killed.status !== 0)
+            failure = new Error(`${error.message}; taskkill failed (${killed.status ?? killed.error?.message})`, {
+              cause: error,
+            })
+        } else {
+          try {
+            process.kill(-child.pid, "SIGKILL")
+          } catch (cause) {
+            if (cause.code !== "ESRCH") throw cause
+          }
+        }
+        child.kill("SIGKILL")
+      } catch (cause) {
+        failure = new Error(`${error.message}; process cleanup failed: ${cause.message}`, { cause: error })
+      }
     }
     const timer = setTimeout(() => stop(new Error("Native TypeScript probe timed out")), timeoutMs)
-    for (const [stream, append] of [
-      [
-        child.stdout,
-        (chunk) => {
-          stdout += chunk
-        },
-      ],
-      [
-        child.stderr,
-        (chunk) => {
-          stderr += chunk
-        },
-      ],
+    for (const [stream, chunks] of [
+      [child.stdout, stdout],
+      [child.stderr, stderr],
     ]) {
-      stream.setEncoding("utf8")
       stream.on("data", (chunk) => {
-        bytes += Buffer.byteLength(chunk)
+        bytes += chunk.length
         if (bytes > 4 * 1024 * 1024) stop(new Error("Native TypeScript probe exceeded its output limit"))
-        else append(chunk)
+        else chunks.push(chunk)
       })
     }
-    child.on("error", (error) => {
-      failure ??= error
-    })
-    child.on("close", (status, signal) => {
-      clearTimeout(timer)
-      if (failure) reject(failure)
-      else resolve({ status, signal, stdout, stderr })
-    })
+    child.on("error", stop)
+    child.on("close", finish)
   })
 }
 

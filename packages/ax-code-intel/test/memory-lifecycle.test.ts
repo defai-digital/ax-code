@@ -1,7 +1,8 @@
 import { test, expect, vi } from "vitest"
 import fs from "node:fs/promises"
+import path from "node:path"
 import { spawn } from "node:child_process"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { Instance, tmpdir } from "./harness"
 import { LSPClient } from "../src/client"
 import { LSPServerConfig } from "../src/server-config"
@@ -56,16 +57,16 @@ test.each([
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await LSP.prewarmFiles([`${tmp.path}/source.ts`])
+        const source = path.join(tmp.path, "source.ts")
+        await LSP.prewarmFiles([source])
         expect(clients).toHaveLength(1)
         expect(await LSP.status()).toHaveLength(1)
         // An empty warmed server can be reclaimed without losing coverage.
-        const source = `${tmp.path}/source.ts`
         await fs.writeFile(source, "export const value = 1\n")
         if (opened === true) await clients[0].notify.open({ path: source })
         if (opened === "push")
           await clients[0].connection.sendRequest("test/publishDiagnostics", {
-            uri: new URL(`file://${source}`).href,
+            uri: pathToFileURL(source).href,
             diagnostics: [],
           })
         const release = clients[0].activity.retain()
@@ -87,7 +88,7 @@ test.each([
         else expect(await LSP.diagnostics()).toEqual({})
         expect((await LSP.diagnosticsAggregated()).degraded).toBe(Boolean(opened))
         clock.mockRestore()
-        await LSP.prewarmFiles([`${tmp.path}/source.ts`])
+        await LSP.prewarmFiles([source])
         expect(clients).toHaveLength(2)
         if (opened) await expect(LSP.diagnostics()).rejects.toThrow("incomplete")
         else expect(await LSP.diagnostics()).toEqual({})
@@ -95,7 +96,7 @@ test.each([
         expect((await LSP.diagnosticsAggregated()).degraded).toBe(Boolean(opened))
         await clients[1].notify.open({ path: source })
         await clients[1].connection.sendRequest("test/publishDiagnostics", {
-          uri: new URL(`file://${source}`).href,
+          uri: pathToFileURL(source).href,
           diagnostics: [],
         })
         expect(await LSP.diagnostics()).toEqual({ [source]: [] })

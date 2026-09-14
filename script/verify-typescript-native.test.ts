@@ -61,3 +61,32 @@ test("native qualification timeout terminates the owned descendant", async () =>
     await fs.rm(directory, { recursive: true, force: true })
   }
 }, 15000)
+
+test("native qualification deadline survives a descendant retaining inherited pipes", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-probe-pipes-"))
+  const pidFile = path.join(directory, "child.pid")
+  let guard: ReturnType<typeof setTimeout> | undefined
+  try {
+    const program =
+      'const child = require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {detached: true, stdio: ["ignore", process.stdout, process.stderr]}); require("node:fs").writeFileSync(process.env.PROBE_CHILD_PID_FILE, String(child.pid)); setInterval(() => {}, 1000)'
+    const probe = runProbe(
+      process.execPath,
+      ["-e", program],
+      { env: { ...process.env, PROBE_CHILD_PID_FILE: pidFile } },
+      3000,
+    )
+    const deadline = new Promise((_, reject) => {
+      guard = setTimeout(() => reject(new Error("Probe did not settle after cleanup deadline")), 9000)
+    })
+    await expect(Promise.race([probe, deadline])).rejects.toThrow("timed out")
+  } finally {
+    clearTimeout(guard)
+    const pid = Number(await fs.readFile(pidFile, "utf8").catch(() => ""))
+    if (Number.isSafeInteger(pid) && pid > 0) {
+      try {
+        process.kill(pid, "SIGKILL")
+      } catch {}
+    }
+    await fs.rm(directory, { recursive: true, force: true })
+  }
+}, 15000)
