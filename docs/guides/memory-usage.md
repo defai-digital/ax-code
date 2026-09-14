@@ -1,5 +1,13 @@
 # Memory usage
 
+Status: Current
+
+Scope: current-state
+
+Last reviewed: 2026-09-13
+
+Owner: ax-code runtime
+
 AX Code shares the machine with language servers, repository builds, browsers and any local model runtime. A TypeScript server or Rust analyzer can use more memory than the AX Code backend itself. Those processes provide code analysis; they are not voice services. Summing process RSS can count shared pages more than once.
 
 ## Profiles

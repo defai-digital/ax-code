@@ -277,7 +277,11 @@ export function createHubCatalogStore(input: {
       model = await fetchModel(id, signal)
     }
     const decision = evaluateHubModel(model, catalog)
-    const definition = hubModelDefinition(model, decision)
+    // Offline status and cleanup must continue to understand pinned historical
+    // records even after model policy excludes them from new activation.
+    const definition =
+      hubModelDefinition(model, decision) ??
+      (options.offline ? hubModelDefinition(model, { ...decision, policy: "eligible" }) : undefined)
     if (!definition)
       throw new AxEngineCatalogError({ message: `${AX_ENGINE_ERROR.ModelUnsupported}: ${decision.reason}` })
     options.signal?.throwIfAborted()
