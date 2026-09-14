@@ -813,7 +813,11 @@ describe("reverse exit rain", () => {
     expect(readFileSync(path.join(import.meta.dirname, dir, "component/prompt/index.tsx"), "utf8")).toContain(
       "exit.flourish",
     )
-    expect(readFileSync(path.join(import.meta.dirname, dir, "app-commands.ts"), "utf8")).toContain("exit.flourish")
+    const commands = readFileSync(path.join(import.meta.dirname, dir, "app-commands.ts"), "utf8")
+    expect(commands).toContain("exit.flourish")
+    // `/exit` is offered in the slash menu, not merely callable blind.
+    expect(commands).toMatch(/name: "exit",\s*aliases: \["quit", "q"\],\s*\},/)
+    expect(commands).not.toMatch(/name: "exit",\s*aliases: \[[^\]]*\],\s*hidden: true/)
   })
 
   test("the palette previews the reverse rain alongside the rain", () => {

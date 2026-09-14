@@ -565,7 +565,6 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       slash: {
         name: "exit",
         aliases: ["quit", "q"],
-        hidden: true,
       },
       onSelect: () => {
         // An explicit quit plays the app-registered flourish (the reverse
