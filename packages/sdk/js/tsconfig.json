@@ -8,7 +8,8 @@
     "moduleResolution": "nodenext",
     "lib": ["es2022", "dom", "dom.iterable"],
     "composite": true,
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["node"]
   },
   "include": ["src"]
 }

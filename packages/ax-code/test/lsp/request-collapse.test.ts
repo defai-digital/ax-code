@@ -43,7 +43,7 @@ describe("Request collapse (§S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: false } as never)
 
         const [a, b, c] = await Promise.all([
           LSP.referencesEnvelope({ file, line: 0, character: 0 }),
@@ -73,7 +73,7 @@ describe("Request collapse (§S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: false } as never)
 
         // They'll happen to equal structurally (both empty) — the
         // point is the dedup path does NOT fire for different keys,
@@ -97,7 +97,7 @@ describe("Request collapse (§S1)", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: false } as never)
 
         await Promise.all([
           LSP.referencesEnvelope({ file, line: 0, character: 0 }),

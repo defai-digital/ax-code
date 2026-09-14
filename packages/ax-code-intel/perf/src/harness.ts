@@ -1,3 +1,4 @@
+import { resolveNativeTypescript } from "../../src/typescript-native"
 // Perf baseline harness for @ax-code/ax-code-intel (PRD Phase 0).
 //
 //   pnpm run perf:intel          # all scenarios, smoke profile, synthetic fixtures
@@ -126,7 +127,7 @@ function parseArgs(argv: string[]): Cli {
 // The harness measures these three servers — the three languages the PRD
 // scopes Phase 0 to. Keyed by the serverId recorded in the fixture manifest.
 const SERVER_DEFS: Record<string, { server: LSPServer.Info; language: "ts" | "py" | "rust"; binary: string }> = {
-  typescript: { server: LSPServer.Typescript, language: "ts", binary: "typescript-language-server" },
+  typescript: { server: LSPServer.Typescript, language: "ts", binary: "typescript-native" },
   pyright: { server: LSPServer.Pyright, language: "py", binary: "pyright-langserver" },
   rust: { server: LSPServer.RustAnalyzer, language: "rust", binary: "rust-analyzer" },
 }
@@ -138,7 +139,8 @@ const SERVER_DEFS: Record<string, { server: LSPServer.Info; language: "ts" | "py
 // exactly what the harness needs — the server spawns and answers initialize
 // in the materialized workdir.
 async function versionLabel(binary: string): Promise<string | undefined> {
-  const resolved = which.sync(binary, { nothrow: true })
+  const resolved =
+    binary === "typescript-native" ? resolveNativeTypescript().executable : which.sync(binary, { nothrow: true })
   if (!resolved) return undefined
   try {
     const { stdout } = await execFileAsync(resolved, ["--version"], { timeout: 5_000 })

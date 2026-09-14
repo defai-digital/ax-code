@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "types": ["node"],
     // Environment setup & latest features
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "target": "ESNext",

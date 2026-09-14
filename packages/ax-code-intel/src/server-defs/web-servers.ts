@@ -1,3 +1,4 @@
+import { resolveNativeTypescript } from "../typescript-native"
 import { codeIntelHost } from "../host"
 import { JS_LOCKFILE_ROOT_MARKERS } from "./shared"
 import path from "path"
@@ -11,7 +12,6 @@ import {
   nodeModuleScript,
   pathExists,
   resolveTypescriptSdk,
-  resolveTypescriptServer,
   spawnInfo,
 } from "../server-helpers"
 import { PINNED_DIRECT_LSP_RELEASES, installReleaseBin, managedToolDir, managedToolPath } from "../server-releases"
@@ -64,14 +64,9 @@ export const Typescript: Info = {
   root: NearestRoot([...JS_LOCKFILE_ROOT_MARKERS], ["deno.json", "deno.jsonc"]),
   extensions: JS_PROJECT_EXTENSIONS,
   async spawn(root) {
-    const tsserver = resolveTypescriptServer()
-    log.info("typescript server", { tsserver })
-    if (!tsserver) return
-    return toolSpawnInfo(root, "typescript-language-server", ["--stdio"], {
-      tsserver: {
-        path: tsserver,
-      },
-    })
+    const native = resolveNativeTypescript()
+    log.info("native typescript server", { version: native.version, executable: native.executable })
+    return spawnInfo(native.executable, root, ["--lsp", "--stdio"])
   },
 }
 

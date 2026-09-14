@@ -14,8 +14,8 @@
   },
   "scripts": {
     "preinstall": "npx only-allow pnpm",
-    "dev": "node node_modules/typescript/bin/tsc -p packages/sdk/js/tsconfig.json && pnpm --dir packages/ax-code exec node ../../script/node-ffi-runner.mjs --optional-env-file=../../.env --import tsx --import ../../script/solid-loader.mjs --conditions=node ./src/index-node-tui.ts",
-    "cli": "node node_modules/typescript/bin/tsc -p packages/sdk/js/tsconfig.json && pnpm --dir packages/ax-code exec node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node ./src/index-node-tui.ts",
+    "dev": "node node_modules/@typescript/native/bin/tsc -p packages/sdk/js/tsconfig.json && pnpm --dir packages/ax-code exec node ../../script/node-ffi-runner.mjs --optional-env-file=../../.env --import tsx --import ../../script/solid-loader.mjs --conditions=node ./src/index-node-tui.ts",
+    "cli": "node node_modules/@typescript/native/bin/tsc -p packages/sdk/js/tsconfig.json && pnpm --dir packages/ax-code exec node ../../script/node-ffi-runner.mjs --import tsx --import ../../script/solid-loader.mjs --conditions=node ./src/index-node-tui.ts",
     "setup:cli": "tsx script/setup-cli.ts",
     "check:structure": "tsx script/structure.ts",
     "check:shared-helpers": "tsx script/check-shared-helpers.ts",
@@ -43,12 +43,12 @@
   "devDependencies": {
     "@actions/artifact": "5.0.1",
     "@types/node": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "husky": "9.1.7",
     "prettier": "3.6.2",
     "tsx": "^4.22.4",
     "turbo": "2.9.14",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@typescript/native": "catalog:"
   },
   "dependencies": {
     "@ax-code/plugin": "workspace:*",

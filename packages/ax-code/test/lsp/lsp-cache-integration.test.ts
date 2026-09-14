@@ -56,7 +56,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(false)
-        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: false } as never)
 
         const envelope = await LSP.referencesEnvelope({ file, line: 0, character: 0 })
         // No server matches → empty envelope regardless of cache.
@@ -86,7 +86,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(true)
-        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: false } as never)
 
         const envelope = await LSP.referencesEnvelope({ file, line: 0, character: 0 })
         // No server → empty → must not be written to cache (see cacheWrite guard).
@@ -116,7 +116,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(true)
-        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: false } as never)
 
         const contentHash = await LSPCache.hashFile(file)
         expect(contentHash).toBeDefined()
@@ -163,7 +163,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(false)
-        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: false } as never)
 
         const contentHash = await LSPCache.hashFile(file)
         expect(contentHash).toBeDefined()
@@ -212,7 +212,7 @@ describe("LSP cache integration", () => {
       directory: tmp.path,
       fn: async () => {
         setCacheFlag(true)
-        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: {} } as never)
+        configSpy = vi.spyOn(Config, "get").mockResolvedValue({ lsp: false } as never)
 
         // Seed with a *different* content hash than the file currently
         // has. The production lookup will compute the real hash and miss.

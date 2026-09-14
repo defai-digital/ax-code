@@ -35,7 +35,7 @@
     "./log": "./src/log.ts"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -50,8 +50,8 @@
   "devDependencies": {
     "@types/cross-spawn": "6.0.6",
     "@types/node": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@typescript/native": "catalog:"
   }
 }

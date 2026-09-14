@@ -4,8 +4,13 @@ import { InternalBus } from "./internal/events"
 import path from "path"
 import { pathToFileURL, fileURLToPath } from "url"
 import { createHash, randomUUID } from "node:crypto"
-import { createMessageConnection, StreamMessageReader, StreamMessageWriter } from "vscode-jsonrpc/node"
-import type { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types"
+import {
+  CancellationTokenSource,
+  createMessageConnection,
+  StreamMessageReader,
+  StreamMessageWriter,
+} from "vscode-jsonrpc/node"
+import { Diagnostic as VSCodeDiagnostic } from "vscode-languageserver-types"
 import { diffLines } from "diff"
 import { Log } from "./internal/log"
 import { LANGUAGE_EXTENSIONS } from "./language"
@@ -354,8 +359,10 @@ export namespace LSPClient {
       diagnostics.set(filePath, diags)
     }
 
+    let pullsDiagnostics = false
     connection.onNotification("textDocument/publishDiagnostics", (params) => {
       activity.touch()
+      if (pullsDiagnostics) return
       const filePath = diagnosticPathFromUri(params.uri)
       if (!filePath) {
         l.debug("skipping diagnostics for non-file URI", { uri: params.uri })
@@ -397,7 +404,7 @@ export namespace LSPClient {
     const initializeResult = await withTimeout(
       connection.sendRequest("initialize", {
         rootUri: pathToFileURL(input.root).href,
-        processId: input.server.process.pid,
+        processId: process.pid,
         workspaceFolders: [
           {
             name: "workspace",
@@ -413,6 +420,7 @@ export namespace LSPClient {
           },
           workspace: {
             configuration: true,
+            ...(input.serverID === "typescript" ? { diagnostics: { refreshSupport: true } } : {}),
             symbol: {
               resolveSupport: {
                 properties: ["location.range"],
@@ -427,6 +435,9 @@ export namespace LSPClient {
             },
           },
           textDocument: {
+            ...(input.serverID === "typescript"
+              ? { diagnostic: { dynamicRegistration: false, relatedDocumentSupport: false } }
+              : {}),
             synchronization: {
               dynamicRegistration: false,
               willSave: false,
@@ -451,6 +462,10 @@ export namespace LSPClient {
     })
 
     const runtimeCapabilityHints = capabilityHintsFromInitialize(initializeResult?.capabilities)
+    pullsDiagnostics =
+      input.serverID === "typescript" && capabilityEnabled(initializeResult?.capabilities?.diagnosticProvider)
+    const staleDiagnostics = new Set<string>()
+    let diagnosticGeneration = 0
     // Negotiated document sync mode. Ranged (incremental) didChange payloads
     // are only protocol-legal when this is TextDocumentSyncKind.Incremental.
     const documentSync = textDocumentSyncSettings(initializeResult?.capabilities)
@@ -473,14 +488,108 @@ export namespace LSPClient {
     // owns waiter cleanup and timeout handling; the client-scoped prefix
     // keeps unrelated LSP clients from serializing each other.
     const pathLockPrefix = `lsp-client:${input.serverID}:${input.root}:${randomUUID()}`
-    async function withPathLock<T>(filepath: string, fn: () => Promise<T>): Promise<T> {
+    function normalizeDocumentPath(filePath: string) {
+      return Filesystem.normalizePath(
+        path.isAbsolute(filePath) ? filePath : path.resolve(codeIntelHost().projectRoot(), filePath),
+      )
+    }
+    async function withPathLock<T>(filepath: string, fn: () => Promise<T>, deadline?: number): Promise<T> {
       return activity.run(async () => {
-        using _lock = await Lock.write(`${pathLockPrefix}:${filepath}`, { timeoutMs: 60_000 })
+        const remaining = deadline === undefined ? 60_000 : deadline - Date.now()
+        if (remaining <= 0) throw new Error("Native diagnostic inventory is incomplete; collection deadline expired")
+        using _lock = await Lock.write(`${pathLockPrefix}:${filepath}`, { timeoutMs: remaining })
+        if (deadline !== undefined && Date.now() >= deadline) {
+          throw new Error("Native diagnostic inventory is incomplete; collection deadline expired")
+        }
         return await fn()
       })
     }
 
     const lastContent = new ContentCache(sourceCacheBytes())
+    const diagnosticTargets = new Set<string>()
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined
+    let refreshRunning = false
+    let refreshAgain = false
+    function scheduleDiagnosticRefresh() {
+      if (closing || refreshTimer) return
+      refreshTimer = setTimeout(() => {
+        refreshTimer = undefined
+        if (refreshRunning) {
+          refreshAgain = true
+          return
+        }
+        refreshRunning = true
+        void (async () => {
+          for (const filePath of [...diagnosticTargets]) {
+            if (closing) break
+            if (files[filePath] === undefined || !staleDiagnostics.has(filePath)) continue
+            await withPathLock(filePath, () => refreshDiagnostics(filePath))
+          }
+        })()
+          .catch((error) => l.warn("diagnostic refresh failed", { error }))
+          .finally(() => {
+            refreshRunning = false
+            if (refreshAgain) {
+              refreshAgain = false
+              scheduleDiagnosticRefresh()
+            }
+          })
+      }, 50)
+      refreshTimer.unref?.()
+    }
+    // TypeScript diagnostics depend on other files. Invalidate the inventory
+    // on document and server refresh events; callers explicitly pull what
+    // they need. Never report an in-flight or stale inventory as complete.
+    function invalidateDiagnostics() {
+      if (!pullsDiagnostics) return
+      diagnosticGeneration++
+      for (const filePath of Object.keys(files)) staleDiagnostics.add(filePath)
+      diagnostics.clear()
+      scheduleDiagnosticRefresh()
+    }
+    if (pullsDiagnostics) {
+      connection.onRequest("workspace/diagnostic/refresh", () => {
+        invalidateDiagnostics()
+        return null
+      })
+    }
+    async function refreshDiagnostics(filePath: string, timeoutMs = 15_000) {
+      if (!pullsDiagnostics || files[filePath] === undefined) return
+      diagnosticTargets.delete(filePath)
+      diagnosticTargets.add(filePath)
+      if (diagnosticTargets.size > MAX_CACHED_DIAGNOSTICS) {
+        diagnosticTargets.delete(diagnosticTargets.values().next().value!)
+      }
+      staleDiagnostics.add(filePath)
+      diagnostics.delete(filePath)
+      const generation = diagnosticGeneration
+      const cancellation = new CancellationTokenSource()
+      try {
+        const report = await withTimeout(
+          connection.sendRequest<{ kind: string; items?: Diagnostic[] }>(
+            "textDocument/diagnostic",
+            { textDocument: { uri: pathToFileURL(filePath).href } },
+            cancellation.token,
+          ),
+          timeoutMs,
+        )
+        // We send no previousResultId, so an unchanged report is invalid.
+        if (report.kind !== "full" || !Array.isArray(report.items) || !report.items.every(VSCodeDiagnostic.is)) {
+          throw new Error("Expected a full LSP diagnostic report")
+        }
+        if (closing || generation !== diagnosticGeneration || files[filePath] === undefined) return
+        setDiagnostics(filePath, report.items)
+        staleDiagnostics.delete(filePath)
+        const payload = { path: filePath, serverID: input.serverID }
+        InternalBus.publish(Event.Diagnostics.type, payload)
+        codeIntelHost().publishClientDiagnostics(payload)
+      } catch (error) {
+        if (!closing) cancellation.cancel()
+        l.warn("pull diagnostics failed", { path: filePath, error })
+      } finally {
+        cancellation.dispose()
+      }
+    }
     function setLastContent(filePath: string, text: string) {
       lastContent.set(filePath, text)
     }
@@ -577,6 +686,9 @@ export namespace LSPClient {
           })
       }
       delete files[normalized]
+      diagnosticTargets.delete(normalized)
+      invalidateDiagnostics()
+      staleDiagnostics.delete(normalized)
       lastContent.delete(normalized)
       diagnostics.delete(normalized)
       return true
@@ -614,9 +726,7 @@ export namespace LSPClient {
       },
       notify: {
         async open(input: { path: string; waitForDiagnostics?: boolean }) {
-          const normalized = path.isAbsolute(input.path)
-            ? input.path
-            : path.resolve(codeIntelHost().projectRoot(), input.path)
+          const normalized = normalizeDocumentPath(input.path)
           // Serialize per-path. Concurrent opens for the same file would
           // otherwise race on the `files[path]` read-modify-write and
           // send duplicate didChange notifications with the same version
@@ -650,6 +760,7 @@ export namespace LSPClient {
                   path: normalized,
                   version,
                 })
+                if (input.waitForDiagnostics) await refreshDiagnostics(normalized)
                 return false
               }
 
@@ -664,12 +775,13 @@ export namespace LSPClient {
               })
               const sendsTextDocumentNotification = documentSync.change !== 0 || documentSync.save.enabled
               const wait =
-                input.waitForDiagnostics && sendsTextDocumentNotification
+                input.waitForDiagnostics && !pullsDiagnostics && sendsTextDocumentNotification
                   ? diagnosticsWait({ path: normalized })
                   : undefined
 
               const next = version + 1
               files[normalized] = next
+              invalidateDiagnostics()
               noteWorkspaceChange()
 
               try {
@@ -729,6 +841,7 @@ export namespace LSPClient {
               }
               wait?.start()
               setLastContent(normalized, text)
+              if (input.waitForDiagnostics) await refreshDiagnostics(normalized)
               await wait?.promise
               return true
             }
@@ -743,7 +856,9 @@ export namespace LSPClient {
               ],
             })
             const wait =
-              input.waitForDiagnostics && documentSync.openClose ? diagnosticsWait({ path: normalized }) : undefined
+              input.waitForDiagnostics && !pullsDiagnostics && documentSync.openClose
+                ? diagnosticsWait({ path: normalized })
+                : undefined
 
             diagnostics.delete(normalized)
             if (documentSync.openClose) {
@@ -764,25 +879,54 @@ export namespace LSPClient {
             }
             wait?.start()
             files[normalized] = 0
+            invalidateDiagnostics()
             setLastContent(normalized, text)
+            if (input.waitForDiagnostics) await refreshDiagnostics(normalized)
             await wait?.promise
             return true
           })
         },
         async close(input: { path: string; deleted?: boolean }) {
-          const normalized = path.isAbsolute(input.path)
-            ? input.path
-            : path.resolve(codeIntelHost().projectRoot(), input.path)
+          const normalized = normalizeDocumentPath(input.path)
           return withPathLock(normalized, () => closeUnlocked({ path: normalized, deleted: input.deleted }))
         },
       },
       get diagnostics() {
         return diagnostics
       },
+      get diagnosticsDegraded() {
+        return staleDiagnostics.size > 0
+      },
+      diagnosticsStale(filePath: string) {
+        return staleDiagnostics.has(normalizeDocumentPath(filePath))
+      },
+      async refreshDiagnosticInventory() {
+        if (!pullsDiagnostics) return
+        if (Object.keys(files).length > MAX_CACHED_DIAGNOSTICS)
+          throw new Error("Native diagnostic inventory exceeds the collection limit")
+        const deadline = Date.now() + 15_000
+        // didChange, didSave, and watched-file events can produce separate
+        // refresh requests. Let that burst settle, then retry a bounded number
+        // of snapshots instead of presenting the transient empty inventory.
+        for (let pass = 0; pass < 3 && !closing && Date.now() < deadline; pass++) {
+          if (staleDiagnostics.size === 0) return
+          await new Promise<void>((resolve) => setTimeout(resolve, Math.min(50, deadline - Date.now())))
+          for (const filePath of Object.keys(files)) {
+            if (!staleDiagnostics.has(filePath)) continue
+            if (closing || Date.now() >= deadline) break
+            await withPathLock(
+              filePath,
+              () => refreshDiagnostics(filePath, Math.max(1, deadline - Date.now())),
+              deadline,
+            )
+          }
+          if (staleDiagnostics.size === 0 && !closing) return
+        }
+        throw new Error("Native diagnostic inventory is incomplete; retry after the workspace settles")
+      },
       async waitForDiagnostics(input: { path: string }) {
-        const normalizedPath = Filesystem.normalizePath(
-          path.isAbsolute(input.path) ? input.path : path.resolve(codeIntelHost().projectRoot(), input.path),
-        )
+        const normalizedPath = normalizeDocumentPath(input.path)
+        if (pullsDiagnostics) return withPathLock(normalizedPath, () => refreshDiagnostics(normalizedPath))
         return await activity.run(() => diagnosticsWaitStarted({ path: normalizedPath }))
       },
       // Liveness check. Uses signal 0 (kill -0), which doesn't actually
@@ -806,6 +950,8 @@ export namespace LSPClient {
       async shutdown() {
         l.info("shutting down")
         closing = true
+        if (refreshTimer) clearTimeout(refreshTimer)
+        diagnosticTargets.clear()
         lastContent.clear()
         diagnostics.clear()
         // Wrap end() and dispose() so a broken-stream throw from

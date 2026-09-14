@@ -39,6 +39,7 @@ export function spawn(cmd: string, argsOrOpts?: string[] | SpawnOptions, opts?: 
 
   if (!proc.stdin || !proc.stdout || !proc.stderr) throw new Error("Process output not available")
   if (onStderr) proc.stderr.on("data", onStderr)
+  else proc.stderr.resume() // Unread stderr can block the next RPC response.
 
   liveChildren.add(proc)
   proc.once("close", () => {

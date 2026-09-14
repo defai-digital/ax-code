@@ -13,6 +13,7 @@ import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { unixNodeLauncherScript, windowsNodeLauncherScript } from "./node-launcher"
 import { copyTuiDistPackage, toTuiDistPackageJson, withoutTuiTransformDependencies } from "./tui-dist"
 import pkg from "../package.json"
+import { resolveNativeTypescript } from "../../ax-code-intel/src/typescript-native"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
 // src/index-node-tui.ts (boot.ts) with esbuild + the AX Code TUI Solid JSX plugin.
@@ -333,6 +334,7 @@ const resolveTuiCatalogVersion = (name: string) => {
   return installed.version
 }
 const distDeps: Record<string, string> = {
+  "@typescript/native": `npm:typescript@${resolveNativeTypescript().version}`,
   ...collectPackageRuntimeDependencies(
     [
       {
@@ -360,11 +362,27 @@ await writeText(
 console.log("Installing runtime dependencies (node-pty, tree-sitter) into the distribution...")
 const runNpm = (args: string[], env: NodeJS.ProcessEnv = process.env) =>
   spawnSync("npm", args, { cwd: outRoot, stdio: "inherit", shell: process.platform === "win32", env })
-const install = runNpm(["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund"])
+const install = runNpm(["install", "--omit=dev", "--ignore-scripts", "--no-audit", "--no-fund", `--cpu=${arch}`])
 if (install.status !== 0) {
   console.error("npm install for the distribution failed")
   if (install.error) console.error(install.error)
   process.exit(1)
+}
+
+// Verify native delivery before publishing the distribution.
+const nativeTypescript = resolveNativeTypescript({
+  packageJsonPath: path.join(outRoot, "node_modules", "@typescript", "native", "package.json"),
+  arch,
+})
+const stagedNativePath = path.relative(fs.realpathSync(outRoot), fs.realpathSync(nativeTypescript.executable))
+if (stagedNativePath.startsWith(`..${path.sep}`) || path.isAbsolute(stagedNativePath)) {
+  throw new Error("Native TypeScript resolved outside the staged distribution")
+}
+if (arch === process.arch) {
+  const check = spawnSync(nativeTypescript.executable, ["--version"], { encoding: "utf8" })
+  if (check.status !== 0 || check.stdout.trim() !== `Version ${nativeTypescript.version}`) {
+    throw new Error("Staged TypeScript native compiler failed version verification")
+  }
 }
 
 // Re-apply pnpm patches to the freshly npm-installed dist deps. The install
@@ -543,7 +561,7 @@ if (release) {
 // releases already ship with their own Developer ID signature, and local Node
 // builds may require entitlements we should not overwrite.
 if (process.platform === "darwin") {
-  const nativeLibs: string[] = []
+  const nativeLibs: string[] = [nativeTypescript.executable]
   const walk = (root: string) => {
     if (!fs.existsSync(root)) return
     for (const entry of fs.readdirSync(root, { withFileTypes: true })) {

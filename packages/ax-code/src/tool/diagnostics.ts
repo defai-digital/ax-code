@@ -42,7 +42,17 @@ export async function collectDiagnostics(files: string[], options?: { includePro
       error: result.reason,
     })
   }
-  const diagnostics = await LSP.diagnostics()
+  let diagnostics: Awaited<ReturnType<typeof LSP.diagnostics>>
+  try {
+    diagnostics = await LSP.diagnostics()
+  } catch (error) {
+    log.warn("LSP diagnostics are incomplete", { error })
+    return {
+      diagnostics: {},
+      output:
+        "\n\nLSP diagnostics are incomplete or unavailable. File changes were saved, but absence of reported errors does not confirm a clean type check.",
+    }
+  }
 
   // DRE integration: run correlation and prewarming when the flag is on.
   // Both are best-effort — failures are logged but never block the tool.

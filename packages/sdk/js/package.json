@@ -9,7 +9,7 @@
     "node": ">=26"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "validate:openapi": "tsx ./script/validate-openapi.ts",
     "build": "tsx ./script/build.ts",
     "test": "vitest run",
@@ -47,10 +47,10 @@
     "@hey-api/openapi-ts": "0.97.3",
     "@tsconfig/node24": "catalog:",
     "@types/node": "catalog:",
-    "@typescript/native-preview": "catalog:",
     "jsr": "catalog:",
     "tsx": "4.22.4",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@typescript/native": "catalog:"
   }
 }

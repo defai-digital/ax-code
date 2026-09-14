@@ -41,7 +41,7 @@
     "./log": "./src/log.ts"
   },
   "scripts": {
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
@@ -54,14 +54,14 @@
     "vscode-jsonrpc": "8.2.1",
     "vscode-languageserver-types": "3.17.5",
     "which": "6.0.1",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "@typescript/native": "catalog:"
   },
   "devDependencies": {
     "@types/cross-spawn": "6.0.6",
     "@types/mime-types": "catalog:",
     "@types/node": "catalog:",
     "@types/which": "3.0.4",
-    "@typescript/native-preview": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

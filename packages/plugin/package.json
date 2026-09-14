@@ -5,7 +5,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "tsc --noEmit",
     "build": "tsc",
     "test": "vitest run"
   },
@@ -42,7 +42,7 @@
     "@tsconfig/node24": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "@typescript/native-preview": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@typescript/native": "catalog:"
   }
 }
