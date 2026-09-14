@@ -109,83 +109,316 @@ export namespace GoalPlanBaseline {
   }
 }
 
-const COMMAND_SPLIT = /\s*(?:&&|\|\||;|\||&)\s*/
 const GIT_TOKENS = new Set(["git", "merge-base", "$GIT", "${GIT}"])
-const NESTED_SHELL = new Set(["sh", "bash", "zsh", "ksh", "dash", "eval"])
+const NESTED_SHELL = new Set(["sh", "bash", "zsh", "ksh", "dash"])
+const COMMAND_PREFIXES = new Set([
+  "!",
+  "if",
+  "then",
+  "else",
+  "elif",
+  "while",
+  "until",
+  "do",
+  "time",
+  "exec",
+  "command",
+  "builtin",
+])
 const MAX_NEST = 4
 
-function looksLikeGitCommand(command: string, depth = 0) {
-  return command.split(COMMAND_SPLIT).some((part) => isGitRevisionSegment(part, depth))
+function looksLikeGitCommand(command: string, depth = 0): boolean {
+  if (depth > MAX_NEST) return false
+  return shellSegments(command).some((segment) => segmentLooksLikeGit(segment, depth))
 }
 
-function isGitRevisionSegment(part: string, depth = 0): boolean {
-  const token = unwrapQuotes(firstCommandToken(part))
-  if (GIT_TOKENS.has(token)) return true
-  if (depth >= MAX_NEST || !NESTED_SHELL.has(token)) return false
-  return quotedPayloads(afterFirstToken(stripLeadingAssignments(part.trim()))).some((script) =>
-    looksLikeGitCommand(script, depth + 1),
-  )
+function segmentLooksLikeGit(segment: string, depth: number): boolean {
+  if (commandSubstitutions(segment).some((inner) => looksLikeGitCommand(inner, depth + 1))) return true
+  const cmd = commandWord(segment)
+  if (!cmd) return false
+  if (GIT_TOKENS.has(cmd.value)) return true
+  if (cmd.value === "eval") return looksLikeGitCommand(joinWords(cmd.rest), depth + 1)
+  if (!NESTED_SHELL.has(cmd.value)) return false
+  const script = dashCScript(cmd.rest)
+  return script !== undefined && looksLikeGitCommand(script, depth + 1)
 }
 
 function gitRevisionText(command: string, depth = 0): string {
   if (depth > MAX_NEST) return ""
-  return command
-    .split(COMMAND_SPLIT)
-    .flatMap((part) => revisionTextsForSegment(part, depth))
+  return shellSegments(command)
+    .flatMap((segment) => revisionTextsForSegment(segment, depth))
     .join(" ")
 }
 
-function revisionTextsForSegment(part: string, depth: number): string[] {
-  const token = unwrapQuotes(firstCommandToken(part))
-  if (GIT_TOKENS.has(token)) return [stripGitPathspec(part)]
-  if (depth >= MAX_NEST || !NESTED_SHELL.has(token)) return []
-  return quotedPayloads(afterFirstToken(stripLeadingAssignments(part.trim()))).map((script) =>
-    gitRevisionText(script, depth + 1),
-  )
-}
-
-function stripGitPathspec(part: string) {
-  if (!GIT_TOKENS.has(unwrapQuotes(firstCommandToken(part)))) return part
-  const cut = part.search(/\s--\s/)
-  return cut === -1 ? part : part.slice(0, cut)
-}
-
-function firstCommandToken(part: string) {
-  const rest = stripLeadingAssignments(part.trim())
-  return rest.match(/^('[^']*'|"[^"]*"|\S+)/)?.[0] ?? ""
-}
-
-function afterFirstToken(part: string) {
-  return part.replace(/^('[^']*'|"[^"]*"|\S+)\s*/, "")
-}
-
-function unwrapQuotes(token: string) {
-  if (
-    token.length >= 2 &&
-    ((token.startsWith("'") && token.endsWith("'")) || (token.startsWith('"') && token.endsWith('"')))
-  ) {
-    return token.slice(1, -1)
+function revisionTextsForSegment(segment: string, depth: number): string[] {
+  const out = commandSubstitutions(segment).map((inner) => gitRevisionText(inner, depth + 1))
+  const cmd = commandWord(segment)
+  if (!cmd) return out
+  if (GIT_TOKENS.has(cmd.value)) {
+    out.push(stripGitPathspec(segment))
+    return out
   }
-  return token
-}
-
-function stripLeadingAssignments(text: string) {
-  let rest = text
-  const assignment = /^[A-Za-z_][A-Za-z0-9_]*=(?:'[^']*'|"[^"]*"|\S+)\s+/
-  while (assignment.test(rest)) {
-    rest = rest.replace(assignment, "")
+  if (cmd.value === "eval") {
+    out.push(gitRevisionText(joinWords(cmd.rest), depth + 1))
+    return out
   }
-  return rest
+  if (NESTED_SHELL.has(cmd.value)) {
+    const script = dashCScript(cmd.rest)
+    if (script !== undefined) out.push(gitRevisionText(script, depth + 1))
+  }
+  return out
 }
 
-function quotedPayloads(text: string) {
+function stripGitPathspec(segment: string) {
+  const cmd = commandWord(segment)
+  if (!cmd || !GIT_TOKENS.has(cmd.value)) return segment
+  const cut = segment.search(/\s--\s/)
+  return cut === -1 ? segment : segment.slice(0, cut)
+}
+
+function commandWord(segment: string) {
+  const words = shellWords(segment)
+  let index = 0
+  while (index < words.length && (isAssignmentWord(words[index]!) || COMMAND_PREFIXES.has(words[index]!.value))) {
+    index++
+  }
+  const current = words[index]
+  if (!current) return undefined
+  return { value: current.value, rest: words.slice(index + 1) }
+}
+
+function dashCScript(args: ShellWord[]) {
+  for (let index = 0; index < args.length; index++) {
+    const value = args[index]!.value
+    if (value === "--") return undefined
+    if (value === "-c" || /^-[^-]*c$/.test(value)) {
+      let next = index + 1
+      if (args[next]?.value === "--") next++
+      return args[next]?.value
+    }
+    if (!value.startsWith("-")) return undefined
+  }
+  return undefined
+}
+
+function joinWords(words: ShellWord[]) {
+  return words.map((word) => word.value).join(" ")
+}
+
+function isAssignmentWord(word: ShellWord) {
+  return /^[A-Za-z_][A-Za-z0-9_]*=/.test(word.value)
+}
+
+type ShellWord = { value: string }
+
+function shellSegments(command: string) {
+  const segments: string[] = []
+  let start = 0
+  let quote: "none" | "single" | "double" = "none"
+  for (let index = 0; index < command.length; ) {
+    const char = command[index]!
+    if (quote === "single") {
+      if (char === "'") quote = "none"
+      index++
+      continue
+    }
+    if (quote === "double") {
+      if (char === "\\" && index + 1 < command.length) {
+        index += 2
+        continue
+      }
+      if (char === '"') quote = "none"
+      index++
+      continue
+    }
+    if (char === "'") {
+      quote = "single"
+      index++
+      continue
+    }
+    if (char === '"') {
+      quote = "double"
+      index++
+      continue
+    }
+    if (char === "\\" && index + 1 < command.length) {
+      index += 2
+      continue
+    }
+    if (command.startsWith("&&", index) || command.startsWith("||", index)) {
+      segments.push(command.slice(start, index))
+      index += 2
+      start = index
+      continue
+    }
+    if (char === ";" || char === "|" || char === "&") {
+      segments.push(command.slice(start, index))
+      index++
+      start = index
+      continue
+    }
+    index++
+  }
+  segments.push(command.slice(start))
+  return segments
+}
+
+function shellWords(input: string) {
+  const words: ShellWord[] = []
+  let index = 0
+  while (index < input.length) {
+    while (index < input.length && /\s/.test(input[index]!)) index++
+    if (index >= input.length) break
+    let value = ""
+    let seen = false
+    while (index < input.length && !/\s/.test(input[index]!)) {
+      const char = input[index]!
+      if (char === "'") {
+        index++
+        while (index < input.length && input[index] !== "'") value += input[index++]
+        if (index < input.length) index++
+        seen = true
+        continue
+      }
+      if (char === '"') {
+        index++
+        while (index < input.length && input[index] !== '"') {
+          if (input[index] === "\\" && index + 1 < input.length) {
+            value += input[index + 1]
+            index += 2
+            continue
+          }
+          value += input[index++]
+        }
+        if (index < input.length) index++
+        seen = true
+        continue
+      }
+      if (char === "\\" && index + 1 < input.length) {
+        value += input[index + 1]
+        index += 2
+        seen = true
+        continue
+      }
+      value += char
+      index++
+      seen = true
+    }
+    if (seen) words.push({ value })
+  }
+  return words
+}
+
+function commandSubstitutions(input: string) {
   const found: string[] = []
-  const pattern = /'([^']*)'|"([^"]*)"/g
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(text))) {
-    found.push(match[1] ?? match[2] ?? "")
+  let quote: "none" | "single" | "double" = "none"
+  for (let index = 0; index < input.length; ) {
+    const char = input[index]!
+    if (quote === "single") {
+      if (char === "'") quote = "none"
+      index++
+      continue
+    }
+    if (quote === "double") {
+      if (char === "\\" && index + 1 < input.length) {
+        index += 2
+        continue
+      }
+      if (char === '"') {
+        quote = "none"
+        index++
+        continue
+      }
+      if (char === "$" && input[index + 1] === "(") {
+        const [inner, next] = readBalancedParen(input, index + 2)
+        found.push(inner)
+        index = next
+        continue
+      }
+      index++
+      continue
+    }
+    if (char === "'") {
+      quote = "single"
+      index++
+      continue
+    }
+    if (char === '"') {
+      quote = "double"
+      index++
+      continue
+    }
+    if (char === "\\" && index + 1 < input.length) {
+      index += 2
+      continue
+    }
+    if (char === "$" && input[index + 1] === "(") {
+      const [inner, next] = readBalancedParen(input, index + 2)
+      found.push(inner)
+      index = next
+      continue
+    }
+    if (char === "`") {
+      index++
+      let inner = ""
+      while (index < input.length && input[index] !== "`") {
+        if (input[index] === "\\" && index + 1 < input.length) {
+          inner += input[index + 1]
+          index += 2
+          continue
+        }
+        inner += input[index++]
+      }
+      if (index < input.length) index++
+      found.push(inner)
+      continue
+    }
+    index++
   }
   return found
+}
+
+function readBalancedParen(input: string, start: number): [string, number] {
+  let depth = 1
+  let quote: "none" | "single" | "double" = "none"
+  for (let index = start; index < input.length; ) {
+    const char = input[index]!
+    if (quote === "single") {
+      if (char === "'") quote = "none"
+      index++
+      continue
+    }
+    if (quote === "double") {
+      if (char === "\\" && index + 1 < input.length) {
+        index += 2
+        continue
+      }
+      if (char === '"') quote = "none"
+      index++
+      continue
+    }
+    if (char === "'") {
+      quote = "single"
+      index++
+      continue
+    }
+    if (char === '"') {
+      quote = "double"
+      index++
+      continue
+    }
+    if (char === "\\" && index + 1 < input.length) {
+      index += 2
+      continue
+    }
+    if (char === "(") depth++
+    else if (char === ")") {
+      depth--
+      if (depth === 0) return [input.slice(start, index), index + 1]
+    }
+    index++
+  }
+  return [input.slice(start), input.length]
 }
 
 function remoteBeforeStateError(checkId: string, refs: string[]) {

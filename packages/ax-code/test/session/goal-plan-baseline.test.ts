@@ -170,6 +170,31 @@ describe("GoalPlanBaseline", () => {
       }),
     ).toThrow(/origin\/main/)
     expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract('test -z "$(git diff origin/main..HEAD)"'), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("! git diff origin/main..HEAD"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("if git diff origin/main..HEAD; then true; fi"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract('sh -c "git diff \\"origin/main\\"..HEAD"'), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("bash script/check.sh '$GIT diff origin/main..HEAD'"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).not.toThrow()
+    expect(() =>
       GoalPlanBaseline.prepareAssurance(contract("$GIT diff HEAD -- origin/generated"), {
         objective: "keep the diff in scope",
       }),
