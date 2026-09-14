@@ -114,12 +114,18 @@ function looksLikeGitCommand(command: string) {
 }
 
 function revisionText(command: string) {
-  // Strip pathspecs of actual `git <args> -- <paths>` invocations only.
-  // Wrapper `--` (`sh -c --`, `env --`) must not hide a later git range.
-  return command.replace(/\bgit(?:\s+[^\s]+)*\s--\s.*?(?=\s*(?:&&|\|\||;|\||&|$))/g, (matched) => {
-    const cut = matched.search(/\s--\s/)
-    return cut === -1 ? matched : matched.slice(0, cut)
-  })
+  // Strip pathspecs per shell segment so `git diff HEAD -- a && git diff origin/main -- b`
+  // cannot let the first `--` swallow the second git invocation.
+  return command
+    .split(/(\s*(?:&&|\|\||;|\||&)\s*)/)
+    .map((part) => {
+      if (/^\s*(?:&&|\|\||;|\||&)\s*$/.test(part)) return part
+      return part.replace(/\bgit(?:\s+[^\s]+)*\s--\s.*$/, (matched) => {
+        const cut = matched.search(/\s--\s/)
+        return cut === -1 ? matched : matched.slice(0, cut)
+      })
+    })
+    .join("")
 }
 
 function remoteBeforeStateError(checkId: string, refs: string[]) {

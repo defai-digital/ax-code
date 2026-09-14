@@ -201,6 +201,7 @@ export async function executeShellCommand(
 
   // Default shell timeout to prevent hung commands from blocking forever
   const SHELL_TIMEOUT = 300_000 // 5 minutes
+  const SHELL_ABORT_TIMEOUT = "Shell abort timed out while waiting for process to exit"
   const shellTimer = setTimeout(() => {
     if (!exited) {
       log.warn("shell command timed out", {
@@ -246,7 +247,7 @@ export async function executeShellCommand(
   function abortTimeoutHandler() {
     abortTimer = setTimeout(() => {
       if (!exited) {
-        rejectPromise?.(new Error("Shell abort timed out while waiting for process to exit"))
+        rejectPromise?.(new Error(SHELL_ABORT_TIMEOUT))
       }
     }, 5_000)
   }
@@ -301,10 +302,15 @@ export async function executeShellCommand(
     }
     try {
       await waitForExit
-    } catch {
-      // Grace timer rejected waitForExit because killTree/process hung.
-      // Persist an aborted turn instead of leaving the tool part running.
-      aborted = true
+    } catch (error) {
+      if (error instanceof Error && error.message === SHELL_ABORT_TIMEOUT) {
+        // Grace timer rejected waitForExit because killTree/process hung.
+        // Persist an aborted turn instead of leaving the tool part running.
+        aborted = true
+      } else {
+        exited = true
+        exitCode = 1
+      }
     }
   } finally {
     clearShellCommandTimers()
