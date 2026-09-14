@@ -299,7 +299,13 @@ export async function executeShellCommand(
         })
       })
     }
-    await waitForExit
+    try {
+      await waitForExit
+    } catch {
+      // Grace timer rejected waitForExit because killTree/process hung.
+      // Persist an aborted turn instead of leaving the tool part running.
+      aborted = true
+    }
   } finally {
     clearShellCommandTimers()
     clearShellCommandListeners()

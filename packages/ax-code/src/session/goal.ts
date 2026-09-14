@@ -277,8 +277,8 @@ export namespace SessionGoal {
       return row.time_created
     })
     if (removedCreated === undefined) return
-    await GoalPlan.remove(sessionID, removedCreated).catch(() => undefined)
     publish(undefined, sessionID)
+    await GoalPlan.remove(sessionID, removedCreated).catch(() => undefined)
   }
 
   /**
@@ -326,6 +326,17 @@ export namespace SessionGoal {
       // A goal row without its contract is treated as pre-v1 and can complete
       // without acceptance evidence or assurance checks. Drop only the row we
       // inserted — a successor goal on the same session must survive.
+      await removeCopiedGoal(input.to, copied.goal)
+      return undefined
+    }
+    // copyForFork treats a missing source plan as success (pre-v1). If the
+    // source still has a frozen digest, that would leave the fork completable
+    // without assurance — drop the copy instead.
+    if (
+      GoalPlan.storedDigest(input.from, copied.fromCreated) &&
+      !GoalPlan.hasValidContract(input.to, copied.goal.time.created)
+    ) {
+      log.warn("forked goal is missing its frozen contract after plan copy")
       await removeCopiedGoal(input.to, copied.goal)
       return undefined
     }

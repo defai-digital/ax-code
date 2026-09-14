@@ -264,6 +264,32 @@ describe("GoalPlanOrchestration", () => {
     })
   })
 
+  test("a source digest without a plan does not leave the fork completable", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        const prepared = await GoalPlanOrchestration.activate({
+          sessionID: session.id,
+          objective: "keep the forked contract",
+        })
+        await fs.unlink(prepared.path)
+        const fork = await Session.create({})
+        try {
+          const copied = await SessionGoal.copyTo({ from: session.id, to: fork.id })
+          expect(copied).toBeUndefined()
+          expect(await SessionGoal.get(fork.id)).toBeUndefined()
+        } finally {
+          GoalPlanWriter.resetWrite()
+          await Session.remove(fork.id)
+          await Session.remove(session.id)
+        }
+      },
+    })
+  })
+
   test("a failed plan copy does not delete a successor goal on the fork", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

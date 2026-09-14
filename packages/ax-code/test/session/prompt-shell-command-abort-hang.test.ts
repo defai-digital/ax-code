@@ -59,31 +59,32 @@ describe("executeShellCommand abort hang", () => {
         const session = await Session.create({})
         const controller = new AbortController()
         const started = Date.now()
-        await expect(
-          executeShellCommand(
-            {
-              sessionID: session.id,
-              agent: "build",
-              model: {
-                providerID: ProviderID.make("openai"),
-                modelID: ModelID.make("gpt-5.2"),
-              },
-              command: "hang-on-abort",
+        const result = await executeShellCommand(
+          {
+            sessionID: session.id,
+            agent: "build",
+            model: {
+              providerID: ProviderID.make("openai"),
+              modelID: ModelID.make("gpt-5.2"),
             },
-            {
-              start: () => {
-                queueMicrotask(() => controller.abort())
-                return controller.signal
-              },
-              queuedCallbacks: () => [],
-              cancel: async () => {},
-              resumeLoop: async () => ({ info: session as any, parts: [] as any }),
+            command: "hang-on-abort",
+          },
+          {
+            start: () => {
+              queueMicrotask(() => controller.abort())
+              return controller.signal
             },
-          ),
-        ).rejects.toThrow(/abort timed out/)
+            queuedCallbacks: () => [],
+            cancel: async () => {},
+            resumeLoop: async () => ({ info: session as any, parts: [] as any }),
+          },
+        )
         const elapsed = Date.now() - started
         expect(elapsed).toBeGreaterThan(4_000)
         expect(elapsed).toBeLessThan(8_000)
+        const shellPart = result!.parts[0] as { type: string; state: { status: string; output?: string } }
+        expect(shellPart.state.status).toBe("completed")
+        expect(shellPart.state.output).toContain("User aborted the command")
       },
     })
   }, 15_000)

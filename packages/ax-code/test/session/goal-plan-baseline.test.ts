@@ -116,6 +116,11 @@ describe("GoalPlanBaseline", () => {
         objective: "refactor the core runtime then test and commit",
       }),
     ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("sh -c -- 'git diff origin/main..HEAD'"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
   })
 
   test("rewrites {BASELINE} to the plan-time HEAD SHA", () => {
