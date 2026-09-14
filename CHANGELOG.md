@@ -6,11 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-## [7.16.7] - 2026-09-14
+## [7.17.8] - 2026-09-14
 
 ### Changed
 
-- Publish the paired SDK 2.5.20.
+- Publish the paired SDK 2.5.21.
 - Reduce repeated read, grep, and glob output in model requests while preserving complete evidence and tool execution.
 
 ### Fixed
