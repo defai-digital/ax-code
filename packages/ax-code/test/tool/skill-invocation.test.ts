@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from "vitest"
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
 import { Skill } from "../../src/skill"
@@ -11,9 +11,19 @@ import { SkillTool } from "../../src/tool/skill"
 import type { Tool } from "../../src/tool/tool"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
+import { Ripgrep } from "../../src/file/ripgrep"
+
+beforeEach(() => {
+  // These fixtures contain only SKILL.md. Invocation-policy tests must not
+  // download a search binary when the host has no system ripgrep installed.
+  vi.spyOn(Ripgrep, "files").mockImplementation(async function* () {
+    yield "SKILL.md"
+  })
+})
 
 afterEach(async () => {
   await Instance.disposeAll()
+  vi.restoreAllMocks()
 })
 
 function context(): Tool.Context {
