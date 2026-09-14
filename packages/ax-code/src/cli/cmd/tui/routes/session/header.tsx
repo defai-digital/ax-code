@@ -1,3 +1,4 @@
+import { useTerminalDimensions } from "ax-tui/solid"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { type Accessor, createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
 import { useRouteData } from "@tui/context/route"
@@ -11,6 +12,8 @@ import { useKV } from "../../context/kv"
 import { Flag } from "@/flag/flag"
 import { collapseSessionBreadcrumbs, sessionBreadcrumbs } from "./header-view-model"
 import { computeSidebarWidth } from "./layout"
+import { navigationLayout } from "../../navigation/navigation-layout"
+import { sidebarRestoreEntry, sidebarRestoreVisible } from "../../sidebar-restore-view-model"
 import { autonomousActiveView, autonomousProgressLabel } from "./autonomous-active"
 import {
   AUTONOMOUS_CHROME_PULSE_MAX_ALPHA,
@@ -71,10 +74,23 @@ export function Header() {
   const [hover, setHover] = createSignal<"parent" | "prev" | "next" | null>(null)
   let lastSubagentHeaderClickAt = 0
   const dimensions = useContentDimensions()
+  const terminal = useTerminalDimensions()
   const narrow = createMemo(() => {
     const sw = dimensions().width > 120 ? computeSidebarWidth(dimensions().width, kv.get("sidebar_width")) : 0
     return dimensions().width - sw < 100
   })
+  const sidebarRestore = createMemo(() => {
+    if (session()?.parentID) return false
+    const rail = navigationLayout(terminal().width, kv.get("navigation_visible", true), kv.get("navigation_width"))
+    if (rail.railWidth === 0) return false
+    return sidebarRestoreVisible({
+      sessionRoute: true,
+      childSession: false,
+      sidebar: kv.get("sidebar", "auto") === "hide" ? "hide" : "auto",
+      terminalWidth: terminal().width,
+    })
+  })
+  const sidebarRestoreLabel = createMemo(() => (sidebarRestore() ? sidebarRestoreEntry(dimensions().width) : ""))
   const breadcrumbs = createMemo(() =>
     collapseSessionBreadcrumbs(sessionBreadcrumbs(sync.data.session, route.sessionID), {
       narrow: narrow(),
@@ -232,14 +248,25 @@ export function Header() {
                   <WorkspaceInfo workspace={workspace} />
                 </Show>
               </box>
-              <Show when={autonomous().active}>
-                <box flexDirection="row" gap={1} paddingLeft={1} paddingRight={1} flexShrink={0}>
-                  <Spinner color={chipColor()}>
-                    <span style={{ fg: chipColor(), bold: true }}>{sync.data.autonomous ? "◆ AUTO" : "◆ WORKING"}</span>
-                    <span style={{ fg: theme.textMuted }}> · {autonomousProgressLabel(autonomous())}</span>
-                  </Spinner>
-                </box>
-              </Show>
+              <box flexDirection="row" gap={2} flexShrink={0}>
+                <Show when={autonomous().active}>
+                  <box flexDirection="row" gap={1} paddingLeft={1} paddingRight={1} flexShrink={0}>
+                    <Spinner color={chipColor()}>
+                      <span style={{ fg: chipColor(), bold: true }}>
+                        {sync.data.autonomous ? "◆ AUTO" : "◆ WORKING"}
+                      </span>
+                      <span style={{ fg: theme.textMuted }}> · {autonomousProgressLabel(autonomous())}</span>
+                    </Spinner>
+                  </box>
+                </Show>
+                <Show when={sidebarRestoreLabel()}>
+                  <box flexShrink={0} onMouseUp={() => command.trigger("session.sidebar.toggle")}>
+                    <text fg={theme.primary} selectable={false}>
+                      {sidebarRestoreLabel()}
+                    </text>
+                  </box>
+                </Show>
+              </box>
             </box>
           </Match>
         </Switch>

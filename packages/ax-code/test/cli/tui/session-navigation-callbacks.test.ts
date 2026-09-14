@@ -442,6 +442,19 @@ describe("navigation recovery entry and width selection", () => {
     expect(mocked.trigger).toHaveBeenCalledExactlyOnceWith("session.navigation")
   })
 
+  test("places a clickable /sidebar restore on the right when the sidebar is collapsed", () => {
+    const tree = mount(() => NavigationBar({ width: 80, showSidebarRestore: true }))
+    expect(text(tree)).toContain("/sidebar")
+    click(tree, "/sidebar")
+    expect(mocked.trigger).toHaveBeenCalledExactlyOnceWith("session.sidebar.toggle")
+    expect(mocked.navigate).not.toHaveBeenCalled()
+  })
+
+  test("omits the sidebar restore until the session chrome asks for it", () => {
+    const tree = mount(() => NavigationBar({ width: 80 }))
+    expect(text(tree)).not.toContain("/sidebar")
+  })
+
   test("makes the project label an information entry when space is available", () => {
     const tree = mount(() => NavigationBar({ width: 80 }))
     click(tree, "workspace")

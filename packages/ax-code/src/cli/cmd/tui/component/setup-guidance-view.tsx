@@ -39,6 +39,11 @@ export function SetupGuidanceView(props: { guidance: SetupGuidance; compact?: bo
             /navigation - sessions and agents
           </text>
         </box>
+        <box flexShrink={0} onMouseUp={() => command.trigger("session.sidebar.toggle")}>
+          <text flexShrink={0} fg={theme.textMuted} selectable={false} wrapMode="word">
+            /sidebar - session context
+          </text>
+        </box>
       </Show>
     </box>
   )

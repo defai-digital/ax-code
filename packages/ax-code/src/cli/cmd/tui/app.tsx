@@ -61,6 +61,7 @@ import { ContentDimensionsProvider } from "./context/content-dimensions"
 import { navigationLayout } from "./navigation/navigation-layout"
 import { SessionNavigation } from "./component/session-navigation"
 import { NavigationBar } from "./component/navigation-bar"
+import { sidebarRestoreVisible } from "./sidebar-restore-view-model"
 import { mergeFollowUpSnapshot } from "./component/prompt/durable-follow-up"
 import { DialogFollowUps } from "./component/dialog-follow-ups"
 import { TuiConfig } from "@/config/tui"
@@ -501,6 +502,15 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const navigation = createMemo(() =>
     navigationLayout(dimensions().width, kv.get("navigation_visible", true), kv.get("navigation_width")),
   )
+  const showSidebarRestore = createMemo(() => {
+    if (route.data.type !== "session") return false
+    return sidebarRestoreVisible({
+      sessionRoute: true,
+      childSession: Boolean(sync.session.get(route.data.sessionID)?.parentID),
+      sidebar: kv.get("sidebar", "auto") === "hide" ? "hide" : "auto",
+      terminalWidth: dimensions().width,
+    })
+  })
   const contentDimensions = createMemo(() => ({
     width: navigation().contentWidth,
     height: Math.max(0, dimensions().height - (navigation().railWidth ? 0 : 1) - (args.persistentRuntime ? 1 : 0)),
@@ -1232,7 +1242,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         )}
       </Show>
       <Show when={navigation().railWidth === 0}>
-        <NavigationBar width={dimensions().width} />
+        <NavigationBar width={dimensions().width} showSidebarRestore={showSidebarRestore()} />
       </Show>
       <box flexDirection="row" width="100%" height={contentDimensions().height}>
         <Show when={navigation().railWidth > 0}>
