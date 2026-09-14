@@ -102,6 +102,7 @@ pages are the ones linked here.
 
 ## Reference
 
+- [TypeScript Native Support](guides/typescript-native.md) — source compiler, language service, diagnostics, and compatibility.
 - [Skill and Plugin Catalog](reference/skills-and-plugins.md) — bundled skills, project skills, plugins, and evals.
 - [Isolation Policy Packs](policies/README.md) — machine-readable policy examples.
 - [Release Verification](release/README.md) — canonical minisign public key and verification command.

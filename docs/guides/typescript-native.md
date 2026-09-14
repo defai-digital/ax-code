@@ -1,5 +1,10 @@
 # TypeScript native support
 
+Status: Active in source; packaged runtime release pending
+Scope: current-state source toolchain and language service
+Last reviewed: 2026-09-14
+Owner: AX Code maintainers
+
 AX Code uses the official Go-based TypeScript 7.0.2 compiler for workspace
 checks, SDK emission, and its built-in JavaScript/TypeScript language server.
 The language server runs the shipped native executable directly with
