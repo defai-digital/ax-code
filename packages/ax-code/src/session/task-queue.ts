@@ -1453,7 +1453,19 @@ export namespace TaskQueue {
     if ("worktree" in parsed) updates.worktree = parsed.worktree ?? null
     if ("agent" in parsed) updates.agent = parsed.agent ?? null
     if ("model" in parsed) updates.model = parsed.model ?? null
-    if (parsed.payload !== undefined) updates.payload = parsed.payload
+    if (parsed.payload !== undefined) {
+      // Preserve the executor-ownership key across payload replacement.
+      // `waiting_for_idle` row liveness is derived solely from
+      // `payload.executorOwner` (see isLiveRow), so an API edit that echoes a
+      // payload without the key would make restart recovery treat a row still
+      // driven by a live backend as orphaned and re-queue it — the peer-clobber
+      // class fixed in 2026-08-28, leaking through the edit path.
+      const existingOwner = current.payload[EXECUTOR_OWNER_KEY]
+      updates.payload =
+        existingOwner !== undefined && parsed.payload[EXECUTOR_OWNER_KEY] === undefined
+          ? { ...parsed.payload, [EXECUTOR_OWNER_KEY]: existingOwner }
+          : parsed.payload
+    }
     if (parsed.priority !== undefined) updates.priority = parsed.priority
 
     // Re-check editability as part of the same write as the isEditableStatus

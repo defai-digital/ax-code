@@ -430,6 +430,35 @@ describe("TaskQueue", () => {
     })
   })
 
+  // 2026-09-14: a payload edit must not erase executor ownership. waiting_for_idle
+  // liveness is derived solely from payload.executorOwner, so an API edit that
+  // echoes a payload without the key made restart recovery treat a row still
+  // driven by a live backend as orphaned (the 2026-08-28 peer-clobber class,
+  // leaking through the edit path).
+  test("payload edit preserves the executor owner on a waiting_for_idle item", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const waiting = await TaskQueue.enqueue({ kind: "automation", title: "Queued followup" })
+        await TaskQueue.setStatus({ id: waiting.id, status: "waiting_for_idle" })
+        const stamped = await TaskQueue.get(waiting.id)
+        expect(TaskQueue.executorOwner(stamped.payload)).toMatchObject({ pid: process.pid })
+
+        const edited = await TaskQueue.edit({ id: waiting.id, payload: { prompt: "rewritten" } })
+        expect(edited.payload["prompt"]).toBe("rewritten")
+        expect(TaskQueue.executorOwner(edited.payload)).toMatchObject({ pid: process.pid })
+
+        // The row must still read as live: recovery leaves it alone rather than
+        // requeuing a followup the owning backend will deliver when idle.
+        const recovered = await TaskQueue.recoverInterrupted()
+        expect(recovered.requeued.map((item) => item.id)).not.toContain(waiting.id)
+        expect((await TaskQueue.get(waiting.id)).status).toBe("waiting_for_idle")
+      },
+    })
+  })
+
   test("restart recovery leaves items owned by a live backend alone", async () => {
     await using tmp = await tmpdir({ git: true })
 

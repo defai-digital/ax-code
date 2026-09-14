@@ -610,6 +610,11 @@ export namespace ScheduledTask {
     return true
   }
 
+  // Sentinel for the authoritative in-transaction overlap guard in runNow;
+  // translated to HTTP 409 outside the transaction so a rejected claim is
+  // never recorded as an execution failure.
+  class RunNowOverlapAborted extends Error {}
+
   export async function runNow(id: ScheduledTaskID): Promise<RunNowResult> {
     const current = await get(id)
     if (current.status === "disabled") {
@@ -619,38 +624,48 @@ export namespace ScheduledTask {
     const deadlineMs = current.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS
     reconcileOrphanRuns(id, now, deadlineMs)
     // Run-now honors overlap protection: it must not bypass the one-open-run rule.
+    // This read is only a friendly pre-check; the authoritative guard runs
+    // inside the claim transaction below, because enqueueing and the executor
+    // import yield the event loop and a scheduler tick can claim the
+    // occurrence in the gap (check-then-act TOCTOU).
     if (hasOpenRun(id, now, deadlineMs)) {
       throw new HTTPException(409, {
         message: `Scheduled task ${id} already has a run in progress; wait for it to finish.`,
       })
     }
+    let claimedQueueID: TaskQueueID | undefined
     try {
       if (current.workflowTemplateID) return await runWorkflowNow(current)
-      const queued = await TaskQueue.enqueue(scheduledQueueInput(current, now, "manual"))
-      const { task, run } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
-        const runRow = insertRunRow(db, {
-          taskID: id,
-          triggerType: "manual",
-          status: "running",
-          occurrenceAt: now,
-          coalescedCount: 1,
-          queueID: queued.id,
-          now,
-        })
-        const row = db
-          .update(ScheduledTaskTable)
-          .set({
-            last_queue_id: queued.id,
-            last_run_at: now,
-            error: null,
-            time_updated: now,
+      const { task, run, queued } = SessionShard.storeForProject(Instance.project.id, { write: true }).transaction(
+        (db) => {
+          if (hasOpenRunIn(db, id, now, deadlineMs)) throw new RunNowOverlapAborted()
+          const queuedItem = TaskQueue.enqueueInTransaction(db, scheduledQueueInput(current, now, "manual"), { now })
+          const runRow = insertRunRow(db, {
+            taskID: id,
+            triggerType: "manual",
+            status: "running",
+            occurrenceAt: now,
+            coalescedCount: 1,
+            queueID: queuedItem.id,
+            now,
           })
-          .where(eq(ScheduledTaskTable.id, id))
-          .returning()
-          .get()
-        if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
-        return { task: fromRow(row), run: runRow }
-      })
+          const row = db
+            .update(ScheduledTaskTable)
+            .set({
+              last_queue_id: queuedItem.id,
+              last_run_at: now,
+              error: null,
+              time_updated: now,
+            })
+            .where(eq(ScheduledTaskTable.id, id))
+            .returning()
+            .get()
+          if (!row) throw new NotFoundError({ message: `Scheduled task not found: ${id}` })
+          return { task: fromRow(row), run: runRow, queued: queuedItem }
+        },
+      )
+      claimedQueueID = queued.id
+      TaskQueue.publishEnqueued(queued)
       publishUpdated(task)
       publishFired(task, run)
       // Commit the relationship before detached execution begins. Otherwise a
@@ -660,6 +675,21 @@ export namespace ScheduledTask {
       const queueItem = await TaskQueueExecutor.start(queued)
       return { task, queueItem }
     } catch (error) {
+      if (error instanceof RunNowOverlapAborted) {
+        throw new HTTPException(409, {
+          message: `Scheduled task ${id} already has a run in progress; wait for it to finish.`,
+        })
+      }
+      if (claimedQueueID) {
+        // The run row exists and is `running`: finalize it through the queue
+        // outcome path (like the scheduler tick's dispatch failure does) so a
+        // failed dispatch cannot wedge overlap protection for
+        // deadline+grace or bypass the consecutive-failure policy.
+        await recordQueueOutcome(id, "failed", error, claimedQueueID).catch((recordError) => {
+          log.warn("scheduled task dispatch failure record failed", { taskID: id, error: recordError })
+        })
+        throw error
+      }
       await recordRunFailure(id, error).catch((recordError) => {
         log.warn("scheduled task failure record failed", { taskID: id, error: recordError })
       })
@@ -793,6 +823,12 @@ export namespace ScheduledTask {
 
   function claimDueTask(task: Info, next: number | undefined, now: number, coalescedCount: number) {
     return SessionShard.storeForProject(Instance.project.id, { write: true }).transaction((db) => {
+      // Authoritative overlap guard: a manual run-now can insert its
+      // `running` row between this caller's hasOpenRun read and this
+      // transaction, and the next_run_at CAS alone does not see it (run-now
+      // never advances next_run_at). Aborting returns undefined so the tick
+      // skips this occurrence; the next poll records it as skipped_overlap.
+      if (hasOpenRunIn(db, task.id, now, task.maxRunDurationMs ?? DEFAULT_RUN_DEADLINE_MS)) return undefined
       const claimed = db
         .update(ScheduledTaskTable)
         .set({
@@ -964,22 +1000,29 @@ export namespace ScheduledTask {
   // older than the run deadline + grace is treated as orphaned (crash between
   // claim and outcome) and must not wedge the task forever.
   export function hasOpenRun(taskID: ScheduledTaskID, now: number, deadlineMs: number): boolean {
+    return SessionShard.storeForProject(Instance.project.id).use((db) => hasOpenRunIn(db, taskID, now, deadlineMs))
+  }
+
+  // Transaction-local variant. Callers that insert a new `running` row must run
+  // this authoritative check inside the SAME synchronous transaction as the
+  // insert: the standalone hasOpenRun read can be overtaken by a concurrent
+  // claim across an await boundary (check-then-act), which let a manual
+  // run-now and a scheduler tick double-fire the same occurrence.
+  function hasOpenRunIn(db: Database.TxOrDb, taskID: ScheduledTaskID, now: number, deadlineMs: number): boolean {
     const staleBefore = now - (deadlineMs + ORPHAN_GRACE_MS)
-    return SessionShard.storeForProject(Instance.project.id).use((db) => {
-      const row = db
-        .select({ id: ScheduledTaskRunTable.id })
-        .from(ScheduledTaskRunTable)
-        .where(
-          and(
-            eq(ScheduledTaskRunTable.task_id, taskID),
-            eq(ScheduledTaskRunTable.status, "running"),
-            gt(ScheduledTaskRunTable.time_started, staleBefore),
-          ),
-        )
-        .limit(1)
-        .get()
-      return row !== undefined
-    })
+    const row = db
+      .select({ id: ScheduledTaskRunTable.id })
+      .from(ScheduledTaskRunTable)
+      .where(
+        and(
+          eq(ScheduledTaskRunTable.task_id, taskID),
+          eq(ScheduledTaskRunTable.status, "running"),
+          gt(ScheduledTaskRunTable.time_started, staleBefore),
+        ),
+      )
+      .limit(1)
+      .get()
+    return row !== undefined
   }
 
   function reconcileOrphanRuns(taskID: ScheduledTaskID, now: number, deadlineMs: number): void {
