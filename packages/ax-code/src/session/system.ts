@@ -272,6 +272,12 @@ export namespace SystemPrompt {
         `  Working directory: ${Instance.directory}`,
         `  Workspace root folder: ${Instance.worktree}`,
         `  Is directory a git repo: ${project.vcs === "git" ? "yes" : "no"}`,
+        ...(project.vcs === "git" && Instance.directory !== Instance.worktree
+          ? [
+              `  Git path base: this session starts below the repository root. For repository-relative paths, set bash workdir to the workspace root folder above. Otherwise git diff/show pathspecs are relative to the command's working directory.`,
+              `  A bash workdir override applies to that call only; later calls without workdir start in the working directory above. An empty path-filtered diff does not prove there are no changes until the path base is correct.`,
+            ]
+          : []),
         ...gitContext,
         `  Platform: ${process.platform}`,
         `  Today's date: ${new Date().toDateString()}`,

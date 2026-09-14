@@ -5,6 +5,7 @@ import { GrepTool } from "../../src/tool/grep"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
+import { CanonicalOutput } from "../../src/tool/canonical-output"
 import { NativeAddon } from "../../src/native/addon"
 
 const ctx = {
@@ -27,6 +28,54 @@ afterEach(async () => {
 })
 
 describe("tool.grep", () => {
+  test("a file-scoped include and limit work without context", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "source.ts")
+    await writeFile(file, "needle one\nneedle two\nneedle three\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await GrepTool.init()
+        const result = await tool.execute({ pattern: "needle", path: file, include: "*.ts", limit: 2 }, ctx)
+        expect(CanonicalOutput.Grep.parse(result.data).matches).toHaveLength(2)
+        expect(result.metadata.truncated).toBe(true)
+        expect(result.output).not.toContain("needle three")
+      },
+    })
+  })
+
+  test("native search honors a caller's smaller match budget", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const searchContent = vi.fn(() =>
+      JSON.stringify(
+        Array.from({ length: 3 }, (_, i) => ({
+          path: path.join(tmp.path, "file.ts"),
+          line: i + 1,
+          column: 1,
+          matchText: `needle ${i}`,
+        })),
+      ),
+    )
+    const native = vi.spyOn(NativeAddon, "fs").mockReturnValue({ searchContent } as any)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle", limit: 2 }, ctx)
+          expect(JSON.parse((searchContent.mock.calls[0] as unknown as string[])[2]!)).toMatchObject({
+            limit: 3,
+            contextLines: 0,
+          })
+          expect(CanonicalOutput.Grep.parse(result.data).matches).toHaveLength(2)
+          expect(result.metadata.truncated).toBe(true)
+          expect(result.output).not.toContain("Line 3")
+        },
+      })
+    } finally {
+      native.mockRestore()
+    }
+  })
+
   test("basic search", async () => {
     await Instance.provide({
       directory: projectRoot,

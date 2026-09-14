@@ -16,6 +16,7 @@ import { resolveToolFilePath } from "./file-path"
 import { parseNativeJsonArray } from "../util/native-json"
 import { errorCode } from "@/util/error-message"
 import { CanonicalOutput } from "./canonical-output"
+import { searchWithContext } from "./grep-context"
 
 const NativeSearchMatch = z.object({
   path: z.string(),
@@ -37,14 +38,32 @@ export function parseRipgrepLineNumber(value: string): number | undefined {
 }
 
 const RESULT_LIMIT = 100
-const NATIVE_SCAN_LIMIT = RESULT_LIMIT + 1
 
 export const GrepTool = Tool.define("grep", {
   description: DESCRIPTION,
   parameters: z.object({
     pattern: z.string().describe("The regex pattern to search for in file contents"),
-    path: z.string().optional().describe("The directory to search in. Defaults to the current working directory."),
+    path: z
+      .string()
+      .optional()
+      .describe("The file or directory to search in. Defaults to the current working directory."),
     include: z.string().optional().describe('File pattern to include in the search (e.g. "*.js", "*.{ts,tsx}")'),
+    context: z
+      .number()
+      .int()
+      .min(0)
+      .max(10)
+      .optional()
+      .describe(
+        "Lines before and after matches (0-10). Use for definitions or callers to avoid a separate read. Defaults to 0.",
+      ),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("Maximum matching lines (1-100). Defaults to 20 with context, otherwise 100."),
   }),
   concurrencySafe: () => true,
   outputSchema: CanonicalOutput.Grep,
@@ -57,7 +76,8 @@ export const GrepTool = Tool.define("grep", {
     if (params.include?.includes("\x00")) throw new Error("Include pattern contains null byte")
 
     let searchPath = params.path ?? Instance.directory
-    searchPath = await fileToolGuard(ctx, searchPath, { kind: "directory" })
+    const isFile = Filesystem.stat(resolveToolFilePath(searchPath, Instance.directory))?.isFile() === true
+    searchPath = await fileToolGuard(ctx, searchPath, { kind: isFile ? "file" : "directory" })
 
     await ctx.ask({
       permission: "grep",
@@ -67,12 +87,19 @@ export const GrepTool = Tool.define("grep", {
         pattern: params.pattern,
         path: params.path,
         include: params.include,
+        context: params.context,
+        limit: params.limit,
       },
     })
 
+    const limit = params.limit ?? (params.context ? 20 : RESULT_LIMIT)
+    if (params.context)
+      return searchWithContext({ ...params, path: searchPath, limit, context: params.context }, ctx.abort)
+    const scanLimit = limit + 1
+
     // Native fast-path: in-process search via Rust addon
     const native = NativeAddon.fs()
-    if (native) {
+    if (native && !(isFile && params.include)) {
       try {
         const json = NativePerf.run(
           "fs.searchContent",
@@ -80,7 +107,7 @@ export const GrepTool = Tool.define("grep", {
             searchPath,
             pattern: params.pattern,
             glob: params.include ? 1 : 0,
-            limit: NATIVE_SCAN_LIMIT,
+            limit: scanLimit,
           },
           () =>
             native.searchContent(
@@ -88,7 +115,7 @@ export const GrepTool = Tool.define("grep", {
               params.pattern,
               JSON.stringify({
                 glob: params.include,
-                limit: NATIVE_SCAN_LIMIT,
+                limit: scanLimit,
                 contextLines: 0,
               }),
             ),
@@ -102,8 +129,8 @@ export const GrepTool = Tool.define("grep", {
           (match) =>
             !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path),
         )
-        const truncated = matches.length > RESULT_LIMIT
-        const visibleMatches = truncated ? matches.slice(0, RESULT_LIMIT) : matches
+        const truncated = matches.length > limit
+        const visibleMatches = truncated ? matches.slice(0, limit) : matches
 
         if (visibleMatches.length === 0) {
           return {
@@ -115,15 +142,15 @@ export const GrepTool = Tool.define("grep", {
         }
 
         // Report the pre-truncation count like the ripgrep path below —
-        // `visibleMatches.length` would always read RESULT_LIMIT when
+        // `visibleMatches.length` would always read limit when
         // truncated, understating how many matches were actually found.
-        // The native scan stops at NATIVE_SCAN_LIMIT, so when the raw scan
+        // The native scan stops at scanLimit, so when the raw scan
         // hit that cap the true total is unknown — report a lower bound
         // instead of presenting the capped number as the exact count.
         const totalMatches = matches.length
-        const scanCapped = rawMatches.length >= NATIVE_SCAN_LIMIT
+        const scanCapped = rawMatches.length >= scanLimit
         const countLabel = scanCapped ? `${totalMatches}+` : `${totalMatches}`
-        const outputLines = [`Found ${countLabel} matches${truncated ? ` (showing first ${RESULT_LIMIT})` : ""}`]
+        const outputLines = [`Found ${countLabel} matches${truncated ? ` (showing first ${limit})` : ""}`]
         let currentFile = ""
         for (const match of visibleMatches) {
           if (currentFile !== match.path) {
@@ -267,7 +294,6 @@ export const GrepTool = Tool.define("grep", {
 
     matches.sort((a, b) => b.modTime - a.modTime)
 
-    const limit = RESULT_LIMIT
     const truncated = matches.length > limit
     const finalMatches = truncated ? matches.slice(0, limit) : matches
 

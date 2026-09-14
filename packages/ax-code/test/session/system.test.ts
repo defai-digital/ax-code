@@ -19,8 +19,36 @@ import PROMPT_TRINITY from "../../src/session/prompt/trinity.txt"
 import PROMPT_ANTHROPIC from "../../src/session/prompt/anthropic.txt"
 import PROMPT_GEMINI from "../../src/session/prompt/gemini.txt"
 import PROMPT_META from "../../src/session/prompt/meta.txt"
+import { git } from "../../src/util/git"
 
 describe("session.system", () => {
+  test("nested sessions explain the Git path base that otherwise yields empty diffs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const nested = path.join(tmp.path, "packages", "app")
+    await mkdir(nested, { recursive: true })
+    const file = path.join(nested, "entry.ts")
+    await writeFile(file, "export const value = 1\n")
+    await git(["add", "."], { cwd: tmp.path })
+    await git(["commit", "-m", "Add path context fixture"], { cwd: tmp.path })
+    await writeFile(file, "export const value = 2\n")
+    expect((await git(["diff", "--", "packages/app/entry.ts"], { cwd: nested })).text()).toBe("")
+    expect((await git(["diff", "--", "packages/app/entry.ts"], { cwd: tmp.path })).text()).toContain(
+      "+export const value = 2",
+    )
+    await Instance.provide({
+      directory: nested,
+      fn: async () => {
+        const env = (
+          await SystemPrompt.environment({ api: { id: "test-model" }, providerID: "test-provider" } as any)
+        ).join("\n")
+        expect(env).toContain(`Working directory: ${nested}`)
+        expect(env).toContain(`Workspace root folder: ${tmp.path}`)
+        expect(env).toContain("Git path base: this session starts below the repository root")
+        expect(env).toContain("workdir override applies to that call only")
+      },
+    })
+  })
+
   test("routes Kimi / Moonshot models to the Kimi action-first prompt", () => {
     const kimi = SystemPrompt.provider({
       id: "alibaba-pai/Kimi-K2.7-Code",
