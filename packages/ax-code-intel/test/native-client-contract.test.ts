@@ -77,7 +77,7 @@ test("native diagnostic pulls are lazy, expose pending state, and recover after 
     const state = await client.connection.sendRequest<{ requests: number }>("test/diagnostics", { report: null })
     expect(state.requests).toBe(0)
     expect(await aggregateEnvelope([client])).toMatchObject({ degraded: true, completeness: "partial" })
-    await client.waitForDiagnostics({ path: source })
+    await expect(client.waitForDiagnostics({ path: source })).rejects.toThrow("incomplete")
     expect(client.diagnosticsDegraded).toBe(true)
     await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] }, hold: true })
     let started!: () => void
@@ -193,6 +193,142 @@ test("native collection limits each pull to its remaining time budget", async ()
     clock?.mockRestore()
     await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] } })
     await inventory?.catch(() => {})
+    await client.shutdown()
+  }
+})
+
+test.each(["wait", "open"])(
+  "overlapping native %s calls share one pull while sequential calls refresh",
+  async (mode) => {
+    await using tmp = await tmpdir()
+    const source = path.join(tmp.path, "source.ts")
+    await fs.writeFile(source, "export const value = 42\n")
+    const child = spawn(process.execPath, [fileURLToPath(new URL("./fixture/fake-lsp-server.js", import.meta.url))], {
+      env: { ...process.env, FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ diagnosticProvider: true }) },
+    })
+    const client = await LSPClient.create({ serverID: "typescript", root: tmp.path, server: { process: child } })
+    try {
+      await client.notify.open({ path: source })
+      await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] }, hold: true })
+      let start!: () => void
+      const started = new Promise<void>((resolve) => {
+        start = resolve
+      })
+      const listener = client.connection.onNotification("test/pullStarted", start)
+      const call = () =>
+        mode === "wait"
+          ? client.waitForDiagnostics({ path: source })
+          : client.notify.open({ path: source, waitForDiagnostics: true })
+      const waits = Promise.all(Array.from({ length: 20 }, call))
+      await withTimeout(started, 3000)
+      const state = await client.connection.sendRequest<{ requests: number }>("test/diagnostics", {
+        report: { kind: "full", items: [] },
+      })
+      await waits
+      listener.dispose()
+      expect(state.requests).toBe(1)
+      expect(client.diagnostics.get(source)).toEqual([])
+      await call()
+      const next = await client.connection.sendRequest<{ requests: number }>("test/diagnostics", {
+        report: { kind: "full", items: [] },
+      })
+      expect(next.requests).toBe(2)
+    } finally {
+      await client.shutdown()
+    }
+  },
+)
+
+test("workspace changes prevent sharing an older in-flight native pull", async () => {
+  await using tmp = await tmpdir()
+  const source = path.join(tmp.path, "source.ts")
+  const other = path.join(tmp.path, "other.ts")
+  await fs.writeFile(source, "export const value = 42\n")
+  await fs.writeFile(other, "export const other = 1\n")
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./fixture/fake-lsp-server.js", import.meta.url))], {
+    env: { ...process.env, FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ diagnosticProvider: true }) },
+  })
+  const client = await LSPClient.create({ serverID: "typescript", root: tmp.path, server: { process: child } })
+  try {
+    await client.notify.open({ path: source })
+    await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] }, hold: true })
+    let start!: () => void
+    const started = new Promise<void>((resolve) => {
+      start = resolve
+    })
+    const listener = client.connection.onNotification("test/pullStarted", start)
+    const old = expect(client.waitForDiagnostics({ path: source })).rejects.toThrow("incomplete")
+    await withTimeout(started, 3000)
+    listener.dispose()
+    await client.notify.open({ path: other })
+    const current = client.waitForDiagnostics({ path: source })
+    await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] } })
+    await Promise.all([old, current])
+    const state = await client.connection.sendRequest<{ requests: number }>("test/diagnostics", {
+      report: { kind: "full", items: [] },
+    })
+    expect(state.requests).toBe(2)
+    expect(client.diagnosticsStale(source)).toBe(false)
+    expect(client.diagnosticsStale(other)).toBe(true)
+  } finally {
+    await client.shutdown()
+  }
+})
+
+test("expired close lock waits cannot later close a live document", async () => {
+  await using tmp = await tmpdir()
+  const source = path.join(tmp.path, "source.ts")
+  await fs.writeFile(source, "export const value = 42\n")
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./fixture/fake-lsp-server.js", import.meta.url))], {
+    env: { ...process.env, FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ diagnosticProvider: true }) },
+  })
+  const client = await LSPClient.create({ serverID: "typescript", root: tmp.path, server: { process: child } })
+  try {
+    await client.notify.open({ path: source })
+    await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] }, hold: true })
+    let start!: () => void
+    const started = new Promise<void>((resolve) => {
+      start = resolve
+    })
+    const listener = client.connection.onNotification("test/pullStarted", start)
+    const waiting = client.waitForDiagnostics({ path: source })
+    await withTimeout(started, 3000)
+    listener.dispose()
+    await expect(client.notify.close({ path: source, deadline: Date.now() + 25 })).rejects.toThrow()
+    await client.connection.sendRequest("test/diagnostics", { report: { kind: "full", items: [] } })
+    await waiting
+    expect(client.openPaths).toContain(source)
+    expect(client.diagnostics.get(source)).toEqual([])
+  } finally {
+    await client.shutdown()
+  }
+})
+
+test("timed-out close delivery frees local state but never reports a complete inventory", async () => {
+  const { vi } = await import("vitest")
+  await using tmp = await tmpdir()
+  const source = path.join(tmp.path, "source.ts")
+  await fs.writeFile(source, "export const value = 42\n")
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./fixture/fake-lsp-server.js", import.meta.url))], {
+    env: { ...process.env, FAKE_LSP_CAPABILITIES_JSON: JSON.stringify({ diagnosticProvider: true }) },
+  })
+  const client = await LSPClient.create({ serverID: "typescript", root: tmp.path, server: { process: child } })
+  let release!: () => void
+  const pending = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let send: ReturnType<typeof vi.spyOn> | undefined
+  try {
+    await client.notify.open({ path: source })
+    send = vi.spyOn(client.connection, "sendNotification").mockReturnValue(pending)
+    await client.notify.close({ path: source, deleted: true, deadline: Date.now() + 25 })
+    expect(client.openPaths).not.toContain(source)
+    expect(client.diagnosticsDegraded).toBe(true)
+    await expect(collect([client])).rejects.toThrow("incomplete")
+    expect((await aggregateEnvelope([client])).degraded).toBe(true)
+  } finally {
+    release()
+    send?.mockRestore()
     await client.shutdown()
   }
 })

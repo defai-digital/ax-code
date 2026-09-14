@@ -35,10 +35,10 @@ describe("LSP client notify fan-out", () => {
     expect(result).toEqual({ count: 2, ok: false })
   })
 
-  test("closeAll waits for every client even when one fails", async () => {
+  test.each([false, true])("closeAll waits for every client, with strict deadline reporting=%s", async (strict) => {
     const closed: string[] = []
 
-    await closeAll(
+    const result = closeAll(
       [
         client({
           serverID: "a",
@@ -61,8 +61,10 @@ describe("LSP client notify fan-out", () => {
           },
         }),
       ],
-      { path: "/repo/demo.ts", deleted: true },
+      { path: "/repo/demo.ts", deleted: true, ...(strict ? { deadline: Date.now() + 2000 } : {}) },
     )
+    if (strict) await expect(result).rejects.toThrow("incomplete")
+    else await result
 
     expect(closed).toEqual(["a", "c"])
   })

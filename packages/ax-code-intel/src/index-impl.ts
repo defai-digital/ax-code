@@ -21,7 +21,7 @@ import * as LSPDocumentSymbol from "./document-symbol"
 import * as LSPReferences from "./references"
 import { LSPServerConfig } from "./server-config"
 import { uniqueStrings } from "./internal/string-list"
-import { memoryProfile, LOW_MEMORY_IDLE_MS } from "./prewarm-profile"
+import { memoryProfile, lspIdleMs } from "./prewarm-profile"
 import { memoryWork } from "./memory-work"
 
 export namespace LSP {
@@ -160,6 +160,7 @@ export namespace LSP {
             servers,
             clients,
             reaped: false,
+            reclaimed: new Map<string, Set<string>>(),
             spawnAbort: new AbortController(),
             rootCache: new Map<string, string | null>(),
             spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
@@ -186,6 +187,7 @@ export namespace LSP {
           servers,
           clients,
           reaped: false,
+          reclaimed: new Map<string, Set<string>>(),
           spawnAbort: new AbortController(),
           rootCache: new Map<string, string | null>(),
           spawning: new Map<string, Promise<LSPClient.Info | undefined>>(),
@@ -212,14 +214,15 @@ export namespace LSP {
         // loop is in flight.
         s.healthCheck = setInterval(() => {
           if (s.clients.length === 0) return
-          if (memoryProfile() === "low") {
+          const idleMs = lspIdleMs()
+          if (idleMs > 0) {
             const now = performance.now()
             for (const client of [...s.clients]) {
               if (!client.ping()) continue
               const lastUse = Math.max(s.clientLastUse.get(client) ?? 0, client.activity?.lastUse ?? now)
-              if (!client.activity?.idle(now, LOW_MEMORY_IDLE_MS) || now - lastUse < LOW_MEMORY_IDLE_MS) continue
+              if (!client.activity?.idle(now, idleMs) || now - lastUse < idleMs) continue
               s.clients.splice(s.clients.indexOf(client), 1)
-              s.reaped = true
+              recordReclaimed(s, client)
               log.info("reaping idle lsp client", { serverID: client.serverID, root: client.root })
               void client.shutdown().catch((error) => log.warn("idle lsp shutdown failed", { error }))
               codeIntelHost().publishUpdated()
@@ -334,6 +337,33 @@ export namespace LSP {
     return candidates.sort((a, b) => lastUse(a) - lastUse(b)).slice(0, candidates.length - cap)
   }
 
+  // Bounded coverage ledger: reclaiming an empty server loses no diagnostics.
+  // A restarted server repairs coverage only after the old document is checked.
+  function recordReclaimed(s: State, client: LSPClient.Info) {
+    const paths = [...new Set([...client.openPaths, ...client.diagnostics.keys()])]
+    if (!paths.length) return
+    const key = clientKey(client.root, client.serverID)
+    const lost = s.reclaimed.get(key) ?? new Set<string>()
+    const count = [...s.reclaimed.values()].reduce((sum, paths) => sum + paths.size, 0)
+    if (count + paths.length > 2000) {
+      s.reaped = true // Overflow remains conservatively incomplete until disposal.
+      return
+    }
+    for (const file of paths) lost.add(file)
+    s.reclaimed.set(key, lost)
+  }
+
+  function hasReclaimedCoverage(s: State) {
+    for (const [key, paths] of s.reclaimed) {
+      const client = s.clients.find((client) => clientKey(client.root, client.serverID) === key)
+      for (const file of paths) {
+        if (client?.diagnostics.has(file) && !client.diagnosticsStale(file)) paths.delete(file)
+      }
+      if (!paths.size) s.reclaimed.delete(key)
+    }
+    return s.reaped || s.reclaimed.size > 0
+  }
+
   function markClientUsed(s: State, client: LSPClient.Info) {
     s.clientLastUse.set(client, performance.now())
     client.activity?.touch()
@@ -352,6 +382,7 @@ export namespace LSP {
       if (client.activity?.busy) continue
       const idx = s.clients.indexOf(client)
       if (idx >= 0) s.clients.splice(idx, 1)
+      recordReclaimed(s, client)
       log.info("evicting least-recently-used lsp client", {
         serverID,
         root: client.root,
@@ -861,10 +892,14 @@ export namespace LSP {
   // diagnostics). Used when a file is deleted, renamed, or no longer relevant
   // to the current task. Safe to call on files that were never opened — each
   // client short-circuits non-matching paths.
-  export async function closeFile(input: string, deleted = false) {
+  export async function closeFile(input: string, deleted = false, deadline?: number) {
     log.info("closing file", { file: input })
     const s = await state()
-    await LSPClientNotify.closeAll(s.clients, { path: input, deleted })
+    await LSPClientNotify.closeAll(s.clients, { path: input, deleted, deadline })
+    if (deleted) {
+      const normalized = Filesystem.normalizePath(path.resolve(codeIntelHost().projectRoot(), input))
+      for (const paths of s.reclaimed.values()) paths.delete(normalized)
+    }
   }
 
   // Manually clear the broken-server cooldown map. The next getClients() call
@@ -882,7 +917,10 @@ export namespace LSP {
 
   export async function diagnostics() {
     const s = await state()
-    return LSPDiagnostics.collect(s.clients)
+    const diagnostics = await LSPDiagnostics.collect(s.clients)
+    if (hasReclaimedCoverage(s))
+      throw new Error("LSP diagnostic inventory is incomplete after language server reclamation")
+    return diagnostics
   }
 
   // Aggregate diagnostics across all connected clients. Pass `file`
@@ -892,9 +930,9 @@ export namespace LSP {
     const envelope = await LSPDiagnostics.aggregateEnvelope(s.clients, file)
     // Idle reclamation loses workspace-wide diagnostic inventory. A new file
     // touch cannot prove that every former document has been reanalyzed.
-    if (s.reaped) {
+    if (hasReclaimedCoverage(s)) {
       envelope.degraded = true
-      if (envelope.completeness === "full") envelope.completeness = "partial"
+      envelope.completeness = "partial"
     }
     return envelope
   }

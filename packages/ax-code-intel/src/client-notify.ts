@@ -30,13 +30,20 @@ export async function openAll(
   return { count, ok }
 }
 
-export async function closeAll(clients: NotifyClient[], input: { path: string; deleted?: boolean }): Promise<void> {
+export async function closeAll(
+  clients: NotifyClient[],
+  input: { path: string; deleted?: boolean; deadline?: number },
+): Promise<void> {
   const results = await Promise.allSettled(
-    clients.map((client) => client.notify.close({ path: input.path, deleted: input.deleted })),
+    clients.map((client) =>
+      client.notify.close({ path: input.path, deleted: input.deleted, deadline: input.deadline }),
+    ),
   )
+  let failed = false
   for (let i = 0; i < results.length; i++) {
     const result = results[i]
     if (result.status === "rejected") {
+      failed = true
       log.error("failed to close file for client", {
         err: result.reason,
         file: input.path,
@@ -44,4 +51,5 @@ export async function closeAll(clients: NotifyClient[], input: { path: string; d
       })
     }
   }
+  if (failed && input.deadline !== undefined) throw new Error("LSP document cleanup is incomplete")
 }

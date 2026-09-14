@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { memoryProfile, LOW_MEMORY_IDLE_MS, speculativeLspPrewarmEnabled } from "../src/prewarm-profile"
+import {
+  memoryProfile,
+  LOW_MEMORY_IDLE_MS,
+  lspIdleMs,
+  NORMAL_MEMORY_IDLE_MS,
+  speculativeLspPrewarmEnabled,
+} from "../src/prewarm-profile"
 import { ContentCache } from "../src/content-cache"
 import { ClientActivity } from "../src/client-activity"
 import { WorkQueue, memoryWork } from "../src/memory-work"
@@ -219,4 +225,22 @@ describe("LSP admission and idle safety", () => {
     )
     expect(peak).toBe(1)
   })
+})
+
+test("idle reclamation defaults, override, and explicit disable are bounded and deterministic", () => {
+  try {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "normal")
+    for (const invalid of ["", "-1", "NaN", "1.5", "9007199254740992"]) {
+      vi.stubEnv("AX_CODE_LSP_IDLE_MS", invalid)
+      expect(lspIdleMs()).toBe(NORMAL_MEMORY_IDLE_MS)
+    }
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "low")
+    expect(lspIdleMs()).toBe(LOW_MEMORY_IDLE_MS)
+    vi.stubEnv("AX_CODE_LSP_IDLE_MS", "0")
+    expect(lspIdleMs()).toBe(0)
+    vi.stubEnv("AX_CODE_LSP_IDLE_MS", "120000")
+    expect(lspIdleMs()).toBe(120000)
+  } finally {
+    vi.unstubAllEnvs()
+  }
 })

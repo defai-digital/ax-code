@@ -1,6 +1,7 @@
 import z from "zod"
 import * as path from "path"
 import * as fs from "fs/promises"
+import { LSP } from "@ax-code/ax-code-intel"
 import { Tool } from "./tool"
 import { Bus } from "../bus"
 import { File } from "../file"
@@ -504,6 +505,35 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
       throw error
     }
 
+    // Retire deleted/renamed-away server documents only after the transaction
+    // succeeds. Diagnostics must not retain buffers for files that no longer exist.
+    let cleanupIncomplete = false
+    const closeDeadline = Date.now() + 2000
+    for (const update of updates) {
+      if (update.event !== "unlink") continue
+      try {
+        // A later operation in the patch may recreate a removed source path.
+        if (
+          await fs
+            .lstat(update.file)
+            .then(() => true)
+            .catch((error: unknown) => {
+              if (errorCode(error) === "ENOENT") return false
+              throw error
+            })
+        )
+          continue
+        if (Date.now() >= closeDeadline) {
+          cleanupIncomplete = true
+          break
+        }
+        await LSP.closeFile(update.file, true, closeDeadline)
+      } catch (error) {
+        cleanupIncomplete = true
+        log.warn("failed to close removed LSP document", { file: update.file, error })
+      }
+    }
+
     for (const file of editedFiles) {
       await Bus.publish(File.Event.Edited, { file })
     }
@@ -534,6 +564,9 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     const changedFiles = fileChanges.filter((c) => c.type !== "delete").map((c) => c.movePath ?? c.filePath)
     const { diagnostics, output: diagOutput } = await collectDiagnostics(changedFiles)
     let output = `Success. Updated the following files:\n${summaryLines.join("\n")}` + diagOutput
+    if (cleanupIncomplete)
+      output +=
+        "\n\nLSP document cleanup was incomplete. File changes were saved; run a full project type check to verify diagnostics."
 
     return {
       title: output,

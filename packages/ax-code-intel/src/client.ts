@@ -326,6 +326,7 @@ export namespace LSPClient {
     const diagnostics = new Map<string, Diagnostic[]>()
     const serverLanguageId = input.languageId
     let closing = false
+    let incompleteClose = false
     let closeNotified = false
 
     function notifyClosed(error?: unknown) {
@@ -507,6 +508,7 @@ export namespace LSPClient {
 
     const lastContent = new ContentCache(sourceCacheBytes())
     const diagnosticTargets = new Set<string>()
+    const diagnosticWaits = new Map<string, { generation: number; promise: Promise<void> }>()
     let refreshTimer: ReturnType<typeof setTimeout> | undefined
     let refreshRunning = false
     let refreshAgain = false
@@ -523,7 +525,9 @@ export namespace LSPClient {
           for (const filePath of [...diagnosticTargets]) {
             if (closing) break
             if (files[filePath] === undefined || !staleDiagnostics.has(filePath)) continue
-            await withPathLock(filePath, () => refreshDiagnostics(filePath))
+            await withPathLock(filePath, async () => {
+              if (staleDiagnostics.has(filePath)) await refreshDiagnostics(filePath)
+            })
           }
         })()
           .catch((error) => l.warn("diagnostic refresh failed", { error }))
@@ -653,40 +657,50 @@ export namespace LSPClient {
     // entry while already holding the per-path lock. Callers from
     // outside the lock must go through notify.close, which wraps this
     // with withPathLock.
-    async function closeUnlocked(input: { path: string; deleted?: boolean }): Promise<boolean> {
+    async function closeUnlocked(input: { path: string; deleted?: boolean; deadline?: number }): Promise<boolean> {
       const normalized = input.path
       if (files[normalized] === undefined) return false
+      const deadline = input.deadline ?? Date.now() + 2000
+      const notify = async (method: string, params: unknown) => {
+        const remaining = deadline - Date.now()
+        try {
+          if (remaining <= 0) throw new Error("LSP close delivery deadline expired")
+          await withTimeout(connection.sendNotification(method, params), remaining)
+        } catch (error) {
+          // Local buffers can be freed, but uncertain server delivery cannot
+          // establish a complete diagnostic inventory until this client restarts.
+          incompleteClose = true
+          l.warn("LSP close delivery is incomplete", { path: normalized, error })
+        }
+      }
       if (documentSync.openClose) {
         log.info("textDocument/didClose", { path: normalized })
-        await connection
-          .sendNotification("textDocument/didClose", {
-            textDocument: {
-              uri: pathToFileURL(normalized).href,
-            },
-          })
-          .catch(() => {
-            // Server may be dead or unresponsive. We still want to
-            // clean up local state.
-          })
+        await notify("textDocument/didClose", {
+          textDocument: {
+            uri: pathToFileURL(normalized).href,
+          },
+        }).catch(() => {
+          // Server may be dead or unresponsive. We still want to
+          // clean up local state.
+        })
       }
       if (input.deleted) {
         noteWorkspaceChange()
-        await connection
-          .sendNotification("workspace/didChangeWatchedFiles", {
-            changes: [
-              {
-                uri: pathToFileURL(normalized).href,
-                type: 3, // Deleted
-              },
-            ],
-          })
-          .catch(() => {
-            // Same policy as didClose: deletion signal is best-effort,
-            // local cleanup still wins if the server is already gone.
-          })
+        await notify("workspace/didChangeWatchedFiles", {
+          changes: [
+            {
+              uri: pathToFileURL(normalized).href,
+              type: 3, // Deleted
+            },
+          ],
+        }).catch(() => {
+          // Same policy as didClose: deletion signal is best-effort,
+          // local cleanup still wins if the server is already gone.
+        })
       }
       delete files[normalized]
       diagnosticTargets.delete(normalized)
+      diagnosticWaits.delete(normalized)
       invalidateDiagnostics()
       staleDiagnostics.delete(normalized)
       lastContent.delete(normalized)
@@ -696,6 +710,9 @@ export namespace LSPClient {
 
     const result = {
       activity,
+      get openPaths() {
+        return Object.keys(files)
+      },
       get cachedContentBytes() {
         return lastContent.bytes
       },
@@ -727,6 +744,7 @@ export namespace LSPClient {
       notify: {
         async open(input: { path: string; waitForDiagnostics?: boolean }) {
           const normalized = normalizeDocumentPath(input.path)
+          const priorDiagnostics = diagnostics.get(normalized)
           // Serialize per-path. Concurrent opens for the same file would
           // otherwise race on the `files[path]` read-modify-write and
           // send duplicate didChange notifications with the same version
@@ -760,7 +778,16 @@ export namespace LSPClient {
                   path: normalized,
                   version,
                 })
-                if (input.waitForDiagnostics) await refreshDiagnostics(normalized)
+                // Another overlapping open may have completed a current pull
+                // while this call waited for the path lock. Reuse only that
+                // fresh response; a sequential open still refreshes explicitly.
+                if (
+                  input.waitForDiagnostics &&
+                  (staleDiagnostics.has(normalized) ||
+                    !diagnostics.has(normalized) ||
+                    diagnostics.get(normalized) === priorDiagnostics)
+                )
+                  await refreshDiagnostics(normalized)
                 return false
               }
 
@@ -886,21 +913,27 @@ export namespace LSPClient {
             return true
           })
         },
-        async close(input: { path: string; deleted?: boolean }) {
+        async close(input: { path: string; deleted?: boolean; deadline?: number }) {
           const normalized = normalizeDocumentPath(input.path)
-          return withPathLock(normalized, () => closeUnlocked({ path: normalized, deleted: input.deleted }))
+          const deadline = input.deadline ?? Date.now() + 2000
+          return withPathLock(
+            normalized,
+            () => closeUnlocked({ path: normalized, deleted: input.deleted, deadline }),
+            deadline,
+          )
         },
       },
       get diagnostics() {
         return diagnostics
       },
       get diagnosticsDegraded() {
-        return staleDiagnostics.size > 0
+        return incompleteClose || staleDiagnostics.size > 0
       },
       diagnosticsStale(filePath: string) {
-        return staleDiagnostics.has(normalizeDocumentPath(filePath))
+        return incompleteClose || staleDiagnostics.has(normalizeDocumentPath(filePath))
       },
       async refreshDiagnosticInventory() {
+        if (incompleteClose) throw new Error("LSP diagnostic inventory is incomplete after failed document cleanup")
         if (!pullsDiagnostics) return
         if (Object.keys(files).length > MAX_CACHED_DIAGNOSTICS)
           throw new Error("Native diagnostic inventory exceeds the collection limit")
@@ -916,7 +949,10 @@ export namespace LSPClient {
             if (closing || Date.now() >= deadline) break
             await withPathLock(
               filePath,
-              () => refreshDiagnostics(filePath, Math.max(1, deadline - Date.now())),
+              async () => {
+                if (staleDiagnostics.has(filePath))
+                  await refreshDiagnostics(filePath, Math.max(1, deadline - Date.now()))
+              },
               deadline,
             )
           }
@@ -926,7 +962,28 @@ export namespace LSPClient {
       },
       async waitForDiagnostics(input: { path: string }) {
         const normalizedPath = normalizeDocumentPath(input.path)
-        if (pullsDiagnostics) return withPathLock(normalizedPath, () => refreshDiagnostics(normalizedPath))
+        if (pullsDiagnostics) {
+          const existing = diagnosticWaits.get(normalizedPath)
+          if (existing?.generation === diagnosticGeneration) return existing.promise
+          // Share only overlapping waits within this workspace generation.
+          // Sequential explicit requests still ask the server for fresh results.
+          const entry = {
+            generation: diagnosticGeneration,
+            promise: withPathLock(normalizedPath, async () => {
+              await refreshDiagnostics(normalizedPath)
+              if (closing || files[normalizedPath] === undefined || staleDiagnostics.has(normalizedPath)) {
+                throw new Error("Native diagnostics are incomplete; retry after the workspace settles")
+              }
+            }),
+          }
+          diagnosticWaits.set(normalizedPath, entry)
+          try {
+            await entry.promise
+          } finally {
+            if (diagnosticWaits.get(normalizedPath) === entry) diagnosticWaits.delete(normalizedPath)
+          }
+          return
+        }
         return await activity.run(() => diagnosticsWaitStarted({ path: normalizedPath }))
       },
       // Liveness check. Uses signal 0 (kill -0), which doesn't actually
@@ -952,6 +1009,7 @@ export namespace LSPClient {
         closing = true
         if (refreshTimer) clearTimeout(refreshTimer)
         diagnosticTargets.clear()
+        diagnosticWaits.clear()
         lastContent.clear()
         diagnostics.clear()
         // Wrap end() and dispose() so a broken-stream throw from

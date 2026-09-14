@@ -29,6 +29,18 @@ export function speculativeLspPrewarmEnabled() {
 }
 
 export const LOW_MEMORY_IDLE_MS = 5 * 60_000
+export const NORMAL_MEMORY_IDLE_MS = 30 * 60_000
+
+// A process lifetime policy, not a heap or machine-wide RAM ceiling.
+export function lspIdleMs() {
+  const override = process.env.AX_CODE_LSP_IDLE_MS
+  if (override !== undefined && /^\d+$/.test(override)) {
+    const value = Number(override)
+    if (Number.isSafeInteger(value)) return value
+  }
+  return memoryProfile() === "low" ? LOW_MEMORY_IDLE_MS : NORMAL_MEMORY_IDLE_MS
+}
+
 export function sourceCacheBytes() {
   return (memoryProfile() === "low" ? 4 : 16) * 1024 ** 2
 }

@@ -41,7 +41,34 @@ edit tools disclose this condition without losing the successful file edit.
 Other language servers retain their
 existing push diagnostics behavior.
 
-Existing memory-profile, idle-reaping, and opt-in prewarm controls still apply.
+Overlapping explicit diagnostic waits for the same file share a request only
+within the same workspace generation. Sequential requests still refresh; a
+workspace change prevents reuse of an older in-flight request. Background and
+inventory refreshes recheck freshness after waiting for a document lock.
+
+Successful patch deletions and moves close the removed source documents in the
+language service. Failed patch transactions retain their document state. Cleanup has a shared
+two-second deadline and skips paths recreated by a later operation in the same
+patch. Incomplete cleanup is disclosed without undoing saved edits. If delivery
+to the server times out, diagnostics remain incomplete until that client restarts.
+
+Idle language servers are reclaimed after 30 minutes in the normal memory
+profile, or five minutes with `AX_CODE_MEMORY_PROFILE=low`. Reclamation runs on
+the existing one-minute health-check interval and waits for active and queued
+requests to settle. Servers restart on demand. `AX_CODE_LSP_IDLE_MS` overrides
+the idle duration in milliseconds; `0` disables idle reclamation. Invalid values
+use the profile default. These settings do not impose a process RAM ceiling or
+a machine-wide budget. Speculative prewarming remains opt-in.
+
+Reclaiming a server discards its diagnostic inventory. Aggregated results remain
+marked degraded until previously open documents have been reopened and checked,
+or explicitly removed. The raw inventory API rejects incomplete coverage.
+The coverage ledger is limited to 2,000 paths; overflow remains conservatively
+incomplete until the project instance is disposed. Reclaiming an empty server
+loses no coverage. Edit tools preserve saved
+changes and disclose that diagnostics are incomplete. Use a full project type
+check to establish whether the project is clean.
+
 Native compilation does not guarantee a particular resident-memory reduction.
 Compare the same project, open documents, requests, and process-tree RSS before
 making a memory claim.

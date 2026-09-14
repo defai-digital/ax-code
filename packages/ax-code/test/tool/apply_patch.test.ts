@@ -10,6 +10,7 @@ vi.mock("fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("fs/promises")>()
   return { ...actual, default: { ...(actual as any).default } }
 })
+import { LSP } from "@ax-code/ax-code-intel"
 import { ApplyPatchTool } from "../../src/tool/apply_patch"
 import { Instance } from "../../src/project/instance"
 import { FileTime } from "../../src/file/time"
@@ -940,5 +941,97 @@ EOF`
         expect(await fs.readFile(target, "utf-8")).toBe(`He said "hi"\nsome${emDash}dash\nend\n`)
       },
     })
+  })
+})
+
+test.each(["delete", "move"])(
+  "closes %s source documents after a successful transaction even when LSP cleanup fails",
+  async (kind) => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const source = path.join(fixture.path, "old.txt")
+        await writeAndTrack(source, "old\n")
+        const close = vi.spyOn(LSP, "closeFile").mockImplementation(async (file, deleted) => {
+          expect(file).toBe(source)
+          expect(deleted).toBe(true)
+          await expect(fs.stat(source)).rejects.toThrow()
+          throw new Error("LSP unavailable")
+        })
+        try {
+          const patchText =
+            kind === "delete"
+              ? "*** Begin Patch\n*** Delete File: old.txt\n*** End Patch"
+              : "*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n@@\n-old\n+new\n*** End Patch"
+          await execute({ patchText }, ctx)
+          expect(close).toHaveBeenCalledExactlyOnceWith(source, true, expect.any(Number))
+          if (kind === "move") expect(await fs.readFile(path.join(fixture.path, "new.txt"), "utf8")).toBe("new\n")
+        } finally {
+          close.mockRestore()
+        }
+      },
+    })
+  },
+)
+
+test("rolled-back deletions do not close LSP documents", async () => {
+  await using fixture = await tmpdir()
+  const { ctx } = makeCtx()
+  await Instance.provide({
+    directory: fixture.path,
+    fn: async () => {
+      const first = path.join(fixture.path, "first.txt")
+      const second = path.join(fixture.path, "second.txt")
+      await writeAndTrack(first, "first\n")
+      await writeAndTrack(second, "second\n")
+      const originalUnlink = fs.unlink
+      const close = vi.spyOn(LSP, "closeFile").mockResolvedValue(undefined)
+      const unlink = vi.spyOn(fs, "unlink").mockImplementation(async (file) => {
+        if (file === second) throw new Error("Injected delete failure")
+        await originalUnlink(file)
+      })
+      try {
+        await expect(
+          execute(
+            { patchText: "*** Begin Patch\n*** Delete File: first.txt\n*** Delete File: second.txt\n*** End Patch" },
+            ctx,
+          ),
+        ).rejects.toThrow("Injected delete failure")
+        expect(await fs.readFile(first, "utf8")).toBe("first\n")
+        expect(await fs.readFile(second, "utf8")).toBe("second\n")
+        expect(close).not.toHaveBeenCalled()
+      } finally {
+        unlink.mockRestore()
+        close.mockRestore()
+      }
+    },
+  })
+})
+
+test("preserves a source path recreated before post-transaction LSP cleanup", async () => {
+  await using fixture = await tmpdir()
+  const { ctx } = makeCtx()
+  await Instance.provide({
+    directory: fixture.path,
+    fn: async () => {
+      const source = path.join(fixture.path, "source.txt")
+      await writeAndTrack(source, "old\n")
+      const originalUnlink = fs.unlink
+      const close = vi.spyOn(LSP, "closeFile").mockResolvedValue(undefined)
+      const unlink = vi.spyOn(fs, "unlink").mockImplementation(async (file) => {
+        await originalUnlink(file)
+        if (file === source) await fs.writeFile(source, "recreated\n")
+      })
+      try {
+        await execute({ patchText: "*** Begin Patch\n*** Delete File: source.txt\n*** End Patch" }, ctx)
+        expect(await fs.readFile(source, "utf8")).toBe("recreated\n")
+        expect(close).not.toHaveBeenCalled()
+      } finally {
+        unlink.mockRestore()
+        close.mockRestore()
+      }
+    },
   })
 })

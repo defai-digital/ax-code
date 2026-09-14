@@ -1,4 +1,5 @@
 import { test, expect, vi } from "vitest"
+import fs from "node:fs/promises"
 import { spawn } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { Instance, tmpdir } from "./harness"
@@ -6,10 +7,18 @@ import { LSPClient } from "../src/client"
 import { LSPServerConfig } from "../src/server-config"
 import { LSP } from "../src/index-impl"
 import { codeIntelHost, configureCodeIntelHost } from "../src/host"
-import { LOW_MEMORY_IDLE_MS } from "../src/prewarm-profile"
+import { LOW_MEMORY_IDLE_MS, NORMAL_MEMORY_IDLE_MS } from "../src/prewarm-profile"
 
-test("low profile reaps only idle clients and restarts on demand without a false clean inventory", async () => {
-  vi.stubEnv("AX_CODE_MEMORY_PROFILE", "low")
+let dispose: (() => Promise<void>) | undefined
+
+test.each([
+  ["low", LOW_MEMORY_IDLE_MS, true],
+  ["normal", NORMAL_MEMORY_IDLE_MS, true],
+  ["normal", NORMAL_MEMORY_IDLE_MS, false],
+  ["normal", NORMAL_MEMORY_IDLE_MS, "push"],
+] as const)("%s profile reaps only idle clients and preserves incomplete coverage", async (profile, idleMs, opened) => {
+  vi.stubEnv("AX_CODE_MEMORY_PROFILE", profile)
+  vi.stubEnv("AX_CODE_LSP_IDLE_MS", "invalid")
   await using tmp = await tmpdir()
   const clients: LSPClient.Info[] = []
   const originalCreate = LSPClient.create
@@ -35,7 +44,6 @@ test("low profile reaps only idle clients and restarts on demand without a false
     return originalInterval(callback, ms)
   }) as typeof setInterval)
   const host = codeIntelHost()
-  let dispose: (() => Promise<void>) | undefined
   configureCodeIntelHost({
     ...host,
     state: (init, cleanup) => {
@@ -51,27 +59,52 @@ test("low profile reaps only idle clients and restarts on demand without a false
         await LSP.prewarmFiles([`${tmp.path}/source.ts`])
         expect(clients).toHaveLength(1)
         expect(await LSP.status()).toHaveLength(1)
+        // An empty warmed server can be reclaimed without losing coverage.
+        const source = `${tmp.path}/source.ts`
+        await fs.writeFile(source, "export const value = 1\n")
+        if (opened === true) await clients[0].notify.open({ path: source })
+        if (opened === "push")
+          await clients[0].connection.sendRequest("test/publishDiagnostics", {
+            uri: new URL(`file://${source}`).href,
+            diagnostics: [],
+          })
         const release = clients[0].activity.retain()
         const now = performance.now()
-        const clock = vi.spyOn(performance, "now").mockReturnValue(now + LOW_MEMORY_IDLE_MS * 2)
+        const clock = vi.spyOn(performance, "now").mockReturnValue(now + idleMs * 2)
         for (const tick of intervals) tick()
         expect(await LSP.status()).toHaveLength(1)
         release()
         for (const tick of intervals) tick()
         expect(await LSP.status()).toHaveLength(1)
-        clock.mockReturnValue(now + LOW_MEMORY_IDLE_MS * 4)
+        clock.mockReturnValue(now + idleMs * 4)
+        vi.stubEnv("AX_CODE_LSP_IDLE_MS", "0")
+        for (const tick of intervals) tick()
+        expect(await LSP.status()).toHaveLength(1)
+        vi.stubEnv("AX_CODE_LSP_IDLE_MS", "invalid")
         for (const tick of intervals) tick()
         expect(await LSP.status()).toHaveLength(0)
-        expect((await LSP.diagnosticsAggregated()).degraded).toBe(true)
+        if (opened) await expect(LSP.diagnostics()).rejects.toThrow("incomplete")
+        else expect(await LSP.diagnostics()).toEqual({})
+        expect((await LSP.diagnosticsAggregated()).degraded).toBe(Boolean(opened))
         clock.mockRestore()
         await LSP.prewarmFiles([`${tmp.path}/source.ts`])
         expect(clients).toHaveLength(2)
+        if (opened) await expect(LSP.diagnostics()).rejects.toThrow("incomplete")
+        else expect(await LSP.diagnostics()).toEqual({})
         expect(await LSP.status()).toHaveLength(1)
-        expect((await LSP.diagnosticsAggregated()).degraded).toBe(true)
+        expect((await LSP.diagnosticsAggregated()).degraded).toBe(Boolean(opened))
+        await clients[1].notify.open({ path: source })
+        await clients[1].connection.sendRequest("test/publishDiagnostics", {
+          uri: new URL(`file://${source}`).href,
+          diagnostics: [],
+        })
+        expect(await LSP.diagnostics()).toEqual({ [source]: [] })
+        expect((await LSP.diagnosticsAggregated()).degraded).toBe(false)
         await dispose?.()
       },
     })
   } finally {
+    await dispose?.()
     await Promise.all(clients.map((client) => client.shutdown()))
     configureCodeIntelHost(host)
     vi.restoreAllMocks()
