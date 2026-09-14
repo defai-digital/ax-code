@@ -109,27 +109,32 @@ export namespace GoalPlanBaseline {
   }
 }
 
+const GIT_INVOCATION = /\bgit\b|\bmerge-base\b|\$(?:\{GIT\}|GIT\b)/
+const GIT_PATHSPEC_PREFIX = /(?:\bgit|\$\{GIT\}|\$GIT\b)(?:\s+[^\s]+)*\s--\s.*$/
+
 function looksLikeGitCommand(command: string) {
-  return /\bgit\b|\bmerge-base\b|\$GIT\b/.test(command)
+  return GIT_INVOCATION.test(command)
 }
 
 function isGitRevisionSegment(part: string) {
-  return /\bgit\b|\bmerge-base\b|\$GIT\b|\b(?:diff|log|show|rev-list|rev-parse)\b/.test(part)
+  return GIT_INVOCATION.test(part)
 }
 
 function gitRevisionText(command: string) {
-  // Only git/merge-base segments contribute before-states. `grep origin/main`
-  // in a later command must not be treated as a git revision.
+  // Only git / $GIT / ${GIT} / merge-base segments contribute before-states.
+  // Later Unix `diff`/`grep origin/main` must not be treated as a git revision.
   return command
     .split(/\s*(?:&&|\|\||;|\||&)\s*/)
     .filter((part) => isGitRevisionSegment(part))
-    .map((part) =>
-      part.replace(/\bgit(?:\s+[^\s]+)*\s--\s.*$/, (matched) => {
-        const cut = matched.search(/\s--\s/)
-        return cut === -1 ? matched : matched.slice(0, cut)
-      }),
-    )
+    .map(stripGitPathspec)
     .join(" ")
+}
+
+function stripGitPathspec(part: string) {
+  return part.replace(GIT_PATHSPEC_PREFIX, (matched) => {
+    const cut = matched.search(/\s--\s/)
+    return cut === -1 ? matched : matched.slice(0, cut)
+  })
 }
 
 function remoteBeforeStateError(checkId: string, refs: string[]) {
