@@ -1899,25 +1899,9 @@
       "count": 485,
       "findings": [
         {
-          "fingerprint": "ac110f04260c483cf0241ca9c330315691931c3d5bbe4a4717f977b833cd5dae",
+          "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
           "file": "../ax-code-intel/src/client.ts",
-          "line": 619,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "10df9032e9938af047eeef2058e6333892fb89804a0a38c002b7e3ffd55b45df",
-          "file": "../ax-code-intel/src/client.ts",
-          "line": 775,
-          "severity": "high",
-          "kind": "path_traversal",
-          "summary": "path_traversal"
-        },
-        {
-          "fingerprint": "c64281151e1dc8ed133228db5229929167dc32071a0020ee50583a9358d16114",
-          "file": "../ax-code-intel/src/client.ts",
-          "line": 784,
+          "line": 494,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -1934,6 +1918,14 @@
           "fingerprint": "0676e100dad0cff305cf75b6814ad3376f9fae7b6bf93b9ab4e5368c324f64b5",
           "file": "../ax-code-intel/src/index-impl.ts",
           "line": 802,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "c65ca0c2907d67fba1979894817c3608b8730a65860512cfcedfa6b702eabe3a",
+          "file": "../ax-code-intel/src/index-impl.ts",
+          "line": 900,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"
@@ -2198,6 +2190,14 @@
           "fingerprint": "eafde35102689ec4345e6e64be7c68841dd3509875b1f961e7d5c86575347390",
           "file": "../ax-code-intel/src/server-releases.ts",
           "line": 501,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "4fafa60cb35789ec88aeb67e8f248fd3e5a9b37c4ec2070117a53e7e315d9626",
+          "file": "../ax-code-intel/src/typescript-native.ts",
+          "line": 43,
           "severity": "high",
           "kind": "path_traversal",
           "summary": "path_traversal"

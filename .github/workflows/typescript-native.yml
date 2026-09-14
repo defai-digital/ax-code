@@ -1,0 +1,75 @@
+name: TypeScript native qualification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, dev]
+    paths:
+      - ".github/workflows/typescript-native.yml"
+      - "script/verify-typescript-native.cjs"
+      - "script/verify-typescript-native.test.ts"
+      - "packages/ax-code-intel/**"
+      - "packages/ax-code/**"
+      - ".github/actions/setup-ax-code-toolchain/**"
+      - "packages/plugin/tsconfig.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  pull_request:
+    paths:
+      - ".github/workflows/typescript-native.yml"
+      - "script/verify-typescript-native.cjs"
+      - "script/verify-typescript-native.test.ts"
+      - "packages/ax-code-intel/**"
+      - "packages/ax-code/**"
+      - ".github/actions/setup-ax-code-toolchain/**"
+      - "packages/plugin/tsconfig.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: typescript-native-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: TypeScript 7 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            distribution: ax-code-darwin-arm64
+          - os: ubuntu-24.04
+            distribution: ax-code-linux-x64
+          - os: ubuntu-24.04-arm
+            distribution: ax-code-linux-arm64
+          - os: windows-2022
+            distribution: ax-code-windows-x64
+          - os: windows-11-arm
+            distribution: ax-code-windows-arm64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ax-code-toolchain
+        with:
+          checkout: "false"
+          node-version: "26"
+      - name: Install pinned dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Test native diagnostics and lifecycle
+        working-directory: packages/ax-code-intel
+        run: pnpm exec vitest run test/typescript-native.test.ts test/native-client-contract.test.ts test/memory.test.ts test/memory-lifecycle.test.ts --retry=0 --testTimeout=60000
+      - name: Test qualification process cleanup
+        run: pnpm exec vitest run script/verify-typescript-native.test.ts --retry=0
+      - name: Compile SDK
+        run: pnpm --dir packages/sdk/js exec tsc
+      - name: Build Plugin
+        run: pnpm --dir packages/plugin run build
+      - name: Build candidate distribution
+        run: pnpm --dir packages/ax-code exec tsx script/build-node-tui.ts
+      - name: Verify relocated native TypeScript runtime
+        run: node script/verify-typescript-native.cjs packages/ax-code/dist/${{ matrix.distribution }}

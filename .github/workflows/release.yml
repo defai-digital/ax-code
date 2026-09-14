@@ -324,6 +324,9 @@ jobs:
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
 
+      - name: Verify relocated native TypeScript runtime
+        run: node script/verify-typescript-native.cjs packages/ax-code/dist/ax-code-${{ matrix.targets == 'win32-x64' && 'windows-x64' || matrix.targets == 'win32-arm64' && 'windows-arm64' || matrix.targets }}
+
       - name: Smoke — release runtime
         working-directory: packages/ax-code
         shell: bash
