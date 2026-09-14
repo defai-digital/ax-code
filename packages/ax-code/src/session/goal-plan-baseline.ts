@@ -187,7 +187,8 @@ function commandWord(segment: string) {
   return { value: current.value, rest: words.slice(index + 1) }
 }
 
-const SHELL_VALUE_OPTIONS = new Set(["-o", "-O", "-W", "--rcfile", "--init-file"])
+const SHELL_VALUE_OPTIONS = new Set(["-o", "--rcfile", "--init-file"])
+const SHELL_OPTIONAL_VALUE_FLAGS = new Set(["-O", "-W"])
 
 function dashCScript(args: ShellWord[]) {
   for (let index = 0; index < args.length; index++) {
@@ -200,8 +201,12 @@ function dashCScript(args: ShellWord[]) {
     }
     if (value.startsWith("--rcfile=") || value.startsWith("--init-file=")) continue
     if (SHELL_VALUE_OPTIONS.has(value)) {
+      if (index + 1 < args.length) index++
+      continue
+    }
+    if (SHELL_OPTIONAL_VALUE_FLAGS.has(value)) {
       const next = args[index + 1]?.value
-      if (next && !next.startsWith("-")) index++
+      if (next !== undefined && !next.startsWith("-")) index++
       continue
     }
     if (value.startsWith("-")) continue
@@ -321,6 +326,7 @@ function shellWords(input: string) {
 function commandSubstitutions(input: string) {
   const found: string[] = []
   let quote: "none" | "single" | "double" = "none"
+  let justClosedSubstitution = false
   for (let index = 0; index < input.length; ) {
     const char = input[index]!
     if (quote === "single") {
@@ -367,22 +373,30 @@ function commandSubstitutions(input: string) {
       index += 2
       continue
     }
-    if (char === "#" && (index === 0 || /[\s;&|]/.test(input[index - 1]!))) {
-      while (index < input.length && input[index] !== "\n") index++
-      continue
+    if (char === "#") {
+      const glued = justClosedSubstitution
+      justClosedSubstitution = false
+      const previous = index === 0 ? "" : input[index - 1]!
+      if (!glued && (index === 0 || /[\s;&|]/.test(previous) || previous === ")")) {
+        while (index < input.length && input[index] !== "\n") index++
+        continue
+      }
     }
     if (char === "$" && input[index + 1] === "(") {
       const [inner, next] = readBalancedParen(input, index + 2)
       found.push(inner)
       index = next
+      justClosedSubstitution = true
       continue
     }
     if (char === "`") {
       const [inner, next] = readBacktick(input, index + 1)
       found.push(inner)
       index = next
+      justClosedSubstitution = true
       continue
     }
+    justClosedSubstitution = false
     index++
   }
   return found
