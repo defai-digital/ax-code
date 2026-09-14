@@ -60,7 +60,7 @@ import {
   sanitizePromptInput,
   windowsClipboardTextPaste,
 } from "./view-model"
-import { FooterStickmanSpinner } from "../footer-stickman"
+import { FooterAnimationSpinner } from "../footer-animation"
 import { summarizedPasteViews } from "./paste-view-model"
 import {
   footerContextGauge,
@@ -343,6 +343,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     return computeSessionMainPaneWidth({
       terminalWidth: dimensions().width,
       sidebarVisible,
+      // Match the Session route's canonical computation: without the user's
+      // sidebar width preset this drifts from the parent for non-default widths.
+      sidebarPreferredWidth: kv.get("sidebar_width"),
     })
   })
 
@@ -893,13 +896,12 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     return `Ask anything... "${PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]}"`
   })
 
-  // Footer busy glyph: an 8x5 matchstick man (two braille rows) that walks a
-  // couple of steps, punches, and kicks. It deliberately does NOT share a frame
-  // set with the terminal-tab A/X morph: the tab is a single OSC line, while
-  // this glyph needs two rows, so the two surfaces animate independently.
-  // Braille is Narrow-width, unlike the Ambiguous-width block glyphs (U+25A0)
-  // the old 8-cell "Knight Rider" scanner used, which drift CJK layouts.
-  const spinnerColor = createMemo(() => local.agent.color(local.agent.current().name))
+  // Footer busy indicator: two animal emoji picked at random from a large pool
+  // and reshuffled every three seconds. They replace the old braille pixel art
+  // in the footer, while the tab keeps its own A/X dot-matrix morph. Only
+  // astral-plane emoji are used: this renderer gives those a fixed two-cell
+  // width, whereas a base symbol plus U+FE0F measures one cell and would
+  // misalign the row.
 
   // Context-window usage for the footer gauge (ADR-086). Undefined — and
   // therefore not rendered — unless auto-compaction is disabled: those
@@ -1452,7 +1454,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                       </text>
                     }
                   >
-                    <FooterStickmanSpinner color={spinnerColor()} />
+                    <FooterAnimationSpinner />
                   </Show>
                   <Show when={busyStatus()?.stale}>
                     <text fg={theme.warning}>!</text>

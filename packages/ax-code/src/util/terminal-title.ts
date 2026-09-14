@@ -18,11 +18,11 @@ export const AX_CODE_TERMINAL_TITLE = "AX-Code"
 // Busy-tab activity glyph: a 4-column by 4-row dot matrix (two full 8-dot
 // braille cells). It morphs back and forth between "A" and "X" — the AX brand
 // mark — one dot flip per frame, so a busy session shows a small brand pulse
-// in the tab. The footer shows a larger 6x6 glyph on its own surface
-// (component/footer-animal.tsx); the two surfaces deliberately do not share a
-// frame set, because an OSC tab title cannot span the two rows a 6x6 glyph
-// needs. Braille is CJK-safe (Narrow width); the previous "Knight Rider"
-// scanner used Ambiguous-width block glyphs that drift CJK layouts.
+// in the tab. The footer shows two random animal emoji reshuffled every three
+// seconds (component/footer-animation); the two surfaces deliberately do not
+// share a frame set. Braille is CJK-safe (Narrow width); the previous
+// "Knight Rider" scanner used Ambiguous-width block glyphs that drift CJK
+// layouts.
 const TITLE_GLYPH_ROWS = 4
 const TITLE_GLYPH_COLUMNS = 4
 

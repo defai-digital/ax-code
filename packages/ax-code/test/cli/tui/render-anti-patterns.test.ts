@@ -1125,13 +1125,13 @@ describe("AX Code TUI stability guardrails", () => {
   test("keeps the footer busy glyph separate from the terminal-tab morph", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
-    // The footer shows a two-line 8x5 matchstick man (component/footer-stickman)
-    // while the OSC tab title keeps a single-line 4x4 A/X morph. They
-    // deliberately do not share a frame set: the tab cannot span the two rows
-    // the stickman needs. The local 8-cell "Knight Rider" scanner
-    // (createFrames/createColors) and its Ambiguous-width block glyphs must not
+    // The footer busy indicator is two random animal emoji reshuffled every
+    // three seconds (component/footer-animation) - no frame set at all, and
+    // deliberately separate from the terminal-tab 4x4 A/X morph. The local
+    // 8-cell "Knight Rider" scanner (createFrames/createColors), its
+    // Ambiguous-width block glyphs, and ax-tui's one-line <spinner> must not
     // come back.
-    expect(prompt).toContain("FooterStickmanSpinner")
+    expect(prompt).toContain("FooterAnimationSpinner")
     expect(prompt).not.toContain("AX_CODE_TITLE_SPINNER_FRAMES")
     expect(prompt).not.toContain("AxTuiSpinner")
     expect(prompt).not.toContain("createFrames")
