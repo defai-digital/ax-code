@@ -6,6 +6,12 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.16.6] - 2026-09-14
+
+### Changed
+
+- Prepare AX Code 7.16.6 and SDK 2.5.19.
+
 ### Added
 
 - Play the Matrix rain overlay once when the TUI starts, on by default and disabled with the "Matrix rain on startup" command toggle; it still honors `animations_enabled` and the compiled-runtime policy.
