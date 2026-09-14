@@ -2,7 +2,6 @@ import fs from "fs"
 import path from "path"
 import { createRequire } from "module"
 import { fileURLToPath } from "url"
-import { spawnSync } from "node:child_process"
 import esbuild from "esbuild"
 import { SkillLint } from "./check-skills"
 import { solidEsbuildPlugin } from "./esbuild-solid-plugin"
@@ -48,103 +47,6 @@ const legacyName = `${pkg.name}-${platform}-${arch}`
 const outRoot = path.join(dir, "dist", legacyName)
 const outBin = path.join(outRoot, "bin")
 const outLib = path.join(outRoot, "lib")
-const bundledNodeName = process.platform === "win32" ? "node.exe" : "node"
-
-type FfiNodeRuntime = {
-  path: string
-  version: string
-  platform: NodeJS.Platform
-  arch: NodeJS.Architecture
-}
-
-function inspectFfiNodeRuntime(nodePath: string): FfiNodeRuntime | undefined {
-  const result = spawnSync(
-    nodePath,
-    [
-      "--experimental-ffi",
-      "--disable-warning=ExperimentalWarning",
-      "-e",
-      "require('node:ffi'); process.stdout.write([process.version, process.platform, process.arch].join('\\n'))",
-    ],
-    {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 5_000,
-    },
-  )
-  if (result.status !== 0) return undefined
-  const [version, runtimePlatform, runtimeArch] = String(result.stdout).trim().split("\n")
-  if (!version || !runtimePlatform || !runtimeArch) return undefined
-  return {
-    path: nodePath,
-    version,
-    platform: runtimePlatform as NodeJS.Platform,
-    arch: runtimeArch as NodeJS.Architecture,
-  }
-}
-
-function candidateNodeRuntimePaths() {
-  const candidates = [
-    process.execPath,
-    ...String(process.env.PATH ?? "")
-      .split(path.delimiter)
-      .filter(Boolean)
-      .map((entry) => path.join(entry, bundledNodeName)),
-  ].filter((value): value is string => typeof value === "string" && value.length > 0)
-
-  const seen = new Set<string>()
-  return candidates.filter((candidate) => {
-    let real: string
-    try {
-      real = fs.realpathSync(candidate)
-    } catch {
-      return false
-    }
-    if (seen.has(real)) return false
-    seen.add(real)
-    return true
-  })
-}
-
-function resolveBundledNodeRuntime(targetArch: "x64" | "arm64") {
-  const explicit = process.env.AX_CODE_BUNDLED_NODE
-  if (explicit) {
-    const runtime = inspectFfiNodeRuntime(explicit)
-    if (!runtime) {
-      throw new Error(`AX_CODE_BUNDLED_NODE does not support node:ffi: ${explicit}`)
-    }
-    if (runtime.platform !== process.platform || runtime.arch !== targetArch) {
-      throw new Error(
-        `AX_CODE_BUNDLED_NODE resolved to ${runtime.version} ${runtime.platform}-${runtime.arch}, expected ${process.platform}-${targetArch}: ${explicit}`,
-      )
-    }
-    return runtime
-  }
-
-  const inspected: string[] = []
-  for (const candidate of candidateNodeRuntimePaths()) {
-    const runtime = inspectFfiNodeRuntime(candidate)
-    if (!runtime) {
-      inspected.push(`${candidate} (no node:ffi support)`)
-      continue
-    }
-    if (runtime.platform !== process.platform || runtime.arch !== targetArch) {
-      inspected.push(
-        `${candidate} (${runtime.version} ${runtime.platform}-${runtime.arch}, expected ${process.platform}-${targetArch})`,
-      )
-      continue
-    }
-    return runtime
-  }
-
-  throw new Error(
-    [
-      `Node TUI bundled builds require a Node runtime with node:ffi support for ${process.platform}-${targetArch}.`,
-      "Run the build with Node 26+, or set AX_CODE_BUNDLED_NODE to a Node 26+ executable.",
-      inspected.length ? `Inspected candidates:\n  - ${inspected.join("\n  - ")}` : "No Node candidates were found.",
-    ].join("\n"),
-  )
-}
 
 const migrationDirs = (await fs.promises.readdir(path.join(dir, "migration"), { withFileTypes: true }))
   .filter((e) => e.isDirectory() && /^\d{14}/.test(e.name))
