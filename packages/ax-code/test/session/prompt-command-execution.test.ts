@@ -58,6 +58,7 @@ test("preserves explicit skill command agent during prompt execution", async () 
           sessionID: session.id,
           command: "debug",
           arguments: "broken command",
+          system: "Reply in Japanese. Preserve project rules.",
           agent: "architect",
           model: "test/test-model",
         },
@@ -80,6 +81,7 @@ test("preserves explicit skill command agent during prompt execution", async () 
   })
 
   expect(calls).toHaveLength(1)
+  expect(calls[0].system).toBe("Reply in Japanese. Preserve project rules.")
   expect(calls[0].agent).toBe("debug")
   expect(calls[0].agentRouting).toBe("preserve")
 })

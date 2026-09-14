@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createSignal, For, Show } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { useCommandDialog } from "@tui/component/dialog-command"
@@ -5,9 +6,9 @@ import { useDialog } from "../../ui/dialog"
 import { DialogConfirm } from "@tui/ui/dialog-confirm"
 import { useKeybind } from "@tui/context/keybind"
 import type { DiffFile } from "./revert"
-import { Locale } from "@/util/locale"
 
 export function RevertNotice(props: { count: number; files: DiffFile[] }) {
+  const { t } = useLanguage()
   const { theme } = useTheme()
   const keybind = useKeybind()
   const command = useCommandDialog()
@@ -15,11 +16,7 @@ export function RevertNotice(props: { count: number; files: DiffFile[] }) {
   const [hover, setHover] = createSignal(false)
 
   const onClick = async () => {
-    const ok = await DialogConfirm.show(
-      dialog,
-      "Confirm Redo",
-      "Are you sure you want to restore the reverted messages?",
-    )
+    const ok = await DialogConfirm.show(dialog, t("rollback.redoTitle"), t("rollback.redoMessage"))
     if (ok) command.trigger("session.redo")
   }
 
@@ -37,9 +34,12 @@ export function RevertNotice(props: { count: number; files: DiffFile[] }) {
         paddingLeft={2}
         backgroundColor={hover() ? theme.backgroundElement : theme.backgroundPanel}
       >
-        <text fg={theme.textMuted}>{Locale.pluralize(props.count, "{} message reverted", "{} messages reverted")}</text>
         <text fg={theme.textMuted}>
-          <span style={{ fg: theme.text }}>{keybind.print("messages_redo")}</span> or /redo to restore
+          {t(props.count === 1 ? "rollback.one" : "rollback.many", { count: props.count })}
+        </text>
+        <text fg={theme.textMuted}>
+          <span style={{ fg: theme.text }}>{keybind.print("messages_redo")}</span>
+          {t("rollback.restore")}
         </text>
         <Show when={props.files.length}>
           <box marginTop={1}>

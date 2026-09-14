@@ -1,3 +1,4 @@
+import { english } from "../../../src/cli/cmd/tui/i18n"
 import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
@@ -152,7 +153,7 @@ describe("recover undo history", () => {
     const body = transformSync(source.slice(start, end), { loader: "ts" }).code
     let handler!: (event: any) => void
     const events: string[] = []
-    new Function("useKeyboard", "store", "props", "runDialogConfirmAction", "dialog", "setStore", body)(
+    new Function("useKeyboard", "store", "props", "runDialogConfirmAction", "dialog", "setStore", "t", body)(
       (fn: typeof handler) => {
         handler = fn
       },
@@ -161,6 +162,7 @@ describe("recover undo history", () => {
       (fn: () => void) => fn(),
       { clear: () => events.push("clear") },
       () => {},
+      english,
     )
     handler({
       name: "return",

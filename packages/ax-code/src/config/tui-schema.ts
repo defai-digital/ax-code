@@ -43,6 +43,14 @@ export const TuiNotifications = z.object({
 })
 
 export const TuiOptions = z.object({
+  interface_language: z
+    .enum(["en", "zh-TW", "zh-CN", "ja", "ko"])
+    .optional()
+    .describe("TUI interface language (default en); interactive language choices override this default"),
+  conversation_language: z
+    .enum(["auto", "en", "zh-TW", "zh-CN", "ja", "ko"])
+    .optional()
+    .describe("Independent TUI conversation language preference (default auto); project instructions take precedence"),
   scroll_speed: z.number().min(0.001).optional().describe("TUI scroll speed"),
   scroll_acceleration: z
     .object({

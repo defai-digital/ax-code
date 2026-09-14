@@ -58,6 +58,7 @@ pages are the ones linked here.
 - [Sandbox Mode](guides/sandbox.md) — isolation modes, protected paths, network controls, and precedence.
 - [Cloud Operations Mode](guides/cloud-operations.md) — plan/approve/apply workflow, approval tokens, and the `cloudops` agent posture.
 - [Autonomous Mode](guides/autonomous.md) — unattended execution, approvals, headless use, and safeguards.
+- [TUI Languages and Setup](guides/tui-language-and-setup.md) — interface and conversation languages, first-time setup.
 - [Loop Mode and Scheduled Tasks](guides/loop-mode.md) — recurring prompts, durable schedules, and long-run limits.
 - [Long-Running Operations](guides/long-running-operations.md) — supervised service examples, recovery semantics, and
   operational checks.

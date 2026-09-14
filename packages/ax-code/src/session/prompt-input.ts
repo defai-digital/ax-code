@@ -59,6 +59,7 @@ export const ShellInput = z.object({
 export type ShellInput = z.infer<typeof ShellInput>
 
 export const CommandInput = z.object({
+  system: z.string().optional(),
   messageID: MessageID.zod.optional(),
   sessionID: SessionID.zod,
   agent: z.string().optional(),

@@ -76,6 +76,7 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       agent: input.agent,
       model,
       variant: input.variant,
+      system: input.system,
       parts: [
         {
           type: "text",
@@ -123,6 +124,7 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     agent: input.agent,
     model,
     variant: input.variant,
+    system: input.system,
     parts: [
       {
         type: "text",

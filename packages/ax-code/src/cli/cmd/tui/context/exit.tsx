@@ -6,6 +6,7 @@ import { win32FlushInputBuffer } from "../win32"
 import { destroyTuiRenderer } from "../renderer"
 import { registerShutdownSignals } from "@/util/signals"
 import { Log } from "@/util/log"
+import { captureTuiInput } from "../util/capture-input"
 type Exit = ((reason?: unknown) => Promise<void>) & {
   message: {
     set: (value?: string) => () => void
@@ -34,6 +35,9 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
     // Requested by the explicit-quit path and consumed by the teardown that
     // follows, so a second exit call cannot replay the animation.
     let flourishRequested = false
+    let exitReason: unknown
+    const flourishAbort = new AbortController()
+    let releaseInput = () => {}
     const store = {
       set: (value?: string) => {
         const prev = message
@@ -48,46 +52,96 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
       get: () => message,
     }
     const runFlourish = async () => {
-      if (!flourishRequested) return
-      flourishRequested = false
-      if (!flourishHandler) return
+      const handler = flourishHandler
+      if (!handler || flourishAbort.signal.aborted) return
+      let timer: ReturnType<typeof setTimeout> | undefined
+      let stop: (() => void) | undefined
+      const interrupted = new Promise<void>((resolve) => {
+        stop = resolve
+        flourishAbort.signal.addEventListener("abort", stop, { once: true })
+        // Cosmetic work must never hold terminal or backend cleanup indefinitely.
+        timer = setTimeout(resolve, 5_000)
+        timer.unref?.()
+      })
       try {
-        await flourishHandler()
+        await Promise.race([
+          Promise.resolve().then(() => {
+            if (!flourishAbort.signal.aborted) return handler()
+          }),
+          interrupted,
+        ])
       } catch (error) {
         Log.Default.warn("tui.exit.flourish failed", { error })
+      } finally {
+        clearTimeout(timer)
+        if (stop) flourishAbort.signal.removeEventListener("abort", stop)
       }
     }
     const exit: Exit = Object.assign(
       (reason?: unknown) => {
-        if (task) return task
-        task = (async () => {
-          // Abnormal exits carry a reason (a bootstrap failure); they must
-          // return the terminal as fast as possible and never animate.
-          if (!reason) await runFlourish()
-          await destroyTuiRenderer(renderer)
-          win32FlushInputBuffer()
-          if (reason) {
-            // A reason means the exit is abnormal (e.g. sync bootstrap
-            // failure) — make sure the process exit code reflects that
-            // instead of the default 0.
-            process.exitCode = 1
-            const formatted = FormatError(reason) ?? FormatUnknownError(reason)
-            if (formatted) {
-              process.stderr.write(formatted + "\n")
+        if (reason !== undefined) {
+          exitReason ??= reason
+          process.exitCode = 1
+        }
+        if (task) {
+          // Signals, failures and a direct second exit bypass cosmetic work.
+          flourishAbort.abort()
+          return task
+        }
+        // Keep admission closed for the entire shutdown, including the rest of
+        // the input batch that dismisses and unmounts the animation.
+        releaseInput = captureTuiInput(renderer.keyInput, () => flourishAbort.abort())
+        const playFlourish = flourishRequested && reason === undefined
+        flourishRequested = false
+        // Publish the task before invoking a handler that can itself request exit.
+        task = Promise.resolve()
+          .then(async () => {
+            if (playFlourish) await runFlourish()
+            let failure: { error: unknown } | undefined
+            const recordFailure = (error: unknown) => {
+              failure ??= { error }
+              process.exitCode = 1
             }
-          }
-          const text = store.get()
-          if (text) process.stdout.write(text + "\n")
-          await input.onExit?.()
-        })()
+            // Each cleanup stage is independent: renderer failure must not leave
+            // queued input for the shell, hide the exit reason or strand a backend.
+            try {
+              await destroyTuiRenderer(renderer)
+            } catch (error) {
+              recordFailure(error)
+            }
+            try {
+              win32FlushInputBuffer()
+            } catch (error) {
+              recordFailure(error)
+            }
+            try {
+              if (exitReason !== undefined) {
+                const formatted = FormatError(exitReason) ?? FormatUnknownError(exitReason)
+                if (formatted) process.stderr.write(formatted + "\n")
+              }
+              const text = store.get()
+              if (text) process.stdout.write(text + "\n")
+            } catch (error) {
+              recordFailure(error)
+            }
+            try {
+              await input.onExit?.()
+            } catch (error) {
+              recordFailure(error)
+            }
+            if (failure) throw failure.error
+          })
+          .finally(() => releaseInput())
         return task
       },
       {
         message: store,
         onFlourish: (handler: (() => Promise<void>) | undefined) => {
           flourishHandler = handler
+          if (!handler) flourishAbort.abort()
         },
         flourish: () => {
+          if (task) return task
           flourishRequested = true
           return exit()
         },
@@ -98,8 +152,13 @@ export const { use: useExit, provider: ExitProvider } = createSimpleContext({
     // (destroyTuiRenderer → disableTuiMouseTracking → flushTuiStdout).
     // Without this, the terminal is left in alt-screen + raw mode + mouse
     // tracking on anything other than a clean React unmount or SIGHUP.
-    const unregister = registerShutdownSignals(() => void exit(), { signals: TUI_EXIT_SIGNALS })
-    onCleanup(unregister)
+    const unregister = registerShutdownSignals(() => exit(), { signals: TUI_EXIT_SIGNALS })
+    onCleanup(() => {
+      // Tree disposal can precede renderer teardown; the exit task owns input
+      // release so queued events stay blocked across that handoff.
+      unregister()
+      flourishAbort.abort()
+    })
     return exit
   },
 })

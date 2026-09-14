@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { canPersistPermission, canConfirmPersistentPermission } from "@/permission/interaction"
 import { createStore, produce } from "solid-js/store"
@@ -61,6 +62,7 @@ function normalizePath(input?: string) {
 }
 
 function EditBody(props: { request: PermissionRequest; expanded: boolean }) {
+  const { t } = useLanguage()
   const themeState = useTheme()
   const theme = themeState.theme
   const syntax = themeState.syntax
@@ -122,7 +124,7 @@ function EditBody(props: { request: PermissionRequest; expanded: boolean }) {
       </Show>
       <Show when={!diff()}>
         <box paddingLeft={1}>
-          <text fg={theme.textMuted}>No diff provided</text>
+          <text fg={theme.textMuted}>{t("permission.noDiff")}</text>
         </box>
       </Show>
     </box>
@@ -158,6 +160,7 @@ function TextBody(props: { title: string; description?: string; icon?: string })
 // so the underlying permission policy rules (allow/deny/ask for
 // "edit") apply unchanged. See PRD-debug-refactor-engine.md Tier 1c.
 function RefactorApplyBody(props: { request: PermissionRequest }) {
+  const { t } = useLanguage()
   const { theme } = useTheme()
   const meta = props.request.metadata ?? {}
   const planId = typeof meta.planId === "string" ? meta.planId : "(unknown)"
@@ -172,18 +175,18 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
           users MUST see before approving. Aggressive mode is colored
           warning so approval-fatigue users notice it. */}
       <box flexDirection="row" gap={2}>
-        <text fg={theme.textMuted}>Mode</text>
+        <text fg={theme.textMuted}>{t("common.mode")}</text>
         <text fg={riskColor}>{mode}</text>
         <text fg={theme.textMuted}>·</text>
-        <text fg={theme.textMuted}>Stage</text>
+        <text fg={theme.textMuted}>{t("common.stage")}</text>
         <text fg={preflight ? theme.textMuted : theme.text}>
-          {preflight ? "pre-flight check (no file writes)" : "real apply (will modify files on success)"}
+          {preflight ? t("permission.preflight") : t("permission.apply")}
         </text>
       </box>
       {/* Row 2: plan id. Referenced by the /plans slash command and
           by refactor_apply's abortReason on failure. */}
       <box flexDirection="row" gap={2}>
-        <text fg={theme.textMuted}>Plan</text>
+        <text fg={theme.textMuted}>{t("common.plan")}</text>
         <text fg={theme.text}>{planId}</text>
       </box>
       {/* Row 3+: affected files. Uses the patterns we pass alongside
@@ -211,6 +214,7 @@ function RefactorApplyBody(props: { request: PermissionRequest }) {
 }
 
 export function PermissionPrompt(props: { request: PermissionRequest }) {
+  const { t } = useLanguage()
   const [expanded, setExpanded] = createSignal(false)
   const sdk = useSDK()
   const sync = useSync()
@@ -294,8 +298,8 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     }
   })
   const baseOptions = createMemo(() => {
-    const opts: Record<string, string> = { once: "Allow once", reject: "Reject" }
-    if (allowAlwaysAvailable()) opts.always = "Allow always"
+    const opts: Record<string, string> = { once: t("permission.once"), reject: t("common.reject") }
+    if (allowAlwaysAvailable()) opts.always = t("permission.always")
     return opts
   })
 
@@ -309,9 +313,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     // props.request may already be the next queued request.
     const { sessionID, id } = props.request
     void Promise.resolve()
-      .then(() =>
-        withTimeout(run(), PERMISSION_REPLY_TIMEOUT_MS, "Permission reply timed out — the server did not respond"),
-      )
+      .then(() => withTimeout(run(), PERMISSION_REPLY_TIMEOUT_MS, t("permission.timeout")))
       .then((result) => {
         // The reply resolves to { error } rather than rejecting on
         // HTTP/network failure (see replyError). Running the success path
@@ -431,7 +433,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     }
 
     if (permission === "bash") {
-      const title = typeof data.description === "string" && data.description ? data.description : "Shell command"
+      const title = typeof data.description === "string" && data.description ? data.description : t("permission.shell")
       const command = typeof data.command === "string" ? data.command : ""
       return {
         icon: "#",
@@ -447,7 +449,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     }
 
     if (permission === "task") {
-      const type = typeof data.subagent_type === "string" ? data.subagent_type : "Unknown"
+      const type = typeof data.subagent_type === "string" ? data.subagent_type : t("common.unknown")
       const desc = typeof data.description === "string" ? data.description : ""
       return {
         icon: "#",
@@ -531,12 +533,10 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       if (meta["reason"] === "dynamic shell path") {
         return {
           icon: "←",
-          title: "Run a command with paths ax-code can't verify",
+          title: t("permission.dynamicTitle"),
           body: (
             <box paddingLeft={1} flexDirection="column" gap={1}>
-              <text fg={theme.textMuted}>
-                The command uses a variable or glob, so the paths it touches can't be checked ahead of time.
-              </text>
+              <text fg={theme.textMuted}>{t("permission.dynamicWarning")}</text>
               <For each={patterns}>{(p) => <text fg={theme.text}>{"- " + p}</text>}</For>
             </box>
           ),
@@ -554,11 +554,11 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
       return {
         icon: "←",
-        title: `Access external directory ${dir}`,
+        title: t("permission.external", { path: dir }),
         body: (
           <Show when={patterns.length > 0}>
             <box paddingLeft={1} gap={1}>
-              <text fg={theme.textMuted}>Patterns</text>
+              <text fg={theme.textMuted}>{t("permission.patterns")}</text>
               <box>
                 <For each={patterns}>{(p) => <text fg={theme.text}>{"- " + p}</text>}</For>
               </box>
@@ -571,10 +571,10 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     if (permission === "doom_loop") {
       return {
         icon: "⟳",
-        title: "Continue after repeated failures",
+        title: t("permission.repeatTitle"),
         body: (
           <box paddingLeft={1}>
-            <text fg={theme.textMuted}>This keeps the session running despite repeated failures.</text>
+            <text fg={theme.textMuted}>{t("permission.repeatWarning")}</text>
           </box>
         ),
       }
@@ -582,7 +582,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 
     return {
       icon: "⚙",
-      title: `Call tool ${permission}`,
+      title: t("permission.tool", { tool: permission }),
       body: (
         <box paddingLeft={1}>
           <text fg={theme.textMuted}>{"Tool: " + permission}</text>
@@ -595,17 +595,15 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
     <Switch>
       <Match when={store.stage === "always"}>
         <Prompt
-          title="Always allow"
+          title={t("permission.alwaysTitle")}
           body={
             <Switch>
               <Match when={props.request.always.length === 1 && props.request.always[0] === "*"}>
-                <TextBody title={"This will allow future " + props.request.permission + " requests in this project."} />
+                <TextBody title={t("permission.future", { permission: props.request.permission })} />
               </Match>
               <Match when={true}>
                 <box paddingLeft={1} gap={1}>
-                  <text fg={theme.textMuted}>
-                    This will allow future requests matching these patterns in this project
-                  </text>
+                  <text fg={theme.textMuted}>{t("permission.patternsWarning")}</text>
                   <box>
                     <For each={props.request.always}>
                       {(pattern) => (
@@ -620,7 +618,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
               </Match>
             </Switch>
           }
-          options={{ confirm: "Confirm", cancel: "Cancel" }}
+          options={{ confirm: t("common.confirm"), cancel: t("common.cancel") }}
           escapeKey="cancel"
           onSelect={(option) => {
             const canConfirm =
@@ -634,7 +632,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   requestID: props.request.id,
                 }),
               "permission prompt always-reply failed",
-              "Failed to allow permission permanently",
+              t("permission.failAlways"),
             )
           }}
         />
@@ -650,7 +648,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   message: message || undefined,
                 }),
               "permission prompt reject failed",
-              "Failed to reject permission",
+              t("permission.failReject"),
             )
           }}
           onCancel={() => {
@@ -660,12 +658,12 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       </Match>
       <Match when={store.stage === "permission"}>
         <Prompt
-          title="Permission required"
+          title={t("permission.required")}
           header={
             <box flexDirection="column" gap={0}>
               <box flexDirection="row" gap={1} flexShrink={0}>
                 <text fg={theme.warning}>{"▲"}</text>
-                <text fg={theme.text}>Permission required</text>
+                <text fg={theme.text}>{t("permission.required")}</text>
               </box>
               <box flexDirection="row" gap={1} paddingLeft={2} flexShrink={0}>
                 <text fg={theme.textMuted} flexShrink={0}>
@@ -703,7 +701,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                     requestID: props.request.id,
                   }),
                 "permission prompt reject failed",
-                "Failed to reject permission",
+                t("permission.failReject"),
               )
               return
             }
@@ -714,7 +712,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
                   requestID: props.request.id,
                 }),
               "permission prompt once-reply failed",
-              "Failed to allow permission once",
+              t("permission.failOnce"),
             )
           }}
         />
@@ -724,6 +722,7 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
 }
 
 function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: () => void }) {
+  const { t } = useLanguage()
   let input: TextareaRenderable
   const { theme } = useTheme()
   const keybind = useKeybind()
@@ -757,10 +756,10 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
       <box gap={1} paddingLeft={1} paddingRight={3} paddingTop={1} paddingBottom={1}>
         <box flexDirection="row" gap={1} paddingLeft={1}>
           <text fg={theme.error}>{"▲"}</text>
-          <text fg={theme.text}>Reject permission</text>
+          <text fg={theme.text}>{t("permission.rejectTitle")}</text>
         </box>
         <box paddingLeft={1}>
-          <text fg={theme.textMuted}>Tell ax-code what to do differently</text>
+          <text fg={theme.textMuted}>{t("permission.rejectHint")}</text>
         </box>
       </box>
       <box
@@ -785,10 +784,10 @@ function RejectPrompt(props: { onConfirm: (message: string) => void; onCancel: (
         />
         <box flexDirection="row" gap={2} flexShrink={0}>
           <text fg={theme.text}>
-            enter <span style={{ fg: theme.textMuted }}>confirm</span>
+            enter <span style={{ fg: theme.textMuted }}>{t("common.confirm")}</span>
           </text>
           <text fg={theme.text}>
-            esc <span style={{ fg: theme.textMuted }}>cancel</span>
+            esc <span style={{ fg: theme.textMuted }}>{t("common.cancel")}</span>
           </text>
         </box>
       </box>
@@ -806,6 +805,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   onFullscreenChange?: (expanded: boolean) => void
   onSelect: (option: keyof T) => void
 }) {
+  const { t } = useLanguage()
   const { theme } = useTheme()
   const keybind = useKeybind()
   const dimensions = useContentDimensions()
@@ -862,7 +862,7 @@ function Prompt<const T extends Record<string, string>>(props: {
     }
   })
 
-  const hint = createMemo(() => (store.expanded ? "minimize" : "fullscreen"))
+  const hint = createMemo(() => (store.expanded ? t("common.minimize") : t("common.fullscreen")))
 
   const content = () => (
     <box
@@ -936,10 +936,10 @@ function Prompt<const T extends Record<string, string>>(props: {
             </text>
           </Show>
           <text fg={theme.text}>
-            {"⇆"} <span style={{ fg: theme.textMuted }}>select</span>
+            {"⇆"} <span style={{ fg: theme.textMuted }}>{t("common.select")}</span>
           </text>
           <text fg={theme.text}>
-            enter <span style={{ fg: theme.textMuted }}>confirm</span>
+            enter <span style={{ fg: theme.textMuted }}>{t("common.confirm")}</span>
           </text>
         </box>
       </box>

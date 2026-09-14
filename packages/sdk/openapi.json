@@ -29495,6 +29495,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "system": {
+                    "type": "string"
+                  },
                   "messageID": {
                     "type": "string",
                     "pattern": "^msg_.*"
@@ -29613,6 +29616,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "system": {
+                    "type": "string"
+                  },
                   "messageID": {
                     "type": "string",
                     "pattern": "^msg_.*"

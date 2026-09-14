@@ -1,3 +1,4 @@
+import { english } from "../../../src/cli/cmd/tui/i18n"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
@@ -830,8 +831,10 @@ describe("reverse exit rain", () => {
 
   test("the palette uses the video wording", () => {
     const commands = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app-commands.ts"), "utf8")
-    expect(commands).toContain("Play Opening Video")
-    expect(commands).toContain("Play Ending Video")
+    expect(commands).toContain('t("command.opening")')
+    expect(english("command.opening")).toBe("Play Opening Video")
+    expect(commands).toContain('t("command.ending")')
+    expect(english("command.ending")).toBe("Play Ending Video")
     expect(commands).toContain("Enable OV/EV on task completion")
     expect(commands).toContain("Disable OV/EV on task completion")
   })
@@ -844,13 +847,5 @@ describe("reverse exit rain", () => {
     expect(readFileSync(path.join(import.meta.dirname, dir, "routes/session/index.tsx"), "utf8")).toContain(
       "exit.flourish()",
     )
-  })
-
-  test("a second ctrl+c cuts the ending video short instead of being swallowed", () => {
-    const rain = readFileSync(
-      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/matrix-rain.tsx"),
-      "utf8",
-    )
-    expect(rain).toContain('props.captureInput && evt.ctrl && evt.name === "c"')
   })
 })

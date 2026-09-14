@@ -1,3 +1,6 @@
+import { LanguageProvider, useLanguage } from "./context/language"
+import { DialogLanguage } from "./component/dialog-language"
+import { DialogSetup, shouldOfferSetup } from "./component/dialog-setup"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
@@ -171,31 +174,33 @@ export function tui(input: TuiInput) {
                             headers={input.headers}
                             events={input.events}
                           >
-                            <SyncProvider>
-                              <ThemeProvider mode={FALLBACK_COLOR_MODE}>
-                                <LocalProvider>
-                                  <KeybindProvider>
-                                    <PromptStashProvider>
-                                      <AxEngineDownloadsProvider>
-                                        <DialogProvider>
-                                          <CommandProvider>
-                                            <FrecencyProvider>
-                                              <PromptHistoryProvider>
-                                                <PromptRefProvider>
-                                                  <VisualCapabilityProvider>
-                                                    <App onSnapshot={input.onSnapshot} />
-                                                  </VisualCapabilityProvider>
-                                                </PromptRefProvider>
-                                              </PromptHistoryProvider>
-                                            </FrecencyProvider>
-                                          </CommandProvider>
-                                        </DialogProvider>
-                                      </AxEngineDownloadsProvider>
-                                    </PromptStashProvider>
-                                  </KeybindProvider>
-                                </LocalProvider>
-                              </ThemeProvider>
-                            </SyncProvider>
+                            <LanguageProvider>
+                              <SyncProvider>
+                                <ThemeProvider mode={FALLBACK_COLOR_MODE}>
+                                  <LocalProvider>
+                                    <KeybindProvider>
+                                      <PromptStashProvider>
+                                        <AxEngineDownloadsProvider>
+                                          <DialogProvider>
+                                            <CommandProvider>
+                                              <FrecencyProvider>
+                                                <PromptHistoryProvider>
+                                                  <PromptRefProvider>
+                                                    <VisualCapabilityProvider>
+                                                      <App onSnapshot={input.onSnapshot} />
+                                                    </VisualCapabilityProvider>
+                                                  </PromptRefProvider>
+                                                </PromptHistoryProvider>
+                                              </FrecencyProvider>
+                                            </CommandProvider>
+                                          </DialogProvider>
+                                        </AxEngineDownloadsProvider>
+                                      </PromptStashProvider>
+                                    </KeybindProvider>
+                                  </LocalProvider>
+                                </ThemeProvider>
+                              </SyncProvider>
+                            </LanguageProvider>
                           </SDKProvider>
                         </TuiConfigProvider>
                       </RouteProvider>
@@ -233,6 +238,7 @@ function sessionErrorNotifyKey(props: { sessionID?: string; error?: unknown }): 
 }
 
 function App(props: { onSnapshot?: () => Promise<string[]> }) {
+  const { t } = useLanguage()
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const renderer = useRenderer()
@@ -254,6 +260,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     onCleanup(sdk.event.on(event, () => refreshQueue((value) => value + 1)))
   }
   command.register(() => [
+    {
+      title: t("language.title"),
+      value: "language.settings",
+      category: t("common.settings"),
+      slash: { name: "language", aliases: ["lang"] },
+      onSelect: () => dialog.replace(() => <DialogLanguage />),
+    },
+    {
+      title: t("setup.title"),
+      value: "setup.open",
+      category: t("common.settings"),
+      slash: { name: "setup" },
+      onSelect: () => dialog.replace(() => <DialogSetup />),
+    },
     {
       title: "Manage saved follow-ups",
       value: "session.followups",
@@ -309,7 +329,10 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   // (`matrix_rain_on_task_complete`).
   const [matrixPlaying, setMatrixPlaying] = createSignal(false)
   const [startupRainPhase, setStartupRainPhase] = createSignal(initialStartupRainPhase())
-  const playMatrixRain = () => setMatrixPlaying(true)
+  let exiting = false
+  const playMatrixRain = () => {
+    if (!exiting) setMatrixPlaying(true)
+  }
   const endMatrixRain = (reason: MatrixRainDoneReason = "timeout") => {
     batch(() => {
       setMatrixPlaying(false)
@@ -352,11 +375,23 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     })
   }
   const playExitMatrixRain = () => {
+    exiting = true
+    // Cancel every startup phase before KV readiness or a playback callback
+    // can start another overlay above the ending video.
+    batch(() => {
+      setStartupRainPhase(completeStartupRain())
+      setMatrixPlaying(false)
+    })
     if (!shouldPlayExitMatrixRain({ animationsEnabled: kv.get("animations_enabled", true) })) return Promise.resolve()
     return playReverseMatrixRain()
   }
   exit.onFlourish(playExitMatrixRain)
-  onCleanup(() => exit.onFlourish(undefined))
+  onCleanup(() => {
+    exit.onFlourish(undefined)
+    settleReverseRain?.()
+    settleReverseRain = undefined
+    reverseRainDone = undefined
+  })
   createEffect(() => {
     // Selection is not checked here on purpose: a selection can only appear
     // under the overlays through the keys they pass through, and the overlays
@@ -1040,12 +1075,42 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     forkSessionWithRetries({ sessionID: args.sessionID, source: "startup" })
   })
 
-  // Provider setup is an explicit action from the new-task surface or prompt.
-  // Loading an empty provider list must not open a blocking startup dialog.
+  // Offer setup once on a fresh interactive install, after bootstrap. Never
+  // replace an active dialog or interrupt a restored session or --prompt.
+  let setupOffered = false
+  createEffect(() => {
+    if (
+      setupOffered ||
+      !shouldOfferSetup({
+        kvReady: kv.ready,
+        seen: kv.get("setup_seen_v1", false),
+        providerLoaded: sync.data.provider_loaded,
+        providerFailed: sync.data.provider_failed,
+        modelReady: local.model.ready,
+        sessionLoaded: sync.data.session_loaded,
+        sessionCount: sync.data.session.length,
+        providerCount: sync.data.provider.length,
+        explicitLaunch: !!(args.prompt || args.sessionID || args.continue || args.fork),
+        atHome: route.data.type === "home",
+        dialogOpen: dialog.stack.length > 0,
+      })
+    )
+      return
+    setupOffered = true
+    dialog.replace(() => <DialogSetup />)
+  })
+
+  createEffect(() => {
+    if (!kv.ready || !kv.get("setup_resume_v1", false) || dialog.stack.length > 0) return
+    kv.set("setup_resume_v1", false)
+    if (args.prompt || args.sessionID || args.continue || args.fork) return
+    dialog.replace(() => <DialogSetup />)
+  })
 
   const connected = useConnected()
   command.register(() =>
     appCommands({
+      t,
       dialogs,
       sync,
       kv,
@@ -1278,7 +1343,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
               {sdk.sseConnected ? "connected" : "disconnected"}
             </text>
             <box onMouseUp={() => void exit()}>
-              <text fg={theme.accent}>Disconnect</text>
+              <text fg={theme.accent}>{t("common.disconnect")}</text>
             </box>
           </box>
         )}
@@ -1305,7 +1370,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
                   when={sessionRoute()}
                   fallback={
                     <box paddingLeft={2} paddingRight={2} paddingTop={1}>
-                      <text fg={theme.textMuted}>Loading session...</text>
+                      <text fg={theme.textMuted}>{t("common.loading")}</text>
                     </box>
                   }
                 >

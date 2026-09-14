@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import { arenaView, councilView, type EnsembleTone } from "./ensemble-view"
@@ -23,15 +24,16 @@ function toneColor(theme: ReturnType<typeof useTheme>["theme"], tone: EnsembleTo
  * fan-out does not reflow the transcript before metadata exists.
  */
 export function CouncilToolView(props: ToolProps<any>) {
+  const { t } = useLanguage()
   const { theme } = useTheme()
   const status = createMemo(() => props.part.state.status)
-  const view = createMemo(() => councilView(props.metadata, props.input))
+  const view = createMemo(() => councilView(props.metadata, props.input, t))
 
   return (
     <Switch>
       <Match when={status() === "pending" || status() === "running"}>
-        <InlineTool icon="*" pending="Council members reviewing..." complete={false} part={props.part}>
-          Council running
+        <InlineTool icon="*" pending={t("ensemble.councilPending")} complete={false} part={props.part}>
+          {t("ensemble.councilRunning")}
         </InlineTool>
       </Match>
       <Match when={status() === "completed"}>
@@ -39,7 +41,7 @@ export function CouncilToolView(props: ToolProps<any>) {
           <box flexDirection="column" gap={1}>
             <Show when={view().membersLabel}>
               <box flexDirection="row" gap={2}>
-                <text fg={theme.textMuted}>Members</text>
+                <text fg={theme.textMuted}>{t("ensemble.members")}</text>
                 <text fg={theme.text}>{view().membersLabel}</text>
               </box>
             </Show>
@@ -57,7 +59,7 @@ export function CouncilToolView(props: ToolProps<any>) {
             </Show>
             <Show when={view().roster.length > 0}>
               <box flexDirection="column">
-                <text fg={theme.textMuted}>Models</text>
+                <text fg={theme.textMuted}>{t("common.models")}</text>
                 <For each={view().roster}>{(name) => <text fg={theme.text}>{"  " + name}</text>}</For>
               </box>
             </Show>
@@ -88,15 +90,16 @@ export function CouncilToolView(props: ToolProps<any>) {
  * title so the fix is obvious.
  */
 export function ArenaToolView(props: ToolProps<any>) {
+  const { t } = useLanguage()
   const { theme } = useTheme()
   const status = createMemo(() => props.part.state.status)
-  const view = createMemo(() => arenaView(props.metadata, props.input))
+  const view = createMemo(() => arenaView(props.metadata, props.input, t))
 
   return (
     <Switch>
       <Match when={status() === "pending" || status() === "running"}>
-        <InlineTool icon="*" pending="Arena contestants planning..." complete={false} part={props.part}>
-          Arena running
+        <InlineTool icon="*" pending={t("ensemble.arenaPending")} complete={false} part={props.part}>
+          {t("ensemble.arenaRunning")}
         </InlineTool>
       </Match>
       <Match when={status() === "completed"}>
@@ -126,7 +129,7 @@ export function ArenaToolView(props: ToolProps<any>) {
                   )}
                 </For>
                 <Show when={view().rankedOverflow > 0}>
-                  <text fg={theme.textMuted}>{`+${view().rankedOverflow} more`}</text>
+                  <text fg={theme.textMuted}>{t("ensemble.more", { count: view().rankedOverflow })}</text>
                 </Show>
               </box>
             </Show>
