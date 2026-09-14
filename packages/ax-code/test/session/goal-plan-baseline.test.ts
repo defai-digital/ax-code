@@ -127,6 +127,12 @@ describe("GoalPlanBaseline", () => {
         { objective: "refactor the core runtime then test and commit" },
       ),
     ).toThrow(/origin\/main/)
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(
+        contract(`git diff --name-only ${BASELINE_PLACEHOLDER}..HEAD -- src && grep -q -- origin/main config.txt`),
+        { objective: "keep the diff in scope", snapshot: { head, divergedFromTracking: [], dirty: [] } },
+      ),
+    ).not.toThrow()
   })
 
   test("rewrites {BASELINE} to the plan-time HEAD SHA", () => {

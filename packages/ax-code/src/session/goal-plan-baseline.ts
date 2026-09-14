@@ -97,7 +97,7 @@ export namespace GoalPlanBaseline {
       throw remoteBeforeStateError(checkId, unambiguous)
     }
     if (!looksLikeGitCommand(command)) return
-    const text = revisionText(command)
+    const text = gitRevisionText(command)
     const remotes = uniqueMatches(text, GIT_REMOTE)
     if (remotes.length > 0 && !objectiveAllowsRemote(objective, remotes)) {
       throw remoteBeforeStateError(checkId, remotes)
@@ -113,19 +113,19 @@ function looksLikeGitCommand(command: string) {
   return /\bgit\b|\bmerge-base\b/.test(command)
 }
 
-function revisionText(command: string) {
-  // Strip pathspecs per shell segment so `git diff HEAD -- a && git diff origin/main -- b`
-  // cannot let the first `--` swallow the second git invocation.
+function gitRevisionText(command: string) {
+  // Only git/merge-base segments contribute before-states. `grep origin/main`
+  // in a later command must not be treated as a git revision.
   return command
-    .split(/(\s*(?:&&|\|\||;|\||&)\s*)/)
-    .map((part) => {
-      if (/^\s*(?:&&|\|\||;|\||&)\s*$/.test(part)) return part
-      return part.replace(/\bgit(?:\s+[^\s]+)*\s--\s.*$/, (matched) => {
+    .split(/\s*(?:&&|\|\||;|\||&)\s*/)
+    .filter((part) => /\bgit\b|\bmerge-base\b/.test(part))
+    .map((part) =>
+      part.replace(/\bgit(?:\s+[^\s]+)*\s--\s.*$/, (matched) => {
         const cut = matched.search(/\s--\s/)
         return cut === -1 ? matched : matched.slice(0, cut)
-      })
-    })
-    .join("")
+      }),
+    )
+    .join(" ")
 }
 
 function remoteBeforeStateError(checkId: string, refs: string[]) {
