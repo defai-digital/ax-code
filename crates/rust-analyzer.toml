@@ -1,0 +1,7 @@
+# Keep optional RocksDB and bindgen dependencies out of routine IDE analysis.
+# Native builds and CI continue to use Cargo's default features.
+# Temporarily set this to false and restart rust-analyzer when editing
+# ax-code-fs/src/evidence.rs.
+
+[cargo]
+noDefaultFeatures = true

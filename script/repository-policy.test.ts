@@ -49,4 +49,10 @@ describe("shared editor config", () => {
     expect(settings).toContain("rust-analyzer.linkedProjects")
     expect(settings).not.toMatch(/token|password|secret|api[_-]?key/i)
   })
+
+  test("keeps optional native dependencies out of routine Rust analysis", () => {
+    const config = readFileSync("crates/rust-analyzer.toml", "utf8")
+    expect(config).toContain("[cargo]")
+    expect(config).toMatch(/^noDefaultFeatures\s*=\s*true\s*$/m)
+  })
 })
