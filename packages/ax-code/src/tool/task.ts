@@ -1,4 +1,4 @@
-import { taskParentConstraints } from "./task-constraints"
+import { inheritTaskPermissionDenials, taskParentConstraints } from "./task-constraints"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task.txt"
 import z from "zod"
@@ -364,7 +364,11 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
             if (NotFoundError.isInstance(e)) return undefined
             throw e
           })
-          if (found && found.parentID === ctx.sessionID) return found
+          if (found && found.parentID === ctx.sessionID) {
+            const permission = inheritTaskPermissionDenials(found.permission ?? [], constraints.permissionDenials)
+            await Session.setPermission({ sessionID: found.id, permission })
+            return { ...found, permission }
+          }
           if (found) throw new Error("Cannot resume a session that is not a child of the current session")
         }
 
@@ -403,6 +407,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
               action: "allow" as const,
               permission: t,
             })) ?? []),
+            ...constraints.permissionDenials,
           ],
         })
       })
@@ -471,6 +476,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
             agent: agent.name,
             agentRouting: "preserve",
             tools: taskTools,
+            toolsScope: "turn",
             isolation: constraints.isolation,
             parts: promptParts,
           }),
@@ -496,6 +502,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
                 agent: agent.name,
                 agentRouting: "preserve",
                 isolation: constraints.isolation,
+                toolsScope: "turn",
                 tools: {
                   ...taskTools,
                   task: false,

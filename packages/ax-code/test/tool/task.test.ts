@@ -761,7 +761,9 @@ describe("tool.task", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const parent = await Session.create({})
+        const parent = await Session.create({
+          permission: [{ permission: "read", pattern: "*secret*", action: "deny" }],
+        })
         const user = await Session.updateMessage({
           id: MessageID.ascending(),
           sessionID: parent.id,
@@ -842,6 +844,7 @@ describe("tool.task", () => {
 
           const child = await Session.get(SessionID.make(taskID))
           expect(child.parentID).toBe(parent.id)
+          expect(child.permission).toContainEqual({ permission: "read", pattern: "*secret*", action: "deny" })
 
           const queued = await TaskQueue.get(TaskQueueID.make(queueID))
           expect(queued.kind).toBe("subagent")
@@ -864,6 +867,11 @@ describe("tool.task", () => {
           await vi.waitFor(async () => {
             const latest = await TaskQueue.get(TaskQueueID.make(queueID))
             expect(latest.payload["deliveryStatus"]).toBe("delivered")
+          })
+          expect((await Session.get(child.id)).permission).toContainEqual({
+            permission: "read",
+            pattern: "*secret*",
+            action: "deny",
           })
           const parentMessages = await Session.messages({ sessionID: parent.id })
           const handoffText = parentMessages

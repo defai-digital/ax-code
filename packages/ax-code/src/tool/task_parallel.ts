@@ -157,6 +157,7 @@ async function runOneTask(input: {
         action: "allow" as const,
         permission: t,
       })) ?? []),
+      ...constraints.permissionDenials,
     ],
   })
 
@@ -195,6 +196,7 @@ async function runOneTask(input: {
         agent: agent.name,
         agentRouting: "preserve",
         tools: taskTools,
+        toolsScope: "turn",
         isolation: constraints.isolation,
         parts: promptParts,
       }),
@@ -216,6 +218,7 @@ async function runOneTask(input: {
             agentRouting: "preserve",
             tools: { ...taskTools, task: false, task_parallel: false },
             isolation: constraints.isolation,
+            toolsScope: "turn",
             parts: [
               {
                 type: "text",
