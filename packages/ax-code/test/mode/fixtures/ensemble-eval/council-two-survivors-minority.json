@@ -6,13 +6,25 @@
     {
       "memberId": "m1",
       "issues": [
-        { "memberId": "m1", "severity": "high", "category": "security", "location": "a.ts:1", "summary": "Missing rate limit" }
+        {
+          "memberId": "m1",
+          "severity": "high",
+          "category": "security",
+          "location": "a.ts:1",
+          "summary": "Missing rate limit"
+        }
       ]
     },
     {
       "memberId": "m2",
       "issues": [
-        { "memberId": "m2", "severity": "high", "category": "security", "location": "a.ts:1", "summary": "Missing rate limit" }
+        {
+          "memberId": "m2",
+          "severity": "high",
+          "category": "security",
+          "location": "a.ts:1",
+          "summary": "Missing rate limit"
+        }
       ]
     },
     { "memberId": "m3", "error": "timeout: member exceeded 180000ms" },

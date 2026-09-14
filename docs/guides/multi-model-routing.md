@@ -13,8 +13,8 @@ Use the expensive model for reasoning-dense work, and cheap models for mechanica
 
 ## Recommended layer split
 
-| Layer                 | Model class                                              | Typical agents / tasks                                                 |
-| --------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Layer                 | Model class                                              | Typical agents / tasks                                                  |
+| --------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Worker / executor     | Connected flash SKU when available (e.g. DeepSeek Flash) | unpinned session, `build`, `general`, `scout`, `test`, `devops`, `perf` |
 | Advisor / reasoning   | Stronger connected model (e.g. DeepSeek V4 Pro)          | `plan`, `architect`, `security`, `debug`                                |
 | Cheap / read-only aux | Same flash SKU                                           | `explore`, `compaction`, titles, recaps, low-complexity classification  |

@@ -10,9 +10,7 @@ describe("sleep", () => {
 
   test("unrefs its timer so it cannot hold the process open", async () => {
     const unref = vi.fn()
-    const spy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
-      cb: (...args: unknown[]) => void,
-    ) => {
+    const spy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((cb: (...args: unknown[]) => void) => {
       cb()
       return { unref } as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout)
@@ -31,7 +29,13 @@ describe("withTimeout", () => {
   })
 
   test("rejects with a custom message when the timeout fires first", async () => {
-    await expect(withTimeout(sleep(1000).then(() => "late"), 5, "too slow")).rejects.toThrow("too slow")
+    await expect(
+      withTimeout(
+        sleep(1000).then(() => "late"),
+        5,
+        "too slow",
+      ),
+    ).rejects.toThrow("too slow")
   })
 
   test("rejects with a default message that includes the timeout", async () => {
@@ -47,7 +51,9 @@ describe("withTimeout", () => {
     const setSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation((() => {
       return { unref } as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout)
-    const clearSpy = vi.spyOn(globalThis, "clearTimeout").mockImplementation((() => {}) as unknown as typeof clearTimeout)
+    const clearSpy = vi
+      .spyOn(globalThis, "clearTimeout")
+      .mockImplementation((() => {}) as unknown as typeof clearTimeout)
     try {
       await expect(withTimeout(Promise.resolve(1), 60_000)).resolves.toBe(1)
     } finally {
