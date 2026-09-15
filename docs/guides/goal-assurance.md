@@ -203,3 +203,40 @@ range, and inspects every changed path in every commit without path filters.
 Include deleted files and both sides of renames, handle merge commits explicitly,
 and validate any required branch or message properties separately. Use
 `/goal revise` to strengthen an existing contract; do not edit frozen requirements.
+
+### Plan size and complete resubmission
+
+The rendered plan, including Markdown and assurance JSON, must fit within 8,192
+UTF-8 bytes. Aim below 7,168 bytes. If submission exceeds the cap, shorten
+repeated prose and resubmit the complete object, including `kind` and all
+required fields. Preserve acceptance ids and checks; the runtime does not
+truncate requirements or raise the reader limit to accept an oversized plan.
+
+### Local CLI animation review receipts
+
+The repository-owned `packages/ax-code/script/verify-cli-review-receipts.ts`
+checks `round-*` artifacts under the receipt root selected with `--root`. Each round
+needs `revision.txt`, and each of `grok`, `claude`, and `codex` needs `exit.txt`
+with `0` and one final verdict in `stdout.jsonl` (Grok text events) or
+`stdout.txt` (Claude/Codex). Preserve failed attempts outside completed round
+directories; do not turn failures into exit-zero receipts.
+
+`dispositions.json` contains a `findings` array. Every entry names `round`,
+`cli`, `id`, `status` (`fixed` or `rejected`), and nonblank `evidence`. Fixed
+entries additionally require a `regression` object with a literal repository
+path `file` under `packages/ax-code/test/cli/tui/` and the exact Vitest
+`fullName`. Duplicate dispositions or ambiguous multiple verdicts fail.
+
+The verifier runs those files using the installed Vitest with the global retry
+default set to zero (individual test options may override that default),
+then checks that each referenced assertion passed exactly once. Missing, skipped,
+failed, or ambiguous assertions fail verification. This proves those referenced
+tests passed, not that their assertions semantically cover the finding. Rejected
+dispositions remain recorded judgments. A final round must match current HEAD;
+findings marked fixed require a newer revision and review round. Uncommitted
+core-package source, test, or configuration changes prevent verification. Keep the
+unrelated local `ax-code.json` configuration out of commits.
+
+For this repository, `vitest run --dir test/cli/tui` preserves the normal lane's
+exclusions while scanning the TUI directory. Group runners may still select exact
+files with `AX_TEST_FILES`; directory selection does not disable exclusions.

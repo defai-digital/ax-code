@@ -4,6 +4,7 @@ import { transform as esbuildTransform } from "esbuild"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { defaultExcludedTests } from "./script/test-group"
+import { testScanDirectory, testScope } from "./script/test-scope"
 import { sanitizeAxCodeEnv } from "./test/support/sanitize-env"
 
 // Sanitize inherited AX_CODE_* runtime flags at config-evaluation time, in
@@ -71,6 +72,13 @@ const includeFiles = process.env.AX_TEST_FILES
       .filter(Boolean)
   : undefined
 
+const scope = testScope({
+  root: dir,
+  scanDir: testScanDirectory(process.argv.slice(2)),
+  files: includeFiles,
+  excluded: defaultExcludedTests,
+})
+
 export default defineConfig({
   plugins: [txtAsText, forceEsbuildTs],
   resolve: {
@@ -92,10 +100,8 @@ export default defineConfig({
     // files, so when a group explicitly requests files we drop those exact paths
     // from the exclude — otherwise the recovery/e2e/live groups would self-
     // exclude and run nothing.
-    include: includeFiles ?? ["test/**/*.test.{ts,tsx}"],
-    exclude: includeFiles
-      ? ["**/node_modules/**", "test-vitest/**", ...defaultExcludedTests.filter((file) => !includeFiles.includes(file))]
-      : ["**/node_modules/**", "test-vitest/**", ...defaultExcludedTests],
+    include: scope.include,
+    exclude: scope.exclude,
     // Order matters: vitest.env strips inherited AX_CODE_* host-session flags
     // before any src/ import (see sanitize-env.ts); vitest.setup then installs
     // the Bun compat shim; preload sets per-process (pid) XDG/home isolation
