@@ -130,7 +130,9 @@ The rendered plan must stay under 8192 bytes (UTF-8). Keep every field
 concise: short single-line acceptance criteria and verification steps, a
 brief implementation approach, and checklist items of a few words each. An
 oversized submission is rejected with an error — shorten the fields and
-call submit_goal_plan again.
+resubmit the complete object, including kind and all required fields. Aim for
+a rendered plan below 7168 bytes to leave room for Markdown and assurance JSON.
+Preserve acceptance ids and required checks; remove repeated prose, not obligations.
 
 After submit_goal_plan succeeds, stop.
 

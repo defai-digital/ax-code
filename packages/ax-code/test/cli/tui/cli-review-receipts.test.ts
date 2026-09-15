@@ -29,7 +29,7 @@ describe("CLI review receipt verdict extraction", () => {
       JSON.stringify({ type: "text", data: json.slice(11, 37) }),
       JSON.stringify({ type: "text", data: json.slice(37) }),
     ]
-    const verdicts = extractVerdicts(events.join("\n"))
+    const verdicts = extractVerdicts(events.join("\n"), "jsonl")
     expect(verdicts).toHaveLength(1)
     const last = verdicts.at(-1)!
     expect(last.verdict).toBe("findings")

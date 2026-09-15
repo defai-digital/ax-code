@@ -102,7 +102,9 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       throw new Error(
         `The rendered goal plan is ${bytes} bytes, exceeding the ${GoalPlan.MAX_READ_BYTES}-byte limit. ` +
           "Shorten the assurance checks, source references, acceptance criteria, verification steps, implementation approach, and task checklist " +
-          "(aim for concise single-line items) and call submit_goal_plan again.",
+          `(aim for concise single-line items and a rendered plan below 7168 bytes; remove at least ${bytes - GoalPlan.MAX_READ_BYTES} bytes). ` +
+          `Resubmit the COMPLETE object, including kind="${params.kind}" and all required fields, not a partial patch. ` +
+          "Keep every acceptance id and required check; shorten repeated prose rather than dropping obligations.",
       )
     }
     return {

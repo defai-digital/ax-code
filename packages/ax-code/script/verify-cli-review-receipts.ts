@@ -28,6 +28,7 @@ import { execFileSync } from "node:child_process"
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { runReviewRegressions, validateRegression, type ReviewRegression } from "./cli-review-regressions"
 import { parseJsonPayload } from "../src/util/json-value"
 
 const CLI_NAMES = ["grok", "claude", "codex"] as const
@@ -68,6 +69,7 @@ export type Disposition = {
   id: string
   status: "fixed" | "rejected"
   evidence: string
+  regression?: ReviewRegression
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -75,7 +77,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function asString(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined
 }
 
 /**
@@ -88,37 +90,21 @@ function asString(value: unknown): string | undefined {
  * them (or inserting newlines between fragments) corrupts the verdict JSON, which
  * is why the previous newline-join could never parse grok's answer.
  */
-export function extractVerdicts(raw: string): ReceiptVerdict[] {
-  const lines = raw.split("\n")
-  const streamText: string[] = []
-  const candidateParts: string[] = []
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const parsed = parseJsonPayload(trimmed)
-    if (isRecord(parsed)) {
-      // Streaming JSONL event: only `text` payloads belong to the answer.
-      if (typeof parsed.type === "string" && "data" in parsed) {
-        if (parsed.type === "text" && typeof parsed.data === "string") streamText.push(parsed.data)
-        continue
-      }
-      let unwrapped = false
-      for (const key of ["data", "text", "content", "message"]) {
-        const value = parsed[key]
-        if (typeof value === "string") {
-          candidateParts.push(value)
-          unwrapped = true
-        }
-      }
-      if (!unwrapped && "verdict" in parsed) candidateParts.push(trimmed)
+export function extractVerdicts(raw: string, format: "text" | "jsonl" = "text"): ReceiptVerdict[] {
+  if (format === "text") return scanBalancedObjects(raw)
+  const parts: string[] = []
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue
+    const parsed = parseJsonPayload(line)
+    if (!isRecord(parsed)) return []
+    if (typeof parsed.type === "string") {
+      if (parsed.type === "text" && typeof parsed.data === "string") parts.push(parsed.data)
       continue
     }
-    candidateParts.push(line)
+    // Admit a complete verdict as one JSONL record, without stripping its fields.
+    if ("verdict" in parsed) parts.push(line)
   }
-  const sources: string[] = []
-  if (streamText.length > 0) sources.push(streamText.join(""))
-  if (candidateParts.length > 0) sources.push(candidateParts.join("\n"))
-  return sources.flatMap((text) => scanBalancedObjects(text))
+  return scanBalancedObjects(parts.join(""))
 }
 
 function scanBalancedObjects(text: string): ReceiptVerdict[] {
@@ -165,7 +151,7 @@ function normalizeVerdict(value: Record<string, unknown>): ReceiptVerdict | unde
   const reviewedRevision = asString(value.reviewed_revision)
   if (!reviewedRevision) return undefined
   const rawFindings = value.findings
-  if (!Array.isArray(rawFindings)) return undefined
+  if (!Array.isArray(rawFindings) || (verdict === "findings" && rawFindings.length === 0)) return undefined
   const findings: ReceiptFinding[] = []
   for (const item of rawFindings) {
     if (!isRecord(item)) return undefined
@@ -215,19 +201,25 @@ export function parseArgs(argv: string[], root: string): ParsedArgs {
   return { root: reviewRoot, revision, quiet }
 }
 
-export function verify(options: { root: string; revision: string }): { failures: string[]; lines: string[] } {
+export function verify(options: { root: string; revision: string }): {
+  failures: string[]
+  lines: string[]
+  regressions: ReviewRegression[]
+} {
   const failures: string[] = []
   const lines: string[] = []
+  const regressions: ReviewRegression[] = []
   const { root, revision } = options
 
   if (!existsSync(root)) {
-    return { failures: [`receipt root does not exist: ${root}`], lines }
+    return { failures: [`receipt root does not exist: ${root}`], lines, regressions }
   }
 
   const rounds = listRounds(root)
   if (rounds.length === 0) failures.push(`no round-* directory under ${root}`)
 
   const seenFindings = new Map<string, ReceiptFinding>()
+  const currentRounds = new Set<string>()
   let finalRound: string | undefined
 
   for (const round of rounds) {
@@ -237,7 +229,10 @@ export function verify(options: { root: string; revision: string }): { failures:
       failures.push(`${round}: missing or malformed ${CliReviewReceipts.RevisionFile}`)
       continue
     }
-    if (roundRevision === revision) finalRound = finalRound ?? round
+    if (roundRevision === revision) {
+      finalRound = finalRound ?? round
+      currentRounds.add(round)
+    }
     for (const cli of CLI_NAMES) {
       const cliDir = path.join(roundDir, cli)
       const exitRaw = readTextFile(path.join(cliDir, "exit.txt"))?.trim()
@@ -255,7 +250,8 @@ export function verify(options: { root: string; revision: string }): { failures:
         failures.push(`${round}/${cli}: empty review output at ${path.relative(root, stdoutFile)}`)
         continue
       }
-      const verdicts = extractVerdicts(stdout)
+      const verdicts = extractVerdicts(stdout, cli === "grok" ? "jsonl" : "text")
+      if (verdicts.length > 1) failures.push(`${round}/${cli}: multiple verdicts are ambiguous`)
       const last = verdicts.at(-1)
       if (!last) {
         failures.push(`${round}/${cli}: no terminal verdict JSON carrying a "verdict" key`)
@@ -309,11 +305,24 @@ export function verify(options: { root: string; revision: string }): { failures:
       if (!evidence) {
         failures.push(`${CliReviewReceipts.DispositionsFile}: ${round}/${cli}/${id} has no evidence`)
       }
-      dispositionList.push({ round, cli, id, status, evidence: evidence ?? "" })
+      if (status === "fixed" && currentRounds.has(round))
+        failures.push(`${round}/${cli}/${id}: fixed findings require a new revision and review round`)
+      const regression = validateRegression(entry.regression)
+      if (status === "fixed" && !regression)
+        failures.push(
+          `${CliReviewReceipts.DispositionsFile}: ${round}/${cli}/${id} requires regression.file and regression.fullName`,
+        )
+      if (status === "fixed" && regression) regressions.push(regression)
+      dispositionList.push({ round, cli, id, status, evidence: evidence ?? "", regression })
     }
   }
 
-  const dispositionKeys = new Set(dispositionList.map((entry) => `${entry.round}/${entry.cli}/${entry.id}`))
+  const dispositionKeys = new Set<string>()
+  for (const entry of dispositionList) {
+    const key = `${entry.round}/${entry.cli}/${entry.id}`
+    if (dispositionKeys.has(key)) failures.push(`duplicate disposition ${key}`)
+    dispositionKeys.add(key)
+  }
   for (const key of seenFindings.keys()) {
     if (!dispositionKeys.has(key)) failures.push(`finding ${key} has no disposition`)
   }
@@ -322,18 +331,55 @@ export function verify(options: { root: string; revision: string }): { failures:
     if (!seenFindings.has(key)) failures.push(`disposition ${key} does not match any reported finding`)
     else
       lines.push(
-        `disposition ${key}: ${entry.status}${entry.status === "fixed" ? " (covered by a regression test)" : ""}`,
+        `disposition ${key}: ${entry.status}${entry.status === "fixed" ? " (regression declared; execution required)" : " (recorded reviewer judgment)"}`,
       )
   }
 
-  return { failures, lines }
+  return { failures, lines, regressions }
 }
 
-function main(): void {
+export function reviewSourceDirty(root: string): boolean {
+  return (
+    execFileSync(
+      "git",
+      [
+        "-C",
+        root,
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+        "--",
+        "packages/ax-code",
+        ":(exclude)packages/ax-code/ax-code.json",
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "docs/guides/tui-animations.md",
+      ],
+      { encoding: "utf8" },
+    ).length > 0
+  )
+}
+
+async function main(): Promise<void> {
   const root = repoRoot()
   const args = parseArgs(process.argv.slice(2), root)
   const revision = args.revision ?? currentRevision(root)
-  const { failures, lines } = verify({ root: args.root, revision })
+  const { failures, lines, regressions } = verify({ root: args.root, revision })
+  if (currentRevision(root) !== revision) failures.push("Requested review revision does not match repository HEAD")
+  if (reviewSourceDirty(root))
+    failures.push("Reviewed source has uncommitted changes; commit it and capture a matching review round")
+  if (failures.length === 0) {
+    failures.push(...(await runReviewRegressions(root, regressions)))
+    if (reviewSourceDirty(root)) failures.push("Reviewed source changed during regression execution")
+    if (currentRevision(root) !== revision)
+      failures.push("Repository HEAD changed or does not match the reviewed revision")
+    if (failures.length === 0 && regressions.length)
+      lines.push(
+        `${regressions.length} referenced regression assertions passed; this does not establish semantic bug coverage`,
+      )
+  }
   if (!args.quiet) for (const line of lines) console.log(line)
   if (failures.length > 0) {
     console.error(`\ncli review receipt verification failed (${failures.length}):`)
@@ -345,4 +391,8 @@ function main(): void {
   )
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main()
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error))
+    process.exitCode = 1
+  })

@@ -117,9 +117,17 @@ describe("submit_goal_plan", () => {
       metadata() {},
       async ask() {},
     }
-    await expect(tool.execute(params, ctx)).rejects.toThrow(
-      new RegExp(`exceeding the ${GoalPlan.MAX_READ_BYTES}-byte limit`),
-    )
+    const before = JSON.stringify(params)
+    const failure = await tool.execute(params, ctx).catch((error: unknown) => error)
+    expect(failure).toBeInstanceOf(Error)
+    const message = (failure as Error).message
+    expect(message).toMatch(new RegExp(`exceeding the ${GoalPlan.MAX_READ_BYTES}-byte limit`))
+    expect(message).toContain('kind="code-change"')
+    expect(message).toContain("COMPLETE object")
+    expect(message).toContain("Keep every acceptance id and required check")
+    const bytes = Number(message.match(/plan is (\d+) bytes/)?.[1])
+    expect(message).toContain(`remove at least ${bytes - GoalPlan.MAX_READ_BYTES} bytes`)
+    expect(JSON.stringify(params)).toBe(before)
   })
 
   test("accepts a plan just under the read cap", async () => {
