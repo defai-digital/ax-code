@@ -1,3 +1,5 @@
+import { VerificationPolicy } from "./verification-policy"
+import { goalSourceScope, goalSourceScopeNotice } from "./goal-source-scope"
 import { GoalPlan } from "./goal-plan"
 import { GoalCheckVerification } from "./goal-check-verification"
 import type { MessageV2 } from "./message-v2"
@@ -17,11 +19,17 @@ export async function goalCheckpoint(
     !GoalPlan.hasValidContract(goal.sessionID, goal.time.created)
   )
     return guidance
-  const source = await currentSourceState(
-    Instance.worktree,
-    Instance.project.vcs ?? "",
-    plan.contract.assurance.sourcePaths,
-  ).catch(() => ({ available: false, commit: null, dirtyDigest: null }))
+  const scope = goalSourceScope({
+    cwd: Instance.worktree,
+    created: goal.time.created,
+    sourcePaths: plan.contract.assurance.sourcePaths,
+    messages,
+  })
+  const source = await currentSourceState(Instance.worktree, Instance.project.vcs ?? "", scope.paths).catch(() => ({
+    available: false,
+    commit: null,
+    dirtyDigest: null,
+  }))
   const checks = GoalCheckVerification.inspect({
     assurance: plan.contract.assurance,
     sessionID: goal.sessionID,
@@ -35,6 +43,13 @@ export async function goalCheckpoint(
     ...guidance,
     context: [
       guidance?.context,
+      ...[goalSourceScopeNotice(scope.additional, scope.external)].filter(Boolean),
+      ...plan.contract.assurance.checks
+        .filter((check) => VerificationPolicy.isFilePresenceOnlyCommand(check.command))
+        .map(
+          (check) =>
+            `Legacy check ${check.id} only establishes file presence, not successful execution or review. Request /goal revise to strengthen required evidence; do not treat a warning log as a completed review.`,
+        ),
       "Executed check status (current observation):",
       ...(source.available ? [] : ["Source fingerprint unavailable; receipt freshness is unverified."]),
       ...checks.map((check) => `${check.id}: ${check.status} - ${check.detail}`),

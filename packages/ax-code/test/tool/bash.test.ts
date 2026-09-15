@@ -2048,3 +2048,29 @@ describe("tool.bash isolation", () => {
     })
   })
 })
+
+test.skipIf(process.platform === "win32")(
+  "external reviewer timeout includes recovery guidance without claiming success",
+  async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await fs.writeFile(path.join(dir, "claude"), "#!/bin/sh\nsleep 5\n", { mode: 0o700 })
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const bash = await BashTool.init()
+        const result = await bash.execute(
+          { command: "./claude -p review", timeout: 50, description: "Run fixture reviewer" },
+          ctx,
+        )
+        expect(result.metadata.hang.timedOut).toBe(true)
+        expect(result.output).toContain("External CLI review (claude) did not complete")
+        expect(result.output).toContain("concrete correction or transient failure")
+        expect(result.metadata.exit).not.toBe(0)
+      },
+    })
+  },
+)

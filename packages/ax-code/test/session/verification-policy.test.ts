@@ -94,3 +94,24 @@ describe("VerificationPolicy.renderVerificationProtocol", () => {
     expect(block).toContain("node")
   })
 })
+
+test.each([
+  "test -s review.md",
+  "[ -f review.json ] && test -s verdict.txt",
+  'd=.internal/reviews; for f in claude.md grok.md; do test -s "$d/$f" || exit 1; done; for c in claude grok; do grep -iq "$c" "$d/TRIAGE.md" || exit 1; done',
+])("recognizes presence-only admission checks without changing legacy classification: %s", (command) => {
+  expect(VerificationPolicy.isFilePresenceOnlyCommand(command)).toBe(true)
+  expect(VerificationPolicy.isTrivialVerificationCommand(command)).toBe(false)
+})
+
+test.each([
+  "pnpm test",
+  "node check-review.cjs",
+  "test -s review.md && node validate-review.cjs",
+  'test -n "$(git log --oneline baseline..HEAD)"',
+  'test "$status" = passed',
+  'test -s result -a "$status" = passed',
+  'for f in files; do node validate.cjs "$f"; done',
+])("does not guess semantics of executable or value assertions: %s", (command) => {
+  expect(VerificationPolicy.isFilePresenceOnlyCommand(command)).toBe(false)
+})

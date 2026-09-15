@@ -1928,7 +1928,7 @@
       ]
     },
     "security_scan": {
-      "count": 485,
+      "count": 489,
       "findings": [
         {
           "fingerprint": "437e1d0157fc1965a429fe7f0e9474576f6c0db625ea27bb6ce1b57af9e2cd9f",
@@ -5809,6 +5809,38 @@
           "severity": "medium",
           "kind": "missing_validation",
           "summary": "missing_validation"
+        },
+        {
+          "fingerprint": "7ed6bb0435ad9d81d6a7f589377fea3a49ee7c5dbb58a9c1d390c6836fe19cf3",
+          "file": "src/session/goal-source-scope.ts",
+          "line": 33,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "6c35431628eaa724aa931489ee03bf5b67723a6f2370596226df7c43ca291813",
+          "file": "src/session/goal-source-scope.ts",
+          "line": 35,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "1615c84de3da926fc19001bbeaff9638f5303011c412f9b7f80489de109473d5",
+          "file": "src/session/goal-source-scope.ts",
+          "line": 38,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
+        },
+        {
+          "fingerprint": "33fbde07405ad04c778b5b9d003a129cc651d211882346713aa2b6f2fa506b2f",
+          "file": "src/session/goal-source-scope.ts",
+          "line": 46,
+          "severity": "high",
+          "kind": "path_traversal",
+          "summary": "path_traversal"
         }
       ]
     },

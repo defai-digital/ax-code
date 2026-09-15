@@ -506,6 +506,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       // so assertBashNetwork gets an explicit suspect flag instead.
       let networkWrapperSuspect = false
       let foundCommands = false
+      const externalReviewClis = new Set<string>()
 
       // `decoded` marks a word already normalized by decodeShellLiteral.
       // A `$`, backtick, or glob that survives decoding came from a quoted or
@@ -833,6 +834,8 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         const rawUnwrapped = findWrappedCommand(command)
         const rawScanParts = rawUnwrapped ? [rawUnwrapped.name, ...rawUnwrapped.args] : command
         const scanParts = unwrappedCommand ? [unwrappedCommand.name, ...unwrappedCommand.args] : normalizedCommand
+        const executable = path.basename(scanParts[0] ?? "").replace(/\.(?:exe|cmd|bat)$/i, "")
+        if (["claude", "grok", "codex"].includes(executable)) externalReviewClis.add(executable)
 
         // Commands that wrap or delegate to other commands.
         // For shell invocations with -c, and eval, we parse the inner
@@ -1560,6 +1563,11 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
 
         if (timedOut) {
           resultMetadata.push(`bash tool terminated command after exceeding timeout ${timeout} ms`)
+          if (externalReviewClis.size)
+            resultMetadata.push(
+              `External CLI review (${[...externalReviewClis].join(", ")}) did not complete. Preserve this failed attempt and inspect its output before retrying. ` +
+                `Do not infer a cause from silence or keep varying model, prompt size and timeout. Use a bounded retry only for a concrete correction or transient failure; report an unavailable reviewer instead of inventing a verdict.`,
+            )
         }
 
         if (aborted) {

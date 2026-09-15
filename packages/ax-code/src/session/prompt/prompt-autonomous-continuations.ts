@@ -127,12 +127,40 @@ export namespace AutonomousContinuationPrompt {
     continuation: number
     maxContinuations: number
   }) {
+    if (input.agentName === "goal-plan-writer") {
+      return (
+        `Goal planning reached its model-turn limit (${input.maxSteps}). ` +
+        `This is agent model-turn-limit auto-continuation ${continuationCounter(input.continuation, input.maxContinuations)}. ` +
+        goalPlanSubmission()
+      )
+    }
     return (
       `Autonomous mode reached the ${input.agentName} agent model-turn limit (${input.maxSteps} model turns). ` +
       `Continue from where you left off with the same agent. Do not summarize the task as complete ` +
       `unless the work is actually complete; use tools to finish the remaining work and verify it. ` +
       `This is agent model-turn-limit auto-continuation ${continuationCounter(input.continuation, input.maxContinuations)}.`
     )
+  }
+
+  function goalPlanSubmission() {
+    return (
+      `Stop broad exploration. Your remaining task is to submit the goal contract with submit_goal_plan, ` +
+      `not to implement, run external reviewers, or finish the objective. Use the evidence already gathered; ` +
+      `read further only to resolve a concrete missing requirement or validation error. Preserve requested ` +
+      `reviews and implementation work in the plan checklist. Do not invent evidence or weaken acceptance checks. ` +
+      `Correct rejected submissions using the tool diagnostic, and stop after successful submission. ` +
+      `If a valid plan cannot be grounded, explain the specific blocker and stop without claiming success.`
+    )
+  }
+
+  export function goalPlanDeadline(input: { agentName: string; step: number; maxSteps: number }) {
+    if (input.agentName !== "goal-plan-writer" || !Number.isFinite(input.maxSteps)) return undefined
+    // The final finite-agent step disables tools. Remind the writer while
+    // three submission/repair turns are still available, even without todos
+    // or autonomous continuations. Never override the tool-disabled last step.
+    const remaining = input.maxSteps - input.step
+    if (remaining <= 0 || remaining > 3) return undefined
+    return `Goal planning has ${remaining} tool-enabled model turns left in this segment, including this turn. ${goalPlanSubmission()}`
   }
 
   export function emptyModelTurnRecovery(input: { attempt: number; maxAttempts: number }) {

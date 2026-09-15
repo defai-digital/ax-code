@@ -126,3 +126,38 @@ describe("prompt loop agent step limit", () => {
     ).toEqual({ action: "ignore" })
   })
 })
+
+test("goal writer continuation converges on submission without changing its budget", () => {
+  const result = handlePromptLoopAgentStepLimit(
+    {
+      sessionID: SessionID.descending(),
+      agentName: "goal-plan-writer",
+      step: 12,
+      maxSteps: 12,
+      autonomous: true,
+      continuations: 2,
+      maxContinuations: 3,
+    },
+    noDeps,
+  )
+  expect(result.action).toBe("continue")
+  if (result.action !== "continue") throw new Error("expected continuation")
+  expect(result.text).toContain("auto-continuation 3/3")
+  expect(result.text).toContain("submit_goal_plan")
+  expect(result.text).toContain("Stop broad exploration")
+  expect(result.text).toContain("Do not invent evidence")
+  expect(
+    handlePromptLoopAgentStepLimit(
+      {
+        sessionID: SessionID.descending(),
+        agentName: "goal-plan-writer",
+        step: 12,
+        maxSteps: 12,
+        autonomous: true,
+        continuations: 3,
+        maxContinuations: 3,
+      },
+      noDeps,
+    ).action,
+  ).toBe("stop")
+})

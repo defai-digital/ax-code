@@ -51,6 +51,16 @@ Usage notes:
     cd /foo/bar && pytest tests
     </bad-example>
 
+# External CLI reviews
+
+Use a bounded review request with the relevant source or diff and a clear final deliverable. Keep large prompts out of argv. For Claude Code, send a prepared prompt file through stdin, for example `claude -p --output-format json --permission-mode plan --tools "" --model opus < review-prompt.txt`. For Grok, use `grok --prompt-file review-prompt.txt --output-format json --max-turns 1 --no-subagents --tools "" -m grok-4.6` for a no-tool review. If the reviewer must inspect files, allow read-only tools and a bounded multi-turn budget instead. Prefer configured model IDs and verify installed CLI flags when an invocation fails.
+
+Claude's --tools / --allowed-tools / --disallowed-tools options take variadic values. Never put a positional prompt immediately after them: it can be consumed as tool names. Use stdin or an explicit `--` separator. A successful tiny ping establishes basic connectivity only, not completion of a substantive review. A settings warning alone is not a review result and does not establish why inference is slow.
+
+Keep at most two attempts per reviewer for the same review input by default. Retry only with a concrete invocation correction or evidence of a transient failure; do not repeatedly vary prompt size, model, transport, and timeout based on silence. Inspect incremental output and continue independent work while waiting. After bounded attempts fail, retain the exact failure and report the reviewer as unavailable; do not invent its verdict or mark a required review complete. A new source revision is a new review input, not permission for an unbounded retry loop.
+
+Capture the actual reviewer exit code and terminal completion result, source/diff identity, and final findings or explicit no-findings verdict. Keep stdout and stderr distinct. Do not mask a failed reviewer with a succeeding `echo`, `tail`, `wc`, or pipeline. Preserve earlier attempts instead of overwriting their output. File existence, nonempty warning logs, partial reasoning, and process liveness never prove successful review. A required review check must validate successful completion and matching source identity as well as the final artifact.
+
 # Committing changes with git
 
 Only create commits when requested by the user. If unclear, ask first. When the user asks you to create a new git commit, follow these steps carefully:
