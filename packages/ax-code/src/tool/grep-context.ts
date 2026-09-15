@@ -123,6 +123,13 @@ export async function searchWithContext(
     // Commit the match together with the before-context it owns, or drop both
     // when the budget cannot fit the pair.
     const before = pendingBeforeContext.get(file) ?? []
+    // Buffered rows must actually be this match's before-context: earlier in the
+    // file and within the context window. Verify it here instead of relying on
+    // ripgrep's stream semantics, so protocol drift truncates safely rather than
+    // misattributing a row to the wrong match.
+    if (before.some((item) => item.entry.line >= entry.line || entry.line - item.entry.line > params.context)) {
+      return false
+    }
     if (data.context!.length + bufferedLines + 1 > MAX_LINES || bytes + bufferedBytes + size > MAX_BYTES) {
       return false
     }

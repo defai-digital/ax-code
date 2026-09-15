@@ -301,4 +301,32 @@ describe("bounded grep context", () => {
       },
     })
   })
+
+  test("truncates instead of misattributing a before-context row outside the window", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const spawn = Process.spawn
+    const record = (type: string, file: string, line: number, text: string) =>
+      JSON.stringify({ type, data: { path: { text: file }, lines: { text: text + "\n" }, line_number: line } })
+    // a.ts:1 is 9 lines above the match at a.ts:10, far outside context 2, so it
+    // cannot be that match's before-context. The pair must be rejected together
+    // (safe truncation) rather than rendered as if it belonged to the match.
+    const stream = [record("context", "a.ts", 1, "far-before"), record("match", "a.ts", 10, "needle")].join("\n") + "\n"
+    const script = `process.stdout.write(${JSON.stringify(stream)}); process.stdout.end()`
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) => {
+      if (!args.includes("--json")) return spawn(args, options)
+      return spawn([process.execPath, "-e", script], options)
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await GrepTool.init()
+        const result = await tool.execute({ pattern: "needle", context: 2, limit: 10 }, ctx)
+        const data = CanonicalOutput.Grep.parse(result.data)
+        expect(data.matches).toHaveLength(0)
+        expect(result.metadata.truncated).toBe(true)
+        expect(result.output).not.toContain("far-before")
+        expect(result.output).not.toContain("needle")
+      },
+    })
+  })
 })
