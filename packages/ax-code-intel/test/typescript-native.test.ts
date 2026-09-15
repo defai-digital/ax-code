@@ -99,3 +99,49 @@ test("missing or mismatched native packages fail instead of falling back to JS",
     "TypeScript 7 native LSP is unavailable",
   )
 })
+
+test("native saved diagnostics remain current during filesystem watch traffic", async () => {
+  await using tmp = await tmpdir()
+  const modules = 2000
+  await fs.writeFile(path.join(tmp.path, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true } }))
+  for (let offset = 0; offset < modules; offset += 100) {
+    await Promise.all(
+      Array.from({ length: 100 }, (_, i) => {
+        const index = offset + i
+        return fs.writeFile(path.join(tmp.path, `module${index}.ts`), `export const value${index} = ${index}\n`)
+      }),
+    )
+  }
+  const source = path.join(tmp.path, "source.ts")
+  const imports = Array.from({ length: modules }, (_, i) => `import { value${i} } from "./module${i}"`).join("\n")
+  const content = (wrong: boolean) => `${imports}\nexport const answer: number = ${wrong ? '\"wrong\"' : "42"}\n`
+  await fs.writeFile(source, content(true))
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const server = await LSPServer.Typescript.spawn(tmp.path)
+      expect(server).toBeDefined()
+      let client: Awaited<ReturnType<typeof LSPClient.create>> | undefined
+      try {
+        client = await LSPClient.create({ serverID: "typescript", server: server!, root: tmp.path })
+        for (let round = 0; round < 300; round++) {
+          const wrong = round % 2 === 0
+          await fs.writeFile(source, content(wrong))
+          await Promise.all(
+            Array.from({ length: 8 }, () => client!.notify.open({ path: source, waitForDiagnostics: true })),
+          )
+          const snapshot = await collect([client])
+          expect(
+            snapshot[source]?.some((item) => item.code === 2322),
+            `saved edit ${round}`,
+          ).toBe(wrong)
+          // Give native filesystem events an opportunity to interleave with edits.
+          await new Promise((resolve) => setTimeout(resolve, 10))
+        }
+      } finally {
+        if (client) await client.shutdown()
+        else server?.process.kill("SIGKILL")
+      }
+    },
+  })
+}, 120_000)

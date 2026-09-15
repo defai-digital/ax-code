@@ -34,8 +34,10 @@ Native TypeScript uses pull diagnostics. AX Code requests them when a caller
 asks to wait for diagnostics or collects the diagnostic inventory. Synchronizing
 a file alone does not wait for type checking. Edits invalidate dependent cached results; stale, pending, or failed
 inventories are reported as partial/degraded by the aggregated diagnostics API.
-A successful pull refreshes that file. Server refresh requests trigger coalesced
-refreshes of previously requested documents. The raw record API refreshes stale
+A successful pull refreshes that file. Server refresh requests mark cached results
+stale; the next diagnostic request refreshes them on demand. Background server
+traffic does not renew the idle lifetime. File edits can still refresh previously
+requested documents in the background. The raw record API refreshes stale
 results within a bounded collection budget and rejects incomplete inventories;
 edit tools disclose this condition without losing the successful file edit.
 Other language servers retain their
@@ -82,3 +84,12 @@ executable with `--stdio`. Avoid unpinned `npx` commands. The override is explic
 AX Code does not automatically fall back when the native compiler is unavailable.
 
 Upstream: [TypeScript 7 announcement](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/).
+
+## TypeScript 7.0.2 saved-document compatibility
+
+The native 7.0.2 server can return an earlier diagnostic snapshot when file-watch
+traffic overlaps saved edits. AX Code closes and reopens changed documents for
+that exact server version before requesting diagnostics. This sends the full
+changed document; unchanged documents still reuse overlapping requests. Other
+server versions keep their negotiated synchronization mode. An interrupted
+replacement remains incomplete until the language server restarts.
