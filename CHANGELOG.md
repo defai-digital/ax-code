@@ -6,10 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.1] - 2026-09-15
+
 ### Changed
 
+- Publish the paired SDK 2.5.25.
+- Add reactive localization for eight more languages and improve session navigation, actions, and transcript timelines.
 - Rename the TUI animation and its theme to Digital Code, preserving existing preferences. Render the rain and startup logo in randomly selected neon purple and blue.
 - Restrict managed AX Engine model selection to Qwen3.8 27B AXQ 6-bit MTP.
+
+### Fixed
+
+- Reject failed snapshot content reads instead of displaying empty contents, enforce content limits for literal Git pathspec filenames, and drain active parallel reads before releasing operation ownership.
+- Preserve gateway tool thought signatures when replaying compatible-provider messages.
+- Preserve grep result fidelity, cancellation, context attribution, and bounded output.
+- Avoid false output-loop detection for generated code while checking large stream chunks consistently.
 
 ## [7.18.0] - 2026-09-15
 
