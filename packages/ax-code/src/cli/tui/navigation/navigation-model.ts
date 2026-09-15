@@ -131,3 +131,23 @@ export function visibleAfterNavigationClear<
   for (const id of [...keep]) addAncestorsAndDescendants(input.sessions, keep, id)
   return input.sessions.filter((session) => keep.has(session.id))
 }
+
+/** Reveal the current path without changing the user's saved expansion set. */
+export function navigationExpandedAncestors<T extends { id: string; parentID?: string }>(
+  sessions: readonly T[],
+  currentID: string | undefined,
+  expanded: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const next = new Set(expanded)
+  const byID = new Map(sessions.map((session) => [session.id, session]))
+  const seen = new Set<string>()
+  let node = currentID ? byID.get(currentID) : undefined
+  while (node?.parentID && !seen.has(node.id)) {
+    seen.add(node.id)
+    const parent = byID.get(node.parentID)
+    if (!parent) break
+    next.add(parent.id)
+    node = parent
+  }
+  return next
+}

@@ -105,7 +105,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     playReverseDigitalCode,
   } = input
 
-  return [
+  const commands: CommandOption[] = [
     {
       title: t("command.switchSession"),
       value: "session.list",
@@ -150,6 +150,26 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       onSelect: () => {
         kv.set("navigation_filter", navigationFilter(kv.get("navigation_filter")) === "recent" ? "active" : "recent")
         dialog.clear()
+      },
+    },
+    {
+      title: t("navigation.find"),
+      value: "session.navigation.find",
+      category: t("common.session"),
+      slash: { name: "navigation-find" },
+      onSelect: () => {
+        void dialogs.showNavigationDialog()
+      },
+    },
+    {
+      title: t("navigation.options"),
+      value: "session.navigation.options",
+      category: t("common.session"),
+      slash: { name: "navigation-options" },
+      onSelect: () => {
+        void dialogs.showNavigationOptionsDialog((value) => {
+          void commands.find((option) => option.value === value)?.onSelect?.(dialog)
+        })
       },
     },
     {
@@ -848,4 +868,5 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
       },
     },
   ]
+  return commands
 }

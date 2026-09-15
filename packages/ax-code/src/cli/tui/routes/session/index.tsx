@@ -1,3 +1,4 @@
+import { TimelineRail } from "./timeline-rail"
 import { applyInitialPromptDraft } from "@tui/component/prompt/session-drafts"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import {
@@ -382,6 +383,8 @@ export function Session() {
   const [showAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
   const [showAssistantStats, setShowAssistantStats] = kv.signal("assistant_stats_visibility", true)
   const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", true)
+  const showTimeline = () =>
+    showScrollbar() && dimensions().width >= 60 && timelineTurns().length >= 2 && !session()?.parentID
   const [showHeader, setShowHeader] = kv.signal("header_visible", true)
   const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
   const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
@@ -1405,6 +1408,16 @@ export function Session() {
 
   const revert = createMemo(() => revertState(revertInfo(), messages()))
   const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID(), revertPartID()))
+  const timelineTurns = createMemo(() =>
+    messages().filter(
+      (message) =>
+        message.role === "user" &&
+        !hiddenIDs().has(message.id) &&
+        (sync.data.part[message.id] ?? []).some(
+          (part) => (part.type === "text" && !part.synthetic) || part.type === "file",
+        ),
+    ),
+  )
   const pinnedInputCandidate = createMemo(() =>
     selectPinnedInputCandidate({
       messages: messages(),
@@ -1546,90 +1559,128 @@ export function Session() {
               onStop={stopSubagent}
             />
             <LastInputBanner view={pinnedInput()} onJump={jumpToUserMessage} />
-            <scrollbox
-              ref={(r: ScrollBoxRenderable) => (scroll = r)}
-              viewportOptions={{
-                paddingRight: showScrollbar() ? 1 : 0,
-              }}
-              verticalScrollbarOptions={{
-                // ax-tui derives the slider thickness from the scrollbar width
-                // clamped to 1..2 cells; pin it to 1 so the transcript bar is
-                // half its previous weight.
-                width: 1,
-                paddingLeft: 1,
-                visible: showScrollbar(),
-                trackOptions: {
-                  backgroundColor: theme.backgroundElement,
-                  foregroundColor: theme.border,
-                },
-              }}
-              stickyScroll={true}
-              stickyStart="bottom"
-              flexGrow={1}
-              scrollAcceleration={scrollAcceleration()}
-            >
-              <Show when={messages().length === 0 && !session()?.parentID}>
-                <box flexGrow={1} alignItems="center" justifyContent="center" paddingTop={4} paddingBottom={2}>
-                  <text>
-                    <span style={{ fg: theme.accent }}>◦</span>
-                    <span style={{ fg: theme.textMuted }}> Start typing to chat</span>
-                  </text>
-                  <text>
-                    <span style={{ fg: theme.accent }}>◦</span>
-                    <span style={{ fg: theme.textMuted }}> /help for commands</span>
-                  </text>
-                </box>
-              </Show>
-              <Show when={sync.data.message_truncated[route.sessionID]}>
-                <box paddingLeft={2} paddingBottom={1}>
-                  <text fg={theme.textMuted}>
-                    ▲ Showing the most recent {messages().length} messages — earlier history is not loaded
-                  </text>
-                </box>
-              </Show>
-              <Show when={sync.data.message_memory_limited[route.sessionID]}>
-                <box paddingLeft={2} paddingBottom={1}>
-                  <text fg={theme.warning}>
-                    Transcript memory budget exceeded: keeping the newest whole message or Undo history.
-                  </text>
-                </box>
-              </Show>
-              <Show when={sync.data.message_reload[route.sessionID]}>
-                <box paddingLeft={2} paddingBottom={1}>
-                  <text fg={theme.warning}>Some pending transcript updates were released to limit memory.</text>
-                  <text
-                    fg={theme.text}
-                    onMouseUp={() =>
-                      void sync.session
-                        .sync(route.sessionID, { force: true })
-                        .catch(() => toast.show({ message: "Failed to reload transcript", variant: "error" }))
-                    }
-                  >
-                    Reload transcript from saved history
-                  </text>
-                </box>
-              </Show>
-              <Show when={missingRevertHistory() || historyLoading() || historyError()}>
-                <box paddingLeft={2} paddingBottom={1}>
-                  <text fg={theme.warning}>
-                    {historyLoading()
-                      ? "Loading history for Undo / Restore..."
-                      : historyError() || "Older history is needed for Undo / Restore."}
-                  </text>
-                  <text fg={theme.text} onMouseUp={() => void ensureRevertHistory()}>
-                    Retry history loading: /undo-history
-                  </text>
-                  <text fg={theme.text} onMouseUp={() => command.trigger("session.restore-all")}>
-                    Restore all reverted messages and files: /restore-all
-                  </text>
-                </box>
-              </Show>
-              <For each={messages()}>
-                {(message, index) => (
-                  <Switch>
-                    <Match when={message.id === revert()?.messageID}>
-                      <>
-                        <Show when={revertPartID() && message.role === "user"}>
+            <box flexDirection="row" flexGrow={1} minHeight={0}>
+              <scrollbox
+                ref={(r: ScrollBoxRenderable) => (scroll = r)}
+                viewportOptions={{
+                  paddingRight: showScrollbar() ? 1 : 0,
+                }}
+                verticalScrollbarOptions={{
+                  // ax-tui derives the slider thickness from the scrollbar width
+                  // clamped to 1..2 cells; pin it to 1 so the transcript bar is
+                  // half its previous weight.
+                  width: 1,
+                  paddingLeft: 1,
+                  visible: showScrollbar() && !showTimeline(),
+                  trackOptions: {
+                    backgroundColor: theme.backgroundElement,
+                    foregroundColor: theme.border,
+                  },
+                }}
+                minWidth={0}
+                stickyScroll={true}
+                stickyStart="bottom"
+                flexGrow={1}
+                scrollAcceleration={scrollAcceleration()}
+              >
+                <Show when={messages().length === 0 && !session()?.parentID}>
+                  <box flexGrow={1} alignItems="center" justifyContent="center" paddingTop={4} paddingBottom={2}>
+                    <text>
+                      <span style={{ fg: theme.accent }}>◦</span>
+                      <span style={{ fg: theme.textMuted }}> Start typing to chat</span>
+                    </text>
+                    <text>
+                      <span style={{ fg: theme.accent }}>◦</span>
+                      <span style={{ fg: theme.textMuted }}> /help for commands</span>
+                    </text>
+                  </box>
+                </Show>
+                <Show when={sync.data.message_truncated[route.sessionID]}>
+                  <box paddingLeft={2} paddingBottom={1}>
+                    <text fg={theme.textMuted}>
+                      ▲ Showing the most recent {messages().length} messages — earlier history is not loaded
+                    </text>
+                  </box>
+                </Show>
+                <Show when={sync.data.message_memory_limited[route.sessionID]}>
+                  <box paddingLeft={2} paddingBottom={1}>
+                    <text fg={theme.warning}>
+                      Transcript memory budget exceeded: keeping the newest whole message or Undo history.
+                    </text>
+                  </box>
+                </Show>
+                <Show when={sync.data.message_reload[route.sessionID]}>
+                  <box paddingLeft={2} paddingBottom={1}>
+                    <text fg={theme.warning}>Some pending transcript updates were released to limit memory.</text>
+                    <text
+                      fg={theme.text}
+                      onMouseUp={() =>
+                        void sync.session
+                          .sync(route.sessionID, { force: true })
+                          .catch(() => toast.show({ message: "Failed to reload transcript", variant: "error" }))
+                      }
+                    >
+                      Reload transcript from saved history
+                    </text>
+                  </box>
+                </Show>
+                <Show when={missingRevertHistory() || historyLoading() || historyError()}>
+                  <box paddingLeft={2} paddingBottom={1}>
+                    <text fg={theme.warning}>
+                      {historyLoading()
+                        ? "Loading history for Undo / Restore..."
+                        : historyError() || "Older history is needed for Undo / Restore."}
+                    </text>
+                    <text fg={theme.text} onMouseUp={() => void ensureRevertHistory()}>
+                      Retry history loading: /undo-history
+                    </text>
+                    <text fg={theme.text} onMouseUp={() => command.trigger("session.restore-all")}>
+                      Restore all reverted messages and files: /restore-all
+                    </text>
+                  </box>
+                </Show>
+                <For each={messages()}>
+                  {(message, index) => (
+                    <Switch>
+                      <Match when={message.id === revert()?.messageID}>
+                        <>
+                          <Show when={revertPartID() && message.role === "user"}>
+                            <UserMessage
+                              index={index()}
+                              onMouseUp={() => {
+                                if (renderer.getSelection()?.getSelectedText()) return
+                                dialog.replace(() => (
+                                  <DialogMessage
+                                    messageID={message.id}
+                                    sessionID={route.sessionID}
+                                    setPrompt={(promptInfo) => prompt.set(promptInfo)}
+                                  />
+                                ))
+                              }}
+                              message={message as UserMessageInfo}
+                              parts={visibleParts(sync.data.part[message.id] ?? [], revertPartID())}
+                              pending={pending()}
+                            />
+                          </Show>
+                          <Show when={revertPartID() && message.role === "assistant"}>
+                            <Show when={!recoveredAssistantIDs().has(message.id)}>
+                              <AssistantMessage
+                                last={lastAssistant()?.id === message.id}
+                                message={message as AssistantMessageInfo}
+                                parts={visibleParts(sync.data.part[message.id] ?? [], revertPartID())}
+                              />
+                            </Show>
+                          </Show>
+                          <Show when={revert()}>
+                            {(state) => <RevertNotice count={state().reverted.length} files={state().diffFiles} />}
+                          </Show>
+                        </>
+                      </Match>
+                      <Match when={revert()?.messageID && hiddenIDs().has(message.id)}>
+                        <></>
+                      </Match>
+                      <Match when={message.role === "user"}>
+                        <>
                           <UserMessage
                             index={index()}
                             onMouseUp={() => {
@@ -1643,62 +1694,30 @@ export function Session() {
                               ))
                             }}
                             message={message as UserMessageInfo}
-                            parts={visibleParts(sync.data.part[message.id] ?? [], revertPartID())}
+                            parts={sync.data.part[message.id] ?? []}
                             pending={pending()}
                           />
+                          <RouteIndicator messageID={message.id} routeInfoByMessage={routeInfoByMessage} />
+                        </>
+                      </Match>
+                      <Match when={message.role === "assistant"}>
+                        <Show when={!recoveredAssistantIDs().has(message.id)}>
+                          <AssistantMessage
+                            last={lastAssistant()?.id === message.id}
+                            message={message as AssistantMessageInfo}
+                            parts={sync.data.part[message.id] ?? []}
+                          />
                         </Show>
-                        <Show when={revertPartID() && message.role === "assistant"}>
-                          <Show when={!recoveredAssistantIDs().has(message.id)}>
-                            <AssistantMessage
-                              last={lastAssistant()?.id === message.id}
-                              message={message as AssistantMessageInfo}
-                              parts={visibleParts(sync.data.part[message.id] ?? [], revertPartID())}
-                            />
-                          </Show>
-                        </Show>
-                        <Show when={revert()}>
-                          {(state) => <RevertNotice count={state().reverted.length} files={state().diffFiles} />}
-                        </Show>
-                      </>
-                    </Match>
-                    <Match when={revert()?.messageID && hiddenIDs().has(message.id)}>
-                      <></>
-                    </Match>
-                    <Match when={message.role === "user"}>
-                      <>
-                        <UserMessage
-                          index={index()}
-                          onMouseUp={() => {
-                            if (renderer.getSelection()?.getSelectedText()) return
-                            dialog.replace(() => (
-                              <DialogMessage
-                                messageID={message.id}
-                                sessionID={route.sessionID}
-                                setPrompt={(promptInfo) => prompt.set(promptInfo)}
-                              />
-                            ))
-                          }}
-                          message={message as UserMessageInfo}
-                          parts={sync.data.part[message.id] ?? []}
-                          pending={pending()}
-                        />
-                        <RouteIndicator messageID={message.id} routeInfoByMessage={routeInfoByMessage} />
-                      </>
-                    </Match>
-                    <Match when={message.role === "assistant"}>
-                      <Show when={!recoveredAssistantIDs().has(message.id)}>
-                        <AssistantMessage
-                          last={lastAssistant()?.id === message.id}
-                          message={message as AssistantMessageInfo}
-                          parts={sync.data.part[message.id] ?? []}
-                        />
-                      </Show>
-                    </Match>
-                  </Switch>
-                )}
-              </For>
-              <QueuedFollowUps items={queuedFollowUps()} />
-            </scrollbox>
+                      </Match>
+                    </Switch>
+                  )}
+                </For>
+                <QueuedFollowUps items={queuedFollowUps()} />
+              </scrollbox>
+              <Show when={showTimeline()}>
+                <TimelineRail scroll={() => scroll} turns={timelineTurns()} />
+              </Show>
+            </box>
             <box flexShrink={0}>
               <Show when={queuedFollowUps().length > 0}>
                 <box height={1} flexShrink={0} paddingLeft={2} onMouseUp={() => command.trigger("session.followups")}>

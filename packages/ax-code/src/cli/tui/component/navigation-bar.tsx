@@ -20,6 +20,7 @@ export function NavigationBar(props: { width: number; showSidebarRestore?: boole
   const sidebarEntry = () => (props.showSidebarRestore ? sidebarRestoreEntry(props.width) : "")
   const attentionLabel = () => `Pending ${pending()}${sdk.sseConnected ? "" : "*"}`
   const pendingChipWidth = () => (pending() ? attentionLabel().length + 4 : 0)
+  const showSchedule = () => props.width >= (pending() > 0 ? 50 : 36)
   const projectWidth = () =>
     props.width - 1 - entry().length - 2 - pendingChipWidth() - (sidebarEntry() ? sidebarEntry().length + 2 : 0)
   return (
@@ -50,11 +51,11 @@ export function NavigationBar(props: { width: number; showSidebarRestore?: boole
             </text>
           </box>
         </Show>
-        <Show when={props.width >= (pending() > 0 ? 50 : 36)}>
+        <Show when={showSchedule()}>
           <ScheduleStatus width={14} compact />
         </Show>
         <Show when={projectWidth() >= 12}>
-          <box onMouseUp={() => command.trigger("session.navigation.info")}>
+          <box flexShrink={0} onMouseUp={() => command.trigger("session.navigation.info")}>
             <text fg={theme.textMuted} selectable={false}>
               {truncateToCellWidth(projectLabel(sdk.directory ?? sync.data.path.directory), projectWidth())}
             </text>

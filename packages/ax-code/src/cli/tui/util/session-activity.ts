@@ -1,3 +1,4 @@
+import { english, type Translate } from "../i18n"
 import { createSessionTreeIndex, type SessionTreeNode } from "./session-tree"
 import type { PendingRequestRef } from "./pending-request-notices"
 
@@ -23,11 +24,13 @@ export function knownAttentionRequests(permissions: RequestBuckets, questions: R
 }
 
 export function createSessionActivityIndex(input: {
+  t?: Translate
   sessions: readonly SessionTreeNode[]
   statuses: ActivityStatuses
   permissions: RequestBuckets
   questions: RequestBuckets
 }) {
+  const uiText = input.t ?? english
   const tree = createSessionTreeIndex(input.sessions)
   const requests = knownAttentionRequests(input.permissions, input.questions)
   const bySession = new Map<string, AttentionRequest[]>()
@@ -49,14 +52,14 @@ export function createSessionActivityIndex(input: {
       // signals get row labels; no inferred Done/Idle badge is rendered.
       const label = approvals
         ? questions
-          ? "Approval and question pending"
-          : "Approval needed"
+          ? uiText("ui.approvalAndQuestionPending")
+          : uiText("ui.approvalNeeded")
         : questions
-          ? "Question pending"
+          ? uiText("ui.questionPending")
           : retrying
-            ? "Retrying"
+            ? uiText("ui.retrying")
             : working
-              ? "Working"
+              ? uiText("ui.working")
               : undefined
       return { members, pending, label, working: working || retrying, attention: pending.length > 0 }
     },
