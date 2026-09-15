@@ -76,7 +76,7 @@ export function expectedReleaseInstallerSignatures() {
 }
 
 export function expectedReleaseMetadataAssets() {
-  return ["ax-minisign.pub", "install.sha256"]
+  return ["ax-minisign.pub", "install.sha256", "install.ps1.sha256"]
 }
 
 export function missingReleaseAssets(
@@ -431,12 +431,15 @@ export async function downloadReleaseAssets(options: PublishGithubReleaseOptions
 }
 
 export function verifyInstallerDigest(assetDir: string) {
-  const expected = fs.readFileSync(path.join(assetDir, "install.sha256"), "utf8").trim().split(/\s+/)[0]
-  const actual = createHash("sha256")
-    .update(fs.readFileSync(path.join(assetDir, "install")))
-    .digest("hex")
-  if (!/^[a-f0-9]{64}$/i.test(expected) || expected.toLowerCase() !== actual) {
-    throw new Error("Downloaded Unix installer digest does not match install.sha256")
+  for (const name of expectedReleaseInstallerAssets()) {
+    const sidecar = `${name}.sha256`
+    const expected = fs.readFileSync(path.join(assetDir, sidecar), "utf8").trim().split(/\s+/)[0]
+    const actual = createHash("sha256")
+      .update(fs.readFileSync(path.join(assetDir, name)))
+      .digest("hex")
+    if (!/^[a-f0-9]{64}$/i.test(expected) || expected.toLowerCase() !== actual) {
+      throw new Error(`Downloaded ${name} digest does not match ${sidecar}`)
+    }
   }
 }
 

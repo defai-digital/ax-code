@@ -424,12 +424,16 @@ describe("installation", () => {
     test("runs the PowerShell installer via powershell.exe on Windows", async () => {
       const script = "param([string]$Version)\nWrite-Host $Version\n"
       const calls: string[][] = []
+      const urls: string[] = []
 
       await withTestDependencies(
         {
           platform: "win32",
           fetch: (url) => {
+            urls.push(url)
             if (url.endsWith("/install.ps1")) return new Response(script, { status: 200 })
+            if (url.endsWith("/install.ps1.sha256"))
+              return new Response(createHash("sha256").update(script).digest("hex"))
             return new Response("not found", { status: 404 })
           },
           run: (cmd) => {
@@ -447,6 +451,53 @@ describe("installation", () => {
       expect(ps).toContain("-File")
       expect(ps?.slice(-2)).toEqual(["-Version", "5.3.0"])
       expect(calls.some((cmd) => cmd[0] === "bash")).toBe(false)
+      expect(urls).toEqual([
+        "https://github.com/defai-digital/ax-code/releases/download/v5.3.0/install.ps1",
+        "https://github.com/defai-digital/ax-code/releases/download/v5.3.0/install.ps1.sha256",
+      ])
+    })
+
+    test("requires a target Windows installer and digest before invoking powershell", async () => {
+      const urls: string[] = []
+      let invoked = false
+      await expect(
+        withTestDependencies(
+          {
+            platform: "win32",
+            fetch: (url) => {
+              urls.push(url)
+              return new Response("param([string]$Version)\n", { status: url.endsWith(".sha256") ? 404 : 200 })
+            },
+            run: () => {
+              invoked = true
+              return { code: 0, stdout: "", stderr: "" }
+            },
+          },
+          () => Installation.upgrade("curl", "7.16.5"),
+        ),
+      ).rejects.toThrow("release digest is missing")
+      expect(invoked).toBe(false)
+      expect(urls).toEqual([
+        "https://github.com/defai-digital/ax-code/releases/download/v7.16.5/install.ps1",
+        "https://github.com/defai-digital/ax-code/releases/download/v7.16.5/install.ps1.sha256",
+      ])
+    })
+
+    test("hard-fails when the Windows installer script sha256 sidecar mismatches", async () => {
+      const promise = withTestDependencies(
+        {
+          platform: "win32",
+          fetch: (url) => {
+            if (url.endsWith("/install.ps1")) return new Response("param([string]$Version)\n", { status: 200 })
+            if (url.endsWith("/install.ps1.sha256"))
+              return new Response(`${"0".repeat(64)}  install.ps1\n`, { status: 200 })
+            return new Response("not found", { status: 404 })
+          },
+        },
+        () => Installation.upgrade("curl", "5.3.0"),
+      )
+
+      await expect(promise).rejects.toThrow(/integrity check failed/)
     })
 
     test("hard-fails when the installer script sha256 sidecar mismatches", async () => {

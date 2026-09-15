@@ -26,20 +26,26 @@ import {
 } from "./publish-github-release"
 
 describe("publish-github-release helpers", () => {
-  test("checks Unix installer bytes against a required well-formed digest", () => {
+  test("checks installer bytes against required well-formed digests", () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ax-installer-digest-"))
     try {
-      const body = "#!/bin/bash\nprintf 'verified'\n"
-      fs.writeFileSync(path.join(directory, "install"), body)
+      const unix = "#!/bin/bash\nprintf 'verified'\n"
+      const windows = "param([string]$Version)\nWrite-Host $Version\n"
+      fs.writeFileSync(path.join(directory, "install"), unix)
+      fs.writeFileSync(path.join(directory, "install.ps1"), windows)
       expect(() => verifyInstallerDigest(directory)).toThrow()
       fs.writeFileSync(path.join(directory, "install.sha256"), "invalid")
+      fs.writeFileSync(
+        path.join(directory, "install.ps1.sha256"),
+        createHash("sha256").update(windows).digest("hex") + "  install.ps1\n",
+      )
       expect(() => verifyInstallerDigest(directory)).toThrow(/digest/)
       fs.writeFileSync(
         path.join(directory, "install.sha256"),
-        createHash("sha256").update(body).digest("hex") + "  install\n",
+        createHash("sha256").update(unix).digest("hex") + "  install\n",
       )
       expect(() => verifyInstallerDigest(directory)).not.toThrow()
-      fs.appendFileSync(path.join(directory, "install"), "modified")
+      fs.appendFileSync(path.join(directory, "install.ps1"), "modified")
       expect(() => verifyInstallerDigest(directory)).toThrow(/digest/)
     } finally {
       fs.rmSync(directory, { recursive: true, force: true })
@@ -189,7 +195,7 @@ describe("publish-github-release helpers", () => {
     ])
     expect(expectedReleaseInstallerAssets()).toEqual(["install", "install.ps1"])
     expect(expectedReleaseInstallerSignatures()).toEqual(["install.minisig", "install.ps1.minisig"])
-    expect(expectedReleaseMetadataAssets()).toEqual(["ax-minisign.pub", "install.sha256"])
+    expect(expectedReleaseMetadataAssets()).toEqual(["ax-minisign.pub", "install.sha256", "install.ps1.sha256"])
   })
 
   test("reports missing release assets", () => {
@@ -213,6 +219,7 @@ describe("publish-github-release helpers", () => {
       "install.ps1.minisig",
       "ax-minisign.pub",
       "install.sha256",
+      "install.ps1.sha256",
     ])
   })
 

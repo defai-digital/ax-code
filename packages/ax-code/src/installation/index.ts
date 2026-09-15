@@ -9,7 +9,6 @@ import {
   HOMEBREW_TAP,
   LEGACY_HOMEBREW_TAP,
   HOMEBREW_FORMULA_API_URL,
-  INSTALL_PS1_SCRIPT_URL,
   GITHUB_RELEASES_API_URL,
   GITHUB_REPO_URL,
 } from "@/constants/project"
@@ -231,9 +230,9 @@ export namespace Installation {
     return canonical
   }
 
-  // Fetches a remote installer script and verifies it against its optional
-  // `.sha256` sidecar. A hash mismatch is a hard failure; a missing sidecar
-  // only warns and proceeds so existing deployments without one keep working.
+  // Fetches a remote installer script and verifies it against its `.sha256`
+  // sidecar. A hash mismatch is a hard failure. Missing sidecars warn and
+  // proceed only when the caller did not require a digest.
   async function fetchInstallerScript(scriptUrl: string, requireDigest = false) {
     const sha256Url = `${scriptUrl}.sha256`
     const response = await fetchOk(scriptUrl)
@@ -281,11 +280,15 @@ export namespace Installation {
     })
   }
 
-  // Windows-native self-upgrade: download the PowerShell installer and run it
-  // with Windows PowerShell. The installer minisign-verifies the release
-  // archive itself against a pinned public key, matching the bash path.
+  // Windows-native self-upgrade: download the versioned PowerShell installer
+  // with a required digest, then run it with Windows PowerShell. The installer
+  // minisign-verifies the release archive itself against a pinned public key,
+  // matching the bash path.
   async function upgradeWindows(target: string) {
-    const bodyBytes = await fetchInstallerScript(INSTALL_PS1_SCRIPT_URL)
+    const version = semver.valid(target)
+    if (!version) throw new Error("Invalid installer release version")
+    target = version
+    const bodyBytes = await fetchInstallerScript(`${GITHUB_REPO_URL}/releases/download/v${target}/install.ps1`, true)
     // mkdtemp appends a random suffix and creates the private directory atomically.
     // @scan-suppress security_scan — os.tmpdir plus a trusted constant prefix
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-upgrade-"))

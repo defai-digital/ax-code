@@ -411,6 +411,7 @@ jobs:
           cp install.ps1 packages/ax-code/dist/install.ps1
           cp install packages/ax-code/dist/install
           shasum -a 256 packages/ax-code/dist/install > packages/ax-code/dist/install.sha256
+          shasum -a 256 packages/ax-code/dist/install.ps1 > packages/ax-code/dist/install.ps1.sha256
 
       - name: Install minisign
         run: brew install minisign
@@ -519,6 +520,7 @@ jobs:
             packages/ax-code/dist/install.sha256
             packages/ax-code/dist/install.ps1
             packages/ax-code/dist/install.ps1.minisig
+            packages/ax-code/dist/install.ps1.sha256
             packages/ax-code/dist/ax-code-darwin-arm64.zip
             packages/ax-code/dist/ax-code-darwin-arm64.zip.minisig
             packages/ax-code/dist/ax-code-windows-x64.zip
@@ -552,6 +554,9 @@ jobs:
           EXPECTED_DIGEST="$(awk '{print $1}' "$VERIFY_DIR/install.sha256")"
           ACTUAL_DIGEST="$(shasum -a 256 "$VERIFY_DIR/install" | awk '{print $1}')"
           test "$EXPECTED_DIGEST" = "$ACTUAL_DIGEST"
+          EXPECTED_PS1_DIGEST="$(awk '{print $1}' "$VERIFY_DIR/install.ps1.sha256")"
+          ACTUAL_PS1_DIGEST="$(shasum -a 256 "$VERIFY_DIR/install.ps1" | awk '{print $1}')"
+          test "$EXPECTED_PS1_DIGEST" = "$ACTUAL_PS1_DIGEST"
 
           assets=(
             "$VERIFY_DIR/install"

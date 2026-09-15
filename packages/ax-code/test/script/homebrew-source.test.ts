@@ -159,6 +159,7 @@ describe("distribution support guardrails", () => {
     expect(publishJob![0]).toContain("node script/github-release-assets.mjs publish")
     expect(publishJob![0]).toContain("cp install.ps1 packages/ax-code/dist/install.ps1")
     expect(publishJob![0]).toContain("packages/ax-code/dist/install.ps1")
+    expect(publishJob![0]).toContain("packages/ax-code/dist/install.ps1.sha256")
     for (const archive of releaseArchives) {
       expect(publishJob![0]).toContain(`packages/ax-code/dist/${archive}`)
       expect(publishJob![0]).toContain(`packages/ax-code/dist/${archive}.minisig`)
