@@ -948,7 +948,7 @@ describe("tool.bash isolation", () => {
             },
             testCtx,
           ),
-        ).rejects.toThrow(/Dynamic redirection targets/)
+        ).rejects.toThrow(/Dynamic redirection targets.*literal quoted paths.*workdir/s)
       },
     })
   })

@@ -57,6 +57,13 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
     }
     // Submission-only: legacy frozen contracts must retain their schema and digest.
     if (params.kind === "code-change") {
+      const gitPresenceOnly =
+        params.assurance?.checks.filter((check) => VerificationPolicy.isGitLogPresenceOnlyCommand(check.command)) ?? []
+      if (gitPresenceOnly.length)
+        throw new Error(
+          `Goal checks ${gitPresenceOnly.map((check) => check.id).join(", ")} only establish matching git log output. ` +
+            `A path-filtered log cannot prove all committed files are in scope. Use a project-owned verifier that checks baseline ancestry, a nonempty range, and every changed path in every commit without a path filter, including deletions and both rename sides.`,
+        )
       const presenceOnly =
         params.assurance?.checks.filter((check) => VerificationPolicy.isFilePresenceOnlyCommand(check.command)) ?? []
       if (presenceOnly.length)
@@ -95,7 +102,9 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       throw new Error(
         `The rendered goal plan is ${bytes} bytes, exceeding the ${GoalPlan.MAX_READ_BYTES}-byte limit. ` +
           "Shorten the assurance checks, source references, acceptance criteria, verification steps, implementation approach, and task checklist " +
-          "(aim for concise single-line items) and call submit_goal_plan again.",
+          `(aim for concise single-line items and a rendered plan below 7168 bytes; remove at least ${bytes - GoalPlan.MAX_READ_BYTES} bytes). ` +
+          `Resubmit the COMPLETE object, including kind="${params.kind}" and all required fields, not a partial patch. ` +
+          "Keep every acceptance id and required check; shorten repeated prose rather than dropping obligations.",
       )
     }
     return {
