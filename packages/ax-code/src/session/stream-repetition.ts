@@ -11,9 +11,10 @@
  * This guard watches the raw text/reasoning deltas of one stream and detects
  * two repetition shapes inside a sliding tail window:
  *
- * - `segment`: the same paragraph (>= MIN_SEGMENT_CHARS) appears
+ * - `segment`: the same prose line (>= MIN_SEGMENT_CHARS) appears
  *   MAX_SEGMENT_REPEATS+ times in the window. Catches the common "same plan
- *   sentence re-emitted between re-reads of the same code" loop.
+ *   sentence re-emitted between re-reads of the same code" loop. Complete
+ *   fenced blocks count as single units: distinct tests often share lines.
  * - `tail`: the window ends with the same short unit repeated back-to-back.
  *   Catches single-line streams with no paragraph breaks ("foo foo foo ...").
  *
@@ -27,17 +28,19 @@ export namespace StreamRepetition {
   export const WINDOW_CHARS = 6144
   /** Run the checks at most once per this many appended chars. */
   export const CHECK_INTERVAL_CHARS = 512
-  /** Paragraphs shorter than this are ignored by the segment check. */
+  /** Prose lines shorter than this are ignored by the segment check. */
   export const MIN_SEGMENT_CHARS = 40
-  /** A paragraph appearing this many times in the window is a loop. */
+  /** A prose line appearing more than this many times in the window is a loop. */
   export const MAX_SEGMENT_REPEATS = 3
   /** Shortest / longest unit considered by the back-to-back tail check. */
   export const MIN_TAIL_UNIT_CHARS = 30
-  export const MAX_TAIL_UNIT_CHARS = 600
   /** Consecutive repeats of the unit required at the tail. */
   export const MIN_TAIL_REPEATS = 3
+  // Cover multiline code loops too: shared lines are excluded from the prose
+  // check, but three copies of an entire code block can fit in the raw window.
+  export const MAX_TAIL_UNIT_CHARS = Math.floor(WINDOW_CHARS / MIN_TAIL_REPEATS)
   /** Cap on anchor occurrences scanned per tail check (cost bound). */
-  const MAX_ANCHOR_OCCURRENCES = 16
+  const MAX_ANCHOR_OCCURRENCES = 64
   /** Cap unique paragraph keys counted per window (cost bound). */
   const MAX_SEGMENT_KEYS = 256
 
@@ -63,18 +66,18 @@ export namespace StreamRepetition {
     return raw.trim().replace(/\s+/g, " ")
   }
 
-  function detectSegmentRepeat(window: string, minSegmentChars: number, maxRepeats: number): Detection | undefined {
-    const segments = window.split(/\n+/)
+  type Segment = { start: number; text: string; kind: "prose" | "code" }
+
+  function detectSegmentRepeat(segments: Segment[], maxRepeats: number): Detection | undefined {
     const counts = new Map<string, number>()
-    for (const raw of segments) {
-      const segment = normalizeSegment(raw)
-      if (segment.length < minSegmentChars) continue
-      const count = (counts.get(segment) ?? 0) + 1
+    for (const segment of segments) {
+      const key = `${segment.kind}:${segment.text}`
+      const count = (counts.get(key) ?? 0) + 1
       if (count > maxRepeats) {
-        return { kind: "segment", unit: segment.slice(0, 200), count }
+        return { kind: "segment", unit: segment.text.slice(0, 200), count }
       }
-      if (counts.size >= MAX_SEGMENT_KEYS && !counts.has(segment)) continue
-      counts.set(segment, count)
+      if (counts.size >= MAX_SEGMENT_KEYS && !counts.has(key)) continue
+      counts.set(key, count)
     }
     return undefined
   }
@@ -135,17 +138,78 @@ export namespace StreamRepetition {
     let total = 0
     let window = ""
     let sinceCheck = 0
+    let segments: Segment[] = []
+    let pendingLine = ""
+    let lineLength = 0
+    let lineStart = 0
+    let fence: { marker: string; length: number; start: number; body: string; overflow: boolean } | undefined
+
+    const pruneSegments = (end: number) => {
+      while (segments.length && segments[0].start < end - windowChars) segments.shift()
+    }
+    const recordSegment = (raw: string, start: number, kind: Segment["kind"]) => {
+      // Whitespace inside code can be data (for example a string literal).
+      const text = kind === "code" ? raw.trim() : normalizeSegment(raw)
+      if (text.length >= minSegmentChars) segments.push({ start, text, kind })
+    }
+
+    // Parse only complete lines, independently of delta/window boundaries.
+    // Raw offsets expire entire units; a clipped or unfinished line cannot
+    // spuriously match an earlier line. Fence bodies are bounded too, and only
+    // complete blocks wholly inside the window participate in segment counts.
+    const appendSegments = (delta: string) => {
+      let offset = 0
+      while (offset < delta.length) {
+        const newline = delta.indexOf("\n", offset)
+        const end = newline === -1 ? delta.length : newline
+        const length = end - offset
+        pendingLine += delta.slice(offset, offset + Math.min(length, windowChars - pendingLine.length))
+        lineLength += length
+        if (newline === -1) break
+
+        const lineEnd = lineStart + lineLength + 1
+        pruneSegments(lineEnd)
+        const delimiter = lineLength <= windowChars ? /^ {0,3}(`{3,}|~{3,})(.*)\r?$/.exec(pendingLine) : null
+        if (fence) {
+          if (lineEnd - fence.start > windowChars) {
+            fence.body = ""
+            fence.overflow = true
+          }
+          if (
+            delimiter &&
+            delimiter[1][0] === fence.marker &&
+            delimiter[1].length >= fence.length &&
+            !delimiter[2].trim()
+          ) {
+            if (!fence.overflow) recordSegment(fence.body, fence.start, "code")
+            fence = undefined
+          } else if (!fence.overflow) {
+            fence.body += pendingLine + "\n"
+          }
+        } else if (delimiter && (delimiter[1][0] !== "`" || !delimiter[2].includes("`"))) {
+          fence = { marker: delimiter[1][0], length: delimiter[1].length, start: lineStart, body: "", overflow: false }
+        } else if (lineLength <= windowChars) {
+          recordSegment(pendingLine, lineStart, "prose")
+        }
+        pendingLine = ""
+        lineLength = 0
+        lineStart = lineEnd
+        offset = newline + 1
+      }
+    }
 
     return {
       /** Feed one streamed delta. Returns a Detection the first time a loop trips. */
       push(delta: string): Detection | undefined {
         total += delta.length
         window = window.length + delta.length > windowChars ? (window + delta).slice(-windowChars) : window + delta
+        appendSegments(delta)
+        pruneSegments(total)
         sinceCheck += delta.length
         if (total < minTotalChars || sinceCheck < checkIntervalChars) return undefined
         sinceCheck = 0
         return (
-          detectSegmentRepeat(window, minSegmentChars, maxSegmentRepeats) ??
+          detectSegmentRepeat(segments, maxSegmentRepeats) ??
           detectTailRepeat(window, minTailUnitChars, maxTailUnitChars, minTailRepeats)
         )
       },
@@ -154,6 +218,11 @@ export namespace StreamRepetition {
         total = 0
         window = ""
         sinceCheck = 0
+        segments = []
+        pendingLine = ""
+        lineLength = 0
+        lineStart = 0
+        fence = undefined
       },
     }
   }

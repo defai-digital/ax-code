@@ -484,14 +484,20 @@ export namespace SessionProcessor {
             // models) would otherwise generate forever with a fresh heartbeat
             // and no error. Fed with text/reasoning deltas below; a detection
             // aborts the turn with a typed, non-retryable error.
-            const repetitionGuard = StreamRepetition.create()
-            const guardStreamOutput = (delta: string) => {
-              const detection = repetitionGuard.push(delta)
+            // Reasoning and visible text have independent Markdown state: an
+            // unfinished code fence in reasoning must not mask a text loop.
+            const repetitionGuards = {
+              reasoning: StreamRepetition.create(),
+              text: StreamRepetition.create(),
+            }
+            const guardStreamOutput = (channel: keyof typeof repetitionGuards, delta: string) => {
+              const detection = repetitionGuards[channel].push(delta)
               if (!detection) return
               log.warn("model output repetition detected, aborting stream", {
                 sessionId: input.sessionID,
                 command: "session.process",
                 status: "output_loop",
+                channel,
                 kind: detection.kind,
                 count: detection.count,
                 unit: detection.unit,
@@ -501,7 +507,7 @@ export namespace SessionProcessor {
                   `Model output loop detected: the model repeated the same content ${detection.count} times ` +
                   `within a single response ("${detection.unit}"). The turn was stopped to prevent an endless ` +
                   "generation loop. Re-prompt with a smaller scope, or switch to a different model.",
-              }).toObject()
+              })
             }
 
             for await (const value of stream.fullStream) {
@@ -545,7 +551,7 @@ export namespace SessionProcessor {
                     const part = reasoningMap[value.id]
                     const offset = part.text.length
                     part.text += value.text
-                    guardStreamOutput(value.text)
+                    guardStreamOutput("reasoning", value.text)
                     if (value.providerMetadata) part.metadata = value.providerMetadata
                     deltaBatcher.push(part.id, value.text, offset)
                     // Coalesce SQLite progress snapshots for long reasoning.
@@ -1110,7 +1116,8 @@ export namespace SessionProcessor {
                   // Judge repetition per model step: identical phrasing across
                   // separate steps is normal (e.g. recapping a plan), identical
                   // phrasing many times within one step is a generation loop.
-                  repetitionGuard.reset()
+                  repetitionGuards.reasoning.reset()
+                  repetitionGuards.text.reset()
                   stepToolCallCount = 0
                   stepErrorSurfaces = []
                   stepTouchedFiles = []
@@ -1395,7 +1402,7 @@ export namespace SessionProcessor {
                   if (currentText) {
                     const offset = currentText.text.length
                     currentText.text += value.text
-                    guardStreamOutput(value.text)
+                    guardStreamOutput("text", value.text)
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
                     deltaBatcher.push(currentText.id, value.text, offset)
                     // Coalesce progress snapshots so multi-KB streams do not

@@ -18,6 +18,7 @@ import { TaskQueue } from "../../src/session/task-queue"
 import { tmpdir } from "../fixture/fixture"
 import * as ImageResize from "../../src/session/image-resize"
 import { preparePromptRequest } from "../../src/session/prompt/prompt-request-build"
+import { Recorder } from "../../src/replay/recorder"
 
 const model: Provider.Model = {
   id: "test-model" as any,
@@ -144,6 +145,97 @@ function successfulTextStream(text = "done") {
 }
 
 describe("session.processor", () => {
+  test("preserves distinct generated tests that share fenced setup code", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const output = Array.from({ length: 40 }, (_, i) =>
+          [
+            `Test ${i} covers its own input and expected output.`,
+            "```ts",
+            `test("case ${i}", async () => {`,
+            "  await using tmp = await tmpdir({ git: true })",
+            `  expect(await search(tmp.path, "case ${i}")).toHaveLength(${i})`,
+            "})",
+            "```",
+            "",
+          ].join("\n"),
+        ).join("\n")
+        const { processor, streamInput } = await createProcessorFixture(
+          tmp.path,
+          processorDependencies({ stream: async () => successfulTextStream(output) }),
+        )
+        await processor.process(streamInput)
+        expect(processor.message.error).toBeUndefined()
+        const persisted = await MessageV2.get({ sessionID: streamInput.sessionID, messageID: processor.message.id })
+        expect(persisted.parts.find((part) => part.type === "text")).toMatchObject({ text: output.trimEnd() })
+      },
+    })
+  })
+
+  test("records the typed diagnostic when a true output loop stops the stream", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const events = vi.spyOn(Recorder, "emit")
+        try {
+          const { processor, streamInput } = await createProcessorFixture(
+            tmp.path,
+            processorDependencies({
+              stream: async () =>
+                successfulTextStream("The model keeps repeating this sentence without progress.\n".repeat(100)),
+            }),
+          )
+          expect(await processor.process(streamInput)).toBe("stop")
+          expect(processor.message.error?.name).toBe("MessageOutputLoopError")
+          expect(events).toHaveBeenCalledWith(
+            expect.objectContaining({
+              type: "error",
+              errorType: "MessageOutputLoopError",
+              message: expect.stringContaining("Model output loop detected"),
+            }),
+          )
+        } finally {
+          events.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("an unclosed reasoning fence does not hide a prose loop in text", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const output = Array.from(
+          { length: 70 },
+          (_, i) =>
+            `I need to recheck the same source again before I can proceed with the change.\nPass ${i} is next.\n`,
+        ).join("")
+        const stream = successfulTextStream(output)
+        const textEvents = stream.fullStream
+        stream.fullStream = (async function* () {
+          for await (const event of textEvents) {
+            if (event.type === "text-start") {
+              yield { type: "reasoning-start", id: "reasoning_1" }
+              yield { type: "reasoning-delta", id: "reasoning_1", text: "Here is a draft:\n```ts\n" }
+              yield { type: "reasoning-end", id: "reasoning_1" }
+            }
+            yield event
+          }
+        })()
+        const { processor, streamInput } = await createProcessorFixture(
+          tmp.path,
+          processorDependencies({ stream: async () => stream }),
+        )
+        expect(await processor.process(streamInput)).toBe("stop")
+        expect(processor.message.error?.name).toBe("MessageOutputLoopError")
+      },
+    })
+  })
+
   test.each(["image/png", "application/pdf"])(
     "keeps current user media and stops instead of answering after silently stripping it: %s",
     async (mime) => {
