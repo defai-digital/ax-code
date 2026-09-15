@@ -1,3 +1,6 @@
+import fs from "node:fs/promises"
+import path from "node:path"
+import { VerificationPolicy } from "../../src/session/verification-policy"
 import { describe, expect, test } from "vitest"
 import { SubmitGoalPlanTool } from "../../src/tool/submit_goal_plan"
 import { GoalPlan } from "../../src/session/goal-plan"
@@ -324,12 +327,15 @@ describe("submit_goal_plan", () => {
   })
 })
 
-test("rejects presence-only new plans while retaining existing frozen contracts and digests", async () => {
+test.each([
+  { command: "test -s review.md", error: "only establish file presence" },
+  { command: 'test -n "$(git log --format=%h 1234567..HEAD -- src)"', error: "only establish matching git log output" },
+])("rejects weak new checks while preserving frozen digest: $command", async ({ command, error }) => {
   const legacy = {
     ...GoalPlan.sample("Review fixes"),
     assurance: {
       ...assurance,
-      checks: [{ ...assurance.checks[0], command: "test -s review.md" }],
+      checks: [{ ...assurance.checks[0], command }],
     },
   }
   const originalDigest = GoalPlan.digestOf(legacy)
@@ -357,5 +363,24 @@ test("rejects presence-only new plans while retaining existing frozen contracts 
         async ask() {},
       },
     ),
-  ).rejects.toThrow("only establish file presence")
+  ).rejects.toThrow(error)
+})
+
+test("mixed-scope commits pass the old filtered log assertion and are recognized by the new guard", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const baseline = (await git(["rev-parse", "HEAD"], { cwd: tmp.path })).text().trim()
+  await fs.mkdir(path.join(tmp.path, "src"))
+  await fs.writeFile(path.join(tmp.path, "src/fix.ts"), "export const fixed = true\n")
+  await fs.writeFile(path.join(tmp.path, "unrelated.txt"), "outside the declared scope\n")
+  await git(["add", "src/fix.ts", "unrelated.txt"], { cwd: tmp.path })
+  const commit = await git(["commit", "-m", "Fix source and include unrelated data"], { cwd: tmp.path })
+  expect(commit.exitCode).toBe(0)
+  const log = await git(["log", "--format=%h", `${baseline}..HEAD`, "--", "src"], { cwd: tmp.path })
+  expect(log.exitCode).toBe(0)
+  expect(log.text().trim()).not.toBe("")
+  const paths = await git(["diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"], { cwd: tmp.path })
+  expect(paths.text()).toContain("unrelated.txt")
+  expect(
+    VerificationPolicy.isGitLogPresenceOnlyCommand(`test -n "$(git log --format=%h ${baseline}..HEAD -- src)"`),
+  ).toBe(true)
 })

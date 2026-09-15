@@ -50,6 +50,12 @@ export async function goalCheckpoint(
           (check) =>
             `Legacy check ${check.id} only establishes file presence, not successful execution or review. Request /goal revise to strengthen required evidence; do not treat a warning log as a completed review.`,
         ),
+      ...plan.contract.assurance.checks
+        .filter((check) => VerificationPolicy.isGitLogPresenceOnlyCommand(check.command))
+        .map(
+          (check) =>
+            `Legacy check ${check.id} only establishes matching git log output; it does not prove all committed files are in scope. Request /goal revise with a project-owned verifier of every changed path, including deletions and both rename sides. Do not edit the frozen contract.`,
+        ),
       "Executed check status (current observation):",
       ...(source.available ? [] : ["Source fingerprint unavailable; receipt freshness is unverified."]),
       ...checks.map((check) => `${check.id}: ${check.status} - ${check.detail}`),

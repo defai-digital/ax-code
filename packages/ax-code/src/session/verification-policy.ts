@@ -178,6 +178,23 @@ export namespace VerificationPolicy {
     return presence
   }
 
+  /** Narrow new-plan admission guard, not a semantic shell validator. */
+  export function isGitLogPresenceOnlyCommand(command: string): boolean {
+    // Match only a complete nonempty-output assertion. A separate executable
+    // validator or a pipeline may add real assertions, so do not guess those.
+    const assertion = command.trim().replace(/;\s*$/, "")
+    const body = assertion.startsWith("test ")
+      ? assertion.slice(5).trim()
+      : assertion.startsWith("[[ ") && assertion.endsWith(" ]]")
+        ? assertion.slice(3, -3).trim()
+        : assertion.startsWith("[ ") && assertion.endsWith(" ]")
+          ? assertion.slice(2, -2).trim()
+          : ""
+    const match = /^-n\s+"\$\(\s*git\s+log\s+([^$`()\n;|&<>"'\\]+)\)"$/.exec(body)
+    // Unfiltered log existence may legitimately assert that a commit exists.
+    return Boolean(match && /\s--\s+\S/.test(" " + match[1]))
+  }
+
   export function looksLikeVerificationCommand(command: string): boolean {
     if (!command.trim()) return false
     if (isTrivialVerificationCommand(command)) return false

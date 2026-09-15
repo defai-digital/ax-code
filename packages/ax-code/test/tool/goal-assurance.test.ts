@@ -378,3 +378,33 @@ test("goal receipts track edits omitted from frozen sourcePaths without rewritin
     },
   })
 })
+
+test("legacy git-log presence checks receive revision guidance without changing frozen authority", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const session = await Session.create({})
+      try {
+        const goal = await SessionGoal.create({ sessionID: session.id, objective: "Commit only scoped fixes" })
+        const contract = {
+          ...GoalPlan.sample(goal.objective),
+          assurance: {
+            ...assurance,
+            checks: [{ ...assurance.checks[0], command: 'test -n "$(git log --format=%h 1234567..HEAD -- src)"' }],
+          },
+        }
+        await GoalPlan.write(session.id, goal.time.created, GoalPlan.render(contract))
+        const digest = GoalPlan.storedDigest(session.id, goal.time.created)
+        const { goalCheckpoint } = await import("../../src/session/goal-checkpoint")
+        const checkpoint = await goalCheckpoint(goal, [])
+        expect(checkpoint?.context).toContain("does not prove all committed files are in scope")
+        expect(checkpoint?.context).toContain("/goal revise")
+        expect(GoalPlan.hasValidContract(session.id, goal.time.created)).toBe(true)
+        expect(GoalPlan.storedDigest(session.id, goal.time.created)).toBe(digest)
+      } finally {
+        await Session.remove(session.id)
+      }
+    },
+  })
+})

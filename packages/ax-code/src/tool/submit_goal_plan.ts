@@ -57,6 +57,13 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
     }
     // Submission-only: legacy frozen contracts must retain their schema and digest.
     if (params.kind === "code-change") {
+      const gitPresenceOnly =
+        params.assurance?.checks.filter((check) => VerificationPolicy.isGitLogPresenceOnlyCommand(check.command)) ?? []
+      if (gitPresenceOnly.length)
+        throw new Error(
+          `Goal checks ${gitPresenceOnly.map((check) => check.id).join(", ")} only establish matching git log output. ` +
+            `A path-filtered log cannot prove all committed files are in scope. Use a project-owned verifier that checks baseline ancestry, a nonempty range, and every changed path in every commit without a path filter, including deletions and both rename sides.`,
+        )
       const presenceOnly =
         params.assurance?.checks.filter((check) => VerificationPolicy.isFilePresenceOnlyCommand(check.command)) ?? []
       if (presenceOnly.length)

@@ -53,6 +53,8 @@ Usage notes:
 
 # External CLI reviews
 
+The session directory may be a nested package. Set workdir to the intended repository root explicitly for repository-relative review paths. Create capture directories in a separate command first. Use literal quoted paths for input/output redirections, not shell variables such as > "$R/stdout.txt" or command substitutions; static path admission rejects those before starting the CLI. Correct that invocation once, then reuse it across reviewers.
+
 Use a bounded review request with the relevant source or diff and a clear final deliverable. Keep large prompts out of argv. For Claude Code, send a prepared prompt file through stdin, for example `claude -p --output-format json --permission-mode plan --tools "" --model opus < review-prompt.txt`. For Grok, use `grok --prompt-file review-prompt.txt --output-format json --max-turns 1 --no-subagents --tools "" -m grok-4.6` for a no-tool review. If the reviewer must inspect files, allow read-only tools and a bounded multi-turn budget instead. Prefer configured model IDs and verify installed CLI flags when an invocation fails.
 
 Claude's --tools / --allowed-tools / --disallowed-tools options take variadic values. Never put a positional prompt immediately after them: it can be consumed as tool names. Use stdin or an explicit `--` separator. A successful tiny ping establishes basic connectivity only, not completion of a substantive review. A settings warning alone is not a review result and does not establish why inference is slow.

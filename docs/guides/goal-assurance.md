@@ -189,3 +189,17 @@ a test exercised that file. Prefer bounded source directories and test commands
 that include new regressions when planning an open-ended bug sweep.
 
 Workspace aliases are normalized for observed file paths. External scratch files do not become workspace source inputs; checkpoints disclose that external content is not fingerprinted. Required external state still needs project-owned verification.
+
+### Commit scope evidence
+
+A nonempty `git log <baseline>..HEAD -- <paths>` only proves that a commit
+matches the filter. It does not exclude unrelated files in that commit or
+other commits. New code-change plans reject recognized standalone nonempty
+path-filtered Git-log assertions; older frozen checks receive revision guidance without
+changing their digest or read-time validation.
+
+Use a project-owned verifier that checks baseline ancestry, requires a nonempty
+range, and inspects every changed path in every commit without path filters.
+Include deleted files and both sides of renames, handle merge commits explicitly,
+and validate any required branch or message properties separately. Use
+`/goal revise` to strengthen an existing contract; do not edit frozen requirements.

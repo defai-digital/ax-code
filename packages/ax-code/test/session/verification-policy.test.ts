@@ -115,3 +115,25 @@ test.each([
 ])("does not guess semantics of executable or value assertions: %s", (command) => {
   expect(VerificationPolicy.isFilePresenceOnlyCommand(command)).toBe(false)
 })
+
+test.each([
+  'test -n "$(git log --format=%h {BASELINE}..HEAD -- src test)"',
+  '[ -n "$(git log --oneline HEAD~1..HEAD -- src)" ]',
+  '[[ -n "$(git log --format=%h 1234567..HEAD -- src)" ]];',
+])("recognizes standalone git-log presence checks: %s", (command) => {
+  expect(VerificationPolicy.isGitLogPresenceOnlyCommand(command)).toBe(true)
+})
+
+test.each([
+  'test -n "$(git log --format="%h -- %s" HEAD~1..HEAD)"',
+  'test -n "$(git log --format=%h HEAD~1..HEAD)"',
+  'test -n "$(git log --format=%h HEAD~1..HEAD)" && node verify-range.cjs',
+  'test -n "$(git log --format=%h HEAD~1..HEAD | node verify-range.cjs)"',
+  "node verify-range.cjs --baseline 1234567",
+  "git merge-base --is-ancestor 1234567 HEAD",
+  'test -n "$(node verify-range.cjs)"',
+  'test -n "$(git diff --name-only HEAD~1..HEAD)"',
+  "printf 'test -n git log'",
+])("does not guess compound or other command semantics: %s", (command) => {
+  expect(VerificationPolicy.isGitLogPresenceOnlyCommand(command)).toBe(false)
+})
