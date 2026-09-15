@@ -54,6 +54,22 @@ describe("falling foliage", () => {
       }
     },
   )
+  test("clamps an injected random source that returns 1 into the palette and shape ranges", () => {
+    // Regression: leaf() used an unclamped Math.floor(random() * N), unlike the
+    // sibling glyph() guard in digital-code-view-model.ts. A random of exactly 1
+    // produced an out-of-range color/shape, and renderFoliagePixels/foliageCells
+    // then dereferenced the undefined palette entry and threw.
+    const frame = createFoliage(80, 40, "classic-foliage", () => 1)
+    expect(frame.leaves.length).toBeGreaterThan(0)
+    for (const leaf of frame.leaves) {
+      expect(leaf.color).toBeGreaterThanOrEqual(0)
+      expect(leaf.color).toBeLessThan(FOLIAGE_COLORS["classic-foliage"].length)
+      expect(leaf.shape).toBeGreaterThanOrEqual(0)
+      expect(leaf.shape).toBeLessThan(3)
+    }
+    expect(() => renderFoliagePixels(frame)).not.toThrow()
+    expect(() => foliageCells(frame, 80, 40)).not.toThrow()
+  })
   test("pixel transport switches styles and deletes its image only once on disposal", () => {
     const output: string[] = []
     const player = digitalCodePixelPlayer((data) => output.push(data))

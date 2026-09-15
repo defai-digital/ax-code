@@ -47,8 +47,11 @@ function leaf(frame: Omit<Foliage, "leaves">, initial: boolean): Leaf {
     phase: random() * Math.PI * 2,
     swing: 15 + random() * 30,
     frequency: 0.6 + random() * 1.2,
-    color: Math.floor(random() * FOLIAGE_COLORS[frame.variant].length),
-    shape: Math.floor(random() * SHAPES.length),
+    color: Math.min(
+      FOLIAGE_COLORS[frame.variant].length - 1,
+      Math.floor(random() * FOLIAGE_COLORS[frame.variant].length),
+    ),
+    shape: Math.min(SHAPES.length - 1, Math.floor(random() * SHAPES.length)),
   }
 }
 export function createFoliage(width: number, height: number, variant: FoliageVariant, random = Math.random): Foliage {
