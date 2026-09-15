@@ -504,7 +504,8 @@ export const messages = {
   "ui.messageIsNoLongerAvailable": "Nachricht nicht mehr verf\u00fcgbar",
   "ui.codeBlockCopiedToClipboard": "Codeblock in Zwischenablage kopiert!",
   "ui.copyCodeBlock": "Codeblock kopieren",
-  "ui.undoMessagesAndFileChanges": "Nachrichten und Datei\u00e4nderungen r\u00fcckg\u00e4ngig machen",
+  "ui.undoMessagesAndFileChanges":
+    "Nachrichten und erfasste Datei\u00e4nderungen r\u00fcckg\u00e4ngig machen; ohne Snapshots nur Nachrichten",
   "ui.messageTextToClipboard": "Nachrichtentext in Zwischenablage",
   "ui.fencedCodeBlockToClipboard": "Begrenzten Codeblock in Zwischenablage",
   "ui.fork": "Verzweigen",

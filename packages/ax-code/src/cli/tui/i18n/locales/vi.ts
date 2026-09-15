@@ -540,7 +540,8 @@ export const messages = {
   "ui.messageIsNoLongerAvailable": "Tin nh\u1eafn kh\u00f4ng c\u00f2n kh\u1ea3 d\u1ee5ng",
   "ui.codeBlockCopiedToClipboard": "\u0110\u00e3 sao ch\u00e9p kh\u1ed1i m\u00e3 v\u00e0o b\u1ed9 nh\u1edb t\u1ea1m!",
   "ui.copyCodeBlock": "Sao ch\u00e9p kh\u1ed1i m\u00e3",
-  "ui.undoMessagesAndFileChanges": "ho\u00e0n t\u00e1c tin nh\u1eafn v\u00e0 thay \u0111\u1ed5i t\u1ec7p",
+  "ui.undoMessagesAndFileChanges":
+    "ho\u00e0n t\u00e1c tin nh\u1eafn v\u00e0 thay \u0111\u1ed5i t\u1ec7p \u0111\u00e3 ch\u1ee5p; kh\u00f4ng c\u00f3 b\u1ea3n ch\u1ee5p th\u00ec ch\u1ec9 ho\u00e0n t\u00e1c tin nh\u1eafn",
   "ui.messageTextToClipboard": "v\u0103n b\u1ea3n tin nh\u1eafn v\u00e0o b\u1ed9 nh\u1edb t\u1ea1m",
   "ui.fencedCodeBlockToClipboard": "kh\u1ed1i m\u00e3 c\u00f3 h\u00e0ng r\u00e0o v\u00e0o b\u1ed9 nh\u1edb t\u1ea1m",
   "ui.fork": "T\u1ea1o nh\u00e1nh",

@@ -500,7 +500,7 @@ export const messages = {
   "ui.messageIsNoLongerAvailable": "Pesan tidak lagi tersedia",
   "ui.codeBlockCopiedToClipboard": "Blok kode disalin ke papan klip!",
   "ui.copyCodeBlock": "Salin blok kode",
-  "ui.undoMessagesAndFileChanges": "batalkan pesan dan perubahan berkas",
+  "ui.undoMessagesAndFileChanges": "batalkan pesan dan perubahan berkas yang direkam; tanpa snapshot, hanya pesan",
   "ui.messageTextToClipboard": "teks pesan ke papan klip",
   "ui.fencedCodeBlockToClipboard": "blok kode berpagar ke papan klip",
   "ui.fork": "Buat cabang",

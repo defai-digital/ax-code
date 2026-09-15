@@ -516,7 +516,8 @@ export const messages = {
   "ui.messageIsNoLongerAvailable": "\u0130leti art\u0131k mevcut de\u011fil",
   "ui.codeBlockCopiedToClipboard": "Kod blo\u011fu panoya kopyaland\u0131!",
   "ui.copyCodeBlock": "Kod blo\u011funu kopyala",
-  "ui.undoMessagesAndFileChanges": "iletileri ve dosya de\u011fi\u015fikliklerini geri al",
+  "ui.undoMessagesAndFileChanges":
+    "iletileri ve kaydedilen dosya de\u011fi\u015fikliklerini geri al; anl\u0131k g\u00f6r\u00fcnt\u00fc yoksa yaln\u0131zca iletiler",
   "ui.messageTextToClipboard": "ileti metnini panoya kopyala",
   "ui.fencedCodeBlockToClipboard": "s\u0131n\u0131rland\u0131r\u0131lm\u0131\u015f kod blo\u011funu panoya kopyala",
   "ui.fork": "Dallan",

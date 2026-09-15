@@ -44,7 +44,11 @@ describe("tui session undo/redo/revert SDK-error handling", () => {
 
   test("redo checks unrevert/revert result.error and only clears the dialog on success", async () => {
     const src = await fs.readFile(SESSION_INDEX_SRC, "utf8")
-    const block = sliceHandler(src, '"session.redo"', 1600)
+    const start = src.indexOf('value: "session.redo"')
+    const end = src.indexOf("\n    {", start)
+    expect(start).toBeGreaterThan(0)
+    expect(end).toBeGreaterThan(start)
+    const block = src.slice(start, end)
 
     // The unrevert branch must check the result before wiping the typed prompt.
     expect(block).toContain("const result = await sdk.client.session.unrevert")

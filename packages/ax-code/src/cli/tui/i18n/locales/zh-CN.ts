@@ -524,7 +524,8 @@ export const messages = {
   "ui.messageIsNoLongerAvailable": "\u6d88\u606f\u5df2\u65e0\u6cd5\u83b7\u53d6",
   "ui.codeBlockCopiedToClipboard": "\u4ee3\u7801\u5757\u5df2\u590d\u5236\u5230\u526a\u8d34\u677f\uff01",
   "ui.copyCodeBlock": "\u590d\u5236\u4ee3\u7801\u5757",
-  "ui.undoMessagesAndFileChanges": "\u64a4\u9500\u6d88\u606f\u4e0e\u6587\u4ef6\u66f4\u6539",
+  "ui.undoMessagesAndFileChanges":
+    "\u64a4\u9500\u6d88\u606f\u4e0e\u5df2\u6355\u83b7\u7684\u6587\u4ef6\u66f4\u6539\uff1b\u6ca1\u6709\u5feb\u7167\u65f6\u4ec5\u64a4\u9500\u6d88\u606f",
   "ui.messageTextToClipboard": "\u5c06\u6d88\u606f\u6587\u672c\u590d\u5236\u5230\u526a\u8d34\u677f",
   "ui.fencedCodeBlockToClipboard": "\u5c06\u4ee3\u7801\u5757\u590d\u5236\u5230\u526a\u8d34\u677f",
   "ui.fork": "\u521b\u5efa\u5206\u652f",

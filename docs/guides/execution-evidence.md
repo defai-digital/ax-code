@@ -91,6 +91,16 @@ It is a review aid. It is not a probability, a calibrated confidence, or a state
 
 ## Undo precisely
 
+File snapshots work in Git repositories and ordinary project directories when Git
+is installed and `snapshot` is enabled. AX Code keeps its snapshot Git store
+outside your project; it does not create a project `.git` directory. Ignore rules
+and unsupported-path exclusions still apply.
+
+TUI Revert undoes messages and captured file changes. With `snapshot: false`, or
+for older turns that never captured a baseline, it can only undo messages; file
+edits remain on disk. Enabling snapshots now cannot reconstruct earlier file
+contents. A captured turn with no file changes also has nothing to restore.
+
 ```bash
 ax-code rollback <sessionID> --list      # show recoverable points
 ax-code rollback <sessionID> --dry-run   # show what would change

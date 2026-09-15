@@ -518,7 +518,8 @@ export const messages = {
   "ui.messageIsNoLongerAvailable": "Le message n\u2019est plus disponible",
   "ui.codeBlockCopiedToClipboard": "Bloc de code copi\u00e9 !",
   "ui.copyCodeBlock": "Copier le bloc de code",
-  "ui.undoMessagesAndFileChanges": "annuler les messages et modifications de fichiers",
+  "ui.undoMessagesAndFileChanges":
+    "annuler les messages et les modifications de fichiers captur\u00e9es ; sans instantan\u00e9, messages uniquement",
   "ui.messageTextToClipboard": "texte du message vers le presse-papiers",
   "ui.fencedCodeBlockToClipboard": "bloc de code d\u00e9limit\u00e9 vers le presse-papiers",
   "ui.fork": "Cr\u00e9er une branche",
