@@ -1,10 +1,23 @@
+import { renderTextScenePixels } from "./text-scene-pixels"
+import { isTextSceneStyle } from "./text-scene-view-model"
+import {
+  createFoliage,
+  advanceFoliage,
+  renderFoliagePixels,
+  type Foliage,
+  type OverlayStyle,
+} from "./foliage-view-model"
 import { deflateSync } from "node:zlib"
 import { randomInt } from "node:crypto"
 import {
   createDigitalCode,
   advanceDigitalCode,
   digitalCodeCellLevel,
+  DIGITAL_CODE_LEVEL_RGB,
+  DIGITAL_CODE_LEVELS,
   type DigitalCodeDirection,
+  type DigitalCodeHue,
+  type DigitalCodeRandom,
 } from "./digital-code-view-model"
 
 // Original 5x7 bitmap alphabet. Six-pixel vertical advance overlaps adjacent
@@ -28,6 +41,11 @@ const GLYPHS = [
   [31, 16, 16, 30, 16, 16, 16],
 ]
 
+// Bounded even on a 4K terminal. 1280x720 stays sharp when the Kitty image is
+// stretched to the window, without blowing the 20 fps zlib budget.
+export const DIGITAL_CODE_PIXEL_MAX_WIDTH = 1280
+export const DIGITAL_CODE_PIXEL_MAX_HEIGHT = 720
+
 export function supportsDigitalCodePixels(input: {
   tty: boolean
   screenMode: string
@@ -43,26 +61,37 @@ export function supportsDigitalCodePixels(input: {
   )
 }
 
-export function createDigitalCodePixels(width: number, height: number, direction: DigitalCodeDirection) {
-  // Fixed work and transfer bounds, even on a 4K terminal. Preserve aspect ratio.
-  const scale = Math.min(1, 640 / width, 360 / height)
+export function createDigitalCodePixels(
+  width: number,
+  height: number,
+  direction: DigitalCodeDirection,
+  random?: DigitalCodeRandom,
+  style?: OverlayStyle,
+) {
+  const maxWidth = isTextSceneStyle(style) ? 1920 : DIGITAL_CODE_PIXEL_MAX_WIDTH
+  const maxHeight = isTextSceneStyle(style) ? 1080 : DIGITAL_CODE_PIXEL_MAX_HEIGHT
+  const scale = Math.min(1, maxWidth / width, maxHeight / height)
   const w = Math.max(7, Math.floor(width * scale))
   const h = Math.max(7, Math.floor(height * scale))
   return {
     width: w,
     height: h,
-    rain: createDigitalCode({ width: Math.floor(w / 7), height: Math.ceil(h / 6), direction }),
+    rain: createDigitalCode({ width: Math.floor(w / 7), height: Math.ceil(h / 6), direction, random }),
   }
 }
 export type DigitalCodePixels = ReturnType<typeof createDigitalCodePixels>
 
+function paletteColor(hue: DigitalCodeHue, level: number): readonly [number, number, number] {
+  const ramp = DIGITAL_CODE_LEVEL_RGB[hue]
+  return ramp[Math.min(DIGITAL_CODE_LEVELS, Math.max(0, level))] ?? ramp[DIGITAL_CODE_LEVELS]!
+}
+
 export function renderDigitalCodePixels(frame: DigitalCodePixels): Buffer {
   const { width, height, rain } = frame
   const pixels = Buffer.alloc(width * height * 3)
-  const paint = (x: number, y: number, strength: number, white: boolean) => {
+  const paint = (x: number, y: number, strength: number, color: readonly [number, number, number]) => {
     if (x < 0 || y < 0 || x >= width || y >= height) return
     const index = (y * width + x) * 3
-    const color = white ? [255, 210, 255] : [205, 15, 255]
     for (let c = 0; c < 3; c++) pixels[index + c] = Math.min(255, pixels[index + c]! + color[c]! * strength)
   }
   for (const column of rain.columns) {
@@ -71,20 +100,20 @@ export function renderDigitalCodePixels(frame: DigitalCodePixels): Buffer {
       const y = Math.floor(column.head * 6) + (rain.direction === "up" ? offset * 6 : -offset * 6)
       if (y < -7 || y >= height) continue
       const level = digitalCodeCellLevel(rain.direction, offset, column.length)
-      const bright = rain.direction === "up" ? offset === column.length - 1 : offset === 0
-      const strength = Math.pow(level / 6, 1.6)
+      const hue = column.hues[offset] ?? column.hue
+      const color = paletteColor(hue, level)
       const glyph = GLYPHS[(column.chars[offset]?.charCodeAt(0) ?? 0) % GLYPHS.length]!
       for (let gy = 0; gy < 7; gy++) {
         for (let gx = 0; gx < 5; gx++) {
           if (!(glyph[gy]! & (1 << (4 - gx)))) continue
-          paint(x + gx, y + gy, strength, bright)
+          paint(x + gx, y + gy, 1, color)
           for (const [dx, dy] of [
             [-1, 0],
             [1, 0],
             [0, -1],
             [0, 1],
           ]) {
-            paint(x + gx + dx!, y + gy + dy!, strength * 0.12, bright)
+            paint(x + gx + dx!, y + gy + dy!, 0.12, color)
           }
         }
       }
@@ -93,8 +122,20 @@ export function renderDigitalCodePixels(frame: DigitalCodePixels): Buffer {
   return pixels
 }
 
-export function kittyDigitalCodeFrame(id: number, frame: DigitalCodePixels, columns: number, rows: number): string {
-  const payload = deflateSync(renderDigitalCodePixels(frame), { level: 1 }).toString("base64")
+export function kittyDigitalCodeDeleteSequence(id: number): string {
+  // d=I deletes this image and every placement of it. Quiet (q=2) so the
+  // terminal does not write a response into stdin during overlay teardown.
+  return `\x1b_Ga=d,d=I,i=${id},q=2;\x1b\\`
+}
+
+export function kittyDigitalCodeFrame(
+  id: number,
+  frame: DigitalCodePixels,
+  columns: number,
+  rows: number,
+  rgb?: Buffer,
+): string {
+  const payload = deflateSync(rgb ?? renderDigitalCodePixels(frame), { level: 1 }).toString("base64")
   const chunks: string[] = ["\x1b7\x1b[H"]
   for (let offset = 0; offset < payload.length; offset += 4096) {
     const more = offset + 4096 < payload.length ? 1 : 0
@@ -113,19 +154,50 @@ export function kittyDigitalCodeFrame(id: number, frame: DigitalCodePixels, colu
 export function digitalCodePixelPlayer(write: (data: string) => void) {
   const id = randomInt(1, 0x7fffffff)
   let frame: DigitalCodePixels | undefined
+  let foliage: Foliage | undefined
+  const started = performance.now()
+  let previous = started
   let size = ""
   let closed = false
-  const clear = () => write(`\x1b_Ga=d,d=I,i=${id},q=2;\x1b\\`)
+  const clear = () => write(kittyDigitalCodeDeleteSequence(id))
   return {
-    draw(input: { width: number; height: number; columns: number; rows: number; direction: DigitalCodeDirection }) {
+    draw(input: {
+      width: number
+      height: number
+      columns: number
+      rows: number
+      direction: DigitalCodeDirection
+      style?: OverlayStyle
+      elapsedMs?: number
+    }) {
       if (closed) return
-      const next = `${input.width}:${input.height}:${input.columns}:${input.rows}`
+      const next = `${input.width}:${input.height}:${input.columns}:${input.rows}:${input.style ?? "digital-code"}`
       if (!frame || next !== size) {
         if (frame) clear()
-        frame = createDigitalCodePixels(input.width, input.height, input.direction)
+        frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)
         size = next
+        foliage =
+          input.style && input.style !== "digital-code" && !isTextSceneStyle(input.style)
+            ? createFoliage(frame.width, frame.height, input.style)
+            : undefined
+        previous = performance.now()
       } else frame.rain = advanceDigitalCode(frame.rain)
-      write(kittyDigitalCodeFrame(id, frame, input.columns, input.rows))
+      const now = performance.now()
+      if (foliage) foliage = advanceFoliage(foliage, now - previous)
+      previous = now
+      write(
+        kittyDigitalCodeFrame(
+          id,
+          frame,
+          input.columns,
+          input.rows,
+          isTextSceneStyle(input.style)
+            ? renderTextScenePixels(frame.width, frame.height, input.style, input.elapsedMs ?? now - started)
+            : foliage
+              ? renderFoliagePixels(foliage)
+              : undefined,
+        ),
+      )
     },
     dispose() {
       if (closed) return

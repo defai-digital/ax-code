@@ -382,10 +382,12 @@ export const messages = {
     "TUI \uc2dc\uc791 \uc2dc \uc560\ub2c8\uba54\uc774\uc158 \ud55c \ubc88 \uc7ac\uc0dd",
   "ui.recommendedTerminalFontCascadiaCodeNerdFont":
     "\uad8c\uc7a5 \ud130\ubbf8\ub110 \uae00\uaf34: Cascadia Code Nerd Font",
-  "ui.disableDigitalCodeOnTaskCompletion": "\uc791\uc5c5 \uc644\ub8cc \uc2dc Digital Code \ube44\ud65c\uc131\ud654",
-  "ui.enableDigitalCodeOnTaskCompletion": "\uc791\uc5c5 \uc644\ub8cc \uc2dc Digital Code \ud65c\uc131\ud654",
-  "ui.disableDigitalCodeOnStartup": "\uc2dc\uc791 \uc2dc Digital Code \ube44\ud65c\uc131\ud654",
-  "ui.enableDigitalCodeOnStartup": "\uc2dc\uc791 \uc2dc Digital Code \ud65c\uc131\ud654",
+  "ui.disableDigitalCodeOnTaskCompletion":
+    "\uc791\uc5c5 \uc644\ub8cc \uc2dc \uc560\ub2c8\uba54\uc774\uc158 \ube44\ud65c\uc131\ud654",
+  "ui.enableDigitalCodeOnTaskCompletion":
+    "\uc791\uc5c5 \uc644\ub8cc \uc2dc \uc560\ub2c8\uba54\uc774\uc158 \ud65c\uc131\ud654",
+  "ui.disableDigitalCodeOnStartup": "\uc2dc\uc791 \uc2dc \uc560\ub2c8\uba54\uc774\uc158 \ube44\ud65c\uc131\ud654",
+  "ui.enableDigitalCodeOnStartup": "\uc2dc\uc791 \uc2dc \uc560\ub2c8\uba54\uc774\uc158 \ud65c\uc131\ud654",
   "ui.renameSession": "\uc138\uc158 \uc774\ub984 \ubcc0\uacbd",
   "ui.renameSession2": "\uc138\uc158 \uc774\ub984 \ubcc0\uacbd",
   "ui.viewSessionGoal": "\uc138\uc158 \ubaa9\ud45c \ubcf4\uae30",
@@ -1029,4 +1031,14 @@ export const messages = {
   "navigation.options": "\ud0d0\uc0c9 \uc635\uc158",
   "navigation.attention": "\ud655\uc778 \ud544\uc694",
   "navigation.showHidden": "\uc228\uae34 \uc138\uc158 \ud45c\uc2dc",
+  "animation.classicFoliage": "\uac00\uc744 \ub099\uc5fd",
+  "animation.goldenFoliage": "\ud669\uae08 \ub099\uc5fd",
+  "animation.digitalOpening": "\uc2dc\uc791 \uc601\uc0c1 \uc7ac\uc0dd \u00b7 Digital Code",
+  "animation.digitalEnding": "\uc885\ub8cc \uc601\uc0c1 \uc7ac\uc0dd \u00b7 Digital Code",
+  "animation.midnightDream": "Bench: \ud55c\ubc24\uc758 \uafc8",
+  "animation.sunsetSerenade": "Bench: \uc11d\uc591\uc758 \uc138\ub808\ub098\ub370",
+  "animation.mahjongMatch": "\ub9c8\uc791: \ub300\uad6d",
+  "animation.mahjongEnding": "\ub9c8\uc791: \ucd5c\uc885 \uc810\uc218",
+  "animation.fujiDay": "\ud6c4\uc9c0\uc0b0: \ub0ae",
+  "animation.fujiNight": "\ud6c4\uc9c0\uc0b0: \ubc24",
 } satisfies Dictionary

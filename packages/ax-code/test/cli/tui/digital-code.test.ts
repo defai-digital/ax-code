@@ -940,8 +940,8 @@ describe("reverse exit rain", () => {
     expect(english("command.opening")).toBe("Play Opening Video")
     expect(commands).toContain('t("command.ending")')
     expect(english("command.ending")).toBe("Play Ending Video")
-    expect(english("ui.enableDigitalCodeOnTaskCompletion")).toBe("Enable Digital Code on task completion")
-    expect(english("ui.disableDigitalCodeOnTaskCompletion")).toBe("Disable Digital Code on task completion")
+    expect(english("ui.enableDigitalCodeOnTaskCompletion")).toBe("Enable animation on task completion")
+    expect(english("ui.disableDigitalCodeOnTaskCompletion")).toBe("Disable animation on task completion")
   })
 
   test("ctrl+c plays the ending video before the app ends", () => {

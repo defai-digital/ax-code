@@ -402,11 +402,13 @@ export const messages = {
   "ui.recommendedTerminalFontCascadiaCodeNerdFont":
     "\u63a8\u5968\u30bf\u30fc\u30df\u30ca\u30eb\u30d5\u30a9\u30f3\u30c8: Cascadia Code Nerd Font",
   "ui.disableDigitalCodeOnTaskCompletion":
-    "\u30bf\u30b9\u30af\u5b8c\u4e86\u6642\u306e Digital Code \u3092\u7121\u52b9\u5316",
+    "\u30bf\u30b9\u30af\u5b8c\u4e86\u6642\u306e \u30a2\u30cb\u30e1\u30fc\u30b7\u30e7\u30f3 \u3092\u7121\u52b9\u5316",
   "ui.enableDigitalCodeOnTaskCompletion":
-    "\u30bf\u30b9\u30af\u5b8c\u4e86\u6642\u306e Digital Code \u3092\u6709\u52b9\u5316",
-  "ui.disableDigitalCodeOnStartup": "\u8d77\u52d5\u6642\u306e Digital Code \u3092\u7121\u52b9\u5316",
-  "ui.enableDigitalCodeOnStartup": "\u8d77\u52d5\u6642\u306e Digital Code \u3092\u6709\u52b9\u5316",
+    "\u30bf\u30b9\u30af\u5b8c\u4e86\u6642\u306e \u30a2\u30cb\u30e1\u30fc\u30b7\u30e7\u30f3 \u3092\u6709\u52b9\u5316",
+  "ui.disableDigitalCodeOnStartup":
+    "\u8d77\u52d5\u6642\u306e \u30a2\u30cb\u30e1\u30fc\u30b7\u30e7\u30f3 \u3092\u7121\u52b9\u5316",
+  "ui.enableDigitalCodeOnStartup":
+    "\u8d77\u52d5\u6642\u306e \u30a2\u30cb\u30e1\u30fc\u30b7\u30e7\u30f3 \u3092\u6709\u52b9\u5316",
   "ui.renameSession": "\u30bb\u30c3\u30b7\u30e7\u30f3\u540d\u3092\u5909\u66f4",
   "ui.renameSession2": "\u30bb\u30c3\u30b7\u30e7\u30f3\u540d\u3092\u5909\u66f4",
   "ui.viewSessionGoal": "\u30bb\u30c3\u30b7\u30e7\u30f3\u306e\u76ee\u6a19\u3092\u8868\u793a",
@@ -1087,4 +1089,14 @@ export const messages = {
   "navigation.options": "\u30ca\u30d3\u30b2\u30fc\u30b7\u30e7\u30f3\u8a2d\u5b9a",
   "navigation.attention": "\u5bfe\u5fdc\u304c\u5fc5\u8981",
   "navigation.showHidden": "\u975e\u8868\u793a\u306e\u30bb\u30c3\u30b7\u30e7\u30f3\u3092\u8868\u793a",
+  "animation.classicFoliage": "\u79cb\u306e\u6728\u306e\u8449",
+  "animation.goldenFoliage": "\u9ec4\u91d1\u306e\u6728\u306e\u8449",
+  "animation.digitalOpening": "\u30aa\u30fc\u30d7\u30cb\u30f3\u30b0\u3092\u518d\u751f \u00b7 Digital Code",
+  "animation.digitalEnding": "\u30a8\u30f3\u30c7\u30a3\u30f3\u30b0\u3092\u518d\u751f \u00b7 Digital Code",
+  "animation.midnightDream": "Bench\uff1a\u771f\u591c\u4e2d\u306e\u5922",
+  "animation.sunsetSerenade": "Bench\uff1a\u5915\u65e5\u306e\u30bb\u30ec\u30ca\u30fc\u30c7",
+  "animation.mahjongMatch": "\u9ebb\u96c0\uff1a\u5bfe\u5c40",
+  "animation.mahjongEnding": "\u9ebb\u96c0\uff1a\u7d50\u679c",
+  "animation.fujiDay": "\u5bcc\u58eb\u5c71\uff1a\u663c\u666f",
+  "animation.fujiNight": "\u5bcc\u58eb\u5c71\uff1a\u591c\u666f",
 } satisfies Dictionary

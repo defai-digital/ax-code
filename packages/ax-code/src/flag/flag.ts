@@ -1,4 +1,5 @@
 import { Env } from "../util/env"
+import { resolveTuiAdvancedTerminal } from "../util/terminal-program"
 
 function truthy(key: string) {
   return Env.parseBoolean(process.env[key]) === true
@@ -64,9 +65,11 @@ export namespace Flag {
   // indicator (OSC 9;4) the TUI writes while a session is working.
   export const AX_CODE_DISABLE_TERMINAL_TITLE = truthy("AX_CODE_DISABLE_TERMINAL_TITLE")
   // AX Code TUI's full terminal setup enables alternate-screen, capability
-  // probes, and a native render thread. Keep that profile opt-in until it
-  // is stable across direct-TTY environments.
-  export const AX_CODE_TUI_ADVANCED_TERMINAL = truthy("AX_CODE_TUI_ADVANCED_TERMINAL")
+  // probes, and a native render thread. Explicit 1/true opts in; explicit
+  // 0/false opts out. When unset, Ghostty is allowlisted (see
+  // resolveTuiAdvancedTerminal). Access-time getter so tests and wrappers
+  // can change process.env after import.
+  export declare const AX_CODE_TUI_ADVANCED_TERMINAL: boolean
   // The Kitty keyboard protocol (CSI-u) is pushed with a single
   // fire-and-forget escape the terminal either honors or ignores — unlike
   // the advanced profile's capability probes it cannot hang startup.
@@ -258,6 +261,14 @@ export namespace Flag {
 // Dynamic getters for runtime-injected flags.
 // Keep these access-time rather than import-time so CLI middleware, test
 // harnesses, and wrappers can set process.env after modules are loaded.
+
+Object.defineProperty(Flag, "AX_CODE_TUI_ADVANCED_TERMINAL", {
+  get() {
+    return resolveTuiAdvancedTerminal()
+  },
+  enumerable: true,
+  configurable: false,
+})
 
 // This must be evaluated at access time, not module load time,
 // because external tooling may set this env var at runtime

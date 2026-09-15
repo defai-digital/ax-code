@@ -1,3 +1,6 @@
+import { animationPreviewCommands } from "./component/animation-preview-commands"
+import type { AnimationPair } from "./component/animation-pair"
+import type { OverlayStyle } from "./component/foliage-view-model"
 import { english, type Translate } from "./i18n"
 import { Flag } from "@/flag/flag"
 import { WorkMode } from "@/mode/work-mode"
@@ -25,6 +28,7 @@ export type AppCommandSandbox = {
 }
 
 export type AppCommandsInput = {
+  animationPair?: AnimationPair
   t?: Translate
   dialogs: TuiDialogLoaders
   sync: any
@@ -61,8 +65,8 @@ export type AppCommandsInput = {
   renderer: any
   onSnapshot?: () => Promise<string[]>
   terminalSuspend: { suspend: (input: { suspend: () => void; resume: () => void }) => void }
-  playDigitalCode: () => void
-  playReverseDigitalCode: () => void
+  playDigitalCode: (style?: OverlayStyle) => void
+  playReverseDigitalCode: (style?: OverlayStyle) => void
   terminalWidth: () => number
 }
 
@@ -688,7 +692,17 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: t("command.opening"),
-      description: uiText("ui.previewTheOpeningDigitalCodeAnimation"),
+      description:
+        input.animationPair?.opening === "digital-code"
+          ? uiText("ui.previewTheOpeningDigitalCodeAnimation")
+          : input.animationPair?.opening === "midnight-dream"
+            ? uiText("animation.midnightDream")
+            : input.animationPair?.opening === "fuji-day"
+              ? uiText("animation.fujiDay")
+              : input.animationPair?.opening === "mahjong-match"
+                ? uiText("animation.mahjongMatch")
+                : uiText("animation.classicFoliage"),
+      slash: { name: "ov", aliases: ["op"] },
       value: "app.digital_code.play",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -698,7 +712,17 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: t("command.ending"),
-      description: uiText("ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit"),
+      description:
+        input.animationPair?.ending === "digital-code"
+          ? uiText("ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit")
+          : input.animationPair?.ending === "sunset-serenade"
+            ? uiText("animation.sunsetSerenade")
+            : input.animationPair?.ending === "fuji-night"
+              ? uiText("animation.fujiNight")
+              : input.animationPair?.ending === "mahjong-ending"
+                ? uiText("animation.mahjongEnding")
+                : uiText("animation.goldenFoliage"),
+      slash: { name: "ev" },
       value: "app.digital_code.play_reverse",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -706,6 +730,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
         playReverseDigitalCode()
       },
     },
+    ...animationPreviewCommands({ t: uiText, opening: playDigitalCode, ending: playReverseDigitalCode }),
     {
       title: kv.get("digital_code_on_task_complete", false)
         ? uiText("ui.disableDigitalCodeOnTaskCompletion")

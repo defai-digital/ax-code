@@ -8,6 +8,9 @@ const originalAutonomous = process.env["AX_CODE_AUTONOMOUS"]
 const originalSuperLong = process.env["AX_CODE_SUPER_LONG"]
 const originalSuperLongOverride = process.env["AX_CODE_SUPER_LONG_SESSION_OVERRIDE"]
 const originalShardSessions = process.env["AX_CODE_SHARD_SESSIONS"]
+const originalAdvancedTerminal = process.env["AX_CODE_TUI_ADVANCED_TERMINAL"]
+const originalTermProgram = process.env["TERM_PROGRAM"]
+const originalTerm = process.env["TERM"]
 
 afterEach(() => {
   restoreEnv("AX_CODE_CONFIG_CONTENT", originalConfigContent)
@@ -17,6 +20,9 @@ afterEach(() => {
   restoreEnv("AX_CODE_SUPER_LONG", originalSuperLong)
   restoreEnv("AX_CODE_SUPER_LONG_SESSION_OVERRIDE", originalSuperLongOverride)
   restoreEnv("AX_CODE_SHARD_SESSIONS", originalShardSessions)
+  restoreEnv("AX_CODE_TUI_ADVANCED_TERMINAL", originalAdvancedTerminal)
+  restoreEnv("TERM_PROGRAM", originalTermProgram)
+  restoreEnv("TERM", originalTerm)
 })
 
 test("autonomous flag defaults on but honors explicit false", () => {
@@ -79,6 +85,23 @@ test("session sharding flag reads process.env at access time", () => {
 
   process.env["AX_CODE_SHARD_SESSIONS"] = "false"
   expect(Flag.AX_CODE_SHARD_SESSIONS).toBe(false)
+})
+
+test("advanced terminal flag allowlists Ghostty unless explicitly disabled", () => {
+  delete process.env["AX_CODE_TUI_ADVANCED_TERMINAL"]
+  delete process.env["TERM_PROGRAM"]
+  process.env["TERM"] = "xterm-256color"
+  expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(false)
+
+  process.env["TERM_PROGRAM"] = "ghostty"
+  expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(true)
+
+  process.env["AX_CODE_TUI_ADVANCED_TERMINAL"] = "0"
+  expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(false)
+
+  delete process.env["TERM_PROGRAM"]
+  process.env["AX_CODE_TUI_ADVANCED_TERMINAL"] = "1"
+  expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(true)
 })
 
 test("positive integer flag parser rejects non-decimal numerics", () => {

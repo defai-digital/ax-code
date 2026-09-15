@@ -4,6 +4,7 @@ import { Clipboard } from "@tui/util/clipboard"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { toErrorMessage } from "@/util/error-message"
+import { isGhosttyTerminal } from "@/util/terminal-program"
 import { axCodeTerminalTitleSequence } from "@/util/terminal-title"
 import { ensureWindowsUtf8Console } from "@/cli/bootstrap/windows-console"
 import {
@@ -90,13 +91,13 @@ export function createTuiRenderOptionsFromProfile(
   return {
     targetFps: 60,
     gatherStats: false,
-    // Keep the default profile compatibility-first. The full AX Code TUI
-    // terminal setup performs startup capability probes and advanced
-    // protocol negotiation on the real TTY, which has been a source of
-    // install-time hangs on some terminals. Users who need the old
-    // behavior can opt back in with AX_CODE_TUI_ADVANCED_TERMINAL=1.
-    // (Kitty keyboard is the exception: a probe-free flags push, enabled
-    // in all profiles unless AX_CODE_TUI_KITTY_KEYBOARD=0.)
+    // Keep the default profile compatibility-first except Ghostty, which is
+    // allowlisted when AX_CODE_TUI_ADVANCED_TERMINAL is unset. The full AX
+    // Code TUI terminal setup performs startup capability probes on the real
+    // TTY and has hung some terminals; Ghostty is a known-good GPU host for
+    // those probes and for Digital Code pixel rain. Explicit 0/false still
+    // opts out. (Kitty keyboard is the exception: a probe-free flags push,
+    // enabled in all profiles unless AX_CODE_TUI_KITTY_KEYBOARD=0.)
     exitOnCtrlC: profile.exitOnCtrlC,
     useThread: profile.useThread,
     useMouse: profile.useMouse,
@@ -173,8 +174,7 @@ export function supportsTuiTerminalProgress(env: NodeJS.ProcessEnv = process.env
   if ((env["WT_SESSION"] ?? "").length > 0) return true
   if (env["ConEmuANSI"] === "ON") return true
   const termProgram = env["TERM_PROGRAM"] ?? ""
-  if (termProgram === "ghostty" || termProgram === "WezTerm") return true
-  if ((env["TERM"] ?? "") === "xterm-ghostty") return true
+  if (termProgram === "WezTerm" || isGhosttyTerminal(env)) return true
   return false
 }
 

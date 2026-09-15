@@ -75,6 +75,11 @@ process.env["AX_CODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 // test suite measures what its assertions actually describe.
 process.env["AX_CODE_NATIVE_INDEX"] = "0"
 
+// Production auto-enables the advanced TUI profile on Ghostty when the env
+// is unset. Tests must not inherit the host terminal; suites that exercise
+// the allowlist pass an explicit env to resolveTuiAdvancedTerminal.
+process.env["AX_CODE_TUI_ADVANCED_TERMINAL"] = "0"
+
 // Write the cache version file to prevent global/index.ts from clearing the cache
 const cacheDir = path.join(dir, "cache", "opencode")
 await fs.mkdir(cacheDir, { recursive: true })

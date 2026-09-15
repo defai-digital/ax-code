@@ -1,4 +1,6 @@
-import { For, createSignal, onCleanup, onMount } from "solid-js"
+import { textSceneRows, textSceneBackground, isTextSceneStyle, type SceneRun } from "./text-scene-view-model"
+import { createFoliage, advanceFoliage, foliageCells, type OverlayStyle } from "./foliage-view-model"
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js"
 import { RGBA, TextAttributes, resolveRenderLib } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
@@ -47,6 +49,7 @@ export function DigitalCodeCover() {
 export type DigitalCodeDoneReason = "timeout" | "skip"
 
 export function DigitalCode(props: {
+  style?: OverlayStyle
   durationMs?: number
   /** `up` is the reverse rain used by the exit flourish; defaults to the startup fall. */
   direction?: DigitalCodeDirection
@@ -66,8 +69,46 @@ export function DigitalCode(props: {
     direction: props.direction,
   })
   const [rows, setRows] = createSignal(digitalCodeRows(state))
+  let foliage =
+    props.style && props.style !== "digital-code" && !isTextSceneStyle(props.style)
+      ? createFoliage(dimensions().width * 8, dimensions().height * 16, props.style)
+      : undefined
+  const scene = isTextSceneStyle(props.style) ? props.style : undefined
+  const started = performance.now()
+  let previous = started
+  const [leafRows, setLeafRows] = createSignal<SceneRun[][]>(
+    scene
+      ? textSceneRows(dimensions().width, dimensions().height, scene, 0)
+      : foliage
+        ? foliageCells(foliage, dimensions().width, dimensions().height)
+        : [],
+  )
   let pixels: ReturnType<typeof digitalCodePixelPlayer> | undefined
   let pixelsFailed = false
+  let finished = false
+  const writePixels = (data: string) => {
+    // Frame failures must reach the caller so it can switch to text. Only
+    // deletion may bypass the native queue during renderer teardown.
+    if (!data.startsWith("\x1b_Ga=d,")) {
+      if (renderer.isDestroyed) throw new Error("Animation renderer has been destroyed")
+      resolveRenderLib().writeOut(renderer.rendererPtr, data)
+      return
+    }
+    try {
+      if (!renderer.isDestroyed) {
+        resolveRenderLib().writeOut(renderer.rendererPtr, data)
+        return
+      }
+    } catch {
+      // Fall through to stdout so a teardown race still deletes the image.
+    }
+    if (process.stdout.writable === false || process.stdout.destroyed) return
+    try {
+      process.stdout.write(data)
+    } catch {
+      // Best effort — overlay teardown must continue.
+    }
+  }
   const clearPixels = () => {
     const active = pixels
     pixels = undefined
@@ -78,12 +119,20 @@ export function DigitalCode(props: {
       pixelsFailed = true
     }
   }
-  onCleanup(clearPixels)
+  onCleanup(() => {
+    finished = true
+    clearPixels()
+  })
 
+  let stopTimeout = () => {}
   const stopInterval = scheduleTuiInterval(
     () => {
+      if (finished) return
       const size = dimensions()
       state = tickDigitalCode(state, size)
+      const now = performance.now()
+      if (foliage) foliage = advanceFoliage(foliage, now - previous, size.width * 8, size.height * 16)
+      previous = now
       const resolution = renderer.resolution
       const supported =
         !pixelsFailed &&
@@ -97,15 +146,15 @@ export function DigitalCode(props: {
         })
       if (supported) {
         try {
-          pixels ??= digitalCodePixelPlayer((data) => {
-            if (!renderer.isDestroyed) resolveRenderLib().writeOut(renderer.rendererPtr, data)
-          })
+          pixels ??= digitalCodePixelPlayer(writePixels)
           pixels.draw({
             width: resolution.width,
             height: resolution.height,
             columns: size.width,
             rows: size.height,
             direction: props.direction ?? "down",
+            style: props.style,
+            elapsedMs: now - started,
           })
           return
         } catch {
@@ -113,12 +162,25 @@ export function DigitalCode(props: {
           clearPixels()
         }
       } else clearPixels()
-      setRows(digitalCodeRows(state))
+      if (scene) setLeafRows(textSceneRows(size.width, size.height, scene, now - started))
+      else if (foliage) setLeafRows(foliageCells(foliage, size.width, size.height))
+      else setRows(digitalCodeRows(state))
     },
     { name: "digital-code-tick", delayMs: DIGITAL_CODE_TICK_MS, unref: true },
   )
 
-  const stopTimeout = scheduleTuiTimeout(() => props.onDone("timeout"), {
+  const finish = (reason: DigitalCodeDoneReason) => {
+    if (finished) return
+    finished = true
+    stopInterval()
+    stopTimeout()
+    // Delete the Kitty image before chrome returns. Waiting for unmount
+    // races renderer.destroy() and leaves a Ghostty remnant.
+    clearPixels()
+    props.onDone(reason)
+  }
+
+  stopTimeout = scheduleTuiTimeout(() => finish("timeout"), {
     name: "digital-code-timeout",
     delayMs: durationMs,
     unref: true,
@@ -133,7 +195,7 @@ export function DigitalCode(props: {
   // merely before focused renderables. Paste has a separate dispatch channel.
   onMount(() => {
     if (!props.captureInput) return
-    onCleanup(captureTuiInput(renderer.keyInput, () => props.onDone("skip")))
+    onCleanup(captureTuiInput(renderer.keyInput, () => finish("skip")))
   })
 
   // Opening playback preserves ordinary input and yields to selection.
@@ -142,10 +204,10 @@ export function DigitalCode(props: {
     if (evt.name === "escape") {
       evt.preventDefault()
       evt.stopPropagation()
-      props.onDone("skip")
+      finish("skip")
       return
     }
-    if (renderer.hasSelection) props.onDone("skip")
+    if (renderer.hasSelection) finish("skip")
   })
 
   return (
@@ -155,29 +217,46 @@ export function DigitalCode(props: {
       top={0}
       width={dimensions().width}
       height={dimensions().height}
-      backgroundColor={BACKGROUND}
-      onMouseDown={() => props.onDone("skip")}
+      backgroundColor={scene ? RGBA.fromHex(textSceneBackground(scene)) : BACKGROUND}
+      onMouseDown={() => finish("skip")}
     >
-      <For each={rows()}>
-        {(row) => (
-          <text>
-            {row.map((run) =>
-              run.level === 0 ? (
-                run.text
-              ) : (
+      <Show when={foliage || scene}>
+        <For each={leafRows()}>
+          {(row) => (
+            <text>
+              {row.map((run) => (
                 <span
-                  style={{
-                    fg: DIGITAL_CODE_LEVEL_COLORS[run.hue][run.level],
-                    attributes: run.bold ? TextAttributes.BOLD : undefined,
-                  }}
+                  style={{ fg: RGBA.fromHex(run.color), bg: run.background ? RGBA.fromHex(run.background) : undefined }}
                 >
                   {run.text}
                 </span>
-              ),
-            )}
-          </text>
-        )}
-      </For>
+              ))}
+            </text>
+          )}
+        </For>
+      </Show>
+      <Show when={!foliage && !scene}>
+        <For each={rows()}>
+          {(row) => (
+            <text>
+              {row.map((run) =>
+                run.level === 0 ? (
+                  run.text
+                ) : (
+                  <span
+                    style={{
+                      fg: DIGITAL_CODE_LEVEL_COLORS[run.hue][run.level],
+                      attributes: run.bold ? TextAttributes.BOLD : undefined,
+                    }}
+                  >
+                    {run.text}
+                  </span>
+                ),
+              )}
+            </text>
+          )}
+        </For>
+      </Show>
     </box>
   )
 }

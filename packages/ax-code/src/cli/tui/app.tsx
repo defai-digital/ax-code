@@ -1,3 +1,5 @@
+import { chooseAnimationPair } from "./component/animation-pair"
+import type { OverlayStyle } from "./component/foliage-view-model"
 import { LanguageProvider, useLanguage } from "./context/language"
 import { DialogLanguage } from "./component/dialog-language"
 import { DialogSetup, shouldOfferSetup } from "./component/dialog-setup"
@@ -325,15 +327,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   })
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
-  // Short-lived ASCII Digital Code overlay. Manual preview is always
+  // Short-lived paired animation overlay. Manual preview is always
   // available; startup playback is on by default (`digital_code_on_start`
   // opts out) and task-completion playback is opt-in
   // (`digital_code_on_task_complete`).
   const [digitalCodePlaying, setDigitalCodePlaying] = createSignal(false)
   const [startupRainPhase, setStartupRainPhase] = createSignal(initialStartupRainPhase())
   let exiting = false
-  const playDigitalCode = () => {
-    if (!exiting) setDigitalCodePlaying(true)
+  const animationPair = chooseAnimationPair()
+  const [openingStyle, setOpeningStyle] = createSignal<OverlayStyle>(animationPair.opening)
+  const [endingStyle, setEndingStyle] = createSignal<OverlayStyle>(animationPair.ending)
+  const playDigitalCode = (style: OverlayStyle = animationPair.opening) => {
+    if (exiting) return
+    setOpeningStyle(style)
+    setDigitalCodePlaying(true)
   }
   const endDigitalCode = (reason: DigitalCodeDoneReason = "timeout") => {
     batch(() => {
@@ -347,7 +354,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const endStartupLogo = () => {
     if (startupRainShowsLogo(startupRainPhase())) setStartupRainPhase(completeStartupRain())
   }
-  // Reverse (bottom-to-top) rain. An explicit quit plays it before the
+  // The matching ending. An explicit quit plays it before the
   // renderer tears down; the palette's "Play Ending Video" entry previews the
   // same overlay. The preview is always allowed — it is a deliberate request —
   // while the exit flourish honors the shared animation policy so quitting
@@ -355,7 +362,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const [reverseRainPlaying, setReverseRainPlaying] = createSignal(false)
   let reverseRainDone: Promise<void> | undefined
   let settleReverseRain: (() => void) | undefined
-  const playReverseDigitalCode = (): Promise<void> => {
+  const playReverseDigitalCode = (style: OverlayStyle = animationPair.ending): Promise<void> => {
     const existing = reverseRainDone
     // A caller that arrives mid-run — quitting during the palette preview —
     // waits for the run already on screen instead of cutting it off.
@@ -363,6 +370,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     const created = new Promise<void>((resolve) => {
       settleReverseRain = resolve
     })
+    setEndingStyle(style)
     reverseRainDone = created
     setReverseRainPlaying(true)
     return created
@@ -1141,6 +1149,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       renderer,
       onSnapshot: props.onSnapshot,
       terminalSuspend,
+      animationPair,
       playDigitalCode,
       playReverseDigitalCode,
       terminalWidth: () => dimensions().width,
@@ -1387,10 +1396,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         <DigitalCodeCover />
       </Show>
       <Show when={digitalCodePlaying()}>
-        <DigitalCode onDone={endDigitalCode} />
+        <DigitalCode style={openingStyle()} onDone={endDigitalCode} />
       </Show>
       <Show when={reverseRainPlaying()}>
         <DigitalCode
+          style={endingStyle()}
           direction="up"
           durationMs={DIGITAL_CODE_REVERSE_DURATION_MS}
           captureInput
