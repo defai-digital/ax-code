@@ -11,7 +11,7 @@ import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
 import { isDedicatedPrivateGpuProviderID } from "./private-gpu/presets"
 import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { cliEffortVariants } from "./cli/effort"
-import { wrapThinkTagText } from "./think-tags"
+import { wrapThinkTagText, type ThinkTagName } from "./think-tags"
 import { PromptCachePolicy } from "./prompt-cache-policy"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
@@ -78,7 +78,7 @@ export namespace ProviderTransform {
   function normalizeMessages(
     msgs: ModelMessage[],
     model: Provider.Model,
-    _options: Record<string, unknown>,
+    options: Record<string, unknown>,
   ): ModelMessage[] {
     // Anthropic thinking blocks (signatures, redacted data) must stay as
     // reasoning parts. Mapping them through openaiCompatible.reasoning_content
@@ -95,7 +95,12 @@ export namespace ProviderTransform {
     // MiniMax uses Anthropic thinking blocks instead — do not fold those.
     // Return here so interleaved.field stripping cannot re-emit an empty
     // reasoning_content after the fold.
-    if (usesThinkTags(model)) return foldThinkTagReasoning(msgs)
+    const family = chatReasoningFamily(model)
+    if (family === "minimax-m3" || family === "minimax-m2.7") {
+      // Native Chat accepts reasoning_content. Explicit unsplit responses use
+      // native <think> tags, never the private GPU <mm:think> format.
+      if (options.reasoning_split === false) return foldThinkTagReasoning(msgs, "think")
+    } else if (usesThinkTags(model)) return foldThinkTagReasoning(msgs)
 
     // DeepSeek requires a reasoning part on every assistant message, even when
     // empty. OpenCode injects one; without it some DeepSeek endpoints 400.
@@ -733,7 +738,7 @@ export namespace ProviderTransform {
       .filter((msg): msg is ModelMessage => msg !== undefined && msg.content !== "")
   }
 
-  function foldThinkTagReasoning(msgs: ModelMessage[]): ModelMessage[] {
+  function foldThinkTagReasoning(msgs: ModelMessage[], tag: ThinkTagName = "mm:think"): ModelMessage[] {
     return msgs.map((msg) => {
       if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg
       let reasoningText = ""
@@ -752,7 +757,7 @@ export namespace ProviderTransform {
       // rejects with 400.
       if (!hadReasoning) return msg
       if (reasoningText) {
-        const tagged = wrapThinkTagText(reasoningText)
+        const tagged = wrapThinkTagText(reasoningText, tag)
         const firstText = rest.findIndex((part) => part.type === "text")
         if (firstText >= 0) {
           const part = rest[firstText] as { type: "text"; text: string }
@@ -818,6 +823,71 @@ export namespace ProviderTransform {
       ? QWEN37_ALIBABA_THINKING_BUDGET
       : ALIBABA_THINKING_BUDGET_TOKENS
     return Math.min(Math.floor(value), max, budgetCap)
+  }
+
+  // Exact upstream IDs with documented Chat controls. Native SDKs have
+  // independent serialization contracts; the installed DeepSeek SDK drops
+  // reasoningEffort. Local/private deployments retain their own dialects.
+  function chatReasoningFamily(model: Provider.Model) {
+    if (model.api.npm !== "@ai-sdk/openai-compatible" || model.options?.nativeReasoning === false) return undefined
+    if (isPrivateGpuProvider(model.providerID)) return undefined
+    if (
+      [
+        AX_ENGINE_PROVIDER_ID,
+        "groq",
+        "openrouter",
+        "nvidia",
+        "lilac",
+        "ollama",
+        "lmstudio",
+        "ax-studio",
+        "local-llm",
+      ].includes(model.providerID)
+    )
+      return undefined
+    let host = ""
+    try {
+      // Custom provider names must not bypass known dialect exclusions.
+      host = new URL(model.api.url).hostname
+      if (["openrouter.ai", "api.groq.com", "integrate.api.nvidia.com"].includes(host)) return undefined
+    } catch {
+      // Synthetic models and SDK-only callers may omit the URL.
+    }
+    const id = model.api.id.toLowerCase()
+    if (/^qwen3\.8-(?:max|flash)$/.test(id)) return "qwen3.8"
+    // DashScope deploys other vendors with its own enable_thinking dialect.
+    if (
+      isAlibabaPlanProvider(model.providerID) ||
+      ["alibaba", "alibaba-cn"].includes(model.providerID) ||
+      host === "dashscope.aliyuncs.com" ||
+      host.endsWith(".maas.aliyuncs.com") ||
+      (host.startsWith("dashscope-") && host.endsWith(".aliyuncs.com"))
+    )
+      return undefined
+    if (id === "glm-5.3") return "glm5.3"
+    if (/^deepseek-(?:v4-(?:pro|flash)|flash)$/.test(id)) return "deepseek-v4"
+    if (id === "minimax-m3" || id === "minimax-m2.7") return id
+    return undefined
+  }
+
+  function currentChatVariants(model: Provider.Model): Record<string, Record<string, any>> | undefined {
+    const family = chatReasoningFamily(model)
+    if (family === "qwen3.8")
+      return {
+        low: { reasoningEffort: "low" },
+        medium: { reasoningEffort: "medium" },
+        high: { reasoningEffort: "xhigh" }, // Keep the existing user-facing alias.
+        xhigh: { reasoningEffort: "xhigh" },
+      }
+    if (family === "glm5.3" || family === "deepseek-v4")
+      return {
+        low: { reasoningEffort: "low" },
+        high: { reasoningEffort: "high" },
+        max: { reasoningEffort: "max" },
+        // GLM defaults to max. Autonomous/recovery deep must not lower it.
+        ...(family === "glm5.3" ? { deep: { reasoningEffort: "max" } } : {}),
+      }
+    return undefined
   }
 
   function glm52ReasoningVariants(model: Provider.Model): Record<string, Record<string, any>> | undefined {
@@ -887,6 +957,9 @@ export namespace ProviderTransform {
     // OpenAI reasoning-effort levels. Avoid advertising low/medium/high
     // variants that an OpenAI-compatible vLLM/AX Engine endpoint may reject.
     if (isOrnithFamily(model)) return {}
+
+    const current = currentChatVariants(model)
+    if (current) return current
 
     const id = model.id.toLowerCase()
 
@@ -1017,11 +1090,21 @@ export namespace ProviderTransform {
   }): Record<string, any> {
     const result: Record<string, any> = {}
 
-    // z.ai: no special provider options. v3.1.0 added a `thinking`
-    // parameter that was reverted through v3.1.1 and v3.1.2. OpenCode
-    // currently sends `thinking: { type: "enabled", clear_thinking: false }`
-    // on zai/zhipuai OpenAI-compat; we keep the empty shape until a live
-    // wire probe (ADR-040 M2) confirms it. Do not copy that block back.
+    const family = chatReasoningFamily(input.model)
+    if (
+      family === "glm5.3" &&
+      input.model.capabilities.reasoning &&
+      input.longAgent &&
+      input.providerOptions?.preserveThinking === true
+    ) {
+      // Preservation changes billed context and requires complete history.
+      // Ordinary tool-turn reasoning is replayed without enabling it.
+      result.thinking = { type: "enabled", clear_thinking: false }
+    }
+    if (family === "minimax-m3" || family === "minimax-m2.7") {
+      // Persist native reasoning events verbatim instead of reconstructing tags.
+      result.reasoning_split = true
+    }
 
     // Session-scoped cache key. OpenCode defaults this on for OpenAI-family
     // SDKs; we keep the generic default off (unknown OpenAI-compat servers
@@ -1066,7 +1149,7 @@ export namespace ProviderTransform {
       // No explicit `requested` — alibabaThinkingBudget picks the model-aware
       // default (QWEN37_ALIBABA_THINKING_BUDGET for Max/Plus, generic 8k
       // otherwise) when requested is undefined.
-      result["thinking_budget"] = alibabaThinkingBudget(input.model)
+      if (family !== "qwen3.8") result["thinking_budget"] = alibabaThinkingBudget(input.model)
       if (input.longAgent) {
         // preserve_thinking keeps reasoning state across turns for long-agent execution.
         // Opt-out: set preserveThinking: false in provider options to disable it
@@ -1151,7 +1234,9 @@ export namespace ProviderTransform {
     options: Record<string, any>,
     toolChoice?: "auto" | "required" | "none",
   ): Record<string, any> {
-    let result = options
+    // Local deployment opt-out must never become an API body field.
+    const { nativeReasoning: _nativeReasoning, ...wireOptions } = options
+    let result = wireOptions
     // The installed SDK predates GPT-6. Its documented override enables
     // Responses reasoning serialization and removes unsupported sampling.
     // Restrict this to the first-party protocol, never infer gateway support.
@@ -1162,7 +1247,45 @@ export namespace ProviderTransform {
     ) {
       result = { ...result, forceReasoning: true }
     }
-    if (isAlibabaThinkingModel(model)) {
+    const family = chatReasoningFamily(model)
+    if (family) {
+      // The SDK overwrites raw reasoning_effort with its camelCase option.
+      // Normalize explicit snake-case input; camelCase wins when both exist.
+      const { reasoning_effort: snakeEffort, ...rest } = result
+      result = snakeEffort === undefined ? rest : { ...rest, reasoningEffort: rest.reasoningEffort ?? snakeEffort }
+    }
+    if (family === "qwen3.8") {
+      // Qwen rejects forced tools while thinking. Disable only this request;
+      // keep required-tool semantics and resume thinking on the next request.
+      const {
+        thinking_budget: budget,
+        preserve_thinking: preserve,
+        reasoningEffort: requestedEffort,
+        thinking: _thinking,
+        reasoning: _reasoning,
+        thinkingConfig: _thinkingConfig,
+        ...rest
+      } = result
+      const effort =
+        requestedEffort === "high" || requestedEffort === "max"
+          ? "xhigh"
+          : requestedEffort === "minimal"
+            ? "low"
+            : requestedEffort
+      result =
+        rest.enable_thinking === false || effort === "none" || toolChoice === "required"
+          ? { ...rest, enable_thinking: false }
+          : {
+              ...rest,
+              ...(effort !== undefined
+                ? { reasoningEffort: effort }
+                : budget !== undefined || isAlibabaThinkingModel(model)
+                  ? { thinking_budget: isAlibabaThinkingModel(model) ? alibabaThinkingBudget(model, budget) : budget }
+                  : {}),
+              ...(preserve !== undefined ? { preserve_thinking: preserve } : {}),
+            }
+    }
+    if (isAlibabaThinkingModel(model) && family !== "qwen3.8") {
       // Strip incompatible thinking shapes (Anthropic block, reasoning-effort
       // variants) that user config or other transforms may have layered in,
       // then re-establish the documented DashScope pair with a clamped
@@ -1193,6 +1316,11 @@ export namespace ProviderTransform {
               // Carry through preserve_thinking only when it was explicitly requested
               ...(requestedPreserve ? { preserve_thinking: true } : {}),
             }
+    }
+
+    if ((family === "deepseek-v4" || family === "minimax-m3") && result.thinking?.type === "disabled") {
+      const { reasoningEffort: _effort, reasoning_effort: _snakeEffort, ...rest } = result
+      result = rest
     }
 
     if (model.providerID === AX_ENGINE_PROVIDER_ID) {
@@ -1231,6 +1359,14 @@ export namespace ProviderTransform {
   }
 
   export function smallOptions(model: Provider.Model, providerOptions?: Record<string, any>) {
+    const family = chatReasoningFamily(model)
+    if (family && model.capabilities.reasoning === false) return {}
+    if (family === "glm5.3") return { reasoningEffort: "low", thinking: { type: "enabled" } }
+    if (family === "deepseek-v4") return { thinking: { type: "disabled" } }
+    if (family === "qwen3.8") return { enable_thinking: false }
+    if (family === "minimax-m3") return { thinking: { type: "disabled" }, reasoning_split: true }
+    if (family === "minimax-m2.7") return { reasoning_split: true }
+
     if (isOrnithFamily(model) || model.providerID === AX_ENGINE_PROVIDER_ID) {
       // AX Engine and Ornith (local 35B or PAI 397B) expose Qwen's
       // chat-template switch. Auxiliary and response-only turns do not
@@ -1282,6 +1418,7 @@ export namespace ProviderTransform {
     if (Object.prototype.hasOwnProperty.call(small, "enable_thinking")) {
       next.enable_thinking = small.enable_thinking
     }
+    if (isRecord(small.thinking)) next.thinking = { ...small.thinking }
     if (isRecord(small.thinkingConfig)) {
       next.thinkingConfig = { ...small.thinkingConfig }
     }

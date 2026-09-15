@@ -1994,8 +1994,8 @@ describe("ProviderTransform.variants", () => {
     }
   })
 
-  test("GLM versions other than 5.2 keep the family-wide empty variants", () => {
-    for (const id of ["glm-5.25", "glm-5.3", "glm-5"]) {
+  test("Unqualified GLM versions keep the family-wide empty variants", () => {
+    for (const id of ["glm-5.25", "glm-5.30", "glm-5"]) {
       const model = createMockModel({
         id: `togetherai/${id}`,
         providerID: "togetherai",
@@ -3021,7 +3021,7 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     expect(result.thinking_budget).toBe(16_384)
   })
 
-  test("raises thinking_budget to 16 384 for qwen3.8-max on Alibaba Token Plan", () => {
+  test("leaves qwen3.8-max thinking budget unset for effort selection on Alibaba Token Plan", () => {
     const result = ProviderTransform.options({
       model: createModel("qwen3.8-max"),
       sessionID: "session-test",
@@ -3029,10 +3029,10 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     })
 
     expect(result.enable_thinking).toBe(true)
-    expect(result.thinking_budget).toBe(16_384)
+    expect(result.thinking_budget).toBeUndefined()
   })
 
-  test("raises thinking_budget to 16 384 for qwen3.8-flash on Alibaba Token Plan", () => {
+  test("leaves qwen3.8-flash thinking budget unset for effort selection on Alibaba Token Plan", () => {
     const result = ProviderTransform.options({
       model: createModel("qwen3.8-flash"),
       sessionID: "session-test",
@@ -3040,7 +3040,7 @@ describe("ProviderTransform.options - Alibaba Token Plan Team Edition", () => {
     })
 
     expect(result.enable_thinking).toBe(true)
-    expect(result.thinking_budget).toBe(16_384)
+    expect(result.thinking_budget).toBeUndefined()
   })
 
   test("keeps thinking_budget at or below a lower configured output limit", () => {
