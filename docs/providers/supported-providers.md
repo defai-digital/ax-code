@@ -190,14 +190,13 @@ For Kimi Code membership, install the local `kimi` binary, run `kimi login`, the
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and offers eight AutomatosX Qwen3.8 27B MLX AXQ packs: 4-bit, 6-bit, 8-bit, and MXFP4, each with and without MTP. Native capabilities are checked when the model starts.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and offers AutomatosX Qwen3.8 27B MLX AXQ 6-bit MTP. Native capabilities are checked when the model starts.
 
-| Provider id | Model id                                                                      | Selection                           |      Context |      Output |
-| ----------- | ----------------------------------------------------------------------------- | ----------------------------------- | -----------: | ----------: |
-| `ax-engine` | `qwen3.8-27b-axq-6bit`                                                        | Qwen3.8 27B AXQ 6-bit MTP (default) |       65,536 |      16,384 |
-| `ax-engine` | Exact `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-<variant>@<commit>` from the catalog | Other seven AXQ variants            | Up to 32,768 | Up to 8,192 |
+| Provider id | Model id               | Selection                           | Context | Output |
+| ----------- | ---------------------- | ----------------------------------- | ------: | -----: |
+| `ax-engine` | `qwen3.8-27b-axq-6bit` | Qwen3.8 27B AXQ 6-bit MTP (default) |  65,536 | 16,384 |
 
-Ornith, Qwen3-Coder-Next, non-AXQ packs, other model sizes, and other publishers are excluded from managed selection. Historical records remain readable for status and cleanup.
+Other Qwen3.8 27B AXQ variants, Ornith, Qwen3-Coder-Next, non-AXQ packs, other model sizes, and other publishers are excluded from managed selection. Historical records remain readable for status and cleanup.
 
 The default local model is `qwen3.8-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for the exact selected repositories, memory, and disk guidance.
 

@@ -15,8 +15,6 @@ import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
 import { resolveAxEngineModelDefinition } from "../../../src/provider/ax-engine/hub-catalog"
-import { HubCatalog, hubModelID } from "../../../src/provider/ax-engine/hub-model"
-import snapshot from "../../../src/provider/ax-engine/hub-catalog-snapshot.json"
 
 const AXQ27 = {
   modelID: "qwen3.8-27b-axq-6bit",
@@ -284,22 +282,17 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     expect(await Filesystem.exists(AxEnginePaths.prepareState)).toBe(false)
   })
 
-  test("downloadModel checks disk space against the requested model, not the default", async () => {
+  test("downloadModel checks disk space before starting a download", async () => {
     if (process.platform === "win32") return
 
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const artifact = HubCatalog.parse(snapshot).models.find(
-      (entry) => entry.id === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-8bit-MTP",
-    )!
-    const modelID = hubModelID(artifact)
-    const definition = await resolveAxEngineModelDefinition(modelID)
-    const requiredBytes = definition.quantizations.mlx!.minDiskBytes
-    expect(requiredBytes).toBeGreaterThan(32 * 1024 ** 3)
+    const definition = await resolveAxEngineModelDefinition(AXQ27.modelID)
+    const requiredBytes = definition.quantizations.mlx6bit!.minDiskBytes
+    expect(requiredBytes).toBeGreaterThan(0)
     const originalText = Process.text
-    // Enough for the default alias, but below this pinned variant's own estimate.
-    const availableBlocks = Math.floor((32 * 1024 ** 3 + requiredBytes) / 2 / 1024)
+    const availableBlocks = Math.floor(requiredBytes / 2 / 1024)
     const spy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
       if (cmd[0] === "df") {
         const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
@@ -320,7 +313,12 @@ describe("ax-engine model storage uses the HF snapshot", () => {
       await fs.chmod(binary, 0o755)
 
       await expect(
-        downloadModel({ binaryPath: binary, modelID, quantization: "mlx", binaryVersion: "7.2.1" }),
+        downloadModel({
+          binaryPath: binary,
+          modelID: AXQ27.modelID,
+          quantization: AXQ27.quant,
+          binaryVersion: "7.2.1",
+        }),
       ).rejects.toThrow("AX_ENGINE_INSUFFICIENT_DISK")
       expect(
         spy.mock.calls.some(
@@ -328,7 +326,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
             Array.isArray(cmd) &&
             cmd[0] === binary &&
             cmd[1] === "download" &&
-            cmd[2] === modelID &&
+            cmd[2] === AXQ27.modelID &&
             cmd[3] === "--json",
         ),
       ).toBe(false)

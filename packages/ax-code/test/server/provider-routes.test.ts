@@ -484,19 +484,8 @@ describe("provider routes", () => {
     const response = await Server.Default().request(`/provider/ax-engine/models?directory=${directory}`)
     expect(response.status).toBe(200)
     const body = (await response.json()) as { models: Array<{ id: string }> }
-    expect(body.models.map((model) => model.id)).toEqual([
-      "qwen3.8-27b-axq-6bit",
-      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-4bit@[a-f0-9]{40}$/),
-      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-4bit-MTP@[a-f0-9]{40}$/),
-      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-6bit@[a-f0-9]{40}$/),
-      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-8bit@[a-f0-9]{40}$/),
-      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-8bit-MTP@[a-f0-9]{40}$/),
-      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-MXFP4@[a-f0-9]{40}$/),
-      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-MXFP4-MTP@[a-f0-9]{40}$/),
-    ])
-    const dynamic = body.models.filter((model) => model.id.startsWith("AutomatosX/"))
-    expect(dynamic.length).toBeGreaterThan(0)
-    expect(dynamic.every((model) => /@[a-f0-9]{40}$/.test(model.id))).toBe(true)
+    expect(body.models.map((model) => model.id)).toEqual(["qwen3.8-27b-axq-6bit"])
+    expect(body.models.every((model) => !model.id.startsWith("AutomatosX/"))).toBe(true)
     expect((body as { catalog?: { source?: string; modelIDs?: string[] } }).catalog).toMatchObject({
       source: "packages/ax-code/src/provider/ax-engine/constants.ts",
       modelIDs: body.models.map((model) => model.id),

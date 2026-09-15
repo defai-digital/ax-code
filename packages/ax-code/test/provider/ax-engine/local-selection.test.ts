@@ -23,16 +23,7 @@ import { tmpdir } from "../../fixture/fixture"
 import fs from "node:fs/promises"
 import path from "node:path"
 
-const repositories = [
-  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
-  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit",
-  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
-  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit",
-  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-8bit",
-  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-8bit-MTP",
-  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-MXFP4",
-  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP",
-]
+const repository = "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP"
 
 afterEach(async () => {
   await Instance.disposeAll()
@@ -40,9 +31,10 @@ afterEach(async () => {
   vi.unstubAllEnvs()
 })
 
-test("the managed model catalog offers exactly the eight Qwen3.8 27B AXQ repositories", async () => {
+test("the managed model catalog offers only Qwen3.8 27B AXQ 6-bit MTP", async () => {
   const result = await getAxEngineModelsCatalog()
-  expect(result.models.map((model) => model.hfRepo)).toEqual(repositories)
+  expect(result.models.map((model) => model.hfRepo)).toEqual([repository])
+  expect(result.models).toHaveLength(1)
   expect(result.models[0]).toMatchObject({
     id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
     quantization: "mlx6bit",
@@ -50,31 +42,21 @@ test("the managed model catalog offers exactly the eight Qwen3.8 27B AXQ reposit
     contextTokens: 65_536,
     outputTokens: 16_384,
   })
-  const catalog = HubCatalog.parse(snapshot)
-  for (const entry of result.models.slice(1)) {
-    const artifact = catalog.models.find((model) => model.id === entry.hfRepo)!
-    expect(entry).toMatchObject({
-      id: hubModelID(artifact),
-      revision: artifact.sha,
-      quantization: "mlx",
-      estimatedResources: true,
-      verification: "unverified",
-      recommended: false,
-      contextTokens: 32_768,
-      outputTokens: 8_192,
-      fit: { runnable: false },
-    })
-    expect(entry.minMemoryBytes).toBeGreaterThan(0)
-    expect(entry.minDiskBytes).toBeGreaterThan(0)
-  }
-  expect(
-    result.discovery.decisions
-      .filter((entry) => entry.policy !== "excluded")
-      .every((entry) => axEngineLocalRepository(entry.id)),
-  ).toBe(true)
+  expect(result.models.every((model) => axEngineLocalRepository(model.id) === repository)).toBe(true)
+  expect(result.discovery.decisions.some((entry) => entry.repoID === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit")).toBe(
+    true,
+  )
+  expect(result.models.some((model) => model.hfRepo === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit")).toBe(false)
 })
 
 const excludedRepositories = [
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-8bit",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-8bit-MTP",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-MXFP4",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP",
   "AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-MXFP4-MTP",
   "AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP",
   "AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-6bit-MTP",
@@ -106,8 +88,8 @@ test.each(excludedModels)("excluded download of %s stops before creating a backg
   expect(requireEligibility).not.toHaveBeenCalled()
 })
 
-test.each(repositories)("selected repository %s passes preparation admission", async (repo) => {
-  const model = HubCatalog.parse(snapshot).models.find((entry) => entry.id === repo)!
+test("the selected 6-bit MTP repository passes preparation admission", async () => {
+  const model = HubCatalog.parse(snapshot).models.find((entry) => entry.id === repository)!
   const requireEligibility = vi.fn().mockRejectedValue(new Error("Selected model reached eligibility"))
   await expect(prepareAxEngine({ modelID: hubModelID(model) }, { requireEligibility })).rejects.toThrow(
     "Selected model reached eligibility",
@@ -115,8 +97,8 @@ test.each(repositories)("selected repository %s passes preparation admission", a
   expect(requireEligibility).toHaveBeenCalledOnce()
 })
 
-test.each(repositories)("selected %s reaches the pinned-download runtime version gate", async (repo) => {
-  const model = HubCatalog.parse(snapshot).models.find((entry) => entry.id === repo)!
+test("the selected 6-bit MTP repository reaches the pinned-download runtime version gate", async () => {
+  const model = HubCatalog.parse(snapshot).models.find((entry) => entry.id === repository)!
   await expect(
     downloadModel({ modelID: hubModelID(model), binaryPath: "/never-start", binaryVersion: "6.13.0" }),
   ).rejects.toThrow("AX_ENGINE_VERSION_UNSUPPORTED")
@@ -133,34 +115,35 @@ test.each(excludedRepositories)(
   },
 )
 
-test.each(repositories.slice(1))(
-  "stale catalogs retain %s offline and deduplicate prepared revisions",
-  async (repo) => {
-    await using tmp = await tmpdir()
-    const catalog = HubCatalog.parse(snapshot)
-    const qwen = catalog.models.find((model) => model.id === repo)!
-    const old = { ...qwen, sha: "a".repeat(40) }
-    const cachePath = path.join(tmp.path, "catalog.json")
-    await fs.writeFile(cachePath, JSON.stringify({ version: 1, fetchedAt: 1, models: [] }))
-    const fetcher = vi.fn<typeof fetch>()
-    const store = createHubCatalogStore({
-      cachePath,
-      artifactPath: (id) => path.join(tmp.path, encodeURIComponent(id)),
-      bundled: { version: 1, fetchedAt: 2, models: [qwen] },
-      pinnedModels: async () => [old],
-      fetch: fetcher,
-    })
-    const view = await store.inspect()
-    expect(view.source).toBe("cache")
-    expect(selectAxEngineLocalModels(view.definitions, (model) => model.id).map((model) => model.id)).toEqual([
-      hubModelID(qwen),
-    ])
-    expect((await store.resolve(hubModelID(qwen), { offline: true })).revision).toBe(qwen.sha)
-    expect(fetcher).not.toHaveBeenCalled()
-  },
-)
+test("stale catalogs retain the selected 6-bit MTP repository offline and prefer the alias", async () => {
+  await using tmp = await tmpdir()
+  const catalog = HubCatalog.parse(snapshot)
+  const qwen = catalog.models.find((model) => model.id === repository)!
+  const old = { ...qwen, sha: "a".repeat(40) }
+  const cachePath = path.join(tmp.path, "catalog.json")
+  await fs.writeFile(cachePath, JSON.stringify({ version: 1, fetchedAt: 1, models: [] }))
+  const fetcher = vi.fn<typeof fetch>()
+  const store = createHubCatalogStore({
+    cachePath,
+    artifactPath: (id) => path.join(tmp.path, encodeURIComponent(id)),
+    bundled: { version: 1, fetchedAt: 2, models: [qwen] },
+    pinnedModels: async () => [old],
+    fetch: fetcher,
+  })
+  const view = await store.inspect()
+  expect(view.source).toBe("cache")
+  expect(view.decisions.some((entry) => entry.repoID === repository)).toBe(true)
+  expect(
+    selectAxEngineLocalModels(
+      [{ id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID }, ...view.definitions],
+      (model) => model.id,
+    ).map((model) => model.id),
+  ).toEqual([AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID])
+  expect((await store.resolve(hubModelID(qwen), { offline: true })).revision).toBe(qwen.sha)
+  expect(fetcher).not.toHaveBeenCalled()
+})
 
-test("managed provider discovery replaces stale configured models with exactly eight Qwen3.8 27B AXQ choices", async () => {
+test("managed provider discovery replaces stale configured models with only Qwen3.8 27B AXQ 6-bit MTP", async () => {
   vi.spyOn(platform, "isSupportedHost").mockResolvedValue(true)
   vi.stubEnv(
     "AX_CODE_CONFIG_CONTENT",
@@ -174,7 +157,8 @@ test("managed provider discovery replaces stale configured models with exactly e
             [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: { name: "Removed Coder model" },
             [`AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`]: { name: "Removed 35B model" },
             [`AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`]: { name: "Removed 9B model" },
-            [`${repositories[0]}@${"a".repeat(40)}`]: { name: "Old configured revision" },
+            [`AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"a".repeat(40)}`]: { name: "Removed 4-bit MTP variant" },
+            [`${repository}@${"a".repeat(40)}`]: { name: "Old configured revision" },
             alternate: { id: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, name: "Duplicate alias" },
             [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: {
               options: { modelID: AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID },
@@ -190,8 +174,9 @@ test("managed provider discovery replaces stale configured models with exactly e
     fn: async () => {
       await Provider.ready()
       const provider = (await Provider.list())[ProviderID.make("ax-engine")]
-      expect(Object.keys(provider.models).map(axEngineLocalRepository)).toEqual(repositories)
-      expect(Object.keys(provider.models)).not.toContain(`${repositories[0]}@${"a".repeat(40)}`)
+      expect(Object.keys(provider.models).map(axEngineLocalRepository)).toEqual([repository])
+      expect(Object.keys(provider.models)).toEqual([AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID])
+      expect(Object.keys(provider.models)).not.toContain(`${repository}@${"a".repeat(40)}`)
       expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID].options.modelID).toBe(
         AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       )

@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Restrict managed AX Engine model selection to Qwen3.8 27B AXQ 6-bit MTP.
+
 ## [7.18.0] - 2026-09-15
 
 ### Changed
