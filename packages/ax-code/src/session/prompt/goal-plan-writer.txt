@@ -55,6 +55,20 @@ the inspected revision or object when available; comments and previous migration
 implementations are leads, not proof of legacy behavior. Never invent fields or
 requirements to reconcile conflicting sources. Record missing sources in risks.
 
+When external CLI review is required, a gate that only checks nonempty files or
+reviewer names does not prove that review ran. Declare a project-owned check
+that validates the actual process exit and terminal completion, source/diff
+identity, and final findings or explicit no-findings verdict. Warning-only logs,
+partial reasoning and timeouts must fail. If no such check exists, put creating
+it in the implementation checklist; do not substitute artifact existence.
+
+Choose bounded source directories when a bug sweep can touch nearby modules or
+new regression files. Avoid freezing a hand-picked test list that omits the
+possible change area. Checks must discover or explicitly include regressions
+for every actual fix. Receipt freshness is not proof of test coverage. If work
+later needs different acceptance or checks, use explicit /goal revise; never
+silently edit a frozen contract or claim an omitted test was covered.
+
 Declare sourcePaths relative to the workspace for bounded source fingerprinting. Include
 the implementation, configuration and check scripts that affect the outcome.
 Git workspaces fingerprint tracked and nonignored untracked files within those

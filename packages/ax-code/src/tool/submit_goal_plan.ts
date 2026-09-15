@@ -1,3 +1,4 @@
+import { VerificationPolicy } from "@/session/verification-policy"
 import z from "zod"
 import { GoalPlanWriter } from "@/session/goal-plan-writer"
 import { GoalPlan } from "@/session/goal-plan"
@@ -53,6 +54,16 @@ export const SubmitGoalPlanTool = Tool.define("submit_goal_plan", {
       throw new Error(
         "Code-change plans require assurance with executable checks covering every acceptance id. Declare project-owned verification commands and source references; do not invent successful observations.",
       )
+    }
+    // Submission-only: legacy frozen contracts must retain their schema and digest.
+    if (params.kind === "code-change") {
+      const presenceOnly =
+        params.assurance?.checks.filter((check) => VerificationPolicy.isFilePresenceOnlyCommand(check.command)) ?? []
+      if (presenceOnly.length)
+        throw new Error(
+          `Goal checks ${presenceOnly.map((check) => check.id).join(", ")} only establish file presence. ` +
+            `Use a project-owned check that asserts behavior or validates successful review completion, source identity and final results; nonempty warning logs are not successful reviews.`,
+        )
     }
     const assurance = params.assurance
       ? GoalPlanBaseline.prepareAssurance(params.assurance, {

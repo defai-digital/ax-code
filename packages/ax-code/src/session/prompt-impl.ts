@@ -1807,7 +1807,7 @@ export namespace SessionPrompt {
           reason = "completed"
           break
         }
-        const goalMessages = goal?.status === "active" ? await Session.messages({ sessionID }) : msgs
+        const goalMessages = goal && goal.status !== "complete" ? await Session.messages({ sessionID }) : msgs
         const progress = goal?.status === "active" ? goalProgress(goalMessages, goal.time.created) : undefined
         const goalGuidance =
           goal && goal.status !== "complete"

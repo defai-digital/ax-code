@@ -1,3 +1,4 @@
+import { goalSourceScope } from "@/session/goal-source-scope"
 import z from "zod"
 import { Session } from "@/session"
 import { SessionGoal } from "@/session/goal"
@@ -184,7 +185,12 @@ export const UpdateGoalTool = Tool.define("update_goal", {
                   source: await currentSourceState(
                     Instance.worktree,
                     Instance.project.vcs ?? "",
-                    assurance.sourcePaths,
+                    goalSourceScope({
+                      cwd: Instance.worktree,
+                      created: currentGoal.time.created,
+                      sourcePaths: assurance.sourcePaths,
+                      messages,
+                    }).paths,
                   ),
                   cwd: Instance.worktree,
                 },

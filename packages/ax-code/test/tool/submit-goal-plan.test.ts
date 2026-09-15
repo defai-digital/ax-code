@@ -323,3 +323,39 @@ describe("submit_goal_plan", () => {
     })
   })
 })
+
+test("rejects presence-only new plans while retaining existing frozen contracts and digests", async () => {
+  const legacy = {
+    ...GoalPlan.sample("Review fixes"),
+    assurance: {
+      ...assurance,
+      checks: [{ ...assurance.checks[0], command: "test -s review.md" }],
+    },
+  }
+  const originalDigest = GoalPlan.digestOf(legacy)
+  expect(GoalPlan.digestOf(GoalPlan.parse(GoalPlan.render(legacy)))).toBe(originalDigest)
+  const tool = await SubmitGoalPlanTool.init()
+  await expect(
+    tool.execute(
+      {
+        kind: "code-change",
+        assurance: legacy.assurance,
+        acceptance: ["Review completed"],
+        verification: [{ tag: "gating", action: "Validate review", observation: "Successful review" }],
+        nonGoals: ["Other changes"],
+        assumedScope: "src",
+        implementationApproach: "Review then fix",
+        taskChecklist: ["Review", "Verify"],
+      },
+      {
+        sessionID: "ses_test" as any,
+        messageID: MessageID.ascending(),
+        agent: "goal-plan-writer",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata() {},
+        async ask() {},
+      },
+    ),
+  ).rejects.toThrow("only establish file presence")
+})

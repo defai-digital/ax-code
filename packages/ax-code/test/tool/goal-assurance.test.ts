@@ -9,6 +9,7 @@ import type { GoalAssurance } from "../../src/session/goal-assurance"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { ModelID, ProviderID } from "../../src/provider/schema"
+import { WriteTool } from "../../src/tool/write"
 import { VerifyProjectTool } from "../../src/tool/verify_project"
 import { UpdateGoalTool } from "../../src/tool/goal"
 import type { Tool } from "../../src/tool/tool"
@@ -305,6 +306,75 @@ test("turn context reloads frozen authority after history loss and refuses tampe
         (await VerifyProjectTool.init()).execute({ goalCheck: "database" }, context(session.id)),
       ).rejects.toThrow(/Restore/)
       await Session.remove(session.id)
+    },
+  })
+})
+
+test("goal receipts track edits omitted from frozen sourcePaths without rewriting the contract", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { session, goal } = await prepare(tmp.path)
+      const digest = GoalPlan.storedDigest(session.id, goal.time.created)
+      const extra = path.join(tmp.path, "train.cjs")
+      const written = await (
+        await WriteTool.init()
+      ).execute({ filePath: extra, content: "module.exports = 1\n" }, context(session.id))
+      const messageID = MessageID.ascending()
+      await Session.updateMessage({
+        id: messageID,
+        parentID: MessageID.ascending(),
+        sessionID: session.id,
+        role: "assistant",
+        agent: "build",
+        mode: "build",
+        path: { cwd: tmp.path, root: tmp.path },
+        modelID: "test" as ModelID,
+        providerID: "test" as ProviderID,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        time: { created: Date.now(), completed: Date.now() },
+      } satisfies MessageV2.Assistant)
+      await Session.updatePart({
+        id: PartID.ascending(),
+        messageID,
+        sessionID: session.id,
+        type: "tool",
+        tool: "write",
+        callID: "write-train",
+        state: {
+          status: "completed",
+          input: { filePath: extra },
+          output: written.output,
+          title: written.title,
+          metadata: written.metadata,
+          time: { start: Date.now(), end: Date.now() },
+        },
+      })
+      const verify = await VerifyProjectTool.init()
+      for (const check of assurance.checks) {
+        const result = await verify.execute({ goalCheck: check.id }, context(session.id))
+        expect(result.metadata.passed).toBe(true)
+        expect(result.output).toContain("train.cjs")
+        await record(session.id, tmp.path, check.id, result)
+      }
+      await fs.writeFile(extra, "module.exports = 2\n")
+      const update = await UpdateGoalTool.init()
+      await expect(
+        update.execute({ status: "complete", acceptanceEvidence: { AC1: "Tests passed" } }, context(session.id)),
+      ).rejects.toThrow("current successful execution evidence")
+      const { goalCheckpoint } = await import("../../src/session/goal-checkpoint")
+      const checkpoint = await goalCheckpoint(goal, await Session.messages({ sessionID: session.id }))
+      expect(checkpoint?.context).toContain("train.cjs")
+      expect(checkpoint?.context).toContain("parity: stale")
+      expect(GoalPlan.storedDigest(session.id, goal.time.created)).toBe(digest)
+      for (const check of assurance.checks) {
+        const result = await verify.execute({ goalCheck: check.id }, context(session.id))
+        await record(session.id, tmp.path, check.id, result)
+      }
+      await expect(
+        update.execute({ status: "complete", acceptanceEvidence: { AC1: "Checks rerun" } }, context(session.id)),
+      ).resolves.toBeDefined()
     },
   })
 })
