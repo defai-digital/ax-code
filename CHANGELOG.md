@@ -14,6 +14,7 @@ changes belong to AX Coder.
 ### Fixed
 
 - Rebuild the pixel rain when only the travel direction changes, keep the left-facing Fuji train moving nose-first, and render a frame instead of throwing when a rain cell is blank.
+- Stop the ending/exit animation when a dialog opens during its playback, so an asynchronously opened dialog is no longer left hidden behind the input-capturing overlay.
 
 ## [7.18.1] - 2026-09-15
 
