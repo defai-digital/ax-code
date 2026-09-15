@@ -73,3 +73,15 @@ test("benchmark rejects dirty runtime source and failed runners", async () => {
   failed.runnerExitCode = 1
   expect((await compare(capture(false), failed)).stderr).toContain("runner failed")
 })
+test("benchmark run refuses an existing output file", async () => {
+  await using tmp = await tmpdir()
+  const output = path.join(tmp.path, "out.json")
+  await fs.writeFile(output, "{}\n")
+  const result = spawnSync(process.execPath, ["--import", "tsx", "script/goal-benchmark.ts", "run", output], {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 10000,
+  })
+  expect(result.status).not.toBe(0)
+  expect(`${result.stderr}${result.stdout}`).toContain("EEXIST")
+})

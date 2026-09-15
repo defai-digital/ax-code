@@ -1,4 +1,5 @@
 import fs from "node:fs/promises"
+import { constants } from "node:fs"
 import path from "node:path"
 import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
@@ -64,50 +65,58 @@ const [action, file, arg] = process.argv.slice(2)
 if (action === "run" && file) {
   const output = path.resolve(file)
   await fs.mkdir(path.dirname(output), { recursive: true })
-  const handle = await fs.open(output, "wx")
-  await handle.close()
-  const repetitions = Number(arg ?? 5)
-  if (!Number.isSafeInteger(repetitions) || repetitions < 1 || repetitions > 20)
-    throw new Error("Repetitions must be 1..20")
-  const fixtureHash = hash(await fs.readFile(path.join(root, fixture)))
-  const revision = git("rev-parse", "HEAD")
-  const runtimeDiffHash = hash(git("diff", "HEAD", "--", "src", "../ax-code-intel/src", "../ax-code-reason/src"))
-  const cli = path.join(path.dirname(require.resolve("vitest/package.json")), "vitest.mjs")
-  const child = spawnSync(process.execPath, [cli, "run", "--retry", "0", "--maxWorkers", "1"], {
-    cwd: root,
-    stdio: "inherit",
-    timeout: 240000,
-    env: {
-      ...process.env,
-      AX_TEST_FILES: fixture,
-      GOAL_BENCHMARK_OUTPUT: output,
-      GOAL_BENCHMARK_REPETITIONS: String(repetitions),
-    },
-  })
-  const raw = z
-    .object({
-      version: z.literal(1),
-      repetitions: z.number(),
-      scenarios: z.array(z.string()),
-      observations: z.array(Observation),
+  const handle = await fs.open(
+    output,
+    constants.O_CREAT | constants.O_EXCL | constants.O_RDWR | (constants.O_NOFOLLOW ?? 0),
+  )
+  try {
+    const repetitions = Number(arg ?? 5)
+    if (!Number.isSafeInteger(repetitions) || repetitions < 1 || repetitions > 20)
+      throw new Error("Repetitions must be 1..20")
+    const fixtureHash = hash(await fs.readFile(path.join(root, fixture)))
+    const revision = git("rev-parse", "HEAD")
+    const runtimeDiffHash = hash(git("diff", "HEAD", "--", "src", "../ax-code-intel/src", "../ax-code-reason/src"))
+    const cli = path.join(path.dirname(require.resolve("vitest/package.json")), "vitest.mjs")
+    const child = spawnSync(process.execPath, [cli, "run", "--retry", "0", "--maxWorkers", "1"], {
+      cwd: root,
+      stdio: "inherit",
+      timeout: 240000,
+      env: {
+        ...process.env,
+        AX_TEST_FILES: fixture,
+        GOAL_BENCHMARK_OUTPUT: output,
+        GOAL_BENCHMARK_REPETITIONS: String(repetitions),
+      },
     })
-    .parse(parseJsonStrict(await fs.readFile(output, "utf8")))
-  const sourceChanged =
-    revision !== git("rev-parse", "HEAD") ||
-    runtimeDiffHash !== hash(git("diff", "HEAD", "--", "src", "../ax-code-intel/src", "../ax-code-reason/src")) ||
-    fixtureHash !== hash(await fs.readFile(path.join(root, fixture)))
-  const capture = {
-    ...raw,
-    revision,
-    runtimeDiffHash,
-    fixtureHash,
-    node: process.version,
-    model: "scripted-no-network",
-    runnerExitCode: sourceChanged ? 1 : (child.status ?? 1),
+    const raw = z
+      .object({
+        version: z.literal(1),
+        repetitions: z.number(),
+        scenarios: z.array(z.string()),
+        observations: z.array(Observation),
+      })
+      .parse(parseJsonStrict(await handle.readFile({ encoding: "utf8" })))
+    const sourceChanged =
+      revision !== git("rev-parse", "HEAD") ||
+      runtimeDiffHash !== hash(git("diff", "HEAD", "--", "src", "../ax-code-intel/src", "../ax-code-reason/src")) ||
+      fixtureHash !== hash(await fs.readFile(path.join(root, fixture)))
+    const capture = {
+      ...raw,
+      revision,
+      runtimeDiffHash,
+      fixtureHash,
+      node: process.version,
+      model: "scripted-no-network",
+      runnerExitCode: sourceChanged ? 1 : (child.status ?? 1),
+    }
+    const payload = JSON.stringify(capture, null, 2) + "\n"
+    await handle.truncate(0)
+    await handle.write(payload, 0, "utf8")
+    validate(capture)
+    console.log(`Captured ${raw.observations.length} observations; behavior failures remain in the report denominator.`)
+  } finally {
+    await handle.close()
   }
-  await fs.writeFile(output, JSON.stringify(capture, null, 2) + "\n")
-  validate(capture)
-  console.log(`Captured ${raw.observations.length} observations; behavior failures remain in the report denominator.`)
 } else if (action === "compare" && file && arg) {
   const baseline = validate(parseJsonStrict(await fs.readFile(file, "utf8")))
   const candidate = validate(parseJsonStrict(await fs.readFile(arg, "utf8")))

@@ -6,7 +6,6 @@ import { Module } from "@ax-code/util/module"
 import {
   bunServerHandle,
   bunSpawnInfo,
-  toolSpawnInfo,
   log,
   NearestRoot,
   nodeModuleScript,

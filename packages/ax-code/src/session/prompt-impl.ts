@@ -18,7 +18,6 @@ import { defer } from "../util/defer"
 import { ScopedFlag } from "../flag/scoped"
 import { Todo } from "./todo"
 import { SessionGoal } from "./goal"
-import { GoalPlan } from "./goal-plan"
 import { goalCheckpoint } from "./goal-checkpoint"
 import { goalProgress } from "./goal-progress"
 import { Config } from "@/config/config"
@@ -47,7 +46,11 @@ import { handlePromptLoopTodoConvergence } from "./prompt/prompt-loop-todo-conve
 import { handlePromptLoopTodoContinuation } from "./prompt/prompt-loop-todo-continuation"
 import { appendNewerMessages, loopMessages, scanLoopMessages } from "./prompt/prompt-loop-messages"
 import { finishPromptLoopQueue } from "./prompt/prompt-loop-queue"
-import { beginPromptLoopRecording, finishPromptLoopRecording, type PromptLoopEndReason } from "./prompt/prompt-loop-recording"
+import {
+  beginPromptLoopRecording,
+  finishPromptLoopRecording,
+  type PromptLoopEndReason,
+} from "./prompt/prompt-loop-recording"
 import { resolvePromptLoopResult } from "./prompt/prompt-loop-result"
 import { markPromptLoopBusy } from "./prompt/prompt-loop-status"
 import { handlePromptLoopGlobalStepLimit } from "./prompt/prompt-loop-step-limit"
