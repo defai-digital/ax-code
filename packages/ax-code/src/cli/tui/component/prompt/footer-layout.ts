@@ -1,5 +1,7 @@
+import { stringWidth } from "@/bun/node-compat"
+
 const INLINE_STATUS_RESERVE = 36
-const GROUP_GAP = 1
+const GROUP_GAP = 2
 
 export type PromptFooterLayout = {
   stacked: boolean
@@ -9,7 +11,7 @@ export type PromptFooterLayout = {
 }
 
 export function footerHintWidth(key: string, label: string) {
-  return key.length + 1 + label.length
+  return stringWidth(key) + 1 + stringWidth(label)
 }
 
 export function promptFooterLayout(input: {
@@ -19,10 +21,14 @@ export function promptFooterLayout(input: {
   variantsWidth: number
   shellWidth: number
   clearWidth: number
+  busy?: boolean
 }) {
   const inlineBudget = Math.max(0, input.contentWidth - INLINE_STATUS_RESERVE)
   const firstHintWidth = input.mode === "shell" ? input.shellWidth : input.clearWidth
-  const stacked = inlineBudget < input.toggleWidth + (firstHintWidth > 0 ? GROUP_GAP + firstHintWidth : 0)
+  // A busy row contains variable-length tool, token, and retry text. Give it
+  // its own row instead of estimating that content with a fixed reserve.
+  const stacked =
+    !!input.busy || inlineBudget < input.toggleWidth + (firstHintWidth > 0 ? GROUP_GAP + firstHintWidth : 0)
 
   let remaining = Math.max(
     0,
