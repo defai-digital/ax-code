@@ -2,7 +2,6 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "exclude": [
     "dist",
-    "bench-both.ts",
     "src/cli/cmd/workspace-serve.ts",
     "src/server/routes/workspace.ts",
     "src/storage/db.node.ts",
