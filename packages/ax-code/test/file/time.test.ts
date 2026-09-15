@@ -1,6 +1,7 @@
 import { describe, test, expect, afterEach, vi } from "vitest"
 import path from "path"
 import fs from "fs/promises"
+import nodeFs from "node:fs"
 import { FileTime } from "../../src/file/time"
 import { Instance } from "../../src/project/instance"
 import { SessionID } from "../../src/session/schema"
@@ -159,11 +160,10 @@ describe("file/time", () => {
     test("detects unsafe bigint size changes without rounding", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "huge.bin")
-      const fixed = new Date(1_000)
       const statSpy = vi
-        .spyOn(Filesystem, "stat")
-        .mockReturnValueOnce({ mtime: fixed, ctime: fixed, size: 9_007_199_254_740_992n } as any)
-        .mockReturnValueOnce({ mtime: fixed, ctime: fixed, size: 9_007_199_254_740_993n } as any)
+        .spyOn(nodeFs, "statSync")
+        .mockReturnValueOnce({ mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_992n } as any)
+        .mockReturnValueOnce({ mtimeMs: 1000n, ctimeMs: 1000n, size: 9_007_199_254_740_993n } as any)
 
       try {
         await Instance.provide({
@@ -171,6 +171,35 @@ describe("file/time", () => {
           fn: async () => {
             await FileTime.read(sessionID, filepath)
             await expect(FileTime.assert(sessionID, filepath)).rejects.toThrow("modified since it was last read")
+          },
+        })
+      } finally {
+        statSpy.mockRestore()
+      }
+    })
+
+    test("uses bigint milliseconds at a floating-point rounding boundary", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "boundary.txt")
+      const milliseconds = 1_700_000_000_123n
+      const statSpy = vi.spyOn(nodeFs, "statSync").mockReturnValue({
+        mtimeMs: milliseconds,
+        ctimeMs: milliseconds,
+        mtime: new Date(Number(milliseconds) + 1),
+        ctime: new Date(Number(milliseconds) + 1),
+        size: 3n,
+      } as any)
+      try {
+        await Instance.provide({
+          directory: tmp.path,
+          fn: async () => {
+            await FileTime.read(sessionID, filepath, {
+              mtime: Number(milliseconds),
+              ctime: Number(milliseconds),
+              size: 3,
+            })
+            await expect(FileTime.assert(sessionID, filepath)).resolves.toBeUndefined()
+            expect(statSpy).toHaveBeenCalledWith(filepath, { bigint: true, throwIfNoEntry: false })
           },
         })
       } finally {

@@ -186,3 +186,25 @@ test("one recipe uses real cached child reads and preserves full child records",
     },
   })
 })
+
+test.each(["memory", "off"])("read-to-write stamps agree at fractional milliseconds with cache %s", async (cache) => {
+  vi.stubEnv("AX_CODE_EVIDENCE_CACHE", cache)
+  await using tmp = await tmpdir({
+    init: async (dir) => fs.writeFile(path.join(dir, "source.txt"), "unchanged source"),
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const filePath = path.join(tmp.path, "source.txt")
+      // Date-valued stat times round this fraction; bigint mtimeMs truncates it.
+      await fs.utimes(filePath, 1700000000.12375, 1700000000.12375)
+      const read = await ReadTool.init()
+      await read.execute({ filePath }, ctx)
+      await expect(FileTime.assert(ctx.sessionID, filePath)).resolves.toBeUndefined()
+      await read.execute({ filePath }, ctx)
+      await expect(FileTime.assert(ctx.sessionID, filePath)).resolves.toBeUndefined()
+      await fs.writeFile(filePath, "external change must still be rejected")
+      await expect(FileTime.assert(ctx.sessionID, filePath)).rejects.toThrow("modified since")
+    },
+  })
+})

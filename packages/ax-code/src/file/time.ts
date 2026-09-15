@@ -1,6 +1,6 @@
 import { Flag } from "@/flag/flag"
 import type { SessionID } from "@/session/schema"
-import { Filesystem } from "../util/filesystem"
+import fs from "node:fs"
 import { Log } from "../util/log"
 import { Instance } from "@/project/instance"
 
@@ -25,12 +25,19 @@ export namespace FileTime {
   }))
 
   function stamp(file: string): Stamp {
-    const stat = Filesystem.stat(file)
-    const size = typeof stat?.size === "bigint" ? stat.size.toString() : stat?.size
+    const stat = fs.statSync(file, { bigint: true, throwIfNoEntry: false })
+    const size =
+      stat?.size === undefined
+        ? undefined
+        : stat.size > BigInt(Number.MAX_SAFE_INTEGER)
+          ? stat.size.toString()
+          : Number(stat.size)
     return {
       read: new Date(),
-      mtime: stat?.mtime?.getTime(),
-      ctime: stat?.ctime?.getTime(),
+      // ReadTool records bigint stat milliseconds (truncated, not Date-rounded).
+      // Use the same representation for fresh stamps and write admission.
+      mtime: stat ? Number(stat.mtimeMs) : undefined,
+      ctime: stat ? Number(stat.ctimeMs) : undefined,
       size,
     }
   }

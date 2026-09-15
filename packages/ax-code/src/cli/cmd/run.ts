@@ -9,7 +9,7 @@ import { bootstrap } from "../bootstrap"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { EOL } from "os"
 import { Filesystem } from "../../util/filesystem"
-import { createAxCodeClient, type AxCodeClient, type ToolPart } from "@ax-code/sdk/v2"
+import { createAxCodeClient, type AxCodeClient, type ToolPart, type Event } from "@ax-code/sdk/v2"
 import type { Permission } from "../../permission"
 import { Log } from "../../util/log"
 import { toErrorMessage } from "../../util/error-message"
@@ -678,17 +678,45 @@ export const RunCommand = cmd({
       let error: string | undefined
       let finalMessage: string | undefined
       let finalAssistantMessageID: string | undefined
+      let submittedMessage: Awaited<ReturnType<typeof sdk.session.prompt>>["data"]
+      const observedFinalParts = new Set<string>()
 
-      async function loop() {
-        const toggles = new Map<string, boolean>()
+      const toggles = new Map<string, boolean>()
+      const observedCompletedMessages = new Set<string>()
+      const observedErrors = new Set<string>()
+      let checkDrained: (() => void) | undefined
 
-        for await (const event of events.stream) {
+      async function* finalEvents() {
+        if (!submittedMessage) return
+        const info = submittedMessage.info
+        yield { type: "message.updated" as const, properties: { info } }
+        if (info.role === "assistant" && info.error && !observedErrors.has(JSON.stringify(info.error))) {
+          yield { type: "session.error" as const, properties: { sessionID, error: info.error } }
+        }
+        for (const part of submittedMessage.parts) {
+          if (observedFinalParts.has(part.id)) continue
+          // Control responses persist complete text without streaming timestamps.
+          const finalPart =
+            part.type === "text" && !part.time?.end
+              ? {
+                  ...part,
+                  time: { start: part.time?.start ?? info.time.created, end: info.time.completed ?? Date.now() },
+                }
+              : part
+          yield { type: "message.part.updated" as const, properties: { part: finalPart } }
+        }
+      }
+
+      async function loop(source: AsyncIterable<Event>) {
+        for await (const event of source) {
           if (
             event.type === "message.updated" &&
             event.properties.info.role === "assistant" &&
             event.properties.info.sessionID === sessionID
           ) {
             finalAssistantMessageID = event.properties.info.id
+            if (event.properties.info.time?.completed) observedCompletedMessages.add(event.properties.info.id)
+            checkDrained?.()
           }
 
           if (
@@ -716,6 +744,14 @@ export const RunCommand = cmd({
           if (event.type === "message.part.updated") {
             const part = event.properties.part
             if (part.sessionID !== sessionID) continue
+            if (
+              (part.type === "tool" && (part.state.status === "completed" || part.state.status === "error")) ||
+              ((part.type === "text" || part.type === "reasoning") && part.time?.end) ||
+              part.type === "step-start" ||
+              part.type === "step-finish"
+            )
+              observedFinalParts.add(part.id)
+            checkDrained?.()
 
             if (part.type === "tool" && (part.state.status === "completed" || part.state.status === "error")) {
               if (emit("tool_use", { part })) continue
@@ -790,6 +826,7 @@ export const RunCommand = cmd({
           if (event.type === "session.error") {
             const props = event.properties
             if (props.sessionID !== sessionID || !props.error) continue
+            observedErrors.add(JSON.stringify(props.error))
             let err = String(props.error.name)
             if ("data" in props.error && props.error.data && "message" in props.error.data) {
               err = String(props.error.data.message)
@@ -799,13 +836,10 @@ export const RunCommand = cmd({
             UI.error(err)
           }
 
-          if (
-            event.type === "session.status" &&
-            event.properties.sessionID === sessionID &&
-            event.properties.status.type === "idle"
-          ) {
-            break
-          }
+          // A goal revision can cancel an older generation and publish idle
+          // while this submission is still planning. The synchronous HTTP
+          // submission owns completion; keep consuming permission asks until
+          // it settles rather than treating any session-wide idle as final.
 
           if (event.type === "permission.asked") {
             const permission = event.properties
@@ -964,11 +998,16 @@ export const RunCommand = cmd({
         const stream = events.stream as AsyncIterator<unknown>
         await (stream.return?.(undefined) ?? Promise.resolve()).catch(() => {})
       }
-      const loopPromise = loop()
+      const loopPromise = loop(events.stream)
+      // Attach the rejection handler immediately, including while HTTP is pending.
+      const loopResult = loopPromise.then(
+        () => undefined,
+        (error: unknown) => error,
+      )
 
       try {
         if (args.command) {
-          await sdk.session.command(
+          const response = await sdk.session.command(
             {
               sessionID,
               agent,
@@ -979,8 +1018,9 @@ export const RunCommand = cmd({
             },
             { throwOnError: true },
           )
+          submittedMessage = response.data
         } else {
-          await sdk.session.prompt(
+          const response = await sdk.session.prompt(
             {
               sessionID,
               agent,
@@ -990,22 +1030,43 @@ export const RunCommand = cmd({
             },
             { throwOnError: true },
           )
+          submittedMessage = response.data
         }
       } catch (e) {
         await closeEvents()
-        await loopPromise.catch(() => {})
+        await loopResult
         throw e
       }
 
-      await loopPromise.catch((e) => {
-        Log.Default.error("run event loop failed", {
-          sessionID,
-          error: toErrorMessage(e),
-          stack: e instanceof Error ? e.stack : undefined,
-        })
-        UI.error(`Event stream error: ${toErrorMessage(e)}`)
-        process.exitCode = 1
+      // Give final frames on the separate SSE connection a bounded chance to
+      // drain. Control commands need not publish idle or streaming text times.
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(finish, 250)
+        function finish() {
+          clearTimeout(timeout)
+          checkDrained = undefined
+          resolve()
+        }
+        checkDrained = () => {
+          if (
+            submittedMessage &&
+            observedCompletedMessages.has(submittedMessage.info.id) &&
+            submittedMessage.parts.every((part) => observedFinalParts.has(part.id))
+          )
+            finish()
+        }
+        checkDrained()
+        void loopResult.then(finish)
       })
+      await closeEvents()
+      const loopError = await loopResult
+      if (loopError !== undefined) {
+        Log.Default.error("run event loop failed", { sessionID, error: toErrorMessage(loopError) })
+        UI.error(`Event stream error: ${toErrorMessage(loopError)}`)
+        process.exitCode = 1
+      }
+      // Reconcile after stream shutdown, even if it ended before HTTP settled.
+      await loop(finalEvents())
       const storedFinalMessage = await readFinalAssistantText(sdk, sessionID, finalAssistantMessageID).catch((e) => {
         Log.Default.warn("failed to read final assistant text from session messages", {
           sessionID,
