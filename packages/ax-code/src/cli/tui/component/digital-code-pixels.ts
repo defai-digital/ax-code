@@ -102,7 +102,10 @@ export function renderDigitalCodePixels(frame: DigitalCodePixels): Buffer {
       const level = digitalCodeCellLevel(rain.direction, offset, column.length)
       const hue = column.hues[offset] ?? column.hue
       const color = paletteColor(hue, level)
-      const glyph = GLYPHS[(column.chars[offset]?.charCodeAt(0) ?? 0) % GLYPHS.length]!
+      const cell = column.chars[offset]
+      // A missing or empty cell must not reach charCodeAt: "" yields NaN, and
+      // NaN % length would index GLYPHS out of range and crash the frame.
+      const glyph = GLYPHS[(cell ? cell.charCodeAt(0) : 0) % GLYPHS.length]!
       for (let gy = 0; gy < 7; gy++) {
         for (let gx = 0; gx < 5; gx++) {
           if (!(glyph[gy]! & (1 << (4 - gx)))) continue
@@ -171,7 +174,7 @@ export function digitalCodePixelPlayer(write: (data: string) => void) {
       elapsedMs?: number
     }) {
       if (closed) return
-      const next = `${input.width}:${input.height}:${input.columns}:${input.rows}:${input.style ?? "digital-code"}`
+      const next = `${input.width}:${input.height}:${input.columns}:${input.rows}:${input.direction}:${input.style ?? "digital-code"}`
       if (!frame || next !== size) {
         if (frame) clear()
         frame = createDigitalCodePixels(input.width, input.height, input.direction, undefined, input.style)

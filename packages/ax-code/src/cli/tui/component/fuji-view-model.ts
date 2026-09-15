@@ -82,9 +82,11 @@ export function fujiRows(columns: number, rows: number, style: FujiStyle, elapse
   paint(0, 14, "_".repeat(SCENE_WIDTH), colors.track)
   paint(0, 15, "=".repeat(SCENE_WIDTH), colors.track)
   // Use elapsed time and a bounded traversal instead of frame-dependent speed
-  // and hundreds of blank padding characters in the browser example.
+  // and hundreds of blank padding characters in the browser example. The train
+  // keeps its left-facing nose, so it enters from the right and exits left
+  // rather than travelling backwards across the frame.
   const phase = (Math.max(0, elapsedMs) % TRAIN_CYCLE_MS) / TRAIN_CYCLE_MS
-  const trainX = Math.floor(phase * (SCENE_WIDTH + TRAIN_WIDTH)) - TRAIN_WIDTH
+  const trainX = SCENE_WIDTH - Math.floor(phase * (SCENE_WIDTH + TRAIN_WIDTH))
   for (let line = 0; line < TRAIN.length; line++) paint(trainX, 16 + line, TRAIN[line]!, "#edf2f4", "#1d3557")
   return grid.map((row) => {
     const runs: FujiRun[] = []

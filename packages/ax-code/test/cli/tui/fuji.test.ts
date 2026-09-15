@@ -38,6 +38,26 @@ describe("Fuji Mountain scenes", () => {
         .join("\n"),
     ).toContain("JR")
   })
+  test("the left-facing train travels right-to-left instead of backwards", () => {
+    const leftmostInk = (ms: number) => {
+      let min = Number.POSITIVE_INFINITY
+      for (const row of fujiRows(74, 20, "fuji-day", ms).slice(16)) {
+        let column = 0
+        for (const run of row) {
+          for (let index = 0; index < run.text.length; index++) {
+            if (run.text[index] !== " " && column + index < min) min = column + index
+          }
+          column += run.text.length
+        }
+      }
+      return min
+    }
+    const early = leftmostInk(800)
+    const late = leftmostInk(1600)
+    expect(Number.isFinite(early)).toBe(true)
+    expect(Number.isFinite(late)).toBe(true)
+    expect(late).toBeLessThan(early)
+  })
   test("day and night preserve Fuji and sakura with distinct sky and celestial colors", () => {
     const day = fujiRows(74, 24, "fuji-day", 0),
       night = fujiRows(74, 24, "fuji-night", 0)

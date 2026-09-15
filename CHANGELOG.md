@@ -13,6 +13,10 @@ changes belong to AX Coder.
 - Rename the TUI animation and its theme to Digital Code, preserving existing preferences. Render the rain and startup logo in randomly selected neon purple and blue.
 - Restrict managed AX Engine model selection to Qwen3.8 27B AXQ 6-bit MTP.
 
+### Fixed
+
+- Rebuild the pixel rain when only the travel direction changes, keep the left-facing Fuji train moving nose-first, and render a frame instead of throwing when a rain cell is blank.
+
 ## [7.18.0] - 2026-09-15
 
 ### Changed

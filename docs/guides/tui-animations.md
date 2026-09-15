@@ -13,8 +13,9 @@ travelling across the foreground. The original 74-column, 20-row artwork is cent
 proportions; narrow terminals crop the text fallback. Daytime uses the supplied pale
 blue sky, static clouds, golden sun behind the summit, and pale pink blossoms;
 night uses a dark sky, stars, and moon. The original train artwork and both
-platform rows above it are preserved. The train repeats its journey with motion
-based on elapsed time and clips safely at the screen edges. Local alternate-screen
+platform rows above it are preserved. The train keeps its left-facing nose and
+travels nose-first from right to left, repeating its journey with motion based on
+elapsed time and clipping safely at the screen edges. Local alternate-screen
 terminals with confirmed Kitty graphics support and reported pixel dimensions
 use antialiased stroke glyphs with fixed proportions, fitting the complete scene
 independently of the terminal font. Fuji pixel frames are bounded to 1920x1080.

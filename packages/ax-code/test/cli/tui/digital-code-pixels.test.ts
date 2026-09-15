@@ -103,6 +103,28 @@ describe("Digital Code pixel transport", () => {
     expect(writes).toHaveLength(4)
   })
 
+  test("renders a frame when a rain cell is blank instead of crashing", () => {
+    const frame = createDigitalCodePixels(320, 180, "down", () => 0)
+    frame.rain.columns[0]!.head = 8
+    frame.rain.columns[0]!.chars[0] = ""
+    expect(() => renderDigitalCodePixels(frame)).not.toThrow()
+    expect(renderDigitalCodePixels(frame)).toHaveLength(320 * 180 * 3)
+  })
+
+  test("recreates the rain when only the direction changes on an unchanged size", () => {
+    const writes: string[] = []
+    const player = digitalCodePixelPlayer((data) => writes.push(data))
+    const input = { width: 320, height: 180, columns: 80, rows: 24, direction: "down" as const }
+    player.draw(input)
+    expect(writes).toHaveLength(1)
+    player.draw({ ...input, direction: "up" })
+    expect(writes).toHaveLength(3)
+    const id = /,i=(\d+),/.exec(writes[0]!)![1]
+    expect(writes[1]).toBe(kittyDigitalCodeDeleteSequence(Number(id)))
+    expect(writes[2]).toContain("a=T,")
+    expect(writes[2]).toContain("i=" + id + ",")
+  })
+
   test("unused playback emits nothing", () => {
     const writes: string[] = []
     digitalCodePixelPlayer((data) => writes.push(data)).dispose()
