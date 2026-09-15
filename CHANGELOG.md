@@ -6,13 +6,18 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.2] - 2026-09-15
+
 ### Changed
 
+- Publish the paired SDK 2.5.26.
 - Auto-enable the advanced TUI profile on Ghostty unless `AX_CODE_TUI_ADVANCED_TERMINAL` is set. Explicit `0`/`false` still opts out.
 - Render Digital Code pixel rain with the neon purple/blue palette, a 1280×720 transfer cap, and image deletion before the overlay returns the working screen.
 
 ### Fixed
 
+- Recover snapshot initialization after an interrupted attempt leaves an empty store directory, report Git initialization failures directly, and retain SHA-1 snapshot identifiers when Git defaults to SHA-256.
+- Enable exact-byte undo and redo in non-Git projects while preserving explicit snapshot disablement and ignore rules.
 - Rebuild the pixel rain when only the travel direction changes, keep the left-facing Fuji train moving nose-first, and render a frame instead of throwing when a rain cell is blank.
 - Stop the ending/exit animation when a dialog opens during its playback, so an asynchronously opened dialog is no longer left hidden behind the input-capturing overlay.
 - Refuse a manual animation preview while another overlay is already playing, instead of stacking two full-screen overlays.

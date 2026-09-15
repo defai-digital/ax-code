@@ -442,14 +442,26 @@ export namespace Snapshot {
   }
 
   async function ensureRepo(current: State) {
-    const existed = await exists(current.gitdir)
+    // mkdir can survive a failed or interrupted init; the directory alone is
+    // not evidence that Git has initialized the snapshot store.
+    const existed = await exists(path.join(current.gitdir, "HEAD"))
     await fs.mkdir(current.gitdir, { recursive: true })
     if (existed) return
 
-    await runGit(["init"], {
+    // Snapshot identifiers have a persisted 40-character SHA-1 contract,
+    // independent of the user's default object format for new repositories.
+    const initialized = await runGit(["init", "--object-format=sha1"], {
       cwd: current.worktree,
       env: { GIT_DIR: current.gitdir, GIT_WORK_TREE: current.worktree },
     })
+    if (initialized.code !== 0) {
+      log.error("failed to initialize snapshot store", {
+        gitdir: current.gitdir,
+        exitCode: initialized.code,
+        stderr: initialized.stderr,
+      })
+      throw new Error(`Snapshot initialization failed: git init exited with code ${initialized.code}`)
+    }
     await runGit(["--git-dir", current.gitdir, "config", "core.autocrlf", "false"], { cwd: current.worktree })
     await runGit(["--git-dir", current.gitdir, "config", "core.longpaths", "true"], { cwd: current.worktree })
     await runGit(["--git-dir", current.gitdir, "config", "core.symlinks", "true"], { cwd: current.worktree })
