@@ -261,6 +261,7 @@ export namespace ProviderTransform {
   export function message(msgs: ModelMessage[], model: Provider.Model, options: Record<string, unknown>) {
     msgs = unsupportedParts(msgs, model)
     msgs = normalizeMessages(msgs, model, options)
+    msgs = normalizeToolThoughtSignatures(msgs, model)
     // Official Qwen 3.x / Ornith / Holo3 / MiniMax jinja raise when system
     // turns are not a single leading message. MiniMax's chat template only
     // extracts messages[0] if it is system; extra system turns leak into
@@ -271,6 +272,35 @@ export namespace ProviderTransform {
       msgs = applyCaching(msgs, model)
     }
     return msgs
+  }
+
+  function normalizeToolThoughtSignatures(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
+    if (model.api.npm !== "@ai-sdk/openai-compatible") return msgs
+    // The compatible SDK reads response signatures under its configured
+    // provider name, but serializes tool-call signatures only from google.
+    // Bridge the active provider's metadata without changing stored history
+    // or borrowing signatures from another provider after a model switch.
+    const key = model.providerID.split(".")[0].trim()
+    return msgs.map((msg) => {
+      if (msg.role !== "assistant" || !Array.isArray(msg.content)) return msg
+      return {
+        ...msg,
+        content: msg.content.map((part) => {
+          if (part.type !== "tool-call") return part
+          const signature = part.providerOptions?.[key]?.thoughtSignature
+          if (typeof signature !== "string" || !signature || part.providerOptions?.google?.thoughtSignature != null) {
+            return part
+          }
+          return {
+            ...part,
+            providerOptions: {
+              ...part.providerOptions,
+              google: { ...part.providerOptions?.google, thoughtSignature: signature },
+            },
+          }
+        }),
+      }
+    })
   }
 
   function systemText(content: ModelMessage["content"]): string {
