@@ -357,4 +357,41 @@ describe("GoalPlanBaseline", () => {
     expect(context).toContain("README.md")
     expect(context).toContain(snap.head)
   })
+
+  test("preserves the first dirty path recorded from git status porcelain", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await fs.writeFile(path.join(tmp.path, "afile.txt"), "one\n")
+    await git(["add", "afile.txt"], { cwd: tmp.path })
+    await git(["commit", "-m", "add afile"], { cwd: tmp.path })
+    await fs.writeFile(path.join(tmp.path, "afile.txt"), "two\n")
+    const snap = await GoalPlanBaseline.snapshot(tmp.path)
+    // The modified tracked file is the first porcelain line (" M afile.txt").
+    // Trimming the whole git output before parsing drops its leading status
+    // space and shifts the fixed-width path slice by one character.
+    expect(snap.dirty).toContain("afile.txt")
+  })
+
+  test("rejects an absolute-path git executable as a remote before-state", () => {
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("/usr/bin/git diff --name-only origin/main..HEAD"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+  })
+
+  test("rejects a subshell-wrapped git command as a remote before-state", () => {
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("(git diff --name-only origin/main..HEAD)"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).toThrow(/origin\/main/)
+  })
+
+  test("allows an absolute-path git command with an allowed before-state", () => {
+    expect(() =>
+      GoalPlanBaseline.prepareAssurance(contract("/usr/bin/git diff --name-only HEAD~1..HEAD"), {
+        objective: "refactor the core runtime then test and commit",
+      }),
+    ).not.toThrow()
+  })
 })

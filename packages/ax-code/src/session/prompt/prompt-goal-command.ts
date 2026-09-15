@@ -73,6 +73,10 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
     // writer fail-closed before activating. Budget / missing-goal errors stay
     // control messages.
     const model = await commandModel({ model: input.model, sessionID: input.sessionID })
+    // Resume reactivates the goal and submits a fresh continuation prompt, so
+    // it must take over from any in-flight turn exactly like create/revise;
+    // otherwise the goal is active on paper while the run sits queued.
+    await cancelRunningSession(input.sessionID)
     let prepared: Awaited<ReturnType<typeof GoalPlanOrchestration.resumeWithPlan>>
     try {
       prepared = await GoalPlanOrchestration.resumeWithPlan({

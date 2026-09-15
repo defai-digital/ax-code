@@ -58,5 +58,19 @@ export function parseGoalArguments(raw: string): GoalArgumentDecision {
       objective,
     }
   }
+  // A budget flag whose value is missing or empty ("--budget", "--budget=",
+  // "--budget= fix the bug") does not match the strict pattern above. Without
+  // this guard it fell through to goal creation with the raw flag text as the
+  // objective and NO budget applied — silently dropping the user's intent.
+  // `--budgeting is hard` is a plain objective and is left alone (no
+  // `=`/whitespace/end right after the flag word).
+  if (/^--(?:token-)?budget(?:=|\s|$)/i.test(text)) {
+    return {
+      action: "error",
+      message:
+        `Invalid --budget value: expected a positive whole number of tokens ` +
+        `(e.g. /goal --budget 500000 <objective>).`,
+    }
+  }
   return { action: "create", objective: text }
 }

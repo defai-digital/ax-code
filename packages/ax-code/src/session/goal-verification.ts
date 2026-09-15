@@ -106,16 +106,36 @@ export namespace GoalVerification {
     let verifiedAfterMutation = true
     for (const message of input.messages) {
       if (message.info?.role !== "assistant") continue
-      const created = message.info?.time?.created
-      if (input.since !== undefined && typeof created === "number" && created < input.since) continue
+      const messageCreated = message.info?.time?.created
       for (const part of message.parts ?? []) {
         const record = asRecordOrUndefined(part)
         if (!record || record["type"] !== "tool") continue
         const tool = record["tool"]
         if (typeof tool !== "string") continue
         const state = asRecordOrUndefined(record["state"])
-        if (state?.["status"] !== "completed") continue
-        if (MUTATION_TOOLS.has(tool)) {
+        const status = state?.["status"]
+        const mutation = MUTATION_TOOLS.has(tool)
+        if (!mutation && status !== "completed") continue
+        // A file tool records its write before it can fail (for example when
+        // BlastRadius rejects the size after the bytes are already on disk),
+        // so an "error" mutation part may have changed the workspace and is
+        // treated conservatively as a mutation.
+        if (mutation && status !== "completed" && status !== "error") continue
+        // Scope by when the tool actually ran, not the containing message: a
+        // message that started before the goal can still hold a call that
+        // finished after goal creation (create_goal followed by edit in the
+        // same turn). Fall back to the message time, then scan unscoped.
+        const time = asRecordOrUndefined(state?.["time"])
+        const ended = time?.["end"]
+        const started = time?.["start"]
+        const changedAt =
+          typeof ended === "number" && Number.isFinite(ended)
+            ? ended
+            : typeof started === "number" && Number.isFinite(started)
+              ? started
+              : messageCreated
+        if (input.since !== undefined && typeof changedAt === "number" && changedAt < input.since) continue
+        if (mutation) {
           sawMutation = true
           verifiedAfterMutation = false
         } else if (VERIFICATION_TOOLS.has(tool) && isVerificationRun(tool, state)) {

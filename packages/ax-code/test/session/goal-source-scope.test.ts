@@ -125,6 +125,16 @@ test("tracks every multiedit result outside the declared scope using executed me
   expect(result.external).toEqual([path.resolve(cwd, "../scratch.ts")])
 })
 
+test("tracks nested multiedit filepath metadata in addition to filediff", () => {
+  const result = goalSourceScope({
+    cwd,
+    created: 10,
+    sourcePaths: ["src"],
+    messages: [message({ results: [{ filepath: absolute("test/nested.ts") }] }, 20, "multiedit")],
+  })
+  expect(result.additional).toEqual(["test/nested.ts"])
+})
+
 test("ignores historical, unsuccessful, and unrelated nested results", () => {
   const metadata = { results: [{ filediff: { file: absolute("extra.ts") } }] }
   expect(

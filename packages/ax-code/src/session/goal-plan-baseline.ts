@@ -1,3 +1,4 @@
+import path from "node:path"
 import { git } from "../util/git"
 import type { GoalAssurance } from "./goal-assurance"
 
@@ -31,6 +32,14 @@ export namespace GoalPlanBaseline {
       const result = await git(args, { cwd, timeout: SNAPSHOT_TIMEOUT_MS })
       return result.exitCode === 0 ? result.text().trim() : undefined
     }
+    // `git status --porcelain` lines are fixed-width: the two status columns
+    // are followed by a space, so the path starts at index 3 of every line.
+    // Trimming the whole output would strip the leading status space of the
+    // first line and shift that path slice by one character.
+    const runRaw = async (args: string[]) => {
+      const result = await git(args, { cwd, timeout: SNAPSHOT_TIMEOUT_MS })
+      return result.exitCode === 0 ? result.text() : undefined
+    }
     const head = await run(["rev-parse", "HEAD"])
     if (!head) {
       return { divergedFromTracking: [], dirty: [] }
@@ -38,7 +47,7 @@ export namespace GoalPlanBaseline {
     const [branch, tracking, porcelain] = await Promise.all([
       run(["rev-parse", "--abbrev-ref", "HEAD"]),
       run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]),
-      run(["status", "--porcelain"]),
+      runRaw(["status", "--porcelain"]),
     ])
     const dirty = porcelain ? parsePorcelain(porcelain) : []
     if (!tracking) {
@@ -124,8 +133,26 @@ const COMMAND_PREFIXES = new Set([
   "exec",
   "command",
   "builtin",
+  "(",
+  "{",
 ])
 const MAX_NEST = 4
+
+/**
+ * Drop shell grouping punctuation glued to a command word: "(git" -> "git",
+ * "(git diff)" -> "git". Only the subshell close paren is stripped — a
+ * trailing "}" is part of "${GIT}" and must be preserved so the parameter
+ * expansion keeps matching GIT_TOKENS.
+ */
+function stripGrouping(value: string) {
+  return value.replace(/^[({]+/, "").replace(/\)+$/, "")
+}
+
+function isGitWord(word: string) {
+  // Match a bare `git` token or an absolute/relative path to the executable
+  // (/usr/bin/git, ./git); the guard must not be bypassable by path spelling.
+  return GIT_TOKENS.has(word) || path.posix.basename(word) === "git"
+}
 
 function looksLikeGitCommand(command: string, depth = 0): boolean {
   if (depth > MAX_NEST) return false
@@ -136,9 +163,10 @@ function segmentLooksLikeGit(segment: string, depth: number): boolean {
   if (commandSubstitutions(segment).some((inner) => looksLikeGitCommand(inner, depth + 1))) return true
   const cmd = commandWord(segment)
   if (!cmd) return false
-  if (GIT_TOKENS.has(cmd.value)) return true
-  if (cmd.value === "eval") return looksLikeGitCommand(joinWords(cmd.rest), depth + 1)
-  if (!NESTED_SHELL.has(cmd.value)) return false
+  const word = stripGrouping(cmd.value)
+  if (isGitWord(word)) return true
+  if (word === "eval") return looksLikeGitCommand(joinWords(cmd.rest), depth + 1)
+  if (!NESTED_SHELL.has(word)) return false
   const script = dashCScript(cmd.rest)
   return script !== undefined && looksLikeGitCommand(script, depth + 1)
 }
@@ -154,15 +182,16 @@ function revisionTextsForSegment(segment: string, depth: number): string[] {
   const out = commandSubstitutions(segment).map((inner) => gitRevisionText(inner, depth + 1))
   const cmd = commandWord(segment)
   if (!cmd) return out
-  if (GIT_TOKENS.has(cmd.value)) {
+  const word = stripGrouping(cmd.value)
+  if (isGitWord(word)) {
     out.push(stripGitPathspec(segment))
     return out
   }
-  if (cmd.value === "eval") {
+  if (word === "eval") {
     out.push(gitRevisionText(joinWords(cmd.rest), depth + 1))
     return out
   }
-  if (NESTED_SHELL.has(cmd.value)) {
+  if (NESTED_SHELL.has(word)) {
     const script = dashCScript(cmd.rest)
     if (script !== undefined) out.push(gitRevisionText(script, depth + 1))
   }
@@ -171,7 +200,7 @@ function revisionTextsForSegment(segment: string, depth: number): string[] {
 
 function stripGitPathspec(segment: string) {
   const cmd = commandWord(segment)
-  if (!cmd || !GIT_TOKENS.has(cmd.value)) return segment
+  if (!cmd || !isGitWord(stripGrouping(cmd.value))) return segment
   const cut = segment.search(/\s--\s/)
   return cut === -1 ? segment : segment.slice(0, cut)
 }

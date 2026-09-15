@@ -74,7 +74,9 @@ export function goalSourceScope(input: {
       // than a top-level filediff. Do not infer changed paths from tool inputs.
       if (record.tool === "multiedit" && Array.isArray(metadata?.results)) {
         for (const result of metadata.results) {
-          add(asRecordOrUndefined(asRecordOrUndefined(result)?.filediff)?.file)
+          const entry = asRecordOrUndefined(result)
+          add(entry?.filepath)
+          add(asRecordOrUndefined(entry?.filediff)?.file)
         }
       }
       if (Array.isArray(metadata?.files)) {

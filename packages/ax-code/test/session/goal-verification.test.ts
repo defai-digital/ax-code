@@ -261,4 +261,39 @@ describe("GoalVerification.decide", () => {
     })
     expect(decision.ok).toBe(false)
   })
+
+  test("a mutation after goal creation inside an earlier message still requires verification", () => {
+    // create_goal and a file edit land in the same assistant message, whose
+    // message timestamp predates the reserved goal-creation time. Filtering
+    // whole messages by their creation time would skip the edit entirely.
+    const decision = GoalVerification.decide({
+      messages: [
+        {
+          info: { role: "assistant", time: { created: 50 } },
+          parts: [
+            { type: "tool", tool: "create_goal", state: { status: "completed", time: { start: 55, end: 60 } } },
+            { type: "tool", tool: "edit", state: { status: "completed", time: { start: 61, end: 70 } } },
+          ],
+        },
+      ],
+      pendingTodos: [],
+      since: 65,
+    })
+    expect(decision.ok).toBe(false)
+    if (decision.ok) throw new Error("expected rejection")
+    expect(decision.reason).toBe("unverified_changes")
+  })
+
+  test("an errored mutation tool still requires verification", () => {
+    // write/edit record the file change before BlastRadius.assert can throw,
+    // so an "error" part may already have landed on disk and must not be
+    // treated as a no-op.
+    const decision = GoalVerification.decide({
+      messages: [assistant({ type: "tool", tool: "write", state: { status: "error" } })],
+      pendingTodos: [],
+    })
+    expect(decision.ok).toBe(false)
+    if (decision.ok) throw new Error("expected rejection")
+    expect(decision.reason).toBe("unverified_changes")
+  })
 })

@@ -100,4 +100,16 @@ describe("parseGoalArguments", () => {
       expect(decision.message).toContain("Invalid --budget value")
     }
   })
+
+  test("a budget flag with an empty value errors instead of creating an unbudgeted goal", () => {
+    // "--budget=" / "--budget= fix the bug" have no value token, so the
+    // strict budget pattern does not match and they used to fall through to
+    // goal creation with the raw flag text as the objective and no budget.
+    for (const raw of ["--budget=", "--budget= fix the bug", "--token-budget=  do it", "--budget"]) {
+      const decision = parseGoalArguments(raw)
+      expect(decision.action).toBe("error")
+      if (decision.action !== "error") throw new Error(`expected error for ${raw}`)
+      expect(decision.message).toContain("--budget")
+    }
+  })
 })

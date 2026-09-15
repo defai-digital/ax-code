@@ -1,9 +1,11 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
 import { GoalPlan } from "../../src/session/goal-plan"
+import { GoalPlanOrchestration } from "../../src/session/goal-plan-orchestration"
 import { GoalPlanWriter } from "../../src/session/goal-plan-writer"
+import { SessionPrompt } from "../../src/session/prompt"
 import { executeGoalCommand } from "../../src/session/prompt/prompt-goal-command"
 import type { PromptInput } from "../../src/session/prompt/prompt-input"
 import { tmpdir } from "../fixture/fixture"
@@ -131,6 +133,53 @@ describe("executeGoalCommand plan writer", () => {
           duplicate.parts.some((part) => part.type === "text" && part.text.includes("already has an active goal")),
         ).toBe(true)
         await Session.remove(session.id)
+      },
+    })
+  })
+
+  test("resume cancels an in-flight run before reactivating the goal", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GoalPlanWriter.setWrite(GoalPlanWriter.stubWrite())
+        const session = await Session.create({})
+        const prepared = await GoalPlanOrchestration.activate({
+          sessionID: session.id,
+          objective: "resume while busy",
+        })
+        await SessionGoal.pause(session.id)
+        // Force the busy branch: resume must cancel the running turn (like
+        // create and revise) or the reactivated goal sits dormant.
+        const busySpy = vi.spyOn(SessionPrompt, "assertNotBusy").mockImplementation(() => {
+          throw new Session.BusyError(session.id)
+        })
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as any)
+        const prompts: PromptInput[] = []
+        try {
+          await executeGoalCommand(
+            {
+              sessionID: session.id,
+              command: "goal",
+              arguments: "resume",
+              agent: "build",
+              model: "test/test-model",
+            },
+            async (input) => {
+              prompts.push(input)
+              return { info: { role: "assistant" }, parts: [] } as any
+            },
+          )
+          expect(cancelSpy).toHaveBeenCalledTimes(1)
+          expect(prompts).toHaveLength(1)
+          expect(prepared.goal.status).toBe("active")
+          expect((await SessionGoal.get(session.id))?.status).toBe("active")
+        } finally {
+          cancelSpy.mockRestore()
+          busySpy.mockRestore()
+          GoalPlanWriter.resetWrite()
+          await Session.remove(session.id)
+        }
       },
     })
   })
