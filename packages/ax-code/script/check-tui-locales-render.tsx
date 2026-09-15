@@ -14,15 +14,12 @@ const { testRender } = await import("ax-tui/solid")
 const { KVProvider, useKV } = await import("../src/cli/tui/context/kv")
 const { TuiConfigProvider } = await import("../src/cli/tui/context/tui-config")
 const { LanguageProvider, useLanguage } = await import("../src/cli/tui/context/language")
-const { ThemeProvider, useTheme } = await import("../src/cli/tui/context/theme")
+const { ThemeProvider } = await import("../src/cli/tui/context/theme")
 const { KeybindProvider } = await import("../src/cli/tui/context/keybind")
 const { ToastProvider } = await import("../src/cli/tui/ui/toast")
 const { DialogProvider, useDialog } = await import("../src/cli/tui/ui/dialog")
 const { SetupWizard } = await import("../src/cli/tui/component/setup-wizard")
 const { DialogLanguage } = await import("../src/cli/tui/component/dialog-language")
-const { ModeToggle } = await import("../src/cli/tui/component/mode-chips")
-const { ChromeWidthAction } = await import("../src/cli/tui/component/chrome-action")
-const { runModeLabel } = await import("../src/cli/tui/component/prompt/run-mode-view-model")
 const { DialogHelp } = await import("../src/cli/tui/ui/dialog-help")
 const { footerSessionStatusView } = await import("../src/cli/tui/routes/session/footer-view-model")
 const { DialogConfirm } = await import("../src/cli/tui/ui/dialog-confirm")
@@ -43,31 +40,6 @@ function Controls() {
     ready = kv.ready
   })
   return null
-}
-function ChromeProbe(props: { mode: "none" | "auto" | "super-long"; onAction: (action: string) => void }) {
-  const { t } = useLanguage()
-  const { theme } = useTheme()
-  return (
-    <box flexDirection="column">
-      <ChromeWidthAction width={36} onMouseUp={() => props.onAction("width")} />
-      <ModeToggle
-        label={runModeLabel(props.mode, t)}
-        active={props.mode !== "none"}
-        activeFg={theme.text}
-        inactiveFg={theme.textMuted}
-        background={theme.warning}
-        onMouseUp={() => props.onAction("run")}
-      />
-      <ModeToggle
-        label={t("mode.sandbox")}
-        active={true}
-        activeFg={theme.text}
-        inactiveFg={theme.textMuted}
-        background={theme.success}
-        onMouseUp={() => props.onAction("sandbox")}
-      />
-    </box>
-  )
 }
 function StatusProbe() {
   const { t } = useLanguage()
@@ -259,7 +231,7 @@ try {
     }
   }
   console.log(
-    "Native locale dialogs passed: 13 locales, 36/80 columns, live switch, picker, setup language/connect/skip, help/status live switching, width/run-mode/sandbox labels and clicks, listener disposal, and cancel action.",
+    "Native locale dialogs passed: 13 locales, 36/80 columns, live switch, picker, setup language/connect/skip, help/status live switching, listener disposal, and cancel action.",
   )
 } finally {
   await fs.rm(state, { recursive: true, force: true })
