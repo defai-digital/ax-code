@@ -8,6 +8,8 @@ changes belong to AX Coder.
 
 ### Changed
 
+- Auto-enable the advanced TUI profile on Ghostty unless `AX_CODE_TUI_ADVANCED_TERMINAL` is set. Explicit `0`/`false` still opts out.
+- Render Digital Code pixel rain with the neon purple/blue palette, a 1280×720 transfer cap, and image deletion before the overlay returns the working screen.
 - Rename the TUI animation and its theme to Digital Code, preserving existing preferences. Render the rain and startup logo in randomly selected neon purple and blue.
 - Restrict managed AX Engine model selection to Qwen3.8 27B AXQ 6-bit MTP.
 
