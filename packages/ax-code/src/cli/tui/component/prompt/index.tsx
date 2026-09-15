@@ -1,3 +1,4 @@
+import { FooterStatusRow } from "./footer-status-row"
 import { useLanguage } from "../../context/language"
 import { usePromptRef } from "@tui/context/prompt"
 import { createSessionPromptDraftLifecycle, promptDraftKey } from "./session-drafts"
@@ -566,13 +567,14 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     promptFooterLayout({
       contentWidth: promptContentWidth(),
       toggleWidth: 0,
+      busy: status().type !== "idle" || subagentStatus() !== undefined,
       mode: store.mode,
       variantsWidth:
         local.model.variant.list().length > 0
-          ? footerHintWidth(keybind.print("variant_cycle"), uiText("ui.variants"))
+          ? footerHintWidth(keybind.print("variant_cycle"), uiText("ui.effort"))
           : 0,
       shellWidth: footerHintWidth("esc", uiText("ui.exitShellMode")),
-      clearWidth: footerHintWidth("ctrl+c", uiText("ui.clear2")),
+      clearWidth: footerHintWidth(footerClearHint().keys, footerClearHint().label),
     }),
   )
 
@@ -1443,11 +1445,10 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
               </Show>
             }
           >
-            <box
-              flexDirection="row"
-              gap={1}
-              flexGrow={1}
-              justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
+            {/* Only the active parent can be interrupted, even when its subagent keeps this row visible. */}
+            <FooterStatusRow
+              width={promptContentWidth()}
+              interrupt={status().type !== "idle" ? uiText("ui.interrupt") : undefined}
             >
               <box flexShrink={0} flexDirection="row" gap={1}>
                 <box marginLeft={1} flexDirection="row" gap={1}>
@@ -1519,7 +1520,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                     const handleMessageClick = () => {
                       const r = retry()
                       if (!r) return
-                      if (isTruncated()) {
+                      if (r.message) {
                         DialogAlert.show(dialog, "Retry Error", r.message)
                       }
                     }
@@ -1537,20 +1538,16 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                     return (
                       <Show when={retry()}>
                         <box onMouseUp={handleMessageClick}>
-                          <text fg={theme.error}>{retryText()}</text>
+                          <text fg={theme.error} wrapMode="none">
+                            {retryText()}
+                          </text>
                         </box>
                       </Show>
                     )
                   })()}
                 </box>
               </box>
-              {/* The interrupt command targets the parent session and is
-                  disabled while it is idle, so only hint esc when the
-                  parent's own status row is what keeps the footer busy. */}
-              <Show when={status().type !== "idle"}>
-                <KeyHint keys="esc" label={uiText("ui.interrupt")} />
-              </Show>
-            </box>
+            </FooterStatusRow>
           </Show>
           <Show when={status().type !== "retry"}>
             <box

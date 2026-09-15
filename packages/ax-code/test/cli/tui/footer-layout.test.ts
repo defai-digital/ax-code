@@ -2,6 +2,38 @@ import { describe, expect, test } from "vitest"
 import { footerHintWidth, promptFooterLayout } from "../../../src/cli/tui/component/prompt/footer-layout"
 
 describe("promptFooterLayout", () => {
+  test("measures terminal cells rather than UTF-16 code units", () => {
+    expect(footerHintWidth("esc", "中断")).toBe(8)
+    expect(footerHintWidth("esc", "interrupt")).toBe(13)
+    expect(footerHintWidth("esc", "e\u0301")).toBe(5)
+  })
+
+  test.each([20, 40, 80, 120, 200])("isolates busy status from secondary widgets at %i columns", (contentWidth) => {
+    expect(
+      promptFooterLayout({
+        contentWidth,
+        toggleWidth: 0,
+        mode: "normal",
+        busy: true,
+        clearWidth: 11,
+        variantsWidth: 16,
+        shellWidth: 0,
+      }).stacked,
+    ).toBe(true)
+  })
+
+  test("accounts for the two-cell gap between rendered shortcuts", () => {
+    const input = {
+      contentWidth: 64,
+      toggleWidth: 0,
+      mode: "normal" as const,
+      clearWidth: 11,
+      variantsWidth: 16,
+      shellWidth: 0,
+    }
+    expect(promptFooterLayout(input).showVariants).toBe(false)
+    expect(promptFooterLayout({ ...input, contentWidth: 67 }).showVariants).toBe(true)
+  })
   test("stacks and hides secondary hints when inline budget is tight", () => {
     const layout = promptFooterLayout({
       contentWidth: 48,
