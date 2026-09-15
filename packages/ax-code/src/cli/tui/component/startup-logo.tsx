@@ -3,7 +3,7 @@ import { RGBA } from "ax-tui"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
 import { logo } from "@/cli/logo"
-import { MATRIX_RAIN_LEVEL_COLORS } from "./matrix-rain-palette"
+import { DIGITAL_CODE_LEVEL_COLORS } from "./digital-code-palette"
 import {
   STARTUP_LOGO_DURATION_MS,
   STARTUP_LOGO_TICK_MS,
@@ -11,7 +11,7 @@ import {
   createStartupLogoGlyphs,
   startupLogoFrame,
   startupLogoPadding,
-} from "./matrix-rain-view-model"
+} from "./digital-code-view-model"
 
 const BACKGROUND = RGBA.fromInts(0, 0, 0)
 
@@ -26,7 +26,7 @@ const GLYPHS = createStartupLogoGlyphs({ lines: logo })
 /**
  * Brand beat between the startup rain and the working screen: every character
  * of the ASCII mark drops on its own randomized schedule and warms from the
- * green tail to the white head as it lands, then the mark holds for a beat
+ * dim neon tail to the bright highlight as it lands, then the mark holds for a beat
  * before handing off. Covers the screen so the main chrome never flashes
  * before the app is revealed. Escape or a click skips straight to the app;
  * ordinary keys still reach the prompt behind it.
@@ -115,7 +115,7 @@ export function StartupLogo(props: { durationMs?: number; onDone: () => void }) 
                   run.level === 0 ? (
                     run.text
                   ) : (
-                    <span style={{ fg: MATRIX_RAIN_LEVEL_COLORS[run.level] }}>{run.text}</span>
+                    <span style={{ fg: DIGITAL_CODE_LEVEL_COLORS[run.hue][run.level] }}>{run.text}</span>
                   )
                 }
               </For>

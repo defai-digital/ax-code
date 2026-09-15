@@ -11,7 +11,7 @@ import { clearTuiTerminalTitle } from "./renderer"
 import { resolveDesktopHandoff } from "./navigation/desktop-handoff"
 import { parseIsolationState } from "./context/sync-runtime-store"
 import { nextRunMode, runModeLabel, type RunMode } from "./component/prompt/run-mode-view-model"
-import { MATRIX_RAIN_ON_START_DEFAULT } from "./component/matrix-rain-view-model"
+import { DIGITAL_CODE_ON_START_DEFAULT } from "./component/digital-code-view-model"
 import { workModeCycleToast } from "./component/work-mode-availability"
 import type { CommandOption } from "./component/dialog-command"
 import type { TuiDialogLoaders } from "./tui-dialogs"
@@ -66,8 +66,8 @@ export type AppCommandsInput = {
   renderer: any
   onSnapshot?: () => Promise<string[]>
   terminalSuspend: { suspend: (input: { suspend: () => void; resume: () => void }) => void }
-  playMatrixRain: () => void
-  playReverseMatrixRain: () => void
+  playDigitalCode: () => void
+  playReverseDigitalCode: () => void
   terminalWidth: () => number
 }
 
@@ -101,8 +101,8 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     renderer,
     onSnapshot,
     terminalSuspend,
-    playMatrixRain,
-    playReverseMatrixRain,
+    playDigitalCode,
+    playReverseDigitalCode,
   } = input
 
   return [
@@ -666,45 +666,45 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
     },
     {
       title: t("command.opening"),
-      description: "Preview the opening ASCII digital-rain animation",
-      value: "app.matrix.play",
+      description: t("ui.previewTheOpeningDigitalCodeAnimation"),
+      value: "app.digital_code.play",
       category: t("category.system"),
       onSelect: (dialog) => {
         dialog.clear()
-        playMatrixRain()
+        playDigitalCode()
       },
     },
     {
       title: t("command.ending"),
-      description: "Preview the ending bottom-to-top rain that plays when you exit",
-      value: "app.matrix.play_reverse",
+      description: t("ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit"),
+      value: "app.digital_code.play_reverse",
       category: t("category.system"),
       onSelect: (dialog) => {
         dialog.clear()
-        playReverseMatrixRain()
+        playReverseDigitalCode()
       },
     },
     {
-      title: kv.get("matrix_rain_on_task_complete", false)
-        ? "Disable OV/EV on task completion"
-        : "Enable OV/EV on task completion",
-      description: "Play the overlay once a scheduled task run completes",
-      value: "app.toggle.matrix_rain",
+      title: kv.get("digital_code_on_task_complete", false)
+        ? t("ui.disableDigitalCodeOnTaskCompletion")
+        : t("ui.enableDigitalCodeOnTaskCompletion"),
+      description: t("ui.playTheOverlayOnceAScheduledTaskRunCompletes"),
+      value: "app.toggle.digital_code",
       category: t("category.system"),
       onSelect: (dialog) => {
-        kv.set("matrix_rain_on_task_complete", !kv.get("matrix_rain_on_task_complete", false))
+        kv.set("digital_code_on_task_complete", !kv.get("digital_code_on_task_complete", false))
         dialog.clear()
       },
     },
     {
-      title: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT)
-        ? "Disable Matrix rain on startup"
-        : "Enable Matrix rain on startup",
-      description: "Play the overlay once when the TUI launches",
-      value: "app.toggle.matrix_rain_on_start",
+      title: kv.get("digital_code_on_start", DIGITAL_CODE_ON_START_DEFAULT)
+        ? t("ui.disableDigitalCodeOnStartup")
+        : t("ui.enableDigitalCodeOnStartup"),
+      description: t("ui.playTheOverlayOnceWhenTheTuiLaunches"),
+      value: "app.toggle.digital_code_on_start",
       category: t("category.system"),
       onSelect: (dialog) => {
-        kv.set("matrix_rain_on_start", !kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT))
+        kv.set("digital_code_on_start", !kv.get("digital_code_on_start", DIGITAL_CODE_ON_START_DEFAULT))
         dialog.clear()
       },
     },

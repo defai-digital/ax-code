@@ -30,9 +30,9 @@ vi.mock("@/util/filesystem", async (importOriginal) => {
 
 import { createKVStore } from "../../../src/cli/tui/context/kv"
 import {
-  MATRIX_RAIN_ON_START_DEFAULT,
-  decideMatrixRainOnStart,
-} from "../../../src/cli/tui/component/matrix-rain-view-model"
+  DIGITAL_CODE_ON_START_DEFAULT,
+  decideDigitalCodeOnStart,
+} from "../../../src/cli/tui/component/digital-code-view-model"
 
 function flush() {
   // Drain the microtask queue a few times so promise chains settle.
@@ -52,6 +52,60 @@ beforeEach(() => {
 })
 
 describe("tui kv store initial-load race", () => {
+  test.each([false, true])(
+    "migrates legacy animation preferences (%s) and theme before becoming ready",
+    async (enabled) => {
+      const { kv, dispose } = makeKV()
+      try {
+        resolveLoad({
+          status: "found",
+          value: { matrix_rain_on_start: enabled, matrix_rain_on_task_complete: enabled, theme: "matrix" },
+        })
+        await flush()
+        expect(kv.ready).toBe(true)
+        expect(kv.get("digital_code_on_start")).toBe(enabled)
+        expect(kv.get("digital_code_on_task_complete")).toBe(enabled)
+        expect(kv.get("theme")).toBe("digital-code")
+        expect(writeJson).toHaveBeenCalledTimes(1)
+        expect(writeJson.mock.calls[0]?.[1]).toEqual({
+          digital_code_on_start: enabled,
+          digital_code_on_task_complete: enabled,
+          theme: "digital-code",
+        })
+      } finally {
+        dispose()
+      }
+    },
+  )
+
+  test("current and buffered preferences take precedence during migration", async () => {
+    const { kv, dispose } = makeKV()
+    try {
+      kv.set("digital_code_on_start", false)
+      resolveLoad({
+        status: "found",
+        value: {
+          matrix_rain_on_start: true,
+          digital_code_on_start: true,
+          matrix_rain_on_task_complete: true,
+          digital_code_on_task_complete: false,
+          theme: "tokyonight",
+        },
+      })
+      await flush()
+      expect(kv.get("digital_code_on_start")).toBe(false)
+      expect(kv.get("digital_code_on_task_complete")).toBe(false)
+      expect(writeJson).toHaveBeenCalledTimes(1)
+      expect(writeJson.mock.calls[0]?.[1]).toEqual({
+        digital_code_on_start: false,
+        digital_code_on_task_complete: false,
+        theme: "tokyonight",
+      })
+    } finally {
+      dispose()
+    }
+  })
+
   test("a set() before the initial read resolves does not persist a near-empty snapshot", async () => {
     const { kv, dispose } = makeKV()
     try {
@@ -140,26 +194,26 @@ describe("tui kv store initial-load race", () => {
     }
   })
 
-  test("startup rain stays off across a deferred load that persisted matrix_rain_on_start false", async () => {
+  test("startup rain stays off across a deferred load that persisted digital_code_on_start false", async () => {
     const { kv, dispose } = makeKV()
     try {
       expect(kv.ready).toBe(false)
       expect(
-        decideMatrixRainOnStart({
+        decideDigitalCodeOnStart({
           ready: kv.ready,
-          enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
+          enabled: kv.get("digital_code_on_start", DIGITAL_CODE_ON_START_DEFAULT),
           animationsEnabled: kv.get("animations_enabled", true),
           runtime: "source",
         }),
       ).toBe(false)
-      resolveLoad({ status: "found", value: { matrix_rain_on_start: false } })
+      resolveLoad({ status: "found", value: { digital_code_on_start: false } })
       await flush()
       expect(kv.ready).toBe(true)
-      expect(kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT)).toBe(false)
+      expect(kv.get("digital_code_on_start", DIGITAL_CODE_ON_START_DEFAULT)).toBe(false)
       expect(
-        decideMatrixRainOnStart({
+        decideDigitalCodeOnStart({
           ready: kv.ready,
-          enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
+          enabled: kv.get("digital_code_on_start", DIGITAL_CODE_ON_START_DEFAULT),
           animationsEnabled: kv.get("animations_enabled", true),
           runtime: "source",
         }),

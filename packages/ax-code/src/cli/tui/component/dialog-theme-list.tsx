@@ -11,7 +11,7 @@ export function DialogThemeList() {
     Object.keys(theme.all())
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
       .map((value) => ({
-        title: value,
+        title: value === "digital-code" ? "Digital Code" : value,
         value: value,
       })),
   )

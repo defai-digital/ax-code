@@ -246,4 +246,16 @@ export const messages = {
   "command.runMode": "\uc2e4\ud589 \ubaa8\ub4dc \uc804\ud658 (\ud604\uc7ac: {mode})",
   "command.workMode": "\uc791\uc5c5 \ubaa8\ub4dc \uc120\ud0dd (\ud604\uc7ac: {mode})",
   "command.pinned": "\uace0\uc815\ub41c \uc138\uc158 {slot}(\uc73c)\ub85c \uc804\ud658",
+  "ui.previewTheOpeningDigitalCodeAnimation":
+    "Digital Code \uc2dc\uc791 \uc560\ub2c8\uba54\uc774\uc158 \ubbf8\ub9ac \ubcf4\uae30",
+  "ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit":
+    "\uc885\ub8cc \uc2dc Digital Code \uc560\ub2c8\uba54\uc774\uc158 \ubbf8\ub9ac \ubcf4\uae30",
+  "ui.disableDigitalCodeOnTaskCompletion": "\uc791\uc5c5 \uc644\ub8cc \uc2dc Digital Code \ube44\ud65c\uc131\ud654",
+  "ui.enableDigitalCodeOnTaskCompletion": "\uc791\uc5c5 \uc644\ub8cc \uc2dc Digital Code \ud65c\uc131\ud654",
+  "ui.playTheOverlayOnceAScheduledTaskRunCompletes":
+    "\uc608\uc57d \uc791\uc5c5 \uc644\ub8cc \uc2dc \uc560\ub2c8\uba54\uc774\uc158 \ud55c \ubc88 \uc7ac\uc0dd",
+  "ui.disableDigitalCodeOnStartup": "\uc2dc\uc791 \uc2dc Digital Code \ube44\ud65c\uc131\ud654",
+  "ui.enableDigitalCodeOnStartup": "\uc2dc\uc791 \uc2dc Digital Code \ud65c\uc131\ud654",
+  "ui.playTheOverlayOnceWhenTheTuiLaunches":
+    "TUI \uc2dc\uc791 \uc2dc \uc560\ub2c8\uba54\uc774\uc158 \ud55c \ubc88 \uc7ac\uc0dd",
 } as const

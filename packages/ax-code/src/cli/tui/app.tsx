@@ -97,21 +97,21 @@ import { parseJsonPayload } from "@/util/json-value"
 import { isRecord } from "@/util/record"
 import { createTuiDialogLoaders } from "./tui-dialogs"
 import { appCommands, type AppCommandSandbox } from "./app-commands"
-import { MatrixRain, MatrixRainCover, type MatrixRainDoneReason } from "./component/matrix-rain"
+import { DigitalCode, DigitalCodeCover, type DigitalCodeDoneReason } from "./component/digital-code"
 import { StartupLogo } from "./component/startup-logo"
 import {
-  MATRIX_RAIN_ON_START_DEFAULT,
-  MATRIX_RAIN_REVERSE_DURATION_MS,
-  shouldAutoPlayMatrixRain,
-  shouldPlayExitMatrixRain,
+  DIGITAL_CODE_ON_START_DEFAULT,
+  DIGITAL_CODE_REVERSE_DURATION_MS,
+  shouldAutoPlayDigitalCode,
+  shouldPlayExitDigitalCode,
   initialStartupRainPhase,
   resolveStartupRainPhase,
   completeStartupRain,
   startupRainAfterPlayback,
   startupRainShowsLogo,
   startupRainCoversChrome,
-  shouldStopMatrixRain,
-} from "./component/matrix-rain-view-model"
+  shouldStopDigitalCode,
+} from "./component/digital-code-view-model"
 
 const FALLBACK_COLOR_MODE = "dark" as const
 
@@ -324,18 +324,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const promptRef = usePromptRef()
   const [sessionRoute, setSessionRoute] = createSignal<Component | undefined>()
   // Short-lived ASCII digital-rain overlay. Manual preview is always
-  // available; startup playback is on by default (`matrix_rain_on_start`
+  // available; startup playback is on by default (`digital_code_on_start`
   // opts out) and task-completion playback is opt-in
-  // (`matrix_rain_on_task_complete`).
-  const [matrixPlaying, setMatrixPlaying] = createSignal(false)
+  // (`digital_code_on_task_complete`).
+  const [digitalCodePlaying, setDigitalCodePlaying] = createSignal(false)
   const [startupRainPhase, setStartupRainPhase] = createSignal(initialStartupRainPhase())
   let exiting = false
-  const playMatrixRain = () => {
-    if (!exiting) setMatrixPlaying(true)
+  const playDigitalCode = () => {
+    if (!exiting) setDigitalCodePlaying(true)
   }
-  const endMatrixRain = (reason: MatrixRainDoneReason = "timeout") => {
+  const endDigitalCode = (reason: DigitalCodeDoneReason = "timeout") => {
     batch(() => {
-      setMatrixPlaying(false)
+      setDigitalCodePlaying(false)
       if (startupRainPhase() !== "rain") return
       // Startup rain hands off to the brand logo; an explicit skip goes
       // straight to the working screen. Completion plays are already in "app".
@@ -353,7 +353,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const [reverseRainPlaying, setReverseRainPlaying] = createSignal(false)
   let reverseRainDone: Promise<void> | undefined
   let settleReverseRain: (() => void) | undefined
-  const playReverseMatrixRain = (): Promise<void> => {
+  const playReverseDigitalCode = (): Promise<void> => {
     const existing = reverseRainDone
     // A caller that arrives mid-run — quitting during the palette preview —
     // waits for the run already on screen instead of cutting it off.
@@ -365,7 +365,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     setReverseRainPlaying(true)
     return created
   }
-  const endReverseMatrixRain = () => {
+  const endReverseDigitalCode = () => {
     batch(() => {
       setReverseRainPlaying(false)
       const settle = settleReverseRain
@@ -374,18 +374,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       settle?.()
     })
   }
-  const playExitMatrixRain = () => {
+  const playExitDigitalCode = () => {
     exiting = true
     // Cancel every startup phase before KV readiness or a playback callback
     // can start another overlay above the ending video.
     batch(() => {
       setStartupRainPhase(completeStartupRain())
-      setMatrixPlaying(false)
+      setDigitalCodePlaying(false)
     })
-    if (!shouldPlayExitMatrixRain({ animationsEnabled: kv.get("animations_enabled", true) })) return Promise.resolve()
-    return playReverseMatrixRain()
+    if (!shouldPlayExitDigitalCode({ animationsEnabled: kv.get("animations_enabled", true) })) return Promise.resolve()
+    return playReverseDigitalCode()
   }
-  exit.onFlourish(playExitMatrixRain)
+  exit.onFlourish(playExitDigitalCode)
   onCleanup(() => {
     exit.onFlourish(undefined)
     settleReverseRain?.()
@@ -397,9 +397,9 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     // under the overlays through the keys they pass through, and the overlays
     // yield on their own the moment `renderer.hasSelection` becomes true. This
     // stop path therefore only has to guard dialogs.
-    if (!shouldStopMatrixRain({ dialogOpen: dialog.stack.length > 0, hasSelection: false })) return
+    if (!shouldStopDigitalCode({ dialogOpen: dialog.stack.length > 0, hasSelection: false })) return
     batch(() => {
-      if (matrixPlaying()) setMatrixPlaying(false)
+      if (digitalCodePlaying()) setDigitalCodePlaying(false)
       if (startupRainPhase() !== "app") setStartupRainPhase("app")
     })
   })
@@ -422,14 +422,14 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         const next = resolveStartupRainPhase({
           phase: "hold",
           ready,
-          enabled: kv.get("matrix_rain_on_start", MATRIX_RAIN_ON_START_DEFAULT),
+          enabled: kv.get("digital_code_on_start", DIGITAL_CODE_ON_START_DEFAULT),
           animationsEnabled: kv.get("animations_enabled", true),
           dialogOpen: dialog.stack.length > 0,
         })
         if (next === "hold") return
         batch(() => {
           setStartupRainPhase(next)
-          if (next === "rain") playMatrixRain()
+          if (next === "rain") playDigitalCode()
         })
       },
     ),
@@ -1139,8 +1139,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       renderer,
       onSnapshot: props.onSnapshot,
       terminalSuspend,
-      playMatrixRain,
-      playReverseMatrixRain,
+      playDigitalCode,
+      playReverseDigitalCode,
       terminalWidth: () => dimensions().width,
     }),
   )
@@ -1296,17 +1296,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     // toast remains the primary signal.
     sdk.event.on("scheduled.task.succeeded", () => {
       if (
-        !shouldAutoPlayMatrixRain({
-          enabled: kv.get("matrix_rain_on_task_complete", false),
+        !shouldAutoPlayDigitalCode({
+          enabled: kv.get("digital_code_on_task_complete", false),
           animationsEnabled: kv.get("animations_enabled", true),
-          alreadyPlaying: matrixPlaying(),
+          alreadyPlaying: digitalCodePlaying(),
           dialogOpen: dialog.stack.length > 0,
           hasSelection: Boolean(renderer.getSelection()?.getSelectedText()),
         })
       ) {
         return
       }
-      playMatrixRain()
+      playDigitalCode()
     }),
   ]
   onCleanup(() => {
@@ -1382,17 +1382,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         </box>
       </box>
       <Show when={startupRainCoversChrome(startupRainPhase())}>
-        <MatrixRainCover />
+        <DigitalCodeCover />
       </Show>
-      <Show when={matrixPlaying()}>
-        <MatrixRain onDone={endMatrixRain} />
+      <Show when={digitalCodePlaying()}>
+        <DigitalCode onDone={endDigitalCode} />
       </Show>
       <Show when={reverseRainPlaying()}>
-        <MatrixRain
+        <DigitalCode
           direction="up"
-          durationMs={MATRIX_RAIN_REVERSE_DURATION_MS}
+          durationMs={DIGITAL_CODE_REVERSE_DURATION_MS}
           captureInput
-          onDone={endReverseMatrixRain}
+          onDone={endReverseDigitalCode}
         />
       </Show>
       <Show when={startupRainShowsLogo(startupRainPhase())}>

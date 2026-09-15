@@ -25,6 +25,7 @@ const DEFAULT_THEME = "axcode"
 const THEME_ALIASES: Record<string, string> = {
   automatosx: "axcode",
   opencode: "classic",
+  matrix: "digital-code",
 }
 
 function resolveThemeAlias(name: string) {

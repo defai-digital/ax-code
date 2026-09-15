@@ -232,4 +232,14 @@ export const messages = {
   "command.runMode": "\u5207\u63db\u57f7\u884c\u6a21\u5f0f\uff08\u76ee\u524d\uff1a{mode}\uff09",
   "command.workMode": "\u9078\u64c7\u5de5\u4f5c\u6a21\u5f0f\uff08\u76ee\u524d\uff1a{mode}\uff09",
   "command.pinned": "\u5207\u63db\u81f3\u91d8\u9078\u5de5\u4f5c\u968e\u6bb5 {slot}",
+  "ui.previewTheOpeningDigitalCodeAnimation": "\u9810\u89bd Digital Code \u958b\u5834\u52d5\u756b",
+  "ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit":
+    "\u9810\u89bd\u96e2\u958b\u6642\u64ad\u653e\u7684 Digital Code \u7d50\u5c3e\u52d5\u756b",
+  "ui.disableDigitalCodeOnTaskCompletion": "\u505c\u7528\u5de5\u4f5c\u5b8c\u6210\u6642\u7684 Digital Code",
+  "ui.enableDigitalCodeOnTaskCompletion": "\u555f\u7528\u5de5\u4f5c\u5b8c\u6210\u6642\u7684 Digital Code",
+  "ui.playTheOverlayOnceAScheduledTaskRunCompletes":
+    "\u6392\u7a0b\u5de5\u4f5c\u5b8c\u6210\u6642\u64ad\u653e\u4e00\u6b21\u52d5\u756b",
+  "ui.disableDigitalCodeOnStartup": "\u505c\u7528\u555f\u52d5\u6642\u7684 Digital Code",
+  "ui.enableDigitalCodeOnStartup": "\u555f\u7528\u555f\u52d5\u6642\u7684 Digital Code",
+  "ui.playTheOverlayOnceWhenTheTuiLaunches": "\u555f\u52d5 TUI \u6642\u64ad\u653e\u4e00\u6b21\u52d5\u756b",
 } as const

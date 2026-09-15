@@ -3,39 +3,39 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
 import {
-  MATRIX_RAIN_COLUMN_SPACING,
-  MATRIX_RAIN_DURATION_MS,
-  MATRIX_RAIN_GLYPHS,
-  MATRIX_RAIN_HEAVY_GLYPHS,
-  MATRIX_RAIN_LIGHT_GLYPHS,
-  MATRIX_RAIN_LEVEL_RGB,
-  MATRIX_RAIN_LEVELS,
-  MATRIX_RAIN_MAX_DURATION_MS,
-  MATRIX_RAIN_MIN_DURATION_MS,
-  MATRIX_RAIN_ON_START_DEFAULT,
-  MATRIX_RAIN_RESPAWN_GAP,
-  MATRIX_RAIN_REVERSE_DURATION_MS,
+  DIGITAL_CODE_COLUMN_SPACING,
+  DIGITAL_CODE_DURATION_MS,
+  DIGITAL_CODE_GLYPHS,
+  DIGITAL_CODE_HEAVY_GLYPHS,
+  DIGITAL_CODE_LIGHT_GLYPHS,
+  DIGITAL_CODE_LEVEL_RGB,
+  DIGITAL_CODE_LEVELS,
+  DIGITAL_CODE_MAX_DURATION_MS,
+  DIGITAL_CODE_MIN_DURATION_MS,
+  DIGITAL_CODE_ON_START_DEFAULT,
+  DIGITAL_CODE_RESPAWN_GAP,
+  DIGITAL_CODE_REVERSE_DURATION_MS,
   STARTUP_LOGO_DURATION_MS,
   STARTUP_LOGO_FALL_DURATION_MS,
   STARTUP_LOGO_FALL_JITTER_MS,
   STARTUP_LOGO_HOLD_DURATION_MS,
   STARTUP_LOGO_STAGGER_MS,
   STARTUP_LOGO_TICK_MS,
-  advanceMatrixRain,
+  advanceDigitalCode,
   bindHiddenTerminalCursor,
   completeStartupRain,
-  createMatrixRain,
+  createDigitalCode,
   createStartupLogoGlyphs,
   easeOutLogoDrop,
   initialStartupRainPhase,
-  matrixRainCellLevel,
-  matrixRainRows,
+  digitalCodeCellLevel,
+  digitalCodeRows,
   resolveStartupRainPhase,
-  shouldAutoPlayMatrixRain,
-  decideMatrixRainOnStart,
-  shouldPlayMatrixRainOnStart,
-  shouldPlayExitMatrixRain,
-  shouldStopMatrixRain,
+  shouldAutoPlayDigitalCode,
+  decideDigitalCodeOnStart,
+  shouldPlayDigitalCodeOnStart,
+  shouldPlayExitDigitalCode,
+  shouldStopDigitalCode,
   startupLogoDropLevel,
   startupLogoFrame,
   startupLogoGlyphLevel,
@@ -45,9 +45,9 @@ import {
   startupRainAfterPlayback,
   startupRainCoversChrome,
   startupRainShowsLogo,
-  tickMatrixRain,
-} from "../../../src/cli/tui/component/matrix-rain-view-model"
-import type { MatrixRainRun, MatrixRainState } from "../../../src/cli/tui/component/matrix-rain-view-model"
+  tickDigitalCode,
+} from "../../../src/cli/tui/component/digital-code-view-model"
+import type { DigitalCodeRun, DigitalCodeState } from "../../../src/cli/tui/component/digital-code-view-model"
 import { logo } from "../../../src/cli/logo"
 
 // Deterministic PRNG (mulberry32) so frames are reproducible in assertions.
@@ -71,7 +71,7 @@ const GRID = { width: 80, height: 24 } as const
  * instead would be wrong — a row with several lit columns legitimately has more
  * runs than that, and that false bound used to pass only for one lucky seed.
  */
-function expectRowBudget(state: MatrixRainState, rows: MatrixRainRun[][]): void {
+function expectRowBudget(state: DigitalCodeState, rows: DigitalCodeRun[][]): void {
   for (const row of rows) {
     const lit = row.reduce((total, run) => total + (run.level > 0 ? run.text.length : 0), 0)
     expect(lit).toBeLessThanOrEqual(state.columns.length)
@@ -79,19 +79,34 @@ function expectRowBudget(state: MatrixRainState, rows: MatrixRainRun[][]): void 
   }
 }
 
-describe("matrix rain glyph set", () => {
+describe("Digital Code glyph set", () => {
   test("uses ASCII only", () => {
-    for (const char of MATRIX_RAIN_GLYPHS) {
+    for (const char of DIGITAL_CODE_GLYPHS) {
       expect(char.codePointAt(0)).toBeLessThan(0x80)
     }
-    expect(MATRIX_RAIN_GLYPHS.length).toBeGreaterThan(0)
+    expect(DIGITAL_CODE_GLYPHS.length).toBeGreaterThan(0)
   })
 })
 
-describe("matrix rain frames", () => {
+describe("Digital Code frames", () => {
+  test("keeps long, purple-dominant streaks and a denser ending after resize", () => {
+    for (const size of [GRID, { width: 120, height: 40 }]) {
+      const opening = tickDigitalCode(createDigitalCode({ ...GRID, random: seeded(47) }), size)
+      const ending = tickDigitalCode(createDigitalCode({ ...GRID, direction: "up", random: seeded(47) }), size)
+      expect(ending.columns.length).toBeGreaterThanOrEqual(opening.columns.length * 2)
+      for (const state of [opening, ending]) {
+        expect(state.columns.every((column) => column.length >= 16)).toBe(true)
+        expect(state.columns.filter((column) => column.hue === "purple").length / state.columns.length).toBeGreaterThan(
+          0.75,
+        )
+        expectRowBudget(state, digitalCodeRows(state))
+      }
+    }
+  })
+
   test("renders exactly width x height cells", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(1) })
-    const rows = matrixRainRows(state)
+    const state = createDigitalCode({ ...GRID, random: seeded(1) })
+    const rows = digitalCodeRows(state)
     expect(rows).toHaveLength(GRID.height)
     for (const row of rows) {
       expect(row.map((run) => run.text).join("")).toHaveLength(GRID.width)
@@ -99,13 +114,13 @@ describe("matrix rain frames", () => {
   })
 
   test("stays ASCII-only and within the brightness range over many frames", () => {
-    let state = createMatrixRain({ ...GRID, random: seeded(7) })
+    let state = createDigitalCode({ ...GRID, random: seeded(7) })
     for (let tick = 0; tick < 200; tick++) {
-      const rows = matrixRainRows(state)
+      const rows = digitalCodeRows(state)
       for (const row of rows) {
         for (const run of row) {
           expect(run.level).toBeGreaterThanOrEqual(0)
-          expect(run.level).toBeLessThanOrEqual(MATRIX_RAIN_LEVELS)
+          expect(run.level).toBeLessThanOrEqual(DIGITAL_CODE_LEVELS)
           for (const char of run.text) {
             expect(char.codePointAt(0)).toBeLessThan(0x80)
           }
@@ -116,19 +131,23 @@ describe("matrix rain frames", () => {
           }
         }
       }
-      state = advanceMatrixRain(state)
+      state = advanceDigitalCode(state)
     }
   })
 
   test("merges adjacent cells sharing brightness and weight into single runs", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(3) })
-    const rows = matrixRainRows(state)
+    const state = createDigitalCode({ ...GRID, random: seeded(3) })
+    const rows = digitalCodeRows(state)
     for (const run of rows[Math.floor(GRID.height / 2)] ?? []) {
       expect(run.text.length).toBeGreaterThan(0)
     }
     for (const row of rows) {
       for (let i = 1; i < row.length; i++) {
-        expect([row[i]!.level, row[i]!.bold]).not.toEqual([row[i - 1]!.level, row[i - 1]!.bold])
+        expect([row[i]!.level, row[i]!.bold, row[i]!.hue]).not.toEqual([
+          row[i - 1]!.level,
+          row[i - 1]!.bold,
+          row[i - 1]!.hue,
+        ])
       }
     }
     // Spacing columns is what keeps the per-frame span count proportional to the
@@ -137,9 +156,9 @@ describe("matrix rain frames", () => {
   })
 
   test("keeps one column per lane so the lit cell count stays bounded", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(11) })
+    const state = createDigitalCode({ ...GRID, random: seeded(11) })
     const xs = state.columns.map((column) => column.x)
-    expect(xs.length).toBe(Math.floor(GRID.width / MATRIX_RAIN_COLUMN_SPACING))
+    expect(xs.length).toBe(Math.floor(GRID.width / DIGITAL_CODE_COLUMN_SPACING))
     for (let i = 0; i < xs.length; i++) {
       expect(xs[i]!).toBeGreaterThanOrEqual(0)
       expect(xs[i]!).toBeLessThan(GRID.width)
@@ -149,8 +168,8 @@ describe("matrix rain frames", () => {
   })
 
   test("jitters each column inside its own lane", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(23) })
-    const spacing = MATRIX_RAIN_COLUMN_SPACING
+    const state = createDigitalCode({ ...GRID, random: seeded(23) })
+    const spacing = DIGITAL_CODE_COLUMN_SPACING
     const count = Math.floor(GRID.width / spacing)
     const span = (count - 1) * spacing
     const offset = Math.max(0, Math.floor((GRID.width - span - 1) / 2))
@@ -164,22 +183,22 @@ describe("matrix rain frames", () => {
   })
 
   test("is deterministic for a fixed random source", () => {
-    const first = matrixRainRows(createMatrixRain({ ...GRID, random: seeded(42) }))
-    const second = matrixRainRows(createMatrixRain({ ...GRID, random: seeded(42) }))
+    const first = digitalCodeRows(createDigitalCode({ ...GRID, random: seeded(42) }))
+    const second = digitalCodeRows(createDigitalCode({ ...GRID, random: seeded(42) }))
     expect(second).toEqual(first)
   })
 })
 
 describe("overlay yields to a selection", () => {
   test("a live selection stops the overlay even without a dialog", () => {
-    expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: false })).toBe(false)
-    expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: true })).toBe(true)
-    expect(shouldStopMatrixRain({ dialogOpen: true, hasSelection: false })).toBe(true)
+    expect(shouldStopDigitalCode({ dialogOpen: false, hasSelection: false })).toBe(false)
+    expect(shouldStopDigitalCode({ dialogOpen: false, hasSelection: true })).toBe(true)
+    expect(shouldStopDigitalCode({ dialogOpen: true, hasSelection: false })).toBe(true)
   })
 
   test("both overlays yield when the renderer reports a selection", () => {
     const dir = "../../../src/cli/tui/component"
-    expect(readFileSync(path.join(import.meta.dirname, dir, "matrix-rain.tsx"), "utf8")).toContain(
+    expect(readFileSync(path.join(import.meta.dirname, dir, "digital-code.tsx"), "utf8")).toContain(
       "renderer.hasSelection",
     )
     expect(readFileSync(path.join(import.meta.dirname, dir, "startup-logo.tsx"), "utf8")).toContain(
@@ -188,44 +207,44 @@ describe("overlay yields to a selection", () => {
   })
 })
 
-describe("matrix rain column weight", () => {
+describe("Digital Code column weight", () => {
   test("splits the glyph set into disjoint ASCII pools", () => {
-    expect(MATRIX_RAIN_HEAVY_GLYPHS.length).toBeGreaterThan(0)
-    expect(MATRIX_RAIN_LIGHT_GLYPHS.length).toBeGreaterThan(0)
-    expect(MATRIX_RAIN_GLYPHS).toBe(MATRIX_RAIN_HEAVY_GLYPHS + MATRIX_RAIN_LIGHT_GLYPHS)
-    const heavy = new Set(MATRIX_RAIN_HEAVY_GLYPHS)
-    for (const char of MATRIX_RAIN_LIGHT_GLYPHS) expect(heavy.has(char)).toBe(false)
-    for (const char of MATRIX_RAIN_GLYPHS) expect(char.codePointAt(0)).toBeLessThan(0x80)
+    expect(DIGITAL_CODE_HEAVY_GLYPHS.length).toBeGreaterThan(0)
+    expect(DIGITAL_CODE_LIGHT_GLYPHS.length).toBeGreaterThan(0)
+    expect(DIGITAL_CODE_GLYPHS).toBe(DIGITAL_CODE_HEAVY_GLYPHS + DIGITAL_CODE_LIGHT_GLYPHS)
+    const heavy = new Set(DIGITAL_CODE_HEAVY_GLYPHS)
+    for (const char of DIGITAL_CODE_LIGHT_GLYPHS) expect(heavy.has(char)).toBe(false)
+    for (const char of DIGITAL_CODE_GLYPHS) expect(char.codePointAt(0)).toBeLessThan(0x80)
   })
 
   test("gives some columns each weight", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(31) })
+    const state = createDigitalCode({ ...GRID, random: seeded(31) })
     expect(new Set(state.columns.map((column) => column.heavy))).toEqual(new Set([true, false]))
   })
 
   test("keeps every column inside its own pool for its whole life", () => {
-    let state = createMatrixRain({ ...GRID, random: seeded(37) })
+    let state = createDigitalCode({ ...GRID, random: seeded(37) })
     for (let tick = 0; tick < 200; tick++) {
       for (const column of state.columns) {
-        const pool = column.heavy ? MATRIX_RAIN_HEAVY_GLYPHS : MATRIX_RAIN_LIGHT_GLYPHS
+        const pool = column.heavy ? DIGITAL_CODE_HEAVY_GLYPHS : DIGITAL_CODE_LIGHT_GLYPHS
         for (const char of column.chars) expect(pool).toContain(char)
       }
-      state = advanceMatrixRain(state)
+      state = advanceDigitalCode(state)
     }
   })
 
   test("marks only cells of heavy columns bold", () => {
-    let state = createMatrixRain({ ...GRID, random: seeded(41) })
+    let state = createDigitalCode({ ...GRID, random: seeded(41) })
     let sawBold = false
     for (let tick = 0; tick < 60; tick++) {
-      for (const row of matrixRainRows(state)) {
+      for (const row of digitalCodeRows(state)) {
         for (const run of row) {
           if (!run.bold) continue
           sawBold = true
-          for (const char of run.text) expect(MATRIX_RAIN_HEAVY_GLYPHS).toContain(char)
+          for (const char of run.text) expect(DIGITAL_CODE_HEAVY_GLYPHS).toContain(char)
         }
       }
-      state = advanceMatrixRain(state)
+      state = advanceDigitalCode(state)
     }
     expect(sawBold).toBe(true)
   })
@@ -234,28 +253,28 @@ describe("matrix rain column weight", () => {
     // These seeds are the ones whose dense rows exceed `columns + 1` runs, so the
     // test proves the corrected bound instead of passing on a sparse frame.
     for (const seed of [42, 43, 48]) {
-      let state = createMatrixRain({ ...GRID, random: seeded(seed) })
+      let state = createDigitalCode({ ...GRID, random: seeded(seed) })
       for (let tick = 0; tick < 60; tick++) {
-        expectRowBudget(state, matrixRainRows(state))
-        state = advanceMatrixRain(state)
+        expectRowBudget(state, digitalCodeRows(state))
+        state = advanceDigitalCode(state)
       }
     }
   })
 })
 
-describe("matrix rain advance", () => {
+describe("Digital Code advance", () => {
   test("moves a column head down by its speed", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(5) })
+    const state = createDigitalCode({ ...GRID, random: seeded(5) })
     const before = state.columns[0]!
-    const after = advanceMatrixRain(state).columns[0]!
+    const after = advanceDigitalCode(state).columns[0]!
     expect(after.head).toBeCloseTo(before.head + before.speed, 10)
   })
 
   test("recycles columns and keeps every frame valid", () => {
-    let state = createMatrixRain({ width: 40, height: 10, random: seeded(9) })
+    let state = createDigitalCode({ width: 40, height: 10, random: seeded(9) })
     for (let tick = 0; tick < 400; tick++) {
-      state = advanceMatrixRain(state)
-      const rows = matrixRainRows(state)
+      state = advanceDigitalCode(state)
+      const rows = digitalCodeRows(state)
       expect(rows).toHaveLength(10)
       for (const row of rows) {
         expect(row.map((run) => run.text).join("")).toHaveLength(40)
@@ -264,34 +283,34 @@ describe("matrix rain advance", () => {
   })
 
   test("handles a tiny terminal without throwing", () => {
-    let state = createMatrixRain({ width: 1, height: 1, random: seeded(13) })
+    let state = createDigitalCode({ width: 1, height: 1, random: seeded(13) })
     for (let tick = 0; tick < 20; tick++) {
-      expect(() => matrixRainRows(state)).not.toThrow()
-      state = advanceMatrixRain(state)
+      expect(() => digitalCodeRows(state)).not.toThrow()
+      state = advanceDigitalCode(state)
     }
   })
 })
 
-describe("matrix rain resize", () => {
+describe("Digital Code resize", () => {
   test("advances without rebuilding when the size is unchanged", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(17) })
-    const next = tickMatrixRain(state, { ...GRID })
+    const state = createDigitalCode({ ...GRID, random: seeded(17) })
+    const next = tickDigitalCode(state, { ...GRID })
     expect(next.width).toBe(state.width)
     expect(next.height).toBe(state.height)
     expect(next.columns[0]!.head).toBeCloseTo(state.columns[0]!.head + state.columns[0]!.speed, 10)
   })
 
   test("rebuilds the grid on resize so no row exceeds the new width", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(19) })
+    const state = createDigitalCode({ ...GRID, random: seeded(19) })
     for (const size of [
       { width: 40, height: 12 },
       { width: 120, height: 30 },
       { width: 20, height: 6 },
     ]) {
-      const resized = tickMatrixRain(state, size)
+      const resized = tickDigitalCode(state, size)
       expect(resized.width).toBe(size.width)
       expect(resized.height).toBe(size.height)
-      const rows = matrixRainRows(resized)
+      const rows = digitalCodeRows(resized)
       expect(rows).toHaveLength(size.height)
       for (const row of rows) {
         expect(row.map((run) => run.text).join("")).toHaveLength(size.width)
@@ -300,17 +319,17 @@ describe("matrix rain resize", () => {
   })
 })
 
-describe("matrix rain duration", () => {
+describe("Digital Code duration", () => {
   test("stays inside the requested 2.5 to 5 second window", () => {
-    expect(MATRIX_RAIN_MIN_DURATION_MS).toBeGreaterThanOrEqual(2_500)
-    expect(MATRIX_RAIN_MAX_DURATION_MS).toBeLessThanOrEqual(5_000)
-    expect(MATRIX_RAIN_DURATION_MS).toBe(2_500)
-    expect(MATRIX_RAIN_DURATION_MS).toBeGreaterThanOrEqual(MATRIX_RAIN_MIN_DURATION_MS)
-    expect(MATRIX_RAIN_DURATION_MS).toBeLessThanOrEqual(MATRIX_RAIN_MAX_DURATION_MS)
+    expect(DIGITAL_CODE_MIN_DURATION_MS).toBeGreaterThanOrEqual(2_500)
+    expect(DIGITAL_CODE_MAX_DURATION_MS).toBeLessThanOrEqual(5_000)
+    expect(DIGITAL_CODE_DURATION_MS).toBe(2_500)
+    expect(DIGITAL_CODE_DURATION_MS).toBeGreaterThanOrEqual(DIGITAL_CODE_MIN_DURATION_MS)
+    expect(DIGITAL_CODE_DURATION_MS).toBeLessThanOrEqual(DIGITAL_CODE_MAX_DURATION_MS)
   })
 })
 
-describe("matrix rain auto-play gate", () => {
+describe("Digital Code auto-play gate", () => {
   const base = {
     enabled: true,
     animationsEnabled: true,
@@ -321,32 +340,32 @@ describe("matrix rain auto-play gate", () => {
   }
 
   test("plays only when every gate is clear", () => {
-    expect(shouldAutoPlayMatrixRain(base)).toBe(true)
+    expect(shouldAutoPlayDigitalCode(base)).toBe(true)
   })
 
   test("is opt-in", () => {
-    expect(shouldAutoPlayMatrixRain({ ...base, enabled: false })).toBe(false)
+    expect(shouldAutoPlayDigitalCode({ ...base, enabled: false })).toBe(false)
   })
 
   test("never interrupts a dialog, a selection, or an active overlay", () => {
-    expect(shouldAutoPlayMatrixRain({ ...base, dialogOpen: true })).toBe(false)
-    expect(shouldAutoPlayMatrixRain({ ...base, hasSelection: true })).toBe(false)
-    expect(shouldAutoPlayMatrixRain({ ...base, alreadyPlaying: true })).toBe(false)
+    expect(shouldAutoPlayDigitalCode({ ...base, dialogOpen: true })).toBe(false)
+    expect(shouldAutoPlayDigitalCode({ ...base, hasSelection: true })).toBe(false)
+    expect(shouldAutoPlayDigitalCode({ ...base, alreadyPlaying: true })).toBe(false)
   })
 
   test("honors the animation preference and the compiled-runtime policy", () => {
-    expect(shouldAutoPlayMatrixRain({ ...base, animationsEnabled: false })).toBe(false)
-    expect(shouldAutoPlayMatrixRain({ ...base, runtime: "compiled" })).toBe(false)
+    expect(shouldAutoPlayDigitalCode({ ...base, animationsEnabled: false })).toBe(false)
+    expect(shouldAutoPlayDigitalCode({ ...base, runtime: "compiled" })).toBe(false)
   })
 
   test("stops a playing overlay if a dialog or selection appears", () => {
-    expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: false })).toBe(false)
-    expect(shouldStopMatrixRain({ dialogOpen: true, hasSelection: false })).toBe(true)
-    expect(shouldStopMatrixRain({ dialogOpen: false, hasSelection: true })).toBe(true)
+    expect(shouldStopDigitalCode({ dialogOpen: false, hasSelection: false })).toBe(false)
+    expect(shouldStopDigitalCode({ dialogOpen: true, hasSelection: false })).toBe(true)
+    expect(shouldStopDigitalCode({ dialogOpen: false, hasSelection: true })).toBe(true)
   })
 })
 
-describe("matrix rain cursor hide", () => {
+describe("Digital Code cursor hide", () => {
   test("hides the terminal cursor after each frame and restores on unbind", () => {
     const calls: Array<{ kind: string; args: unknown[] }> = []
     const post: Array<(buffer: unknown, deltaTime: number) => void> = []
@@ -384,53 +403,50 @@ describe("matrix rain cursor hide", () => {
   })
 
   test("both overlays hide the cursor while they cover the screen", () => {
-    const src = readFileSync(
-      path.join(import.meta.dirname, "../../../src/cli/tui/component/matrix-rain.tsx"),
-      "utf8",
-    )
+    const src = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui/component/digital-code.tsx"), "utf8")
     expect(src).toContain("bindHiddenTerminalCursor")
     expect(src.match(/^\s+useHiddenTerminalCursor\(\)$/gm)?.length).toBe(2)
   })
 })
 
-describe("matrix rain startup gate", () => {
+describe("Digital Code startup gate", () => {
   const base = { enabled: true, animationsEnabled: true, runtime: "source" as const }
 
   test("defaults to on so startup plays without configuration", () => {
-    expect(MATRIX_RAIN_ON_START_DEFAULT).toBe(true)
-    expect(shouldPlayMatrixRainOnStart({ ...base, enabled: MATRIX_RAIN_ON_START_DEFAULT })).toBe(true)
+    expect(DIGITAL_CODE_ON_START_DEFAULT).toBe(true)
+    expect(shouldPlayDigitalCodeOnStart({ ...base, enabled: DIGITAL_CODE_ON_START_DEFAULT })).toBe(true)
   })
 
   test("stays off when the user opts out", () => {
-    expect(shouldPlayMatrixRainOnStart({ ...base, enabled: false })).toBe(false)
+    expect(shouldPlayDigitalCodeOnStart({ ...base, enabled: false })).toBe(false)
   })
 
   test("honors the animation preference and the compiled-runtime policy", () => {
-    expect(shouldPlayMatrixRainOnStart({ ...base, animationsEnabled: false })).toBe(false)
-    expect(shouldPlayMatrixRainOnStart({ ...base, runtime: "compiled" })).toBe(false)
-    expect(shouldPlayMatrixRainOnStart({ ...base, runtime: "node-bundled" })).toBe(true)
+    expect(shouldPlayDigitalCodeOnStart({ ...base, animationsEnabled: false })).toBe(false)
+    expect(shouldPlayDigitalCodeOnStart({ ...base, runtime: "compiled" })).toBe(false)
+    expect(shouldPlayDigitalCodeOnStart({ ...base, runtime: "node-bundled" })).toBe(true)
   })
 
   test("App waits for kv.ready before deciding startup rain", () => {
     const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui/app.tsx"), "utf8")
     expect(app).toContain("resolveStartupRainPhase")
     expect(app).toContain("initialStartupRainPhase")
-    expect(app).toContain("MatrixRainCover")
+    expect(app).toContain("DigitalCodeCover")
     expect(app).toContain("() => kv.ready")
-    expect(app).not.toMatch(/onMount\(\(\) => \{\s*if \(\s*shouldPlayMatrixRainOnStart/)
+    expect(app).not.toMatch(/onMount\(\(\) => \{\s*if \(\s*shouldPlayDigitalCodeOnStart/)
   })
 
   test("does not play until kv is ready, then honors a persisted opt-out", () => {
     expect(
-      decideMatrixRainOnStart({
+      decideDigitalCodeOnStart({
         ready: false,
-        enabled: MATRIX_RAIN_ON_START_DEFAULT,
+        enabled: DIGITAL_CODE_ON_START_DEFAULT,
         animationsEnabled: true,
         runtime: "source",
       }),
     ).toBe(false)
     expect(
-      decideMatrixRainOnStart({
+      decideDigitalCodeOnStart({
         ready: true,
         enabled: false,
         animationsEnabled: true,
@@ -438,7 +454,7 @@ describe("matrix rain startup gate", () => {
       }),
     ).toBe(false)
     expect(
-      decideMatrixRainOnStart({
+      decideDigitalCodeOnStart({
         ready: true,
         enabled: true,
         animationsEnabled: true,
@@ -500,10 +516,7 @@ describe("startup logo beat", () => {
   })
 
   test("the logo overlay hides the cursor and clips the drop", () => {
-    const src = readFileSync(
-      path.join(import.meta.dirname, "../../../src/cli/tui/component/startup-logo.tsx"),
-      "utf8",
-    )
+    const src = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui/component/startup-logo.tsx"), "utf8")
     expect(src).toContain("bindHiddenTerminalCursor")
     expect(src).toContain('overflow="hidden"')
   })
@@ -518,7 +531,7 @@ describe("startup logo drop", () => {
         STARTUP_LOGO_HOLD_DURATION_MS,
     )
     expect(STARTUP_LOGO_HOLD_DURATION_MS).toBeGreaterThan(0)
-    expect(STARTUP_LOGO_DURATION_MS).toBeLessThan(MATRIX_RAIN_MIN_DURATION_MS)
+    expect(STARTUP_LOGO_DURATION_MS).toBeLessThan(DIGITAL_CODE_MIN_DURATION_MS)
   })
 
   test("centers the logo block, flooring an odd gap", () => {
@@ -569,20 +582,27 @@ describe("startup logo drop", () => {
   })
 
   test("starts above the top edge and lands on its resting row", () => {
-    const glyph = { char: "A", row: 0, col: 0, delayMs: 0, fallMs: STARTUP_LOGO_FALL_DURATION_MS }
+    const glyph = {
+      hue: "purple" as const,
+      char: "A",
+      row: 0,
+      col: 0,
+      delayMs: 0,
+      fallMs: STARTUP_LOGO_FALL_DURATION_MS,
+    }
     expect(startupLogoGlyphRow({ glyph, elapsedMs: 0, blockTop: 9 })).toBe(-1)
     expect(startupLogoGlyphRow({ glyph, elapsedMs: STARTUP_LOGO_DURATION_MS, blockTop: 9 })).toBe(9)
   })
 
   test("waits out its own delay before moving", () => {
-    const glyph = { char: "A", row: 0, col: 0, delayMs: 100, fallMs: 200 }
+    const glyph = { hue: "purple" as const, char: "A", row: 0, col: 0, delayMs: 100, fallMs: 200 }
     expect(startupLogoGlyphProgress(glyph, 100)).toBe(0)
     expect(startupLogoGlyphProgress(glyph, 200)).toBeCloseTo(0.5, 10)
     expect(startupLogoGlyphProgress(glyph, 300)).toBe(1)
   })
 
   test("descends monotonically and never travels past its row", () => {
-    const glyph = { char: "A", row: 2, col: 0, delayMs: 40, fallMs: 300 }
+    const glyph = { hue: "purple" as const, char: "A", row: 2, col: 0, delayMs: 40, fallMs: 300 }
     let previous = Number.NEGATIVE_INFINITY
     for (let elapsed = 0; elapsed <= STARTUP_LOGO_DURATION_MS; elapsed += 20) {
       const row = startupLogoGlyphRow({ glyph, elapsedMs: elapsed, blockTop: 9 })
@@ -660,69 +680,154 @@ describe("startup logo drop", () => {
   })
 })
 
+describe("Digital Code neon colors", () => {
+  test("mixes glyph accents with sparse white highlights while keeping the main hues dominant", () => {
+    let state = createDigitalCode({ width: 300, height: 30, random: seeded(97) })
+    let highlights = 0
+    let accents = 0
+    let total = 0
+    for (let tick = 0; tick < 20; tick++) {
+      for (const column of state.columns) {
+        expect(column.hues).toHaveLength(column.length)
+        for (const hue of column.hues) {
+          expect(["purple", "blue", "highlight"]).toContain(hue)
+          if (hue === "highlight") highlights++
+          else if (hue !== column.hue) accents++
+          total++
+        }
+      }
+      state = advanceDigitalCode(state)
+    }
+    expect(highlights / total).toBeGreaterThan(0.005)
+    expect(highlights / total).toBeLessThan(0.04)
+    expect(accents / total).toBeGreaterThan(0.005)
+    expect(accents / total).toBeLessThan(0.05)
+  })
+
+  test("randomly chooses both hues and keeps each drop's hue while it moves", () => {
+    const state = createDigitalCode({ width: 300, height: 30, random: seeded(47) })
+    expect(new Set(state.columns.map((column) => column.hue))).toEqual(new Set(["purple", "blue"]))
+    const next = advanceDigitalCode(state)
+    expect(next.columns.map((column) => column.hue)).toEqual(state.columns.map((column) => column.hue))
+  })
+
+  test.each(["down", "up"] as const)("chooses a fresh hue when a %s drop respawns", (direction) => {
+    const state = createDigitalCode({ ...GRID, direction, random: () => 0.25 })
+    expect(state.columns.every((column) => column.hue === "purple")).toBe(true)
+    for (const column of state.columns) column.head = direction === "down" ? GRID.height + 100 : -100
+    const next = advanceDigitalCode({ ...state, random: () => 0.95 })
+    expect(next.columns.every((column) => column.hue === "blue")).toBe(true)
+  })
+
+  test("adjacent drops with different hues remain separate color runs", () => {
+    const state = createDigitalCode({ width: 2, height: 1, random: () => 0.25 })
+    const column = { ...state.columns[0], head: 0 }
+    state.columns = [
+      { ...column, x: 0, hue: "purple", hues: column.chars.map(() => "purple") },
+      { ...column, x: 1, hue: "blue", hues: column.chars.map(() => "blue") },
+    ]
+    const runs = digitalCodeRows(state)[0]
+    expect(runs.map((run) => run.hue)).toEqual(["purple", "blue"])
+    expect(runs.every((run) => run.text.length === 1 && run.level === DIGITAL_CODE_LEVELS)).toBe(true)
+  })
+
+  test("logo glyphs choose both hues and retain them in the rendered frame", () => {
+    const glyphs = createStartupLogoGlyphs({ lines: ["ABCDEFGHIJKLMNOP"], random: seeded(53) })
+    expect(new Set(glyphs.map((glyph) => glyph.hue))).toEqual(new Set(["purple", "blue"]))
+    const frame = startupLogoFrame({
+      glyphs,
+      elapsedMs: STARTUP_LOGO_DURATION_MS,
+      blockLeft: 0,
+      blockTop: 0,
+      width: 16,
+      height: 1,
+    })
+    expect(frame.rows[0].flatMap((run) => [...run.text].map(() => run.hue))).toEqual(glyphs.map((glyph) => glyph.hue))
+  })
+})
+
 describe("startup logo color", () => {
   test("shares the rain brightness ramp", () => {
-    expect(MATRIX_RAIN_LEVEL_RGB.length).toBe(MATRIX_RAIN_LEVELS + 1)
-    expect(MATRIX_RAIN_LEVEL_RGB[0]).toEqual([0, 0, 0])
-    expect(MATRIX_RAIN_LEVEL_RGB[MATRIX_RAIN_LEVELS]).toEqual([205, 255, 220])
+    for (const ramp of Object.values(DIGITAL_CODE_LEVEL_RGB)) {
+      expect(ramp.length).toBe(DIGITAL_CODE_LEVELS + 1)
+      expect(ramp[0]).toEqual([0, 0, 0])
+      for (let level = 1; level < ramp.length; level++) {
+        expect(ramp[level].reduce((sum, channel) => sum + channel, 0)).toBeGreaterThan(
+          ramp[level - 1].reduce((sum, channel) => sum + channel, 0),
+        )
+      }
+    }
+    expect(DIGITAL_CODE_LEVEL_RGB.purple[DIGITAL_CODE_LEVELS]).toEqual([235, 140, 255])
+    expect(DIGITAL_CODE_LEVEL_RGB.blue[DIGITAL_CODE_LEVELS]).toEqual([144, 224, 239])
   })
 
   test("maps fall progress onto the ramp", () => {
     expect(startupLogoDropLevel(0)).toBe(1)
-    expect(startupLogoDropLevel(0.5)).toBe(2.5)
-    expect(startupLogoDropLevel(1)).toBe(MATRIX_RAIN_LEVELS)
+    expect(startupLogoDropLevel(0.5)).toBe(1 + (DIGITAL_CODE_LEVELS - 1) / 2)
+    expect(startupLogoDropLevel(1)).toBe(DIGITAL_CODE_LEVELS)
   })
 
-  test("each character warms from green to the white head as it lands", () => {
-    const glyph = { char: "A", row: 0, col: 0, delayMs: 0, fallMs: 200 }
+  test("each character brightens from dim neon to the highlight as it lands", () => {
+    const glyph = { hue: "purple" as const, char: "A", row: 0, col: 0, delayMs: 0, fallMs: 200 }
     expect(Math.round(startupLogoGlyphLevel(glyph, 0))).toBe(1)
-    expect(Math.round(startupLogoGlyphLevel(glyph, 200))).toBe(MATRIX_RAIN_LEVELS)
+    expect(Math.round(startupLogoGlyphLevel(glyph, 200))).toBe(DIGITAL_CODE_LEVELS)
   })
 
   test("both overlays colorize from the one shared ramp", () => {
     const dir = "../../../src/cli/tui/component"
-    const palette = readFileSync(path.join(import.meta.dirname, dir, "matrix-rain-palette.ts"), "utf8")
-    const rain = readFileSync(path.join(import.meta.dirname, dir, "matrix-rain.tsx"), "utf8")
+    const palette = readFileSync(path.join(import.meta.dirname, dir, "digital-code-palette.ts"), "utf8")
+    const rain = readFileSync(path.join(import.meta.dirname, dir, "digital-code.tsx"), "utf8")
     const logoOverlay = readFileSync(path.join(import.meta.dirname, dir, "startup-logo.tsx"), "utf8")
-    expect(palette).toContain("MATRIX_RAIN_LEVEL_RGB")
-    expect(rain).toContain("MATRIX_RAIN_LEVEL_COLORS")
-    expect(logoOverlay).toContain("MATRIX_RAIN_LEVEL_COLORS")
+    expect(palette).toContain("DIGITAL_CODE_LEVEL_RGB")
+    expect(rain).toContain("DIGITAL_CODE_LEVEL_COLORS")
+    expect(logoOverlay).toContain("DIGITAL_CODE_LEVEL_COLORS")
   })
 })
 
 describe("reverse exit rain", () => {
   test("plays for the requested three seconds", () => {
-    expect(MATRIX_RAIN_REVERSE_DURATION_MS).toBe(3_000)
+    expect(DIGITAL_CODE_REVERSE_DURATION_MS).toBe(3_000)
   })
 
   test("defaults to the startup fall", () => {
-    expect(createMatrixRain({ ...GRID, random: seeded(1) }).direction).toBe("down")
+    expect(createDigitalCode({ ...GRID, random: seeded(1) }).direction).toBe("down")
   })
 
   test("rises a column head by its own speed", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(5), direction: "up" })
+    const state = createDigitalCode({ ...GRID, random: seeded(5), direction: "up" })
     const before = state.columns[0]!
-    const next = advanceMatrixRain(state)
+    const next = advanceDigitalCode(state)
     const after = next.columns[0]!
     expect(after.head).toBeCloseTo(before.head - before.speed, 10)
     expect(next.direction).toBe("up")
   })
 
   test("starts every column at or below the top edge", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(29), direction: "up" })
+    const state = createDigitalCode({ ...GRID, random: seeded(29), direction: "up" })
     expect(state.columns.every((column) => column.head >= 0)).toBe(true)
   })
 
-  test("trails below a rising head, green at the top and white at the bottom", () => {
-    const up: MatrixRainState = {
+  test("trails below a rising head, dim at the top and bright at the bottom", () => {
+    const up: DigitalCodeState = {
       width: 3,
       height: 9,
       direction: "up",
       random: () => 0,
-      columns: [{ x: 1, head: 4, speed: 0.5, length: 4, chars: ["A", "B", "C", "D"], heavy: false }],
+      columns: [
+        {
+          x: 1,
+          head: 4,
+          speed: 0.5,
+          length: 4,
+          chars: ["A", "B", "C", "D"],
+          heavy: false,
+          hue: "purple",
+          hues: ["purple", "purple", "purple", "purple"],
+        },
+      ],
     }
-    const down: MatrixRainState = { ...up, direction: "down" }
-    const lit = (state: MatrixRainState, y: number) => matrixRainRows(state)[y]!.filter((run) => run.level > 0)
+    const down: DigitalCodeState = { ...up, direction: "down" }
+    const lit = (state: DigitalCodeState, y: number) => digitalCodeRows(state)[y]!.filter((run) => run.level > 0)
 
     // Reverse rain: the leading cell is at row 4 and the trail falls below it.
     expect(lit(up, 4)[0]?.text).toBe("A")
@@ -732,45 +837,45 @@ describe("reverse exit rain", () => {
     expect(lit(up, 3)).toHaveLength(0)
     expect(lit(up, 8)).toHaveLength(0)
 
-    // Green at the top of the streak, white at the bottom: brightness grows
-    // downward, the opposite of the falling rain's white head / green tail.
+    // Dim at the top of the streak, bright at the bottom: brightness grows
+    // downward, the opposite of the falling rain's bright head / dim tail.
     expect(lit(up, 4)[0]!.level).toBe(1)
-    expect(lit(up, 7)[0]!.level).toBe(MATRIX_RAIN_LEVELS)
+    expect(lit(up, 7)[0]!.level).toBe(DIGITAL_CODE_LEVELS)
     expect(lit(up, 4)[0]!.level).toBeLessThan(lit(up, 5)[0]!.level)
     expect(lit(up, 5)[0]!.level).toBeLessThan(lit(up, 6)[0]!.level)
     expect(lit(up, 6)[0]!.level).toBeLessThan(lit(up, 7)[0]!.level)
 
-    // The startup rain is the same streak mirrored: white head, green above.
+    // The startup rain is the same streak mirrored: bright head, dim above.
     expect(lit(down, 4)[0]?.text).toBe("A")
     expect(lit(down, 3)[0]?.text).toBe("B")
     expect(lit(down, 2)[0]?.text).toBe("C")
     expect(lit(down, 1)[0]?.text).toBe("D")
-    expect(lit(down, 4)[0]!.level).toBe(MATRIX_RAIN_LEVELS)
+    expect(lit(down, 4)[0]!.level).toBe(DIGITAL_CODE_LEVELS)
     expect(lit(down, 1)[0]!.level).toBe(1)
   })
 
   test("inverts the brightness ramp for the reverse rain", () => {
     const length = 4
-    expect(matrixRainCellLevel("down", 0, length)).toBe(MATRIX_RAIN_LEVELS)
-    expect(matrixRainCellLevel("down", length - 1, length)).toBe(1)
-    expect(matrixRainCellLevel("up", 0, length)).toBe(1)
-    expect(matrixRainCellLevel("up", length - 1, length)).toBe(MATRIX_RAIN_LEVELS)
+    expect(digitalCodeCellLevel("down", 0, length)).toBe(DIGITAL_CODE_LEVELS)
+    expect(digitalCodeCellLevel("down", length - 1, length)).toBe(1)
+    expect(digitalCodeCellLevel("up", 0, length)).toBe(1)
+    expect(digitalCodeCellLevel("up", length - 1, length)).toBe(DIGITAL_CODE_LEVELS)
     // Both ramps stay inside the shared brightness range at every offset of a
     // real trail length.
     for (let offset = 0; offset < 14; offset++) {
       for (const direction of ["down", "up"] as const) {
-        const level = matrixRainCellLevel(direction, offset, 14)
+        const level = digitalCodeCellLevel(direction, offset, 14)
         expect(level).toBeGreaterThanOrEqual(1)
-        expect(level).toBeLessThanOrEqual(MATRIX_RAIN_LEVELS)
+        expect(level).toBeLessThanOrEqual(DIGITAL_CODE_LEVELS)
       }
     }
   })
 
   test("recycles columns at the top and keeps every frame valid", () => {
-    let state = createMatrixRain({ width: 40, height: 10, random: seeded(9), direction: "up" })
+    let state = createDigitalCode({ width: 40, height: 10, random: seeded(9), direction: "up" })
     for (let tick = 0; tick < 400; tick++) {
-      state = advanceMatrixRain(state)
-      const rows = matrixRainRows(state)
+      state = advanceDigitalCode(state)
+      const rows = digitalCodeRows(state)
       expect(rows).toHaveLength(10)
       for (const row of rows) {
         expect(row.map((run) => run.text).join("")).toHaveLength(40)
@@ -778,29 +883,29 @@ describe("reverse exit rain", () => {
       // A respawned column re-enters from below the bottom edge, never from
       // above the top one.
       for (const column of state.columns) {
-        expect(column.head).toBeLessThanOrEqual(state.height + MATRIX_RAIN_RESPAWN_GAP)
+        expect(column.head).toBeLessThanOrEqual(state.height + DIGITAL_CODE_RESPAWN_GAP)
       }
     }
   })
 
   test("preserves the direction across a resize", () => {
-    const state = createMatrixRain({ ...GRID, random: seeded(19), direction: "up" })
-    const resized = tickMatrixRain(state, { width: 40, height: 12 })
+    const state = createDigitalCode({ ...GRID, random: seeded(19), direction: "up" })
+    const resized = tickDigitalCode(state, { width: 40, height: 12 })
     expect(resized.direction).toBe("up")
     expect(resized.columns.every((column) => column.head >= 0)).toBe(true)
   })
 
   test("honors the animation preference and the compiled runtime", () => {
-    expect(shouldPlayExitMatrixRain({ animationsEnabled: true, runtime: "source" })).toBe(true)
-    expect(shouldPlayExitMatrixRain({ animationsEnabled: true, runtime: "node-bundled" })).toBe(true)
-    expect(shouldPlayExitMatrixRain({ animationsEnabled: false, runtime: "source" })).toBe(false)
-    expect(shouldPlayExitMatrixRain({ animationsEnabled: true, runtime: "compiled" })).toBe(false)
+    expect(shouldPlayExitDigitalCode({ animationsEnabled: true, runtime: "source" })).toBe(true)
+    expect(shouldPlayExitDigitalCode({ animationsEnabled: true, runtime: "node-bundled" })).toBe(true)
+    expect(shouldPlayExitDigitalCode({ animationsEnabled: false, runtime: "source" })).toBe(false)
+    expect(shouldPlayExitDigitalCode({ animationsEnabled: true, runtime: "compiled" })).toBe(false)
   })
 
   test("the app plays the reverse rain before an explicit exit tears down", () => {
     const dir = "../../../src/cli/tui"
     const app = readFileSync(path.join(import.meta.dirname, dir, "app.tsx"), "utf8")
-    expect(app).toContain("MATRIX_RAIN_REVERSE_DURATION_MS")
+    expect(app).toContain("DIGITAL_CODE_REVERSE_DURATION_MS")
     expect(app).toContain('direction="up"')
     expect(app).toContain("exit.onFlourish")
     // One shared run: a quit that lands while the video is already on screen
@@ -824,9 +929,9 @@ describe("reverse exit rain", () => {
   test("the palette previews the reverse rain alongside the rain", () => {
     const dir = "../../../src/cli/tui"
     const commands = readFileSync(path.join(import.meta.dirname, dir, "app-commands.ts"), "utf8")
-    expect(commands).toContain('value: "app.matrix.play_reverse"')
-    expect(commands).toContain("playReverseMatrixRain()")
-    expect(readFileSync(path.join(import.meta.dirname, dir, "app.tsx"), "utf8")).toContain("playReverseMatrixRain,")
+    expect(commands).toContain('value: "app.digital_code.play_reverse"')
+    expect(commands).toContain("playReverseDigitalCode()")
+    expect(readFileSync(path.join(import.meta.dirname, dir, "app.tsx"), "utf8")).toContain("playReverseDigitalCode,")
   })
 
   test("the palette uses the video wording", () => {
@@ -835,8 +940,8 @@ describe("reverse exit rain", () => {
     expect(english("command.opening")).toBe("Play Opening Video")
     expect(commands).toContain('t("command.ending")')
     expect(english("command.ending")).toBe("Play Ending Video")
-    expect(commands).toContain("Enable OV/EV on task completion")
-    expect(commands).toContain("Disable OV/EV on task completion")
+    expect(english("ui.enableDigitalCodeOnTaskCompletion")).toBe("Enable Digital Code on task completion")
+    expect(english("ui.disableDigitalCodeOnTaskCompletion")).toBe("Disable Digital Code on task completion")
   })
 
   test("ctrl+c plays the ending video before the app ends", () => {

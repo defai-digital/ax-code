@@ -7,6 +7,8 @@ vi.mock("solid-js", async () => {
   return createRequire(import.meta.url)("solid-js/dist/solid.cjs") as typeof import("solid-js")
 })
 const mocks = vi.hoisted(() => ({
+  write: vi.fn(),
+  tick: undefined as undefined | (() => void),
   renderer: undefined as unknown as {
     keyInput: InternalKeyHandler
     hasSelection: boolean
@@ -15,6 +17,10 @@ const mocks = vi.hoisted(() => ({
     requestRender: ReturnType<typeof vi.fn>
     setCursorPosition: ReturnType<typeof vi.fn>
   },
+}))
+vi.mock("ax-tui", async (original) => ({
+  ...(await original<typeof import("ax-tui")>()),
+  resolveRenderLib: () => ({ writeOut: mocks.write }),
 }))
 vi.mock("ax-tui/solid", () => ({
   useRenderer: () => mocks.renderer,
@@ -25,13 +31,17 @@ vi.mock("ax-tui/solid", () => ({
   },
 }))
 vi.mock("@tui/util/timer", () => ({
-  scheduleTuiInterval: () => () => {},
+  scheduleTuiInterval: (callback: () => void) => {
+    mocks.tick = callback
+    return () => {}
+  },
   scheduleTuiTimeout: () => () => {},
 }))
-import { MatrixRain } from "../../../src/cli/tui/component/matrix-rain"
+import { DigitalCode } from "../../../src/cli/tui/component/digital-code"
 
 let dispose: () => void
 beforeEach(() => {
+  mocks.write.mockClear()
   mocks.renderer = {
     keyInput: new InternalKeyHandler(),
     hasSelection: false,
@@ -50,7 +60,7 @@ async function mount(captureInput = true) {
   const onDone = vi.fn()
   createRoot((cleanup) => {
     dispose = cleanup
-    MatrixRain({ captureInput, onDone })
+    DigitalCode({ captureInput, onDone })
   })
   await Promise.resolve()
   return onDone
@@ -117,4 +127,28 @@ describe("ending rain input admission", () => {
     mocks.renderer.keyInput.emit("keypress", key("a"))
     expect(prompt).toHaveBeenCalledTimes(1)
   })
+})
+
+test("pixel playback deletes its image when the overlay unmounts", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY")
+  Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true })
+  try {
+    Object.assign(mocks.renderer, {
+      resolution: { width: 320, height: 180 },
+      screenMode: "alternate-screen",
+      capabilities: { kitty_graphics: true, remote: false, multiplexer: "none" },
+      rendererPtr: 1,
+      isDestroyed: false,
+    })
+    await mount()
+    mocks.tick!()
+    expect(mocks.write).toHaveBeenCalledTimes(1)
+    expect(mocks.write.mock.calls[0]![1]).toContain("a=T,f=24")
+    dispose()
+    expect(mocks.write).toHaveBeenCalledTimes(2)
+    expect(mocks.write.mock.calls[1]![1]).toContain("a=d,d=I")
+  } finally {
+    if (descriptor) Object.defineProperty(process.stdout, "isTTY", descriptor)
+    else Reflect.deleteProperty(process.stdout, "isTTY")
+  }
 })

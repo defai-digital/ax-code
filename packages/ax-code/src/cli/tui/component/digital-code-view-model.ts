@@ -2,26 +2,26 @@ import { shouldUseTuiAnimations } from "./spinner-profile"
 import type { RuntimeMode } from "@/installation/runtime-mode"
 
 // ASCII-only glyph set. The TUI lays out positioned rows by cell width, and
-// East Asian Width "Ambiguous"/"Wide" glyphs (the katakana in the classic
-// Matrix effect) break that math. Every code point here is < 0x80.
+// East Asian Width "Ambiguous"/"Wide" glyphs can break that math.
+// Every code point here is < 0x80.
 // Glyph pools by ink weight. A terminal cell cannot change font size, so a
 // denser glyph is what makes a column read as a bigger drop than one drawn from
 // the sparse pool. Both pools stay ASCII-only for the same reason as above.
-export const MATRIX_RAIN_HEAVY_GLYPHS = "#@%&$WMNB8Q0"
-export const MATRIX_RAIN_LIGHT_GLYPHS = ".:-'_^+;<>i!l|~,"
-export const MATRIX_RAIN_GLYPHS = MATRIX_RAIN_HEAVY_GLYPHS + MATRIX_RAIN_LIGHT_GLYPHS
+export const DIGITAL_CODE_HEAVY_GLYPHS = "#@%&$WMNB8Q0"
+export const DIGITAL_CODE_LIGHT_GLYPHS = "ACDEFGHIJKLOPRSTUVXYZ12345679*+=-:<>"
+export const DIGITAL_CODE_GLYPHS = DIGITAL_CODE_HEAVY_GLYPHS + DIGITAL_CODE_LIGHT_GLYPHS
 
 // The overlay is a short, dismissible flourish: long enough to read as rain,
 // short enough to never feel like the terminal has been taken hostage. The
 // floor tracks the requested startup playback length, which is the default.
-export const MATRIX_RAIN_MIN_DURATION_MS = 2_500
-export const MATRIX_RAIN_MAX_DURATION_MS = 5_000
-export const MATRIX_RAIN_DURATION_MS = 2_500
-export const MATRIX_RAIN_TICK_MS = 90
+export const DIGITAL_CODE_MIN_DURATION_MS = 2_500
+export const DIGITAL_CODE_MAX_DURATION_MS = 5_000
+export const DIGITAL_CODE_DURATION_MS = 2_500
+export const DIGITAL_CODE_TICK_MS = 50
 // Reverse (bottom-to-top) playback for the explicit-exit flourish. Fixed at the
 // requested three seconds: long enough to read as the session winding down,
 // short enough that quitting still feels immediate.
-export const MATRIX_RAIN_REVERSE_DURATION_MS = 3_000
+export const DIGITAL_CODE_REVERSE_DURATION_MS = 3_000
 
 // Startup sequence: rain -> logo drop -> app. Every character of the mark
 // falls on its own schedule: a random stagger delay decides who leaves first
@@ -41,40 +41,64 @@ export const STARTUP_LOGO_TICK_MS = 30
 // which is what makes a full screen animation affordable without a bespoke
 // native renderable. Each column then jitters inside its own lane, so the drops
 // stop lining up on a visible grid without moving that bound.
-export const MATRIX_RAIN_COLUMN_SPACING = 3
-export const MATRIX_RAIN_LEVELS = 4
-export const MATRIX_RAIN_MIN_TRAIL = 4
-export const MATRIX_RAIN_MAX_TRAIL = 14
-export const MATRIX_RAIN_MIN_SPEED = 0.35
-export const MATRIX_RAIN_MAX_SPEED = 1.1
-export const MATRIX_RAIN_TAIL_MUTATION_CHANCE = 0.35
-// Share of columns that draw from the dense pool and render bold.
-export const MATRIX_RAIN_HEAVY_COLUMN_CHANCE = 0.35
-export const MATRIX_RAIN_RESPAWN_GAP = 20
+// Opening streaks leave broad black gaps; the ending doubles lane density.
+export const DIGITAL_CODE_COLUMN_SPACING = 6
+export const DIGITAL_CODE_ENDING_COLUMN_SPACING = 3
+export const DIGITAL_CODE_LEVELS = 6
+export const DIGITAL_CODE_MIN_TRAIL = 16
+export const DIGITAL_CODE_MAX_TRAIL = 36
+export const DIGITAL_CODE_MIN_SPEED = 0.35
+export const DIGITAL_CODE_MAX_SPEED = 1.1
+export const DIGITAL_CODE_TAIL_MUTATION_CHANCE = 0.35
+// Most streaks use full-ink ASCII glyphs and bold to read as a continuous,
+// heavy meteor inside fixed terminal cells. Keep a few lighter streaks for depth.
+export const DIGITAL_CODE_HEAVY_COLUMN_CHANCE = 0.85
+export const DIGITAL_CODE_RESPAWN_GAP = 20
 
-/**
- * Brightness ramp shared by every startup flourish. Index 0 is blank and index
- * MATRIX_RAIN_LEVELS is the head, so rain trails fade out of the same green the
- * dropping logo warms up from.
- */
-export const MATRIX_RAIN_LEVEL_RGB: readonly (readonly [number, number, number])[] = [
-  [0, 0, 0],
-  [0, 80, 0],
-  [0, 150, 25],
-  [0, 215, 70],
-  [205, 255, 220],
-]
+/** Neon hues are chosen once per drop and stay stable until it respawns. */
+export type DigitalCodeHue = "purple" | "blue" | "highlight"
+
+/** Shared brightness ramps: blank at index 0, neon highlights at the head. */
+export const DIGITAL_CODE_LEVEL_RGB: Record<DigitalCodeHue, readonly (readonly [number, number, number])[]> = {
+  purple: [
+    [0, 0, 0],
+    [20, 2, 35],
+    [45, 8, 75],
+    [90, 24, 154],
+    [123, 44, 191],
+    [157, 78, 221],
+    [235, 140, 255],
+  ],
+  blue: [
+    [0, 0, 0],
+    [0, 18, 30],
+    [0, 40, 65],
+    [0, 90, 125],
+    [0, 140, 185],
+    [0, 180, 216],
+    [144, 224, 239],
+  ],
+  highlight: [
+    [0, 0, 0],
+    [16, 20, 26],
+    [35, 45, 58],
+    [70, 90, 116],
+    [120, 150, 185],
+    [190, 215, 240],
+    [255, 255, 255],
+  ],
+}
 
 /** Injectable randomness so frames are deterministic in tests. */
-export type MatrixRainRandom = () => number
+export type DigitalCodeRandom = () => number
 
 /**
  * Travel direction. `down` is the startup rain (drops fall from the top edge);
  * `up` is the reverse rain used on explicit exit (drops rise from the bottom).
  */
-export type MatrixRainDirection = "down" | "up"
+export type DigitalCodeDirection = "down" | "up"
 
-export interface MatrixRainColumn {
+export interface DigitalCodeColumn {
   /** Column x position in cells. */
   x: number
   /** Head row position, tracked as a float; may be negative above the screen. */
@@ -87,60 +111,77 @@ export interface MatrixRainColumn {
   chars: string[]
   /** Dense pool plus bold, so this column reads as a bigger drop. */
   heavy: boolean
+  /** Main color stays stable; individual glyphs may have a rare accent. */
+  hue: DigitalCodeHue
+  hues: DigitalCodeHue[]
 }
 
-export interface MatrixRainState {
+export interface DigitalCodeState {
   width: number
   height: number
-  columns: MatrixRainColumn[]
-  random: MatrixRainRandom
+  columns: DigitalCodeColumn[]
+  random: DigitalCodeRandom
   /** Which way the drops travel; preserved across ticks and resizes. */
-  direction: MatrixRainDirection
+  direction: DigitalCodeDirection
 }
 
-export interface MatrixRainRun {
+export interface DigitalCodeRun {
   text: string
-  /** 0 = blank; 1..MATRIX_RAIN_LEVELS = brightness (see matrixRainCellLevel). */
+  /** 0 = blank; 1..DIGITAL_CODE_LEVELS = brightness (see digitalCodeCellLevel). */
   level: number
   /** Draw bold; set for cells belonging to a heavy column. */
   bold: boolean
+  hue: DigitalCodeHue
 }
 
-function between(random: MatrixRainRandom, min: number, max: number): number {
+function between(random: DigitalCodeRandom, min: number, max: number): number {
   return min + random() * (max - min)
 }
 
 function glyphPool(heavy: boolean): string {
-  return heavy ? MATRIX_RAIN_HEAVY_GLYPHS : MATRIX_RAIN_LIGHT_GLYPHS
+  return heavy ? DIGITAL_CODE_HEAVY_GLYPHS : DIGITAL_CODE_LIGHT_GLYPHS
 }
 
-function glyph(random: MatrixRainRandom, pool: string): string {
+function glyph(random: DigitalCodeRandom, pool: string): string {
   const index = Math.min(pool.length - 1, Math.floor(random() * pool.length))
   return pool[index] ?? " "
 }
 
-function makeColumn(random: MatrixRainRandom, x: number, head: number): MatrixRainColumn {
+function glyphHue(random: DigitalCodeRandom, base: DigitalCodeHue): DigitalCodeHue {
+  const value = random()
+  if (value > 0.98) return "highlight"
+  if (value < 0.02) return base === "purple" ? "blue" : "purple"
+  return base
+}
+
+function makeColumn(random: DigitalCodeRandom, x: number, head: number): DigitalCodeColumn {
   const length = Math.max(
-    MATRIX_RAIN_MIN_TRAIL,
-    Math.floor(between(random, MATRIX_RAIN_MIN_TRAIL, MATRIX_RAIN_MAX_TRAIL + 1)),
+    DIGITAL_CODE_MIN_TRAIL,
+    Math.floor(between(random, DIGITAL_CODE_MIN_TRAIL, DIGITAL_CODE_MAX_TRAIL + 1)),
   )
   // Ink weight is drawn once and kept for the column's whole life, so a big
   // drop never flickers between weights mid-fall.
-  const heavy = random() < MATRIX_RAIN_HEAVY_COLUMN_CHANCE
+  const heavy = random() < DIGITAL_CODE_HEAVY_COLUMN_CHANCE
   const pool = glyphPool(heavy)
+  const hue = random() < 0.9 ? "purple" : "blue"
   return {
     x,
     head,
     heavy,
-    speed: between(random, MATRIX_RAIN_MIN_SPEED, MATRIX_RAIN_MAX_SPEED),
+    hue,
+    hues: Array.from({ length }, () => glyphHue(random, hue)),
+    speed: between(random, DIGITAL_CODE_MIN_SPEED, DIGITAL_CODE_MAX_SPEED),
     length,
     chars: Array.from({ length }, () => glyph(random, pool)),
   }
 }
 
 /** Lane starts: evenly spaced and centred, one column may live in each. */
-function columnSlots(width: number): number[] {
-  const spacing = MATRIX_RAIN_COLUMN_SPACING
+function columnSpacing(direction: DigitalCodeDirection): number {
+  return direction === "up" ? DIGITAL_CODE_ENDING_COLUMN_SPACING : DIGITAL_CODE_COLUMN_SPACING
+}
+
+function columnSlots(width: number, spacing: number): number[] {
   const count = Math.max(1, Math.floor(width / spacing))
   const span = (count - 1) * spacing
   const offset = Math.max(0, Math.floor((width - span - 1) / 2))
@@ -154,25 +195,26 @@ function columnSlots(width: number): number[] {
  * visible grid. Clamping to the last cell covers the rightmost lane, whose
  * lane end can reach the terminal edge.
  */
-function columnPosition(random: MatrixRainRandom, slot: number, width: number): number {
-  const jitter = Math.floor(random() * MATRIX_RAIN_COLUMN_SPACING)
+function columnPosition(random: DigitalCodeRandom, slot: number, width: number, spacing: number): number {
+  const jitter = Math.floor(random() * spacing)
   return Math.min(width - 1, slot + jitter)
 }
 
-export function createMatrixRain(input: {
+export function createDigitalCode(input: {
   width: number
   height: number
-  random?: MatrixRainRandom
-  direction?: MatrixRainDirection
-}): MatrixRainState {
+  random?: DigitalCodeRandom
+  direction?: DigitalCodeDirection
+}): DigitalCodeState {
   const width = Math.max(1, Math.floor(input.width))
   const height = Math.max(1, Math.floor(input.height))
   const random = input.random ?? Math.random
   const direction = input.direction ?? "down"
   // Stagger initial heads so columns start moving immediately instead of all
   // entering from the same edge on the same tick.
-  const columns = columnSlots(width).map((slot) =>
-    makeColumn(random, columnPosition(random, slot, width), initialHead(random, height, direction)),
+  const spacing = columnSpacing(direction)
+  const columns = columnSlots(width, spacing).map((slot) =>
+    makeColumn(random, columnPosition(random, slot, width, spacing), initialHead(random, height, direction)),
   )
   return { width, height, columns, random, direction }
 }
@@ -182,12 +224,12 @@ export function createMatrixRain(input: {
  * (negative rows) into the screen; the reverse rain mirrors that range so some
  * columns are already rising on the first frame while the rest enter from below.
  */
-function initialHead(random: MatrixRainRandom, height: number, direction: MatrixRainDirection): number {
+function initialHead(random: DigitalCodeRandom, height: number, direction: DigitalCodeDirection): number {
   const spread = Math.max(4, height * 0.6)
   return direction === "up" ? between(random, 0, height + spread) : between(random, -spread, height)
 }
 
-export function advanceMatrixRain(state: MatrixRainState): MatrixRainState {
+export function advanceDigitalCode(state: DigitalCodeState): DigitalCodeState {
   const up = state.direction === "up"
   const columns = state.columns.map((column) => {
     const head = column.head + (up ? -column.speed : column.speed)
@@ -196,37 +238,40 @@ export function advanceMatrixRain(state: MatrixRainState): MatrixRainState {
     // re-enters from the opposite edge.
     if (up ? head + column.length < 0 : head - column.length > state.height) {
       const respawn = up
-        ? state.height + between(state.random, 1, MATRIX_RAIN_RESPAWN_GAP)
-        : -between(state.random, 1, MATRIX_RAIN_RESPAWN_GAP)
+        ? state.height + between(state.random, 1, DIGITAL_CODE_RESPAWN_GAP)
+        : -between(state.random, 1, DIGITAL_CODE_RESPAWN_GAP)
       return makeColumn(state.random, column.x, respawn)
     }
     const pool = glyphPool(column.heavy)
     const chars = column.chars.slice()
+    const hues = column.hues.slice()
     chars[0] = glyph(state.random, pool)
-    if (chars.length > 1 && state.random() < MATRIX_RAIN_TAIL_MUTATION_CHANCE) {
+    hues[0] = glyphHue(state.random, column.hue)
+    if (chars.length > 1 && state.random() < DIGITAL_CODE_TAIL_MUTATION_CHANCE) {
       const index = 1 + Math.floor(state.random() * (chars.length - 1))
       chars[index] = glyph(state.random, pool)
+      hues[index] = glyphHue(state.random, column.hue)
     }
-    return { ...column, head, chars }
+    return { ...column, head, chars, hues }
   })
   return { ...state, columns }
 }
 
 function levelFor(offset: number, length: number): number {
-  const level = MATRIX_RAIN_LEVELS - Math.floor((offset * MATRIX_RAIN_LEVELS) / length)
-  return Math.min(MATRIX_RAIN_LEVELS, Math.max(1, level))
+  const level = DIGITAL_CODE_LEVELS - Math.round((offset * (DIGITAL_CODE_LEVELS - 1)) / Math.max(1, length - 1))
+  return Math.min(DIGITAL_CODE_LEVELS, Math.max(1, level))
 }
 
 /**
  * Brightness of one trail cell. The falling rain keeps the classic look: the
- * head is the white cell and the trail above it fades to green. The reverse
+ * head is the brightest cell and the trail above it fades to dim neon. The reverse
  * rain mirrors the streak on screen instead of the ramp, so it still reads
- * green at the top and white at the bottom — its ramp runs against the offset,
+ * dim at the top and bright at the bottom — its ramp runs against the offset,
  * whose 0 is the leading (top) cell.
  */
-export function matrixRainCellLevel(direction: MatrixRainDirection, offset: number, length: number): number {
+export function digitalCodeCellLevel(direction: DigitalCodeDirection, offset: number, length: number): number {
   const level = levelFor(offset, length)
-  return direction === "up" ? MATRIX_RAIN_LEVELS + 1 - level : level
+  return direction === "up" ? DIGITAL_CODE_LEVELS + 1 - level : level
 }
 
 /**
@@ -234,26 +279,37 @@ export function matrixRainCellLevel(direction: MatrixRainDirection, offset: numb
  * columns from scratch rather than rescaling them, so no glyph is ever drawn
  * outside the new width.
  */
-export function tickMatrixRain(state: MatrixRainState, size: { width: number; height: number }): MatrixRainState {
+export function tickDigitalCode(state: DigitalCodeState, size: { width: number; height: number }): DigitalCodeState {
   if (state.width !== size.width || state.height !== size.height) {
-    return createMatrixRain({
+    return createDigitalCode({
       width: size.width,
       height: size.height,
       random: state.random,
       direction: state.direction,
     })
   }
-  return advanceMatrixRain(state)
+  return advanceDigitalCode(state)
 }
 
-/** Merge adjacent cells sharing brightness and weight into one run, so the
+/** Merge adjacent cells sharing brightness, weight, and hue into one run, so the
  * per-frame span count stays bounded. */
-function mergeRuns(chars: string[], levels: number[], bold: boolean[], width: number): MatrixRainRun[] {
-  const runs: MatrixRainRun[] = []
+function mergeRuns(
+  chars: string[],
+  levels: number[],
+  bold: boolean[],
+  hues: DigitalCodeHue[],
+  width: number,
+): DigitalCodeRun[] {
+  const runs: DigitalCodeRun[] = []
   let start = 0
   for (let x = 1; x <= width; x++) {
-    if (x < width && levels[x] === levels[start] && bold[x] === bold[start]) continue
-    runs.push({ text: chars.slice(start, x).join(""), level: levels[start] ?? 0, bold: bold[start] ?? false })
+    if (x < width && levels[x] === levels[start] && bold[x] === bold[start] && hues[x] === hues[start]) continue
+    runs.push({
+      text: chars.slice(start, x).join(""),
+      level: levels[start] ?? 0,
+      bold: bold[start] ?? false,
+      hue: hues[start] ?? "purple",
+    })
     start = x
   }
   return runs
@@ -261,15 +317,16 @@ function mergeRuns(chars: string[], levels: number[], bold: boolean[], width: nu
 
 /**
  * Render one frame as per-row color runs. Rows are top-to-bottom; cells with
- * the same brightness are merged into a single run so the renderer emits a
+ * the same brightness, hue, and weight are merged into a single run so the renderer emits a
  * bounded number of spans per row.
  */
-export function matrixRainRows(state: MatrixRainState): MatrixRainRun[][] {
-  const rows: MatrixRainRun[][] = []
+export function digitalCodeRows(state: DigitalCodeState): DigitalCodeRun[][] {
+  const rows: DigitalCodeRun[][] = []
   for (let y = 0; y < state.height; y++) {
     const chars: string[] = new Array(state.width).fill(" ")
     const levels = new Array<number>(state.width).fill(0)
     const bold = new Array<boolean>(state.width).fill(false)
+    const hues = new Array<DigitalCodeHue>(state.width).fill("purple")
     for (const column of state.columns) {
       if (column.x < 0 || column.x >= state.width) continue
       // The head is offset 0 and the trail counts away from it. Down rain
@@ -278,10 +335,11 @@ export function matrixRainRows(state: MatrixRainState): MatrixRainRun[][] {
       const offset = state.direction === "up" ? y - Math.floor(column.head) : Math.floor(column.head) - y
       if (offset < 0 || offset >= column.length) continue
       chars[column.x] = column.chars[offset] ?? " "
-      levels[column.x] = matrixRainCellLevel(state.direction, offset, column.length)
+      levels[column.x] = digitalCodeCellLevel(state.direction, offset, column.length)
       bold[column.x] = column.heavy
+      hues[column.x] = column.hues[offset] ?? column.hue
     }
-    rows.push(mergeRuns(chars, levels, bold, state.width))
+    rows.push(mergeRuns(chars, levels, bold, hues, state.width))
   }
   return rows
 }
@@ -291,7 +349,7 @@ export function matrixRainRows(state: MatrixRainState): MatrixRainRun[][] {
  * effect is opt-in and never interrupts a dialog, a text selection, or a run
  * that is already on screen.
  */
-export function shouldAutoPlayMatrixRain(input: {
+export function shouldAutoPlayDigitalCode(input: {
   enabled: boolean
   animationsEnabled: boolean
   runtime?: RuntimeMode
@@ -311,7 +369,7 @@ export function shouldAutoPlayMatrixRain(input: {
  * configuration, but it stays one toggle away from off and still honors the
  * shared animation policy.
  */
-export const MATRIX_RAIN_ON_START_DEFAULT = true
+export const DIGITAL_CODE_ON_START_DEFAULT = true
 
 /**
  * Whether a fresh TUI launch should play the overlay. Shares the completion
@@ -319,12 +377,12 @@ export const MATRIX_RAIN_ON_START_DEFAULT = true
  * selection can exist yet — so only the startup flag and the animation policy
  * can hold it back.
  */
-export function shouldPlayMatrixRainOnStart(input: {
+export function shouldPlayDigitalCodeOnStart(input: {
   enabled: boolean
   animationsEnabled: boolean
   runtime?: RuntimeMode
 }): boolean {
-  return shouldAutoPlayMatrixRain({
+  return shouldAutoPlayDigitalCode({
     enabled: input.enabled,
     animationsEnabled: input.animationsEnabled,
     runtime: input.runtime,
@@ -339,23 +397,23 @@ export function shouldPlayMatrixRainOnStart(input: {
  * opt-in flag of its own — the rain is bound to an explicit quit — but it still
  * honors the shared animation policy, so `animations_enabled` turns it off.
  */
-export function shouldPlayExitMatrixRain(input: { animationsEnabled: boolean; runtime?: RuntimeMode }): boolean {
+export function shouldPlayExitDigitalCode(input: { animationsEnabled: boolean; runtime?: RuntimeMode }): boolean {
   return shouldUseTuiAnimations({ userEnabled: input.animationsEnabled, runtime: input.runtime })
 }
 
 /**
  * Startup rain must not fire on kv defaults. kv.json loads asynchronously,
- * and `matrix_rain_on_start` defaults to on — reading before `ready` would
+ * and `digital_code_on_start` defaults to on — reading before `ready` would
  * replay the overlay after the user turned it off.
  */
-export function decideMatrixRainOnStart(input: {
+export function decideDigitalCodeOnStart(input: {
   ready: boolean
   enabled: boolean
   animationsEnabled: boolean
   runtime?: RuntimeMode
 }): boolean {
   if (!input.ready) return false
-  return shouldPlayMatrixRainOnStart({
+  return shouldPlayDigitalCodeOnStart({
     enabled: input.enabled,
     animationsEnabled: input.animationsEnabled,
     runtime: input.runtime,
@@ -387,7 +445,7 @@ export function resolveStartupRainPhase(input: {
   if (input.dialogOpen) return "app"
   if (input.phase === "rain" || input.phase === "logo") return input.phase
   if (!input.ready) return "hold"
-  return decideMatrixRainOnStart({
+  return decideDigitalCodeOnStart({
     ready: true,
     enabled: input.enabled,
     animationsEnabled: input.animationsEnabled,
@@ -451,6 +509,7 @@ export interface StartupLogoGlyph {
   delayMs: number
   /** Random fall duration for this character. */
   fallMs: number
+  hue: DigitalCodeHue
 }
 
 /**
@@ -458,7 +517,7 @@ export interface StartupLogoGlyph {
  * blanks never become glyphs; each character draws its own delay and fall
  * duration, which is what randomizes who lands first.
  */
-export function createStartupLogoGlyphs(input: { lines: string[]; random?: MatrixRainRandom }): StartupLogoGlyph[] {
+export function createStartupLogoGlyphs(input: { lines: string[]; random?: DigitalCodeRandom }): StartupLogoGlyph[] {
   const random = input.random ?? Math.random
   const glyphs: StartupLogoGlyph[] = []
   input.lines.forEach((line, row) => {
@@ -468,6 +527,7 @@ export function createStartupLogoGlyphs(input: { lines: string[]; random?: Matri
       if (char === " ") continue
       glyphs.push({
         char,
+        hue: random() < 0.5 ? "purple" : "blue",
         row,
         col,
         delayMs: between(random, 0, STARTUP_LOGO_STAGGER_MS),
@@ -498,7 +558,7 @@ export function startupLogoGlyphRow(input: { glyph: StartupLogoGlyph; elapsedMs:
   return Math.round(-1 + (target + 1) * easeOutLogoDrop(startupLogoGlyphProgress(input.glyph, input.elapsedMs)))
 }
 
-/** Ramp level for a glyph: dim green while falling, white head once landed. */
+/** Ramp level for a glyph: dim neon while falling, bright highlight once landed. */
 export function startupLogoGlyphLevel(glyph: StartupLogoGlyph, elapsedMs: number): number {
   return startupLogoDropLevel(startupLogoGlyphProgress(glyph, elapsedMs))
 }
@@ -516,12 +576,13 @@ export function startupLogoFrame(input: {
   blockTop: number
   width: number
   height: number
-}): { top: number; rows: MatrixRainRun[][] } {
+}): { top: number; rows: DigitalCodeRun[][] } {
   const placed = input.glyphs
     .map((glyph) => ({
       col: input.blockLeft + glyph.col,
       row: startupLogoGlyphRow({ glyph, elapsedMs: input.elapsedMs, blockTop: input.blockTop }),
       char: glyph.char,
+      hue: glyph.hue,
       level: Math.round(startupLogoGlyphLevel(glyph, input.elapsedMs)),
     }))
     .filter((cell) => cell.row >= 0 && cell.row < input.height && cell.col >= 0 && cell.col < input.width)
@@ -530,29 +591,31 @@ export function startupLogoFrame(input: {
 
   const top = Math.min(...placed.map((cell) => cell.row))
   const bottom = Math.max(...placed.map((cell) => cell.row))
-  const rows: MatrixRainRun[][] = []
+  const rows: DigitalCodeRun[][] = []
   for (let y = top; y <= bottom; y++) {
     const chars: string[] = new Array(input.width).fill(" ")
     const levels = new Array<number>(input.width).fill(0)
     const bold = new Array<boolean>(input.width).fill(false)
+    const hues = new Array<DigitalCodeHue>(input.width).fill("purple")
     for (const cell of placed) {
       if (cell.row !== y) continue
       chars[cell.col] = cell.char
+      if (cell.level >= levels[cell.col]) hues[cell.col] = cell.hue
       levels[cell.col] = Math.max(levels[cell.col], cell.level)
     }
-    rows.push(mergeRuns(chars, levels, bold, input.width))
+    rows.push(mergeRuns(chars, levels, bold, hues, input.width))
   }
   return { top, rows }
 }
 
 /**
- * Ramp level for the dropping logo: it starts on the dim green tail and
- * brightens to the white head as it lands, so the mark arrives with the color a
+ * Ramp level for the dropping logo: it starts on the dim neon tail and
+ * brightens to the neon highlight as it lands, so the mark arrives with the color a
  * falling drop's head would have.
  */
 export function startupLogoDropLevel(progress: number): number {
   const clamped = Math.min(1, Math.max(0, progress))
-  return 1 + clamped * (MATRIX_RAIN_LEVELS - 1)
+  return 1 + clamped * (DIGITAL_CODE_LEVELS - 1)
 }
 
 export function startupRainCoversChrome(phase: StartupRainPhase): boolean {
@@ -560,12 +623,12 @@ export function startupRainCoversChrome(phase: StartupRainPhase): boolean {
 }
 
 /** Stop a playing overlay if a dialog or selection appears after it started. */
-export function shouldStopMatrixRain(input: { dialogOpen: boolean; hasSelection: boolean }): boolean {
+export function shouldStopDigitalCode(input: { dialogOpen: boolean; hasSelection: boolean }): boolean {
   return input.dialogOpen || input.hasSelection
 }
 
 /** Renderer surface used to hide the terminal cursor while rain covers the screen. */
-export interface MatrixRainCursorRenderer {
+export interface DigitalCodeCursorRenderer {
   setCursorPosition(x: number, y: number, visible?: boolean): void
   addPostProcessFn(fn: (buffer: unknown, deltaTime: number) => void): void
   removePostProcessFn(fn: (buffer: unknown, deltaTime: number) => void): void
@@ -577,7 +640,7 @@ export interface MatrixRainCursorRenderer {
  * The textarea stays focused (keys still reach it); the overlay just wins the
  * cursor bit after each frame's renderables run.
  */
-export function bindHiddenTerminalCursor(renderer: MatrixRainCursorRenderer): () => void {
+export function bindHiddenTerminalCursor(renderer: DigitalCodeCursorRenderer): () => void {
   const hide = () => renderer.setCursorPosition(0, 0, false)
   renderer.addPostProcessFn(hide)
   hide()

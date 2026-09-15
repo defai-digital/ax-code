@@ -226,4 +226,13 @@ export const messages = {
   "command.runMode": "Cycle run mode (current: {mode})",
   "command.workMode": "Choose work mode (current: {mode})",
   "command.pinned": "Switch to pinned session {slot}",
+  "ui.previewTheOpeningDigitalCodeAnimation": "Preview the opening Digital Code animation",
+  "ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit":
+    "Preview the ending Digital Code animation that plays when you exit",
+  "ui.disableDigitalCodeOnTaskCompletion": "Disable Digital Code on task completion",
+  "ui.enableDigitalCodeOnTaskCompletion": "Enable Digital Code on task completion",
+  "ui.playTheOverlayOnceAScheduledTaskRunCompletes": "Play the overlay once a scheduled task run completes",
+  "ui.disableDigitalCodeOnStartup": "Disable Digital Code on startup",
+  "ui.enableDigitalCodeOnStartup": "Enable Digital Code on startup",
+  "ui.playTheOverlayOnceWhenTheTuiLaunches": "Play the overlay once when the TUI launches",
 } as const

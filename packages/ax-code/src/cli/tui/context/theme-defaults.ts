@@ -7,6 +7,7 @@ import catppuccinFrappe from "./theme/catppuccin-frappe.json" with { type: "json
 import catppuccinMacchiato from "./theme/catppuccin-macchiato.json" with { type: "json" }
 import cobalt2 from "./theme/cobalt2.json" with { type: "json" }
 import cursor from "./theme/cursor.json" with { type: "json" }
+import digitalCode from "./theme/digital-code.json" with { type: "json" }
 import dracula from "./theme/dracula.json" with { type: "json" }
 import everforest from "./theme/everforest.json" with { type: "json" }
 import flexoki from "./theme/flexoki.json" with { type: "json" }
@@ -14,7 +15,6 @@ import github from "./theme/github.json" with { type: "json" }
 import gruvbox from "./theme/gruvbox.json" with { type: "json" }
 import kanagawa from "./theme/kanagawa.json" with { type: "json" }
 import material from "./theme/material.json" with { type: "json" }
-import matrix from "./theme/matrix.json" with { type: "json" }
 import mercury from "./theme/mercury.json" with { type: "json" }
 import monokai from "./theme/monokai.json" with { type: "json" }
 import nightowl from "./theme/nightowl.json" with { type: "json" }
@@ -126,6 +126,7 @@ export const DEFAULT_THEMES: Record<string, ThemeJson> = {
   classic,
   cobalt2,
   cursor,
+  "digital-code": digitalCode,
   dracula,
   everforest,
   flexoki,
@@ -133,7 +134,6 @@ export const DEFAULT_THEMES: Record<string, ThemeJson> = {
   gruvbox,
   kanagawa,
   material,
-  matrix,
   mercury,
   monokai,
   nightowl,

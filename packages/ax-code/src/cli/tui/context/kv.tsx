@@ -21,6 +21,7 @@ export function createKVStore() {
   const filePath = path.join(Global.Path.state, "kv.json")
   let writeFailureShown = false
   let persistenceBlocked = false
+  let migrated = false
   // Writes issued before the initial read resolves are buffered here and
   // re-applied on top of the loaded values: persisting immediately would
   // snapshot a near-empty store (wiping kv.json), and the late read would
@@ -45,15 +46,31 @@ export function createKVStore() {
         })
         return
       }
-      setStore(result.value)
+      const values = { ...result.value }
+      // Legacy persisted names are read only during migration. New preferences
+      // win when both versions exist; buffered user changes are applied below.
+      for (const [previous, current] of [
+        ["matrix_rain_on_start", "digital_code_on_start"],
+        ["matrix_rain_on_task_complete", "digital_code_on_task_complete"],
+      ]) {
+        if (!Object.hasOwn(values, previous)) continue
+        if (values[current] === undefined && typeof values[previous] === "boolean") values[current] = values[previous]
+        delete values[previous]
+        migrated = true
+      }
+      if (values.theme === "matrix") {
+        values.theme = "digital-code"
+        migrated = true
+      }
+      setStore(values)
     })
     .finally(() => {
       const buffered = pendingWrites
       pendingWrites = undefined
       if (buffered && Object.keys(buffered).length > 0) {
         for (const [key, value] of Object.entries(buffered)) setStore(key, value)
-        persist()
       }
+      if (migrated || (buffered && Object.keys(buffered).length > 0)) persist()
       setReady(true)
     })
 
