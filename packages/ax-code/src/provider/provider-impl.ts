@@ -431,7 +431,7 @@ export namespace Provider {
             ? { url: provider.options.baseURL }
             : {}),
         }
-        if (!supported(providerID, supportModelID, model)) {
+        if (!supported(providerID, model.api.id, { id: model.api.id, name: model.name, family: model.family })) {
           delete provider.models[modelID]
           continue
         }

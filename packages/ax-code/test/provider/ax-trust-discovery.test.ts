@@ -125,6 +125,66 @@ test.each([
   }
 })
 
+test("preserves configured aliases and local options after authoritative discovery", async () => {
+  vi.stubEnv("AX_CODE_TRUST_PROJECT_CONFIG", "1")
+  await using api = await endpoint((_req, res) => {
+    res.setHeader("Content-Type", "application/json")
+    res.end(
+      JSON.stringify({
+        data: [
+          { id: "deepseek-flash", name: "DeepSeek Flash", capabilities: { attachment: true } },
+          { id: "text-only", capabilities: { attachment: false } },
+        ],
+      }),
+    )
+  })
+  const id = "ax-trust-alias"
+  await using tmp = await tmpdir({
+    config: {
+      enabled_providers: [id],
+      provider: {
+        [id]: {
+          management: "ax-trust",
+          npm: "@ai-sdk/openai-compatible",
+          options: { baseURL: api.url },
+          models: {
+            "deepseek-v4-flash": {
+              id: "deepseek-flash",
+              name: "DeepSeek V4 Flash",
+              options: { max_tokens: 128 },
+              headers: { "X-Local-Alias": "keep" },
+            },
+            withdrawn: { id: "gone-model", name: "Gone" },
+          },
+        },
+      },
+    },
+  })
+  await Auth.set(id, { type: "api", key: "alias-test-token" })
+  try {
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const provider = (await Provider.list())[ProviderID.make(id)]
+        expect(Object.keys(provider.models).sort()).toEqual(["deepseek-flash", "deepseek-v4-flash", "text-only"].sort())
+        const alias = await Provider.getModel(ProviderID.make(id), ModelID.make("deepseek-v4-flash"))
+        expect(alias.name).toBe("DeepSeek V4 Flash")
+        expect(alias.api.id).toBe("deepseek-flash")
+        expect(alias.options).toMatchObject({ max_tokens: 128 })
+        expect(alias.headers).toMatchObject({ "X-Local-Alias": "keep" })
+        const remote = await Provider.getModel(ProviderID.make(id), ModelID.make("deepseek-flash"))
+        expect(remote.api.id).toBe("deepseek-flash")
+        expect(remote.options).toMatchObject({ max_tokens: 128 })
+        expect(remote.headers).toMatchObject({ "X-Local-Alias": "keep" })
+        await expect(Provider.getModel(ProviderID.make(id), ModelID.make("withdrawn"))).rejects.toThrow()
+      },
+    })
+  } finally {
+    await Auth.remove(id)
+  }
+})
+
 test.each([
   [401, "unauthorized"],
   [200, "invalid JSON"],

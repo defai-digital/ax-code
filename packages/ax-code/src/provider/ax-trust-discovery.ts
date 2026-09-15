@@ -25,6 +25,14 @@ export function exactCatalogFallbackModels(
   return out
 }
 
+function previousAxTrustModel(provider: ProviderInfo, remoteId: string) {
+  const direct = provider.models[remoteId]
+  if (direct) return { key: remoteId, model: direct }
+  const aliased = Object.entries(provider.models).find(([, model]) => model.api.id === remoteId)
+  if (!aliased) return undefined
+  return { key: aliased[0], model: aliased[1] }
+}
+
 // AX Trust advertises attachment as image support in its /models contract.
 // Keep execution options local; remote model cards only supply metadata.
 export async function discoverAxTrustModels(
@@ -33,9 +41,9 @@ export async function discoverAxTrustModels(
 ): Promise<Record<string, ProviderModel>> {
   const fallbackModels = exactCatalogFallbackModels(await ModelsDev.get())
   const models = await CustomApiProvider.discoverModels({ ...connection, requireComplete: true, fallbackModels })
-  return Object.fromEntries(
+  const discovered = Object.fromEntries(
     models.map((model) => {
-      const previous = provider.models[model.id]
+      const previous = previousAxTrustModel(provider, model.id)?.model
       const fallback = fallbackModels[model.id]
       const next: ProviderModel = {
         id: ModelID.make(model.id),
@@ -62,4 +70,18 @@ export async function discoverAxTrustModels(
       return [model.id, next]
     }),
   )
+  for (const [localKey, previous] of Object.entries(provider.models)) {
+    const remoteId = previous.api.id
+    if (localKey === remoteId) continue
+    const canonical = discovered[remoteId]
+    if (!canonical) continue
+    discovered[localKey] = {
+      ...canonical,
+      id: ModelID.make(localKey),
+      name: previous.name || canonical.name,
+      options: previous.options ?? canonical.options,
+      headers: previous.headers ?? canonical.headers,
+    }
+  }
+  return discovered
 }
