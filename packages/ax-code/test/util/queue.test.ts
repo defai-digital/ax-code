@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { AsyncQueue } from "../../src/util/queue"
+import { AsyncQueue, work } from "../../src/util/queue"
 
 describe("util.queue", () => {
   test("drains buffered values through iteration after close", async () => {
@@ -59,4 +59,37 @@ describe("util.queue", () => {
 
     await expect(pending).rejects.toThrow("AsyncQueue is closed")
   })
+})
+
+test("work retains ownership of active workers after a sibling fails", async () => {
+  const active = Promise.withResolvers<void>()
+  const failed = Promise.withResolvers<void>()
+  const failure = new Error("worker failed")
+  const visited: number[] = []
+  let settled = false
+  const result = work(2, [0, 1, 2], async (item) => {
+    visited.push(item)
+    if (item === 2) {
+      failed.resolve()
+      throw failure
+    }
+    await active.promise
+  }).then(
+    () => {
+      settled = true
+      return undefined
+    },
+    (error) => {
+      settled = true
+      return error
+    },
+  )
+  await failed.promise
+  // Drain promise callbacks without depending on timer or machine speed.
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  const settledBeforeRelease = settled
+  active.resolve()
+  expect(await result).toBe(failure)
+  expect(settledBeforeRelease).toBe(false)
+  expect(visited).toEqual([2, 1])
 })

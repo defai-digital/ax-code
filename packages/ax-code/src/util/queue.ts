@@ -65,15 +65,26 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
 
 export async function work<T>(concurrency: number, items: T[], fn: (item: T) => Promise<void>) {
   const pending = [...items]
-  await Promise.all(
+  let failed = false
+  // A caller may hold a lock or dispose resources when this promise settles.
+  // Stop admitting work on failure, but drain every worker already using them.
+  const results = await Promise.allSettled(
     Array.from({ length: concurrency }, async () => {
-      while (true) {
-        const item = pending.pop()
-        if (item === undefined) return
-        await fn(item)
+      while (!failed) {
+        if (pending.length === 0) return
+        const item = pending.pop() as T
+        try {
+          await fn(item)
+        } catch (error) {
+          failed = true
+          throw error
+        }
       }
     }),
   )
+  for (const result of results) {
+    if (result.status === "rejected") throw result.reason
+  }
 }
 
 // In-process keyed serialization for long async operations.

@@ -161,3 +161,31 @@ activation. A concurrent replacement
 prevents the candidate from taking over. Model tools cannot silently revise frozen
 requirements. Review the resulting plan and its acceptance criteria; an executable
 command alone does not establish that its assertions cover the corrected request.
+
+### Review results and later source changes
+
+A nonempty review log does not establish successful review. For required external
+reviewers, use a project-owned check that validates the actual exit code,
+terminal completion, source or diff identity, and final findings or an explicit
+no-findings verdict. Warning-only logs, partial reasoning, and timeouts must fail.
+Keep failed attempts separately for diagnosis.
+
+New code-change submissions reject recognized simple file-presence and inspection
+checks. This is a narrow admission guard, not a semantic proof of arbitrary shell
+commands. Existing frozen contracts retain their schema and digest; checkpoints
+warn when an older check has this weakness.
+
+Goal-check freshness also fingerprints resolved file paths reported by successful
+file-editing tools during the current goal, including paths omitted from the
+original source list. Later edits to those files invalidate earlier receipts.
+The frozen contract and digest are unchanged. This tracking uses file-tool result
+metadata; it does not infer arbitrary shell side effects or test coverage.
+Existing filesystem containment, link, size, and file-count limits still apply.
+
+Check output and goal checkpoints disclose additional paths. If a frozen test
+command omits necessary regressions, request `/goal revise <correction>` and run
+the revised checks. Including a file in a fingerprint proves freshness, not that
+a test exercised that file. Prefer bounded source directories and test commands
+that include new regressions when planning an open-ended bug sweep.
+
+Workspace aliases are normalized for observed file paths. External scratch files do not become workspace source inputs; checkpoints disclose that external content is not fingerprinted. Required external state still needs project-owned verification.

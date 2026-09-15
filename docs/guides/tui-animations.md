@@ -1,5 +1,10 @@
 # TUI opening and ending animations
 
+Status: Current
+Scope: TUI opening and ending animations and rendering fallbacks
+Last reviewed: 2026-09-15
+Owner: AX Code TUI maintainers
+
 Each TUI launch randomly selects one of five animation pairs with equal probability (20% each):
 
 - Digital Code: purple/blue falling code for the opening, reverse code for the ending.

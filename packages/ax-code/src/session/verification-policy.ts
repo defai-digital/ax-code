@@ -156,6 +156,28 @@ export namespace VerificationPolicy {
     return true
   }
 
+  /** Narrow admission check for NEW code-change plans; never use to invalidate frozen v1 contracts. */
+  export function isFilePresenceOnlyCommand(command: string): boolean {
+    // Do not infer the behavior of substitutions or arbitrary shell programs.
+    if (/\$\(|`|\n/.test(command)) return false
+    let presence = false
+    for (const raw of command.split(/&&|\|\||;|\|/)) {
+      let segment = raw.trim()
+      if (!segment || /^(?:done|fi|then|else)$/.test(segment)) continue
+      if (/^for\s+[A-Za-z_][A-Za-z0-9_]*\s+in\s+[^;&|<>]+$/.test(segment)) continue
+      segment = segment.replace(/^(?:do|then|if)\s+/, "")
+      const word = firstWord(segment)
+      if (!word) continue
+      if (["test", "[", "[["].includes(word)) {
+        if (!/^(?:test|\[\[?)\s+!?\s*-[sefd]\s+/.test(segment)) return false
+        // Compound tests may assert content or values beyond file presence.
+        if (/\s-(?:a|o)\s|\s(?:=|==|!=|-eq|-ne|-gt|-lt|-ge|-le)\s/.test(segment)) return false
+        presence = true
+      } else if (!TRIVIAL_COMMANDS.has(word)) return false
+    }
+    return presence
+  }
+
   export function looksLikeVerificationCommand(command: string): boolean {
     if (!command.trim()) return false
     if (isTrivialVerificationCommand(command)) return false

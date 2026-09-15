@@ -1,3 +1,5 @@
+import { Session } from "../session"
+import { goalSourceScope, goalSourceScopeNotice } from "../session/goal-source-scope"
 import { Instance } from "../project/instance"
 import { SessionGoal } from "../session/goal"
 import { GoalPlan } from "../session/goal-plan"
@@ -40,7 +42,9 @@ export async function verifyGoalCheck(checkID: string, ctx: Tool.Context) {
   ) {
     throw new Error("The active goal changed while awaiting verification permission")
   }
-  const sourceBefore = await currentSourceState(cwd, Instance.project.vcs ?? "", assurance.sourcePaths)
+  const scopeInput = { cwd, created: goal.time.created, sourcePaths: assurance.sourcePaths }
+  const scopeBefore = goalSourceScope({ ...scopeInput, messages: await Session.messages({ sessionID: ctx.sessionID }) })
+  const sourceBefore = await currentSourceState(cwd, Instance.project.vcs ?? "", scopeBefore.paths)
   if (!sourceBefore.available)
     throw new Error(
       "Source fingerprint unavailable; goal check cannot produce fresh evidence. Check source size, links and declared paths.",
@@ -49,7 +53,8 @@ export async function verifyGoalCheck(checkID: string, ctx: Tool.Context) {
   const run = await runCheck(check.id, check.command, cwd, { signal: ctx.abort })
   ctx.abort.throwIfAborted()
   const endedAt = Date.now()
-  const sourceAfter = await currentSourceState(cwd, Instance.project.vcs ?? "", assurance.sourcePaths)
+  const scopeAfter = goalSourceScope({ ...scopeInput, messages: await Session.messages({ sessionID: ctx.sessionID }) })
+  const sourceAfter = await currentSourceState(cwd, Instance.project.vcs ?? "", scopeAfter.paths)
   ctx.abort.throwIfAborted()
   const passed =
     run.ok &&
@@ -75,7 +80,7 @@ export async function verifyGoalCheck(checkID: string, ctx: Tool.Context) {
   const envelope = VerificationEnvelopeSchema.parse({
     schemaVersion: 1,
     workflow: "qa",
-    scope: { kind: "custom", description: check.purpose, paths: assurance.sourcePaths },
+    scope: { kind: "custom", description: check.purpose, paths: scopeBefore.paths },
     command: { runner: check.id, argv: Process.shellCommand(check.command), cwd },
     result: {
       name: check.id,
@@ -108,6 +113,7 @@ export async function verifyGoalCheck(checkID: string, ctx: Tool.Context) {
       `Passed: ${passed}`,
       `Exit code: ${run.exitCode ?? "unavailable"}`,
       `Envelope: ${envelopeId}`,
+      ...[goalSourceScopeNotice(scopeAfter.additional, scopeAfter.external)].filter(Boolean),
       ...run.errors.map((error) => Env.redactSecrets(error)),
       ...(!GoalCheckVerification.sameSource(sourceBefore, sourceAfter)
         ? ["Source changed during verification or became unavailable; rerun against stable source."]

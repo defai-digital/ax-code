@@ -10,12 +10,26 @@ changes belong to AX Coder.
 
 - Auto-enable the advanced TUI profile on Ghostty unless `AX_CODE_TUI_ADVANCED_TERMINAL` is set. Explicit `0`/`false` still opts out.
 - Render Digital Code pixel rain with the neon purple/blue palette, a 1280×720 transfer cap, and image deletion before the overlay returns the working screen.
+
+### Fixed
+
+- Rebuild the pixel rain when only the travel direction changes, keep the left-facing Fuji train moving nose-first, and render a frame instead of throwing when a rain cell is blank.
+
+## [7.18.1] - 2026-09-15
+
+### Changed
+
+- Publish the paired SDK 2.5.25.
+- Add reactive localization for eight more languages and improve session navigation, actions, and transcript timelines.
 - Rename the TUI animation and its theme to Digital Code, preserving existing preferences. Render the rain and startup logo in randomly selected neon purple and blue.
 - Restrict managed AX Engine model selection to Qwen3.8 27B AXQ 6-bit MTP.
 
 ### Fixed
 
-- Rebuild the pixel rain when only the travel direction changes, keep the left-facing Fuji train moving nose-first, and render a frame instead of throwing when a rain cell is blank.
+- Reject failed snapshot content reads instead of displaying empty contents, enforce content limits for literal Git pathspec filenames, and drain active parallel reads before releasing operation ownership.
+- Preserve gateway tool thought signatures when replaying compatible-provider messages.
+- Preserve grep result fidelity, cancellation, context attribution, and bounded output.
+- Avoid false output-loop detection for generated code while checking large stream chunks consistently.
 
 ## [7.18.0] - 2026-09-15
 
