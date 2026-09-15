@@ -86,7 +86,10 @@ export function fujiRows(columns: number, rows: number, style: FujiStyle, elapse
   // keeps its left-facing nose, so it enters from the right and exits left
   // rather than travelling backwards across the frame.
   const phase = (Math.max(0, elapsedMs) % TRAIN_CYCLE_MS) / TRAIN_CYCLE_MS
-  const trainX = SCENE_WIDTH - Math.floor(phase * (SCENE_WIDTH + TRAIN_WIDTH))
+  // One extra column of travel so the final frame lands the tail fully past the
+  // left edge; without it the last glyph sat on column 0 and the next frame
+  // teleported the train back to the right edge.
+  const trainX = SCENE_WIDTH - Math.floor(phase * (SCENE_WIDTH + TRAIN_WIDTH + 1))
   for (let line = 0; line < TRAIN.length; line++) paint(trainX, 16 + line, TRAIN[line]!, "#edf2f4", "#1d3557")
   return grid.map((row) => {
     const runs: FujiRun[] = []

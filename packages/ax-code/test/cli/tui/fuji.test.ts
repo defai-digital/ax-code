@@ -58,6 +58,27 @@ describe("Fuji Mountain scenes", () => {
     expect(Number.isFinite(late)).toBe(true)
     expect(late).toBeLessThan(early)
   })
+  test("the train fully clears the left edge before the cycle wraps", () => {
+    // Regression: the cycle distance was SCENE_WIDTH + TRAIN_WIDTH, so the last
+    // frame before the wrap landed the tail glyph on column 0 and the next frame
+    // reset to the right edge. The train never completed its leftward journey.
+    const rightmostInk = (ms: number) => {
+      let max = -1
+      for (const row of fujiRows(74, 20, "fuji-day", ms).slice(16)) {
+        let column = 0
+        for (const run of row) {
+          for (let index = 0; index < run.text.length; index++) {
+            if (run.text[index] !== " " && column + index > max) max = column + index
+          }
+          column += run.text.length
+        }
+      }
+      return max
+    }
+    expect(rightmostInk(800)).toBeGreaterThanOrEqual(0)
+    expect(rightmostInk(2400 - 1)).toBe(-1)
+  })
+
   test("day and night preserve Fuji and sakura with distinct sky and celestial colors", () => {
     const day = fujiRows(74, 24, "fuji-day", 0),
       night = fujiRows(74, 24, "fuji-night", 0)
