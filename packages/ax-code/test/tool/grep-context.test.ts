@@ -240,4 +240,65 @@ describe("bounded grep context", () => {
       },
     })
   })
+
+  test("does not emit before-context that belongs to a match rejected by the limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    // ripgrep emits a match's before-context lines before the match itself, so
+    // the second match's before-context ("gap") arrives before the limit
+    // rejection. It must not survive as an orphan with no visible match.
+    await writeFile(path.join(tmp.path, "a.ts"), "before\nneedle one\nafter\ngap\nneedle two\nlast\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await GrepTool.init()
+        const result = await tool.execute({ pattern: "needle", context: 1, limit: 1 }, ctx)
+        const data = CanonicalOutput.Grep.parse(result.data)
+        expect(data.matches).toHaveLength(1)
+        expect(result.output).toContain("after")
+        expect(result.output).not.toContain("gap")
+        expect(data.context!.map((m) => [m.line, m.isMatch])).toEqual([
+          [1, false],
+          [2, true],
+          [3, false],
+        ])
+      },
+    })
+  })
+
+  test("keeps context attribution per file when the stream interleaves files", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const spawn = Process.spawn
+    const record = (type: string, file: string, line: number, text: string) =>
+      JSON.stringify({ type, data: { path: { text: file }, lines: { text: text + "\n" }, line_number: line } })
+    // Real ripgrep emits contiguous per-file blocks, but the budget logic must
+    // not depend on that: in an interleaved stream, a.ts:9 has no match, so it
+    // must not be emitted as if it were before-context of b.ts:20.
+    const stream =
+      [
+        record("context", "a.ts", 9, "a-before"),
+        record("context", "b.ts", 19, "b-before"),
+        record("match", "b.ts", 20, "needle b"),
+      ].join("\n") + "\n"
+    const script = `process.stdout.write(${JSON.stringify(stream)}); process.stdout.end()`
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) => {
+      if (!args.includes("--json")) return spawn(args, options)
+      return spawn([process.execPath, "-e", script], options)
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await GrepTool.init()
+        const result = await tool.execute({ pattern: "needle", context: 2, limit: 10 }, ctx)
+        const data = CanonicalOutput.Grep.parse(result.data)
+        expect(result.output).toContain("b-before")
+        expect(result.output).toContain("needle b")
+        expect(result.output).not.toContain("a-before")
+        expect(data.matches).toHaveLength(1)
+        expect(data.context!.map((m) => [m.path, m.line, m.isMatch])).toEqual([
+          ["b.ts", 19, false],
+          ["b.ts", 20, true],
+        ])
+      },
+    })
+  })
 })

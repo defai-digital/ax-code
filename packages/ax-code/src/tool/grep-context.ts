@@ -54,6 +54,27 @@ export async function searchWithContext(
     errors = (errors + chunk.toString("utf8")).slice(0, 2000)
   })
   let summarySeen = false
+  // ripgrep streams a match's _before-context_ rows before the match row itself.
+  // Holding them until their match is accepted keeps a match rejected by the
+  // line/byte budget from leaving its context rendered with no match.
+  // Attribution is per file so the logic does not depend on ripgrep's per-file
+  // block ordering: a row can only be before-context of a match in the same
+  // file, and pending rows are discarded if that match never arrives. Buffered
+  // rows count against the same budgets as emitted rows.
+  const pendingBeforeContext = new Map<
+    string,
+    { entry: { path: string; line: number; text: string; isMatch: boolean }; rendered: string; size: number }[]
+  >()
+  const lastAcceptedMatchLine = new Map<string, number>()
+  let bufferedLines = 0
+  let bufferedBytes = 0
+  // A context row is a match's after-context when it sits within the context
+  // window that follows it in the same file. Rows past that window are
+  // before-context of a later match, so they are buffered instead.
+  const isAfterContext = (file: string, line: number) => {
+    const matchLine = lastAcceptedMatchLine.get(file)
+    return matchLine !== undefined && line > matchLine && line - matchLine <= params.context
+  }
   const accept = (line: string) => {
     if (!line.trim()) return true
     const event = Event.parse(parseJsonStrict(line))
@@ -78,11 +99,47 @@ export async function searchWithContext(
     const entry = { path: file, line: record.data.line_number, text, isMatch }
     const rendered = `${file}:${entry.line}${isMatch ? ":" : "-"} ${text}${text.length < source.length ? "..." : ""}`
     const size = Buffer.byteLength(rendered) + 1
-    if (data.context!.length >= MAX_LINES || bytes + size > MAX_BYTES) return false
+    if (!isMatch) {
+      if (isAfterContext(file, entry.line)) {
+        if (data.context!.length >= MAX_LINES || bytes + size > MAX_BYTES) return false
+        bytes += size
+        data.context!.push(entry)
+        output.push(rendered)
+        return true
+      }
+      // A possible before-context row: hold it until its match arrives. It is
+      // discarded if that match never comes (budget stop or an absent match), so
+      // it can never surface as an orphan, and it still counts against the
+      // budgets. A match has at most `context` before-context rows.
+      const bucket = pendingBeforeContext.get(file) ?? []
+      if (bucket.length >= params.context) return false
+      if (data.context!.length + bufferedLines >= MAX_LINES || bytes + bufferedBytes + size > MAX_BYTES) return false
+      bucket.push({ entry, rendered, size })
+      pendingBeforeContext.set(file, bucket)
+      bufferedLines++
+      bufferedBytes += size
+      return true
+    }
+    // Commit the match together with the before-context it owns, or drop both
+    // when the budget cannot fit the pair.
+    const before = pendingBeforeContext.get(file) ?? []
+    if (data.context!.length + bufferedLines + 1 > MAX_LINES || bytes + bufferedBytes + size > MAX_BYTES) {
+      return false
+    }
+    const beforeBytes = before.reduce((sum, item) => sum + item.size, 0)
+    pendingBeforeContext.delete(file)
+    bufferedLines -= before.length
+    bufferedBytes -= beforeBytes
+    for (const item of before) {
+      bytes += item.size
+      data.context!.push(item.entry)
+      output.push(item.rendered)
+    }
     bytes += size
     data.context!.push(entry)
-    if (isMatch) data.matches.push({ path: file, line: entry.line, text })
+    data.matches.push({ path: file, line: entry.line, text })
     output.push(rendered)
+    lastAcceptedMatchLine.set(file, entry.line)
     return true
   }
   let stopped = false
@@ -164,6 +221,15 @@ export async function searchWithContext(
   if (!stopped && code !== 0 && code !== 1 && !(code === 2 && data.matches.length))
     throw new Error(`ripgrep failed: ${errors}`)
   if (!stopped && (code === 2 || !summarySeen)) data.truncated = true
+  // Before-context rows that never found their match are not rendered (they
+  // would be orphans). Real ripgrep does not emit them, so this only fires on an
+  // abnormal stream; report it as truncated rather than silently dropping rows.
+  if (!stopped && bufferedLines > 0) {
+    data.truncated = true
+    pendingBeforeContext.clear()
+    bufferedLines = 0
+    bufferedBytes = 0
+  }
 
   const header = data.truncated
     ? `Showing ${data.matches.length} matches (results or context truncated; narrow the path or pattern).`
