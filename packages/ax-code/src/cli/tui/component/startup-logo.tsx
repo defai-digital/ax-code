@@ -11,6 +11,7 @@ import {
   createStartupLogoGlyphs,
   startupLogoFrame,
   startupLogoPadding,
+  startupLogoTick,
 } from "./digital-code-view-model"
 
 const BACKGROUND = RGBA.fromInts(0, 0, 0)
@@ -63,22 +64,34 @@ export function StartupLogo(props: { durationMs?: number; onDone: () => void }) 
     }),
   )
 
-  let elapsed = 0
-  const stopInterval = scheduleTuiInterval(
+  // Frames and hand-off share one wall clock. Counting ticks instead would let
+  // a lagging event loop run out the hand-off timeout before the mark lands.
+  const startedAt = performance.now()
+  const durationMs = props.durationMs ?? STARTUP_LOGO_DURATION_MS
+  let finished = false
+  let stopInterval = () => {}
+  const finish = () => {
+    if (finished) return
+    finished = true
+    stopInterval()
+    stopTimeout()
+    props.onDone()
+  }
+  const stopTimeout = scheduleTuiTimeout(finish, {
+    name: "startup-logo-timeout",
+    delayMs: durationMs,
+    unref: true,
+  })
+  stopInterval = scheduleTuiInterval(
     () => {
-      elapsed += STARTUP_LOGO_TICK_MS
-      setElapsedMs(elapsed)
-      if (elapsed >= STARTUP_LOGO_DURATION_MS) stopInterval()
+      const { elapsedMs, done } = startupLogoTick({ startedAt, now: performance.now(), durationMs })
+      setElapsedMs(elapsedMs)
+      if (done) finish()
     },
     { name: "startup-logo-tick", delayMs: STARTUP_LOGO_TICK_MS, unref: true },
   )
-
-  const stopTimeout = scheduleTuiTimeout(() => props.onDone(), {
-    name: "startup-logo-timeout",
-    delayMs: props.durationMs ?? STARTUP_LOGO_DURATION_MS,
-    unref: true,
-  })
   onCleanup(() => {
+    finished = true
     stopInterval()
     stopTimeout()
   })
@@ -87,12 +100,12 @@ export function StartupLogo(props: { durationMs?: number; onDone: () => void }) 
     if (evt.name === "escape") {
       evt.preventDefault()
       evt.stopPropagation()
-      props.onDone()
+      finish()
       return
     }
     // Keys pass through to the prompt, so a keyboard selection can grow under
     // the cover. Yield as soon as one exists instead of hiding it.
-    if (renderer.hasSelection) props.onDone()
+    if (renderer.hasSelection) finish()
   })
 
   return (

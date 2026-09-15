@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import { chooseAnimationPair } from "../../../src/cli/tui/component/animation-pair"
+import { chooseAnimationPair, launchAnimationPair } from "../../../src/cli/tui/component/animation-pair"
 
 describe("launch animation pairing", () => {
   test.each([0, 0.1, 0.2 - Number.EPSILON])(
@@ -32,4 +32,16 @@ describe("launch animation pairing", () => {
 
 test.each([0.8, 0.9, 0.999999])("draw %s pairs Mahjong match with final points", (draw) => {
   expect(chooseAnimationPair(() => draw)).toEqual({ opening: "mahjong-match", ending: "mahjong-ending" })
+})
+
+describe("launch pair caching", () => {
+  test("draws the launch pair once and reuses it for every later read", () => {
+    // Regression: the pair was drawn inside App, so an error-boundary reset
+    // (which rebuilds App) re-drew it and replayed startup. It is now cached
+    // outside the component tree.
+    const first = launchAnimationPair()
+    expect(Object.isFrozen(first)).toBe(true)
+    expect(launchAnimationPair()).toBe(first)
+    expect(launchAnimationPair()).toBe(first)
+  })
 })

@@ -71,6 +71,29 @@ const includeFiles = process.env.AX_TEST_FILES
       .filter(Boolean)
   : undefined
 
+// `vitest --dir <subdir>` sets the base directory scanned for test files, so the
+// include globs must be relative to that base. The default `test/**` prefix
+// would otherwise double up (`<dir>/test/**`) and match nothing. Plain
+// `vitest run` passes no `--dir`, so its include stays `test/**`.
+const cliScanDir = (() => {
+  const argv = process.argv.slice(2)
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === "--dir") return argv[i + 1]
+    if (arg?.startsWith("--dir=")) return arg.slice("--dir=".length)
+  }
+  return undefined
+})()
+const defaultInclude = cliScanDir ? ["**/*.test.{ts,tsx}"] : ["test/**/*.test.{ts,tsx}"]
+// The exclude globs share the scan base, so drop the `--dir` prefix from the
+// root-relative quarantine list (and any entry outside the scan dir).
+const scanDirPrefix = cliScanDir ? cliScanDir.replace(/^\.\//, "").replace(/\/+$/, "") + "/" : undefined
+const defaultExclude = scanDirPrefix
+  ? defaultExcludedTests
+      .filter((file) => file.startsWith(scanDirPrefix))
+      .map((file) => file.slice(scanDirPrefix.length))
+  : defaultExcludedTests
+
 export default defineConfig({
   plugins: [txtAsText, forceEsbuildTs],
   resolve: {
@@ -92,10 +115,10 @@ export default defineConfig({
     // files, so when a group explicitly requests files we drop those exact paths
     // from the exclude — otherwise the recovery/e2e/live groups would self-
     // exclude and run nothing.
-    include: includeFiles ?? ["test/**/*.test.{ts,tsx}"],
+    include: includeFiles ?? defaultInclude,
     exclude: includeFiles
       ? ["**/node_modules/**", "test-vitest/**", ...defaultExcludedTests.filter((file) => !includeFiles.includes(file))]
-      : ["**/node_modules/**", "test-vitest/**", ...defaultExcludedTests],
+      : ["**/node_modules/**", "test-vitest/**", ...defaultExclude],
     // Order matters: vitest.env strips inherited AX_CODE_* host-session flags
     // before any src/ import (see sanitize-env.ts); vitest.setup then installs
     // the Bun compat shim; preload sets per-process (pid) XDG/home isolation

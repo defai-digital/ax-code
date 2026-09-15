@@ -42,9 +42,11 @@ import {
   startupLogoGlyphProgress,
   startupLogoGlyphRow,
   startupLogoPadding,
+  startupLogoTick,
   startupRainAfterPlayback,
   startupRainCoversChrome,
   startupRainShowsLogo,
+  digitalCodeOverlayActive,
   tickDigitalCode,
 } from "../../../src/cli/tui/component/digital-code-view-model"
 import type { DigitalCodeRun, DigitalCodeState } from "../../../src/cli/tui/component/digital-code-view-model"
@@ -317,6 +319,24 @@ describe("Digital Code resize", () => {
       }
     }
   })
+
+  test("normalizes a fractional or 0-cell size instead of rebuilding every tick", () => {
+    // Regression: comparing the raw size against already-clamped dimensions made
+    // a 0-cell or unfloored terminal look like a resize on every tick, so the
+    // columns were rebuilt from their initial heads and the rain never advanced.
+    const state = createDigitalCode({ ...GRID, random: seeded(17) })
+    const fractional = tickDigitalCode(state, { width: 80.4, height: 24.6 })
+    expect(fractional.width).toBe(state.width)
+    expect(fractional.height).toBe(state.height)
+    expect(fractional.columns[0]!.head).toBeCloseTo(state.columns[0]!.head + state.columns[0]!.speed, 10)
+
+    const zeroSize = { width: 0, height: 0 }
+    const zero = tickDigitalCode(createDigitalCode({ width: 1, height: 1, random: seeded(13) }), zeroSize)
+    const next = tickDigitalCode(zero, zeroSize)
+    expect(next.width).toBe(1)
+    expect(next.height).toBe(1)
+    expect(next.columns[0]!.head).toBeCloseTo(zero.columns[0]!.head + zero.columns[0]!.speed, 10)
+  })
 })
 
 describe("Digital Code duration", () => {
@@ -362,6 +382,18 @@ describe("Digital Code auto-play gate", () => {
     expect(shouldStopDigitalCode({ dialogOpen: false, hasSelection: false })).toBe(false)
     expect(shouldStopDigitalCode({ dialogOpen: true, hasSelection: false })).toBe(true)
     expect(shouldStopDigitalCode({ dialogOpen: false, hasSelection: true })).toBe(true)
+  })
+
+  test("counts an ending or startup overlay as already playing", () => {
+    // Regression: the task-completion gate only looked at the opening overlay,
+    // so a completion could mount a second animation above the ending preview
+    // or the startup logo. Any covering overlay must block it.
+    expect(digitalCodeOverlayActive({ opening: false, ending: false, startupPhase: "app" })).toBe(false)
+    expect(digitalCodeOverlayActive({ opening: true, ending: false, startupPhase: "app" })).toBe(true)
+    expect(digitalCodeOverlayActive({ opening: false, ending: true, startupPhase: "app" })).toBe(true)
+    expect(digitalCodeOverlayActive({ opening: false, ending: false, startupPhase: "hold" })).toBe(true)
+    expect(digitalCodeOverlayActive({ opening: false, ending: false, startupPhase: "rain" })).toBe(true)
+    expect(digitalCodeOverlayActive({ opening: false, ending: false, startupPhase: "logo" })).toBe(true)
   })
 })
 
@@ -515,6 +547,15 @@ describe("startup logo beat", () => {
     expect(app).toContain("StartupLogo")
   })
 
+  test("remounts the opening overlay per requested style instead of mutating a live run", () => {
+    // Regression: playDigitalCode changed the style signal on an already-mounted
+    // overlay, so the text fallback kept its first animation while the Kitty path
+    // picked up the new one. Keying the Show on the style remounts it instead.
+    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui/app.tsx"), "utf8")
+    expect(app).toMatch(/<Show\s+when=\{digitalCodePlaying\(\)\s*&&\s*openingStyle\(\)\}\s+keyed>/)
+    expect(app).toMatch(/\(style\)\s*=>\s*<DigitalCode style=\{style\}/)
+  })
+
   test("the logo overlay hides the cursor and clips the drop", () => {
     const src = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui/component/startup-logo.tsx"), "utf8")
     expect(src).toContain("bindHiddenTerminalCursor")
@@ -616,6 +657,60 @@ describe("startup logo drop", () => {
     const glyphs = createStartupLogoGlyphs({ lines: ["AB", "CD"], random: () => 0 })
     const early = startupLogoFrame({ glyphs, elapsedMs: 0, blockLeft: 0, blockTop: 2, width: 20, height: 10 })
     expect(early.rows).toHaveLength(0)
+  })
+
+  test("takes the character, brightness and color from the same glyph when two share a cell", () => {
+    // Regression: the character came from the last glyph iterated while the
+    // brightness and color came from the brighter one, so an overlapping cell
+    // could draw one letter in another letter's color.
+    const bright = {
+      hue: "blue" as const,
+      char: "A",
+      row: 0,
+      col: 0,
+      delayMs: 0,
+      fallMs: STARTUP_LOGO_FALL_DURATION_MS,
+    }
+    const dim = {
+      hue: "purple" as const,
+      char: "B",
+      row: 0,
+      col: 0,
+      delayMs: 0,
+      fallMs: STARTUP_LOGO_FALL_DURATION_MS * 2,
+    }
+    const frame = startupLogoFrame({
+      glyphs: [bright, dim],
+      elapsedMs: STARTUP_LOGO_FALL_DURATION_MS,
+      blockLeft: 0,
+      blockTop: 0,
+      width: 20,
+      height: 5,
+    })
+    const lit = frame.rows.flat().filter((run) => run.level > 0)
+    expect(lit).toHaveLength(1)
+    expect(lit[0]!.text).toBe("A")
+    expect(lit[0]!.hue).toBe("blue")
+    expect(lit[0]!.level).toBe(DIGITAL_CODE_LEVELS)
+  })
+
+  test("advances the beat on the wall clock and only hands off once the mark lands", () => {
+    // Regression: frames advanced by counted ticks while the hand-off used the
+    // wall clock, so a lagging event loop could finish the beat before the mark
+    // landed. Both now read the same clock.
+    const startedAt = 1_000
+    expect(startupLogoTick({ startedAt, now: startedAt - 50, durationMs: STARTUP_LOGO_DURATION_MS })).toEqual({
+      elapsedMs: 0,
+      done: false,
+    })
+    expect(startupLogoTick({ startedAt, now: startedAt + 400, durationMs: STARTUP_LOGO_DURATION_MS })).toEqual({
+      elapsedMs: 400,
+      done: false,
+    })
+    expect(
+      startupLogoTick({ startedAt, now: startedAt + STARTUP_LOGO_DURATION_MS, durationMs: STARTUP_LOGO_DURATION_MS })
+        .done,
+    ).toBe(true)
   })
 
   test("lands every character on its own row", () => {

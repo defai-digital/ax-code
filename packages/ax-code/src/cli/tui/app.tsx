@@ -1,4 +1,4 @@
-import { chooseAnimationPair } from "./component/animation-pair"
+import { launchAnimationPair } from "./component/animation-pair"
 import type { OverlayStyle } from "./component/foliage-view-model"
 import { LanguageProvider, useLanguage } from "./context/language"
 import { DialogLanguage } from "./component/dialog-language"
@@ -113,6 +113,7 @@ import {
   startupRainShowsLogo,
   startupRainCoversChrome,
   shouldStopDigitalCode,
+  digitalCodeOverlayActive,
 } from "./component/digital-code-view-model"
 
 const FALLBACK_COLOR_MODE = "dark" as const
@@ -334,7 +335,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const [digitalCodePlaying, setDigitalCodePlaying] = createSignal(false)
   const [startupRainPhase, setStartupRainPhase] = createSignal(initialStartupRainPhase())
   let exiting = false
-  const animationPair = chooseAnimationPair()
+  const animationPair = launchAnimationPair()
   const [openingStyle, setOpeningStyle] = createSignal<OverlayStyle>(animationPair.opening)
   const [endingStyle, setEndingStyle] = createSignal<OverlayStyle>(animationPair.ending)
   const playDigitalCode = (style: OverlayStyle = animationPair.opening) => {
@@ -1310,7 +1311,11 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         !shouldAutoPlayDigitalCode({
           enabled: kv.get("digital_code_on_task_complete", false),
           animationsEnabled: kv.get("animations_enabled", true),
-          alreadyPlaying: digitalCodePlaying(),
+          alreadyPlaying: digitalCodeOverlayActive({
+            opening: digitalCodePlaying(),
+            ending: reverseRainPlaying(),
+            startupPhase: startupRainPhase(),
+          }),
           dialogOpen: dialog.stack.length > 0,
           hasSelection: Boolean(renderer.getSelection()?.getSelectedText()),
         })
@@ -1395,8 +1400,8 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       <Show when={startupRainCoversChrome(startupRainPhase())}>
         <DigitalCodeCover />
       </Show>
-      <Show when={digitalCodePlaying()}>
-        <DigitalCode style={openingStyle()} onDone={endDigitalCode} />
+      <Show when={digitalCodePlaying() && openingStyle()} keyed>
+        {(style) => <DigitalCode style={style} onDone={endDigitalCode} />}
       </Show>
       <Show when={reverseRainPlaying()}>
         <DigitalCode

@@ -280,10 +280,16 @@ export function digitalCodeCellLevel(direction: DigitalCodeDirection, offset: nu
  * outside the new width.
  */
 export function tickDigitalCode(state: DigitalCodeState, size: { width: number; height: number }): DigitalCodeState {
-  if (state.width !== size.width || state.height !== size.height) {
+  // Normalize the incoming size exactly like createDigitalCode does. Comparing
+  // the raw size to already-clamped dimensions would treat a 0-cell or
+  // fractional terminal as a resize on every tick, rebuilding the columns from
+  // their initial heads so the rain never advances.
+  const width = Math.max(1, Math.floor(size.width))
+  const height = Math.max(1, Math.floor(size.height))
+  if (state.width !== width || state.height !== height) {
     return createDigitalCode({
-      width: size.width,
-      height: size.height,
+      width,
+      height,
       random: state.random,
       direction: state.direction,
     })
@@ -599,9 +605,13 @@ export function startupLogoFrame(input: {
     const hues = new Array<DigitalCodeHue>(input.width).fill("purple")
     for (const cell of placed) {
       if (cell.row !== y) continue
+      // The drawn character, brightness and hue must come from the same glyph.
+      // When two land in one cell the brighter one wins outright, rather than
+      // taking the character from one glyph and the color from another.
+      if (cell.level < levels[cell.col]) continue
       chars[cell.col] = cell.char
-      if (cell.level >= levels[cell.col]) hues[cell.col] = cell.hue
-      levels[cell.col] = Math.max(levels[cell.col], cell.level)
+      hues[cell.col] = cell.hue
+      levels[cell.col] = cell.level
     }
     rows.push(mergeRuns(chars, levels, bold, hues, input.width))
   }
@@ -620,6 +630,32 @@ export function startupLogoDropLevel(progress: number): number {
 
 export function startupRainCoversChrome(phase: StartupRainPhase): boolean {
   return phase !== "app"
+}
+
+/**
+ * Whether an animated overlay already owns the screen: the opening run, the
+ * ending run, or a startup phase that still covers the chrome. A completion
+ * flourish must never start above any of them.
+ */
+export function digitalCodeOverlayActive(input: {
+  opening: boolean
+  ending: boolean
+  startupPhase: StartupRainPhase
+}): boolean {
+  return input.opening || input.ending || startupRainCoversChrome(input.startupPhase)
+}
+
+/**
+ * One wall-clock step of the logo beat. The frames and the hand-off share this
+ * clock, so a lagging event loop can only delay the beat — it can never finish
+ * it before the mark's glyphs have landed.
+ */
+export function startupLogoTick(input: { startedAt: number; now: number; durationMs: number }): {
+  elapsedMs: number
+  done: boolean
+} {
+  const elapsedMs = Math.max(0, input.now - input.startedAt)
+  return { elapsedMs, done: elapsedMs >= input.durationMs }
 }
 
 /** Stop a playing overlay if a dialog or selection appears after it started. */

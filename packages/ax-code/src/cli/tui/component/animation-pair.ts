@@ -12,3 +12,14 @@ export function chooseAnimationPair(random: () => number = Math.random): Animati
   if (draw < 0.8) return Object.freeze({ opening: "fuji-day", ending: "fuji-night" })
   return Object.freeze({ opening: "mahjong-match", ending: "mahjong-ending" })
 }
+
+let launchPair: AnimationPair | undefined
+
+/**
+ * The launch's selected pair, drawn once and reused for every later read. The
+ * draw is cached outside any component so an error-boundary reset (which
+ * rebuilds `App`) or a preview replay can never re-draw or change it.
+ */
+export function launchAnimationPair(): AnimationPair {
+  return (launchPair ??= chooseAnimationPair())
+}
