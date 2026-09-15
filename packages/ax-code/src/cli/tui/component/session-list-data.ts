@@ -70,3 +70,24 @@ export function sessionNavigationEntries<T extends { id: string; parentID?: stri
   }
   return rows
 }
+
+/** Short identities appear only when titles collide in the displayed list. */
+export function duplicateSessionHints(sessions: readonly { id: string; title: string }[]) {
+  const groups = new Map<string, Set<string>>()
+  for (const session of sessions) {
+    const key = session.title.trim().toLowerCase()
+    const ids = groups.get(key) ?? new Set<string>()
+    ids.add(session.id)
+    groups.set(key, ids)
+  }
+  const result = new Map<string, string>()
+  for (const group of groups.values()) {
+    const ids = [...group]
+    if (ids.length < 2) continue
+    let length = 4
+    const limit = Math.max(...ids.map((id) => id.length))
+    while (length < limit && new Set(ids.map((id) => id.slice(-length))).size < ids.length) length++
+    for (const id of ids) result.set(id, id.slice(-length))
+  }
+  return result
+}

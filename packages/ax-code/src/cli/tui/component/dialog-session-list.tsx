@@ -27,6 +27,7 @@ import { createAbortableResourceFetcher } from "../util/abortable-resource"
 import { Log } from "@/util/log"
 import type { Session } from "@ax-code/sdk/v2"
 import {
+  duplicateSessionHints,
   localWorkspaceDirectory,
   normalizeDialogSessions,
   orderRootSessions,
@@ -204,6 +205,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
       ? sessionNavigationEntries(listedSessions, pinnedIDs, "all")
       : orderRootSessions(allSessions, pinnedIDs).map((session) => ({ session, depth: 0 }))
 
+    const identityHints = duplicateSessionHints(ordered.map((row) => row.session))
     return ordered.map(({ session: x, depth }) => {
       const isPinned = pinnedSet.has(x.id)
       const date = new Date(x.time.updated)
@@ -227,7 +229,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
         bg: isDeleting ? theme.error : undefined,
         value: x.id,
         category,
-        footer: Locale.time(x.time.updated),
+        footer: [identityHints.get(x.id), Locale.time(x.time.updated)].filter(Boolean).join(" · "),
         gutter,
       }
     })

@@ -1,3 +1,5 @@
+import { stringWidth } from "@/bun/node-compat"
+import { ChromeAction } from "@tui/component/chrome-action"
 import { useLanguage } from "@tui/context/language"
 import { useTerminalDimensions } from "ax-tui/solid"
 import { useContentDimensions } from "@tui/context/content-dimensions"
@@ -28,7 +30,22 @@ import { Spinner } from "../../component/spinner"
 
 const SUBAGENT_PARENT_DOUBLE_CLICK_MS = 400
 
-const Title = (props: { session: Accessor<Session | undefined> }) => {
+const Title = (props: { session: Accessor<Session | undefined>; width: number }) => {
+  const { t } = useLanguage()
+  const command = useCommandDialog()
+  const actions = createMemo(() => {
+    let remaining = Math.max(0, props.width)
+    return [
+      { label: t("ui.searchTranscript"), command: "session.search" },
+      { label: t("ui.lastMessage"), command: "session.last" },
+      { label: t("ui.renameSession"), command: "session.rename" },
+    ].filter((action) => {
+      const width = stringWidth(action.label)
+      if (width > remaining) return false
+      remaining -= width + 2
+      return true
+    })
+  })
   const { theme } = useTheme()
   return (
     <Show when={props.session()} fallback={<text fg={theme.textMuted}>Loading session...</text>}>
@@ -37,7 +54,13 @@ const Title = (props: { session: Accessor<Session | undefined> }) => {
           <text fg={theme.text}>
             <span style={{ bold: true }}>{s().title}</span>
           </text>
-          <text fg={theme.textMuted}>{s().id}</text>
+          <box flexDirection="row" gap={2} height={1}>
+            <For each={actions()}>
+              {(action) => (
+                <ChromeAction onMouseUp={() => command.trigger(action.command)}>{action.label}</ChromeAction>
+              )}
+            </For>
+          </box>
         </box>
       )}
     </Show>
@@ -246,7 +269,7 @@ export function Header() {
           <Match when={true}>
             <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
               <box flexDirection="column">
-                <Title session={session} />
+                <Title session={session} width={Math.max(0, dimensions().width - (narrow() ? 8 : 40))} />
                 <Show when={goalChip() && !autonomous().active}>
                   <text fg={goalChipColor()}>{goalChip()?.label}</text>
                 </Show>
