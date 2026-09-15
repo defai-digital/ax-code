@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useSDK } from "@tui/context/sdk"
 import { useTheme } from "@tui/context/theme"
@@ -7,6 +8,8 @@ import type { ScheduledTaskInfo } from "./dialog-scheduled-task-view-model"
 import { SCHEDULED_TASK_EVENTS, scheduleChrome } from "./dialog-scheduled-task-view-model"
 
 export function ScheduleStatus(props: { width: number; compact?: boolean }) {
+  const uiText = useLanguage().t
+
   const sdk = useSDK()
   const command = useCommandDialog()
   const { theme } = useTheme()
@@ -55,7 +58,7 @@ export function ScheduleStatus(props: { width: number; compact?: boolean }) {
             fallback={
               <>
                 <text fg={theme.text} selectable={false}>
-                  <b>Schedule</b>
+                  <b>{uiText("ui.schedule")}</b>
                 </text>
                 <text fg={fg()} selectable={false}>
                   {truncateToCellWidth(view().detail, props.width)}

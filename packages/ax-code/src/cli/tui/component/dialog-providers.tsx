@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useDialog } from "@tui/ui/dialog"
@@ -18,6 +19,8 @@ const CONNECT_NEW_VALUE = "__connect_new__"
  * disconnect; "Connect new provider" hands off to the full /connect flow.
  */
 export function DialogProviders() {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const dialog = useDialog()
   const sdk = useSDK()
@@ -58,31 +61,31 @@ export function DialogProviders() {
               isDisabled
                 ? [
                     {
-                      title: "Enable",
+                      title: uiText("provider.enable"),
                       value: "toggle" as const,
-                      description: "Turn back on — uses saved credentials",
+                      description: uiText("provider.enableHint"),
                     },
                     {
-                      title: "Disconnect",
+                      title: uiText("common.disconnect"),
                       value: "disconnect" as const,
-                      description: "Remove saved credentials",
+                      description: uiText("provider.removeCredentials"),
                     },
                   ]
                 : [
                     {
-                      title: "Select a model",
+                      title: uiText("provider.selectModel"),
                       value: "use" as const,
-                      description: "Switch to a model from this provider",
+                      description: uiText("ui.switchToAModelFromThisProvider"),
                     },
                     {
-                      title: "Disable",
+                      title: uiText("provider.disable"),
                       value: "toggle" as const,
-                      description: "Turn off temporarily — keeps credentials",
+                      description: uiText("provider.keepCredentials"),
                     },
                     {
-                      title: "Disconnect",
+                      title: uiText("common.disconnect"),
                       value: "disconnect" as const,
-                      description: "Remove saved credentials",
+                      description: uiText("provider.removeCredentials"),
                     },
                   ]
             }
@@ -108,22 +111,22 @@ export function DialogProviders() {
     ...connected().map((provider) => ({
       title: provider.name,
       value: provider.id,
-      description: "Connected",
+      description: uiText("ui.connected"),
       onSelect: () => manage(provider.id, provider.name, false),
     })),
     ...disabled().map((providerID) => ({
       title: providerID,
       value: providerID,
-      description: "Disabled",
+      description: uiText("ensemble.disabled"),
       onSelect: () => manage(providerID, providerID, true),
     })),
     {
-      title: "Connect new provider",
+      title: uiText("ui.connectNewProvider"),
       value: CONNECT_NEW_VALUE,
-      description: "Add an API key, OAuth login, CLI, or local runtime",
+      description: uiText("ui.addAnApiKeyOauthLoginCliOrLocalRuntime"),
       onSelect: () => dialog.replace(() => <DialogProvider />),
     },
   ])
 
-  return <DialogSelect title="Providers" options={options()} />
+  return <DialogSelect title={uiText("ui.providers")} options={options()} />
 }

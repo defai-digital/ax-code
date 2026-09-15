@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { useTerminalDimensions } from "ax-tui/solid"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { type Accessor, createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
@@ -55,6 +56,8 @@ const WorkspaceInfo = (props: { workspace: Accessor<string | undefined> }) => {
 }
 
 export function Header() {
+  const uiText = useLanguage().t
+
   const route = useRouteData("session")
   const sync = useSync()
   const session = createMemo(() => sync.session.get(route.sessionID))
@@ -117,6 +120,7 @@ export function Header() {
   })
   const goalChip = createMemo(() =>
     footerGoalChip({
+      t: uiText,
       goal: sync.data.session_goal[route.sessionID],
       maxObjective: 48,
       planning: hasActiveGoalPlanner({
@@ -189,7 +193,7 @@ export function Header() {
               <box flexDirection={narrow() ? "column" : "row"} justifyContent="space-between" gap={narrow() ? 1 : 0}>
                 <box flexDirection="column" onMouseUp={handleSubagentHeaderMouseUp}>
                   <text fg={theme.text}>
-                    <b>Subagent session</b>
+                    <b>{uiText("ui.subagentSession")}</b>
                   </text>
                   <Show when={session()?.id}>{(id) => <text fg={theme.textMuted}>{id()}</text>}</Show>
                   <Show when={goalChip()}>
@@ -210,7 +214,7 @@ export function Header() {
                     paddingLeft={1}
                     paddingRight={1}
                   >
-                    <text fg={hover() === "parent" ? theme.text : theme.background}>Back to Parent</text>
+                    <text fg={hover() === "parent" ? theme.text : theme.background}>{uiText("ui.backToParent")}</text>
                   </box>
                   <text fg={theme.textMuted}>{keybind.print("session_parent")}</text>
                 </box>
@@ -221,7 +225,8 @@ export function Header() {
                   backgroundColor={hover() === "prev" ? theme.backgroundElement : theme.backgroundPanel}
                 >
                   <text fg={theme.text}>
-                    Prev <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
+                    {uiText("ui.prev")}{" "}
+                    <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle_reverse")}</span>
                   </text>
                 </box>
                 <box
@@ -231,7 +236,8 @@ export function Header() {
                   backgroundColor={hover() === "next" ? theme.backgroundElement : theme.backgroundPanel}
                 >
                   <text fg={theme.text}>
-                    Next <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
+                    {uiText("ui.next")}{" "}
+                    <span style={{ fg: theme.textMuted }}>{keybind.print("session_child_cycle")}</span>
                   </text>
                 </box>
               </box>

@@ -1,3 +1,4 @@
+import { english, type Translate } from "../../i18n"
 // Renderer-free view-model for the footer run-mode control.
 //
 // Simplified two-mode system: Manual ↔ Autonomous
@@ -64,15 +65,15 @@ export function runModeFlags(mode: RunMode): RunModeFlags {
   return { autonomous: mode !== "none", superLong: mode === "super-long" }
 }
 
-export function runModeLabel(mode: RunMode): string {
+export function runModeLabel(mode: RunMode, t: Translate = english): string {
   switch (mode) {
     case "none":
-      return "Manual"
+      return t("mode.manual")
     case "auto":
-      return "Auto"
+      return t("ui.auto")
     case "super-long":
       // During deprecation, show as "Auto (Long-Run)" to clarify semantics
-      return "Auto (Long-Run)"
+      return t("mode.longRun")
   }
 }
 

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createEffect, createMemo, createSignal } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
@@ -43,6 +44,8 @@ function pickerFamilySortKey(modelID: string) {
 }
 
 export function DialogModel(props: { providerID?: string }) {
+  const uiText = useLanguage().t
+
   const local = useLocal()
   const sync = useSync()
   const dialog = useDialog()
@@ -226,7 +229,7 @@ export function DialogModel(props: { providerID?: string }) {
         },
         {
           keybind: keybind.all.model_favorite_toggle?.[0],
-          title: "Favorite",
+          title: uiText("ui.favorite"),
           disabled: !connected(),
           onTrigger: (option) => {
             local.model.toggleFavorite(option.value as { providerID: string; modelID: string })

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { useKV } from "@tui/context/kv"
 import {
   activeNavigationSessions,
@@ -51,6 +52,8 @@ function errorMessage(error: unknown, fallback: string) {
 // the listing to a workspace root, `localOnly` restricts to sessions in the
 // current directory.
 export function DialogSessionList(props: { workspaceID?: string; localOnly?: boolean; navigation?: boolean } = {}) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const kv = useKV()
   const filter = () => navigationFilter(kv.get("navigation_filter"))
@@ -242,7 +245,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
             {(value) => (
               <box onMouseUp={() => kv.set("navigation_filter", value)}>
                 <text fg={filter() === value ? theme.accent : theme.textMuted} selectable={false}>
-                  {value === "recent" ? "Recent" : "Active"}
+                  {value === "recent" ? uiText("common.recent") : uiText("ui.active")}
                 </text>
               </box>
             )}
@@ -256,15 +259,15 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
             }}
           >
             <text fg={theme.textMuted} selectable={false}>
-              Clear
+              {uiText("ui.clear")}
             </text>
           </box>
         </box>
         <Show when={filter() === "active"}>
           <text paddingLeft={4} fg={theme.textMuted} wrapMode="word">
             {sdk.sseConnected && sync.data.session_loaded
-              ? "Includes current session"
-              : "Cached sessions; reconnect to filter"}
+              ? uiText("ui.includesCurrentSession")
+              : uiText("ui.cachedSessionsReconnectToFilter")}
           </text>
         </Show>
       </Show>
@@ -276,7 +279,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
               ? "Workspace Sessions"
               : props.localOnly
                 ? "Local Sessions"
-                : "Sessions"
+                : uiText("ui.sessions")
         }
         options={options()}
         skipFilter={!props.localOnly}
@@ -302,7 +305,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
           },
           {
             keybind: keybind.all.session_delete?.[0],
-            title: "delete",
+            title: uiText("ui.delete"),
             onTrigger: async (option) => {
               if (toDelete() === option.value) {
                 const deleted = await sdk.client.session
@@ -314,7 +317,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
                 setToDelete(undefined)
                 if (!deleted) {
                   toast.show({
-                    message: "Failed to delete session",
+                    message: uiText("ui.failedToDeleteSession"),
                     variant: "error",
                   })
                   return
@@ -336,7 +339,7 @@ export function DialogSessionList(props: { workspaceID?: string; localOnly?: boo
           },
           {
             keybind: keybind.all.session_rename?.[0],
-            title: "rename",
+            title: uiText("ui.rename"),
             onTrigger: async (option) => {
               dialog.replace(() => <DialogSessionRename session={option.value} />)
             },

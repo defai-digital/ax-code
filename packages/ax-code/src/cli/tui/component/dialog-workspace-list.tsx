@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
@@ -101,6 +102,8 @@ async function openWorkspace(input: {
 }
 
 function DialogWorkspaceCreate(props: { onSelect: (workspaceID: string) => Promise<void> }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sync = useSync()
   const sdk = useSDK()
@@ -118,15 +121,15 @@ function DialogWorkspaceCreate(props: { onSelect: (workspaceID: string) => Promi
         {
           title: `Creating ${type} workspace...`,
           value: "creating" as const,
-          description: "This can take a while for remote environments",
+          description: uiText("ui.thisCanTakeAWhileForRemoteEnvironments"),
         },
       ]
     }
     return [
       {
-        title: "Worktree",
+        title: uiText("ui.worktree"),
         value: "worktree" as const,
-        description: "Create a local git worktree",
+        description: uiText("ui.createALocalGitWorktree"),
       },
     ]
   })
@@ -140,7 +143,7 @@ function DialogWorkspaceCreate(props: { onSelect: (workspaceID: string) => Promi
       const workspace = result?.data
       if (!workspace) {
         toast.show({
-          message: "Failed to create workspace",
+          message: uiText("ui.failedToCreateWorkspace"),
           variant: "error",
         })
         return
@@ -171,6 +174,8 @@ function DialogWorkspaceCreate(props: { onSelect: (workspaceID: string) => Promi
 }
 
 export function DialogWorkspaceList() {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const route = useRoute()
   const sync = useSync()
@@ -232,7 +237,7 @@ export function DialogWorkspaceList() {
     // is dead for HTTP failures; check listed.error before treating it as empty.
     if (listed?.error) {
       toast.show({
-        message: "Failed to open workspace",
+        message: uiText("ui.failedToOpenWorkspace"),
         variant: "error",
       })
       return
@@ -290,10 +295,10 @@ export function DialogWorkspaceList() {
 
   const options = createMemo(() => [
     {
-      title: "Local",
+      title: uiText("ui.local"),
       value: "__local__",
-      category: "Workspace",
-      description: "Use the local machine",
+      category: uiText("category.workspace"),
+      description: uiText("ui.useTheLocalMachine"),
       footer: `${localCount()} session${localCount() === 1 ? "" : "s"}`,
     },
     ...sync.data.workspaceList.map((workspace) => {
@@ -302,7 +307,7 @@ export function DialogWorkspaceList() {
       return {
         title: toDelete() === workspace ? `Delete ${name}? Press ${keybind.print("session_delete")} again` : name,
         value: workspace,
-        category: "Workspace",
+        category: uiText("category.workspace"),
         description: workspace,
         footer:
           count === undefined
@@ -313,10 +318,10 @@ export function DialogWorkspaceList() {
       }
     }),
     {
-      title: "+ New workspace",
+      title: uiText("ui.newWorkspace"),
       value: "__create__",
       category: "Actions",
-      description: "Create a new workspace",
+      description: uiText("ui.createANewWorkspace"),
     },
   ])
 
@@ -327,7 +332,7 @@ export function DialogWorkspaceList() {
 
   return (
     <DialogSelect
-      title="Workspaces"
+      title={uiText("ui.workspaces")}
       skipFilter={true}
       options={options()}
       current={currentWorkspaceID()}
@@ -345,7 +350,7 @@ export function DialogWorkspaceList() {
       keybind={[
         {
           keybind: keybind.all.session_delete?.[0],
-          title: "delete",
+          title: uiText("ui.delete"),
           onTrigger: async (option) => {
             if (option.value === "__create__" || option.value === "__local__") return
             if (toDelete() !== option.value) {
@@ -359,7 +364,7 @@ export function DialogWorkspaceList() {
             setToDelete(undefined)
             if (!deleted) {
               toast.show({
-                message: "Failed to delete workspace",
+                message: uiText("ui.failedToDeleteWorkspace"),
                 variant: "error",
               })
               return

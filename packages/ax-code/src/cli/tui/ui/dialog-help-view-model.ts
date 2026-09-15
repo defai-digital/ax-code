@@ -1,3 +1,4 @@
+import { english, type Translate } from "../i18n"
 import { Keybinds } from "@/config/schema"
 import { DIALOG_HELP_CHROME_HEIGHT, dialogOverlayVisibleBodyHeight } from "./dialog-overlay"
 
@@ -58,21 +59,33 @@ function dialogHelpGroupTitle(key: string): (typeof GROUP_ORDER)[number] {
   return "System"
 }
 
-// Build the dialog content from the Keybinds schema: labels come from each
-// entry's `.describe()` text and the rendered keys are resolved at draw time
-// via `keybind.print`, so user overrides are reflected automatically.
+// The schema owns key identities; typed catalogs own their visible descriptions.
+// Rendered keys are resolved at draw time via `keybind.print`, so user overrides
+// are reflected automatically. Adding a binding requires a catalog entry.
 // Bindings defaulting to "none" are filtered out by the dialog when they
 // print to an empty string.
-export function dialogHelpGroups(): DialogHelpGroup[] {
+export function dialogHelpGroups(t: Translate = english): DialogHelpGroup[] {
   const bindsByGroup = new Map<string, DialogHelpBind[]>()
-  for (const [key, field] of Object.entries(Keybinds.shape)) {
+  for (const [key] of Object.entries(Keybinds.shape) as [keyof typeof Keybinds.shape, unknown][]) {
     const title = dialogHelpGroupTitle(key)
     const binds = bindsByGroup.get(title) ?? []
-    binds.push({ key, label: field.description ?? key })
+    binds.push({ key, label: t(`help.keybind.${key}`) })
     bindsByGroup.set(title, binds)
   }
   return GROUP_ORDER.filter((title) => bindsByGroup.has(title)).map((title) => ({
-    title,
+    title: t(
+      (
+        {
+          Session: "common.session",
+          Navigation: "ui.navigation",
+          "Models & Agents": "ui.modelsAgents",
+          Input: "ui.input",
+          Permissions: "ui.permissions",
+          Display: "ui.display",
+          System: "category.system",
+        } as const
+      )[title],
+    ),
     binds: bindsByGroup.get(title)!,
   }))
 }

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { TextareaRenderable, TextAttributes } from "ax-tui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
@@ -26,6 +27,8 @@ export type DialogPromptProps = {
 }
 
 export function DialogPrompt(props: DialogPromptProps) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const toast = useToast()
   const { theme } = useTheme()
@@ -97,7 +100,7 @@ export function DialogPrompt(props: DialogPromptProps) {
       </box>
       <box paddingBottom={1} gap={1} flexDirection="row">
         <text fg={theme.text}>
-          enter <span style={{ fg: theme.textMuted }}>submit</span>
+          enter <span style={{ fg: theme.textMuted }}>{uiText("ui.submit")}</span>
         </text>
       </box>
     </box>

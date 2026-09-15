@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal } from "solid-js"
 import { useLocal } from "@tui/context/local"
 import { useSync } from "@tui/context/sync"
@@ -13,17 +14,21 @@ import { Log } from "@/util/log"
 const log = Log.create({ service: "tui.dialog-mcp" })
 
 function Status(props: { enabled: boolean; loading: boolean }) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   if (props.loading) {
-    return <span style={{ fg: theme.textMuted }}>⋯ Loading</span>
+    return <span style={{ fg: theme.textMuted }}>{uiText("ui.loading")}</span>
   }
   if (props.enabled) {
-    return <span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>✓ Enabled</span>
+    return <span style={{ fg: theme.success, attributes: TextAttributes.BOLD }}>{uiText("ui.enabled")}</span>
   }
-  return <span style={{ fg: theme.textMuted }}>○ Disabled</span>
+  return <span style={{ fg: theme.textMuted }}>{uiText("ui.disabled")}</span>
 }
 
 export function DialogMcp() {
+  const uiText = useLanguage().t
+
   const local = useLocal()
   const sync = useSync()
   const sdk = useSDK()
@@ -52,7 +57,7 @@ export function DialogMcp() {
   const keybinds = createMemo(() => [
     {
       keybind: Keybind.parse("space")[0],
-      title: "toggle",
+      title: uiText("ui.toggle"),
       onTrigger: async (option: DialogSelectOption<string>) => {
         // Prevent toggling while an operation is already in progress
         if (loading() !== null) return
@@ -79,7 +84,7 @@ export function DialogMcp() {
   return (
     <DialogSelect
       ref={setRef}
-      title="MCPs"
+      title={uiText("ui.mcps")}
       options={options()}
       keybind={keybinds()}
       onSelect={() => {

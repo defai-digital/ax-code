@@ -1,3 +1,4 @@
+import { useLanguage } from "../context/language"
 import { createMemo, Show } from "solid-js"
 import { WorkMode } from "@/mode/work-mode"
 import { useSync } from "@tui/context/sync"
@@ -14,12 +15,14 @@ import {
  *  always, available council/arena on first use only. The footer chip appears
  *  only while a non-Agent mode is armed. */
 export function WorkModeNotice() {
+  const t = useLanguage().t
   const sync = useSync()
   const kv = useKV()
   const { theme } = useTheme()
   const view = createMemo(() => {
     const mode = WorkMode.parse(kv.get("work_mode", WorkMode.DEFAULT))
     const availability = workModeAvailability({
+      t,
       mode,
       providers: sync.data.provider,
       providerLoaded: sync.data.provider_loaded,
@@ -27,6 +30,7 @@ export function WorkModeNotice() {
     })
     return {
       hint: workModeHint(mode, availability, {
+        t,
         explained: isWorkModeHintSeen(kv.get(WORK_MODE_HINT_SEEN_KEY), mode),
       }),
       blocked: availability.state === "unavailable",

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { useSync } from "@tui/context/sync"
@@ -12,6 +13,8 @@ export function DialogBranch(props: {
   onSelect: (sessionID: string) => void
   onContinue?: (sessionID: string) => void
 }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sync = useSync()
   const go = (sessionID: string) => (props.onContinue ?? props.onSelect)(sessionID)
@@ -31,9 +34,9 @@ export function DialogBranch(props: {
     if (!detail || detail.items.length <= 1) {
       return [
         {
-          title: "No branch family recorded",
+          title: uiText("ui.noBranchFamilyRecorded"),
           value: "empty",
-          description: "Create a fork from this session to compare alternatives.",
+          description: uiText("ui.createAForkFromThisSessionToCompareAlternatives"),
           category: "Overview",
         },
       ]
@@ -82,5 +85,7 @@ export function DialogBranch(props: {
     ]
   })
 
-  return <DialogSelect current={props.currentID} title="Branch Ranking" options={options()} skipFilter={false} />
+  return (
+    <DialogSelect current={props.currentID} title={uiText("ui.branchRanking")} options={options()} skipFilter={false} />
+  )
 }

@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { DialogFollowUps } from "../../component/dialog-follow-ups"
 import { useContentDimensions } from "@tui/context/content-dimensions"
 import { useSync } from "@tui/context/sync"
@@ -10,7 +11,7 @@ import { useKV } from "../../context/kv"
 import { ModeChips } from "../../component/mode-chips"
 import { GoalChip } from "../../component/goal-chip"
 import { TodoItem } from "../../component/todo-item"
-import { ChromeAction } from "../../component/chrome-action"
+import { ChromeAction, ChromeWidthAction } from "../../component/chrome-action"
 import { useCommandDialog } from "../../component/dialog-command"
 import { useSDK } from "@tui/context/sdk"
 import { useToast } from "../../ui/toast"
@@ -123,6 +124,8 @@ function workflowColor(status: string, theme: ReturnType<typeof useTheme>["theme
 }
 
 export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTick?: Accessor<number> }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const sdk = useSDK()
   const toast = useToast()
@@ -201,7 +204,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
       const body = followUpBody(paused)
       const text = await DialogPrompt.show(queueDialog, "Edit paused follow-up", {
         value: followUpText(body),
-        placeholder: "Save changes, then resume when ready",
+        placeholder: uiText("ui.saveChangesThenResumeWhenReady"),
       })
       if (text === null) return
       const parts = [...body.parts]
@@ -215,7 +218,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
           payload: { ...paused.payload, body: { ...body, parts } },
         }),
       )
-      toast.show({ message: "Follow-up saved and paused; resume when ready", variant: "info" })
+      toast.show({ message: uiText("ui.followUpSavedAndPausedResumeWhenReady"), variant: "info" })
     })
   }
 
@@ -232,7 +235,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
   async function copySessionID(id: string) {
     try {
       await Clipboard.copy(id)
-      toast.show({ message: "Session ID copied to clipboard", variant: "success", duration: 1500 })
+      toast.show({ message: uiText("ui.sessionIdCopiedToClipboard"), variant: "success", duration: 1500 })
     } catch (error) {
       log.warn("copy session id failed", {
         command: "tui.sidebar.session.copy",
@@ -240,7 +243,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
         sessionID: id,
         error,
       })
-      toast.show({ message: "Failed to copy session ID", variant: "error" })
+      toast.show({ message: uiText("ui.failedToCopySessionId"), variant: "error" })
     }
   }
 
@@ -433,7 +436,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <Show when={!expanded.mcp}>
                         <span style={{ fg: theme.textMuted }}>
                           {" "}
-                          ({connectedMcpCount()} active
+                          ({connectedMcpCount()} {uiText("ui.active2")}
                           {errorMcpCount() > 0 ? `, ${Locale.pluralize(errorMcpCount(), "{} error", "{} errors")}` : ""}
                           )
                         </span>
@@ -452,10 +455,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                             {key}{" "}
                             <span style={{ fg: theme.textMuted }}>
                               <Switch fallback={item.status}>
-                                <Match when={item.status === "connected"}>Connected</Match>
+                                <Match when={item.status === "connected"}>{uiText("ui.connected")}</Match>
                                 <Match when={item.status === "failed" && item}>{(val) => <i>{val().error}</i>}</Match>
-                                <Match when={item.status === "disabled"}>Disabled</Match>
-                                <Match when={item.status === "needs_auth"}>Needs auth</Match>
+                                <Match when={item.status === "disabled"}>{uiText("ensemble.disabled")}</Match>
+                                <Match when={item.status === "needs_auth"}>{uiText("ui.needsAuth")}</Match>
                                 <Match when={item.status === "needs_client_registration" && item}>
                                   {(val) => <i>{val().error}</i>}
                                 </Match>
@@ -472,7 +475,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
-                      <b>Providers</b>
+                      <b>{uiText("ui.providers")}</b>
                       <span style={{ fg: theme.textMuted }}> ({connectedProviders().length})</span>
                     </text>
                     <text
@@ -481,7 +484,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         command.trigger("provider.manage")
                       }}
                     >
-                      manage
+                      {uiText("ui.manage")}
                     </text>
                   </box>
 
@@ -498,7 +501,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                           •
                         </text>
                         <text fg={theme.text} wrapMode="word">
-                          {provider.name} <span style={{ fg: theme.textMuted }}>Connected</span>
+                          {provider.name} <span style={{ fg: theme.textMuted }}>{uiText("ui.connected")}</span>
                         </text>
                       </box>
                     )}
@@ -529,7 +532,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         <text fg={theme.text}>{expanded.dre ? "−" : "+"}</text>
                       </Show>
                       <text fg={theme.text}>
-                        <b>Analysis</b>
+                        <b>{uiText("ui.analysis")}</b>
                         <Show when={dre()}>
                           {(summary) => (
                             <span
@@ -561,7 +564,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         command.trigger("session.dre.web")
                       }}
                     >
-                      dashboard
+                      {uiText("ui.dashboard")}
                     </text>
                   </box>
 
@@ -591,7 +594,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         <box flexDirection="column" gap={0}>
                           {/* Quality: test status + confidence + execution stats */}
                           <text fg={theme.textMuted} wrapMode="word">
-                            {summary().decision} · confidence {Math.round(summary().confidence * 100)}% ·{" "}
+                            {summary().decision} {uiText("ui.confidence")} {Math.round(summary().confidence * 100)}% ·{" "}
                             {summary().stats}
                           </text>
                           {/* Semantic diff: what changed — accessor pattern avoids unsafe ! assertions */}
@@ -612,7 +615,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                                   △
                                 </text>
                                 <text fg={theme.textMuted} wrapMode="word">
-                                  {sem().headline} · {sem().risk} change risk
+                                  {sem().headline} · {sem().risk} {uiText("ui.changeRisk")}
                                 </text>
                               </box>
                             )}
@@ -660,8 +663,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                               ◆
                             </text>
                             <text fg={theme.textMuted}>
-                              {plan.kind} · {plan.affectedFileCount} file
-                              {plan.affectedFileCount === 1 ? "" : "s"}
+                              {plan.kind} · {uiText("ui.fileCount", { count: plan.affectedFileCount })}
                             </text>
                           </box>
                         )}
@@ -681,7 +683,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <text fg={theme.text}>{expanded.queued ? "−" : "+"}</text>
                     </Show>
                     <text fg={theme.text}>
-                      <b>Follow-ups{sdk.sseConnected ? "" : " (cached)"}</b>
+                      <b>
+                        {uiText("ui.followUps")}
+                        {sdk.sseConnected ? "" : ` (${uiText("ui.cached")})`}
+                      </b>
                       <span style={{ fg: theme.textMuted }}> ({queued().length})</span>
                     </text>
                   </box>
@@ -753,9 +758,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                       <text fg={theme.text}>{expanded.todo ? "−" : "+"}</text>
                     </Show>
                     <text fg={theme.text}>
-                      <b>Todo</b>
+                      <b>{uiText("ui.todo")}</b>
                       <Show when={!expanded.todo}>
-                        <span style={{ fg: theme.textMuted }}> ({todoRemaining()} remaining)</span>
+                        <span style={{ fg: theme.textMuted }}>
+                          {" "}
+                          ({todoRemaining()} {uiText("ui.remaining")}
+                        </span>
                       </Show>
                     </text>
                   </box>
@@ -769,7 +777,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
-                      <b>Quality</b>
+                      <b>{uiText("ui.quality")}</b>
                     </text>
                     <text
                       fg={theme.textMuted}
@@ -777,7 +785,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         command.trigger("session.quality")
                       }}
                     >
-                      view all
+                      {uiText("ui.viewAll")}
                     </text>
                   </box>
 
@@ -807,7 +815,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
-                      <b>Checks</b>
+                      <b>{uiText("ui.checks")}</b>
                     </text>
                   </box>
 
@@ -820,7 +828,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
-                      <b>Review</b>
+                      <b>{uiText("ui.review")}</b>
                     </text>
                   </box>
 
@@ -833,7 +841,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
-                      <b>Hints</b>
+                      <b>{uiText("ui.hints")}</b>
                     </text>
                   </box>
 
@@ -846,7 +854,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <box backgroundColor={theme.backgroundElement} paddingLeft={1} paddingRight={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
-                      <b>Cases</b>
+                      <b>{uiText("ui.cases")}</b>
                     </text>
                   </box>
 
@@ -902,9 +910,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         <text fg={theme.text}>{expanded.activity ? "−" : "+"}</text>
                       </Show>
                       <text fg={theme.text}>
-                        <b>Activity</b>
+                        <b>{uiText("ui.activity")}</b>
                         <Show when={!expanded.activity}>
-                          <span style={{ fg: theme.textMuted }}> ({activity().length} actions)</span>
+                          <span style={{ fg: theme.textMuted }}>
+                            {" "}
+                            ({activity().length} {uiText("ui.actions")}
+                          </span>
                         </Show>
                       </text>
                     </box>
@@ -918,7 +929,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         command.trigger("session.activity")
                       }}
                     >
-                      view all
+                      {uiText("ui.viewAll")}
                     </text>
                   </box>
                   {/* Activity has no panel background, so it keeps one rule as
@@ -953,7 +964,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                         <text fg={theme.text}>{expanded.diff ? "−" : "+"}</text>
                       </Show>
                       <text fg={theme.text}>
-                        <b>Modified Files</b>
+                        <b>{uiText("ui.modifiedFiles")}</b>
                       </text>
                     </box>
                     <box flexDirection="row" gap={1}>
@@ -968,7 +979,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                             command.trigger("session.rollback")
                           }}
                         >
-                          steps
+                          {uiText("ui.steps")}
                         </text>
                       </Show>
                       <text
@@ -981,7 +992,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                           command.trigger("session.undo")
                         }}
                       >
-                        revert
+                        {uiText("ui.revert2")}
                       </text>
                     </box>
                   </box>
@@ -1046,10 +1057,12 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
               {(metrics) => (
                 <box gap={0}>
                   <text fg={theme.text}>
-                    <b>Local inference</b> <span style={{ fg: theme.textMuted }}>{metrics().modelID}</span>
+                    <b>{uiText("ui.localInference")}</b>{" "}
+                    <span style={{ fg: theme.textMuted }}>{metrics().modelID}</span>
                   </text>
                   <text fg={theme.textMuted} wrapMode="none">
-                    prefill {metrics().prefillRate ?? "--"} · decode {metrics().decodeRate ?? "--"}
+                    {uiText("ui.prefill")} {metrics().prefillRate ?? "--"} {uiText("ui.decode")}{" "}
+                    {metrics().decodeRate ?? "--"}
                   </text>
                 </box>
               )}
@@ -1070,18 +1083,18 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
                 <box flexGrow={1} gap={1}>
                   <box flexDirection="row" justifyContent="space-between">
                     <text fg={theme.text}>
-                      <b>Getting started</b>
+                      <b>{uiText("ui.gettingStarted")}</b>
                     </text>
                     <text fg={theme.textMuted} onMouseUp={() => kv.set("dismissed_getting_started", true)}>
                       ✕
                     </text>
                   </box>
-                  <text fg={theme.textMuted}>ax-code includes models you can start with immediately.</text>
+                  <text fg={theme.textMuted}>{uiText("ui.axCodeIncludesModelsYouCanStartWithImmediately")}</text>
                   <text fg={theme.textMuted}>
-                    Connect from 75+ providers to use other models, including Claude, GPT, Gemini etc
+                    {uiText("ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc")}
                   </text>
                   <box flexDirection="row" gap={1} justifyContent="space-between">
-                    <text fg={theme.text}>Connect provider</text>
+                    <text fg={theme.text}>{uiText("command.connect")}</text>
                     <text fg={theme.textMuted}>/connect</text>
                   </box>
                 </box>
@@ -1098,9 +1111,10 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean; statusTic
             </text>
             <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap">
               <ChromeAction onMouseUp={() => command.trigger("session.sidebar.toggle")}>/sidebar</ChromeAction>
-              <ChromeAction
+              <ChromeWidthAction
+                width={chromeWidth(kv.get("sidebar_width"), SIDEBAR_WIDTH_DEFAULT)}
                 onMouseUp={() => command.trigger("session.sidebar.width")}
-              >{`Width ${chromeWidth(kv.get("sidebar_width"), SIDEBAR_WIDTH_DEFAULT)}`}</ChromeAction>
+              />
             </box>
             <ModeChips />
             <GoalChip sessionID={props.sessionID} />

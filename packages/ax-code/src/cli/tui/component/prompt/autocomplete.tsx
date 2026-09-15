@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import type { BoxRenderable, TextareaRenderable, KeyEvent, ScrollBoxRenderable } from "ax-tui"
 import { pathToFileURL } from "url"
 import fuzzysort from "fuzzysort"
@@ -192,6 +193,8 @@ export function Autocomplete(props: {
   agentStyleId: number
   promptPartTypeId: () => number
 }) {
+  const uiText = useLanguage().t
+
   const sdk = useSDK()
   const sync = useSync()
   const command = useCommandDialog()
@@ -481,7 +484,7 @@ export function Autocomplete(props: {
       .map(
         (agent): AutocompleteOption => ({
           display: "@" + (agent.displayName ?? agent.name),
-          description: "Invoke subagent",
+          description: uiText("ui.invokeSubagent"),
           group: "Subagents",
           onSelect: () => {
             insertPart(agent.name, {
@@ -880,7 +883,7 @@ export function Autocomplete(props: {
           each={optionsWithGroupHeaders()}
           fallback={
             <box paddingLeft={1} paddingRight={1}>
-              <text fg={theme.textMuted}>No matching items</text>
+              <text fg={theme.textMuted}>{uiText("ui.noMatchingItems")}</text>
             </box>
           }
         >

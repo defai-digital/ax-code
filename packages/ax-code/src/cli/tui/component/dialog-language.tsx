@@ -12,11 +12,16 @@ export function DialogLanguage(props: { onDone?: () => void } = {}) {
   return (
     <box flexDirection="column">
       <box paddingLeft={2} paddingRight={2} paddingBottom={1}>
-        <text fg={theme.textMuted} wrapMode="word">
-          {language.t("language.interface")}: {LANGUAGE_LABELS[language.locale()]}
+        <text fg={theme.textMuted} wrapMode="word" flexShrink={0}>
+          {language.t("language.interface")}
         </text>
-        <text fg={theme.textMuted} wrapMode="word">
-          {language.t("language.conversation")}:{" "}
+        <text fg={theme.text} flexShrink={0}>
+          {LANGUAGE_LABELS[language.locale()]}
+        </text>
+        <text fg={theme.textMuted} wrapMode="word" flexShrink={0}>
+          {language.t("language.conversation")}
+        </text>
+        <text fg={theme.text} wrapMode="word" flexShrink={0}>
           {language.conversation() === "auto"
             ? language.t("language.auto")
             : LANGUAGE_LABELS[language.conversation() as keyof typeof LANGUAGE_LABELS]}

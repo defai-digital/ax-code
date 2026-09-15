@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { createMemo, createSignal } from "solid-js"
@@ -27,6 +28,8 @@ function getStashPreview(input: string, maxLength: number = 50): string {
 }
 
 export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const stash = usePromptStash()
   const { theme } = useTheme()
@@ -54,7 +57,7 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
 
   return (
     <DialogSelect
-      title="Stash"
+      title={uiText("ui.stash")}
       options={options()}
       onMove={() => {
         setToDelete(undefined)
@@ -70,7 +73,7 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
       keybind={[
         {
           keybind: keybind.all.stash_delete?.[0],
-          title: "delete",
+          title: uiText("ui.delete"),
           onTrigger: (option) => {
             if (toDelete() === option.value) {
               stash.remove(option.value)

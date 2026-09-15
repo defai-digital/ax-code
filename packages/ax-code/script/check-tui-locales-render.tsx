@@ -14,12 +14,17 @@ const { testRender } = await import("ax-tui/solid")
 const { KVProvider, useKV } = await import("../src/cli/tui/context/kv")
 const { TuiConfigProvider } = await import("../src/cli/tui/context/tui-config")
 const { LanguageProvider, useLanguage } = await import("../src/cli/tui/context/language")
-const { ThemeProvider } = await import("../src/cli/tui/context/theme")
+const { ThemeProvider, useTheme } = await import("../src/cli/tui/context/theme")
 const { KeybindProvider } = await import("../src/cli/tui/context/keybind")
 const { ToastProvider } = await import("../src/cli/tui/ui/toast")
 const { DialogProvider, useDialog } = await import("../src/cli/tui/ui/dialog")
 const { SetupWizard } = await import("../src/cli/tui/component/setup-wizard")
 const { DialogLanguage } = await import("../src/cli/tui/component/dialog-language")
+const { ModeToggle } = await import("../src/cli/tui/component/mode-chips")
+const { ChromeWidthAction } = await import("../src/cli/tui/component/chrome-action")
+const { runModeLabel } = await import("../src/cli/tui/component/prompt/run-mode-view-model")
+const { DialogHelp } = await import("../src/cli/tui/ui/dialog-help")
+const { footerSessionStatusView } = await import("../src/cli/tui/routes/session/footer-view-model")
 const { DialogConfirm } = await import("../src/cli/tui/ui/dialog-confirm")
 const { LOCALES, LANGUAGE_LABELS, translate } = await import("../src/cli/tui/i18n")
 const { stringWidth } = await import("../src/bun/node-compat")
@@ -38,6 +43,37 @@ function Controls() {
     ready = kv.ready
   })
   return null
+}
+function ChromeProbe(props: { mode: "none" | "auto" | "super-long"; onAction: (action: string) => void }) {
+  const { t } = useLanguage()
+  const { theme } = useTheme()
+  return (
+    <box flexDirection="column">
+      <ChromeWidthAction width={36} onMouseUp={() => props.onAction("width")} />
+      <ModeToggle
+        label={runModeLabel(props.mode, t)}
+        active={props.mode !== "none"}
+        activeFg={theme.text}
+        inactiveFg={theme.textMuted}
+        background={theme.warning}
+        onMouseUp={() => props.onAction("run")}
+      />
+      <ModeToggle
+        label={t("mode.sandbox")}
+        active={true}
+        activeFg={theme.text}
+        inactiveFg={theme.textMuted}
+        background={theme.success}
+        onMouseUp={() => props.onAction("sandbox")}
+      />
+    </box>
+  )
+}
+function StatusProbe() {
+  const { t } = useLanguage()
+  return (
+    <text>{footerSessionStatusView({ t, status: { type: "busy", waitState: "tool", activeTool: "read" } }).label}</text>
+  )
 }
 function Providers(props: ParentProps) {
   return (
@@ -68,7 +104,14 @@ try {
     ready = false
     const setup = await testRender(() => <Providers />, { width, height })
     try {
-      await setup.waitFor(() => ready)
+      // KV hydration performs real filesystem I/O; render-idle is not I/O-idle.
+      const hydrationDeadline = Date.now() + 5000
+      while (!ready && Date.now() < hydrationDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+        await setup.flush()
+      }
+      assert(ready, "TUI preferences did not hydrate within five seconds")
+      const selectionListeners = setup.renderer.listenerCount("selection")
       for (const locale of LOCALES) {
         language.setLocale(locale)
         language.setConversation("auto")
@@ -101,7 +144,10 @@ try {
         setup.mockInput.pressKey("RETURN")
         await setup.flush()
         assert.equal(language.locale(), locale)
-        assert(setup.captureCharFrame().includes(translate(locale, "setup.provider")))
+        assert(
+          setup.captureCharFrame().includes(translate(locale, "setup.provider")),
+          `${locale}: provider action missing\n${setup.captureCharFrame()}`,
+        )
         setup.mockInput.pressKey("HOME")
         setup.mockInput.pressArrow("down")
         setup.mockInput.pressKey("RETURN")
@@ -124,7 +170,7 @@ try {
         await setup.flush()
         assert(
           setup.captureCharFrame().includes(translate(locale, "setup.ready")),
-          `${locale}: first task action hidden at ${width}x${height}`,
+          `${locale}: first task action hidden at ${width}x${height}\n${setup.captureCharFrame()}`,
         )
         assert(
           setup.captureCharFrame().includes(translate(locale, "setup.skip")),
@@ -144,9 +190,12 @@ try {
         setup.mockInput.pressKey("HOME")
         setup.mockInput.pressKey("RETURN")
         await setup.flush()
-        const picker = setup.captureCharFrame()
-        for (const label of Object.values(LANGUAGE_LABELS))
-          assert(picker.includes(label), `${locale}: missing picker label ${label}`)
+        setup.mockInput.pressKey("HOME")
+        for (const target of LOCALES) {
+          await setup.flush()
+          assert(setup.captureCharFrame().includes(LANGUAGE_LABELS[target]), `${locale}: cannot reach ${target}`)
+          setup.mockInput.pressArrow("down")
+        }
         setup.mockInput.pressKey("ESCAPE")
         await new Promise((resolve) => setTimeout(resolve, 50))
         await setup.flush()
@@ -172,6 +221,31 @@ try {
         setup.mockInput.pressKey("RETURN")
         await setup.flush()
         assert.equal(decision, "cancel", `${locale}: translated cancel changed action`)
+        language.setLocale("en")
+        dialog.replace(() => <DialogHelp />)
+        await setup.flush()
+        language.setLocale(locale)
+        await setup.flush()
+        assert(
+          setup.captureCharFrame().includes(translate(locale, "ui.keyboardShortcuts")),
+          `${locale}: help did not update`,
+        )
+        language.setLocale("en")
+        dialog.replace(() => <StatusProbe />)
+        await setup.flush()
+        language.setLocale(locale)
+        await setup.flush()
+        assert(
+          setup.captureCharFrame().includes(translate(locale, "ui.scanningFiles")),
+          `${locale}: runtime status did not update`,
+        )
+        dialog.clear()
+        await setup.flush()
+        assert.equal(
+          setup.renderer.listenerCount("selection"),
+          selectionListeners,
+          `${locale}: leaked selection listeners`,
+        )
       }
       // Live switch without a remount updates the actual dialog tree.
       language.setLocale("en")
@@ -185,7 +259,7 @@ try {
     }
   }
   console.log(
-    "Native locale dialogs passed: 5 locales, 36/80 columns, live switch, picker, setup language/connect/skip, and cancel action.",
+    "Native locale dialogs passed: 13 locales, 36/80 columns, live switch, picker, setup language/connect/skip, help/status live switching, width/run-mode/sandbox labels and clicks, listener disposal, and cancel action.",
   )
 } finally {
   await fs.rm(state, { recursive: true, force: true })

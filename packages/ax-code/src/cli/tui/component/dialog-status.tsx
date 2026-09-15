@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { TextAttributes } from "ax-tui"
 import { fileURLToPath } from "url"
 import { useTheme } from "../context/theme"
@@ -7,6 +8,8 @@ import { For, Match, Switch, Show, createMemo } from "solid-js"
 import { isNonEmptyRecord, recordCount } from "@/util/record"
 
 export function DialogStatus() {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const { theme } = useTheme()
   const dialog = useDialog()
@@ -43,15 +46,17 @@ export function DialogStatus() {
     <box paddingLeft={2} paddingRight={2} gap={1} paddingBottom={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text fg={theme.text} attributes={TextAttributes.BOLD}>
-          Status
+          {uiText("ui.status")}
         </text>
         <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
           esc
         </text>
       </box>
-      <Show when={hasMcp()} fallback={<text fg={theme.text}>No MCP Servers</text>}>
+      <Show when={hasMcp()} fallback={<text fg={theme.text}>{uiText("ui.noMcpServers")}</text>}>
         <box>
-          <text fg={theme.text}>{recordCount(sync.data.mcp)} MCP Servers</text>
+          <text fg={theme.text}>
+            {recordCount(sync.data.mcp)} {uiText("ui.mcpServers")}
+          </text>
           <For each={Object.entries(sync.data.mcp)}>
             {([key, item]) => (
               <box flexDirection="row" gap={1}>
@@ -75,9 +80,9 @@ export function DialogStatus() {
                   <b>{key}</b>{" "}
                   <span style={{ fg: theme.textMuted }}>
                     <Switch fallback={item.status}>
-                      <Match when={item.status === "connected"}>Connected</Match>
+                      <Match when={item.status === "connected"}>{uiText("ui.connected")}</Match>
                       <Match when={item.status === "failed" && item}>{(val) => val().error}</Match>
-                      <Match when={item.status === "disabled"}>Disabled in configuration</Match>
+                      <Match when={item.status === "disabled"}>{uiText("ui.disabledInConfiguration")}</Match>
                       <Match when={(item.status as string) === "needs_auth"}>
                         Needs authentication (run: ax-code mcp auth {key})
                       </Match>
@@ -94,7 +99,9 @@ export function DialogStatus() {
       </Show>
       {sync.data.lsp.length > 0 && (
         <box>
-          <text fg={theme.text}>{sync.data.lsp.length} LSP Servers</text>
+          <text fg={theme.text}>
+            {sync.data.lsp.length} {uiText("ui.lspServers")}
+          </text>
           <For each={sync.data.lsp}>
             {(item) => (
               <box flexDirection="row" gap={1}>
@@ -117,9 +124,11 @@ export function DialogStatus() {
           </For>
         </box>
       )}
-      <Show when={enabledFormatters().length > 0} fallback={<text fg={theme.text}>No Formatters</text>}>
+      <Show when={enabledFormatters().length > 0} fallback={<text fg={theme.text}>{uiText("ui.noFormatters")}</text>}>
         <box>
-          <text fg={theme.text}>{enabledFormatters().length} Formatters</text>
+          <text fg={theme.text}>
+            {enabledFormatters().length} {uiText("ui.formatters")}
+          </text>
           <For each={enabledFormatters()}>
             {(item) => (
               <box flexDirection="row" gap={1}>
@@ -139,9 +148,11 @@ export function DialogStatus() {
           </For>
         </box>
       </Show>
-      <Show when={plugins().length > 0} fallback={<text fg={theme.text}>No Plugins</text>}>
+      <Show when={plugins().length > 0} fallback={<text fg={theme.text}>{uiText("ui.noPlugins")}</text>}>
         <box>
-          <text fg={theme.text}>{plugins().length} Plugins</text>
+          <text fg={theme.text}>
+            {plugins().length} {uiText("ui.plugins")}
+          </text>
           <For each={plugins()}>
             {(item) => (
               <box flexDirection="row" gap={1}>

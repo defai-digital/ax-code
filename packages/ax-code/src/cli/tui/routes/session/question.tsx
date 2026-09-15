@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createStore, produce } from "solid-js/store"
 import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js"
 import { useKeyboard } from "ax-tui/solid"
@@ -36,6 +37,8 @@ function replyError(error: unknown, fallback: string): Error {
 const QUESTION_REPLY_TIMEOUT_MS = 20_000
 
 export function QuestionPrompt(props: { request: QuestionRequest }) {
+  const uiText = useLanguage().t
+
   const sdk = useSDK()
   const sync = useSync()
   const { theme } = useTheme()
@@ -430,7 +433,9 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
               onMouseOut={() => setTabHover(null)}
               onMouseUp={() => selectTab(questions().length)}
             >
-              <text fg={confirm() ? selectedForeground(theme, theme.accent) : theme.textMuted}>Confirm</text>
+              <text fg={confirm() ? selectedForeground(theme, theme.accent) : theme.textMuted}>
+                {uiText("common.confirm")}
+              </text>
             </box>
           </box>
         </Show>
@@ -491,7 +496,9 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                     </box>
                     <box backgroundColor={other() ? theme.backgroundElement : undefined}>
                       <text fg={other() ? theme.secondary : customPicked() ? theme.success : theme.text}>
-                        {multi() ? `[${customPicked() ? "✓" : " "}] Type your own answer` : "Type your own answer"}
+                        {multi()
+                          ? `[${customPicked() ? "✓" : " "}] Type your own answer`
+                          : uiText("ui.typeYourOwnAnswer")}
                       </text>
                     </box>
 
@@ -511,7 +518,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
                           })
                         }}
                         initialValue={input()}
-                        placeholder="Type your own answer"
+                        placeholder={uiText("ui.typeYourOwnAnswer")}
                         minHeight={1}
                         maxHeight={6}
                         textColor={theme.text}
@@ -534,7 +541,7 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
 
         <Show when={confirm() && !single()}>
           <box paddingLeft={1}>
-            <text fg={theme.text}>Review</text>
+            <text fg={theme.text}>{uiText("ui.review")}</text>
           </box>
           <For each={questions()}>
             {(q, index) => {
@@ -571,18 +578,24 @@ export function QuestionPrompt(props: { request: QuestionRequest }) {
           </Show>
           <Show when={!confirm()}>
             <text fg={theme.text}>
-              {"Up/Down"} <span style={{ fg: theme.textMuted }}>select</span>
+              {"Up/Down"} <span style={{ fg: theme.textMuted }}>{uiText("common.select")}</span>
             </text>
           </Show>
           <text fg={theme.text}>
             enter{" "}
             <span style={{ fg: theme.textMuted }}>
-              {confirm() ? "submit" : multi() ? "toggle" : single() ? "submit" : "confirm"}
+              {confirm()
+                ? uiText("ui.submit")
+                : multi()
+                  ? uiText("ui.toggle")
+                  : single()
+                    ? uiText("ui.submit")
+                    : "confirm"}
             </span>
           </text>
 
           <text fg={theme.text}>
-            esc <span style={{ fg: theme.textMuted }}>dismiss</span>
+            esc <span style={{ fg: theme.textMuted }}>{uiText("ui.dismiss")}</span>
           </text>
         </box>
       </box>

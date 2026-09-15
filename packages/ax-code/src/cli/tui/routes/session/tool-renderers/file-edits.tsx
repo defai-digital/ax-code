@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { useTheme } from "@tui/context/theme"
@@ -16,6 +17,8 @@ import { useSessionRouteContext } from "../context"
 import { BlockTool, InlineTool, type ToolProps } from "./primitives"
 
 export function Bash(props: ToolProps<typeof BashTool>) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const sync = useSync()
   const isRunning = createMemo(() => props.part.state.status === "running")
@@ -61,10 +64,12 @@ export function Bash(props: ToolProps<typeof BashTool>) {
               <text fg={theme.text}>{limited()}</text>
             </Show>
             <Show when={expanded() && capped().truncated}>
-              <text fg={theme.textMuted}>... truncated, {capped().total} lines total</text>
+              <text fg={theme.textMuted}>
+                {uiText("ui.truncated")} {capped().total} {uiText("ui.linesTotal")}
+              </text>
             </Show>
             <Show when={overflow()}>
-              <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+              <text fg={theme.textMuted}>{expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}</text>
             </Show>
           </box>
         </BlockTool>
@@ -79,6 +84,8 @@ export function Bash(props: ToolProps<typeof BashTool>) {
 }
 
 export function Write(props: ToolProps<typeof WriteTool>) {
+  const uiText = useLanguage().t
+
   const { theme, syntax } = useTheme()
   const [expanded, setExpanded] = createSignal(false)
   const lines = createMemo(() => (props.input.content ?? "").split("\n"))
@@ -105,17 +112,19 @@ export function Write(props: ToolProps<typeof WriteTool>) {
             <SessionCodeRenderer display={display()} conceal={false} fg={theme.text} syntaxStyle={syntax()} />
           </line_number>
           <Show when={expanded() && capped().truncated}>
-            <text fg={theme.textMuted}>... truncated, {capped().total} lines total</text>
+            <text fg={theme.textMuted}>
+              {uiText("ui.truncated")} {capped().total} {uiText("ui.linesTotal")}
+            </text>
           </Show>
           <Show when={overflow()}>
-            <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+            <text fg={theme.textMuted}>{expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}</text>
           </Show>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
         </BlockTool>
       </Match>
       <Match when={true}>
         <InlineTool icon="←" pending="Preparing write..." complete={props.input.filePath} part={props.part}>
-          Write {normalize(props.input.filePath)}
+          {uiText("ui.write")} {normalize(props.input.filePath)}
         </InlineTool>
       </Match>
     </Switch>
@@ -123,6 +132,8 @@ export function Write(props: ToolProps<typeof WriteTool>) {
 }
 
 export function Edit(props: ToolProps<typeof EditTool>) {
+  const uiText = useLanguage().t
+
   const ctx = useSessionRouteContext()
   const { theme, syntax } = useTheme()
   const [expanded, setExpanded] = createSignal(false)
@@ -188,14 +199,14 @@ export function Edit(props: ToolProps<typeof EditTool>) {
             </text>
           </Show>
           <Show when={overflow()}>
-            <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+            <text fg={theme.textMuted}>{expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}</text>
           </Show>
           <Diagnostics diagnostics={props.metadata.diagnostics} filePath={props.input.filePath ?? ""} />
         </BlockTool>
       </Match>
       <Match when={true}>
         <InlineTool icon="←" pending="Preparing edit..." complete={props.input.filePath} part={props.part}>
-          Edit {normalize(props.input.filePath)} {detail({ replaceAll: props.input.replaceAll })}
+          {uiText("ui.edit")} {normalize(props.input.filePath)} {detail({ replaceAll: props.input.replaceAll })}
         </InlineTool>
       </Match>
     </Switch>
@@ -222,6 +233,8 @@ function ApplyPatchFile(props: {
   view: (filePath: string) => ReturnType<typeof diffDisplayView>
   diagnostics?: Record<string, Record<string, any>[]>
 }) {
+  const uiText = useLanguage().t
+
   const { theme, syntax } = useTheme()
   const [expanded, setExpanded] = createSignal(false)
   const rawDiff = createMemo(() => props.file.diff ?? "")
@@ -274,7 +287,7 @@ function ApplyPatchFile(props: {
           </text>
         </Show>
         <Show when={overflow()}>
-          <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+          <text fg={theme.textMuted}>{expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}</text>
         </Show>
         <Diagnostics diagnostics={props.diagnostics} filePath={props.file.movePath ?? props.file.filePath} />
       </Show>
@@ -283,6 +296,8 @@ function ApplyPatchFile(props: {
 }
 
 export function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
+  const uiText = useLanguage().t
+
   const ctx = useSessionRouteContext()
 
   const files = createMemo(() => props.metadata.files ?? [])
@@ -308,7 +323,7 @@ export function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="%" pending="Preparing patch..." complete={false} part={props.part}>
-          Patch
+          {uiText("ui.patch")}
         </InlineTool>
       </Match>
     </Switch>
@@ -316,6 +331,8 @@ export function ApplyPatch(props: ToolProps<typeof ApplyPatchTool>) {
 }
 
 function Diagnostics(props: { diagnostics?: Record<string, Record<string, any>[]>; filePath: string }) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const errors = createMemo(() => diagnostics(props.diagnostics, props.filePath))
 
@@ -325,7 +342,8 @@ function Diagnostics(props: { diagnostics?: Record<string, Record<string, any>[]
         <For each={errors()}>
           {(diagnostic) => (
             <text fg={theme.error}>
-              Error [{diagnostic.range.start.line + 1}:{diagnostic.range.start.character + 1}] {diagnostic.message}
+              {uiText("ui.error2")}
+              {diagnostic.range.start.line + 1}:{diagnostic.range.start.character + 1}] {diagnostic.message}
             </text>
           )}
         </For>

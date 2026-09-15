@@ -90,7 +90,7 @@ describe("tui console hygiene", () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
 
     expect(prompt).toContain("when={busyStatus()?.stale}")
-    expect(prompt).toContain('keys="esc" label="interrupt"')
+    expect(prompt).toContain('keys="esc" label={uiText("ui.interrupt")}')
   })
 
   test("does not assume fork responses contain session data", async () => {

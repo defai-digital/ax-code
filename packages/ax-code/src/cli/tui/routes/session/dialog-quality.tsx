@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
@@ -18,6 +19,8 @@ import {
 } from "./quality"
 
 export function DialogQuality(props: { sessionID: string; setPrompt: (prompt: PromptInfo) => void }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const dialog = useDialog()
 
@@ -61,7 +64,7 @@ export function DialogQuality(props: { sessionID: string; setPrompt: (prompt: Pr
     }))
   })
 
-  return <DialogSelect title="Quality Readiness" options={options()} skipFilter={false} />
+  return <DialogSelect title={uiText("ui.qualityReadiness")} options={options()} skipFilter={false} />
 }
 
 export function DialogQualityDetail(props: {
@@ -70,6 +73,8 @@ export function DialogQualityDetail(props: {
   kind: SessionQualityActionKind
   setPrompt: (prompt: PromptInfo) => void
 }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const dialog = useDialog()
   const toast = useToast()
@@ -99,15 +104,15 @@ export function DialogQualityDetail(props: {
     const current = action()
     const result: DialogSelectOption<string>[] = [
       {
-        title: "Refresh readiness",
+        title: uiText("ui.refreshReadiness"),
         value: "quality.refresh",
-        description: "Re-sync the session risk snapshot and refresh quality readiness in place.",
+        description: uiText("ui.reSyncTheSessionRiskSnapshotAndRefreshQualityReadinessInPlace"),
         category: "Actions",
         onSelect: async () => {
           await sync.session
             .sync(props.sessionID, { force: true })
             .then(() => {
-              toast.show({ message: "Quality readiness refreshed", variant: "success" })
+              toast.show({ message: uiText("ui.qualityReadinessRefreshed"), variant: "success" })
             })
             .catch((error) => {
               toast.show({
@@ -118,19 +123,19 @@ export function DialogQualityDetail(props: {
         },
       },
       {
-        title: "Copy next-step prompt",
+        title: uiText("ui.copyNextStepPrompt"),
         value: "quality.copy-prompt",
-        description: "Copy the current action's prompt scaffold to the clipboard.",
+        description: uiText("ui.copyTheCurrentActionSPromptScaffoldToTheClipboard"),
         category: "Actions",
         onSelect: async () => {
           const current = action()
           if (!current) {
-            toast.show({ message: "Quality readiness is no longer available", variant: "warning" })
+            toast.show({ message: uiText("ui.qualityReadinessIsNoLongerAvailable"), variant: "warning" })
             return
           }
           await Clipboard.copy(current.prompt.input)
             .then(() => {
-              toast.show({ message: "Copied quality next-step prompt", variant: "success", duration: 1500 })
+              toast.show({ message: uiText("ui.copiedQualityNextStepPrompt"), variant: "success", duration: 1500 })
             })
             .catch((error) => {
               toast.show({
@@ -141,19 +146,19 @@ export function DialogQualityDetail(props: {
         },
       },
       {
-        title: "Copy readiness brief",
+        title: uiText("ui.copyReadinessBrief"),
         value: "quality.copy-brief",
-        description: "Copy the current quality readiness summary and gate details to the clipboard.",
+        description: uiText("ui.copyTheCurrentQualityReadinessSummaryAndGateDetailsToTheClipboard"),
         category: "Actions",
         onSelect: async () => {
           const current = action()
           if (!current) {
-            toast.show({ message: "Quality readiness is no longer available", variant: "warning" })
+            toast.show({ message: uiText("ui.qualityReadinessIsNoLongerAvailable"), variant: "warning" })
             return
           }
           await Clipboard.copy(renderSessionQualityBrief(current))
             .then(() => {
-              toast.show({ message: "Copied quality readiness brief", variant: "success", duration: 1500 })
+              toast.show({ message: uiText("ui.copiedQualityReadinessBrief"), variant: "success", duration: 1500 })
             })
             .catch((error) => {
               toast.show({
@@ -164,9 +169,9 @@ export function DialogQualityDetail(props: {
         },
       },
       {
-        title: "View activity history",
+        title: uiText("ui.viewActivityHistory"),
         value: "quality.activity",
-        description: "Inspect recent session activity to verify workflow evidence and tool output.",
+        description: uiText("ui.inspectRecentSessionActivityToVerifyWorkflowEvidenceAndToolOutput"),
         category: "Actions",
         onSelect: (ctx) => {
           ctx.replace(() => <DialogActivity sessionID={props.sessionID} />)
@@ -176,9 +181,9 @@ export function DialogQualityDetail(props: {
 
     if (!current) {
       result.push({
-        title: "Quality action unavailable",
+        title: uiText("ui.qualityActionUnavailable"),
         value: "quality.unavailable",
-        description: "This readiness action is no longer available for the current session snapshot.",
+        description: uiText("ui.thisReadinessActionIsNoLongerAvailableForTheCurrentSessionSnapshot"),
         category: "Overview",
         disabled: true,
       })

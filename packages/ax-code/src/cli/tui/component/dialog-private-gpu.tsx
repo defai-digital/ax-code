@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { TextareaRenderable, TextAttributes } from "ax-tui"
 import { createSignal, onCleanup, onMount } from "solid-js"
 import { useKeyboard } from "ax-tui/solid"
@@ -17,6 +18,8 @@ export type DialogPrivateGpuConnectProps = {
 }
 
 export function DialogPrivateGpuConnect(props: DialogPrivateGpuConnectProps) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const toast = useToast()
   const { theme } = useTheme()
@@ -36,7 +39,7 @@ export function DialogPrivateGpuConnect(props: DialogPrivateGpuConnectProps) {
     const rawURL = baseURLInput?.plainText ?? ""
     const apiKey = (apiKeyInput?.plainText ?? "").trim()
     if (!rawURL.trim()) {
-      toast.show({ message: "Endpoint URL is required", variant: "error" })
+      toast.show({ message: uiText("ui.endpointUrlIsRequired"), variant: "error" })
       setActive("baseURL")
       focusActive()
       return
@@ -135,10 +138,10 @@ export function DialogPrivateGpuConnect(props: DialogPrivateGpuConnectProps) {
       </box>
       <box flexDirection="row" gap={2}>
         <text fg={theme.text}>
-          tab <span style={{ fg: theme.textMuted }}>next field</span>
+          tab <span style={{ fg: theme.textMuted }}>{uiText("ui.nextField")}</span>
         </text>
         <text fg={theme.text}>
-          enter <span style={{ fg: theme.textMuted }}>connect</span>
+          enter <span style={{ fg: theme.textMuted }}>{uiText("ui.connect")}</span>
         </text>
       </box>
     </box>

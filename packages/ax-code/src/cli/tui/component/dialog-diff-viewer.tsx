@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, onMount } from "solid-js"
 import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
@@ -113,6 +114,8 @@ export function computeDiffLines(
 }
 
 function DialogDiffDetail(props: { diff: Snapshot.FileDiff }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const { theme } = useTheme()
 
@@ -122,7 +125,7 @@ function DialogDiffDetail(props: { diff: Snapshot.FileDiff }) {
 
   const options = createMemo((): DialogSelectOption<string>[] => {
     if (lines().length === 0) {
-      return [{ title: "No diff content available", value: "empty", disabled: true }]
+      return [{ title: uiText("ui.noDiffContentAvailable"), value: "empty", disabled: true }]
     }
     const capped = capDiffDetailLines(lines())
     const options: DialogSelectOption<string>[] = capped.visible.map((line, i) => ({
@@ -154,6 +157,8 @@ function DialogDiffDetail(props: { diff: Snapshot.FileDiff }) {
 }
 
 export function DialogDiffViewer(props: { sessionID: string }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const sync = useSync()
   const { theme } = useTheme()
@@ -171,9 +176,9 @@ export function DialogDiffViewer(props: { sessionID: string }) {
     if (all.length === 0) {
       return [
         {
-          title: "No file changes",
+          title: uiText("ui.noFileChanges"),
           value: "empty",
-          description: "No file diffs are available for this session.",
+          description: uiText("ui.noFileDiffsAreAvailableForThisSession"),
           disabled: true,
         },
       ]

@@ -1,3 +1,5 @@
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
+
 export namespace Locale {
   export function titlecase(str: string) {
     return str.replace(/\b\w/g, (c) => c.toUpperCase())
@@ -65,8 +67,11 @@ export namespace Locale {
   }
 
   export function truncate(str: string, len: number): string {
+    if (len <= 0) return ""
     if (str.length <= len) return str
-    return str.slice(0, len - 1) + "…"
+    const units = Array.from(graphemes.segment(str), ({ segment }) => segment)
+    if (units.length <= len) return str
+    return units.slice(0, len - 1).join("") + "\u2026"
   }
 
   export function truncateMiddle(str: string, maxLength: number = 35): string {

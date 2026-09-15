@@ -1,3 +1,4 @@
+import { english, type Translate } from "@tui/i18n"
 import { Flag } from "@/flag/flag"
 import { isNativeShiftPressed, shouldDetectNativeShiftEnter } from "@tui/util/native-shift-enter"
 import { Editor } from "@tui/util/editor"
@@ -24,6 +25,7 @@ type PromptCommandStore = {
 }
 
 export type PromptCommandsInput = {
+  t?: Translate
   input: () => PromptComposer
   store: PromptCommandStore
   setStore: (...args: any[]) => void
@@ -50,6 +52,8 @@ export type PromptCommandsInput = {
 }
 
 export function promptCommands(input: PromptCommandsInput): CommandOption[] {
+  const uiText = input.t ?? english
+
   const {
     input: composer,
     store,
@@ -74,9 +78,9 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
 
   return [
     {
-      title: "Clear prompt",
+      title: uiText("ui.clearPrompt"),
       value: "prompt.clear",
-      category: "Prompt",
+      category: uiText("ui.prompt"),
       hidden: true,
       onSelect: (dialog) => {
         composer().extmarks.clear()
@@ -91,10 +95,10 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Submit prompt",
+      title: uiText("ui.submitPrompt"),
       value: "prompt.submit",
       keybind: "input_submit",
-      category: "Prompt",
+      category: uiText("ui.prompt"),
       hidden: true,
       onSelect: (dialog) => {
         if (!composer().focused) return
@@ -113,20 +117,20 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Paste",
+      title: uiText("ui.paste"),
       value: "prompt.paste",
       keybind: "input_paste",
-      category: "Prompt",
+      category: uiText("ui.prompt"),
       hidden: true,
       onSelect: async () => {
         await pasteClipboardImage()
       },
     },
     {
-      title: "Exit shell mode",
+      title: uiText("ui.exitShellMode2"),
       value: "shell.exit",
       keybind: "session_interrupt",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       enabled: store.mode === "shell",
       onSelect: (dialog) => {
@@ -137,10 +141,10 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Interrupt session",
+      title: uiText("ui.interruptSession"),
       value: "session.interrupt",
       keybind: "session_interrupt",
-      category: "Session",
+      category: uiText("common.session"),
       hidden: true,
       enabled: statusType() !== "idle" && store.mode !== "shell",
       onSelect: (dialog) => {
@@ -176,8 +180,8 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Open editor",
-      category: "Session",
+      title: uiText("ui.openEditor"),
+      category: uiText("common.session"),
       keybind: "editor_open",
       value: "prompt.editor",
       slash: {
@@ -195,7 +199,7 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
         const result = await Editor.open({ value, renderer })
         if (result.status === "missing-editor") {
           toast.show({
-            message: "No editor configured. Set VISUAL or EDITOR to use /editor.",
+            message: uiText("ui.noEditorConfiguredSetVisualOrEditorToUseEditor"),
             variant: "warning",
           })
           return
@@ -224,9 +228,9 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       },
     },
     {
-      title: allPastesExpanded() ? "Collapse pasted previews" : "Expand pasted previews",
+      title: allPastesExpanded() ? uiText("prompt.collapsePastes") : uiText("prompt.expandPastes"),
       value: "prompt.paste.preview.toggle",
-      category: "Prompt",
+      category: uiText("ui.prompt"),
       enabled: pasteViewsLength() > 0,
       onSelect: (dialog) => {
         setAllPastePreviews(!allPastesExpanded())
@@ -234,9 +238,9 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Skills",
+      title: uiText("ui.skills"),
       value: "prompt.skills",
-      category: "Prompt",
+      category: uiText("ui.prompt"),
       slash: {
         name: "skills",
         hidden: true,
@@ -261,14 +265,14 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
           })
           .catch((error) => {
             log.warn("failed to load skill dialog", { error })
-            toast.show({ message: "Failed to open skills", variant: "error" })
+            toast.show({ message: uiText("ui.failedToOpenSkills"), variant: "error" })
           })
       },
     },
     {
-      title: "Stash prompt",
+      title: uiText("ui.stashPrompt"),
       value: "prompt.stash",
-      category: "Prompt",
+      category: uiText("ui.prompt"),
       enabled: !!store.prompt.input,
       onSelect: (dialog) => {
         if (!store.prompt.input) return
@@ -285,9 +289,9 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Stash pop",
+      title: uiText("ui.stashPop"),
       value: "prompt.stash.pop",
-      category: "Prompt",
+      category: uiText("ui.prompt"),
       enabled: stash.list().length > 0,
       onSelect: (dialog) => {
         const entry = stash.pop()
@@ -302,9 +306,9 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
       },
     },
     {
-      title: "Stash list",
+      title: uiText("ui.stashList"),
       value: "prompt.stash.list",
-      category: "Prompt",
+      category: uiText("ui.prompt"),
       enabled: stash.list().length > 0,
       onSelect: () => {
         const marker = dialog.stack.at(-1)
@@ -325,7 +329,7 @@ export function promptCommands(input: PromptCommandsInput): CommandOption[] {
           })
           .catch((error) => {
             log.warn("failed to load stash dialog", { error })
-            toast.show({ message: "Failed to open stash", variant: "error" })
+            toast.show({ message: uiText("ui.failedToOpenStash"), variant: "error" })
           })
       },
     },

@@ -1,3 +1,5 @@
+import { english, type Translate } from "../i18n"
+import { useLanguage } from "@tui/context/language"
 import z from "zod"
 import { TextareaRenderable, TextAttributes } from "ax-tui"
 import { createSignal, onCleanup, onMount } from "solid-js"
@@ -112,7 +114,7 @@ export function parseCustomApiProviderModelIDs(
   })
 }
 
-async function confirmInsecureHttp(dialog: DialogContext, baseURL: string) {
+async function confirmInsecureHttp(dialog: DialogContext, baseURL: string, uiText: Translate = english) {
   let url: URL
   try {
     url = new URL(baseURL)
@@ -133,13 +135,13 @@ async function confirmInsecureHttp(dialog: DialogContext, baseURL: string) {
     dialog.replace(
       () => (
         <DialogSelect
-          title="Allow insecure HTTP?"
+          title={uiText("ui.allowInsecureHttp")}
           options={[
-            { title: "Cancel", value: false, description: "Use HTTPS instead" },
+            { title: uiText("common.cancel"), value: false, description: uiText("ui.useHttpsInstead") },
             {
-              title: "Allow HTTP",
+              title: uiText("ui.allowHttp"),
               value: true,
-              description: "Only continue when this network is trusted",
+              description: uiText("ui.onlyContinueWhenThisNetworkIsTrusted"),
             },
           ]}
           onSelect={(option) => resolve(option.value)}
@@ -161,6 +163,8 @@ function DialogCustomApiConnect(props: {
   registered?: readonly CustomApiProviderView[]
   onConfirm: (fields: CustomApiConnectFields) => void
 }) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const toast = useToast()
   const { theme } = useTheme()
@@ -178,7 +182,7 @@ function DialogCustomApiConnect(props: {
     const baseURL = (baseURLInput?.plainText ?? "").trim()
     const apiKey = apiKeyInput?.plainText ?? ""
     if (!baseURL) {
-      toast.show({ message: "Base URL is required", variant: "error" })
+      toast.show({ message: uiText("ui.baseUrlIsRequired"), variant: "error" })
       setActive("baseURL")
       focusActive()
       return
@@ -191,7 +195,7 @@ function DialogCustomApiConnect(props: {
         registered: props.registered,
       })
     ) {
-      toast.show({ message: "API token is required", variant: "error" })
+      toast.show({ message: uiText("ui.apiTokenIsRequired"), variant: "error" })
       setActive("apiKey")
       focusActive()
       return
@@ -249,7 +253,7 @@ function DialogCustomApiConnect(props: {
           {props.management === "ax-trust"
             ? "AX Trust gateway base URL (including /v1) and client API key. Models load from the gateway."
             : "OpenAI-compatible base URL and bearer token. Models load from GET /models."}{" "}
-          Leave the token blank to keep a saved key when this URL is already registered.
+          {uiText("ui.leaveTheTokenBlankToKeepASavedKeyWhenThisUrlIsAlreadyRegistered")}
         </text>
         {fieldLabel("baseURL", "1. Base URL")}
         <textarea
@@ -280,10 +284,10 @@ function DialogCustomApiConnect(props: {
       </box>
       <box flexDirection="row" gap={2}>
         <text fg={theme.text}>
-          tab <span style={{ fg: theme.textMuted }}>next field</span>
+          tab <span style={{ fg: theme.textMuted }}>{uiText("ui.nextField")}</span>
         </text>
         <text fg={theme.text}>
-          enter <span style={{ fg: theme.textMuted }}>connect</span>
+          enter <span style={{ fg: theme.textMuted }}>{uiText("ui.connect")}</span>
         </text>
       </box>
     </box>
@@ -351,12 +355,14 @@ export function resolveCustomApiProviderSetup(input: {
 }
 
 export async function configureCustomApiProvider(input: {
+  t?: Translate
   dialog: DialogContext
   sdk: SDK
   theme: Theme
   existing?: CustomApiProviderView
   management?: CustomApiProvider.Management
 }): Promise<CustomApiProviderView | null> {
+  const uiText = input.t ?? english
   // Load the managed list before the form so add-mode can keep a saved token
   // when the typed URL already belongs to a provider (Desktop already does this).
   const registered = input.existing ? [] : await listCustomApiProviders(input.sdk)
@@ -374,7 +380,7 @@ export async function configureCustomApiProvider(input: {
     )
   })
   if (!fields) return null
-  const allowInsecureHttp = await confirmInsecureHttp(input.dialog, fields.baseURL)
+  const allowInsecureHttp = await confirmInsecureHttp(input.dialog, fields.baseURL, input.t)
   if (!allowInsecureHttp) return null
 
   // Connecting an endpoint that is already registered updates that provider
@@ -412,7 +418,7 @@ export async function configureCustomApiProvider(input: {
           <text fg={input.theme.textMuted}>
             {error instanceof Error ? error.message : "Could not load models from GET /models."}
           </text>
-          <text fg={input.theme.textMuted}>Comma- or newline-separated IDs. New models default to 128k context.</text>
+          <text fg={input.theme.textMuted}>{uiText("ui.commaOrNewlineSeparatedIdsNewModelsDefaultTo128kContext")}</text>
         </box>
       ),
     })
@@ -454,33 +460,37 @@ export async function refreshCustomApiProviderModels(
 
 export type CustomApiProviderManagementAction = "use" | "update" | "refresh" | "disable" | "delete"
 
-export function customApiProviderManagementOptions(provider: CustomApiProviderView): Array<{
+export function customApiProviderManagementOptions(
+  provider: CustomApiProviderView,
+  uiText: Translate = english,
+): Array<{
   title: string
   value: CustomApiProviderManagementAction
   description?: string
 }> {
   return [
-    { title: "Select a model", value: "use" },
-    { title: "Update provider", value: "update", description: provider.baseURL },
+    { title: uiText("provider.selectModel"), value: "use" },
+    { title: uiText("ui.updateProvider"), value: "update", description: provider.baseURL },
     {
-      title: "Refresh models",
+      title: uiText("ui.refreshModels"),
       value: "refresh",
-      description: "Reload model IDs, limits, and capabilities from GET /models",
+      description: uiText("ui.reloadModelIdsLimitsAndCapabilitiesFromGetModels"),
     },
     {
-      title: "Disable",
+      title: uiText("provider.disable"),
       value: "disable",
       description: "Turn off temporarily — keeps credentials and endpoint",
     },
     {
-      title: "Delete provider",
+      title: uiText("ui.deleteProvider"),
       value: "delete",
-      description: "Remove endpoint metadata and encrypted token",
+      description: uiText("ui.removeEndpointMetadataAndEncryptedToken"),
     },
   ]
 }
 
 export function customApiProviderManagementMenu(input: {
+  t?: Translate
   dialog: DialogContext
   provider: CustomApiProviderView
 }): Promise<CustomApiProviderManagementAction | null> {
@@ -489,7 +499,7 @@ export function customApiProviderManagementMenu(input: {
       () => (
         <DialogSelect
           title={`${input.provider.name} — ${input.provider.management === "ax-trust" || isAxTrustProviderID(input.provider.providerID) ? "AX Trust" : "custom API"}`}
-          options={customApiProviderManagementOptions(input.provider)}
+          options={customApiProviderManagementOptions(input.provider, input.t)}
           onSelect={(option) => resolve(option.value)}
         />
       ),
@@ -499,17 +509,19 @@ export function customApiProviderManagementMenu(input: {
 }
 
 export function confirmCustomApiProviderDelete(input: {
+  t?: Translate
   dialog: DialogContext
   provider: CustomApiProviderView
 }): Promise<boolean> {
+  const uiText = input.t ?? english
   return new Promise((resolve) => {
     input.dialog.replace(
       () => (
         <DialogSelect
-          title={`Delete ${input.provider.name}?`}
+          title={uiText("ui.delete2") + ": " + input.provider.name + "?"}
           options={[
-            { title: "Cancel", value: false },
-            { title: "Delete", value: true, description: "This also removes the saved token" },
+            { title: uiText("common.cancel"), value: false },
+            { title: uiText("ui.delete2"), value: true, description: uiText("ui.thisAlsoRemovesTheSavedToken") },
           ]}
           onSelect={(option) => resolve(option.value)}
         />

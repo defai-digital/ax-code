@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, For, Show } from "solid-js"
 import type { MouseEvent } from "ax-tui"
 import { useRenderer } from "ax-tui/solid"
@@ -26,6 +27,8 @@ export function SubagentStatusPanel(props: {
   onOpen: (item: SubagentStatusItem) => void
   onStop: (item: SubagentStatusItem) => void | Promise<void>
 }) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const renderer = useRenderer()
   const [hovered, setHovered] = createSignal<string>()
@@ -137,7 +140,7 @@ export function SubagentStatusPanel(props: {
                                       open(item)
                                     }}
                                   >
-                                    [Open]
+                                    {uiText("ui.open2")}
                                   </text>
                                   <text
                                     fg={stopping() ? theme.warning : theme.textMuted}
@@ -162,7 +165,7 @@ export function SubagentStatusPanel(props: {
                     </For>
                     <Show when={layout().hidden > 0}>
                       <text height={1} fg={theme.textMuted} wrapMode="none">
-                        +{layout().hidden} more active
+                        +{layout().hidden} {uiText("ui.moreActive")}
                       </text>
                     </Show>
                   </box>
@@ -210,7 +213,7 @@ export function SubagentStatusPanel(props: {
                           open(item())
                         }}
                       >
-                        Open
+                        {uiText("ui.open")}
                       </text>
                     </Show>
                     <text

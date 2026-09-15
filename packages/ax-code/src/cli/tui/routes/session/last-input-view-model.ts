@@ -154,12 +154,14 @@ export function selectPinnedInputCandidate(input: {
   return { state: "none", reason: "empty" }
 }
 
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
+
 function fitWidth(text: string, width: number) {
   if (width <= 0) return ""
   if (stringWidth(text) <= width) return text
   let out = ""
   let used = 0
-  for (const ch of text) {
+  for (const { segment: ch } of graphemes.segment(text)) {
     const next = stringWidth(ch)
     if (used + next > width) break
     out += ch
@@ -173,7 +175,7 @@ export function truncateToCellWidth(text: string, width: number) {
   if (stringWidth(text) <= width) return text
   const ellipsisWidth = stringWidth(ELLIPSIS)
   const budget = Math.max(0, width - ellipsisWidth)
-  return fitWidth(text, budget).trimEnd() + ELLIPSIS
+  return fitWidth(text, budget).trimEnd() + fitWidth(ELLIPSIS, width)
 }
 
 export function wrapPreview(text: string, firstLineWidth: number, nextLineWidth: number, maxLines: 1 | 2) {

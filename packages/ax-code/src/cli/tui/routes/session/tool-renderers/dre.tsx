@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js"
 import { useTheme } from "@tui/context/theme"
 import type { RefactorPlanTool } from "@/tool/refactor_plan"
@@ -15,6 +16,8 @@ function riskColor(theme: ReturnType<typeof useTheme>["theme"], label: string | 
 }
 
 export function RefactorPlan(props: ToolProps<typeof RefactorPlanTool>) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const plan = createMemo(() => props.metadata.plan)
   const kind = createMemo(() => plan()?.kind ?? "plan")
@@ -33,10 +36,10 @@ export function RefactorPlan(props: ToolProps<typeof RefactorPlanTool>) {
           <box flexDirection="column" gap={1}>
             {/* Risk + plan id row — the two facts a reviewer needs at a glance */}
             <box flexDirection="row" gap={2}>
-              <text fg={theme.textMuted}>Risk</text>
+              <text fg={theme.textMuted}>{uiText("ui.risk")}</text>
               <text fg={riskColor(theme, risk())}>{risk() ?? "unknown"}</text>
               <text fg={theme.textMuted}>·</text>
-              <text fg={theme.textMuted}>Plan</text>
+              <text fg={theme.textMuted}>{uiText("common.plan")}</text>
               <text fg={theme.text}>{plan()?.planId ?? ""}</text>
             </box>
 
@@ -53,7 +56,10 @@ export function RefactorPlan(props: ToolProps<typeof RefactorPlanTool>) {
                 see every edit before approving the apply step. */}
             <Show when={edits().length > 0}>
               <box flexDirection="column">
-                <text fg={theme.textMuted}>Edits ({edits().length})</text>
+                <text fg={theme.textMuted}>
+                  {uiText("ui.edits")}
+                  {edits().length})
+                </text>
                 <For each={edits()}>
                   {(edit) => (
                     <box flexDirection="row" gap={1} paddingLeft={1}>
@@ -70,7 +76,10 @@ export function RefactorPlan(props: ToolProps<typeof RefactorPlanTool>) {
                 list lives in metadata for callers that need it. */}
             <Show when={affectedFiles().length > 0}>
               <box flexDirection="column">
-                <text fg={theme.textMuted}>Affected files ({affectedFiles().length})</text>
+                <text fg={theme.textMuted}>
+                  {uiText("ui.affectedFiles")}
+                  {affectedFiles().length})
+                </text>
                 <For each={affectedFiles().slice(0, 15)}>
                   {(file) => <text fg={theme.text}>{"  " + normalize(file)}</text>}
                 </For>
@@ -84,7 +93,7 @@ export function RefactorPlan(props: ToolProps<typeof RefactorPlanTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="♺" pending="Planning refactor..." complete={false} part={props.part}>
-          Planning refactor
+          {uiText("ui.planningRefactor")}
         </InlineTool>
       </Match>
     </Switch>
@@ -92,6 +101,8 @@ export function RefactorPlan(props: ToolProps<typeof RefactorPlanTool>) {
 }
 
 export function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const result = createMemo(() => props.metadata.result)
   const applied = createMemo(() => props.metadata.applied === true)
@@ -108,7 +119,8 @@ export function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
         <text fg={theme.text}>{p.label}</text>
         <Show when={p.errorCount > 0}>
           <text fg={theme.error}>
-            ({p.errorCount} error{p.errorCount === 1 ? "" : "s"})
+            ({p.errorCount} {uiText("ui.error")}
+            {p.errorCount === 1 ? "" : "s"})
           </text>
         </Show>
       </box>
@@ -129,16 +141,16 @@ export function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
           <box flexDirection="column" gap={1}>
             {/* Applied flag + plan id row */}
             <box flexDirection="row" gap={2}>
-              <text fg={theme.textMuted}>Applied</text>
+              <text fg={theme.textMuted}>{uiText("ui.applied")}</text>
               <text fg={applied() ? theme.success : theme.error}>{applied() ? "yes" : "no"}</text>
               <text fg={theme.textMuted}>·</text>
-              <text fg={theme.textMuted}>Plan</text>
+              <text fg={theme.textMuted}>{uiText("common.plan")}</text>
               <text fg={theme.text}>{(props.metadata.planId as string) ?? ""}</text>
             </box>
 
             <Show when={abortReason()}>
               <box flexDirection="row" gap={2}>
-                <text fg={theme.textMuted}>Reason</text>
+                <text fg={theme.textMuted}>{uiText("ui.reason")}</text>
                 <text fg={theme.error}>{abortReason() ?? ""}</text>
               </box>
             </Show>
@@ -146,14 +158,18 @@ export function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
             {/* Check matrix — the whole point of the tool. Three rows,
                 one per check, with status + error count. */}
             <box flexDirection="column">
-              <text fg={theme.textMuted}>Checks</text>
+              <text fg={theme.textMuted}>{uiText("ui.checks")}</text>
               <box paddingLeft={1}>
                 <CheckRow
-                  label="typecheck"
+                  label={uiText("ui.typecheck")}
                   ok={checks()?.typecheck.ok}
                   errorCount={checks()?.typecheck.errors.length ?? 0}
                 />
-                <CheckRow label="lint" ok={checks()?.lint.ok} errorCount={checks()?.lint.errors.length ?? 0} />
+                <CheckRow
+                  label={uiText("ui.lint")}
+                  ok={checks()?.lint.ok}
+                  errorCount={checks()?.lint.errors.length ?? 0}
+                />
                 <box flexDirection="row" gap={1}>
                   <text
                     fg={
@@ -166,10 +182,11 @@ export function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
                   >
                     {checks()?.tests.ok === true ? "✓" : checks()?.tests.ok === false ? "✗" : "—"}
                   </text>
-                  <text fg={theme.text}>tests</text>
+                  <text fg={theme.text}>{uiText("ui.tests")}</text>
                   <text fg={theme.textMuted}>
-                    ({checks()?.tests.selection ?? "skipped"}, ran {checks()?.tests.ran ?? 0}, failed{" "}
-                    {checks()?.tests.failed ?? 0})
+                    ({checks()?.tests.selection ?? "skipped"}
+                    {uiText("ui.ran")} {checks()?.tests.ran ?? 0}
+                    {uiText("ui.failed")} {checks()?.tests.failed ?? 0})
                   </text>
                 </box>
               </box>
@@ -178,7 +195,7 @@ export function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
             {/* Files changed (only when applied) */}
             <Show when={applied() && filesChanged().length > 0}>
               <box flexDirection="column">
-                <text fg={theme.textMuted}>Files changed</text>
+                <text fg={theme.textMuted}>{uiText("ui.filesChanged")}</text>
                 <For each={filesChanged()}>{(file) => <text fg={theme.text}>{"  " + normalize(file)}</text>}</For>
               </box>
             </Show>
@@ -187,7 +204,7 @@ export function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="♺" pending="Applying refactor..." complete={false} spinner={true} part={props.part}>
-          Applying refactor
+          {uiText("ui.applyingRefactor")}
         </InlineTool>
       </Match>
     </Switch>
@@ -195,6 +212,8 @@ export function RefactorApply(props: ToolProps<typeof RefactorApplyTool>) {
 }
 
 export function ImpactAnalyze(props: ToolProps<typeof ImpactAnalyzeTool>) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const report = createMemo(() => props.metadata.report)
   const risk = createMemo(() => report()?.riskLabel)
@@ -229,14 +248,14 @@ export function ImpactAnalyze(props: ToolProps<typeof ImpactAnalyzeTool>) {
           <box flexDirection="column" gap={1}>
             {/* Risk + boundaries + truncated row */}
             <box flexDirection="row" gap={2}>
-              <text fg={theme.textMuted}>Risk</text>
+              <text fg={theme.textMuted}>{uiText("ui.risk")}</text>
               <text fg={riskColor(theme, risk())}>{risk() ?? "unknown"}</text>
               <text fg={theme.textMuted}>·</text>
-              <text fg={theme.textMuted}>API boundaries hit</text>
+              <text fg={theme.textMuted}>{uiText("ui.apiBoundariesHit")}</text>
               <text fg={theme.text}>{apiBoundariesHit()}</text>
               <Show when={truncated()}>
                 <text fg={theme.textMuted}>·</text>
-                <text fg={theme.warning}>truncated (budget exhausted)</text>
+                <text fg={theme.warning}>{uiText("ui.truncatedBudgetExhausted")}</text>
               </Show>
             </box>
 
@@ -248,7 +267,7 @@ export function ImpactAnalyze(props: ToolProps<typeof ImpactAnalyzeTool>) {
                   {([distance, entries]) => (
                     <box flexDirection="column">
                       <text fg={theme.textMuted}>
-                        distance {distance} ({entries.length})
+                        {uiText("ui.distance")} {distance} ({entries.length})
                       </text>
                       <For each={expanded() ? entries : entries.slice(0, MAX_INLINE)}>
                         {(entry) => (
@@ -270,14 +289,14 @@ export function ImpactAnalyze(props: ToolProps<typeof ImpactAnalyzeTool>) {
               </box>
             </Show>
             <Show when={affected().length === 0}>
-              <text fg={theme.textMuted}>No dependents found within the traversal budget.</text>
+              <text fg={theme.textMuted}>{uiText("ui.noDependentsFoundWithinTheTraversalBudget")}</text>
             </Show>
           </box>
         </BlockTool>
       </Match>
       <Match when={true}>
         <InlineTool icon="⟁" pending="Analyzing impact..." complete={false} part={props.part}>
-          Analyzing impact
+          {uiText("ui.analyzingImpact")}
         </InlineTool>
       </Match>
     </Switch>
@@ -285,6 +304,8 @@ export function ImpactAnalyze(props: ToolProps<typeof ImpactAnalyzeTool>) {
 }
 
 export function DedupScan(props: ToolProps<typeof DedupScanTool>) {
+  const uiText = useLanguage().t
+
   const { theme } = useTheme()
   const report = createMemo(() => props.metadata.report)
   const clusters = createMemo(() => report()?.clusters ?? [])
@@ -311,10 +332,10 @@ export function DedupScan(props: ToolProps<typeof DedupScanTool>) {
         >
           <box flexDirection="column" gap={1}>
             <Show when={truncated()}>
-              <text fg={theme.warning}>Candidate pool was truncated — results are partial.</text>
+              <text fg={theme.warning}>{uiText("ui.candidatePoolWasTruncatedResultsArePartial")}</text>
             </Show>
             <Show when={clusters().length === 0}>
-              <text fg={theme.textMuted}>No duplicate clusters found.</text>
+              <text fg={theme.textMuted}>{uiText("ui.noDuplicateClustersFound")}</text>
             </Show>
             <For each={clusters().slice(0, MAX_CLUSTERS)}>
               {(cluster) => (
@@ -322,10 +343,12 @@ export function DedupScan(props: ToolProps<typeof DedupScanTool>) {
                   {/* Cluster header: tier + similarity + member count */}
                   <box flexDirection="row" gap={2}>
                     <text fg={tierColor(cluster.tier)}>[{cluster.tier}]</text>
-                    <text fg={theme.text}>similarity {cluster.similarityScore.toFixed(2)}</text>
+                    <text fg={theme.text}>
+                      {uiText("ui.similarity")} {cluster.similarityScore.toFixed(2)}
+                    </text>
                     <text fg={theme.textMuted}>·</text>
                     <text fg={theme.text}>
-                      {cluster.members.length} copies, {cluster.sharedLines} shared lines
+                      {cluster.members.length} {uiText("ui.copies")} {cluster.sharedLines} {uiText("ui.sharedLines")}
                     </text>
                   </box>
                   {/* Member list — each row is a file:line target */}
@@ -360,7 +383,7 @@ export function DedupScan(props: ToolProps<typeof DedupScanTool>) {
       </Match>
       <Match when={true}>
         <InlineTool icon="⌘" pending="Scanning for duplicates..." complete={false} part={props.part}>
-          Scanning for duplicates
+          {uiText("ui.scanningForDuplicates")}
         </InlineTool>
       </Match>
     </Switch>

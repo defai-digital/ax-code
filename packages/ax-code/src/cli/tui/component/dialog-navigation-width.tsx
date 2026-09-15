@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { onMount } from "solid-js"
 import { useKV } from "@tui/context/kv"
 import { useDialog } from "@tui/ui/dialog"
@@ -11,13 +12,15 @@ import {
 } from "../chrome-width"
 
 function DialogChromeWidth(props: { title: string; kvKey: string; fallback: ChromeWidth }) {
+  const uiText = useLanguage().t
+
   const kv = useKV()
   const dialog = useDialog()
   onMount(() => dialog.setSize("medium"))
   return (
     <DialogSelect
       title={props.title}
-      placeholder="Width shrinks automatically to preserve the main content"
+      placeholder={uiText("ui.widthShrinksAutomaticallyToPreserveTheMainContent")}
       current={chromeWidth(kv.get(props.kvKey), props.fallback)}
       options={CHROME_WIDTHS.map((value) => ({ title: `${value} columns`, value }))}
       onSelect={(option) => {
@@ -29,16 +32,20 @@ function DialogChromeWidth(props: { title: string; kvKey: string; fallback: Chro
 }
 
 export function DialogNavigationWidth() {
+  const uiText = useLanguage().t
+
   return DialogChromeWidth({
-    title: "Navigation width",
+    title: uiText("ui.navigationWidth"),
     kvKey: "navigation_width",
     fallback: NAVIGATION_WIDTH_DEFAULT,
   })
 }
 
 export function DialogSidebarWidth() {
+  const uiText = useLanguage().t
+
   return DialogChromeWidth({
-    title: "Sidebar width",
+    title: uiText("ui.sidebarWidth"),
     kvKey: "sidebar_width",
     fallback: SIDEBAR_WIDTH_DEFAULT,
   })

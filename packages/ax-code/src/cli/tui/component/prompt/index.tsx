@@ -105,6 +105,8 @@ export function Prompt(props: PromptProps) {
 }
 
 function SessionPrompt(props: PromptProps & { draftKey: string }) {
+  const uiText = useLanguage().t
+
   const language = useLanguage()
   let input: TextareaRenderable
   let anchor: BoxRenderable
@@ -348,7 +350,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
       })
       .catch((error) => {
         log.warn("failed to load provider dialog", { error })
-        toast.show({ message: "Failed to open provider dialog", variant: "error" })
+        toast.show({ message: uiText("ui.failedToOpenProviderDialog"), variant: "error" })
       })
   }
 
@@ -356,7 +358,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     if (!sync.data.provider_loaded) {
       toast.show({
         variant: "info",
-        message: "Providers are still loading. Please wait about 10 seconds and try again.",
+        message: uiText("ui.providersAreStillLoadingPleaseWaitAbout10SecondsAndTryAgain"),
         duration: 4000,
       })
       return
@@ -364,7 +366,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     if (sync.data.provider_failed) {
       toast.show({
         variant: "warning",
-        message: "Providers failed to load — check your configuration",
+        message: uiText("ui.providersFailedToLoadCheckYourConfiguration"),
         duration: 5000,
       })
       // Open provider dialog so the user can reconfigure or retry.
@@ -557,7 +559,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     const hasDraft = hasPromptDraft(store.prompt.input, store.prompt.parts)
     return {
       keys: (hasDraft ? keybind.print("input_clear") : keybind.print("app_exit")) || "ctrl+c",
-      label: hasDraft ? "clear" : "exit",
+      label: hasDraft ? uiText("ui.clear2") : uiText("ui.exit"),
     }
   })
   const footerLayout = createMemo(() =>
@@ -566,9 +568,11 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
       toggleWidth: 0,
       mode: store.mode,
       variantsWidth:
-        local.model.variant.list().length > 0 ? footerHintWidth(keybind.print("variant_cycle"), "variants") : 0,
-      shellWidth: footerHintWidth("esc", "exit shell mode"),
-      clearWidth: footerHintWidth("ctrl+c", "clear"),
+        local.model.variant.list().length > 0
+          ? footerHintWidth(keybind.print("variant_cycle"), uiText("ui.variants"))
+          : 0,
+      shellWidth: footerHintWidth("esc", uiText("ui.exitShellMode")),
+      clearWidth: footerHintWidth("ctrl+c", uiText("ui.clear2")),
     }),
   )
 
@@ -813,6 +817,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
 
   command.register(() =>
     promptCommands({
+      t: language.t,
       input: () => input,
       store,
       setStore,
@@ -879,15 +884,15 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     if (props.sessionID) return undefined
     if (store.mode === "shell") {
       const example = SHELL_PLACEHOLDERS[store.placeholder % SHELL_PLACEHOLDERS.length]
-      return `Run a command... "${example}"`
+      return uiText("ui.runACommandExample", { example })
     }
     if (!sync.data.provider_loaded || !local.model.ready) {
-      return "Providers are loading... please wait"
+      return uiText("ui.providersAreLoadingPleaseWait")
     }
     if (!local.model.current()) {
       return sync.data.provider.length > 0 ? MSG_NO_MODEL : MSG_NO_PROVIDER
     }
-    return `Ask anything... "${PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]}"`
+    return uiText("ui.askAnythingExample", { example: uiText(PLACEHOLDERS[store.placeholder % PLACEHOLDERS.length]) })
   })
 
   // Footer busy indicator: two animal emoji picked at random from a large pool
@@ -948,6 +953,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     if (status().type !== "idle") return
     const self = sync.data.session.find((item) => item.id === props.sessionID)
     return footerSubagentStatusView({
+      t: language.t,
       sessions: sync.data.session,
       statuses: sync.data.session_status,
       parentSessionID: self?.parentID ?? props.sessionID,
@@ -959,6 +965,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     const current = status()
     if (current.type !== "busy") return subagentStatus()
     return footerSessionStatusView({
+      t: language.t,
       status: current,
       messages: props.sessionID ? sync.data.message[props.sessionID] : undefined,
       now: Date.now(),
@@ -1127,7 +1134,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                     // This handler is async and AX Code TUI invokes it fire-and-forget —
                     // a clipboard failure must not become an unhandled rejection.
                     log.warn("tui.prompt.onKeyDown: clipboard paste failed", { error })
-                    if (paste.canPaste()) toast.show({ variant: "error", message: "Failed to read clipboard" })
+                    if (paste.canPaste()) toast.show({ variant: "error", message: uiText("ui.failedToReadClipboard") })
                   } finally {
                     pasteSubmitGate.finishPasteHandling({ submitDeferred: handledPaste && paste.canPaste() })
                   }
@@ -1309,7 +1316,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                   <Show when={showVariant()}>
                     <text fg={theme.textMuted}>-</text>
                     <text>
-                      <span style={{ fg: theme.textMuted }}>effort: </span>
+                      <span style={{ fg: theme.textMuted }}>{uiText("ui.effort2")} </span>
                       <span
                         style={{
                           fg: local.model.variant.current() ? theme.warning : theme.textMuted,
@@ -1333,9 +1340,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                 backgroundColor={theme.backgroundElement}
               >
                 <text>
-                  <span style={{ fg: theme.warning, bold: true }}>Leader active</span>
+                  <span style={{ fg: theme.warning, bold: true }}>{uiText("ui.leaderActive")}</span>
                 </text>
-                <text fg={theme.textMuted}>press shortcut key or wait to cancel</text>
+                <text fg={theme.textMuted}>{uiText("ui.pressShortcutKeyOrWaitToCancel")}</text>
               </box>
             </Show>
             <Show when={pasteViews().length > 0}>
@@ -1347,7 +1354,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                       if (expanded()) return view.text
                       const lines = [...view.previewLines]
                       if (view.hiddenLineCount > 0) {
-                        lines.push(`... ${view.hiddenLineCount} more line${view.hiddenLineCount === 1 ? "" : "s"}`)
+                        lines.push(uiText("ui.countMoreLines", { count: view.hiddenLineCount }))
                       }
                       return lines.join("\n")
                     })
@@ -1394,7 +1401,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                             {view.label}
                           </text>
                           <text fg={theme.textMuted}>{previewText()}</text>
-                          <text fg={theme.textMuted}>{expanded() ? "Click to collapse" : "Click to expand"}</text>
+                          <text fg={theme.textMuted}>
+                            {expanded() ? uiText("ui.clickToCollapse") : uiText("ui.clickToExpand")}
+                          </text>
                         </box>
                       </box>
                     )
@@ -1423,13 +1432,13 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                 when={submitPending()}
                 fallback={
                   <Show when={finishedStatus()} fallback={<text />}>
-                    <text fg={theme.success}>Finished</text>
+                    <text fg={theme.success}>{uiText("ui.finished")}</text>
                   </Show>
                 }
               >
                 <text fg={theme.warning}>
                   {pendingSubmitStatusText(submitStage())}
-                  {pendingCancelHint() ? ` ${pendingCancelHint()} to cancel` : ""}
+                  {pendingCancelHint() ? " " + uiText("ui.keysToCancel", { keys: pendingCancelHint() ?? "" }) : ""}
                 </text>
               </Show>
             }
@@ -1465,7 +1474,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                   <Show when={tokenChipView()} keyed>
                     {(chip) => (
                       <text fg={theme.textMuted}>
-                        in {chip.input} out {chip.output}
+                        {uiText("ui.inputTokens")} {chip.input} {uiText("ui.outputTokens")} {chip.output}
                         <Show when={chip.rate}>
                           <span style={{ fg: theme.textMuted }}> - {chip.rate}</span>
                         </Show>
@@ -1539,7 +1548,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                   disabled while it is idle, so only hint esc when the
                   parent's own status row is what keeps the footer busy. */}
               <Show when={status().type !== "idle"}>
-                <KeyHint keys="esc" label="interrupt" />
+                <KeyHint keys="esc" label={uiText("ui.interrupt")} />
               </Show>
             </box>
           </Show>
@@ -1553,7 +1562,9 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                 <box flexDirection="row" flexShrink={0} paddingRight={1}>
                   <Gauge
                     view={contextGauge()}
-                    label={compactionCount() > 0 ? `compacted x${compactionCount()}` : undefined}
+                    label={
+                      compactionCount() > 0 ? uiText("ui.compactedXCount", { count: compactionCount() }) : undefined
+                    }
                   />
                 </box>
               </Show>
@@ -1573,12 +1584,12 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                         <KeyHint keys={footerClearHint().keys} label={footerClearHint().label} />
                       </Show>
                       <Show when={footerLayout().showVariants}>
-                        <KeyHint keys={keybind.print("variant_cycle")} label="effort" />
+                        <KeyHint keys={keybind.print("variant_cycle")} label={uiText("ui.effort")} />
                       </Show>
                     </Match>
                     <Match when={store.mode === "shell"}>
                       <Show when={footerLayout().showShellHint}>
-                        <KeyHint keys="esc" label="exit shell mode" />
+                        <KeyHint keys="esc" label={uiText("ui.exitShellMode")} />
                       </Show>
                     </Match>
                   </Switch>

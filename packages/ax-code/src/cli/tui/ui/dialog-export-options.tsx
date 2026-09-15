@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { TextareaRenderable, TextAttributes } from "ax-tui"
 import { useTheme } from "../context/theme"
 import { useDialog, type DialogContext } from "./dialog"
@@ -24,6 +25,8 @@ export type DialogExportOptionsProps = {
 }
 
 export function DialogExportOptions(props: DialogExportOptionsProps) {
+  const uiText = useLanguage().t
+
   const dialog = useDialog()
   const { theme } = useTheme()
   let textarea: TextareaRenderable
@@ -118,7 +121,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
     <box paddingLeft={2} paddingRight={2} gap={1}>
       <box flexDirection="row" justifyContent="space-between">
         <text attributes={TextAttributes.BOLD} fg={theme.text}>
-          Export Options
+          {uiText("ui.exportOptions")}
         </text>
         <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
           esc
@@ -126,7 +129,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
       </box>
       <box gap={1}>
         <box>
-          <text fg={theme.text}>Filename:</text>
+          <text fg={theme.text}>{uiText("ui.filename")}</text>
         </box>
         <textarea
           onSubmit={confirm}
@@ -134,7 +137,7 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
           keyBindings={[{ name: "return", action: "submit" }]}
           ref={(val: TextareaRenderable) => (textarea = val)}
           initialValue={props.defaultFilename}
-          placeholder="Enter filename"
+          placeholder={uiText("ui.enterFilename")}
           textColor={theme.text}
           focusedTextColor={theme.text}
           cursorColor={theme.text}
@@ -143,39 +146,39 @@ export function DialogExportOptions(props: DialogExportOptionsProps) {
       <box flexDirection="column">
         {renderOption({
           key: "thinking",
-          label: "Include thinking",
+          label: uiText("ui.includeThinking"),
           checked: store.thinking,
           isActive: store.active === "thinking",
         })}
         {renderOption({
           key: "toolDetails",
-          label: "Include tool details",
+          label: uiText("ui.includeToolDetails"),
           checked: store.toolDetails,
           isActive: store.active === "toolDetails",
         })}
         {renderOption({
           key: "assistantMetadata",
-          label: "Include assistant metadata",
+          label: uiText("ui.includeAssistantMetadata"),
           checked: store.assistantMetadata,
           isActive: store.active === "assistantMetadata",
         })}
         {renderOption({
           key: "openWithoutSaving",
-          label: "Open without saving",
+          label: uiText("ui.openWithoutSaving"),
           checked: store.openWithoutSaving,
           isActive: store.active === "openWithoutSaving",
         })}
       </box>
       <Show when={store.active !== "filename"}>
         <text fg={theme.textMuted} paddingBottom={1}>
-          Press <span style={{ fg: theme.text }}>space</span> to toggle, <span style={{ fg: theme.text }}>return</span>{" "}
-          to confirm
+          {uiText("ui.press")} <span style={{ fg: theme.text }}>space</span> {uiText("ui.toToggle")}{" "}
+          <span style={{ fg: theme.text }}>return</span> {uiText("ui.toConfirm")}
         </text>
       </Show>
       <Show when={store.active === "filename"}>
         <text fg={theme.textMuted} paddingBottom={1}>
-          Press <span style={{ fg: theme.text }}>return</span> to confirm, <span style={{ fg: theme.text }}>tab</span>{" "}
-          for options
+          {uiText("ui.press")} <span style={{ fg: theme.text }}>return</span> {uiText("ui.toConfirm2")}{" "}
+          <span style={{ fg: theme.text }}>tab</span> {uiText("ui.forOptions")}
         </text>
       </Show>
     </box>

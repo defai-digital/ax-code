@@ -1,3 +1,4 @@
+import { useLanguage } from "@tui/context/language"
 import { createMemo } from "solid-js"
 import { useSync } from "@tui/context/sync"
 import { DialogSelect } from "@tui/ui/dialog-select"
@@ -19,6 +20,8 @@ export function DialogMessage(props: {
   sessionID: string
   setPrompt?: (prompt: ReturnType<typeof promptState>) => void
 }) {
+  const uiText = useLanguage().t
+
   const sync = useSync()
   const sdk = useSDK()
   const toast = useToast()
@@ -63,7 +66,7 @@ export function DialogMessage(props: {
   function copyCodeBlock(code: string, dialog: DialogContext) {
     return Clipboard.copy(code)
       .then(() => {
-        toast.show({ message: "Code block copied to clipboard!", variant: "success", duration: 1500 })
+        toast.show({ message: uiText("ui.codeBlockCopiedToClipboard"), variant: "success", duration: 1500 })
         dialog.clear()
       })
       .catch((error) => {
@@ -81,18 +84,18 @@ export function DialogMessage(props: {
 
   return (
     <DialogSelect
-      title="Message Actions"
+      title={uiText("ui.messageActions")}
       options={[
         ...routeOptions(),
         {
-          title: "Revert",
+          title: uiText("ui.revert"),
           value: "session.revert",
-          description: "undo messages and file changes",
+          description: uiText("ui.undoMessagesAndFileChanges"),
           onSelect: async (dialog) => {
             const msg = message()
             if (!msg) {
               toast.show({
-                message: "Message is no longer available",
+                message: uiText("ui.messageIsNoLongerAvailable"),
                 variant: "warning",
               })
               dialog.clear()
@@ -129,15 +132,15 @@ export function DialogMessage(props: {
           },
         },
         {
-          title: "Copy",
+          title: uiText("ui.copy"),
           value: "message.copy",
-          description: "message text to clipboard",
+          description: uiText("ui.messageTextToClipboard"),
           category: "Actions",
           onSelect: async (dialog) => {
             const msg = message()
             if (!msg) {
               toast.show({
-                message: "Message is no longer available",
+                message: uiText("ui.messageIsNoLongerAvailable"),
                 variant: "warning",
               })
               dialog.clear()
@@ -172,9 +175,9 @@ export function DialogMessage(props: {
         ...(codeBlocks().length > 0
           ? [
               {
-                title: "Copy code block",
+                title: uiText("ui.copyCodeBlock"),
                 value: "message.copy_code_block",
-                description: "fenced code block to clipboard",
+                description: uiText("ui.fencedCodeBlockToClipboard"),
                 category: "Actions",
                 onSelect: async (dialog: DialogContext) => {
                   const blocks = codeBlocks()
@@ -188,7 +191,7 @@ export function DialogMessage(props: {
                   }
                   dialog.replace(() => (
                     <DialogSelect
-                      title="Copy code block"
+                      title={uiText("ui.copyCodeBlock")}
                       options={blocks.map((block, index) => ({
                         title: codeBlockLabel(block, index),
                         value: block.code,
@@ -202,15 +205,15 @@ export function DialogMessage(props: {
             ]
           : []),
         {
-          title: "Fork",
+          title: uiText("ui.fork"),
           value: "session.fork",
-          description: "create a new session",
+          description: uiText("ui.createANewSession"),
           category: "Actions",
           onSelect: async (dialog) => {
             const msg = message()
             if (!msg) {
               toast.show({
-                message: "Message is no longer available",
+                message: uiText("ui.messageIsNoLongerAvailable"),
                 variant: "warning",
               })
               dialog.clear()
