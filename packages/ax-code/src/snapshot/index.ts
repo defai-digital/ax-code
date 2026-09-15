@@ -20,6 +20,7 @@ import { NamedError } from "@ax-code/util/error"
 import { Bus } from "../bus"
 import { NotificationEvent } from "../notification/events"
 import { WindowsSnapshotPaths } from "./windows-paths"
+import { retainedSnapshotHashes } from "./retention"
 
 export namespace Snapshot {
   export const UnsupportedPathError = NamedError.create(
@@ -62,6 +63,9 @@ export namespace Snapshot {
   const core = ["-c", "core.longpaths=true", "-c", "core.symlinks=true"]
   const cfg = ["-c", "core.autocrlf=false", ...core]
   const quote = [...cfg, "-c", "core.quotepath=false"]
+  // Directory instances in one project share a Git index. Serialize the entire
+  // transaction by repository, not just individual Git commands or instances.
+  const operations = new KeyedSerialQueue()
 
   interface State {
     directory: string
@@ -69,7 +73,7 @@ export namespace Snapshot {
     gitdir: string
     vcs: Shape["project"]["vcs"]
     prevHash?: string
-    operationQueue: KeyedSerialQueue
+    projectID: Shape["project"]["id"]
     cleanupDelay?: ReturnType<typeof setTimeout>
     cleanupInterval?: ReturnType<typeof setInterval>
     disposed?: boolean
@@ -112,9 +116,9 @@ export namespace Snapshot {
       const next: State = {
         directory: current.directory,
         worktree: current.worktree,
-        gitdir: path.join(Global.Path.data, "snapshot", current.project.id),
+        gitdir: path.join(Filesystem.resolve(Global.Path.data), "snapshot", current.project.id),
         vcs: current.project.vcs,
-        operationQueue: new KeyedSerialQueue(),
+        projectID: current.project.id,
       }
 
       const scheduleCleanup = () => {
@@ -234,7 +238,8 @@ export namespace Snapshot {
   }
 
   async function withOperationLock<T>(current: State, fn: () => Promise<T>): Promise<T> {
-    return current.operationQueue.run("snapshot", fn)
+    const key = process.platform === "win32" ? current.gitdir.toLowerCase() : current.gitdir
+    return operations.run(key, fn)
   }
 
   async function size(current: State, hash: string, file: string) {
@@ -400,13 +405,41 @@ export namespace Snapshot {
         exitCode: refs.code,
         stderr: refs.stderr,
       })
+      return
     } else {
+      let retained: Set<string>
+      try {
+        retained = retainedSnapshotHashes(current.projectID)
+      } catch (error) {
+        // Never interpret an unreadable registry/shard as no live references.
+        log.warn("snapshot cleanup skipped: retained references could not be read", { error })
+        return
+      }
+      const existing = new Set(
+        refs.text
+          .trim()
+          .split("\n")
+          .map((line) => line.trim().split(/\s+/, 2)[1]),
+      )
+      // Older cleanup versions may have removed refs while objects still exist.
+      // Pin those objects again before GC; a failed pin must not permit pruning.
+      for (const hash of retained) {
+        if (existing.has(hash)) continue
+        const pin = await runGit([...core, ...args(current, ["update-ref", snapshotRef(hash), hash])], {
+          cwd: current.directory,
+        })
+        if (pin.code !== 0) {
+          log.warn("snapshot cleanup skipped: retained snapshot could not be pinned", { hash, stderr: pin.stderr })
+          return
+        }
+        await writeSnapshotMeta(current, hash)
+      }
       let deletedRefs = 0
       for (const line of refs.text.trim().split("\n")) {
         if (!line) continue
         const [ref, hash] = line.trim().split(/\s+/, 2)
         if (!ref || !hash) continue
-        if (hash === current.prevHash) continue
+        if (hash === current.prevHash || retained.has(hash)) continue
         const timestamp = await snapshotTimestamp(current, ref, hash)
         if (!timestamp || timestamp >= cutoff) continue
         const deleted = await runGit([...core, ...args(current, ["update-ref", "-d", ref])], { cwd: current.directory })

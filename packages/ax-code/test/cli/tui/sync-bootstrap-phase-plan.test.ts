@@ -3,6 +3,44 @@ import { createSyncBootstrapPhaseSequence } from "../../../src/cli/tui/context/s
 import { runBootstrapPhaseSequence } from "../../../src/cli/tui/context/sync-bootstrap-runner"
 
 describe("tui sync bootstrap phase plan", () => {
+  test.each(["loading", "partial", "complete"] as const)(
+    "partial core failure from %s stays interactive but degraded (#457)",
+    async (initial) => {
+      let status: "loading" | "partial" | "complete" = initial
+      let finished = 0
+      let errors = 0
+      const run = (fail: boolean) =>
+        runBootstrapPhaseSequence(
+          createSyncBootstrapPhaseSequence({
+            blockingTasks: [],
+            deferredTasks: [],
+            deferredBackground: false,
+            coreTasks: Array.from({ length: 6 }, (_, i) => async () => {
+              if (fail && i > 0) throw new Error("controlled timeout")
+            }),
+            getStatus: () => status,
+            setStatus: (next) => {
+              status = next
+            },
+            finishStartup: () => {
+              finished++
+            },
+            logWarn() {},
+            logError: () => {
+              errors++
+            },
+            recordStartup() {},
+          }),
+        )
+      await run(true)
+      expect(status).toBe("partial")
+      expect(finished).toBe(1)
+      expect(errors).toBe(5)
+      await run(false)
+      expect(status).toBe("complete")
+      expect(finished).toBe(2)
+    },
+  )
   test("applies status transitions, startup markers, spans, and labeled logging across bootstrap phases", async () => {
     const logs: Array<{ level: "warn" | "error"; label: string; error: string }> = []
     const startup: Array<{ name: string; data?: Record<string, unknown> }> = []

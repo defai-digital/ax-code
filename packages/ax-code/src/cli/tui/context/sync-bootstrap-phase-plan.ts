@@ -46,12 +46,10 @@ export function createSyncBootstrapPhaseSequence(input: {
       },
       finishSpan: input.finishCoreSpan,
       after(summary) {
-        const total = input.coreTasks.length
-        if (total > 0 && summary.rejected.length === total) {
-          // Core requests all failed: do not pretend the store is ready.
-          // Leave an existing partial marker in place; otherwise surface
-          // partial so the UI can distinguish settled-but-empty from loaded.
-          if (input.getStatus() === "loading") {
+        if (summary.rejected.length > 0) {
+          // Interactive is not the same as fully loaded, including reconnects
+          // that start from complete but fail to refresh some core data.
+          if (input.getStatus() !== "partial") {
             input.setStatus("partial")
             input.recordStartup("tui.startup.syncPartial")
           }
