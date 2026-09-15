@@ -1,12 +1,17 @@
 import os from "os"
 
+export const DYNAMIC_REDIRECTION_DIAGNOSTIC =
+  "Dynamic redirection targets are not allowed. Use literal quoted paths for stdin, stdout and stderr, " +
+  "and set workdir explicitly when paths are relative to the repository root rather than the session directory. " +
+  "Create output directories in a separate command first. Redirect targets must not contain $, backticks, *, ?, brackets or braces, even when quoted."
+
 export function hasDynamicShellExpansion(value: string) {
   return /[$`*?[\]{}]/.test(value)
 }
 
 export function assertStaticRedirectTarget(target: string) {
   if (hasDynamicShellExpansion(target)) {
-    throw new Error("Dynamic redirection targets are not allowed")
+    throw new Error(DYNAMIC_REDIRECTION_DIAGNOSTIC)
   }
 }
 

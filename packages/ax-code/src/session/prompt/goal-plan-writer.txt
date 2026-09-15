@@ -133,3 +133,13 @@ oversized submission is rejected with an error — shorten the fields and
 call submit_goal_plan again.
 
 After submit_goal_plan succeeds, stop.
+
+Commit scope checks must enumerate the complete changed-path list of every commit
+in {BASELINE}..HEAD without path filters. A nonempty `git log ... -- paths`
+only proves at least one matching path; unrelated files in the same commit or
+other commits remain hidden. Declare a project-owned verifier that asserts
+baseline ancestry, a nonempty range, every path in every commit (including
+deletions and both rename sides, and an explicit policy for merge commits),
+and any required branch or commit-message properties. Do not substitute log
+presence for those assertions. Removing -- or hiding the log in a variable does
+not strengthen the check. Build the verifier during implementation if absent.
