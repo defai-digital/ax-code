@@ -444,6 +444,7 @@ export namespace Snapshot {
   async function ensureRepo(current: State) {
     // mkdir can survive a failed or interrupted init; the directory alone is
     // not evidence that Git has initialized the snapshot store.
+    // @scan-suppress security_scan - gitdir is the managed snapshot directory and HEAD is a fixed leaf.
     const existed = await exists(path.join(current.gitdir, "HEAD"))
     await fs.mkdir(current.gitdir, { recursive: true })
     if (existed) return
