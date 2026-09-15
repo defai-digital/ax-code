@@ -241,6 +241,7 @@ export namespace Snapshot {
     const tree = await runGit([...core, ...args(current, ["ls-tree", "-l", hash, "--", file])], {
       cwd: current.worktree,
     })
+    if (tree.code !== 0) throw new Error(`Snapshot content failed: ls-tree exited with code ${tree.code}`)
     const line = tree.text.trim()
     if (!line) return
     return parseLsTreeSize(line)
@@ -248,12 +249,12 @@ export namespace Snapshot {
 
   async function show(current: State, hash: string, file: string) {
     const next = await size(current, hash, file)
-    if (next !== undefined && next > maxFileSize) return ""
-    return (
-      await runGit([...cfg, ...args(current, ["show", `${hash}:${file}`])], {
-        cwd: current.worktree,
-      })
-    ).text
+    if (next === undefined || next > maxFileSize) return ""
+    const result = await runGit([...cfg, ...args(current, ["show", `${hash}:${file}`])], {
+      cwd: current.worktree,
+    })
+    if (result.code !== 0) throw new Error(`Snapshot content failed: show exited with code ${result.code}`)
+    return result.text
   }
 
   async function enabled(current: State) {
@@ -1035,13 +1036,17 @@ export namespace Snapshot {
         4,
         entries.map((parsed, index) => ({ parsed, index })),
         async ({ parsed, index }) => {
-          const [before, after] = parsed.binary
-            ? ["", ""]
-            : await Promise.all([show(current, from, parsed.file), show(current, to, parsed.file)])
+          const contents = parsed.binary
+            ? []
+            : await Promise.allSettled([show(current, from, parsed.file), show(current, to, parsed.file)])
+          for (const content of contents) {
+            if (content.status === "rejected") throw content.reason
+          }
+          const [before, after] = contents.map((content) => (content.status === "fulfilled" ? content.value : ""))
           ordered[index] = {
             file: parsed.file,
-            before,
-            after,
+            before: before ?? "",
+            after: after ?? "",
             additions: parsed.additions,
             deletions: parsed.deletions,
             status: status.get(parsed.file) ?? "modified",

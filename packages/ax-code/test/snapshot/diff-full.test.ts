@@ -29,7 +29,7 @@ test("diffFull preserves order, statuses and contents for mixed changes", async 
       await fs.writeFile(path.join(tmp.path, "bin.dat"), Buffer.from([9, 9, 9]))
       const to = (await Snapshot.track())!
       const diffs = await Snapshot.diffFull(from, to)
-      expect(diffs.length).toBe(4)
+      expect(diffs.map((item) => item.file)).toEqual(["a.txt", "b.txt", "bin.dat", "e.txt"])
       const byFile = new Map(diffs.map((item) => [item.file, item]))
       expect(byFile.get("a.txt")).toMatchObject({
         status: "modified",
@@ -106,3 +106,39 @@ test("previewRevert diffs only the requested files", async () => {
     },
   })
 })
+
+test.each(["ls-tree", "show"])(
+  "diffFull rejects failed %s content reads instead of returning empty contents",
+  async (command) => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const file = path.join(tmp.path, "content.txt")
+        await fs.writeFile(file, "before\n")
+        const from = (await Snapshot.track())!
+        await fs.writeFile(file, "after\n")
+        const to = (await Snapshot.track())!
+        const real = Git.git
+        const spy = vi.spyOn(Git, "git").mockImplementation(async (args, options) => {
+          if (args.includes(command)) {
+            return {
+              exitCode: 128,
+              text: () => "",
+              stdout: Buffer.alloc(0),
+              stderr: Buffer.from("fatal: failed to read object"),
+            }
+          }
+          return real(args, options)
+        })
+        await expect(Snapshot.diffFull(from, to)).rejects.toThrow(
+          `Snapshot content failed: ${command} exited with code 128`,
+        )
+        spy.mockRestore()
+        expect(await Snapshot.diffFull(from, to)).toEqual([
+          { file: "content.txt", before: "before\n", after: "after\n", additions: 1, deletions: 1, status: "modified" },
+        ])
+      },
+    })
+  },
+)
