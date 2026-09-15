@@ -216,9 +216,9 @@ test("attached run event rendering does not read local agent state", async () =>
 
 test("run command awaits the event loop before bootstrap cleanup", async () => {
   const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/run.ts"), "utf-8")
-  const loopStart = src.indexOf("const loopPromise = loop()")
+  const loopStart = src.indexOf("const loopPromise = loop(events.stream)")
   const sendCommand = src.indexOf("await sdk.session.command", loopStart)
-  const awaitLoop = src.indexOf("await loopPromise.catch", sendCommand)
+  const awaitLoop = src.indexOf("await loopResult", sendCommand)
 
   expect(loopStart).toBeGreaterThan(-1)
   expect(sendCommand).toBeGreaterThan(loopStart)
@@ -286,7 +286,7 @@ test("run command wires structured output flags after the event loop", async () 
   expect(src).toContain("finalAssistantMessageID = event.properties.info.id")
   expect(src).toContain("await sdk.session.messages({ sessionID })")
 
-  const awaitLoop = src.indexOf("await loopPromise.catch")
+  const awaitLoop = src.indexOf("await loopResult")
   const storedFinalMessage = src.indexOf(
     "const storedFinalMessage = await readFinalAssistantText(sdk, sessionID, finalAssistantMessageID)",
     awaitLoop,

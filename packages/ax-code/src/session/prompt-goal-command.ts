@@ -45,6 +45,18 @@ async function goalControlMessage(input: CommandInput, text: string) {
   })
 }
 
+async function cancelRunningSession(sessionID: CommandInput["sessionID"]) {
+  const { SessionPrompt } = await import("./prompt")
+  const { Session } = await import(".")
+  try {
+    SessionPrompt.assertNotBusy(sessionID)
+    return
+  } catch (error) {
+    if (!(error instanceof Session.BusyError)) throw error
+  }
+  await SessionPrompt.cancel(sessionID)
+}
+
 export async function executeGoalCommand(input: CommandInput, prompt: PromptRunner) {
   const parsed = parseGoalArguments(input.arguments)
   if (parsed.action === "view") {
@@ -93,11 +105,10 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
   }
   if (parsed.action === "revise") {
     const model = await commandModel({ model: input.model, sessionID: input.sessionID })
-    const { SessionPrompt } = await import("./prompt")
     let prepared: Awaited<ReturnType<typeof GoalPlanOrchestration.revise>>
     try {
       const target = await GoalPlanOrchestration.revisionTarget(input.sessionID, parsed.correction)
-      await SessionPrompt.cancel(input.sessionID)
+      await cancelRunningSession(input.sessionID)
       prepared = await GoalPlanOrchestration.revise({
         expectedCreated: target.existing.time.created,
         sessionID: input.sessionID,
@@ -160,8 +171,7 @@ export async function executeGoalCommand(input: CommandInput, prompt: PromptRunn
       throw new Error("This session already has an active goal; pause, clear or revise it first")
     if (parsed.tokenBudget !== undefined && (!Number.isSafeInteger(parsed.tokenBudget) || parsed.tokenBudget <= 0))
       throw new Error("Goal token budget must be a positive integer")
-    const { SessionPrompt } = await import("./prompt")
-    await SessionPrompt.cancel(input.sessionID)
+    await cancelRunningSession(input.sessionID)
     prepared = await GoalPlanOrchestration.activate({
       sessionID: input.sessionID,
       objective: parsed.objective,
