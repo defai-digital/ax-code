@@ -26,6 +26,109 @@ afterEach(async () => {
 })
 
 describe("bounded grep context", () => {
+  test.each([0, 1])(
+    "a complete summary remains authoritative if pipe close precedes EOF with context=%i",
+    async (context) => {
+      await using tmp = await tmpdir({ git: true })
+      const file = path.join(tmp.path, "source.ts")
+      await writeFile(file, "needle\n")
+      vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+      const rows = [
+        { type: "match", data: { path: { text: file }, lines: { text: "needle\n" }, line_number: 1 } },
+        { type: "summary" },
+      ]
+      const output = rows.map((row) => JSON.stringify(row)).join("\n") + "\n"
+      const spawn = Process.spawn
+      vi.spyOn(Process, "spawn").mockImplementation((args, options) => {
+        if (!args.includes("--json")) return spawn(args, options)
+        const child = spawn(
+          [
+            process.execPath,
+            "-e",
+            `process.stdout.write(${JSON.stringify(output)}); setTimeout(() => process.exit(0), 100)`,
+          ],
+          options,
+        )
+        child.stdout!.once("data", () => child.stdout!.destroy())
+        return child
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle", context }, ctx)
+          expect(CanonicalOutput.Grep.parse(result.data)).toMatchObject({
+            matches: [{ path: file, line: 1, text: "needle" }],
+            truncated: false,
+          })
+        },
+      })
+    },
+  )
+
+  test("malformed complete JSON frames still fail and reap the child", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const spawn = Process.spawn
+    let child: Process.Child | undefined
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) => {
+      if (!args.includes("--json")) return spawn(args, options)
+      child = spawn(
+        [process.execPath, "-e", 'process.stdout.write("{invalid}\\n"); setInterval(() => {}, 1000)'],
+        options,
+      )
+      return child
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect((await GrepTool.init()).execute({ pattern: "needle", context: 1 }, ctx)).rejects.toThrow()
+        await child!.exited
+        expect(child!.exitCode !== null || child!.signalCode !== null).toBe(true)
+      },
+    })
+  })
+
+  test("binary termination is disclosed even when ripgrep emits a summary", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "binary.txt")
+    await writeFile(file, "needle\n" + "plain\n".repeat(100_000) + "\x00\n" + "plain\n".repeat(100_000) + "needle\n")
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", context: 1 }, ctx)
+        expect(CanonicalOutput.Grep.parse(result.data).matches).toHaveLength(1)
+        expect(result.metadata.truncated).toBe(true)
+        expect(result.output).toContain("Binary data")
+      },
+    })
+  })
+
+  test.each(['{"type":"match","data":', JSON.stringify({ type: "summary" })])(
+    "incomplete final JSON frame %j retains complete matches and discloses truncation",
+    async (tail) => {
+      await using tmp = await tmpdir({ git: true })
+      const row = { type: "match", data: { path: { text: "source.ts" }, lines: { text: "needle\n" }, line_number: 1 } }
+      const spawn = Process.spawn
+      vi.spyOn(Process, "spawn").mockImplementation((args, options) =>
+        args.includes("--json")
+          ? spawn(
+              [process.execPath, "-e", `process.stdout.write(${JSON.stringify(JSON.stringify(row) + "\n" + tail)})`],
+              options,
+            )
+          : spawn(args, options),
+      )
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle", context: 1 }, ctx)
+          expect(CanonicalOutput.Grep.parse(result.data)).toMatchObject({
+            matches: [{ path: "source.ts", line: 1, text: "needle" }],
+            truncated: true,
+          })
+        },
+      })
+    },
+  )
+
   test("cancellation reaps an already streaming subprocess", async () => {
     await using tmp = await tmpdir({ git: true })
     const controller = new AbortController()

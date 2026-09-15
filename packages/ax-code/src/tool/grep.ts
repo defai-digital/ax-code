@@ -8,6 +8,7 @@ import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
 import { fileToolGuard } from "./external-directory"
 import { clampGrepLine } from "./grep-line"
+import { decodeGrepPath } from "./grep-path"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Env } from "@/util/env"
@@ -101,10 +102,11 @@ export const GrepTool = Tool.define("grep", {
         limit: params.limit,
       },
     })
+    ctx.abort.throwIfAborted()
 
     const limit = params.limit ?? (params.context ? 20 : RESULT_LIMIT)
     if (params.context)
-      return searchWithContext({ ...params, path: searchPath, limit, context: params.context }, ctx.abort)
+      return searchWithContext({ ...params, path: searchPath, limit, context: params.context, isFile }, ctx.abort)
     const scanLimit = limit + 1
 
     // Native fast-path: in-process search via Rust addon
@@ -205,6 +207,9 @@ export const GrepTool = Tool.define("grep", {
     // JSON frames filenames, source text, and binary-file diagnostics without
     // letting a warning or a control character consume another file's record.
     const args = ["--json", "--hidden", "--no-messages", "--regexp", params.pattern]
+    // Preserve source line boundaries: binary conversion can replace NUL with
+    // newlines when ripgrep searches an explicitly named file.
+    if (isFile) args.push("--text")
     if (params.include) {
       args.push("--glob", params.include)
     }
@@ -219,10 +224,11 @@ export const GrepTool = Tool.define("grep", {
       timeout: commandTimeoutMs,
     })
 
-    const { output, errorOutput, exitCode, capped: outputCapped, incomplete } = await readGrepOutput(proc, ctx.abort)
+    const { output, errorOutput, exitCode, capped: outputCapped } = await readGrepOutput(proc, ctx.abort)
     if (!outputCapped && exitCode === 124) {
       throw new Error(`grep command timed out after ${commandTimeoutMs / 1000}s`)
     }
+    if (!outputCapped && proc.signalCode) throw new Error(`ripgrep terminated by signal ${proc.signalCode}`)
 
     // Exit codes: 0 = matches found, 1 = no matches, 2 = errors (but may still have matches)
     // With --no-messages, we suppress error output but still get exit code 2 for broken symlinks etc.
@@ -265,10 +271,16 @@ export const GrepTool = Tool.define("grep", {
       if (!line.trim()) continue
       const event = RipgrepEvent.parse(parseJsonStrict(line))
       if (event.type === "summary") summarySeen = true
-      if (event.type === "end" && RipgrepEnd.parse(event).data.binary_offset != null) binaryStopped = true
+      // An explicitly named file is searched through binary data. Directory
+      // traversal stops that file early; binary_offset alone means detection.
+      if (event.type === "end" && !isFile && RipgrepEnd.parse(event).data.binary_offset != null) binaryStopped = true
       if (event.type !== "match") continue
       const record = RipgrepMatch.parse(event).data
-      const filePath = decodeRipgrepText(record.path)
+      const filePath = decodeGrepPath(record.path)
+      if (filePath === undefined) {
+        skippedRecords = true
+        continue
+      }
       const lineNum = record.line_number
       const lineText = decodeRipgrepText(record.lines).replace(/\r?\n$/, "")
 
@@ -294,7 +306,9 @@ export const GrepTool = Tool.define("grep", {
     if (hasErrors && !matches.length) throw new Error(`ripgrep failed: ${errorOutput}`)
 
     const resultCapped = matches.length > limit
-    const streamIncomplete = incomplete || incompleteRecord || !summarySeen
+    // Process may close stdout before its end event after child exit. A complete
+    // protocol summary proves completion; any missing or cut frame does not.
+    const streamIncomplete = incompleteRecord || !summarySeen
     const partial = outputCapped || streamIncomplete || binaryStopped
     const truncated = resultCapped || hasErrors || skippedRecords || partial
     const finalMatches = matches.slice(0, limit)

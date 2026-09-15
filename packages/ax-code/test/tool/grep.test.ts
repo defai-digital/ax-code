@@ -30,6 +30,124 @@ afterEach(async () => {
 })
 
 describe("tool.grep", () => {
+  test.each([0, 1])("binary bytes cannot shift explicit-file line numbers with context=%i", async (context) => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "binary.txt")
+    await writeFile(file, "x\x00y\x00z\nneedle\n")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file, context }, ctx)
+        const data = CanonicalOutput.Grep.parse(result.data)
+        expect(data.matches).toEqual([{ path: file, line: 2, text: "needle" }])
+        expect(data.truncated).toBe(false)
+        if (context) expect(data.context![0]).toEqual({ path: file, line: 1, text: "x\x00y\x00z", isMatch: false })
+      },
+    })
+  })
+
+  test.each([0, 1])(
+    "non-UTF8 filenames cannot be attributed to a different Unicode filename with context=%i",
+    async (context) => {
+      await using tmp = await tmpdir({ git: true })
+      const rawPath = Buffer.concat([Buffer.from(tmp.path + path.sep), Buffer.from([0xff]), Buffer.from(".ts")])
+      const unicodePath = path.join(tmp.path, "\ufffd.ts")
+      await writeFile(unicodePath, "different content\n")
+      vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+      // Replay a POSIX ripgrep byte-path record: APFS itself rejects this name.
+      const output =
+        [
+          {
+            type: "match",
+            data: {
+              path: { bytes: rawPath.toString("base64") },
+              lines: { text: "needle in raw filename\n" },
+              line_number: 1,
+            },
+          },
+          { type: "summary" },
+        ]
+          .map((row) => JSON.stringify(row))
+          .join("\n") + "\n"
+      const spawn = Process.spawn
+      vi.spyOn(Process, "spawn").mockImplementation((args, options) =>
+        args.includes("--json")
+          ? spawn([process.execPath, "-e", `process.stdout.write(${JSON.stringify(output)})`], options)
+          : spawn(args, options),
+      )
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle", context }, ctx)
+          expect(CanonicalOutput.Grep.parse(result.data)).toMatchObject({ matches: [], truncated: true })
+          expect(result.output).not.toContain(unicodePath)
+        },
+      })
+    },
+  )
+
+  test("cancellation while approval settles prevents native search", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const controller = new AbortController()
+    const searchContent = vi.fn(() => "[]")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue({ searchContent } as any)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          (await GrepTool.init()).execute(
+            { pattern: "needle" },
+            {
+              ...ctx,
+              abort: controller.signal,
+              ask: async () => {
+                controller.abort(new Error("Cancelled before native search"))
+              },
+            },
+          ),
+        ).rejects.toThrow("Cancelled before native search")
+        expect(searchContent).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  test.each([0, 1])(
+    "explicit binary file with context=%i is fully searched without false truncation",
+    async (context) => {
+      await using tmp = await tmpdir({ git: true })
+      const file = path.join(tmp.path, "binary.txt")
+      await writeFile(file, "needle\n" + "plain\n".repeat(100_000) + "\x00\n" + "plain\n".repeat(100_000) + "needle\n")
+      vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file, context }, ctx)
+          expect(CanonicalOutput.Grep.parse(result.data).matches).toHaveLength(2)
+          expect(result.metadata.truncated).toBe(false)
+          expect(result.output).not.toContain("Binary data stopped")
+        },
+      })
+    },
+  )
+
+  test.each([0, 1])("signal termination with context=%i is not a successful no-match search", async (context) => {
+    await using tmp = await tmpdir({ git: true })
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    const spawn = Process.spawn
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) =>
+      args.includes("--regexp")
+        ? spawn([process.execPath, "-e", 'process.kill(process.pid, "SIGTERM")'], options)
+        : spawn(args, options),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect((await GrepTool.init()).execute({ pattern: "needle", context }, ctx)).rejects.toThrow("SIGTERM")
+      },
+    })
+  })
+
   test("external cancellation preserves its reason and reaps the search process", async () => {
     await using tmp = await tmpdir({ git: true })
     const controller = new AbortController()

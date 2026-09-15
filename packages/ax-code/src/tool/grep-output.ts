@@ -7,7 +7,6 @@ export async function readGrepOutput(proc: Process.Child, abort: AbortSignal) {
   const chunks: Buffer[] = []
   let bytes = 0
   let capped = false
-  let ended = false
   let errorOutput = ""
   try {
     if (!proc.stdout || !proc.stderr) throw new Error("Process output not available")
@@ -20,17 +19,13 @@ export async function readGrepOutput(proc: Process.Child, abort: AbortSignal) {
     await new Promise<void>((resolve, reject) => {
       const cleanup = () => {
         stdout.off("data", data)
-        stdout.off("end", end)
+        stdout.off("end", finish)
         stdout.off("close", finish)
         stdout.off("error", fail)
       }
       const finish = () => {
         cleanup()
         resolve()
-      }
-      const end = () => {
-        ended = true
-        finish()
       }
       const fail = (error: Error) => {
         cleanup()
@@ -48,14 +43,14 @@ export async function readGrepOutput(proc: Process.Child, abort: AbortSignal) {
         }
       }
       stdout.on("data", data)
-      stdout.once("end", end)
+      stdout.once("end", finish)
       stdout.once("close", finish)
       stdout.once("error", fail)
     })
     if (capped) await Process.stop(proc)
     const exitCode = await proc.exited
     abort.throwIfAborted()
-    return { output: Buffer.concat(chunks, bytes).toString("utf8"), errorOutput, exitCode, capped, incomplete: !ended }
+    return { output: Buffer.concat(chunks, bytes).toString("utf8"), errorOutput, exitCode, capped }
   } finally {
     if (proc.exitCode === null && proc.signalCode === null) await Process.stop(proc)
     await proc.exited

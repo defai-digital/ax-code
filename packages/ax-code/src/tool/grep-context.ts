@@ -4,6 +4,7 @@ import { Ripgrep } from "../file/ripgrep"
 import { Process } from "../util/process"
 import { Env } from "../util/env"
 import { clampGrepLine } from "./grep-line"
+import { decodeGrepPath } from "./grep-path"
 import type { CanonicalOutput } from "./canonical-output"
 import { parseJsonStrict } from "../util/json-value"
 
@@ -13,6 +14,7 @@ const MAX_RECORD_BYTES = 1024 * 1024
 const TIMEOUT_MS = 120_000
 const Text = z.union([z.object({ text: z.string() }), z.object({ bytes: z.string() })])
 const Event = z.object({ type: z.string() }).passthrough()
+const End = z.object({ data: z.object({ binary_offset: z.number().nullish() }) })
 const Record = z.object({
   type: z.enum(["match", "context"]),
   data: z.object({ path: Text, lines: Text, line_number: z.number().int().positive() }),
@@ -22,7 +24,7 @@ const decode = (value: z.infer<typeof Text>) =>
 
 /** One source scan, with merged context from ripgrep rather than a second file read. */
 export async function searchWithContext(
-  params: { pattern: string; path: string; include?: string; context: number; limit: number },
+  params: { pattern: string; path: string; include?: string; context: number; limit: number; isFile: boolean },
   abort: AbortSignal,
 ) {
   abort.throwIfAborted()
@@ -36,6 +38,7 @@ export async function searchWithContext(
     "--regexp",
     params.pattern,
   ]
+  if (params.isFile) args.push("--text")
   if (params.include) args.push("--glob", params.include)
   args.push("--", params.path)
   const proc = Process.spawn([await Ripgrep.filepath(), ...args], {
@@ -54,6 +57,8 @@ export async function searchWithContext(
     errors = (errors + chunk.toString("utf8")).slice(0, 2000)
   })
   let summarySeen = false
+  let binaryStopped = false
+  let skippedPaths = false
   // ripgrep streams a match's _before-context_ rows before the match row itself.
   // Holding them until their match is accepted keeps a match rejected by the
   // line/byte budget from leaving its context rendered with no match.
@@ -79,11 +84,17 @@ export async function searchWithContext(
     if (!line.trim()) return true
     const event = Event.parse(parseJsonStrict(line))
     if (event.type === "summary") summarySeen = true
+    if (event.type === "end" && !params.isFile && End.parse(event).data.binary_offset != null) binaryStopped = true
     if (event.type !== "match" && event.type !== "context") return true
     const record = Record.parse(event)
     const isMatch = record.type === "match"
     if (isMatch && data.matches.length >= params.limit) return false
-    const file = decode(record.data.path)
+    const file = decodeGrepPath(record.data.path)
+    if (file === undefined) {
+      skippedPaths = true
+      data.truncated = true
+      return true
+    }
     const source = decode(record.data.lines).replace(/\r?\n$/, "")
     // A clamped source line is not a dropped result: it stays in the output with
     // a trailing ellipsis, so it must not set the whole-result `truncated` flag.
@@ -203,7 +214,9 @@ export async function searchWithContext(
       stdout.once("close", finish)
       stdout.once("error", fail)
     })
-    if (!stopped && !accept(pending + decoder.end())) stopped = true
+    // Only newline-terminated frames are complete. Keep earlier results when
+    // transport ends mid-frame; malformed complete frames still fail strictly.
+    if (!stopped && (pending.length > 0 || decoder.end().length > 0)) data.truncated = true
     if (stopped) {
       data.truncated = true
       await Process.stop(proc)
@@ -219,9 +232,10 @@ export async function searchWithContext(
     await proc.exited
   }
   if (!stopped && code === 124) throw new Error(`grep command timed out after ${TIMEOUT_MS / 1000}s`)
+  if (!stopped && proc.signalCode) throw new Error(`ripgrep terminated by signal ${proc.signalCode}`)
   if (!stopped && code !== 0 && code !== 1 && !(code === 2 && data.matches.length))
     throw new Error(`ripgrep failed: ${errors}`)
-  if (!stopped && (code === 2 || !summarySeen)) data.truncated = true
+  if (!stopped && (code === 2 || !summarySeen || binaryStopped)) data.truncated = true
   // Before-context rows that never found their match are not rendered (they
   // would be orphans). Real ripgrep does not emit them, so this only fires on an
   // abnormal stream; report it as truncated rather than silently dropping rows.
@@ -238,9 +252,13 @@ export async function searchWithContext(
   const renderedOutput =
     !data.matches.length && !data.truncated
       ? "No files found"
-      : [header, ...output, ...(!stopped && code === 2 ? ["(Some paths were inaccessible and skipped)"] : [])].join(
-          "\n",
-        )
+      : [
+          header,
+          ...output,
+          ...(binaryStopped ? ["(Binary data stopped part of the search)"] : []),
+          ...(skippedPaths ? ["(Some filenames cannot be represented as UTF-8 and were skipped)"] : []),
+          ...(!stopped && code === 2 ? ["(Some paths were inaccessible and skipped)"] : []),
+        ].join("\n")
   return {
     title: params.pattern,
     data,
