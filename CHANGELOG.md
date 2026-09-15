@@ -6,9 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.0] - 2026-09-15
+
 ### Changed
 
+- Publish the paired SDK 2.5.24.
+- Upgrade the TypeScript compiler and language service to native v7, and consume AX TUI 0.1.5.
 - Offer 20/24/28/30/32/36/40-column session chrome widths, default the left navigation rail to 28 columns and the right sidebar to 32, and place the navigation Width action beside `/navigation`.
+- Restrict managed AX Engine model selection to Qwen3.8 27B AXQ.
+
+### Fixed
+
+- Reject FIFO inputs promptly when fingerprinting source, reading runtime records or model metadata, and retiring promoted skills.
+- Preserve fresh TypeScript diagnostics across serialized snapshot replacements, propagate queued failures, and reclaim idle language servers.
+- Improve goal planning, recovery, revision checks, and headless completion; preserve accurate read-to-write timestamps.
+- Preserve DeepSeek reasoning history and required-tool compatibility, improve current model family defaults, and retain AX Trust aliases after authoritative discovery.
+- Close scheduled execution and queue ownership races, and prevent shell permission prefix over-grants.
+- Keep TUI bootstrap incomplete when every core request fails, load the Windows console guard through Node FFI, and pin Windows self-upgrades to versioned installer digests.
 
 ## [7.17.10] - 2026-09-14
 
