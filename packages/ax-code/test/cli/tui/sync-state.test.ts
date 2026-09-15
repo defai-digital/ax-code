@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest"
-import { createInitialSyncState } from "../../../src/cli/cmd/tui/context/sync-state"
+import { createInitialSyncState } from "../../../src/cli/tui/context/sync-state"
 
 afterEach(() => {
   delete process.env.AX_CODE_ISOLATION_MODE

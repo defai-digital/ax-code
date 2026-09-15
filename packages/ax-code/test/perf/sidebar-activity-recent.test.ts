@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { activityItems } from "@/cli/cmd/tui/routes/session/activity"
+import { activityItems } from "@/cli/tui/routes/session/activity"
 import type { ReplayEvent } from "@/replay/event"
 import type { Part } from "@ax-code/sdk/v2"
 

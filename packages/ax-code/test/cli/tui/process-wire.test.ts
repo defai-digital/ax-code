@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events"
 import { describe, expect, test, vi } from "vitest"
-import { createProcessWire } from "../../../src/cli/cmd/tui/thread"
+import { createProcessWire } from "../../../src/cli/tui/thread"
 import { Rpc } from "../../../src/util/rpc"
 
 function createChild() {

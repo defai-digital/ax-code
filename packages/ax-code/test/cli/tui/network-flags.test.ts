@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { hasExplicitNetworkBindFlag } from "../../../src/cli/cmd/tui/util/network-flags"
+import { hasExplicitNetworkBindFlag } from "../../../src/cli/tui/util/network-flags"
 
 describe("hasExplicitNetworkBindFlag", () => {
   test("detects equals-form bind flags", () => {

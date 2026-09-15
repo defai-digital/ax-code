@@ -7,10 +7,10 @@ import {
   tsxLoaderImportSpecifier,
   tuiBackendTransport,
   tuiWorkerReadyTimeoutMs,
-} from "../../../src/cli/cmd/tui/thread"
+} from "../../../src/cli/tui/thread"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
-const WORKER_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/worker.ts"), "utf8")
+const WORKER_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/tui/worker.ts"), "utf8")
 
 describe("tui backend entrypoint guardrails", () => {
   test("does not auto-bind worker transport when imported by the packaged stdio backend command", () => {
@@ -74,7 +74,7 @@ describe("tui backend entrypoint guardrails", () => {
   })
 
   test("backend spawn prefers the entry and solid-loader recorded by short-argv launchers", () => {
-    const thread = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/thread.ts"), "utf8")
+    const thread = readFileSync(path.join(PACKAGE_ROOT, "src/cli/tui/thread.ts"), "utf8")
 
     // POSIX launchers keep argv at "AX-Code /dev/null …", so argv[1] and
     // process.execArgv no longer identify the CLI entry or the solid-loader.

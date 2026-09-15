@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { detectNerdFontTerminal, resolveNerdFontEnabled } from "@/cli/cmd/tui/ui/glyphs"
+import { detectNerdFontTerminal, resolveNerdFontEnabled } from "@/cli/tui/ui/glyphs"
 
 // Guards the wiring restored in autocomplete.tsx (finding #31): the glyph
 // consumer must pass `kv` WITHOUT a default and a `detected` value so

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot, createSignal } from "solid-js"
-import type { PromptInfo } from "../../../src/cli/cmd/tui/component/prompt/prompt-info"
+import type { PromptInfo } from "../../../src/cli/tui/component/prompt/prompt-info"
 
 const mocked = vi.hoisted(() => ({
   revision: (): number => 0,
@@ -99,10 +99,10 @@ vi.mock("@tui/context/local", () => ({
   }),
 }))
 vi.mock("@tui/ui/toast", () => ({ Toast: () => undefined, useToast: () => ({ show: mocked.toast }) }))
-vi.mock("../../../src/cli/cmd/tui/component/dialog-command", () => ({ useCommandDialog: () => ({ trigger: vi.fn() }) }))
-vi.mock("../../../src/cli/cmd/tui/component/logo", () => ({ Logo: () => undefined }))
-vi.mock("../../../src/cli/cmd/tui/component/mode-chips", () => ({ ModeChips: () => undefined }))
-vi.mock("../../../src/cli/cmd/tui/component/work-mode-notice", () => ({ WorkModeNotice: () => undefined }))
+vi.mock("../../../src/cli/tui/component/dialog-command", () => ({ useCommandDialog: () => ({ trigger: vi.fn() }) }))
+vi.mock("../../../src/cli/tui/component/logo", () => ({ Logo: () => undefined }))
+vi.mock("../../../src/cli/tui/component/mode-chips", () => ({ ModeChips: () => undefined }))
+vi.mock("../../../src/cli/tui/component/work-mode-notice", () => ({ WorkModeNotice: () => undefined }))
 
 const disposals: (() => void)[] = []
 let originalExitCode: typeof process.exitCode
@@ -143,7 +143,7 @@ afterEach(() => {
 })
 
 async function home() {
-  const { Home } = await import("../../../src/cli/cmd/tui/routes/home")
+  const { Home } = await import("../../../src/cli/tui/routes/home")
   return () =>
     createRoot((dispose) => {
       disposals.push(dispose)

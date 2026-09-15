@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { buildGlyphSet, resolveNerdFontEnabled } from "@/cli/cmd/tui/ui/glyphs"
+import { buildGlyphSet, resolveNerdFontEnabled } from "@/cli/tui/ui/glyphs"
 
 describe("resolveNerdFontEnabled", () => {
   test("env override wins when defined", () => {

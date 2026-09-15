@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parseFrecencyLine } from "../../../src/cli/cmd/tui/component/prompt/frecency-util"
+import { parseFrecencyLine } from "../../../src/cli/tui/component/prompt/frecency-util"
 
 describe("prompt frecency persistence", () => {
   test("parses valid frecency jsonl rows", () => {

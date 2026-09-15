@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { computeSessionMainPaneWidth, computeSidebarWidth } from "../../../src/cli/cmd/tui/routes/session/layout"
+import { computeSessionMainPaneWidth, computeSidebarWidth } from "../../../src/cli/tui/routes/session/layout"
 
 describe("session layout", () => {
   test("defaults the sidebar to 32 columns and honors width presets", () => {

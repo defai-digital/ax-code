@@ -15,12 +15,12 @@ import {
   type WorkflowDashboardRun,
   type WorkflowEvalSummary,
   type WorkflowRunDetail,
-} from "../../../src/cli/cmd/tui/routes/session/workflow-dashboard"
+} from "../../../src/cli/tui/routes/session/workflow-dashboard"
 import {
   renderWorkflowDashboardHeader,
   renderWorkflowStatusSidebarLine,
   visibleWorkflowSidebarRuns,
-} from "../../../src/cli/cmd/tui/routes/session/workflow-status"
+} from "../../../src/cli/tui/routes/session/workflow-status"
 
 // ADR-035: These tests cover the workflow dialog / AX Code Desktop view model.
 // They do NOT imply default TUI dashboard ownership. The default startup path

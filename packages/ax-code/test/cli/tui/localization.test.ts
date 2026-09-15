@@ -6,12 +6,12 @@ import {
   conversationInstruction,
   interfaceLanguage,
   conversationLanguage,
-} from "../../../src/cli/cmd/tui/i18n"
-import { validateCatalogs } from "../../../src/cli/cmd/tui/i18n/validate"
-import { createLanguagePreferences } from "../../../src/cli/cmd/tui/i18n/preferences"
-import { shouldOfferSetup } from "../../../src/cli/cmd/tui/component/setup-state"
-import { setupGuidance } from "../../../src/cli/cmd/tui/component/setup-guidance"
-import { arenaView, councilView } from "../../../src/cli/cmd/tui/routes/session/tool-renderers/ensemble-view"
+} from "../../../src/cli/tui/i18n"
+import { validateCatalogs } from "../../../src/cli/tui/i18n/validate"
+import { createLanguagePreferences } from "../../../src/cli/tui/i18n/preferences"
+import { shouldOfferSetup } from "../../../src/cli/tui/component/setup-state"
+import { setupGuidance } from "../../../src/cli/tui/component/setup-guidance"
+import { arenaView, councilView } from "../../../src/cli/tui/routes/session/tool-renderers/ensemble-view"
 import { TuiInfo } from "../../../src/config/tui-schema"
 
 const fresh = {

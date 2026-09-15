@@ -608,11 +608,13 @@ export function createEventSource(client: RpcClient, wire?: RpcWireTarget): Even
 
 async function target() {
   if (typeof AX_CODE_WORKER_PATH !== "undefined") return AX_CODE_WORKER_PATH
-  // Compiled-binary layout (legacy fallback): worker is at cli/cmd/tui/worker.js
+  // Compiled-binary layout (legacy fallback): worker is at cli/tui/worker.js
   // relative to the entry point. Kept for backwards compatibility with builds
   // that emit the source-tree directory shape.
-  const dist = new URL("./cli/cmd/tui/worker.js", import.meta.url)
+  const dist = new URL("./cli/tui/worker.js", import.meta.url)
   if (await Filesystem.exists(fileURLToPath(dist))) return dist
+  const legacyDist = new URL("./cli/cmd/tui/worker.js", import.meta.url)
+  if (await Filesystem.exists(fileURLToPath(legacyDist))) return legacyDist
   // Legacy flat bundle layout: worker.js sits next to the bundled index.js.
   // Probe this before the source/dev .ts fallback so old source-bundle installs
   // do not crash with a ModuleNotFound on worker.ts.

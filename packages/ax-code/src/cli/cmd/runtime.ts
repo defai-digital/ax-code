@@ -1,11 +1,11 @@
 import { cmd } from "./cmd"
 import { RuntimeRegistry } from "@/runtime/runtime-registry"
-import { backendProcessCommand } from "./tui/thread"
+import { backendProcessCommand } from "../tui/thread"
 import { Instance } from "@/project/instance"
 import { TuiConfig } from "@/config/tui"
 import { Filesystem } from "@/util/filesystem"
-import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./tui/win32"
-import { createTuiCrashHandler, registerTuiCrashHandlers } from "./tui/util/lifecycle"
+import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "../tui/win32"
+import { createTuiCrashHandler, registerTuiCrashHandlers } from "../tui/util/lifecycle"
 
 export const RuntimeCommand = cmd({
   command: "runtime <action>",
@@ -53,7 +53,7 @@ export const RuntimeCommand = cmd({
     try {
       process.chdir(record.directory)
       const config = await Instance.provide({ directory: record.directory, fn: () => TuiConfig.get() })
-      const { tui } = await import("./tui/app")
+      const { tui } = await import("../tui/app")
       await tui({
         url: record.url.replace(/\/$/, ""),
         headers: RuntimeRegistry.headers(record),

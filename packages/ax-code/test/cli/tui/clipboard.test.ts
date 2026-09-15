@@ -6,8 +6,8 @@ import {
   osc52MuxFromEnv,
   OSC52_MAX_BYTES,
   SCREEN_PASSTHROUGH_CHUNK_SIZE,
-} from "../../../src/cli/cmd/tui/util/clipboard"
-import { wrapOscForMux } from "../../../src/cli/cmd/tui/util/osc-passthrough"
+} from "../../../src/cli/tui/util/clipboard"
+import { wrapOscForMux } from "../../../src/cli/tui/util/osc-passthrough"
 
 describe("TUI clipboard helpers", () => {
   test("decodes valid PNG base64 from clipboard image probes", () => {

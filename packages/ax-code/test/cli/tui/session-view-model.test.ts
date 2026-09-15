@@ -13,7 +13,7 @@ import {
   userMessageMetadataDensity,
   todoWriteView,
   userMessageView,
-} from "../../../src/cli/cmd/tui/routes/session/view-model"
+} from "../../../src/cli/tui/routes/session/view-model"
 
 describe("tui session view model", () => {
   test("summarizes task tool state across transcript messages", () => {

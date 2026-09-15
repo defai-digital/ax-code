@@ -9,7 +9,7 @@ import {
   dialogSelectMoveIndex,
   dialogSelectRows,
   dialogSelectVisibleHeight,
-} from "../../../src/cli/cmd/tui/ui/dialog-select-view-model"
+} from "../../../src/cli/tui/ui/dialog-select-view-model"
 
 describe("tui dialog select view model", () => {
   const options = [

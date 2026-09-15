@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 
-const TUI_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
+const TUI_SRC = path.resolve(import.meta.dirname, "../../../src/cli/tui")
 const APP_SRC = path.join(TUI_SRC, "app.tsx")
 const RENDERER_SRC = path.join(TUI_SRC, "renderer.ts")
 const PROMPT_SRC = path.join(TUI_SRC, "component/prompt/index.tsx")

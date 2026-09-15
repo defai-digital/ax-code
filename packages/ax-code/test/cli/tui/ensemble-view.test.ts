@@ -3,7 +3,7 @@ import {
   arenaView,
   councilView,
   type EnsembleTone,
-} from "../../../src/cli/cmd/tui/routes/session/tool-renderers/ensemble-view"
+} from "../../../src/cli/tui/routes/session/tool-renderers/ensemble-view"
 
 function expectAscii(value: string) {
   expect(value).toMatch(/^[\x00-\x7F]*$/)

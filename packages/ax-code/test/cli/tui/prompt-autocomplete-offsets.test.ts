@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { shouldHideAutocompleteOnInput } from "../../../src/cli/cmd/tui/component/prompt/autocomplete"
+import { shouldHideAutocompleteOnInput } from "../../../src/cli/tui/component/prompt/autocomplete"
 
 describe("autocomplete display-offset handling", () => {
   test("keeps the dropdown open when wide characters precede the @ token", () => {

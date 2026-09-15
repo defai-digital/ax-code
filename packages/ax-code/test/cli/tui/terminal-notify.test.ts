@@ -4,7 +4,7 @@ import {
   notifyTerminal,
   resetTerminalNotificationKeys,
   supportsTerminalNotification,
-} from "../../../src/cli/cmd/tui/util/terminal-notify"
+} from "../../../src/cli/tui/util/terminal-notify"
 
 function fakeStdout() {
   const writes: string[] = []

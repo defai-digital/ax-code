@@ -6,7 +6,7 @@ import {
   axEngineJobToast,
   axEngineJobTransitions,
   type AxEngineDownloadJobView,
-} from "../../../src/cli/cmd/tui/component/ax-engine-downloads-view-model"
+} from "../../../src/cli/tui/component/ax-engine-downloads-view-model"
 
 function job(overrides: Partial<AxEngineDownloadJobView> = {}): AxEngineDownloadJobView {
   return { id: "job-1", modelID: "ornith-35b-axq-6bit", status: "running", ...overrides }

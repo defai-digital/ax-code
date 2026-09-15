@@ -3,8 +3,8 @@ import {
   createRuntimeSyncActions,
   type RuntimeSyncClient,
   type RuntimeSyncFetchResponse,
-} from "../../../src/cli/cmd/tui/context/sync-runtime-sync"
-import type { WorkflowDashboardState } from "../../../src/cli/cmd/tui/context/sync-runtime-store"
+} from "../../../src/cli/tui/context/sync-runtime-sync"
+import type { WorkflowDashboardState } from "../../../src/cli/tui/context/sync-runtime-store"
 
 function okJson(value: unknown): RuntimeSyncFetchResponse {
   return {

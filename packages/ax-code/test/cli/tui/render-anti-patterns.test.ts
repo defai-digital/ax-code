@@ -5,7 +5,7 @@ import { windowsNodeLauncherScript } from "../../../script/node-launcher"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
 const REPO_ROOT = path.resolve(PACKAGE_ROOT, "../..")
-const TUI_ROOT = path.join(PACKAGE_ROOT, "src/cli/cmd/tui")
+const TUI_ROOT = path.join(PACKAGE_ROOT, "src/cli/tui")
 const APP_SRC = path.join(TUI_ROOT, "app.tsx")
 const APP_COMMANDS_SRC = path.join(TUI_ROOT, "app-commands.ts")
 const PROMPT_COMMANDS_SRC = path.join(TUI_ROOT, "component/prompt/prompt-commands.tsx")
@@ -1573,8 +1573,8 @@ describe("AX Code TUI stability guardrails", () => {
 
     // Compiled-binary path (bunfs-rooted absolute string, set by build.ts)
     expect(thread).toContain("AX_CODE_WORKER_PATH")
-    // Compiled-binary-style nested layout (cli/cmd/tui/worker.js)
-    expect(thread).toContain('new URL("./cli/cmd/tui/worker.js", import.meta.url)')
+    // Compiled-binary-style nested layout (cli/tui/worker.js)
+    expect(thread).toContain('new URL("./cli/tui/worker.js", import.meta.url)')
     // Source-bundle flat layout (worker.js sibling to bundled index.js)
     expect(thread).toContain('new URL("./worker.js", import.meta.url)')
     // Source/dev raw .ts layout (worker.ts sibling to thread.ts)

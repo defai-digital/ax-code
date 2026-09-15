@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { installResizeInputGuard, resizeSignature, restoreTuiInputMode } from "../../../src/cli/cmd/tui/input-mode"
+import { installResizeInputGuard, resizeSignature, restoreTuiInputMode } from "../../../src/cli/tui/input-mode"
 
 function createEmitter() {
   const listeners = new Map<string, Set<() => void>>()

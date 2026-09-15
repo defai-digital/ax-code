@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { createSyncBootstrapPhaseSequence } from "../../../src/cli/cmd/tui/context/sync-bootstrap-phase-plan"
-import { runBootstrapPhaseSequence } from "../../../src/cli/cmd/tui/context/sync-bootstrap-runner"
+import { createSyncBootstrapPhaseSequence } from "../../../src/cli/tui/context/sync-bootstrap-phase-plan"
+import { runBootstrapPhaseSequence } from "../../../src/cli/tui/context/sync-bootstrap-runner"
 
 describe("tui sync bootstrap phase plan", () => {
   test("applies status transitions, startup markers, spans, and labeled logging across bootstrap phases", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
-import { runTuiBackgroundTask } from "../../../src/cli/cmd/tui/util/background-task"
+import { runTuiBackgroundTask } from "../../../src/cli/tui/util/background-task"
 
 describe("tui background tasks", () => {
   test("logs synchronous task failures without leaking unhandled rejections", async () => {

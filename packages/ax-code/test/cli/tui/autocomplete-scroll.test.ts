@@ -3,7 +3,7 @@ import {
   autocompleteOptionID,
   autocompletePopupPlacement,
   autocompleteSelectionScrollDelta,
-} from "../../../src/cli/cmd/tui/component/prompt/autocomplete-scroll"
+} from "../../../src/cli/tui/component/prompt/autocomplete-scroll"
 
 describe("autocomplete scroll", () => {
   test("keeps visible selections stationary", () => {

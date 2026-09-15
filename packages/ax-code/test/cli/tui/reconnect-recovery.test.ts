@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
-import { createReconnectRecoveryGate, RECONNECT_STABILIZE_MS } from "../../../src/cli/cmd/tui/util/reconnect-recovery"
+import { createReconnectRecoveryGate, RECONNECT_STABILIZE_MS } from "../../../src/cli/tui/util/reconnect-recovery"
 
 // Wait long enough for the stabilization timer to fire.
 const STABILIZE_WAIT = RECONNECT_STABILIZE_MS + 50

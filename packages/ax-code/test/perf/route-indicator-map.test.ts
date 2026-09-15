@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { buildRouteInfoByMessage } from "@/cli/cmd/tui/routes/session/route"
+import { buildRouteInfoByMessage } from "@/cli/tui/routes/session/route"
 import type { ReplayEvent } from "@/replay/event"
 
 // Perf fix (finding 1): RouteIndicator used to load the full session event

@@ -13,7 +13,7 @@ import {
   TUI_MODIFY_OTHER_KEYS_DISABLE_SEQUENCE,
   TUI_MODIFY_OTHER_KEYS_ENABLE_SEQUENCE,
   TUI_TERMINAL_CRASH_RESET_SEQUENCE,
-} from "../../../src/cli/cmd/tui/terminal-cleanup"
+} from "../../../src/cli/tui/terminal-cleanup"
 
 function fakeStdout() {
   const writes: string[] = []

@@ -7,8 +7,8 @@ import {
   navigationClearedAt,
   navigationFilter,
   visibleAfterNavigationClear,
-} from "../../../src/cli/cmd/tui/navigation/navigation-model"
-import { NAVIGATION_CONTENT_MIN_WIDTH, navigationLayout } from "../../../src/cli/cmd/tui/navigation/navigation-layout"
+} from "../../../src/cli/tui/navigation/navigation-model"
+import { NAVIGATION_CONTENT_MIN_WIDTH, navigationLayout } from "../../../src/cli/tui/navigation/navigation-layout"
 
 const sessions = [
   { id: "root", time: { updated: 1 } },

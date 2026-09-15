@@ -3,7 +3,7 @@ import path from "node:path"
 import {
   resolveTranscriptExportPath,
   transcriptFilename,
-} from "../../../src/cli/cmd/tui/routes/session/display-command-helpers"
+} from "../../../src/cli/tui/routes/session/display-command-helpers"
 
 describe("tui session display command helpers", () => {
   test("builds transcript export filename from session id", () => {

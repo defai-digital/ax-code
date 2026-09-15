@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
-import { runResilientStream, type StreamConnectionStatus } from "../../../src/cli/cmd/tui/util/resilient-stream"
+import { runResilientStream, type StreamConnectionStatus } from "../../../src/cli/tui/util/resilient-stream"
 
 describe("runResilientStream", () => {
   test("retries after a connect timeout and resumes the stream", async () => {

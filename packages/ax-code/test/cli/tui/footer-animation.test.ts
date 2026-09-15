@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   FOOTER_ANIMATION_FRAMES,
   FOOTER_ANIMATION_INTERVAL_MS,
-} from "../../../src/cli/cmd/tui/component/footer-animation"
+} from "../../../src/cli/tui/component/footer-animation"
 
 // A braille cell (U+2800-U+28FF) is East Asian Width "Narrow" and CJK-safe;
 // ambiguous-width block glyphs drift CJK layouts and must not come back.

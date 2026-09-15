@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { diffSummary } from "@/cli/cmd/tui/routes/session/format"
+import { diffSummary } from "@/cli/tui/routes/session/format"
 
 describe("diffSummary", () => {
   test("returns undefined for empty diff", () => {

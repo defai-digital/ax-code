@@ -7,10 +7,10 @@ import {
   knownCommands,
   setKnownCommands,
   unknownProjectError,
-} from "../../../src/cli/cmd/tui/project-arg"
+} from "../../../src/cli/tui/project-arg"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
-const THREAD_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/thread.ts"), "utf8")
+const THREAD_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/tui/thread.ts"), "utf8")
 const BOOT_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/boot.ts"), "utf8")
 
 describe("isBareCommandWord (#414)", () => {

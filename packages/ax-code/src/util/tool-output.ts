@@ -1,5 +1,5 @@
 // Shared tool-output shaping helpers used by both the terminal TUI
-// (src/cli/cmd/tui/routes/session) and the non-interactive `ax-code run`
+// (src/cli/tui/routes/session) and the non-interactive `ax-code run`
 // renderer (src/cli/cmd/run.ts). Keep this module dependency-free so the
 // run path does not pull TUI-only imports.
 

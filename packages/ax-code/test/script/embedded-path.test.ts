@@ -3,8 +3,8 @@ import { compiledBunfsModulePath } from "../../script/embedded-path"
 
 describe("script.embedded-path", () => {
   test("rewrites TypeScript worker entrypoints to the compiled .js bunfs path", () => {
-    expect(compiledBunfsModulePath("/$bunfs/root/", "./src/cli/cmd/tui/worker.ts")).toBe(
-      "/$bunfs/root/src/cli/cmd/tui/worker.js",
+    expect(compiledBunfsModulePath("/$bunfs/root/", "./src/cli/tui/worker.ts")).toBe(
+      "/$bunfs/root/src/cli/tui/worker.js",
     )
   })
 

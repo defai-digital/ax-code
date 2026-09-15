@@ -6,7 +6,7 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { SessionRevert } from "../../src/session/revert"
 import { Bus } from "../../src/bus"
 import { createHeadlessProjectionState, applyHeadlessProjectionEvent } from "../../src/runtime/headless"
-import { hiddenMessageIDs } from "../../src/cli/cmd/tui/routes/session/revert"
+import { hiddenMessageIDs } from "../../src/cli/tui/routes/session/revert"
 import { tmpdir } from "../fixture/fixture"
 
 test("real new prompt after revert clears serialized UI undo state and keeps the new message visible", async () => {

@@ -10,7 +10,7 @@ import { Auth } from "../../src/auth"
 import { Bus } from "../../src/bus"
 import { CustomApiProvider } from "../../src/provider/custom-api-provider"
 import { exactCatalogFallbackModels } from "../../src/provider/ax-trust-discovery"
-import { modelDisplayInfo } from "../../src/cli/cmd/tui/component/model-vision-label"
+import { modelDisplayInfo } from "../../src/cli/tui/component/model-vision-label"
 
 afterEach(() => {
   vi.unstubAllEnvs()

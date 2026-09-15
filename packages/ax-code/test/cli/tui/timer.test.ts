@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { scheduleTuiInterval, scheduleTuiTimeout } from "../../../src/cli/cmd/tui/util/timer"
+import { scheduleTuiInterval, scheduleTuiTimeout } from "../../../src/cli/tui/util/timer"
 
 describe("tui timers", () => {
   beforeEach(() => {

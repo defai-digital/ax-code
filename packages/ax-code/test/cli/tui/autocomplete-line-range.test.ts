@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { extractLineRange, removeLineRange } from "../../../src/cli/cmd/tui/component/prompt/autocomplete"
+import { extractLineRange, removeLineRange } from "../../../src/cli/tui/component/prompt/autocomplete"
 
 describe("autocomplete line range parsing", () => {
   test("keeps nonnumeric hash suffixes as part of the file query", () => {

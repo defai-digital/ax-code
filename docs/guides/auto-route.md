@@ -38,7 +38,7 @@ This page summarizes user-facing behavior. When behavior changes, verify the doc
 - `packages/ax-code/src/session/prompt.ts` for when keyword routing is skipped and when complexity classification runs.
 - `packages/ax-code/src/server/routes/smart-llm.ts` for default, environment, config, and persistence behavior.
 - `packages/ax-code/src/config/schema.ts` for routing config fields and deprecation notes.
-- `packages/ax-code/src/cli/cmd/tui/app.tsx` for slash command names, aliases, labels, and status-bar actions.
+- `packages/ax-code/src/cli/tui/app.tsx` for slash command names, aliases, labels, and status-bar actions.
 - `packages/ax-code/test/agent/router.test.ts` and TUI sync tests for expected activation behavior.
 
 Avoid describing keyword routing and fast-model complexity routing as one feature. They are intentionally separate.

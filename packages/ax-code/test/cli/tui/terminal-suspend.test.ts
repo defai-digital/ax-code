@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import { createTerminalSuspendController } from "../../../src/cli/cmd/tui/util/terminal-suspend"
+import { createTerminalSuspendController } from "../../../src/cli/tui/util/terminal-suspend"
 
 describe("createTerminalSuspendController", () => {
   test("registers SIGCONT, suspends, and sends stop", () => {

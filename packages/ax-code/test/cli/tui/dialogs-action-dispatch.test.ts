@@ -13,7 +13,7 @@ import { describe, expect, test } from "vitest"
 // - Multi-prompt provider auth must keep each DialogPrompt open (autoClose)
 //   so the deferred clear cannot kill the next prompt in the loop.
 
-const TUI_ROOT = path.join(__dirname, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.join(__dirname, "../../../src/cli/tui")
 const DIALOG_CONFIRM_SRC = path.join(TUI_ROOT, "ui/dialog-confirm.tsx")
 const DIALOG_SELECT_SRC = path.join(TUI_ROOT, "ui/dialog-select.tsx")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")

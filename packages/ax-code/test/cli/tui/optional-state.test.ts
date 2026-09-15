@@ -5,8 +5,8 @@ import {
   isOptionalStateUnavailableError,
   optionalStateErrorMessage,
   shouldSurfaceOptionalStateError,
-} from "../../../src/cli/cmd/tui/util/optional-state"
-import { readOptionalJsonState } from "../../../src/cli/cmd/tui/util/optional-json-state"
+} from "../../../src/cli/tui/util/optional-state"
+import { readOptionalJsonState } from "../../../src/cli/tui/util/optional-json-state"
 import { tmpdir } from "../../fixture/fixture"
 
 describe("tui optional state errors", () => {

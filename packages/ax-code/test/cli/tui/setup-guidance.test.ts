@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { setupGuidance } from "../../../src/cli/cmd/tui/component/setup-guidance"
+import { setupGuidance } from "../../../src/cli/tui/component/setup-guidance"
 
 const base = {
   providerLoaded: true,

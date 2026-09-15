@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   COMPACTION_TOAST,
   compactionToastForActiveSession,
-} from "../../../src/cli/cmd/tui/routes/session/compaction-view-model"
+} from "../../../src/cli/tui/routes/session/compaction-view-model"
 
 describe("tui session compaction toast", () => {
   test("returns the info toast for the active session", () => {

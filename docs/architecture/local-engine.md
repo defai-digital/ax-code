@@ -95,8 +95,8 @@ Severity order matches ax-engine `docs/LOCAL-ENGINE-CLIENTS.md`.
 | ---------------------------------- | ----------------------------------------------------------------------- |
 | Server spawn / health              | `packages/ax-code/src/provider/ax-engine/server.ts`                     |
 | Provider loader (managed + attach) | `packages/ax-code/src/provider/ax-engine/provider-loader.ts`            |
-| TUI local runtime                  | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider.tsx`        |
-| Local action helpers               | `packages/ax-code/src/cli/cmd/tui/component/dialog-provider-options.ts` |
+| TUI local runtime                  | `packages/ax-code/src/cli/tui/component/dialog-provider.tsx`        |
+| Local action helpers               | `packages/ax-code/src/cli/tui/component/dialog-provider-options.ts` |
 | Aggregate status                   | `packages/ax-code/src/provider/ax-engine/status.ts`                     |
 | Phase mapping                      | `packages/ax-code/src/provider/ax-engine/lifecycle.ts`                  |
 | Model policy                       | [AX Engine Model Selection](../providers/ax-engine-model-selection.md)  |

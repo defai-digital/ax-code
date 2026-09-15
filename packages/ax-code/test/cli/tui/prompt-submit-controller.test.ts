@@ -4,7 +4,7 @@ import { WorkMode } from "../../../src/mode/work-mode"
 import {
   createPromptSubmitController,
   type PromptSubmitHost,
-} from "../../../src/cli/cmd/tui/component/prompt/prompt-submit-controller"
+} from "../../../src/cli/tui/component/prompt/prompt-submit-controller"
 
 afterEach(() => vi.useRealTimers())
 
@@ -399,7 +399,7 @@ describe("TUI conversation language payload", () => {
   test.each(["zh-TW", "zh-CN", "ja", "ko"] as const)(
     "%s preference keeps prompt and command arguments verbatim",
     async (locale) => {
-      const { conversationInstruction } = await import("../../../src/cli/cmd/tui/i18n")
+      const { conversationInstruction } = await import("../../../src/cli/tui/i18n")
       for (const workMode of ["agent", "council", "arena"] as const) {
         const text =
           "Review authentication; do not edit. \u4e0d\u8981\u4fee\u6539\u6a94\u6848. Keep `file.ts` and $HOME verbatim."

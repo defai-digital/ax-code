@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { insertGroupHeaders } from "../../../src/cli/cmd/tui/component/prompt/autocomplete"
-import type { AutocompleteOption } from "../../../src/cli/cmd/tui/component/prompt/autocomplete"
+import { insertGroupHeaders } from "../../../src/cli/tui/component/prompt/autocomplete"
+import type { AutocompleteOption } from "../../../src/cli/tui/component/prompt/autocomplete"
 
 describe("autocomplete group headers", () => {
   test("returns empty array for no options", () => {

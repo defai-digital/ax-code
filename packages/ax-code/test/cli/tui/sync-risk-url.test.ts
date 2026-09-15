@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { sessionRiskURL } from "../../../src/cli/cmd/tui/context/sync-session-urls"
+import { sessionRiskURL } from "../../../src/cli/tui/context/sync-session-urls"
 
 describe("tui session risk sync url", () => {
   test("opts into all sidebar risk summaries", () => {

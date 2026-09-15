@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
-import { registerSyncLifecycle } from "../../../src/cli/cmd/tui/context/sync-lifecycle"
-import { createSyncStartupCoordinator } from "../../../src/cli/cmd/tui/context/sync-startup"
-import { RECONNECT_STABILIZE_MS } from "../../../src/cli/cmd/tui/util/reconnect-recovery"
+import { registerSyncLifecycle } from "../../../src/cli/tui/context/sync-lifecycle"
+import { createSyncStartupCoordinator } from "../../../src/cli/tui/context/sync-startup"
+import { RECONNECT_STABILIZE_MS } from "../../../src/cli/tui/util/reconnect-recovery"
 
 const STABILIZE_WAIT = RECONNECT_STABILIZE_MS + 50
 

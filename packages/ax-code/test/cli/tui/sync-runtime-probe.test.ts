@@ -3,7 +3,7 @@ import {
   AX_CODE_TUI_RUNTIME_SYNC_PROBE_DELAY_MS,
   createRuntimeSyncProbeScheduler,
   runtimeSyncProbeTask,
-} from "../../../src/cli/cmd/tui/context/sync-runtime-probe"
+} from "../../../src/cli/tui/context/sync-runtime-probe"
 
 describe("tui sync runtime probe", () => {
   test("creates labeled runtime probe tasks from headless probe keys", async () => {

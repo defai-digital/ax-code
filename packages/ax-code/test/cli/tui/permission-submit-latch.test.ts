@@ -5,7 +5,7 @@ import {
   createPermissionSubmitLatch,
   endPermissionSubmit,
   tryBeginPermissionSubmit,
-} from "../../../src/cli/cmd/tui/util/permission-submit-latch"
+} from "../../../src/cli/tui/util/permission-submit-latch"
 
 describe("permission-submit-latch", () => {
   test("blocks double submit for the same request", () => {

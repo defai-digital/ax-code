@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { registerSyncLifecycle } from "../../../src/cli/cmd/tui/context/sync-lifecycle"
+import { registerSyncLifecycle } from "../../../src/cli/tui/context/sync-lifecycle"
 
 describe("tui sync lifecycle", () => {
   test("registers cleanup, starts on mount, and stops only once on unmount", () => {

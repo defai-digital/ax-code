@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { resolveDesktopHandoff, __internal } from "@/cli/cmd/tui/navigation/desktop-handoff"
+import { resolveDesktopHandoff, __internal } from "@/cli/tui/navigation/desktop-handoff"
 
 describe("resolveDesktopHandoff", () => {
   test("returns message with URL when desktopUrl is provided", () => {

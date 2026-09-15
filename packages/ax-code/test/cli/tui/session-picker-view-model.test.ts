@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
-import { recentSessions, recentSessionTitle } from "@/cli/cmd/tui/component/session-picker-view-model"
-import { resolveSessionFirstRoute } from "@/cli/cmd/tui/navigation/launch-policy"
-import { detectNerdFontTerminal, resolveNerdFontEnabled } from "@/cli/cmd/tui/ui/glyphs"
+import { recentSessions, recentSessionTitle } from "@/cli/tui/component/session-picker-view-model"
+import { resolveSessionFirstRoute } from "@/cli/tui/navigation/launch-policy"
+import { detectNerdFontTerminal, resolveNerdFontEnabled } from "@/cli/tui/ui/glyphs"
 
 function session(id: string, updated: number, extra: { title?: string; parentID?: string } = {}) {
   return { id, time: { updated }, ...extra }

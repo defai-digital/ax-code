@@ -19,7 +19,7 @@ const note = [
 
 const rule = [] as { name: string; dir: string; bad: string[] }[]
 
-const hot = ["packages/ax-code/src/cli/cmd"]
+const hot = ["packages/ax-code/src/cli/cmd", "packages/ax-code/src/cli/tui"]
 const workspacePackageRoots = ["packages", "packages/sdk/js"]
 const dependencyFields = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const
 const axCodeSrcRoot = path.join(root, "packages/ax-code/src")

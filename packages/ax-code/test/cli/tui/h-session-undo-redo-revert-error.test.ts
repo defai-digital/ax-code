@@ -10,7 +10,7 @@ import { describe, expect, test } from "vitest"
 // scroll) on a FAILED revert. Each must now inspect `result.error` and route
 // failures into the toast/error path, and must only clear the dialog on success.
 
-const TUI_ROOT = path.join(__dirname, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.join(__dirname, "../../../src/cli/tui")
 const SESSION_INDEX_SRC = path.join(TUI_ROOT, "routes/session/index.tsx")
 const DIALOG_MESSAGE_SRC = path.join(TUI_ROOT, "routes/session/dialog-message.tsx")
 

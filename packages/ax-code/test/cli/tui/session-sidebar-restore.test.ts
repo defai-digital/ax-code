@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { sidebarRestoreEntry, sidebarRestoreVisible } from "../../../src/cli/cmd/tui/sidebar-restore-view-model"
+import { sidebarRestoreEntry, sidebarRestoreVisible } from "../../../src/cli/tui/sidebar-restore-view-model"
 
 describe("sidebar restore chrome", () => {
   test("hides on home, child sessions, and the auto-wide panel", () => {

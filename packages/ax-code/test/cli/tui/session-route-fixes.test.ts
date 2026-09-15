@@ -22,7 +22,7 @@ import { describe, expect, test } from "vitest"
 // - The quality detail pane must fall back to the workflow's current action
 //   when readiness transitions change the derived action kind.
 
-const TUI_ROOT = path.join(__dirname, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.join(__dirname, "../../../src/cli/tui")
 const SESSION_INDEX_SRC = path.join(TUI_ROOT, "routes/session/index.tsx")
 const FILE_EDITS_SRC = path.join(TUI_ROOT, "routes/session/tool-renderers/file-edits.tsx")
 const DISPLAY_COMMANDS_SRC = path.join(TUI_ROOT, "routes/session/display-commands.ts")
@@ -107,7 +107,7 @@ describe("v2 SDK result.error handling", () => {
 
 describe("fork pre-filled prompt on session navigation", () => {
   test("mounted editor receives the explicit route draft before it is consumed", async () => {
-    const { applyInitialPromptDraft } = await import("../../../src/cli/cmd/tui/component/prompt/session-drafts")
+    const { applyInitialPromptDraft } = await import("../../../src/cli/tui/component/prompt/session-drafts")
     const initial = { input: "Fork instruction", parts: [] }
     const events: string[] = []
     let routeDraft: typeof initial | undefined = initial

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { sidebarLocalInferenceView } from "../../../src/cli/cmd/tui/routes/session/sidebar-local-inference-view-model"
+import { sidebarLocalInferenceView } from "../../../src/cli/tui/routes/session/sidebar-local-inference-view-model"
 
 describe("sidebarLocalInferenceView", () => {
   test("returns undefined for non ax-engine messages", () => {

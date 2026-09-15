@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { applyHeadlessProjectionEvent, createHeadlessProjectionState } from "../../../src/runtime/headless/projection"
-import { applySessionLeavePrune } from "../../../src/cli/cmd/tui/context/sync-session-store"
+import { applySessionLeavePrune } from "../../../src/cli/tui/context/sync-session-store"
 
 type Message = { id: string; sessionID: string }
 type Part = { id: string; messageID: string; sessionID: string; type: "text"; text: string }
@@ -77,7 +77,7 @@ describe("transcript retention regressions", () => {
 
 // These assertions measure retained serialized payload, not process RSS.
 import { enforceTranscriptBudget, refreshProjectionSizes } from "../../../src/runtime/headless/projection-retention"
-import { applySessionSyncSnapshot } from "../../../src/cli/cmd/tui/context/sync-session-store"
+import { applySessionSyncSnapshot } from "../../../src/cli/tui/context/sync-session-store"
 
 describe("whole-message byte budget", () => {
   test("evicts oldest whole messages and preserves an oversized newest message visibly", () => {

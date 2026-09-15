@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { normalizeDialogSkills } from "../../../src/cli/cmd/tui/component/skill-list-data"
+import { normalizeDialogSkills } from "../../../src/cli/tui/component/skill-list-data"
 
 describe("skill list data", () => {
   test("normalizes missing or malformed skill payloads to an empty list", () => {

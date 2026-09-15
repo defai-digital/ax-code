@@ -13,8 +13,8 @@ const mocked = vi.hoisted(() => ({
 vi.mock("ax-tui/solid", () => ({ render: mocked.render }))
 vi.mock("@/flag/flag", () => ({ Flag: mocked.flag }))
 
-import { renderTui, type TuiRenderRoot } from "../../../src/cli/cmd/tui/renderer"
-import { TUI_MODIFY_OTHER_KEYS_ENABLE_SEQUENCE } from "../../../src/cli/cmd/tui/terminal-cleanup"
+import { renderTui, type TuiRenderRoot } from "../../../src/cli/tui/renderer"
+import { TUI_MODIFY_OTHER_KEYS_ENABLE_SEQUENCE } from "../../../src/cli/tui/terminal-cleanup"
 
 const originalWrite = process.stdout.write
 const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY")

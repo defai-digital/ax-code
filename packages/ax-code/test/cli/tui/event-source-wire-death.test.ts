@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
-import { createEventSource } from "../../../src/cli/cmd/tui/thread"
-import { TUI_BACKEND_EXITED, type StreamConnectionStatus } from "../../../src/cli/cmd/tui/util/resilient-stream"
+import { createEventSource } from "../../../src/cli/tui/thread"
+import { TUI_BACKEND_EXITED, type StreamConnectionStatus } from "../../../src/cli/tui/util/resilient-stream"
 
 function fakeClient() {
   return {

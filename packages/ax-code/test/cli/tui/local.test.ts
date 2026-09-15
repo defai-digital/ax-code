@@ -20,7 +20,7 @@ import {
   resolveCurrentAgent,
   defaultVisibleAgentName,
   resolvePinnedModelPreference,
-} from "../../../src/cli/cmd/tui/context/local-util"
+} from "../../../src/cli/tui/context/local-util"
 
 describe("tui local agent selection", () => {
   test("preserves pending startup agent name until agents load", () => {

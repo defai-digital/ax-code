@@ -3,8 +3,8 @@ import {
   renderWorkflowDashboardHeader,
   renderWorkflowStatusSidebarLine,
   visibleWorkflowSidebarRuns,
-} from "../../../src/cli/cmd/tui/routes/session/workflow-status"
-import type { WorkflowDashboardRun, WorkflowDashboardState } from "../../../src/cli/cmd/tui/context/sync-runtime-store"
+} from "../../../src/cli/tui/routes/session/workflow-status"
+import type { WorkflowDashboardRun, WorkflowDashboardState } from "../../../src/cli/tui/context/sync-runtime-store"
 
 type WorkflowRunInput = Omit<Partial<WorkflowDashboardRun>, "budgetUsage"> & {
   runID: string

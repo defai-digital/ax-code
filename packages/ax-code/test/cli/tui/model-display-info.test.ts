@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { modelDisplayInfo, supportsWebSearch } from "../../../src/cli/cmd/tui/component/model-vision-label"
+import { modelDisplayInfo, supportsWebSearch } from "../../../src/cli/tui/component/model-vision-label"
 
 describe("modelDisplayInfo", () => {
   test("adds web search marker for CLI providers with built-in web search", () => {

@@ -16,7 +16,7 @@ import { describe, expect, test } from "vitest"
 // Each must now inspect `result.error` and route failures into the toast/error
 // path (delete/list) or throw so DialogPrompt keeps the dialog open (rename).
 
-const TUI_ROOT = path.join(__dirname, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.join(__dirname, "../../../src/cli/tui")
 const DIALOG_SESSION_LIST_SRC = path.join(TUI_ROOT, "component/dialog-session-list.tsx")
 // Both the main and workspace session-list dialogs share this implementation
 // (component/workspace/dialog-session-list.tsx only re-exports it).

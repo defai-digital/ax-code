@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { submitPromptRoute } from "../../../src/cli/cmd/tui/component/prompt/prompt-submit"
-import { SUBMIT_ACCEPT_TIMEOUT_MS } from "../../../src/cli/cmd/tui/component/prompt/prompt-config"
+import { submitPromptRoute } from "../../../src/cli/tui/component/prompt/prompt-submit"
+import { SUBMIT_ACCEPT_TIMEOUT_MS } from "../../../src/cli/tui/component/prompt/prompt-config"
 
 afterEach(() => vi.useRealTimers())
 

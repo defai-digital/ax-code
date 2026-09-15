@@ -11,7 +11,7 @@ import {
   subagentSoloDetails,
   subagentSoloTitle,
   taskQueueItemsToRollupTasks,
-} from "../../../src/cli/cmd/tui/routes/session/subagent-status-view"
+} from "../../../src/cli/tui/routes/session/subagent-status-view"
 
 describe("buildSubagentStatusView", () => {
   test("rolls child session activity into a parent-visible active subagent label", () => {

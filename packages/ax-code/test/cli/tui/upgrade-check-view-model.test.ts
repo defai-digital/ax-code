@@ -3,7 +3,7 @@ import {
   formatTuiUpgradeCompleteMessage,
   nextTuiStartupUpgradeCheckState,
   shouldRunTuiStartupUpgradeCheck,
-} from "../../../src/cli/cmd/tui/upgrade-check-view-model"
+} from "../../../src/cli/tui/upgrade-check-view-model"
 
 const DAY_MS = 24 * 60 * 60 * 1_000
 

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { createSessionActivityIndex, knownAttentionRequests } from "../../../src/cli/cmd/tui/util/session-activity"
+import { createSessionActivityIndex, knownAttentionRequests } from "../../../src/cli/tui/util/session-activity"
 
 const sessions = [{ id: "root" }, { id: "child", parentID: "root" }, { id: "deep", parentID: "child" }, { id: "other" }]
 

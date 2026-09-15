@@ -3,8 +3,8 @@ import { createStore } from "solid-js/store"
 import {
   dispatchStoreBackedSyncEvent,
   type SyncEventStoreState,
-} from "../../../src/cli/cmd/tui/context/sync-store-event"
-import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
+} from "../../../src/cli/tui/context/sync-store-event"
+import type { SyncedSessionRisk } from "../../../src/cli/tui/context/sync-session-risk"
 
 type Session = { id: string; revert?: { messageID: string } }
 type Todo = { id: string }

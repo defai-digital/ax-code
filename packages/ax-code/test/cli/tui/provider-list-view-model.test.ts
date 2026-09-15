@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { disabledProviderIDs } from "../../../src/cli/cmd/tui/component/provider-list-view-model"
+import { disabledProviderIDs } from "../../../src/cli/tui/component/provider-list-view-model"
 
 describe("tui provider list view model", () => {
   test("returns empty when config is undefined", () => {

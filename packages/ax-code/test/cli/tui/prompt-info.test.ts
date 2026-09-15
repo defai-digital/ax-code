@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parsePromptInfo, parsePromptInfoList } from "../../../src/cli/cmd/tui/component/prompt/prompt-info"
+import { parsePromptInfo, parsePromptInfoList } from "../../../src/cli/tui/component/prompt/prompt-info"
 
 describe("tui prompt info decoding", () => {
   test("parses valid prompt info and defaults missing parts", () => {

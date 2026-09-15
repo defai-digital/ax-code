@@ -1,7 +1,7 @@
 import z from "zod"
-import { FindingSchema } from "../../../../quality/finding"
-import { VerificationEnvelopeSchema } from "../../../../quality/verification-envelope"
-import { ReviewResultSchema } from "../../../../quality/review-result"
+import { FindingSchema } from "../../../quality/finding"
+import { VerificationEnvelopeSchema } from "../../../quality/verification-envelope"
+import { ReviewResultSchema } from "../../../quality/review-result"
 import {
   DebugCaseRollupSchema,
   DebugCaseSchema,
@@ -9,7 +9,7 @@ import {
   DebugHypothesisSchema,
   DebugInstrumentationPlanSchema,
 } from "@ax-code/ax-code-reason/runtime-debug"
-import { DecisionHints } from "../../../../session/decision-hints"
+import { DecisionHints } from "../../../session/decision-hints"
 
 export const SyncedSessionQualityReadiness = z.object({
   workflow: z.enum(["review", "debug", "qa"]),

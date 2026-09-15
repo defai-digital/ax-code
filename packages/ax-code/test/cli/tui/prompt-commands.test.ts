@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { promptCommands, type PromptCommandsInput } from "../../../src/cli/cmd/tui/component/prompt/prompt-commands"
-import type { DialogContext } from "../../../src/cli/cmd/tui/ui/dialog"
+import { promptCommands, type PromptCommandsInput } from "../../../src/cli/tui/component/prompt/prompt-commands"
+import type { DialogContext } from "../../../src/cli/tui/ui/dialog"
 
 afterEach(() => vi.restoreAllMocks())
 

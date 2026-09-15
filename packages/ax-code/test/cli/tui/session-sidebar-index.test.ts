@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { sidebarGraphIndexStatusText } from "../../../src/cli/cmd/tui/routes/session/sidebar-index-view-model"
+import { sidebarGraphIndexStatusText } from "../../../src/cli/tui/routes/session/sidebar-index-view-model"
 
 describe("session sidebar graph index status", () => {
   test("keeps completed empty index runs distinct from never-indexed projects", () => {

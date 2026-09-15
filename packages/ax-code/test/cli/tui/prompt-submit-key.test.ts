@@ -1,6 +1,6 @@
 import { test, expect } from "vitest"
-import { textareaKeybindingsForConfig } from "../../../src/cli/cmd/tui/component/textarea-keybindings"
-import { isUnmodifiedPromptSubmitKey } from "../../../src/cli/cmd/tui/component/prompt/view-model"
+import { textareaKeybindingsForConfig } from "../../../src/cli/tui/component/textarea-keybindings"
+import { isUnmodifiedPromptSubmitKey } from "../../../src/cli/tui/component/prompt/view-model"
 import type { Keybind } from "../../../src/util/keybind"
 
 // Regression coverage for the prompt's Enter handling.

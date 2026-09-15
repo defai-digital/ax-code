@@ -4,7 +4,7 @@ import {
   familySessionIDs,
   outsideFamilyRequests,
   requestsInSessionTree,
-} from "@/cli/cmd/tui/util/pending-request-notices"
+} from "@/cli/tui/util/pending-request-notices"
 
 describe("familySessionIDs", () => {
   const sessions = [

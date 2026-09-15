@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { footerHintWidth, promptFooterLayout } from "../../../src/cli/cmd/tui/component/prompt/footer-layout"
+import { footerHintWidth, promptFooterLayout } from "../../../src/cli/tui/component/prompt/footer-layout"
 
 describe("promptFooterLayout", () => {
   test("stacks and hides secondary hints when inline budget is tight", () => {

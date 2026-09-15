@@ -8,7 +8,7 @@ import path from "path"
  * stay on the lifecycle/prune helpers.
  */
 
-const TUI_ROOT = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.resolve(import.meta.dirname, "../../../src/cli/tui")
 
 describe("tui stability phase wiring (ADR-047)", () => {
   test("app uses lifecycle terminal suspend and scheduleTuiTimeout for putJson", async () => {

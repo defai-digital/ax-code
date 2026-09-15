@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { AssistantMessage } from "@ax-code/sdk/v2"
-import { assistantMessageStats } from "@/cli/cmd/tui/routes/session/view-model"
+import { assistantMessageStats } from "@/cli/tui/routes/session/view-model"
 
 function message(input: {
   created: number

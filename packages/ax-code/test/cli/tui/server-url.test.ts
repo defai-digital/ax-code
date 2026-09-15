@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { urlAllowlistServerRoute } from "../../../src/cli/cmd/tui/util/server-url"
+import { urlAllowlistServerRoute } from "../../../src/cli/tui/util/server-url"
 
 describe("urlAllowlistServerRoute", () => {
   test("resolves root-relative routes on the configured server origin", () => {

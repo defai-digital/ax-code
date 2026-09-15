@@ -3,8 +3,8 @@ import {
   rankSlashAutocompleteOptions,
   shouldClearPromptForAutocompleteSelection,
   shouldHideAutocompleteOnInput,
-} from "../../../src/cli/cmd/tui/component/prompt/autocomplete"
-import { commandAutocompleteSuffix } from "../../../src/cli/cmd/tui/component/prompt/autocomplete-command"
+} from "../../../src/cli/tui/component/prompt/autocomplete"
+import { commandAutocompleteSuffix } from "../../../src/cli/tui/component/prompt/autocomplete-command"
 
 describe("tui command autocomplete", () => {
   test("labels reusable command sources", () => {

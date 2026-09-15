@@ -1,13 +1,13 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { TUI_RENDERER_CONTRACT, TUI_RENDERER_CONTRACT_REQUIRED_AREAS } from "../../../src/cli/cmd/tui/renderer-contract"
-import { TUI_PERFORMANCE_CRITERIA } from "../../../src/cli/cmd/tui/performance-criteria"
-import { resolveSessionFirstRoute } from "../../../src/cli/cmd/tui/navigation/launch-policy"
-import { resolveDesktopHandoff } from "../../../src/cli/cmd/tui/navigation/desktop-handoff"
+import { TUI_RENDERER_CONTRACT, TUI_RENDERER_CONTRACT_REQUIRED_AREAS } from "../../../src/cli/tui/renderer-contract"
+import { TUI_PERFORMANCE_CRITERIA } from "../../../src/cli/tui/performance-criteria"
+import { resolveSessionFirstRoute } from "../../../src/cli/tui/navigation/launch-policy"
+import { resolveDesktopHandoff } from "../../../src/cli/tui/navigation/desktop-handoff"
 
 const SRC_ROOT = path.resolve(import.meta.dirname, "../../../src")
-const TUI_SRC = path.join(SRC_ROOT, "cli/cmd/tui")
+const TUI_SRC = path.join(SRC_ROOT, "cli/tui")
 const TUI_RENDERER_RE =
   /(?:from\s+["'](?:ax-tui(?:\/|["'])|@opentui\/|opentui-spinner)|import\s+["'](?:ax-tui(?:\/|["'])|@opentui\/|opentui-spinner))/
 const SPINNER_SOLID_RE = /(?:from\s+["']ax-tui\/spinner\/solid["']|import\s+["']ax-tui\/spinner\/solid["'])/

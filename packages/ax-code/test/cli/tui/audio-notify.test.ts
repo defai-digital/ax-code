@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 
-import { createAudioNotifier, speechText } from "../../../src/cli/cmd/tui/util/audio-notify"
-import type { AudioNotifyDeps, AudioNotifyInput, AudioNotifySettings } from "../../../src/cli/cmd/tui/util/audio-notify"
+import { createAudioNotifier, speechText } from "../../../src/cli/tui/util/audio-notify"
+import type { AudioNotifyDeps, AudioNotifyInput, AudioNotifySettings } from "../../../src/cli/tui/util/audio-notify"
 
 type SpawnCall = { cmd: string[]; opts: { timeout: number; unref: boolean } }
 

@@ -3,7 +3,7 @@ import {
   capDiffDetailLines,
   computeDiffLines,
   DIFF_DETAIL_MAX_LINES,
-} from "../../../src/cli/cmd/tui/component/dialog-diff-viewer"
+} from "../../../src/cli/tui/component/dialog-diff-viewer"
 
 // Reference: the previous unbounded O(m*n) LCS with a full number[][] matrix.
 // The hardened computeDiffLines must produce byte-identical output to this for

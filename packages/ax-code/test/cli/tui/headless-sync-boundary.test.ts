@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import { access, readdir, readFile } from "node:fs/promises"
 import path from "node:path"
 
-const tuiSourceRoot = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
+const tuiSourceRoot = path.resolve(import.meta.dirname, "../../../src/cli/tui")
 
 const legacyLiveSyncModules = [
   "context/sync-event-router.ts",

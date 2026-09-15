@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { localWorkspaceDirectory, normalizeDialogSessions } from "../../../src/cli/cmd/tui/component/session-list-data"
+import { localWorkspaceDirectory, normalizeDialogSessions } from "../../../src/cli/tui/component/session-list-data"
 
 function session(id: string) {
   return {

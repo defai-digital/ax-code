@@ -4,7 +4,7 @@ import {
   isSubmitAbortError,
   pendingSubmitKeyIntent,
   pendingSubmitStatusText,
-} from "../../../src/cli/cmd/tui/component/prompt/submit-state"
+} from "../../../src/cli/tui/component/prompt/submit-state"
 
 describe("prompt submit state", () => {
   test("renders stage-specific pending labels", () => {

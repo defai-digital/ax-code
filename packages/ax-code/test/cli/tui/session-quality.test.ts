@@ -16,15 +16,15 @@ import {
   sessionQualityActionValue,
   sessionQualityDetailItems,
   sessionQualityOverviewItems,
-} from "../../../src/cli/cmd/tui/routes/session/quality"
+} from "../../../src/cli/tui/routes/session/quality"
 import type { VerificationEnvelope } from "../../../src/quality/verification-envelope"
 import type { ReviewResult } from "../../../src/quality/review-result"
 import type { DecisionHints } from "../../../src/session/decision-hints"
 
-const SESSION_ROUTE_SRC = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui/routes/session/index.tsx")
+const SESSION_ROUTE_SRC = path.resolve(import.meta.dirname, "../../../src/cli/tui/routes/session/index.tsx")
 const DIALOG_QUALITY_SRC = path.resolve(
   import.meta.dirname,
-  "../../../src/cli/cmd/tui/routes/session/dialog-quality.tsx",
+  "../../../src/cli/tui/routes/session/dialog-quality.tsx",
 )
 
 describe("tui session quality actions", () => {

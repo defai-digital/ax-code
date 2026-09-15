@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { footerToggleLabel } from "../../../src/cli/cmd/tui/component/prompt/footer-toggle"
+import { footerToggleLabel } from "../../../src/cli/tui/component/prompt/footer-toggle"
 
 describe("footerToggleLabel", () => {
   test("keeps active and inactive labels the same width", () => {

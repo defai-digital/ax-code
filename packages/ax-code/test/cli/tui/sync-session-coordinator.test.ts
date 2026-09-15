@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   createSessionSyncController,
   isMissingSessionSnapshotError,
-} from "../../../src/cli/cmd/tui/context/sync-session-coordinator"
+} from "../../../src/cli/tui/context/sync-session-coordinator"
 
 describe("tui sync session coordinator", () => {
   test("applies a fetched snapshot once and skips repeated syncs until cleared or forced", async () => {

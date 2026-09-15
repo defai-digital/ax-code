@@ -4,7 +4,7 @@ import {
   responseErrorMessage,
   textErrorMessage,
   unknownErrorMessage,
-} from "../../../src/cli/cmd/tui/util/error-message"
+} from "../../../src/cli/tui/util/error-message"
 
 describe("tui error message decoding", () => {
   test("extracts supported error payload message shapes", () => {

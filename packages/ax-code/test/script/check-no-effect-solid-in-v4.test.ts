@@ -8,33 +8,33 @@ describe("script.check-no-effect-solid-in-v4", () => {
   test("ignores safe imports and non-v4 directories", async () => {
     await using tmp = await tmpdir()
     await mkdir(path.join(tmp.path, "src/runtime"), { recursive: true })
-    await mkdir(path.join(tmp.path, "src/cli/cmd/tui/state"), { recursive: true })
-    await mkdir(path.join(tmp.path, "src/cli/cmd/tui"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/cli/tui/state"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/cli/tui"), { recursive: true })
     await writeFile(
       path.join(tmp.path, "src/runtime/safe.ts"),
       `import z from "zod"\nexport const value = z.string()\n`,
     )
     await writeFile(
-      path.join(tmp.path, "src/cli/cmd/tui/state/safe.ts"),
+      path.join(tmp.path, "src/cli/tui/state/safe.ts"),
       `import type { Stats } from "node:fs"\nexport const value = "ok"\n`,
     )
-    await writeFile(path.join(tmp.path, "src/cli/cmd/tui/legacy.tsx"), `import { createSignal } from "solid-js"\n`)
+    await writeFile(path.join(tmp.path, "src/cli/tui/legacy.tsx"), `import { createSignal } from "solid-js"\n`)
 
     expect(await V4Guardrails.check(tmp.path)).toEqual([])
   })
 
   test("reports effect, Solid, and TUI imports in guarded directories", async () => {
     await using tmp = await tmpdir()
-    await mkdir(path.join(tmp.path, "src/cli/cmd/tui/input"), { recursive: true })
-    await mkdir(path.join(tmp.path, "src/cli/cmd/tui/native"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/cli/tui/input"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/cli/tui/native"), { recursive: true })
     await mkdir(path.join(tmp.path, "src/runtime"), { recursive: true })
     await writeFile(path.join(tmp.path, "src/runtime/effect.ts"), `import { Effect } from "effect"\n`)
-    await writeFile(path.join(tmp.path, "src/cli/cmd/tui/input/solid.ts"), `import { batch } from "solid-js"\n`)
-    await writeFile(path.join(tmp.path, "src/cli/cmd/tui/native/renderer.ts"), `import { render } from "ax-tui"\n`)
+    await writeFile(path.join(tmp.path, "src/cli/tui/input/solid.ts"), `import { batch } from "solid-js"\n`)
+    await writeFile(path.join(tmp.path, "src/cli/tui/native/renderer.ts"), `import { render } from "ax-tui"\n`)
 
     expect((await V4Guardrails.check(tmp.path)).map((item) => V4Guardrails.format(item))).toEqual([
-      "src/cli/cmd/tui/input/solid.ts imports solid-js (solid)",
-      "src/cli/cmd/tui/native/renderer.ts imports ax-tui (tui)",
+      "src/cli/tui/input/solid.ts imports solid-js (solid)",
+      "src/cli/tui/native/renderer.ts imports ax-tui (tui)",
       "src/runtime/effect.ts imports effect (effect)",
     ])
   })

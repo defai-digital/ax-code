@@ -9,12 +9,12 @@ const mocks = vi.hoisted(() => ({
   signal: undefined as ((signal: NodeJS.Signals) => void | Promise<void>) | undefined,
 }))
 
-vi.mock("../../../src/cli/cmd/tui/context/helper", () => ({
+vi.mock("../../../src/cli/tui/context/helper", () => ({
   createSimpleContext: (input: { init: (props: unknown) => unknown }) => ({ provider: input.init }),
 }))
 vi.mock("ax-tui/solid", () => ({ useRenderer: () => mocks.renderer }))
-vi.mock("../../../src/cli/cmd/tui/renderer", () => ({ destroyTuiRenderer: mocks.destroy }))
-vi.mock("../../../src/cli/cmd/tui/win32", () => ({ win32FlushInputBuffer: mocks.flush }))
+vi.mock("../../../src/cli/tui/renderer", () => ({ destroyTuiRenderer: mocks.destroy }))
+vi.mock("../../../src/cli/tui/win32", () => ({ win32FlushInputBuffer: mocks.flush }))
 vi.mock("../../../src/util/signals", () => ({
   registerShutdownSignals: (callback: (signal: NodeJS.Signals) => void | Promise<void>) => {
     mocks.signal = callback
@@ -24,7 +24,7 @@ vi.mock("../../../src/util/signals", () => ({
   },
 }))
 
-import { ExitProvider, type useExit } from "../../../src/cli/cmd/tui/context/exit"
+import { ExitProvider, type useExit } from "../../../src/cli/tui/context/exit"
 
 const disposals: (() => void)[] = []
 let previousExitCode: typeof process.exitCode

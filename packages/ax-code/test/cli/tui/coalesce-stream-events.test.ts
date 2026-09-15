@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { coalesceStreamEvents, createStreamDeltaCoalescer } from "../../../src/cli/cmd/tui/util/coalesce-stream-events"
+import { coalesceStreamEvents, createStreamDeltaCoalescer } from "../../../src/cli/tui/util/coalesce-stream-events"
 
 describe("coalesceStreamEvents", () => {
   test("merges text deltas for the same part", () => {

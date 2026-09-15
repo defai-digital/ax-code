@@ -5,7 +5,7 @@ import {
   removeByID,
   shiftOverflow,
   upsert,
-} from "../../../src/cli/cmd/tui/context/sync-util"
+} from "../../../src/cli/tui/context/sync-util"
 
 describe("tui sync", () => {
   test("inserts a newly created child session in id order", () => {

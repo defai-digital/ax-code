@@ -15,8 +15,8 @@ async function repoSource(relativePath: string) {
 
 describe("bug report lifecycle visibility guards", () => {
   test("keeps non-critical upgrade checks observable", async () => {
-    const worker = await source("cli/cmd/tui/worker.ts")
-    const thread = await source("cli/cmd/tui/thread.ts")
+    const worker = await source("cli/tui/worker.ts")
+    const thread = await source("cli/tui/thread.ts")
 
     expect(worker).toContain('Log.Default.debug("upgrade check failed"')
     expect(worker).not.toContain("await upgrade().catch(() => {})")
@@ -60,14 +60,14 @@ describe("bug report lifecycle visibility guards", () => {
   })
 
   test("keeps macOS clipboard image fallback failures observable", async () => {
-    const clipboard = await source("cli/cmd/tui/util/clipboard.ts")
+    const clipboard = await source("cli/tui/util/clipboard.ts")
 
     expect(clipboard).toContain('log.debug("macOS clipboard image read failed"')
     expect(clipboard).toContain('log.debug("clipboard temporary image cleanup failed"')
   })
 
   test("keeps session status timers bound to the current route session", async () => {
-    const sessionRoute = await source("cli/cmd/tui/routes/session/index.tsx")
+    const sessionRoute = await source("cli/tui/routes/session/index.tsx")
 
     expect(sessionRoute).toContain("createEffect(() => {")
     expect(sessionRoute).toContain("const sessionID = route.sessionID")
@@ -146,7 +146,7 @@ describe("bug report lifecycle visibility guards", () => {
   })
 
   test("keeps pre-provider model selections persistent and revalidated", async () => {
-    const local = await source("cli/cmd/tui/context/local.tsx")
+    const local = await source("cli/tui/context/local.tsx")
 
     expect(local).toContain("if (!sync.data.provider_loaded) {")
     expect(local).toContain("setUserModel(currentAgentName, model)")

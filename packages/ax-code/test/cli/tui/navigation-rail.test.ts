@@ -5,9 +5,9 @@ import {
   navigationLayout,
   navigationPanelInnerWidth,
   navigationRailInnerWidth,
-} from "../../../src/cli/cmd/tui/navigation/navigation-layout"
-import { orderRootSessions, sessionNavigationEntries } from "../../../src/cli/cmd/tui/component/session-list-data"
-import { computeSessionMainPaneWidth } from "../../../src/cli/cmd/tui/routes/session/layout"
+} from "../../../src/cli/tui/navigation/navigation-layout"
+import { orderRootSessions, sessionNavigationEntries } from "../../../src/cli/tui/component/session-list-data"
+import { computeSessionMainPaneWidth } from "../../../src/cli/tui/routes/session/layout"
 
 const sessions = [
   { id: "root", time: { updated: 2 } },

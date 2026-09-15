@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { createRoot, createSignal, For, Show, type Setter } from "solid-js"
-import { SessionNavigation } from "../../../src/cli/cmd/tui/component/session-navigation"
-import { NavigationBar } from "../../../src/cli/cmd/tui/component/navigation-bar"
-import { DialogNavigationWidth, DialogSidebarWidth } from "../../../src/cli/cmd/tui/component/dialog-navigation-width"
-import { DialogSessionList } from "../../../src/cli/cmd/tui/component/dialog-session-list"
-import { DialogAttention } from "../../../src/cli/cmd/tui/component/dialog-attention"
+import { SessionNavigation } from "../../../src/cli/tui/component/session-navigation"
+import { NavigationBar } from "../../../src/cli/tui/component/navigation-bar"
+import { DialogNavigationWidth, DialogSidebarWidth } from "../../../src/cli/tui/component/dialog-navigation-width"
+import { DialogSessionList } from "../../../src/cli/tui/component/dialog-session-list"
+import { DialogAttention } from "../../../src/cli/tui/component/dialog-attention"
 
 const mocked = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -68,8 +68,8 @@ vi.mock("@tui/context/route", () => ({
 }))
 vi.mock("@tui/context/keybind", () => ({ useKeybind: () => ({ all: {}, print: (key: string) => key }) }))
 vi.mock("@tui/ui/toast", () => ({ useToast: () => ({ show: vi.fn() }) }))
-vi.mock("../../../src/cli/cmd/tui/component/spinner", () => ({ Spinner: () => undefined }))
-vi.mock("../../../src/cli/cmd/tui/component/dialog-session-rename", () => ({ DialogSessionRename: () => undefined }))
+vi.mock("../../../src/cli/tui/component/spinner", () => ({ Spinner: () => undefined }))
+vi.mock("../../../src/cli/tui/component/dialog-session-rename", () => ({ DialogSessionRename: () => undefined }))
 vi.mock("@tui/context/theme", () => ({ useTheme: () => ({ theme: {} }) }))
 vi.mock("@tui/context/kv", () => ({
   useKV: () => ({
@@ -87,7 +87,7 @@ vi.mock("@tui/context/kv", () => ({
 vi.mock("@tui/context/local", () => ({
   useLocal: () => ({ session: { pinned: () => [], slots: () => ["root"] } }),
 }))
-vi.mock("../../../src/cli/cmd/tui/component/dialog-command", () => ({
+vi.mock("../../../src/cli/tui/component/dialog-command", () => ({
   useCommandDialog: () => ({ trigger: mocked.trigger }),
 }))
 vi.mock("@tui/ui/dialog", () => ({ useDialog: () => ({ clear: mocked.clear, setSize: mocked.setSize }) }))

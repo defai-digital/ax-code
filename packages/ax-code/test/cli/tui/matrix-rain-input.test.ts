@@ -28,7 +28,7 @@ vi.mock("@tui/util/timer", () => ({
   scheduleTuiInterval: () => () => {},
   scheduleTuiTimeout: () => () => {},
 }))
-import { MatrixRain } from "../../../src/cli/cmd/tui/component/matrix-rain"
+import { MatrixRain } from "../../../src/cli/tui/component/matrix-rain"
 
 let dispose: () => void
 beforeEach(() => {

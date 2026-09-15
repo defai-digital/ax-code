@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { dialogHelpBodyHeight, dialogHelpGroups } from "../../../src/cli/cmd/tui/ui/dialog-help-view-model"
+import { dialogHelpBodyHeight, dialogHelpGroups } from "../../../src/cli/tui/ui/dialog-help-view-model"
 import { Keybinds } from "../../../src/config/schema"
 
 describe("tui dialog help view model", () => {

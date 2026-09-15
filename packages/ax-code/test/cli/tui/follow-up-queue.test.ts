@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { followUpText, isQueueableStatus } from "../../../src/cli/cmd/tui/component/prompt/follow-up-queue"
+import { followUpText, isQueueableStatus } from "../../../src/cli/tui/component/prompt/follow-up-queue"
 
 describe("follow-up composer input", () => {
   test("queues only busy and retrying sessions", () => {

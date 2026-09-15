@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { fetchSessionSyncSnapshot } from "../../../src/cli/cmd/tui/context/sync-session-fetch"
+import { fetchSessionSyncSnapshot } from "../../../src/cli/tui/context/sync-session-fetch"
 
 describe("tui sync session fetch", () => {
   test("loads a full session snapshot through the shared timeout wrapper", async () => {

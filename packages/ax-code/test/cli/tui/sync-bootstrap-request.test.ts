@@ -5,7 +5,7 @@ import {
   createTimedBootstrapRequests,
   normalizeSessionListResponse,
   type SyncBootstrapRequestClient,
-} from "../../../src/cli/cmd/tui/context/sync-bootstrap-request"
+} from "../../../src/cli/tui/context/sync-bootstrap-request"
 
 describe("tui sync bootstrap request", () => {
   test("wraps a timed request and runs its settled hook", async () => {

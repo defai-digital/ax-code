@@ -2,13 +2,13 @@ import { describe, expect, test } from "vitest"
 import {
   hasNewActiveSubagent,
   subagentPanelLayout,
-} from "../../../src/cli/cmd/tui/routes/session/subagent-panel-layout"
+} from "../../../src/cli/tui/routes/session/subagent-panel-layout"
 import {
   buildSubagentStatusView,
   isGoalPlanning,
   subagentPanelHeaderSummary,
   subagentPanelItems,
-} from "../../../src/cli/cmd/tui/routes/session/subagent-status-view"
+} from "../../../src/cli/tui/routes/session/subagent-status-view"
 
 describe("active subagent visibility", () => {
   test("renders one active child as a single-row solo rail", () => {

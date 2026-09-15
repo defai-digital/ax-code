@@ -9,7 +9,7 @@ import {
   normalizeBootstrapSessionBuckets,
   normalizeBootstrapValue,
   normalizeProviderBootstrapPayload,
-} from "../../../src/cli/cmd/tui/context/sync-bootstrap-store"
+} from "../../../src/cli/tui/context/sync-bootstrap-store"
 
 describe("tui sync bootstrap store", () => {
   test("merges fetched sessions without dropping event-arrived sessions", () => {

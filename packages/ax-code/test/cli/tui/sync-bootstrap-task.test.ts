@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { createBootstrapResponseTask, createBootstrapTask } from "../../../src/cli/cmd/tui/context/sync-bootstrap-task"
+import { createBootstrapResponseTask, createBootstrapTask } from "../../../src/cli/tui/context/sync-bootstrap-task"
 
 describe("tui sync bootstrap task", () => {
   test("normalizes arbitrary promise values before applying them", async () => {

@@ -409,7 +409,7 @@ test("auth lock polling does not keep the process alive while waiting", async ()
 })
 
 test("TUI worker removes signal handlers during RPC shutdown", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/tui/worker.ts"), "utf-8")
 
   // Worker now routes signal registration through the shared helper so
   // SSH disconnect (SIGHUP) and ^\ (SIGQUIT) also drain MCP children /
@@ -423,14 +423,14 @@ test("TUI worker removes signal handlers during RPC shutdown", async () => {
 })
 
 test("TUI renderer routes native trace traps through terminal cleanup", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/context/exit.tsx"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/tui/context/exit.tsx"), "utf-8")
 
   expect(src).toContain('"SIGTRAP"')
   expect(src).toContain("registerShutdownSignals(() => exit(), { signals: TUI_EXIT_SIGNALS })")
 })
 
 test("TUI worker always forces exit after uncaught exceptions", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/tui/worker.ts"), "utf-8")
   const start = src.indexOf('registerTuiProcessHandler(\n  "uncaughtException"')
   const end = src.indexOf("const handleGlobalEvent", start)
   expect(start).toBeGreaterThan(-1)
@@ -441,7 +441,7 @@ test("TUI worker always forces exit after uncaught exceptions", async () => {
   expect(block).not.toContain("if (!shutdownPromise) setTimeout")
 
   const lifecycleSrc = await readFile(
-    path.join(import.meta.dirname, "../../src/cli/cmd/tui/util/lifecycle.ts"),
+    path.join(import.meta.dirname, "../../src/cli/tui/util/lifecycle.ts"),
     "utf-8",
   )
   const handlerStart = lifecycleSrc.indexOf("export function registerTuiProcessHandler")
@@ -452,7 +452,7 @@ test("TUI worker always forces exit after uncaught exceptions", async () => {
 })
 
 test("TUI worker waits for an old event stream before replacing it", async () => {
-  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/worker.ts"), "utf-8")
+  const src = await readFile(path.join(import.meta.dirname, "../../src/cli/tui/worker.ts"), "utf-8")
 
   expect(src).toContain("const startEventStream = async")
   expect(src).toContain("await eventStream.done?.catch")
@@ -463,7 +463,7 @@ test("TUI worker waits for an old event stream before replacing it", async () =>
 
 test("autonomous pulse timer does not keep the process alive", async () => {
   const src = await readFile(
-    path.join(import.meta.dirname, "../../src/cli/cmd/tui/routes/session/autonomous-pulse.ts"),
+    path.join(import.meta.dirname, "../../src/cli/tui/routes/session/autonomous-pulse.ts"),
     "utf-8",
   )
 
@@ -471,7 +471,7 @@ test("autonomous pulse timer does not keep the process alive", async () => {
   expect(src).toContain("delayMs: TICK_MS")
   expect(src).toContain("unref: true")
 
-  const timerSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/cmd/tui/util/timer.ts"), "utf-8")
+  const timerSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/tui/util/timer.ts"), "utf-8")
   const intervalStart = timerSrc.indexOf("export function scheduleTuiInterval")
   expect(intervalStart).toBeGreaterThan(-1)
   const intervalBlock = timerSrc.slice(intervalStart)

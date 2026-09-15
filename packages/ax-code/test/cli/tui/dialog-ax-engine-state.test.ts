@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   axEngineModelStateAnnotation,
   axEngineModelStateAnnotations,
-} from "../../../src/cli/cmd/tui/component/dialog-ax-engine-state"
+} from "../../../src/cli/tui/component/dialog-ax-engine-state"
 
 describe("axEngineModelStateAnnotation", () => {
   test("annotates missing weights and in-flight downloads", () => {

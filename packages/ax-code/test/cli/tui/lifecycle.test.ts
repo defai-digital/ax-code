@@ -3,7 +3,7 @@ import {
   registerTuiEventListener,
   registerTuiProcessHandler,
   runTuiCleanup,
-} from "../../../src/cli/cmd/tui/util/lifecycle"
+} from "../../../src/cli/tui/util/lifecycle"
 
 describe("tui lifecycle helpers", () => {
   test("registers event listeners with an idempotent cleanup", () => {

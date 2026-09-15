@@ -8,7 +8,7 @@ import {
   setTuiTerminalTitle,
   supportsTuiTerminalProgress,
   TUI_TERMINAL_PROGRESS_KEEPALIVE_MS,
-} from "../../../src/cli/cmd/tui/renderer"
+} from "../../../src/cli/tui/renderer"
 import {
   clearTuiMainScreen,
   disableTuiMouseTracking,
@@ -19,7 +19,7 @@ import {
   TUI_MOUSE_TRACKING_DISABLE_SEQUENCE,
   TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
   TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
-} from "../../../src/cli/cmd/tui/terminal-cleanup"
+} from "../../../src/cli/tui/terminal-cleanup"
 
 const TITLE_CLEAR_SEQUENCE = "\x1b]2;\x07\x1b]1;\x07"
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY")

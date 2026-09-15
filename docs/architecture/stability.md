@@ -11,7 +11,7 @@ How AX Code stays reliable for long interactive sessions and headless runs.
 
 | Layer              | What is hardened                                                                       | Key modules                                                  |
 | ------------------ | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **TUI lifecycle**  | Suspend/resume, crash terminal restore, session leave memory prune                     | ADR-047; `cli/cmd/tui/util/*`                                |
+| **TUI lifecycle**  | Suspend/resume, crash terminal restore, session leave memory prune                     | ADR-047; `cli/tui/util/*`                                |
 | **Process faults** | Abort/cancel/broken-pipe ignored; real crashes still exit                              | `util/harmless-interrupt`, TUI crash handler, CLI boot hooks |
 | **Timeouts**       | Tool/LSP/MCP bounds without unhandledRejection                                         | `util/timeout.withTimeout`                                   |
 | **Streams**        | Idle watchdog, resilient reconnect                                                     | `session/llm-impl` idle watchdog; `resilient-stream`         |

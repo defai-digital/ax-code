@@ -5,7 +5,7 @@ import {
   footerSubagentStatusView,
   footerTokenChip,
   hasActiveSubagentInSessionTree,
-} from "@/cli/cmd/tui/routes/session/footer-view-model"
+} from "@/cli/tui/routes/session/footer-view-model"
 
 describe("footerTokenChip", () => {
   test("returns undefined when no tokens", () => {
