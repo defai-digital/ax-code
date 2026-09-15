@@ -315,9 +315,25 @@ export namespace LSPClient {
     )
 
     const activity = new ClientActivity()
+    const documentSyncLock = `lsp-document-sync:${randomUUID()}`
+    let reopenChangedDocuments = false
     const sendRequest = connection.sendRequest.bind(connection)
     connection.sendRequest = ((...args: Parameters<typeof sendRequest>) =>
-      activity.run(() => sendRequest(...args))) as typeof connection.sendRequest
+      activity.run(async () => {
+        if (!reopenChangedDocuments || args[0] === "shutdown") return sendRequest(...args)
+        // Only admission is locked: concurrent RPCs remain concurrent after
+        // their frames are queued, while a document replacement is exclusive.
+        const lock = await Lock.read(documentSyncLock, { timeoutMs: 15_000 })
+        let response: ReturnType<typeof sendRequest>
+        try {
+          if (incompleteClose)
+            throw new Error("LSP document synchronization is incomplete; restart the language server")
+          response = sendRequest(...args)
+        } finally {
+          lock[Symbol.dispose]()
+        }
+        return response
+      })) as typeof connection.sendRequest
 
     const sendNotification = connection.sendNotification.bind(connection)
     connection.sendNotification = ((...args: Parameters<typeof sendNotification>) =>
@@ -466,10 +482,10 @@ export namespace LSPClient {
     pullsDiagnostics =
       input.serverID === "typescript" && capabilityEnabled(initializeResult?.capabilities?.diagnosticProvider)
     // TypeScript 7.0.2 can retain the previous project snapshot when native
-    // file-watch events race with a saved didChange. A protocol close/open
-    // commits the replacement synchronously in that server. Keep this narrow:
-    // other servers and versions retain their negotiated incremental sync.
-    const reopenChangedDocuments =
+    // file-watch events race with a saved didChange. Flush the deferred close
+    // through a document request before reopening the replacement. Other
+    // servers and versions retain their negotiated incremental sync.
+    reopenChangedDocuments =
       pullsDiagnostics &&
       initializeResult.serverInfo?.name === "typescript-go" &&
       initializeResult.serverInfo.version === "7.0.2"
@@ -827,17 +843,41 @@ export namespace LSPClient {
               try {
                 if (reopenChangedDocuments && documentSync.openClose) {
                   log.info("textDocument reopen (native snapshot compatibility)", { path: normalized, version: next })
-                  // Queue both frames before yielding so an unrelated request
-                  // cannot observe the temporary closed-document state. The
-                  // JSON-RPC writer serializes writes in admission order.
-                  await Promise.all([
-                    connection.sendNotification("textDocument/didClose", {
-                      textDocument: { uri: pathToFileURL(normalized).href },
-                    }),
-                    connection.sendNotification("textDocument/didOpen", {
-                      textDocument: { uri: pathToFileURL(normalized).href, languageId, version: next, text },
-                    }),
-                  ])
+                  using _sync = await Lock.write(documentSyncLock, { timeoutMs: 15_000 })
+                  // Another document may have failed while this replacement waited.
+                  if (incompleteClose)
+                    throw new Error("LSP document synchronization is incomplete; restart the language server")
+                  const cancellation = new CancellationTokenSource()
+                  try {
+                    await withTimeout(
+                      (async () => {
+                        await connection.sendNotification("textDocument/didClose", {
+                          textDocument: { uri: pathToFileURL(normalized).href },
+                        })
+                        if (closing || cancellation.token.isCancellationRequested)
+                          throw new Error("LSP replacement cancelled")
+                        // didClose is deferred by 7.0.2. This read flushes it
+                        // before didOpen; its result is never exposed as user
+                        // evidence. Use the raw request to bypass our own lock.
+                        await sendRequest(
+                          "textDocument/documentSymbol",
+                          { textDocument: { uri: pathToFileURL(normalized).href } },
+                          cancellation.token,
+                        )
+                        if (closing || cancellation.token.isCancellationRequested)
+                          throw new Error("LSP replacement cancelled")
+                        await connection.sendNotification("textDocument/didOpen", {
+                          textDocument: { uri: pathToFileURL(normalized).href, languageId, version: next, text },
+                        })
+                      })(),
+                      15_000,
+                    )
+                  } catch (error) {
+                    cancellation.cancel()
+                    throw error
+                  } finally {
+                    cancellation.dispose()
+                  }
                 } else if (documentSync.change !== 0) {
                   // Ranged incremental changes are only protocol-legal when
                   // the server negotiated TextDocumentSyncKind.Incremental.
