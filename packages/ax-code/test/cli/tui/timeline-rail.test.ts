@@ -7,6 +7,15 @@ describe("transcript turn timeline", () => {
     expect(timelineWindow(1, 24, 0)).toEqual([])
     expect(timelineWindow(20, 2, 0)).toEqual([])
   })
+  test("centers a compact stack instead of stretching sparse turns", () => {
+    expect(timelineWindow(3, 50, 0)).toEqual([
+      { index: 0, row: 23 },
+      { index: 1, row: 24 },
+      { index: 2, row: 25 },
+    ])
+    const ticks = timelineWindow(2, 24, 1)
+    expect(ticks.map((tick) => tick.row)).toEqual([11, 12])
+  })
   test("keeps the active turn reachable across long histories and resize", () => {
     for (const height of [3, 4, 16, 24, 40]) {
       for (const active of [0, 1, 50, 99]) {
@@ -22,6 +31,7 @@ describe("transcript turn timeline", () => {
     expect(timelinePosition(turns, 20)).toEqual({ active: 1, previous: 1, next: 2 })
     expect(timelinePosition(turns, 10)).toEqual({ active: 1, previous: 0, next: 2 })
     expect(timelinePosition(turns, -20)).toEqual({ active: 0, previous: -1, next: 0 })
+    expect(timelinePosition(turns, 20, true)).toEqual({ active: 1, previous: 1, next: -1 })
     expect(timelinePosition(turns, 100)).toEqual({ active: 2, previous: 2, next: -1 })
   })
 })

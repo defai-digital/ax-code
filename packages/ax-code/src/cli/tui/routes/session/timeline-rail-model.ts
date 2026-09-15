@@ -6,16 +6,16 @@ export function timelineWindow(count: number, height: number, active: number) {
   const start = Math.max(0, Math.min(count - size, active - Math.floor(size / 2)))
   return Array.from({ length: size }, (_, index) => ({
     index: start + index,
-    row: size === 1 ? 1 : 1 + Math.round((index * (capacity - 1)) / (size - 1)),
+    row: Math.floor((Math.floor(height) - size - 2) / 2) + 1 + index,
   }))
 }
 
-export function timelinePosition(turns: readonly { y: number }[], top: number) {
+export function timelinePosition(turns: readonly { y: number }[], top: number, atBottom = false) {
   const active = Math.max(
     0,
     turns.findLastIndex((turn) => turn.y <= top),
   )
   const previous = turns.findLastIndex((turn) => turn.y < top)
-  const next = turns.findIndex((turn) => turn.y > top)
+  const next = atBottom ? -1 : turns.findIndex((turn) => turn.y > top)
   return { active, previous, next }
 }

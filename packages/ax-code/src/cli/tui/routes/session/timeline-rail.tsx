@@ -14,6 +14,7 @@ export function TimelineRail(props: {
   const [height, setHeight] = createSignal(0)
   const [position, setPosition] = createSignal({ active: 0, previous: -1, next: -1 })
   const [hover, setHover] = createSignal<number>()
+  const [railHovered, setRailHovered] = createSignal(false)
   function update() {
     const scroll = props.scroll()
     if (!isRenderableAlive(scroll)) return
@@ -27,7 +28,11 @@ export function TimelineRail(props: {
     const turns = props.turns.map((turn) => children.get(turn.id))
     // Hidden or unrendered messages must not produce invented scroll positions.
     if (turns.some((turn) => !turn)) return
-    const next = timelinePosition(turns as { y: number }[], scroll.viewport.y)
+    const next = timelinePosition(
+      turns as { y: number }[],
+      scroll.viewport.y,
+      scroll.scrollTop >= Math.max(0, scroll.scrollHeight - scroll.viewport.height),
+    )
     setPosition((previous) =>
       previous.active === next.active && previous.previous === next.previous && previous.next === next.next
         ? previous
@@ -56,11 +61,25 @@ export function TimelineRail(props: {
     return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
   }
   return (
-    <box width={2} flexShrink={0} onMouseOut={() => setHover(undefined)}>
+    <box
+      width={2}
+      flexShrink={0}
+      onMouseOver={() => setRailHovered(true)}
+      onMouseOut={() => {
+        setHover(undefined)
+        setRailHovered(false)
+      }}
+      onMouseScroll={(event) => {
+        const scroll = props.scroll()
+        if (!isRenderableAlive(scroll)) return
+        scroll.processMouseEvent(event)
+        event.stopPropagation()
+      }}
+    >
       <Show when={ticks().length}>
         <text
           position="absolute"
-          top={0}
+          top={(ticks()[0]?.row ?? 1) - 1}
           fg={position().previous >= 0 ? theme.textMuted : theme.border}
           selectable={false}
           onMouseUp={() => jump(position().previous)}
@@ -73,18 +92,20 @@ export function TimelineRail(props: {
             <text
               position="absolute"
               top={tick.row}
-              fg={tick.index === position().active ? theme.primary : hover() === tick.index ? theme.text : theme.border}
+              width={2}
+              fg={tick.index === position().active || hover() === tick.index ? theme.text : theme.textMuted}
               selectable={false}
               onMouseOver={() => setHover(tick.index)}
+              onMouseOut={() => setHover(undefined)}
               onMouseUp={() => jump(tick.index)}
             >
-              {tick.index === position().active ? "\u2501\u2501" : " \u2500"}
+              {tick.index === position().active ? "\u2501\u2501" : hover() === tick.index ? "\u2500\u2500" : " \u2500"}
             </text>
           )}
         </For>
         <text
           position="absolute"
-          top={Math.max(0, height() - 1)}
+          top={(ticks().at(-1)?.row ?? 0) + 1}
           fg={position().next >= 0 ? theme.textMuted : theme.border}
           selectable={false}
           onMouseUp={() => jump(position().next)}
@@ -92,11 +113,11 @@ export function TimelineRail(props: {
           {" "}
           ▾
         </text>
-        <Show when={hover() !== undefined}>
+        <Show when={railHovered()}>
           <text
             position="absolute"
             right={3}
-            top={ticks().find((tick) => tick.index === hover())?.row ?? 0}
+            top={ticks().find((tick) => tick.index === (hover() ?? position().active))?.row ?? 0}
             width={5}
             bg={theme.background}
             fg={theme.textMuted}
