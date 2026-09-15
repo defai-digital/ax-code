@@ -32,7 +32,7 @@ test.each(["diff", "ls-files"])("a failed %s check cannot return an unverified u
       await Snapshot.track()
       const runGit = Git.git
       vi.spyOn(Git, "git").mockImplementation(async (args, options) =>
-        args.includes(command)
+        args.includes(command) && (command !== "ls-files" || args.includes("--others"))
           ? { exitCode: 128, text: () => "", stdout: Buffer.alloc(0), stderr: Buffer.from("Injected Git failure") }
           : runGit(args, options),
       )

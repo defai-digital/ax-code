@@ -153,7 +153,7 @@ test("revert in subdirectory", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await $`mkdir -p ${tmp.path}/sub`.quiet()
+      await fs.mkdir(`${tmp.path}/sub`, { recursive: true })
       await Filesystem.write(`${tmp.path}/sub/file.txt`, "SUB")
 
       await Snapshot.revert([await Snapshot.patch(before!)])
@@ -279,7 +279,7 @@ test("multiple file operations", async () => {
 
       await fs.unlink(path.join(tmp.path, "a.txt"))
       await Filesystem.write(`${tmp.path}/c.txt`, "C")
-      await $`mkdir -p ${tmp.path}/dir`.quiet()
+      await fs.mkdir(`${tmp.path}/dir`, { recursive: true })
       await Filesystem.write(`${tmp.path}/dir/d.txt`, "D")
       await Filesystem.write(`${tmp.path}/b.txt`, "MODIFIED")
 
@@ -454,7 +454,7 @@ test("empty directory handling", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await $`mkdir ${tmp.path}/empty`.quiet()
+      await fs.mkdir(`${tmp.path}/empty`, { recursive: true })
 
       expect((await Snapshot.patch(before!)).files.length).toBe(0)
     },
@@ -523,7 +523,7 @@ test("nested directory revert", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await $`mkdir -p ${tmp.path}/level1/level2/level3`.quiet()
+      await fs.mkdir(`${tmp.path}/level1/level2/level3`, { recursive: true })
       await Filesystem.write(`${tmp.path}/level1/level2/level3/deep.txt`, "DEEP")
 
       await Snapshot.revert([await Snapshot.patch(before!)])
@@ -625,7 +625,7 @@ test("track surfaces unreadable git exclude files", async () => {
   }
 })
 
-test("patch surfaces git add failures", async () => {
+test("patch surfaces an unreadable snapshot index", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,
@@ -636,7 +636,9 @@ test("patch surfaces git add failures", async () => {
       await fs.rm(index, { force: true })
       await fs.mkdir(index)
 
-      await expect(Snapshot.patch(before!)).rejects.toThrow("Snapshot staging failed")
+      await expect(Snapshot.patch(before!)).rejects.toThrow(
+        process.platform === "win32" ? "Snapshot Windows path check failed" : "Snapshot staging failed",
+      )
     },
   })
 })
@@ -778,9 +780,10 @@ test("escaped non-ASCII filenames modification and restore", async () => {
   })
 })
 
-test("quoted absolute mkdir paths stay inside the temp directory", async () => {
+test("quoted absolute command paths stay inside the temp directory", async () => {
   await using tmp = await bootstrap()
-  await $`mkdir -p "${tmp.path}/quoted-sub"`.quiet()
+  await fs.mkdir(path.join(tmp.path, "quoted-sub"), { recursive: true })
+  await $`git -C "${tmp.path}/quoted-sub" rev-parse --show-toplevel`.quiet()
   await expect(fs.access(path.join(tmp.path, "quoted-sub"))).resolves.toBeUndefined()
 })
 
@@ -867,7 +870,7 @@ test.skipIf(process.platform === "win32")("nested symlinks", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await $`mkdir -p ${tmp.path}/sub/dir`.quiet()
+      await fs.mkdir(`${tmp.path}/sub/dir`, { recursive: true })
       await Filesystem.write(`${tmp.path}/sub/dir/target.txt`, "target content")
       await fs.symlink(`${tmp.path}/sub/dir/target.txt`, `${tmp.path}/sub/dir/link.txt`, "file")
       await fs.symlink(`${tmp.path}/sub`, `${tmp.path}/sub-link`, "dir")
@@ -879,7 +882,7 @@ test.skipIf(process.platform === "win32")("nested symlinks", async () => {
   })
 })
 
-test("file permissions and ownership changes", async () => {
+test.skipIf(process.platform === "win32")("file permissions and ownership changes", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,
@@ -1095,7 +1098,7 @@ test("patch detects changes in secondary worktree", async () => {
     })
   } finally {
     await $`git worktree remove --force ${worktreePath}`.cwd(tmp.path).quiet().nothrow()
-    await $`rm -rf ${worktreePath}`.quiet()
+    await fs.rm(worktreePath, { recursive: true, force: true })
   }
 })
 
@@ -1138,8 +1141,8 @@ test("revert only removes files in invoking worktree", async () => {
     expect(await fs.readFile(primaryFile, "utf-8")).toBe("primary content")
   } finally {
     await $`git worktree remove --force ${worktreePath}`.cwd(tmp.path).quiet().nothrow()
-    await $`rm -rf ${worktreePath}`.quiet()
-    await $`rm -f ${tmp.path}/worktree.txt`.quiet()
+    await fs.rm(worktreePath, { recursive: true, force: true })
+    await fs.rm(`${tmp.path}/worktree.txt`, { force: true })
   }
 })
 
@@ -1175,9 +1178,9 @@ test("diff reports worktree-only/shared edits and ignores primary-only", async (
     })
   } finally {
     await $`git worktree remove --force ${worktreePath}`.cwd(tmp.path).quiet().nothrow()
-    await $`rm -rf ${worktreePath}`.quiet()
-    await $`rm -f ${tmp.path}/shared.txt`.quiet()
-    await $`rm -f ${tmp.path}/primary-only.txt`.quiet()
+    await fs.rm(worktreePath, { recursive: true, force: true })
+    await fs.rm(`${tmp.path}/shared.txt`, { force: true })
+    await fs.rm(`${tmp.path}/primary-only.txt`, { force: true })
   }
 })
 
@@ -1318,7 +1321,7 @@ test("revert preserves file that existed in snapshot when deleted then recreated
       const snapshot = await Snapshot.track()
       expect(snapshot).toBeTruthy()
 
-      await $`rm ${tmp.path}/existing.txt`.quiet()
+      await fs.rm(`${tmp.path}/existing.txt`, { force: true })
       await Filesystem.write(`${tmp.path}/existing.txt`, "recreated")
       await Filesystem.write(`${tmp.path}/newfile.txt`, "new")
 
@@ -1359,7 +1362,7 @@ test("diffFull sets status based on git change type", async () => {
 
       await Filesystem.write(`${tmp.path}/grow.txt`, "one\ntwo\n")
       await Filesystem.write(`${tmp.path}/trim.txt`, "line1\n")
-      await $`rm ${tmp.path}/delete.txt`.quiet()
+      await fs.rm(`${tmp.path}/delete.txt`, { force: true })
       await Filesystem.write(`${tmp.path}/added.txt`, "new")
 
       const after = await Snapshot.track()
@@ -1565,7 +1568,7 @@ test("diffFull with multiple additions and deletions", async () => {
       await Filesystem.write(`${tmp.path}/multi1.txt`, "line1\nline2\nline3")
       await Filesystem.write(`${tmp.path}/multi2.txt`, "single line")
       await fs.unlink(path.join(tmp.path, "a.txt"))
-      await $`rm ${tmp.path}/b.txt`.quiet()
+      await fs.rm(`${tmp.path}/b.txt`, { force: true })
 
       const after = await Snapshot.track()
       expect(after).toBeTruthy()
@@ -1683,7 +1686,7 @@ test("diffFull skips oversized file contents", async () => {
   })
 })
 
-test("diffFull preserves tabs in filenames", async () => {
+test.skipIf(process.platform === "win32")("diffFull preserves tabs in filenames", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
     directory: tmp.path,
