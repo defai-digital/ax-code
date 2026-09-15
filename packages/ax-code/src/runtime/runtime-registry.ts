@@ -47,7 +47,11 @@ export namespace RuntimeRegistry {
 
   export async function read(file: string): Promise<Record | undefined> {
     const handle = await fs
-      .open(file, constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW))
+      .open(
+        file,
+        // Reject special files without waiting for a FIFO writer.
+        constants.O_RDONLY | (process.platform === "win32" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK),
+      )
       .catch((error: NodeJS.ErrnoException) => {
         if (error.code === "ENOENT") return undefined
         throw error

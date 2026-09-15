@@ -174,7 +174,8 @@ export namespace SkillCandidate {
     return path.join(current, "SKILL.md")
   }
   function readOwn(file: string) {
-    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW)
+    // A replaced skill must not block the event loop before its type is checked.
+    const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | (fs.constants.O_NONBLOCK ?? 0))
     try {
       const stat = fs.fstatSync(fd)
       if (!stat.isFile() || stat.size > 40_000 || stat.nlink !== 1)

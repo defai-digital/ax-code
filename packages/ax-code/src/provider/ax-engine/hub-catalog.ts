@@ -89,7 +89,8 @@ async function fetchJSON(url: URL, fetcher: typeof fetch, signal: AbortSignal) {
 }
 
 async function readCached(file: string) {
-  const handle = await fs.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  // Admit the descriptor without blocking on special files such as FIFOs.
+  const handle = await fs.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0))
   try {
     const stat = await handle.stat()
     if (!stat.isFile() || stat.size > MAX_JSON_BYTES) throw catalogError("Invalid metadata cache file")

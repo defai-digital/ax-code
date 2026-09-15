@@ -1,5 +1,7 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { execFileSync, spawn } from "node:child_process"
+import { once } from "node:events"
 import { expect, test } from "vitest"
 import { SkillCandidate } from "../../src/skill/candidate"
 import { Session } from "../../src/session"
@@ -159,6 +161,51 @@ test("rejects self-reported, reverted, stale and escaping proposals", async () =
       await expect(SkillCandidate.promote(candidate.name)).rejects.toThrow("real directories")
       expect(await fs.readdir(outside.path)).toEqual([])
       expect(SkillCandidate.Proposal.safeParse({ ...proposal(first.evidence), name: "../escape" }).success).toBe(false)
+    },
+  })
+})
+
+test.skipIf(process.platform === "win32")("retirement refuses a FIFO without blocking the event loop", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const first = await verification((await Session.create({})).id)
+      const second = await verification((await Session.create({})).id)
+      const candidate = await SkillCandidate.propose(proposal(first.evidence))
+      await SkillCandidate.validate(candidate.name, second.evidence)
+      const promoted = await SkillCandidate.promote(candidate.name)
+      await fs.unlink(promoted.path)
+      execFileSync("mkfifo", [promoted.path])
+      const marker = path.join(tmp.path, "reader-needed-unblocking")
+      // A separate process can release even a synchronous blocked open.
+      const writer = spawn(
+        process.execPath,
+        [
+          "-e",
+          `
+        const fs = require("node:fs")
+        process.stdout.write("ready")
+        setTimeout(() => {
+          fs.writeFileSync(process.argv[2], "blocked")
+          fs.closeSync(fs.openSync(process.argv[1], fs.constants.O_RDWR | fs.constants.O_NONBLOCK))
+        }, 2_000)
+      `,
+          promoted.path,
+          marker,
+        ],
+        { stdio: ["ignore", "pipe", "inherit"] },
+      )
+      const closed = once(writer, "close")
+      try {
+        await once(writer.stdout!, "data")
+        await expect(SkillCandidate.retire(candidate.name)).rejects.toThrow("owned regular file")
+        await expect(fs.stat(marker)).rejects.toMatchObject({ code: "ENOENT" })
+      } finally {
+        writer.kill()
+        await closed
+      }
+      expect((await fs.lstat(promoted.path)).isFIFO()).toBe(true)
     },
   })
 })

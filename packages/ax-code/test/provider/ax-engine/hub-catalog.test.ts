@@ -1,4 +1,6 @@
 import fs from "node:fs/promises"
+import { constants } from "node:fs"
+import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { describe, expect, test, vi } from "vitest"
 import { tmpdir } from "../../fixture/fixture"
@@ -168,4 +170,27 @@ test("selected AXQ metadata cannot bypass source admission through offline resol
     "AX_ENGINE_MODEL_UNSUPPORTED",
   )
   expect(fetcher).not.toHaveBeenCalled()
+})
+
+test.skipIf(process.platform === "win32")("FIFO metadata cache falls back without waiting for a writer", async () => {
+  await using tmp = await tmpdir()
+  const input = storeInput(tmp.path)
+  execFileSync("mkfifo", [input.cachePath])
+  const pending = createHubCatalogStore(input).load()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const result = await Promise.race([
+      pending,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Metadata cache blocked on FIFO open")), 1_000)
+      }),
+    ])
+    expect(result.source).toBe("bundled")
+    expect(result.warnings.join(" ")).toContain("Invalid metadata cache file")
+  } finally {
+    clearTimeout(timer)
+    const writer = await fs.open(input.cachePath, constants.O_RDWR | constants.O_NONBLOCK)
+    await pending
+    await writer.close()
+  }
 })

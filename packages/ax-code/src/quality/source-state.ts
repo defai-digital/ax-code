@@ -87,7 +87,8 @@ export async function currentSourceState(
       seen.add(absolute)
       if (++count > MAX_FILES) throw new Error("Source file count exceeds fingerprint limit")
       const normalized = path.relative(root, absolute).split(path.sep).join("/")
-      const flags = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0)
+      // Opening a FIFO must not block before the descriptor type can be checked.
+      const flags = constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
       let handle
       try {
         handle = await fs.open(absolute, flags)

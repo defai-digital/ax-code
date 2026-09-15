@@ -1,5 +1,7 @@
 import { expect, test } from "vitest"
 import fs from "node:fs/promises"
+import { constants } from "node:fs"
+import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { currentSourceState } from "../../src/quality/source-state"
 import { git } from "../../src/util/git"
@@ -77,5 +79,31 @@ test.skipIf(process.platform === "win32")(
     await fs.writeFile(path.join(external.path, "src/config.txt"), "external source")
     await fs.symlink(external.path, path.join(tmp.path, "linked"))
     expect((await currentSourceState(tmp.path, "git", ["linked/src"])).available).toBe(false)
+  },
+)
+
+test.skipIf(process.platform === "win32")(
+  "source fingerprints reject a FIFO without waiting for a writer",
+  async () => {
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "source.pipe")
+    execFileSync("mkfifo", [file])
+    const pending = currentSourceState(tmp.path, "", ["source.pipe"])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const result = await Promise.race([
+        pending,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Fingerprint blocked on FIFO open")), 1_000)
+        }),
+      ])
+      expect(result.available).toBe(false)
+    } finally {
+      clearTimeout(timer)
+      // Release a blocked reader even when the regression fails.
+      const writer = await fs.open(file, constants.O_RDWR | constants.O_NONBLOCK)
+      await pending
+      await writer.close()
+    }
   },
 )
