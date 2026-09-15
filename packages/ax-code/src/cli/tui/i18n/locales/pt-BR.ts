@@ -506,7 +506,8 @@ export const messages = {
   "ui.messageIsNoLongerAvailable": "A mensagem n\u00e3o est\u00e1 mais dispon\u00edvel",
   "ui.codeBlockCopiedToClipboard": "Bloco de c\u00f3digo copiado para a \u00e1rea de transfer\u00eancia!",
   "ui.copyCodeBlock": "Copiar bloco de c\u00f3digo",
-  "ui.undoMessagesAndFileChanges": "desfazer mensagens e altera\u00e7\u00f5es em arquivos",
+  "ui.undoMessagesAndFileChanges":
+    "desfazer mensagens e altera\u00e7\u00f5es de arquivos capturadas; sem snapshots, apenas mensagens",
   "ui.messageTextToClipboard": "texto da mensagem para a \u00e1rea de transfer\u00eancia",
   "ui.fencedCodeBlockToClipboard": "bloco de c\u00f3digo delimitado para a \u00e1rea de transfer\u00eancia",
   "ui.fork": "Criar branch",

@@ -257,12 +257,14 @@ export namespace Snapshot {
     return result.text
   }
 
-  async function enabled(current: State) {
-    if (current.vcs !== "git") return false
+  async function enabled() {
+    // Snapshots use their own Git store outside the worktree, so an ordinary
+    // project directory does not need a .git directory to support undo/redo.
     return (await Config.get()).snapshot !== false
   }
 
   async function excludes(current: State) {
+    if (current.vcs !== "git") return
     const result = await runGit(["rev-parse", "--path-format=absolute", "--git-path", "info/exclude"], {
       cwd: current.worktree,
     })
@@ -384,7 +386,7 @@ export namespace Snapshot {
   }
 
   async function cleanupFor(current: State, options?: { auto?: boolean }) {
-    if (!(await enabled(current))) return
+    if (!(await enabled())) return
     if (!(await exists(current.gitdir))) return
     const cutoff = Date.now() - pruneMs
     const refs = await runGit(
@@ -477,7 +479,7 @@ export namespace Snapshot {
   export async function track() {
     const current = await state()
     return withOperationLock(current, async () => {
-      if (!(await enabled(current))) return
+      if (!(await enabled())) return
 
       await ensureRepo(current)
 
