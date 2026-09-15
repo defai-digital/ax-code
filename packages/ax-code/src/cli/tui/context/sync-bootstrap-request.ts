@@ -21,7 +21,11 @@ export function normalizeSessionListResponse<T extends { id: string }>(data: unk
 export function createTimedBootstrapRequest<T>(wrap: BootstrapRequestWrap, input: TimedBootstrapRequest<T>) {
   return () => {
     const timed = wrap(input.label, Promise.resolve().then(input.request), input.timeoutMs)
-    return input.onSettled ? timed.finally(input.onSettled) : timed
+    if (!input.onSettled) return timed
+    return timed.then((value) => {
+      input.onSettled?.()
+      return value
+    })
   }
 }
 

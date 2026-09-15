@@ -43,7 +43,7 @@ describe("tui sync bootstrap phase plan", () => {
       }),
     )
 
-    expect(statuses).toEqual(["partial", "complete"])
+    expect(statuses).toEqual(["partial"])
     expect(startupFinished).toBe(1)
     expect(logs).toEqual([
       { level: "warn", label: "blocking bootstrap item failed", error: "Error: blocking failed" },
@@ -116,5 +116,42 @@ describe("tui sync bootstrap phase plan", () => {
     expect(statuses).toEqual(["complete"])
     expect(startup).toEqual(["tui.startup.bootstrapCoreReady", "tui.startup.bootstrapDeferredReady"])
     expect(status as string).toBe("complete")
+  })
+
+  test("does not mark bootstrap complete when every core request fails", async () => {
+    const startup: Array<{ name: string; data?: Record<string, unknown> }> = []
+    let status: "loading" | "partial" | "complete" = "loading"
+    let startupFinished = 0
+
+    await runBootstrapPhaseSequence(
+      createSyncBootstrapPhaseSequence({
+        blockingTasks: [],
+        coreTasks: Array.from({ length: 6 }, () => async () => {
+          throw new Error("simulated request timeout")
+        }),
+        deferredTasks: [],
+        deferredBackground: false,
+        getStatus: () => status,
+        setStatus(next) {
+          status = next
+        },
+        finishStartup() {
+          startupFinished++
+        },
+        logWarn: () => undefined,
+        logError: () => undefined,
+        recordStartup(name, data) {
+          startup.push({ name, data })
+        },
+      }),
+    )
+
+    expect(status).toBe("partial")
+    expect(startupFinished).toBe(1)
+    expect(startup).toEqual([
+      { name: "tui.startup.bootstrapCoreReady", data: { rejected: 6 } },
+      { name: "tui.startup.syncPartial", data: undefined },
+      { name: "tui.startup.bootstrapDeferredReady", data: { rejected: 0 } },
+    ])
   })
 })

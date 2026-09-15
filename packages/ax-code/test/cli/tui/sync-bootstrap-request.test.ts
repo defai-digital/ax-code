@@ -32,7 +32,7 @@ describe("tui sync bootstrap request", () => {
     expect(settled).toEqual(["done"])
   })
 
-  test("runs the settled hook even when the request rejects", async () => {
+  test("does not run the settled hook when the request rejects", async () => {
     const settled: string[] = []
 
     await expect(
@@ -45,10 +45,10 @@ describe("tui sync bootstrap request", () => {
       })(),
     ).rejects.toThrow("boom")
 
-    expect(settled).toEqual(["done"])
+    expect(settled).toEqual([])
   })
 
-  test("runs the settled hook when the request factory throws synchronously", async () => {
+  test("does not run the settled hook when the request factory throws synchronously", async () => {
     const settled: string[] = []
 
     await expect(
@@ -63,7 +63,7 @@ describe("tui sync bootstrap request", () => {
       })(),
     ).rejects.toThrow("sync boom")
 
-    expect(settled).toEqual(["done"])
+    expect(settled).toEqual([])
   })
 
   test("materializes a keyed bundle of timed bootstrap requests", async () => {

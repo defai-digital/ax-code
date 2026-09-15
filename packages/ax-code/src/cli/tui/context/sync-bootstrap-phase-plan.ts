@@ -45,8 +45,19 @@ export function createSyncBootstrapPhaseSequence(input: {
         input.recordStartup("tui.startup.bootstrapCoreReady", { rejected: summary.rejected.length })
       },
       finishSpan: input.finishCoreSpan,
-      after() {
-        input.setStatus("complete")
+      after(summary) {
+        const total = input.coreTasks.length
+        if (total > 0 && summary.rejected.length === total) {
+          // Core requests all failed: do not pretend the store is ready.
+          // Leave an existing partial marker in place; otherwise surface
+          // partial so the UI can distinguish settled-but-empty from loaded.
+          if (input.getStatus() === "loading") {
+            input.setStatus("partial")
+            input.recordStartup("tui.startup.syncPartial")
+          }
+        } else {
+          input.setStatus("complete")
+        }
         // Startup is interactive once core state is ready. Deferred runtime
         // probes continue as background work so they cannot hold the first
         // prompt hostage on packaged stdio backends.
