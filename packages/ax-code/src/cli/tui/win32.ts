@@ -16,46 +16,80 @@ type Kernel = {
   }
 }
 
-let ffi: { dlopen: (name: string, symbols: unknown) => Kernel; ptr: (input: unknown) => unknown } | undefined
+type LoadedFfi = {
+  kernel: Kernel
+  ptr: (input: unknown) => unknown
+}
 
-function loadFfi() {
-  if (ffi) return ffi
-  if (!(process.versions as Record<string, string | undefined>).bun) return undefined
+let loaded: LoadedFfi | undefined
+let loadAttempted = false
+
+const NODE_KERNEL_SYMBOLS = {
+  GetStdHandle: { arguments: ["i32"], return: "pointer" },
+  GetConsoleMode: { arguments: ["pointer", "pointer"], return: "i32" },
+  SetConsoleMode: { arguments: ["pointer", "u32"], return: "i32" },
+  FlushConsoleInputBuffer: { arguments: ["pointer"], return: "i32" },
+} as const
+
+const BUN_KERNEL_SYMBOLS = {
+  GetStdHandle: { args: ["i32"], returns: "ptr" },
+  GetConsoleMode: { args: ["ptr", "ptr"], returns: "i32" },
+  SetConsoleMode: { args: ["ptr", "u32"], returns: "i32" },
+  FlushConsoleInputBuffer: { args: ["ptr"], returns: "i32" },
+} as const
+
+function loadNodeFfi(): LoadedFfi | undefined {
   try {
-    ffi = require("bun:ffi")
-    return ffi
+    const ffi = require("node:ffi") as {
+      dlopen: (name: string, symbols: typeof NODE_KERNEL_SYMBOLS) => { functions: Kernel["symbols"] }
+      ptr?: (input: unknown) => unknown
+    }
+    const { functions } = ffi.dlopen("kernel32.dll", NODE_KERNEL_SYMBOLS)
+    const ptr = typeof ffi.ptr === "function" ? ffi.ptr : (input: unknown) => input
+    return { kernel: { symbols: functions }, ptr }
   } catch {
     return undefined
   }
 }
 
-const kernel = () => {
-  const loaded = loadFfi()
-  if (!loaded) return undefined
-  return loaded.dlopen("kernel32.dll", {
-    GetStdHandle: { args: ["i32"], returns: "ptr" },
-    GetConsoleMode: { args: ["ptr", "ptr"], returns: "i32" },
-    SetConsoleMode: { args: ["ptr", "u32"], returns: "i32" },
-    FlushConsoleInputBuffer: { args: ["ptr"], returns: "i32" },
-  })
+function loadBunFfi(): LoadedFfi | undefined {
+  if (!(process.versions as Record<string, string | undefined>).bun) return undefined
+  try {
+    const ffi = require("bun:ffi") as {
+      dlopen: (name: string, symbols: typeof BUN_KERNEL_SYMBOLS) => Kernel
+      ptr: (input: unknown) => unknown
+    }
+    return { kernel: ffi.dlopen("kernel32.dll", BUN_KERNEL_SYMBOLS), ptr: ffi.ptr }
+  } catch {
+    return undefined
+  }
+}
+
+function loadFfi() {
+  if (loadAttempted) return loaded
+  loadAttempted = true
+  loaded = loadNodeFfi() ?? loadBunFfi()
+  return loaded
 }
 
 let k32: Kernel | undefined
+let ffi: LoadedFfi | undefined
 let warnedNoFfi = false
 
 function load() {
   if (process.platform !== "win32") return false
   try {
-    k32 ??= kernel()
+    ffi ??= loadFfi()
+    k32 ??= ffi?.kernel
   } catch {
     // Reported via the warning below.
   }
   if (!k32 && !warnedNoFfi) {
-    // Once per process: under plain Node (dev/source mode) bun:ffi is
-    // unavailable, so the Ctrl+C console guard silently no-ops and Ctrl+C
-    // kills the whole console group. Surface that instead of staying silent.
+    // Once per process: if neither node:ffi nor bun:ffi can talk to
+    // kernel32, the Ctrl+C console guard no-ops and Ctrl+C may kill the
+    // whole console group. Surface that instead of staying silent.
     warnedNoFfi = true
-    log.warn("Ctrl+C guard unavailable: bun:ffi is required but this runtime is not Bun", {
+    log.warn("Ctrl+C guard unavailable: Windows console FFI failed to load", {
       runtime: process.versions.bun ? "bun" : "node",
     })
   }
