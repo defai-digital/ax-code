@@ -38,23 +38,27 @@ async function runHelpCommand(cmd: string[]): Promise<HelpCheckResult | null> {
 
   let timedOut = false
   let timer: ReturnType<typeof setTimeout> | undefined
-  let timeoutKill: Promise<void> = Promise.resolve()
+  let probeCleanup: Promise<void> = Promise.resolve()
   const timeoutResult = new Promise<null>((resolve) => {
     timer = setTimeout(() => {
       timedOut = true
-      timeoutKill = Process.killProcessTree(proc).catch(() => undefined)
+      probeCleanup = Process.killProcessTree(proc).catch(() => undefined)
       resolve(null)
     }, HELP_CHECK_TIMEOUT_MS)
   })
   let result: [number, string, string] | null = null
   try {
     result = await Promise.race([Promise.all([proc.exited, text(proc.stdout), text(proc.stderr)]), timeoutResult])
+  } catch {
+    // A failed process or prematurely closed pipe cannot establish capability.
+    // Finish owned-process cleanup before reporting the formatter unavailable.
+    probeCleanup = Process.killProcessTree(proc).catch(() => undefined)
   } finally {
     if (timer) clearTimeout(timer)
   }
 
   if (result === null || timedOut) {
-    await timeoutKill
+    await probeCleanup
     return null
   }
   const [code, stdout, stderr] = result

@@ -241,6 +241,52 @@ describe("Format", () => {
     expect(await readFile(file, "utf-8")).toBe("xAB")
   })
 
+  test.each(["premature-close", "spawn-error"])(
+    "formatter probe failure is unavailable after cleanup: %s",
+    async (failure) => {
+      const stdout = new PassThrough()
+      const stderr = new PassThrough()
+      let rejectExit!: (error: Error) => void
+      const proc = {
+        stdout,
+        stderr,
+        exited: new Promise<number>((_, reject) => {
+          rejectExit = reject
+        }),
+      }
+      const whichSpy = vi.spyOn(Which, "which").mockImplementation((name) => (name === "uv" ? "/fixture/uv" : null))
+      const spawnSpy = vi.spyOn(Process, "spawn").mockReturnValue(proc as any)
+      let releaseCleanup!: () => void
+      const cleanup = new Promise<void>((resolve) => {
+        releaseCleanup = resolve
+      })
+      const killSpy = vi.spyOn(Process, "killProcessTree").mockImplementation(() => cleanup)
+      let settled = false
+      const result = Formatter.uvformat.enabled().finally(() => {
+        settled = true
+      })
+      // Attach a handler before injecting failures so a regression is not unhandled.
+      void result.catch(() => {})
+      try {
+        await expect.poll(() => spawnSpy.mock.calls.length).toBe(1)
+        if (failure === "premature-close") stdout.destroy()
+        else rejectExit(Object.assign(new Error("spawn uv ENOENT"), { code: "ENOENT" }))
+        await expect.poll(() => killSpy.mock.calls.length).toBe(1)
+        expect(settled).toBe(false)
+        releaseCleanup()
+        await expect(result).resolves.toBe(false)
+      } finally {
+        releaseCleanup()
+        stdout.destroy()
+        stderr.destroy()
+        await result.catch(() => {})
+        whichSpy.mockRestore()
+        spawnSpy.mockRestore()
+        killSpy.mockRestore()
+      }
+    },
+  )
+
   test("formatter help checks wait for process kill to complete on timeout", async () => {
     const originalSetTimeout = globalThis.setTimeout
     const setTimeoutSpy = (
