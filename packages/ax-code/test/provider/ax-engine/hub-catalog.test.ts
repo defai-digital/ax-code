@@ -134,9 +134,13 @@ describe("AutomatosX metadata store", () => {
 
 test("historical offline metadata survives provider catalog removal without granting eligibility", async () => {
   await using tmp = await tmpdir()
-  const model = hubFixture()
+  const model = hubFixture({ id: "AutomatosX/AX-Qwen3.8-27B-MLX-6bit" })
   const fetcher = vi.fn<typeof fetch>()
-  const store = createHubCatalogStore({ ...storeInput(tmp.path), productCatalog: async () => ({}), fetch: fetcher })
+  const store = createHubCatalogStore({
+    ...storeInput(tmp.path, [model]),
+    productCatalog: async () => ({}),
+    fetch: fetcher,
+  })
   const id = hubModelID(model)
   expect((await store.inspect()).definitions).toEqual([])
   await expect(store.resolve(id)).rejects.toThrow("AX_ENGINE_MODEL_UNSUPPORTED")
@@ -149,9 +153,19 @@ test("historical offline metadata survives provider catalog removal without gran
   })
   expect(fetcher).not.toHaveBeenCalled()
   const incomplete = createHubCatalogStore({
-    ...storeInput(tmp.path, [hubFixture({ siblings: [{ rfilename: "model.safetensors" }] })]),
+    ...storeInput(tmp.path, [hubFixture({ id: model.id, siblings: [{ rfilename: "model.safetensors" }] })]),
     productCatalog: async () => ({}),
     fetch: fetcher,
   })
   await expect(incomplete.resolve(id, { offline: true })).rejects.toThrow("AX_ENGINE_MODEL_UNSUPPORTED")
+})
+
+test("selected AXQ metadata cannot bypass source admission through offline resolution", async () => {
+  await using tmp = await tmpdir()
+  const fetcher = vi.fn<typeof fetch>()
+  const store = createHubCatalogStore({ ...storeInput(tmp.path), productCatalog: async () => ({}), fetch: fetcher })
+  await expect(store.resolve(hubModelID(hubFixture()), { offline: true })).rejects.toThrow(
+    "AX_ENGINE_MODEL_UNSUPPORTED",
+  )
+  expect(fetcher).not.toHaveBeenCalled()
 })

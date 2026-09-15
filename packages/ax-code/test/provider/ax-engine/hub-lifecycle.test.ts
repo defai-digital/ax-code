@@ -8,6 +8,7 @@ import { downloadModel, getModelStatus, markPrepared } from "../../../src/provid
 import { deleteAxEngineModel } from "../../../src/provider/ax-engine/delete"
 import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
+import { AX_ENGINE_LOCAL_REPOSITORIES } from "../../../src/provider/ax-engine/local-models"
 import { HubCatalog, hubModelID } from "../../../src/provider/ax-engine/hub-model"
 import snapshot from "../../../src/provider/ax-engine/hub-catalog-snapshot.json"
 
@@ -17,13 +18,13 @@ const model = HubCatalog.parse(snapshot).models.find(
 const id = hubModelID(model)
 const other = "f".repeat(40)
 
-async function makeSnapshot(revision: string) {
-  const root = HfCache.repoDir(model.id)
+async function makeSnapshot(revision: string, artifact = model) {
+  const root = HfCache.repoDir(artifact.id)
   const dir = path.join(root, "snapshots", revision)
   await fs.mkdir(dir, { recursive: true })
   await fs.mkdir(path.join(root, "refs"), { recursive: true })
   await fs.writeFile(path.join(root, "refs", "main"), revision)
-  for (const file of model.siblings.filter(
+  for (const file of artifact.siblings.filter(
     (entry) =>
       entry.rfilename.endsWith(".safetensors") ||
       ["config.json", "tokenizer.json", "tokenizer_config.json"].includes(entry.rfilename),
@@ -97,13 +98,18 @@ describe("pinned Hub artifact lifecycle", () => {
     expect(await Filesystem.exists(requested)).toBe(false)
   })
 
-  test.each(["match", "wrong", "missing"])(
-    "downloads with a pinned argument and handles %s revision evidence",
-    async (evidence) => {
+  test.each(
+    HubCatalog.parse(snapshot)
+      .models.filter((entry) => AX_ENGINE_LOCAL_REPOSITORIES.some((repo) => repo === entry.id))
+      .flatMap((model) => ["match", "wrong", "missing"].map((evidence) => ({ model, evidence }))),
+  )(
+    "downloads $model.id with a pinned argument and handles $evidence revision evidence",
+    async ({ model, evidence }) => {
+      const id = hubModelID(model)
       if (process.platform === "win32") return
       await using tmp = await tmpdir()
       process.env.HF_HUB_CACHE = path.join(tmp.path, "hub")
-      const destination = await makeSnapshot(evidence === "missing" ? other : model.sha)
+      const destination = await makeSnapshot(evidence === "missing" ? other : model.sha, model)
       const argsPath = path.join(tmp.path, "args.json")
       const binaryPath = path.join(tmp.path, "fake-engine")
       const result = {

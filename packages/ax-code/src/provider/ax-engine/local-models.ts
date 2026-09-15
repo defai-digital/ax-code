@@ -6,11 +6,16 @@ import {
   isAxEngineBuiltinModelID,
 } from "./constants"
 
-/** Managed local choices. Historical model IDs remain valid storage identities. */
+/** Exact Qwen3.8 27B AXQ choices, with the default first. Historical IDs remain valid storage identities. */
 export const AX_ENGINE_LOCAL_REPOSITORIES = [
-  "AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-6bit-MTP",
   "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
-  "AutomatosX/AX-Qwen3-Coder-Next-MLX-AXQ-6bit",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-8bit",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-8bit-MTP",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-MXFP4",
+  "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP",
 ] as const
 
 export function axEngineLocalRepository(modelID: unknown): string | undefined {
@@ -25,7 +30,7 @@ export function axEngineLocalRepository(modelID: unknown): string | undefined {
 export function requireAxEngineLocalModel(modelID: unknown) {
   if (axEngineLocalRepository(modelID)) return
   throw new Error(
-    `${AX_ENGINE_ERROR.ModelUnsupported}: select one of the ${AX_ENGINE_LOCAL_REPOSITORIES.length} supported AX Engine local models`,
+    `${AX_ENGINE_ERROR.ModelUnsupported}: select one of the ${AX_ENGINE_LOCAL_REPOSITORIES.length} supported AutomatosX Qwen3.8 27B AXQ local models`,
   )
 }
 

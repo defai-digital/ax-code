@@ -25,7 +25,6 @@ import {
   AX_ENGINE_MODEL_DEFINITIONS,
   AX_ENGINE_PROVIDER_ID,
   AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
-  AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
   axEngineLoader,
   axEngineServerLaunchArgs,
   commandLooksLikeAxEngineServer,
@@ -1396,8 +1395,8 @@ describe("ax-engine provider integration", () => {
   test("built-in models expose only selected stable local aliases", async () => {
     const provider = (await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]
     expect(provider).toBeDefined()
-    expect(Object.keys(provider.models)).toEqual(["qwen3.8-27b-axq-6bit", "qwen3-coder-next-axq-6bit"])
-    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 32_768])
+    expect(Object.keys(provider.models)).toEqual(["qwen3.8-27b-axq-6bit"])
+    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536])
     expect(provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]).toMatchObject({
       name: "Qwen3.8-27B AXQ 6-bit (Local MLX Auto)",
       tool_call: true,
@@ -1411,21 +1410,10 @@ describe("ax-engine provider integration", () => {
       experimental: { localRuntime: "ax-engine" },
     })
     expect(provider.models[AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]).toBeUndefined()
-    expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toMatchObject({
-      name: "Qwen3-Coder-Next AXQ 6-bit (Local MLX)",
-      tool_call: true,
-      limit: { context: 32_768, input: 16_384, output: 16_384 },
-      options: {
-        modelID: AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
-        quantization: "mlx6bit",
-        minMemoryBytes: AX_ENGINE_CODING_MODEL_MIN_MEMORY_BYTES,
-      },
-      status: "beta",
-      experimental: { localRuntime: "ax-engine" },
-    })
+    expect(provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toBeUndefined()
   })
 
-  test("sub-64GB hosts keep smaller ax-engine models selectable and block larger ones", async () => {
+  test("the default Qwen3.8 27B alias retains its 64GB memory gate", async () => {
     const provider = (await Provider.fromModelsDevProvider((await ModelsDev.get())[AX_ENGINE_PROVIDER_ID]))!
     expect(
       modelMemoryBlockReason(
@@ -1439,20 +1427,6 @@ describe("ax-engine provider integration", () => {
         AX_ENGINE_PROVIDER_ID,
         provider.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID],
         64 * 1024 ** 3,
-      ),
-    ).toBeUndefined()
-    expect(
-      modelMemoryBlockReason(
-        AX_ENGINE_PROVIDER_ID,
-        provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID],
-        64 * 1024 ** 3,
-      ),
-    ).toBe("requires 96GB unified memory")
-    expect(
-      modelMemoryBlockReason(
-        AX_ENGINE_PROVIDER_ID,
-        provider.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID],
-        96 * 1024 ** 3,
       ),
     ).toBeUndefined()
   })
@@ -1508,7 +1482,7 @@ describe("ax-engine provider integration", () => {
     })
 
     expect(seen).toEqual([])
-    expect(models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
+    expect(models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
   })
 
   test("explicit managed mode overrides a legacy AX_ENGINE_HOST attach environment", async () => {
@@ -1553,9 +1527,9 @@ describe("ax-engine provider integration", () => {
         const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
         expect(axEngine).toBeDefined()
         expect(axEngine.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]).toBeDefined()
-        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toBeDefined()
+        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]).toBeUndefined()
         expect(axEngine.options.baseURL).toBeUndefined()
-        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
+        expect(axEngine.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
       },
     })
   })
@@ -1578,7 +1552,7 @@ describe("ax-engine provider integration", () => {
         const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
         expect(axEngine).toBeDefined()
         expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID)
-        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID)
+        expect(Object.keys(axEngine.models)).not.toContain(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID)
       },
     })
   })
@@ -1603,9 +1577,9 @@ describe("ax-engine provider integration", () => {
         const axEngine = providers[ProviderID.make(AX_ENGINE_PROVIDER_ID)]
         expect(axEngine).toBeDefined()
         expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID)
-        expect(Object.keys(axEngine.models)).toContain(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID)
+        expect(Object.keys(axEngine.models)).not.toContain(AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID)
         expect(axEngine.options.baseURL).toBeUndefined()
-        expect(axEngine.models[AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
+        expect(axEngine.models[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID].api.url).toBe("http://127.0.0.1:31418/v1")
       },
     })
   })

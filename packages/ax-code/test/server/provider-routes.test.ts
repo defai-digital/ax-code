@@ -485,9 +485,14 @@ describe("provider routes", () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { models: Array<{ id: string }> }
     expect(body.models.map((model) => model.id)).toEqual([
-      expect.stringMatching(/^AutomatosX\/AX-Ornith-1\.5-35B-A3B-MLX-AXQ-6bit-MTP@[a-f0-9]{40}$/),
       "qwen3.8-27b-axq-6bit",
-      "qwen3-coder-next-axq-6bit",
+      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-4bit@[a-f0-9]{40}$/),
+      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-4bit-MTP@[a-f0-9]{40}$/),
+      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-6bit@[a-f0-9]{40}$/),
+      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-8bit@[a-f0-9]{40}$/),
+      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-8bit-MTP@[a-f0-9]{40}$/),
+      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-MXFP4@[a-f0-9]{40}$/),
+      expect.stringMatching(/^AutomatosX\/AX-Qwen3\.8-27B-MLX-AXQ-MXFP4-MTP@[a-f0-9]{40}$/),
     ])
     const dynamic = body.models.filter((model) => model.id.startsWith("AutomatosX/"))
     expect(dynamic.length).toBeGreaterThan(0)
