@@ -46,6 +46,7 @@ import { estimateAutonomousLineDelta } from "./file-content"
 import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
+  DYNAMIC_REDIRECTION_DIAGNOSTIC,
   expandLeadingTilde,
   spawnHomeDirectory,
   decodeShellLiteral,
@@ -389,7 +390,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
         resolveToolFilePath(params.workdir, Instance.directory)
       }
       if (params.command.includes("\x00")) throw new Error("Command contains null byte")
-      if (hasDynamicRedirection(params.command)) throw new Error("Dynamic redirection targets are not allowed")
+      if (hasDynamicRedirection(params.command)) throw new Error(DYNAMIC_REDIRECTION_DIAGNOSTIC)
 
       const browserOpenIntercept = isBrowserOpenToLocal(params.command)
       if (browserOpenIntercept && (await Config.get()).browser?.interceptOpen !== false) {
@@ -982,7 +983,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           if (!target || /^&/.test(target)) continue
           assertStaticRedirectTarget(target)
           const literal = expandLeadingTilde(target, home)
-          if (!literal) throw new Error("Dynamic redirection targets are not allowed")
+          if (!literal) throw new Error(DYNAMIC_REDIRECTION_DIAGNOSTIC)
           // Instance.containsPath(normalized) below records outside-workspace
           // redirect targets for the external-directory prompt; this join is not unsandboxed.
           const resolved = Isolation.resolveClosestExistingPath(path.resolve(cwd, literal))
