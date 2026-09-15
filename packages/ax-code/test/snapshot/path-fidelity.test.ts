@@ -9,6 +9,7 @@ afterEach(() => Instance.disposeAll())
 
 describe.skipIf(process.platform === "win32")("snapshot path fidelity", () => {
   test.each([
+    { label: "pathspec magic", filename: ":(glob)*.txt" },
     { label: "leading spaces", filename: " leading.txt" },
     { label: "trailing spaces", filename: "trailing.txt " },
     { label: "a tab", filename: `tab${String.fromCharCode(9)}name.txt` },
@@ -35,3 +36,22 @@ describe.skipIf(process.platform === "win32")("snapshot path fidelity", () => {
     })
   })
 })
+
+test.skipIf(process.platform === "win32")(
+  "snapshot content size limits also apply to literal pathspec magic",
+  async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const before = (await Snapshot.track())!
+        await Filesystem.write(path.join(tmp.path, ":(glob)*.txt"), "x".repeat(1024 * 1024 + 1))
+        const after = (await Snapshot.track())!
+        const diffs = await Snapshot.diffFull(before, after)
+        expect(diffs.map((diff) => diff.file)).toEqual([":(glob)*.txt"])
+        expect(diffs[0].before.length).toBe(0)
+        expect(diffs[0].after.length).toBe(0)
+      },
+    })
+  },
+)

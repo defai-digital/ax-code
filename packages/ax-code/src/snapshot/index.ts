@@ -238,7 +238,7 @@ export namespace Snapshot {
   }
 
   async function size(current: State, hash: string, file: string) {
-    const tree = await runGit([...core, ...args(current, ["ls-tree", "-l", hash, "--", file])], {
+    const tree = await runGit([...core, "--literal-pathspecs", ...args(current, ["ls-tree", "-l", hash, "--", file])], {
       cwd: current.worktree,
     })
     if (tree.code !== 0) throw new Error(`Snapshot content failed: ls-tree exited with code ${tree.code}`)
