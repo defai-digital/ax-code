@@ -113,6 +113,7 @@ import {
   startupRainShowsLogo,
   startupRainCoversChrome,
   shouldStopDigitalCode,
+  interruptOverlayPlan,
   digitalCodeOverlayActive,
 } from "./component/digital-code-view-model"
 
@@ -407,11 +408,20 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     // Selection is not checked here on purpose: a selection can only appear
     // under the overlays through the keys they pass through, and the overlays
     // yield on their own the moment `renderer.hasSelection` becomes true. This
-    // stop path therefore only has to guard dialogs.
-    if (!shouldStopDigitalCode({ dialogOpen: dialog.stack.length > 0, hasSelection: false })) return
+    // stop path therefore only has to guard dialogs. The ending overlay captures
+    // input, so it must be stopped too, or an asynchronously opened dialog is
+    // left hidden behind a keyboard-blocking surface.
+    const plan = interruptOverlayPlan({
+      interrupted: shouldStopDigitalCode({ dialogOpen: dialog.stack.length > 0, hasSelection: false }),
+      opening: digitalCodePlaying(),
+      ending: reverseRainPlaying(),
+      startupPhase: startupRainPhase(),
+    })
+    if (!plan.opening && !plan.ending && !plan.startup) return
     batch(() => {
-      if (digitalCodePlaying()) setDigitalCodePlaying(false)
-      if (startupRainPhase() !== "app") setStartupRainPhase("app")
+      if (plan.opening) setDigitalCodePlaying(false)
+      if (plan.ending) endReverseDigitalCode()
+      if (plan.startup) setStartupRainPhase("app")
     })
   })
   let sessionRoutePromise: Promise<Component> | undefined

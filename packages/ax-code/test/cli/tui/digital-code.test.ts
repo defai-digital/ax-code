@@ -36,6 +36,7 @@ import {
   shouldPlayDigitalCodeOnStart,
   shouldPlayExitDigitalCode,
   shouldStopDigitalCode,
+  interruptOverlayPlan,
   startupLogoDropLevel,
   startupLogoFrame,
   startupLogoGlyphLevel,
@@ -206,6 +207,32 @@ describe("overlay yields to a selection", () => {
     expect(readFileSync(path.join(import.meta.dirname, dir, "startup-logo.tsx"), "utf8")).toContain(
       "renderer.hasSelection",
     )
+  })
+
+  test("a dialog interrupts the ending overlay too, not just the opening one", () => {
+    // Regression: the interrupt effect reset the opening overlay and startup
+    // phase but ignored `reverseRainPlaying`. Because the ending overlay renders
+    // with `captureInput`, a dialog opened asynchronously during its playback
+    // stayed hidden behind a keyboard-blocking surface. The plan must include
+    // the ending overlay, and the app effect must act on it.
+    expect(interruptOverlayPlan({ interrupted: true, opening: false, ending: true, startupPhase: "app" })).toEqual({
+      opening: false,
+      ending: true,
+      startup: false,
+    })
+    expect(interruptOverlayPlan({ interrupted: true, opening: true, ending: true, startupPhase: "rain" })).toEqual({
+      opening: true,
+      ending: true,
+      startup: true,
+    })
+    expect(interruptOverlayPlan({ interrupted: false, opening: true, ending: true, startupPhase: "logo" })).toEqual({
+      opening: false,
+      ending: false,
+      startup: false,
+    })
+    const source = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui", "app.tsx"), "utf8")
+    expect(source).toContain("interruptOverlayPlan({")
+    expect(source).toContain("if (plan.ending) endReverseDigitalCode()")
   })
 })
 

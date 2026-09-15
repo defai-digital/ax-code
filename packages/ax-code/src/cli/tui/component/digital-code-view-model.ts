@@ -663,6 +663,24 @@ export function shouldStopDigitalCode(input: { dialogOpen: boolean; hasSelection
   return input.dialogOpen || input.hasSelection
 }
 
+/**
+ * Which overlays the interrupt effect must clear when a dialog or selection
+ * appears after they started. The ending/exit overlay renders with
+ * `captureInput`, so it has to be stopped as well: the effect exists so an
+ * interactive dialog is never left hidden behind a keyboard-blocking overlay.
+ * Stopping the ending resolves its pending play promise, so a caller awaiting
+ * the flourish is not left hanging.
+ */
+export function interruptOverlayPlan(input: {
+  interrupted: boolean
+  opening: boolean
+  ending: boolean
+  startupPhase: StartupRainPhase
+}): { opening: boolean; ending: boolean; startup: boolean } {
+  if (!input.interrupted) return { opening: false, ending: false, startup: false }
+  return { opening: input.opening, ending: input.ending, startup: input.startupPhase !== "app" }
+}
+
 /** Renderer surface used to hide the terminal cursor while rain covers the screen. */
 export interface DigitalCodeCursorRenderer {
   setCursorPosition(x: number, y: number, visible?: boolean): void
