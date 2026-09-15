@@ -497,7 +497,7 @@ export const messages = {
   "ui.messageIsNoLongerAvailable": "Message is no longer available",
   "ui.codeBlockCopiedToClipboard": "Code block copied to clipboard!",
   "ui.copyCodeBlock": "Copy code block",
-  "ui.undoMessagesAndFileChanges": "undo messages and file changes",
+  "ui.undoMessagesAndFileChanges": "undo messages and captured file changes; messages only without snapshots",
   "ui.messageTextToClipboard": "message text to clipboard",
   "ui.fencedCodeBlockToClipboard": "fenced code block to clipboard",
   "ui.fork": "Fork",
