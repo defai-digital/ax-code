@@ -1,4 +1,4 @@
-import { createUserMessage } from "../../src/session/prompt-user-message"
+import { createUserMessage } from "../../src/session/prompt/prompt-user-message"
 import { Session } from "../../src/session"
 import { Plugin } from "../../src/plugin"
 import { ModelID, ProviderID } from "../../src/provider/schema"

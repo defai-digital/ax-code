@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { handlePromptLoopTodoConvergence } from "../../src/session/prompt-loop-todo-convergence"
-import { pendingTodoSignature, type PromptTodo } from "../../src/session/prompt-todo-continuation"
+import { handlePromptLoopTodoConvergence } from "../../src/session/prompt/prompt-loop-todo-convergence"
+import { pendingTodoSignature, type PromptTodo } from "../../src/session/prompt/prompt-todo-continuation"
 import { SessionID } from "../../src/session/schema"
 
 const reportTodo: PromptTodo = {

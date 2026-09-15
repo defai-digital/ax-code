@@ -40,7 +40,7 @@ import {
   textPart,
   titleContextMessages,
   zeroTokenUsage,
-} from "../../src/session/prompt-helpers"
+} from "../../src/session/prompt/prompt-helpers"
 
 afterEach(() => vi.unstubAllEnvs())
 

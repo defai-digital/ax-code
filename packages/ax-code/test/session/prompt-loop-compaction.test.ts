@@ -4,7 +4,7 @@ import { SessionCompaction } from "../../src/session/compaction"
 import {
   maybeSchedulePreflightCompaction,
   maybeScheduleUsageCompaction,
-} from "../../src/session/prompt-loop-compaction"
+} from "../../src/session/prompt/prompt-loop-compaction"
 import { ToolRegistry } from "../../src/tool/registry"
 import type { Agent } from "../../src/agent/agent"
 import type { Provider } from "../../src/provider/provider"

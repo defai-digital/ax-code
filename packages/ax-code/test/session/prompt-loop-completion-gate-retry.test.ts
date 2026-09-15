@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { MessageV2 } from "../../src/session/message-v2"
-import { handlePromptLoopCompletionGateRetry } from "../../src/session/prompt-loop-completion-gate-retry"
+import { handlePromptLoopCompletionGateRetry } from "../../src/session/prompt/prompt-loop-completion-gate-retry"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 function assistant(id = MessageID.ascending()) {

@@ -5,7 +5,7 @@ import {
   pendingTodoSignature,
   todoContextConvergenceDecision,
   todoDeadlineConvergenceDecision,
-} from "../../src/session/prompt-todo-continuation"
+} from "../../src/session/prompt/prompt-todo-continuation"
 
 const finishTaskTodo = { status: "pending", priority: "high", content: "finish task" }
 

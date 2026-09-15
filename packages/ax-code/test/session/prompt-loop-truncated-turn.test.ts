@@ -5,7 +5,7 @@ import {
   isLargeTruncatedCodePaste,
   isRepeatedTruncatedModelOutput,
   truncatedModelOutputPrefix,
-} from "../../src/session/prompt-loop-truncated-turn"
+} from "../../src/session/prompt/prompt-loop-truncated-turn"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 function assistant(id = MessageID.ascending()) {

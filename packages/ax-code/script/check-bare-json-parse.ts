@@ -51,7 +51,7 @@ export namespace JsonParseGuard {
     "src/provider/cli/json.ts",
     "src/server/ipc-transport.ts",
     "src/session/processor-impl.ts",
-    "src/session/prompt-command-workflow.ts",
+    "src/session/prompt/prompt-command-workflow.ts",
     "src/tool/visual/compare.ts",
     "src/tool/visual/critique.ts",
   ])

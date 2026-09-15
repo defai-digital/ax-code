@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { For, Match, Show, Switch } from "solid-js"
 import type { Part, UserMessage as UserMessageInfo } from "@ax-code/sdk/v2"
 import { UserMessage } from "../../../src/cli/cmd/tui/routes/session/transcript"
-import { PromptInput } from "../../../src/session/prompt-input"
-import { resolveUserMessageParts } from "../../../src/session/prompt-message-parts"
+import { PromptInput } from "../../../src/session/prompt/prompt-input"
+import { resolveUserMessageParts } from "../../../src/session/prompt/prompt-message-parts"
 import { MessageID } from "../../../src/session/schema"
 
 // The namespace-safe test transformer emits classic JSX, while production

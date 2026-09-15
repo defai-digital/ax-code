@@ -8,7 +8,7 @@ import {
   parseWorkflowCommandArguments,
   summarizeWorkflowCommandRun,
   workflowCommandPrompt,
-} from "../../src/session/prompt-command-workflow"
+} from "../../src/session/prompt/prompt-command-workflow"
 import { SessionID } from "../../src/session/schema"
 import { WorkflowFixtureSpecs, WorkflowRun, WorkflowScheduler, parseWorkflowSpecV1 } from "../../src/workflow"
 import { tmpdir } from "../fixture/fixture"

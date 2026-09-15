@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { ReplayEvent } from "../../src/replay/event"
-import { emitPromptLoopCompletionGateDecision } from "../../src/session/prompt-loop-completion-gate"
+import { emitPromptLoopCompletionGateDecision } from "../../src/session/prompt/prompt-loop-completion-gate"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 describe("prompt loop completion gate event emission", () => {

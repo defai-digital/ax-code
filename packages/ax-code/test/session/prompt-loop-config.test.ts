@@ -9,7 +9,7 @@ import {
   MAX_TRUNCATED_MODEL_TURN_RETRIES,
   effectivePacingMaxSteps,
   promptLoopLimits,
-} from "../../src/session/prompt-loop-config"
+} from "../../src/session/prompt/prompt-loop-config"
 
 describe("promptLoopLimits", () => {
   test("uses prompt loop defaults when session config is absent", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parseGoalArguments } from "../../src/session/prompt-goal-arguments"
+import { parseGoalArguments } from "../../src/session/prompt/prompt-goal-arguments"
 
 describe("parseGoalArguments", () => {
   test("empty or whitespace-only input views the current goal", () => {

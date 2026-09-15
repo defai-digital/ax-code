@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { finishPromptLoopQueue } from "../../src/session/prompt-loop-queue"
+import { finishPromptLoopQueue } from "../../src/session/prompt/prompt-loop-queue"
 import { SessionID } from "../../src/session/schema"
 
 describe("finishPromptLoopQueue", () => {

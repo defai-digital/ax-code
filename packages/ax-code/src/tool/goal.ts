@@ -12,7 +12,7 @@ import { Instance } from "@/project/instance"
 import { Todo } from "@/session/todo"
 import { Tool } from "./tool"
 import { ModelID, ProviderID } from "@/provider/schema"
-import { lastModel } from "@/session/prompt-command-selection"
+import { lastModel } from "@/session/prompt/prompt-command-selection"
 import { ToolNumber } from "./schema"
 
 function goalOutput(goal: SessionGoal.Info | undefined) {

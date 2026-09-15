@@ -34,7 +34,7 @@ import {
   hasSuccessfulGoalCompleteTool,
   goalCompleteForceTextDecision,
   unexecutableToolTextRecoveryDecision,
-} from "../../src/session/prompt-autonomous-decisions"
+} from "../../src/session/prompt/prompt-autonomous-decisions"
 import {
   AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
   AX_ENGINE_READ_ONLY_TURN_FORCE,
@@ -44,7 +44,7 @@ import {
   MAX_FAILED_TOOL_TURNS,
   MAX_FAILED_MUTATION_ATTEMPTS,
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
-} from "../../src/session/prompt-loop-config"
+} from "../../src/session/prompt/prompt-loop-config"
 
 function unfinishedTodosGate() {
   return {

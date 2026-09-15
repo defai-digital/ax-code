@@ -4,7 +4,7 @@
  * When the OS sandbox (macOS Seatbelt / Linux bubblewrap) itself denies an
  * operation, the wrapped command fails with an ordinary non-zero exit and the
  * denial only survives as stderr text. The app-layer isolation retry loop in
- * session/prompt-tools.ts cannot see these kernel denials — it only covers
+ * session/prompt/prompt-tools.ts cannot see these kernel denials — it only covers
  * Isolation.DeniedError thrown before spawn. The classifier here detects the
  * denial signatures so bash-impl can ask once via the `isolation_escalation`
  * permission and retry exactly once with the OS sandbox relaxed.

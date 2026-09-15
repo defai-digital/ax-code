@@ -2,8 +2,8 @@ import { describe, expect, test } from "vitest"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
 import { ModelID, ProviderID } from "../../src/provider/schema"
-import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-errors"
-import { isLoopbackBaseURL } from "../../src/session/prompt-provider-fallback"
+import { handlePromptLoopError, resolvePromptLoopErrorTransition } from "../../src/session/prompt/prompt-loop-errors"
+import { isLoopbackBaseURL } from "../../src/session/prompt/prompt-provider-fallback"
 import { SessionID } from "../../src/session/schema"
 import { MessageV2 } from "../../src/session/message-v2"
 import { APICallError } from "ai"
@@ -903,7 +903,7 @@ describe("fallback notice rendering (#415)", () => {
     expect(src).toContain("fallbackNoticeOrigin ??= lastUser.model.providerID")
     // The transition still carries the per-hop switch message, but only for
     // logging — handlePromptLoopError emits it at WARN via deps.warn.
-    const errorsSrc = await readFile(path.join(import.meta.dirname, "../../src/session/prompt-loop-errors.ts"), "utf-8")
+    const errorsSrc = await readFile(path.join(import.meta.dirname, "../../src/session/prompt/prompt-loop-errors.ts"), "utf-8")
     expect(errorsSrc).toContain('log.warn)("switching to fallback provider"')
   })
 })

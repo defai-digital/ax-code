@@ -26,7 +26,7 @@ describe("bug report lifecycle visibility guards", () => {
 
   test("keeps process termination cleanup failures observable", async () => {
     const bash = await source("tool/bash-impl.ts")
-    const prompt = await source("session/prompt-shell-command.ts")
+    const prompt = await source("session/prompt/prompt-shell-command.ts")
 
     expect(bash).toContain('log.warn("bash abort kill failed"')
     expect(bash).toContain('log.warn("bash timeout kill failed"')

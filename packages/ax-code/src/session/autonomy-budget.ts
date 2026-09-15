@@ -18,7 +18,7 @@ import {
   MAX_TRUNCATED_MODEL_TURN_RETRIES,
   TOOL_ONLY_TURN_FINAL_NUDGE,
   TOOL_ONLY_TURN_NUDGE,
-} from "./prompt-loop-config"
+} from "./prompt/prompt-loop-config"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "session.autonomy-budget" })

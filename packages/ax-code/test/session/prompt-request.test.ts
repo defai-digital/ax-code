@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { estimateRequestTokens, estimateToolDefinitionTokens, getLastUserInfo } from "../../src/session/prompt-request"
+import { estimateRequestTokens, estimateToolDefinitionTokens, getLastUserInfo } from "../../src/session/prompt/prompt-request"
 
 describe("session.prompt request helpers", () => {
   test("estimates request tokens with per-item overhead", () => {

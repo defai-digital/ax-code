@@ -24,7 +24,7 @@ vi.mock("child_process", async (importOriginal) => {
   }
 })
 
-const { executeShellCommand } = await import("../../src/session/prompt-shell-command")
+const { executeShellCommand } = await import("../../src/session/prompt/prompt-shell-command")
 
 afterEach(async () => {
   await Instance.disposeAll()

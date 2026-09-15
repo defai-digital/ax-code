@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { MessageV2 } from "../../src/session/message-v2"
-import { handlePromptLoopTodoContinuation } from "../../src/session/prompt-loop-todo-continuation"
-import { pendingTodoProgressSignature, type PromptTodo } from "../../src/session/prompt-todo-continuation"
+import { handlePromptLoopTodoContinuation } from "../../src/session/prompt/prompt-loop-todo-continuation"
+import { pendingTodoProgressSignature, type PromptTodo } from "../../src/session/prompt/prompt-todo-continuation"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 function assistant(id = MessageID.ascending()) {

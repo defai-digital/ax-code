@@ -3,7 +3,7 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { InstructionPrompt } from "../../src/session/instruction"
 import type { MessageV2 } from "../../src/session/message-v2"
-import { clearPromptProcessorInstructions, createPromptProcessor } from "../../src/session/prompt-processor"
+import { clearPromptProcessorInstructions, createPromptProcessor } from "../../src/session/prompt/prompt-processor"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { tmpdir } from "../fixture/fixture"
 

@@ -10,7 +10,7 @@ import { tmpdir } from "../fixture/fixture"
 describe("v2-style keyword route", () => {
   test("schema descriptions do not claim specialist auto-routing is removed", async () => {
     const schema = await readFile(path.join(import.meta.dirname, "../../src/config/schema-impl.ts"), "utf-8")
-    const promptInput = await readFile(path.join(import.meta.dirname, "../../src/session/prompt-input.ts"), "utf-8")
+    const promptInput = await readFile(path.join(import.meta.dirname, "../../src/session/prompt/prompt-input.ts"), "utf-8")
 
     expect(schema).toContain("Disable automatic specialist agent routing")
     expect(schema).toContain("Specialist agent auto-routing and message-complexity routing settings")

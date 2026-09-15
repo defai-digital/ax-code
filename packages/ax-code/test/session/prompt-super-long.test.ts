@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Session } from "../../src/session"
 import { SuperLongRuntime } from "../../src/session/super-long-runtime"
-import { enforceSuperLongDeadline } from "../../src/session/prompt-super-long"
+import { enforceSuperLongDeadline } from "../../src/session/prompt/prompt-super-long"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"

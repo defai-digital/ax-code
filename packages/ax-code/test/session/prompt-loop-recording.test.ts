@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { beginPromptLoopRecording, finishPromptLoopRecording } from "../../src/session/prompt-loop-recording"
+import { beginPromptLoopRecording, finishPromptLoopRecording } from "../../src/session/prompt/prompt-loop-recording"
 import { SessionID } from "../../src/session/schema"
 
 describe("prompt loop recording", () => {

@@ -1,0 +1,437 @@
+import { MAX_CONSECUTIVE_ERRORS } from "@/constants/session"
+import { Log } from "../../util/log"
+import { Session } from ".."
+import { MessageV2 } from "../message-v2"
+import { findFallbackModel, isLocalProvider } from "./prompt-provider-fallback"
+import {
+  consecutiveErrorDecision,
+  providerFallbackLookupDecision,
+  providerFallbackSwitchState,
+} from "./prompt-loop-decisions"
+import type { SessionID, SessionStop } from "../schema"
+import { Todo } from "../todo"
+import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
+import { BlastRadius } from "../blast-radius"
+
+const log = Log.create({ service: "session.prompt" })
+
+type PromptLoopErrorResult =
+  | { action: "continue"; consecutiveErrors: number }
+  | {
+      action: "fallback"
+      fallbackModel: MessageV2.User["model"]
+      /** User-facing explanation of the provider switch, persisted by the caller as a synthetic text part. */
+      notice: string
+      consecutiveErrors: number
+    }
+  | { action: "stop"; reason: "error"; consecutiveErrors: number; stopCode?: SessionStop.Code }
+
+type PromptLoopErrorTransition =
+  | {
+      action: "continue"
+      consecutiveErrors: number
+      fallbackModelOverride: MessageV2.User["model"] | undefined
+      resetCachedModel: boolean
+    }
+  | {
+      action: "retry"
+      consecutiveErrors: number
+      fallbackModelOverride: MessageV2.User["model"]
+      fallbackNotice: string
+      resetCachedModel: true
+    }
+  | {
+      action: "stop"
+      reason: "error" | "aborted"
+      consecutiveErrors: number
+      fallbackModelOverride: MessageV2.User["model"] | undefined
+      resetCachedModel: boolean
+      stopCode?: SessionStop.Code
+    }
+
+type PromptLoopErrorTransitionDeps = {
+  handleError?: typeof handlePromptLoopError
+}
+
+type PromptLoopErrorDeps = {
+  findFallback?: (
+    providerID: MessageV2.User["model"]["providerID"],
+    preferredModelID?: MessageV2.User["model"]["modelID"],
+    excludedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>,
+  ) => Promise<MessageV2.User["model"] | undefined>
+  isLocal?: (providerID: MessageV2.User["model"]["providerID"]) => Promise<boolean>
+  warn?: (message: string, fields: Record<string, unknown>) => void
+  publishError?: (input: { sessionID: SessionID; message: string; code?: SessionStop.Code }) => void
+}
+
+function providerFallbackUnavailableMessage(input: {
+  providerID: MessageV2.User["model"]["providerID"]
+  modelID: MessageV2.User["model"]["modelID"]
+  errorMessage: string | undefined
+}) {
+  const reason = input.errorMessage?.trim() || "unknown error"
+  const punctuation = /[.!?]$/.test(reason) ? "" : "."
+  return `Provider ${input.providerID} (model ${input.modelID}) failed: ${reason}${punctuation} No fallback provider available.`
+}
+
+function nonRetryableProviderError(error: unknown) {
+  if (!error || typeof error !== "object") return false
+  if ((error as { isRetryable?: unknown }).isRetryable === false) return true
+  const name = (error as { name?: unknown }).name
+  if (name !== "APIError" && name !== "AI_APICallError") return false
+  const direct = (error as { isRetryable?: unknown }).isRetryable
+  if (direct === false) return true
+  const data = (error as { data?: unknown }).data
+  return Boolean(data && typeof data === "object" && (data as { isRetryable?: unknown }).isRetryable === false)
+}
+
+function terminalProviderErrorMessage(error: unknown) {
+  if (error && typeof error === "object") {
+    const data = (error as { data?: unknown }).data
+    if (data && typeof data === "object" && typeof (data as { message?: unknown }).message === "string") {
+      return (data as { message: string }).message
+    }
+    if (typeof (error as { message?: unknown }).message === "string") {
+      return (error as { message: string }).message
+    }
+  }
+  return "Provider request failed without a recoverable fallback."
+}
+
+function isAxEngineStreamStall(input: { providerID: string; error: unknown }) {
+  return (
+    input.providerID === AX_ENGINE_PROVIDER_ID &&
+    terminalProviderErrorMessage(input.error).includes("Model stream stalled")
+  )
+}
+
+/**
+ * Detect an autonomous blast-radius cap trip that cannot recover within
+ * this run. The steps counter only re-bases at continuation boundaries and
+ * the files/lines tallies are cumulative for the whole session, so once
+ * one of those caps is exceeded EVERY subsequent tool call throws — even
+ * read-only ones. Retrying churns through consecutive errors and ends in a
+ * generic "too many consecutive errors" stop (observed killing a session
+ * at 52941/5000 lines after a generated-snapshot rewrite). Stop once, with
+ * the cap's own actionable message, instead.
+ *
+ * Per-tool caps ("tool_calls") are excluded: those counters reset at every
+ * processor turn, so the ordinary retry path can genuinely recover.
+ * Matches both the live NamedError and its serialized `{name, data}` shape
+ * (assistant message errors arrive serialized).
+ */
+function terminalAutonomousCap(error: unknown): { message: string; stopCode: SessionStop.Code } | undefined {
+  if (!BlastRadius.LimitExceededError.isInstance(error)) return undefined
+  const data = (error as { data?: { kind?: unknown; message?: unknown } }).data
+  // Per-tool counters reset at each model turn, and blocked-path errors are
+  // deliberately recoverable so the model can choose a different path.
+  if (data?.kind === "tool_calls" || data?.kind === "blocked_path") return undefined
+  const message = typeof data?.message === "string" ? data.message.trim() : ""
+  const stopCode: SessionStop.Code = (() => {
+    switch (data?.kind) {
+      case "steps":
+        return "AGGREGATE_TOOL_CALL_LIMIT"
+      case "files":
+        return "FILE_CHANGE_LIMIT"
+      case "lines":
+        return "LINE_CHANGE_LIMIT"
+      default:
+        return "AGGREGATE_TOOL_CALL_LIMIT"
+    }
+  })()
+  return {
+    message: message || "Autonomous blast-radius cap exceeded; the session was stopped.",
+    stopCode,
+  }
+}
+
+export async function handlePromptLoopError(
+  input: {
+    sessionID: SessionID
+    currentModel: MessageV2.User["model"]
+    error: unknown
+    consecutiveErrors: number
+    step: number
+    failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
+    /** Override for autonomy.stall.max_consecutive_errors; defaults to the shipped constant. */
+    maxConsecutiveErrors?: number
+  },
+  deps: PromptLoopErrorDeps = {},
+): Promise<PromptLoopErrorResult> {
+  const cap = terminalAutonomousCap(input.error)
+  if (cap) {
+    ;(deps.warn ?? log.warn)("autonomous cap exceeded, stopping without retry", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "AUTONOMOUS_CAP_EXCEEDED",
+      consecutiveErrors: input.consecutiveErrors,
+      step: input.step,
+      sessionID: input.sessionID,
+      stopCode: cap.stopCode,
+    })
+    ;(deps.publishError ?? Session.publishError)({
+      sessionID: input.sessionID,
+      message: cap.message,
+      code: cap.stopCode,
+    })
+    return {
+      action: "stop",
+      reason: "error",
+      consecutiveErrors: input.consecutiveErrors,
+      stopCode: cap.stopCode,
+    }
+  }
+
+  // Replaying an idle-timed-out local request is actively harmful: MLX may
+  // still be releasing its single job slot, so the duplicate immediately
+  // receives concurrency-limit 429s and can repeat the same huge prefill.
+  // Surface one actionable failure instead. The AX Engine watchdog is longer
+  // than the generic provider timeout, so reaching it represents a real stall.
+  if (isAxEngineStreamStall({ providerID: input.currentModel.providerID, error: input.error })) {
+    const cause = terminalProviderErrorMessage(input.error)
+    const message = `${cause} The local request was not replayed automatically; reduce the session context or retry after the engine becomes idle.`
+    ;(deps.warn ?? log.warn)("local engine stream stalled, stopping without replay", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "AX_ENGINE_STREAM_STALLED",
+      consecutiveErrors: input.consecutiveErrors,
+      step: input.step,
+      sessionID: input.sessionID,
+    })
+    ;(deps.publishError ?? Session.publishError)({ sessionID: input.sessionID, message })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+  }
+
+  // Provider fallback: if the error is a provider API failure (rate limit,
+  // no credit, auth error), try switching to another available provider
+  // instead of retrying the same broken one.
+  const fallbackLookup = providerFallbackLookupDecision({
+    consecutiveErrors: input.consecutiveErrors,
+    error: input.error,
+  })
+  if (fallbackLookup.action === "lookup") {
+    // Privacy guard: never migrate a session off a local provider. The user
+    // chose local inference to keep prompts and code on this machine, so
+    // silently retrying against a remote provider would leak their data.
+    // Transient local failures (engine busy, overloaded) fall through to the
+    // ordinary consecutive-error retry path below; terminal ones stop here.
+    if (await (deps.isLocal ?? isLocalProvider)(input.currentModel.providerID)) {
+      if (fallbackLookup.stopWithoutFallback) {
+        const reason = fallbackLookup.errorMessage?.trim() || "unknown error"
+        const punctuation = /[.!?]$/.test(reason) ? "" : "."
+        const message =
+          `Provider ${input.currentModel.providerID} failed: ${reason}${punctuation} ` +
+          "No fallback was attempted because this is a local provider — switching to a remote " +
+          "provider would send your prompts and code off this machine. Resolve the local issue " +
+          "or pick a different model explicitly and try again."
+        ;(deps.warn ?? log.warn)("local provider failed, no fallback attempted (data privacy)", {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "LOCAL_PROVIDER_NO_FALLBACK",
+          providerID: input.currentModel.providerID,
+          reason: fallbackLookup.errorMessage ?? "unknown error",
+        })
+        ;(deps.publishError ?? Session.publishError)({
+          sessionID: input.sessionID,
+          message,
+        })
+        return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+      }
+      ;(deps.warn ?? log.warn)("local provider failed, skipping remote fallback (data privacy)", {
+        command: "session.prompt.loop",
+        providerID: input.currentModel.providerID,
+        reason: fallbackLookup.errorMessage ?? "unknown error",
+        consecutiveErrors: input.consecutiveErrors,
+      })
+    } else {
+      const fallback = await (deps.findFallback ?? findFallbackModel)(
+        input.currentModel.providerID,
+        input.currentModel.modelID,
+        input.failedProviderIDs,
+      ).catch(() => undefined)
+      if (fallback) {
+        const fallbackSwitch = providerFallbackSwitchState({
+          current: input.currentModel,
+          fallback,
+          errorMessage: fallbackLookup.errorMessage,
+          consecutiveErrors: input.consecutiveErrors,
+        })
+        ;(deps.warn ?? log.warn)("switching to fallback provider", {
+          command: "session.prompt.loop",
+          from: fallbackSwitch.from,
+          to: fallbackSwitch.to,
+          reason: fallbackSwitch.reason,
+        })
+        // The request is continuing automatically. Publishing a session.error
+        // here makes every client show a terminal failure even when the
+        // fallback returns a successful response in the same turn. The switch
+        // is still surfaced: the caller persists `notice` as a synthetic text
+        // part on the fallback turn's assistant message (same mechanism as
+        // publishPromptFailure), so both the TUI transcript and `ax-code run`
+        // show which model actually answered without any terminal semantics.
+        return {
+          action: "fallback",
+          fallbackModel: fallback,
+          notice: fallbackSwitch.message,
+          consecutiveErrors: fallbackSwitch.nextConsecutiveErrors,
+        }
+      }
+
+      if (fallbackLookup.stopWithoutFallback) {
+        const message = providerFallbackUnavailableMessage({
+          providerID: input.currentModel.providerID,
+          modelID: input.currentModel.modelID,
+          errorMessage: fallbackLookup.errorMessage,
+        })
+        ;(deps.warn ?? log.warn)("no fallback provider available", {
+          command: "session.prompt.loop",
+          status: "error",
+          errorCode: "PROVIDER_FALLBACK_UNAVAILABLE",
+          providerID: input.currentModel.providerID,
+          reason: fallbackLookup.errorMessage ?? "unknown error",
+        })
+        ;(deps.publishError ?? Session.publishError)({
+          sessionID: input.sessionID,
+          message,
+        })
+        return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+      }
+    }
+  }
+
+  if (nonRetryableProviderError(input.error)) {
+    ;(deps.warn ?? log.warn)("non-retryable provider error, stopping", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "NON_RETRYABLE_PROVIDER_ERROR",
+      consecutiveErrors: input.consecutiveErrors,
+      step: input.step,
+      sessionID: input.sessionID,
+    })
+    ;(deps.publishError ?? Session.publishError)({
+      sessionID: input.sessionID,
+      message: terminalProviderErrorMessage(input.error),
+    })
+    return { action: "stop", reason: "error", consecutiveErrors: input.consecutiveErrors }
+  }
+
+  ;(deps.warn ?? log.warn)("consecutive error", {
+    command: "session.prompt.loop",
+    status: "error",
+    errorCode: "CONSECUTIVE_ERROR",
+    consecutiveErrors: input.consecutiveErrors,
+    step: input.step,
+    sessionID: input.sessionID,
+    error: input.error,
+  })
+  let pendingTodoCount = 0
+  try {
+    pendingTodoCount = Todo.active(input.sessionID).length
+  } catch {
+    // Instance/DB may be unavailable in isolated unit tests; guidance still
+    // works with zero pending todos.
+  }
+  const errorDecision = consecutiveErrorDecision({
+    consecutiveErrors: input.consecutiveErrors,
+    maxConsecutiveErrors: input.maxConsecutiveErrors ?? MAX_CONSECUTIVE_ERRORS,
+    step: input.step,
+    errorMessage: terminalProviderErrorMessage(input.error),
+    pendingTodoCount,
+  })
+  if (errorDecision.action === "stop") {
+    ;(deps.warn ?? log.warn)("too many consecutive errors, stopping", {
+      command: "session.prompt.loop",
+      status: "error",
+      errorCode: "MAX_CONSECUTIVE_ERRORS",
+      consecutiveErrors: input.consecutiveErrors,
+      sessionID: input.sessionID,
+      pendingTodoCount,
+    })
+    ;(deps.publishError ?? Session.publishError)({
+      sessionID: input.sessionID,
+      message: errorDecision.message,
+    })
+    return { action: "stop", reason: errorDecision.reason, consecutiveErrors: input.consecutiveErrors }
+  }
+
+  return { action: "continue", consecutiveErrors: input.consecutiveErrors }
+}
+
+export async function resolvePromptLoopErrorTransition(
+  input: {
+    sessionID: SessionID
+    currentModel: MessageV2.User["model"]
+    error: unknown
+    consecutiveErrors: number
+    fallbackModelOverride: MessageV2.User["model"] | undefined
+    step: number
+    failedProviderIDs?: Iterable<MessageV2.User["model"]["providerID"]>
+    /** Override for autonomy.stall.max_consecutive_errors; defaults to the shipped constant. */
+    maxConsecutiveErrors?: number
+  },
+  deps: PromptLoopErrorTransitionDeps = {},
+): Promise<PromptLoopErrorTransition> {
+  if (!input.error) {
+    return {
+      action: "continue",
+      consecutiveErrors: 0,
+      fallbackModelOverride: input.fallbackModelOverride,
+      resetCachedModel: false,
+    }
+  }
+
+  // A cancel that lands mid-turn surfaces as MessageAbortedError on the
+  // assistant message. It must not consume the consecutive-error budget,
+  // trigger provider-fallback lookup, publish a session error, or log a
+  // backoff retry — the run was deliberately stopped, so end it as aborted
+  // (observed 2026-08-29: a cancelled goal plan writer turn logged
+  // CONSECUTIVE_ERROR + "backing off before outer prompt retry" and only
+  // the abort-aware retry sleep kept it from re-entering the loop).
+  if (MessageV2.AbortedError.isInstance(input.error)) {
+    return {
+      action: "stop",
+      reason: "aborted",
+      consecutiveErrors: input.consecutiveErrors,
+      fallbackModelOverride: input.fallbackModelOverride,
+      resetCachedModel: false,
+    }
+  }
+
+  const errorResult = await (deps.handleError ?? handlePromptLoopError)({
+    sessionID: input.sessionID,
+    currentModel: input.currentModel,
+    error: input.error,
+    consecutiveErrors: input.consecutiveErrors + 1,
+    step: input.step,
+    failedProviderIDs: input.failedProviderIDs,
+    maxConsecutiveErrors: input.maxConsecutiveErrors,
+  })
+
+  if (errorResult.action === "fallback") {
+    return {
+      action: "retry",
+      consecutiveErrors: errorResult.consecutiveErrors,
+      fallbackModelOverride: errorResult.fallbackModel,
+      fallbackNotice: errorResult.notice,
+      resetCachedModel: true,
+    }
+  }
+
+  if (errorResult.action === "stop") {
+    return {
+      action: "stop",
+      reason: errorResult.reason,
+      consecutiveErrors: errorResult.consecutiveErrors,
+      fallbackModelOverride: input.fallbackModelOverride,
+      resetCachedModel: false,
+      ...(errorResult.stopCode ? { stopCode: errorResult.stopCode } : {}),
+    }
+  }
+
+  return {
+    action: "continue",
+    consecutiveErrors: errorResult.consecutiveErrors,
+    fallbackModelOverride: input.fallbackModelOverride,
+    resetCachedModel: false,
+  }
+}

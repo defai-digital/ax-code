@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { pendingCompactionDecision } from "../../src/session/prompt-loop-decisions"
+import { pendingCompactionDecision } from "../../src/session/prompt/prompt-loop-decisions"
 
 describe("session.prompt-loop-decisions.pendingCompactionDecision", () => {
   test("'stop' on a non-overflow (proactive) compaction is escalated as 'error'", () => {

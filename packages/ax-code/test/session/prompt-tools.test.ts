@@ -11,7 +11,7 @@ import {
   runToolLifecycle,
   shouldBypassAgentCheck,
   transformMcpInputSchema,
-} from "../../src/session/prompt-tools"
+} from "../../src/session/prompt/prompt-tools"
 import { tmpdir } from "../fixture/fixture"
 import { Plugin } from "../../src/plugin"
 import { LifecycleHooks } from "../../src/hooks/lifecycle"

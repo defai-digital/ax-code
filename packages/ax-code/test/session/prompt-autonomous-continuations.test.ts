@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { AutonomousContinuationPrompt } from "../../src/session/prompt-autonomous-continuations"
+import { AutonomousContinuationPrompt } from "../../src/session/prompt/prompt-autonomous-continuations"
 
 const pendingTodos = [{ content: "Report confirmed bugs to .internal/bugs/", status: "in_progress", priority: "high" }]
 

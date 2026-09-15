@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest"
 import { SessionGoal } from "../../src/session/goal"
 import type { MessageV2 } from "../../src/session/message-v2"
-import { addPromptGoalUsage } from "../../src/session/prompt-goal-usage"
+import { addPromptGoalUsage } from "../../src/session/prompt/prompt-goal-usage"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 function assistantMessage(): MessageV2.Assistant {

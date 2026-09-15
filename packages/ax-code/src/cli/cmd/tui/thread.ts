@@ -755,7 +755,7 @@ export const TuiThreadCommand = cmd({
       // provider loader — always broken on Windows and never recovered in worker
       // mode (see finding #7). Secrets are re-stripped via `Env.sanitize()` at
       // every model-controlled spawn point *inside* the backend (tool/bash-impl.ts,
-      // pty/index.ts, mcp/impl.ts, session/prompt-shell-command.ts), so they never
+      // pty/index.ts, mcp/impl.ts, session/prompt/prompt-shell-command.ts), so they never
       // leak from the backend into an LLM-driven shell.
       const backendEnv: Record<string, string | undefined> = { ...process.env }
       if (cliBooleanFlagValue(process.argv, "--print-logs") === true) backendEnv.AX_CODE_PRINT_LOGS = "1"

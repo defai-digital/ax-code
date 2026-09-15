@@ -7,7 +7,7 @@ import {
   detectTurnExecutionProfile,
   RESPONSE_ONLY_SYSTEM_PROMPT,
   responseOnlyUsesFastReasoning,
-} from "../../src/session/prompt-turn-profile"
+} from "../../src/session/prompt/prompt-turn-profile"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 
 const sessionID = SessionID.make("ses_response_only")

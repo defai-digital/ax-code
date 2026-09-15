@@ -24,43 +24,43 @@ import { goalProgress } from "./goal-progress"
 import { Config } from "@/config/config"
 import { fn } from "@/util/fn"
 import { assertWorkSessionSendable } from "./work-session"
-import { agentInfo, modelInfo } from "./prompt-agent-model-info"
-import { processorLoopDecision, providerFallbackNotice } from "./prompt-loop-decisions"
+import { agentInfo, modelInfo } from "./prompt/prompt-agent-model-info"
+import { processorLoopDecision, providerFallbackNotice } from "./prompt/prompt-loop-decisions"
 import {
   maybeSchedulePreflightCompaction,
   maybeScheduleUsageCompaction,
   processPendingCompaction,
-} from "./prompt-loop-compaction"
-import { resolvePromptLoopErrorTransition } from "./prompt-loop-errors"
-import { resolvePromptLoopAssistantExit } from "./prompt-loop-exit"
-import { handlePromptLoopGoalContinuation } from "./prompt-loop-goal"
-import { handlePromptLoopAgentStepLimit } from "./prompt-loop-agent-step-limit"
-import { emitPromptLoopCompletionGateDecision } from "./prompt-loop-completion-gate"
-import { handlePromptLoopCompletionGateRetry } from "./prompt-loop-completion-gate-retry"
-import { handlePromptLoopEmptyTurn } from "./prompt-loop-empty-turn"
+} from "./prompt/prompt-loop-compaction"
+import { resolvePromptLoopErrorTransition } from "./prompt/prompt-loop-errors"
+import { resolvePromptLoopAssistantExit } from "./prompt/prompt-loop-exit"
+import { handlePromptLoopGoalContinuation } from "./prompt/prompt-loop-goal"
+import { handlePromptLoopAgentStepLimit } from "./prompt/prompt-loop-agent-step-limit"
+import { emitPromptLoopCompletionGateDecision } from "./prompt/prompt-loop-completion-gate"
+import { handlePromptLoopCompletionGateRetry } from "./prompt/prompt-loop-completion-gate-retry"
+import { handlePromptLoopEmptyTurn } from "./prompt/prompt-loop-empty-turn"
 import {
   handlePromptLoopTruncatedTurn,
   isLargeTruncatedCodePaste,
   truncatedModelOutputPrefix,
-} from "./prompt-loop-truncated-turn"
-import { handlePromptLoopTodoConvergence } from "./prompt-loop-todo-convergence"
-import { handlePromptLoopTodoContinuation } from "./prompt-loop-todo-continuation"
-import { appendNewerMessages, loopMessages, scanLoopMessages } from "./prompt-loop-messages"
-import { finishPromptLoopQueue } from "./prompt-loop-queue"
-import { beginPromptLoopRecording, finishPromptLoopRecording, type PromptLoopEndReason } from "./prompt-loop-recording"
-import { resolvePromptLoopResult } from "./prompt-loop-result"
-import { markPromptLoopBusy } from "./prompt-loop-status"
-import { handlePromptLoopGlobalStepLimit } from "./prompt-loop-step-limit"
-import { handlePromptLoopTotalStepLimit } from "./prompt-loop-total-step-limit"
-import { preparePromptRequest, type PromptRequestCache } from "./prompt-request-build"
+} from "./prompt/prompt-loop-truncated-turn"
+import { handlePromptLoopTodoConvergence } from "./prompt/prompt-loop-todo-convergence"
+import { handlePromptLoopTodoContinuation } from "./prompt/prompt-loop-todo-continuation"
+import { appendNewerMessages, loopMessages, scanLoopMessages } from "./prompt/prompt-loop-messages"
+import { finishPromptLoopQueue } from "./prompt/prompt-loop-queue"
+import { beginPromptLoopRecording, finishPromptLoopRecording, type PromptLoopEndReason } from "./prompt/prompt-loop-recording"
+import { resolvePromptLoopResult } from "./prompt/prompt-loop-result"
+import { markPromptLoopBusy } from "./prompt/prompt-loop-status"
+import { handlePromptLoopGlobalStepLimit } from "./prompt/prompt-loop-step-limit"
+import { handlePromptLoopTotalStepLimit } from "./prompt/prompt-loop-total-step-limit"
+import { preparePromptRequest, type PromptRequestCache } from "./prompt/prompt-request-build"
 import type { MediaProjection } from "./media-projection"
-import { createStructuredOutputTurn } from "./prompt-structured-output"
-import { publishPromptFailure, createSyntheticFailureAssistant } from "./prompt-loop-failure"
-import { executeSubtask } from "./prompt-subtask"
-import { resolveTools, shouldBypassAgentCheck } from "./prompt-tools"
-import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt-processor"
-import { textPart } from "./prompt-message-builders"
-import { addPromptGoalUsage } from "./prompt-goal-usage"
+import { createStructuredOutputTurn } from "./prompt/prompt-structured-output"
+import { publishPromptFailure, createSyntheticFailureAssistant } from "./prompt/prompt-loop-failure"
+import { executeSubtask } from "./prompt/prompt-subtask"
+import { resolveTools, shouldBypassAgentCheck } from "./prompt/prompt-tools"
+import { clearPromptProcessorInstructions, createPromptProcessor } from "./prompt/prompt-processor"
+import { textPart } from "./prompt/prompt-message-builders"
+import { addPromptGoalUsage } from "./prompt/prompt-goal-usage"
 import {
   effectiveContinuationCap,
   effectiveTotalStepLimit,
@@ -91,29 +91,29 @@ import {
   unexecutableToolTextRecoveryDecision,
   type ForceTextReason,
   type GoalBudgetWrapUp,
-} from "./prompt-autonomous-decisions"
+} from "./prompt/prompt-autonomous-decisions"
 import { toErrorMessage } from "../util/error-message"
-import { insertReminders } from "./prompt-reminders"
-import { executeShellCommand } from "./prompt-shell-command"
-import { executePromptCommand } from "./prompt-command-execution"
-import { createDeferredCodeGraphAutoIndex } from "./prompt-code-graph"
-import { recordPromptSessionStart } from "./prompt-session-start"
-import { scheduleFirstTurnSummary } from "./prompt-session-summary"
-import { enforceSuperLongDeadline } from "./prompt-super-long"
+import { insertReminders } from "./prompt/prompt-reminders"
+import { executeShellCommand } from "./prompt/prompt-shell-command"
+import { executePromptCommand } from "./prompt/prompt-command-execution"
+import { createDeferredCodeGraphAutoIndex } from "./prompt/prompt-code-graph"
+import { recordPromptSessionStart } from "./prompt/prompt-session-start"
+import { scheduleFirstTurnSummary } from "./prompt/prompt-session-summary"
+import { enforceSuperLongDeadline } from "./prompt/prompt-super-long"
 import { SuperLongPolicy } from "./super-long-policy"
-import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
-import { createAutonomousTextContinuation, createUserMessage } from "./prompt-user-message"
-import { permissionRulesetFromLegacyTools } from "./prompt-permission"
-import { resolvePromptIsolationPolicy } from "./prompt-runtime-policy"
-import { createPromptRunState } from "./prompt-run-state"
-import { resolvePromptCache, type PromptCacheEntry } from "./prompt-cache"
+import { AutonomousContinuationPrompt } from "./prompt/prompt-autonomous-continuations"
+import { createAutonomousTextContinuation, createUserMessage } from "./prompt/prompt-user-message"
+import { permissionRulesetFromLegacyTools } from "./prompt/prompt-permission"
+import { resolvePromptIsolationPolicy } from "./prompt/prompt-runtime-policy"
+import { createPromptRunState } from "./prompt/prompt-run-state"
+import { resolvePromptCache, type PromptCacheEntry } from "./prompt/prompt-cache"
 import {
   CONVERSATION_SYSTEM_PROMPT,
   detectTurnExecutionProfile,
   RESPONSE_ONLY_SYSTEM_PROMPT,
   textOnlyUsesFastReasoning,
   type TurnExecutionProfile,
-} from "./prompt-turn-profile"
+} from "./prompt/prompt-turn-profile"
 import { SystemPrompt } from "./system"
 import {
   AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
@@ -128,7 +128,7 @@ import {
   MAX_UNEXECUTABLE_TOOL_TEXT_RECOVERIES,
   effectivePacingMaxSteps,
   promptLoopLimits,
-} from "./prompt-loop-config"
+} from "./prompt/prompt-loop-config"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import { clearSessionToolCycleRing, sessionToolCycleSignatures } from "./tool-cycle-ring"
 import { GOAL_CEILING_CONVERGENCE_STEPS, ORDINARY_RUN_CEILING_CONVERGENCE_STEPS } from "@/constants/session"
@@ -141,7 +141,7 @@ import {
   type PromptInput as PromptInputType,
   ShellInput as ShellInputSchema,
   type ShellInput as ShellInputType,
-} from "./prompt-input"
+} from "./prompt/prompt-input"
 
 // @ts-ignore — suppresses ai-sdk stdout log warnings.
 // See: https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
