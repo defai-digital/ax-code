@@ -6,6 +6,17 @@ import { Installation } from "../../src/installation"
 import { standaloneInstallRoot, isWithinInstallPrefix } from "../../src/installation/install-layout"
 
 describe("installation layout", () => {
+  test.each([
+    "bin/ax-code.cmd",
+    "versions/abc/runtime/bin/ax-code.cmd",
+    "versions/abc/runtime/lib/index-node-tui.js",
+    "versions/abc/runtime/node/bin/node.exe",
+  ])("recognizes Windows generation ownership: %s", async (relative) => {
+    const home = "C:/Users/test"
+    const entryPath = `${home}/.ax-code/${relative}`
+    expect(standaloneInstallRoot(entryPath, home, "win32")).toBe("C:\\Users\\test\\.ax-code")
+    if (process.platform === "win32") expect(await Installation.method({ home, entryPath })).toBe("curl")
+  })
   test("recognizes Windows bundles without matching neighboring or source directories", () => {
     expect(standaloneInstallRoot("C:/Users/test/.ax-code/lib/index-node-tui.js", "C:/Users/test", "win32")).toBe(
       "C:\\Users\\test\\.ax-code",

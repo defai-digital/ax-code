@@ -434,6 +434,104 @@ function Move-RuntimePath([string]$Source, [string]$Destination) {
 }
 
 function Install-NodeBundleTree([string]$Root, [string]$ExpectedVersion = "local") {
+  New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
+  # Keep one writer across staging, launcher activation and rollback. Leave the
+  # lock file in place: deleting it after closing would race a new lock holder.
+  $lockPath = Join-Path $InstallRoot ".install.lock"
+  $installLock = $null
+  try {
+    try {
+      $installLock = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    } catch {
+      throw "Cannot acquire AX Code installation lock at $lockPath. Another installer may be running; retry after it finishes. $_"
+    }
+    Install-NodeBundleTreeUnlocked $Root $ExpectedVersion
+  } finally {
+    if ($installLock) { $installLock.Dispose() }
+  }
+}
+
+function Replace-RuntimeFile([string]$Source, [string]$Destination, [string]$Backup) {
+  # All three files live under the install root on the same volume. Never
+  # delete the current launcher or pointer to work around a sharing lock.
+  [System.IO.File]::Replace($Source, $Destination, $Backup)
+}
+
+function Install-VersionedNodeBundle([string]$StagedRoot, [string]$ExpectedVersion) {
+  $generation = [System.Guid]::NewGuid().ToString("N")
+  $generationRoot = Join-Path (Join-Path $InstallRoot "versions") $generation
+  $runtime = Join-Path $generationRoot "runtime"
+  New-Item -ItemType Directory -Force -Path $generationRoot | Out-Null
+  Move-RuntimePath $StagedRoot $runtime
+
+  $pointer = Join-Path $InstallRoot ".active-runtime"
+  $pending = Join-Path $generationRoot "pending-runtime"
+  $candidate = Join-Path $InstallDir (".ax-code-" + $generation + ".cmd")
+  $backup = Join-Path $generationRoot "previous-runtime"
+  $rejected = Join-Path $generationRoot "rejected-runtime"
+  $utf8 = [System.Text.UTF8Encoding]::new($false)
+  $activated = $false
+  try {
+    Assert-NodeBundleRuntime $runtime
+    Assert-NodeFfiRuntime (Join-Path $runtime "node\bin\node.exe")
+    & {
+      $InstallCmdPath = Join-Path $runtime "bin\ax-code.cmd"
+      Verify-InstalledRuntime $ExpectedVersion
+    }
+    $previousLauncher = [System.IO.File]::ReadAllText($InstallCmdPath)
+    $marker = '@rem AX_CODE_VERSIONED_LAUNCHER_V1'
+    if (-not $previousLauncher.Contains($marker)) {
+      if (-not $previousLauncher.StartsWith("@echo off`r`n") -and -not $previousLauncher.StartsWith("@echo off`n")) {
+        throw "Unsupported Windows launcher layout. Previous runtime was not changed."
+      }
+      $previousVersion = Get-InstalledVersion
+      $legacyName = ".ax-code-legacy-" + $generation + ".cmd"
+      [System.IO.File]::WriteAllText((Join-Path $InstallDir $legacyName), $previousLauncher, $utf8)
+      [System.IO.File]::WriteAllText($pointer, ("bin\" + $legacyName), $utf8)
+      # cmd.exe resumes a running batch at its old byte offset after Node exits.
+      # Keep every existing byte offset after the nine-byte first line intact.
+      # Future upgrades change only the pointer, never this dispatcher.
+      # Tail-chain the release launcher without CALL (no double argument expansion).
+      $dispatcher = '@goto AXG' + $previousLauncher.Substring(9) + "`r`n:AXG`r`n" + $marker + "`r`n" + @'
+@echo off
+setlocal DisableDelayedExpansion
+set "AX_CODE_RUNTIME="
+set /p "AX_CODE_RUNTIME="<"%~dp0..\.active-runtime"
+if not defined AX_CODE_RUNTIME exit /b 1
+"%~dp0..\%AX_CODE_RUNTIME%" %*
+'@
+      [System.IO.File]::WriteAllText($candidate, $dispatcher, $utf8)
+      & {
+        $InstallCmdPath = $candidate
+        Verify-InstalledRuntime $previousVersion
+      }
+      Replace-RuntimeFile $candidate $InstallCmdPath (Join-Path $generationRoot "previous-launcher.cmd")
+    } elseif (-not (Test-Path -LiteralPath $pointer -PathType Leaf)) {
+      throw "AX Code runtime pointer is missing. Repair the installation before upgrading."
+    }
+    [System.IO.File]::WriteAllText($pending, ("versions\" + $generation + "\runtime\bin\ax-code.cmd"), $utf8)
+    Replace-RuntimeFile $pending $pointer $backup
+    $activated = $true
+    Verify-InstalledRuntime $ExpectedVersion
+    Write-Info "Installed runtime generation $generation. Restart AX Code to use the update; running sessions keep their previous runtime."
+  } catch {
+    $failure = $_
+    if ($activated) {
+      try {
+        Replace-RuntimeFile $backup $pointer $rejected
+      } catch {
+        throw "AX Code runtime pointer rollback failed. Recovery files remain at $generationRoot. $failure. $_"
+      }
+    }
+    throw "AX Code installation failed; previous runtime retained. $failure"
+  } finally {
+    Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    # A published dispatcher and any briefly activated runtime may still be in
+    # use. Retain them even after rollback; explicit uninstall owns cleanup.
+  }
+}
+
+function Install-NodeBundleTreeUnlocked([string]$Root, [string]$ExpectedVersion = "local") {
   $launcher = Join-Path $Root "bin\ax-code.cmd"
   $lib = Join-Path $Root "lib"
   $entry = Join-Path $lib "index-node-tui.js"
@@ -477,6 +575,17 @@ function Install-NodeBundleTree([string]$Root, [string]$ExpectedVersion = "local
     Copy-Item -LiteralPath $nodeModules -Destination (Join-Path $stagingRoot "node_modules") -Recurse -Force
     Copy-Item -LiteralPath $packageJson -Destination (Join-Path $stagingRoot "package.json") -Force
     Assert-NodeBundleRuntime $stagingRoot
+
+    # A real existing Node install may have DLLs or module files held open by
+    # other sessions. Publish a new generation instead of moving those trees.
+    if ((Test-Path -LiteralPath (Join-Path $InstallLibDir "index-node-tui.js") -PathType Leaf) -or
+        (Test-Path -LiteralPath (Join-Path $InstallRoot "versions") -PathType Container)) {
+      if (-not (Test-Path -LiteralPath $InstallCmdPath -PathType Leaf)) {
+        throw "Existing AX Code runtime has no launcher. Repair the installation before upgrading."
+      }
+      Install-VersionedNodeBundle $stagingRoot $ExpectedVersion
+      return
+    }
 
     # Move complete old trees aside before replacement. Windows can retain
     # loaded native files; never partially delete the active runtime or ignore

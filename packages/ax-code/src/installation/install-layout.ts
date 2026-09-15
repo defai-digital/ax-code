@@ -10,10 +10,10 @@ export function standaloneInstallRoot(
   const paths = platform === "win32" ? path.win32 : path.posix
   const root = canonicalRoot ?? paths.resolve(home, ".ax-code")
   const relative = paths.relative(root, paths.resolve(activePath)).replaceAll("\\", "/")
-  if (/^(?:bin\/ax-code(?:\.exe)?|node\/bin\/[^/]+|lib\/index-(?:node-tui|node|compiled)\.js)$/.test(relative))
+  if (/^(?:bin\/ax-code(?:\.exe|\.cmd)?|node\/bin\/[^/]+|lib\/index-(?:node-tui|node|compiled)\.js)$/.test(relative))
     return root
   if (
-    /^versions\/[^/]+\/runtime\/(?:bin\/ax-code|node\/bin\/[^/]+|lib\/index-(?:node-tui|node|compiled)\.js)$/.test(
+    /^versions\/[^/]+\/runtime\/(?:bin\/ax-code(?:\.cmd)?|node\/bin\/[^/]+|lib\/index-(?:node-tui|node|compiled)\.js)$/.test(
       relative,
     )
   )
