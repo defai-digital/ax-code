@@ -12,6 +12,7 @@ import type { SessionID } from "../schema"
 import { Config } from "@/config/config"
 import { recoverUserImages } from "../media-recovery"
 import { projectTailReminders } from "../reminder-projection"
+import { AutonomousContinuationPrompt } from "./prompt-autonomous-continuations"
 
 export type PromptRequestCache = Parameters<typeof getSystemPrompt>[0]["cache"]
 
@@ -63,6 +64,14 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
     (await Config.get()).experimental?.tail_reminders === true
       ? projectTailReminders(requestMessagesSource)
       : { messages: requestMessagesSource, reminder: undefined }
+  const goalPlanReminder =
+    !input.isLastStep &&
+    AutonomousContinuationPrompt.goalPlanDeadline({
+      agentName: input.agent.name,
+      step: input.step,
+      maxSteps: input.agent.steps ?? Infinity,
+    })
+  const requestReminder = [projection.reminder, goalPlanReminder].filter(Boolean).join("\n\n")
   const convertMessages = async (mediaProjection: MediaProjection.Mode) => {
     const source =
       mediaProjection === "normal"
@@ -82,7 +91,7 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
       toolFailureCount: ReasoningPolicy.failureCount(modelMessages),
       messages: [
         ...modelMessages,
-        ...(projection.reminder ? [{ role: "user" as const, content: projection.reminder }] : []),
+        ...(requestReminder ? [{ role: "user" as const, content: requestReminder }] : []),
         ...(input.isLastStep
           ? [
               {

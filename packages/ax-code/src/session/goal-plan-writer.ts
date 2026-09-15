@@ -12,8 +12,10 @@ import type { SessionID } from "./schema"
 import type { ModelID, ProviderID } from "../provider/schema"
 
 // The writer's turn budget is `steps: 12` with up to 3 auto-continuations
-// (48 model turns worst case). Exploration turns run 5–10s each and the final
-// plan-drafting/submission turns 20–30s+ on mid-latency providers, so a
+// (44 tool-enabled turns with the default autonomous limit handling, which
+// continues or stops before each tool-disabled 12th step). Exploration turns
+// run 5–10s each and final plan-drafting/submission turns 20–30s+ on
+// mid-latency providers, so a
 // healthy writer needs several minutes. The previous 120s cap only covered
 // ~14 fast exploration turns and killed healthy writers mid-submission
 // (observed 2026-08-29: cancel landed while submit_goal_plan was executing).
@@ -120,6 +122,33 @@ export namespace GoalPlanWriter {
       input.abort?.throwIfAborted()
       const markdown = await extractSubmittedPlan(child.id)
       if (!markdown) {
+        // The prompt loop can resolve normally after persisting a terminal
+        // failure (for example, an exhausted model-turn budget). Do not hide
+        // that diagnosis behind the missing-submission fallback.
+        const messages = await Session.messages({ sessionID: child.id })
+        const terminal = messages.findLast((message) => message.info.role === "assistant")
+        const error = terminal?.info.role === "assistant" ? terminal.info.error : undefined
+        const rejected = messages
+          .flatMap((message) => (message.info.role === "assistant" ? message.parts : []))
+          .findLast((part) => part.type === "tool" && part.tool === "submit_goal_plan" && part.state.status === "error")
+        const rejection =
+          rejected?.type === "tool" && rejected.state.status === "error" ? rejected.state.error : undefined
+        const explanation = terminal?.parts
+          .flatMap((part) => (part.type === "text" && !part.synthetic ? [part.text] : []))
+          .join("\n")
+          .trim()
+          .slice(0, 1000)
+        const data = error && asRecordOrUndefined(error.data)
+        const failure = error ? (typeof data?.message === "string" ? data.message : error.name) : explanation
+        const details = [failure, rejection ? `submit_goal_plan rejected the plan: ${rejection}` : undefined]
+          .filter(Boolean)
+          .join("\n")
+        if (details) {
+          throw new GoalPlan.Error(
+            "writer",
+            `Goal plan writer finished without submit_goal_plan (${child.id}): ${details}\nThe goal is paused — /goal resume retries planning, or /goal clear to discard.`,
+          )
+        }
         throw new GoalPlan.Error(
           "writer",
           "Goal plan writer finished without submit_goal_plan. Resume with /goal resume to retry, or /goal clear to discard.",
