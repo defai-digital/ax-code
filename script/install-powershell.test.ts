@@ -123,6 +123,164 @@ ${body}
 }
 
 describe.skipIf(!available)("PowerShell runtime installation", () => {
+  test.skipIf(process.platform !== "win32").each([0, 23])(
+    "keeps a running launcher session alive with exit code %s",
+    async (exitCode) => {
+      await runInstaller(`
+$entry = Join-Path $Source "lib/index-node-tui.js"
+Set-Content -LiteralPath $entry -Value 'import fs from "node:fs"; if (process.argv.includes("--version")) { console.log("9.9.9") } else { fs.writeFileSync(process.env.AX_READY, "ready"); const timer = setInterval(async () => { if (!fs.existsSync(process.env.AX_GO)) return; clearInterval(timer); const { version } = await import("solid-js"); fs.writeFileSync(process.env.AX_DONE, version); process.exitCode = ${exitCode}; }, 50) }'
+Install-NodeBundleTree $Source "9.9.9"
+if (${exitCode} -ne 0) { Install-NodeBundleTree $Source "9.9.9" }
+$env:AX_READY = Join-Path $env:AX_TEST_ROOT "ready"
+$env:AX_GO = Join-Path $env:AX_TEST_ROOT "go"
+$env:AX_DONE = Join-Path $env:AX_TEST_ROOT "done"
+$session = Start-Process -FilePath $env:ComSpec -ArgumentList ('/d /s /c ""' + $InstallCmdPath + '""') -WindowStyle Hidden -PassThru
+try {
+  $deadline = [DateTime]::UtcNow.AddSeconds(5)
+  while (-not (Test-Path $env:AX_READY)) {
+    if ([DateTime]::UtcNow -gt $deadline) { throw "Session did not start" }
+    Start-Sleep -Milliseconds 50
+  }
+  Set-Content -LiteralPath $entry -Value 'import { version } from "solid-js"; console.log(version)'
+  Set-Content -LiteralPath (Join-Path $Source "node_modules/solid-js/index.js") -Value 'export const version = "9.9.10"'
+  Install-NodeBundleTree $Source "9.9.10"
+  Assert-Equal (Get-InstalledVersion) "9.9.10"
+  Assert-Equal $session.HasExited $false
+  Set-Content -LiteralPath $env:AX_GO -Value "go"
+  if (-not $session.WaitForExit(5000)) { throw "Previous session did not finish" }
+  Assert-Equal (Get-Content -LiteralPath $env:AX_DONE -Raw) "9.9.9"
+  Assert-Equal $session.ExitCode ${exitCode}
+} finally {
+  Set-Content -LiteralPath $env:AX_GO -Value "go"
+  if (-not $session.WaitForExit(5000)) { Stop-Process -Id $session.Id -Force }
+  $session.Dispose()
+}
+`)
+    },
+  )
+
+  test.skipIf(process.platform !== "win32")(
+    "preserves arguments and nonzero exit codes through the dispatcher",
+    async () => {
+      await runInstaller(`
+Install-NodeBundleTree $Source "9.9.9"
+Set-Content -LiteralPath (Join-Path $Source "lib/index-node-tui.js") -Value 'if (process.argv.includes("--version")) { console.log("9.9.10") } else { console.log(JSON.stringify(process.argv.slice(2))); process.exitCode = 17 }'
+Install-NodeBundleTree $Source "9.9.10"
+$info = [System.Diagnostics.ProcessStartInfo]::new()
+$info.FileName = $env:ComSpec
+$info.Arguments = '/d /s /c ""' + $InstallCmdPath + '" "hello world" "amp&ersand" "wow!" "100%""'
+$info.UseShellExecute = $false
+$info.CreateNoWindow = $true
+$info.RedirectStandardOutput = $true
+$probe = [System.Diagnostics.Process]::Start($info)
+try {
+  $actual = $probe.StandardOutput.ReadToEnd().Trim()
+  $probe.WaitForExit()
+  Assert-Equal $probe.ExitCode 17
+  Assert-Equal $actual '["hello world","amp&ersand","wow!","100%"]'
+} finally { $probe.Dispose() }
+`)
+    },
+  )
+
+  test.skipIf(process.platform !== "win32")("upgrades twice while previous runtime files remain locked", async () => {
+    await runInstaller(`
+Install-NodeBundleTree $Source "9.9.9"
+$oldModule = Join-Path $InstallNodeModulesDir "solid-js/index.js"
+$lock = [System.IO.File]::Open($oldModule, 'Open', 'Read', 'Read')
+try {
+  $blocked = $false
+  try { [System.IO.Directory]::Move($InstallNodeModulesDir, "$InstallNodeModulesDir-moved") } catch { $blocked = $true }
+  Assert-Equal $blocked $true
+  Set-Content -LiteralPath (Join-Path $Source "node_modules/solid-js/index.js") -Value 'export const version = "9.9.10"'
+  Install-NodeBundleTree $Source "9.9.10"
+  Assert-Equal (Get-InstalledVersion) "9.9.10"
+  Assert-InstalledBundle
+  $generation = @(Get-ChildItem -LiteralPath (Join-Path $InstallRoot "versions") -Directory)[0]
+  $generationLock = [System.IO.File]::Open((Join-Path $generation.FullName "runtime/node_modules/solid-js/index.js"), 'Open', 'Read', 'Read')
+  try {
+    Set-Content -LiteralPath (Join-Path $Source "node_modules/solid-js/index.js") -Value 'export const version = "9.9.11"'
+    Install-NodeBundleTree $Source "9.9.11"
+    Assert-Equal (Get-InstalledVersion) "9.9.11"
+    Assert-Equal (& (Join-Path $generation.FullName "runtime/bin/ax-code.cmd") --version) "9.9.10"
+    Assert-InstalledBundle
+  } finally { $generationLock.Dispose() }
+} finally { $lock.Dispose() }
+`)
+  })
+
+  test.skipIf(process.platform !== "win32").each(["candidate", "replace", "pointer", "published"])(
+    "preserves the previous runtime after a %s failure",
+    async (phase) => {
+      await runInstaller(`
+Install-NodeBundleTree $Source "9.9.9"
+$previous = [System.IO.File]::ReadAllText($InstallCmdPath)
+Set-Content -LiteralPath (Join-Path $Source "node_modules/solid-js/index.js") -Value 'export const version = "9.9.10"'
+$script:originalVerify = (Get-Command Verify-InstalledRuntime).ScriptBlock
+function Verify-InstalledRuntime([string]$ExpectedVersion) {
+  if ("${phase}" -eq "candidate" -and $InstallCmdPath -match '\\.ax-code-') { throw "Injected candidate failure" }
+  if ("${phase}" -eq "published" -and $InstallCmdPath -eq (Join-Path $InstallDir "ax-code.cmd")) { throw "Injected published failure" }
+  & $script:originalVerify $ExpectedVersion
+}
+if ("${phase}" -eq "replace") {
+  function Replace-RuntimeFile { throw "Injected replace failure" }
+}
+if ("${phase}" -eq "pointer") {
+  $script:originalReplace = (Get-Command Replace-RuntimeFile).ScriptBlock
+  function Replace-RuntimeFile($Source, $Destination, $Backup) {
+    if ($Destination -eq (Join-Path $InstallRoot ".active-runtime")) { throw "Injected pointer failure" }
+    & $script:originalReplace $Source $Destination $Backup
+  }
+}
+$failure = $null
+try { Install-NodeBundleTree $Source "9.9.10" } catch { $failure = $_ }
+if ($failure -notmatch "Injected ${phase} failure") { throw "Expected injected failure: $failure" }
+if ("${phase}" -in @("candidate", "replace")) { Assert-Equal ([System.IO.File]::ReadAllText($InstallCmdPath)) $previous }
+Assert-Equal (Get-InstalledVersion) "9.9.9"
+Assert-InstalledBundle
+`)
+    },
+  )
+
+  test.skipIf(process.platform !== "win32")("retains the previous pointer if rollback is blocked", async () => {
+    await runInstaller(`
+Install-NodeBundleTree $Source "9.9.9"
+Set-Content -LiteralPath (Join-Path $Source "node_modules/solid-js/index.js") -Value 'export const version = "9.9.10"'
+$script:originalVerify = (Get-Command Verify-InstalledRuntime).ScriptBlock
+$script:originalReplace = (Get-Command Replace-RuntimeFile).ScriptBlock
+function Verify-InstalledRuntime([string]$ExpectedVersion) {
+  if ($InstallCmdPath -eq (Join-Path $InstallDir "ax-code.cmd")) { throw "Injected final failure" }
+  & $script:originalVerify $ExpectedVersion
+}
+function Replace-RuntimeFile($Source, $Destination, $Backup) {
+  if ((Split-Path -Leaf $Source) -eq "previous-runtime") { throw "Injected rollback failure" }
+  & $script:originalReplace $Source $Destination $Backup
+}
+$failure = $null
+try { Install-NodeBundleTree $Source "9.9.10" } catch { $failure = $_ }
+if ($failure -notmatch "Recovery files remain at") { throw "Expected recovery path: $failure" }
+$generation = @(Get-ChildItem -LiteralPath (Join-Path $InstallRoot "versions") -Directory)[0]
+$previous = [System.IO.File]::ReadAllText((Join-Path $generation.FullName "previous-runtime"))
+Assert-Equal (& (Join-Path $InstallRoot $previous) --version) "9.9.9"
+Assert-InstalledBundle
+`)
+  })
+
+  test("rejects concurrent installers and releases the lock after failure", async () => {
+    await runInstaller(`
+New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
+$lock = [System.IO.File]::Open((Join-Path $InstallRoot ".install.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
+try {
+  $failure = $null
+  try { Install-NodeBundleTree $Source "9.9.9" } catch { $failure = $_ }
+  if ($failure -notmatch "installation lock") { throw "Expected lock failure: $failure" }
+  Assert-Equal (Test-Path $InstallCmdPath) $false
+} finally { $lock.Dispose() }
+Install-NodeBundleTree $Source "9.9.9"
+Assert-InstalledBundle
+`)
+  })
+
   test("installs a release archive with literal brackets in its filename", async () => {
     await runInstaller(`
 New-PreviousInstall
