@@ -329,4 +329,100 @@ describe("bounded grep context", () => {
       },
     })
   })
+
+  test.each([2, 3])("keeps a local match while another file buffers %i context rows", async (pendingCount) => {
+    await using tmp = await tmpdir({ git: true })
+    const spawn = Process.spawn
+    const record = (type: string, file: string, line: number, text: string) =>
+      JSON.stringify({ type, data: { path: { text: file }, lines: { text: text + "\n" }, line_number: line } })
+    const rows: string[] = []
+    // File A fills the emitted budget to 198 rows (99 matches + 99 after-context).
+    for (let i = 0; i < 99; i++) {
+      rows.push(record("match", "a.ts", 2 * i + 1, `a-match ${i}`))
+      rows.push(record("context", "a.ts", 2 * i + 2, `a-after ${i}`))
+    }
+    // File X holds two before-context rows whose match never arrives.
+    for (let i = 1; i <= pendingCount; i++) rows.push(record("context", "x.ts", i, `x-before ${i}`))
+    // File B's match needs one row and fits locally (198 + 0 + 1 = 199 <= 200).
+    rows.push(record("match", "b.ts", 1, "b-match"))
+    const stream = rows.join("\n") + "\n"
+    const script = path.join(tmp.path, "context-stream.cjs")
+    await writeFile(script, `process.stdout.write(${JSON.stringify(stream)}); process.stdout.end()`)
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) => {
+      if (!args.includes("--json")) return spawn(args, options)
+      return spawn([process.execPath, script], options)
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await GrepTool.init()
+        const result = await tool.execute({ pattern: "needle", context: 10, limit: 100 }, ctx)
+        const data = CanonicalOutput.Grep.parse(result.data)
+        expect(result.output).toContain("b-match")
+        expect(data.matches.some((match) => match.path === "b.ts")).toBe(true)
+        expect(data.context!.some((row) => row.path === "b.ts")).toBe(true)
+        expect(data.matches.filter((match) => match.path === "a.ts")).toHaveLength(99)
+        expect(result.output).not.toContain("x-before")
+        expect(data.context!.some((row) => row.path === "x.ts")).toBe(false)
+      },
+    })
+  })
+
+  test("pending bytes in another file cannot reject a match that fits the emitted byte budget", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const record = (type: string, file: string, line: number, text: string) =>
+      JSON.stringify({ type, data: { path: { text: file }, lines: { text: text + "\n" }, line_number: line } })
+    const rows = Array.from({ length: 15 }, (_, i) => record("match", "a.ts", i + 1, "a".repeat(2000)))
+    rows.push(record("context", "x.ts", 1, "x".repeat(2000)))
+    rows.push(record("match", "b.ts", 1, "b-match " + "b".repeat(1000)))
+    const script = path.join(tmp.path, "byte-stream.cjs")
+    await writeFile(script, `process.stdout.write(${JSON.stringify(rows.join("\n") + "\n")})`)
+    const spawn = Process.spawn
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) =>
+      args.includes("--json") ? spawn([process.execPath, script], options) : spawn(args, options),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", context: 1, limit: 100 }, ctx)
+        const data = CanonicalOutput.Grep.parse(result.data)
+        expect(data.matches).toHaveLength(16)
+        expect(result.output).toContain("b-match")
+        expect(result.output).not.toContain("x".repeat(20))
+        expect(Buffer.byteLength(result.output)).toBeLessThan(33 * 1024)
+      },
+    })
+  })
+
+  test("interleaved files retain their own context and complete without truncation", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const record = (type: string, file: string, line: number, text: string) =>
+      JSON.stringify({ type, data: { path: { text: file }, lines: { text: text + "\n" }, line_number: line } })
+    const rows = [
+      record("context", "x.ts", 1, "before"),
+      record("match", "b.ts", 1, "b-match"),
+      record("match", "x.ts", 2, "x-match"),
+      JSON.stringify({ type: "summary" }),
+    ]
+    const spawn = Process.spawn
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) =>
+      args.includes("--json")
+        ? spawn([process.execPath, "-e", `process.stdout.write(${JSON.stringify(rows.join("\n") + "\n")})`], options)
+        : spawn(args, options),
+    )
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", context: 1 }, ctx)
+        const data = CanonicalOutput.Grep.parse(result.data)
+        expect(data.truncated).toBe(false)
+        expect(data.matches.map((row) => row.path)).toEqual(["b.ts", "x.ts"])
+        expect(data.context!.map((row) => [row.path, row.text])).toEqual([
+          ["b.ts", "b-match"],
+          ["x.ts", "before"],
+          ["x.ts", "x-match"],
+        ])
+      },
+    })
+  })
 })

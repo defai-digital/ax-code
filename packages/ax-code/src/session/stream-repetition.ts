@@ -201,17 +201,25 @@ export namespace StreamRepetition {
     return {
       /** Feed one streamed delta. Returns a Detection the first time a loop trips. */
       push(delta: string): Detection | undefined {
-        total += delta.length
-        window = window.length + delta.length > windowChars ? (window + delta).slice(-windowChars) : window + delta
-        appendSegments(delta)
-        pruneSegments(total)
-        sinceCheck += delta.length
-        if (total < minTotalChars || sinceCheck < checkIntervalChars) return undefined
-        sinceCheck = 0
-        return (
-          detectSegmentRepeat(segments, maxSegmentRepeats) ??
-          detectTailRepeat(window, minTailUnitChars, maxTailUnitChars, minTailRepeats)
-        )
+        // Check at fixed character boundaries, not provider delta boundaries.
+        // A large delta must not evict a real loop before it is examined.
+        for (let offset = 0; offset < delta.length; ) {
+          const untilCheck = Math.max(1, minTotalChars - total, checkIntervalChars - sinceCheck)
+          const chunk = delta.slice(offset, offset + untilCheck)
+          offset += chunk.length
+          total += chunk.length
+          window = (window + chunk).slice(-windowChars)
+          appendSegments(chunk)
+          pruneSegments(total)
+          sinceCheck += chunk.length
+          if (total < minTotalChars || sinceCheck < checkIntervalChars) continue
+          sinceCheck = 0
+          const detection =
+            detectSegmentRepeat(segments, maxSegmentRepeats) ??
+            detectTailRepeat(window, minTailUnitChars, maxTailUnitChars, minTailRepeats)
+          if (detection) return detection
+        }
+        return undefined
       },
       /** Reset accumulated state (e.g. at a new step within the same stream). */
       reset() {

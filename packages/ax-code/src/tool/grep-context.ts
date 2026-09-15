@@ -3,7 +3,7 @@ import { StringDecoder } from "node:string_decoder"
 import { Ripgrep } from "../file/ripgrep"
 import { Process } from "../util/process"
 import { Env } from "../util/env"
-import { MAX_LINE_LENGTH } from "../constants/tool"
+import { clampGrepLine } from "./grep-line"
 import type { CanonicalOutput } from "./canonical-output"
 import { parseJsonStrict } from "../util/json-value"
 
@@ -60,7 +60,7 @@ export async function searchWithContext(
   // Attribution is per file so the logic does not depend on ripgrep's per-file
   // block ordering: a row can only be before-context of a match in the same
   // file, and pending rows are discarded if that match never arrives. Buffered
-  // rows count against the same budgets as emitted rows.
+  // rows have their own bounded staging budget, separate from emitted rows.
   const pendingBeforeContext = new Map<
     string,
     { entry: { path: string; line: number; text: string; isMatch: boolean }; rendered: string; size: number }[]
@@ -89,13 +89,7 @@ export async function searchWithContext(
     // a trailing ellipsis, so it must not set the whole-result `truncated` flag.
     // The non-context grep path reports truncated=false for the same input, and
     // `truncated` means "results were capped", not "a line was shortened".
-    let text = source.slice(0, MAX_LINE_LENGTH)
-    if (text.length < source.length) {
-      // Do not split a surrogate pair at the cut: a lone surrogate is invalid
-      // UTF-16 and renders as a replacement glyph in the tool output.
-      const last = text.charCodeAt(text.length - 1)
-      if (last >= 0xd800 && last <= 0xdbff) text = text.slice(0, -1)
-    }
+    const text = clampGrepLine(source)
     const entry = { path: file, line: record.data.line_number, text, isMatch }
     const rendered = `${file}:${entry.line}${isMatch ? ":" : "-"} ${text}${text.length < source.length ? "..." : ""}`
     const size = Buffer.byteLength(rendered) + 1
@@ -109,11 +103,11 @@ export async function searchWithContext(
       }
       // A possible before-context row: hold it until its match arrives. It is
       // discarded if that match never comes (budget stop or an absent match), so
-      // it can never surface as an orphan, and it still counts against the
-      // budgets. A match has at most `context` before-context rows.
+      // it can never surface as an orphan. Bound staging separately so pending
+      // rows in other files cannot consume this file's output budget.
       const bucket = pendingBeforeContext.get(file) ?? []
       if (bucket.length >= params.context) return false
-      if (data.context!.length + bufferedLines >= MAX_LINES || bytes + bufferedBytes + size > MAX_BYTES) return false
+      if (bufferedLines >= MAX_LINES || bufferedBytes + size > MAX_BYTES) return false
       bucket.push({ entry, rendered, size })
       pendingBeforeContext.set(file, bucket)
       bufferedLines++
@@ -130,10 +124,10 @@ export async function searchWithContext(
     if (before.some((item) => item.entry.line >= entry.line || entry.line - item.entry.line > params.context)) {
       return false
     }
-    if (data.context!.length + bufferedLines + 1 > MAX_LINES || bytes + bufferedBytes + size > MAX_BYTES) {
+    const beforeBytes = before.reduce((sum, item) => sum + item.size, 0)
+    if (data.context!.length + before.length + 1 > MAX_LINES || bytes + beforeBytes + size > MAX_BYTES) {
       return false
     }
-    const beforeBytes = before.reduce((sum, item) => sum + item.size, 0)
     pendingBeforeContext.delete(file)
     bufferedLines -= before.length
     bufferedBytes -= beforeBytes

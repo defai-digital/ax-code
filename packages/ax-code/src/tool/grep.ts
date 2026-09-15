@@ -1,5 +1,4 @@
 import z from "zod"
-import { text } from "node:stream/consumers"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
 import { Ripgrep } from "../file/ripgrep"
@@ -8,7 +7,7 @@ import { Process } from "../util/process"
 import DESCRIPTION from "./grep.txt"
 import { Instance } from "../project/instance"
 import { fileToolGuard } from "./external-directory"
-import { MAX_LINE_LENGTH } from "@/constants/tool"
+import { clampGrepLine } from "./grep-line"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Env } from "@/util/env"
@@ -17,10 +16,21 @@ import { parseNativeJsonArray } from "../util/native-json"
 import { errorCode } from "@/util/error-message"
 import { CanonicalOutput } from "./canonical-output"
 import { searchWithContext } from "./grep-context"
+import { readGrepOutput } from "./grep-output"
+import { parseJsonStrict } from "../util/json-value"
+
+const RipgrepText = z.union([z.object({ text: z.string() }), z.object({ bytes: z.string() })])
+const RipgrepEvent = z.object({ type: z.string() }).passthrough()
+const RipgrepMatch = z.object({
+  data: z.object({ path: RipgrepText, lines: RipgrepText, line_number: z.number().int().positive() }),
+})
+const RipgrepEnd = z.object({ data: z.object({ binary_offset: z.number().nullish() }) })
+const decodeRipgrepText = (value: z.infer<typeof RipgrepText>) =>
+  "text" in value ? value.text : Buffer.from(value.bytes, "base64").toString("utf8")
 
 const NativeSearchMatch = z.object({
   path: z.string(),
-  line: z.number(),
+  line: z.number().int().positive(),
   column: z.number(),
   matchText: z.string(),
 })
@@ -34,7 +44,7 @@ export function parseNativeSearchMatches(json: string): NativeSearchMatch[] {
 export function parseRipgrepLineNumber(value: string): number | undefined {
   if (!/^\d+$/.test(value)) return undefined
   const parsed = Number(value)
-  return Number.isSafeInteger(parsed) ? parsed : undefined
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
 const RESULT_LIMIT = 100
@@ -129,15 +139,18 @@ export const GrepTool = Tool.define("grep", {
           (match) =>
             !Filesystem.contains(Instance.directory, searchPath) || Filesystem.contains(Instance.directory, match.path),
         )
-        const truncated = matches.length > limit
+        const scanCapped = rawMatches.length >= scanLimit
+        const truncated = scanCapped || matches.length > limit
         const visibleMatches = truncated ? matches.slice(0, limit) : matches
 
         if (visibleMatches.length === 0) {
           return {
             title: params.pattern,
-            metadata: { matches: 0, truncated: false },
-            data: { matches: [], truncated: false },
-            output: "No files found",
+            metadata: { matches: 0, truncated },
+            data: { matches: [], truncated },
+            output: truncated
+              ? "No visible matches found before the search limit; narrow the path or pattern."
+              : "No files found",
           }
         }
 
@@ -148,9 +161,10 @@ export const GrepTool = Tool.define("grep", {
         // hit that cap the true total is unknown — report a lower bound
         // instead of presenting the capped number as the exact count.
         const totalMatches = matches.length
-        const scanCapped = rawMatches.length >= scanLimit
         const countLabel = scanCapped ? `${totalMatches}+` : `${totalMatches}`
-        const outputLines = [`Found ${countLabel} matches${truncated ? ` (showing first ${limit})` : ""}`]
+        const outputLines = [
+          `Found ${countLabel} matches${truncated ? ` (showing first ${visibleMatches.length})` : ""}`,
+        ]
         let currentFile = ""
         for (const match of visibleMatches) {
           if (currentFile !== match.path) {
@@ -158,10 +172,8 @@ export const GrepTool = Tool.define("grep", {
             currentFile = match.path
             outputLines.push(`${match.path}:`)
           }
-          const truncatedLineText =
-            match.matchText.length > MAX_LINE_LENGTH
-              ? match.matchText.substring(0, MAX_LINE_LENGTH) + "..."
-              : match.matchText
+          const line = clampGrepLine(match.matchText)
+          const truncatedLineText = line + (line.length < match.matchText.length ? "..." : "")
           outputLines.push(`  Line ${match.line}: ${truncatedLineText}`)
         }
 
@@ -171,7 +183,7 @@ export const GrepTool = Tool.define("grep", {
             matches: visibleMatches.map((match) => ({
               path: match.path,
               line: match.line,
-              text: match.matchText.slice(0, MAX_LINE_LENGTH),
+              text: clampGrepLine(match.matchText),
             })),
             truncated,
           },
@@ -190,26 +202,13 @@ export const GrepTool = Tool.define("grep", {
     }
 
     const rgPath = await Ripgrep.filepath()
-    // Use the ASCII Unit Separator (0x1f) as the field separator
-    // instead of `|`. `|` is a valid filename character on Unix, so a
-    // path like `foo|bar.ts` would corrupt the split. 0x1f is a
-    // control character that cannot appear in typical file paths,
-    // line numbers, or source code, and Node's child_process allows
-    // it (it only rejects NUL/0x00 in argv). Ripgrep treats it as a
-    // literal byte separator.
-    const FIELD_SEP = "\x1f"
-    const args = [
-      "-nH",
-      "--hidden",
-      "--no-messages",
-      `--field-match-separator=${FIELD_SEP}`,
-      "--regexp",
-      params.pattern,
-    ]
+    // JSON frames filenames, source text, and binary-file diagnostics without
+    // letting a warning or a control character consume another file's record.
+    const args = ["--json", "--hidden", "--no-messages", "--regexp", params.pattern]
     if (params.include) {
       args.push("--glob", params.include)
     }
-    args.push(searchPath)
+    args.push("--", searchPath)
     const commandTimeoutMs = 120_000
 
     const proc = Process.spawn([rgPath, ...args], {
@@ -220,28 +219,15 @@ export const GrepTool = Tool.define("grep", {
       timeout: commandTimeoutMs,
     })
 
-    let output: string
-    let errorOutput: string
-    let exitCode: number
-    const hasExited = () => proc.exitCode !== null || proc.signalCode !== null
-
-    try {
-      if (!proc.stdout || !proc.stderr) {
-        throw new Error("Process output not available")
-      }
-      ;[output, errorOutput, exitCode] = await Promise.all([text(proc.stdout), text(proc.stderr), proc.exited])
-      if (exitCode === 124) {
-        throw new Error(`grep command timed out after ${commandTimeoutMs / 1000}s`)
-      }
-    } catch (err) {
-      if (!hasExited()) Process.stop(proc).catch(() => {})
-      throw err
+    const { output, errorOutput, exitCode, capped: outputCapped, incomplete } = await readGrepOutput(proc, ctx.abort)
+    if (!outputCapped && exitCode === 124) {
+      throw new Error(`grep command timed out after ${commandTimeoutMs / 1000}s`)
     }
 
     // Exit codes: 0 = matches found, 1 = no matches, 2 = errors (but may still have matches)
     // With --no-messages, we suppress error output but still get exit code 2 for broken symlinks etc.
-    // Only fail if exit code is 2 AND no output was produced
-    if (exitCode === 1 || (exitCode === 2 && !output.trim())) {
+    // An error with no results is not evidence that no matches exist.
+    if (!outputCapped && exitCode === 1) {
       return {
         title: params.pattern,
         metadata: { matches: 0, truncated: false },
@@ -250,39 +236,51 @@ export const GrepTool = Tool.define("grep", {
       }
     }
 
-    if (exitCode !== 0 && exitCode !== 2) {
+    if (!outputCapped && ((exitCode !== 0 && exitCode !== 2) || (exitCode === 2 && !output))) {
       throw new Error(`ripgrep failed: ${errorOutput}`)
     }
 
-    const hasErrors = exitCode === 2
+    const hasErrors = !outputCapped && exitCode === 2
 
-    // Handle both Unix (\n) and Windows (\r\n) line endings
-    const lines = output.trim().split(/\r?\n/)
     const matches = []
+    let skippedRecords = false
+    let incompleteRecord = false
+    let summarySeen = false
+    let binaryStopped = false
     // mtime is only needed once per file for sorting, but ripgrep emits one
     // line per match — wide searches would otherwise stat the same file
     // hundreds of times.
     const mtimeCache = new Map<string, number | undefined>()
 
-    for (const line of lines) {
-      if (!line) continue
-
-      const [filePath, lineNumStr, ...lineTextParts] = line.split(FIELD_SEP)
-      if (!filePath || !lineNumStr || lineTextParts.length === 0) continue
-
-      const lineNum = parseRipgrepLineNumber(lineNumStr)
-      if (lineNum === undefined) continue
-      // Rejoin on the field separator so matched lines that happened
-      // to contain 0x1f reconstruct correctly (edge case for binary
-      // files or terminal escape sequences).
-      const lineText = lineTextParts.join(FIELD_SEP)
+    for (let offset = 0; offset < output.length; ) {
+      const lineEnd = output.indexOf("\n", offset)
+      // Both capture cutoff and a prematurely closed pipe can leave a partial
+      // JSON record. Never turn it into a result or an unreadable-file warning.
+      if (lineEnd === -1) {
+        incompleteRecord = true
+        break
+      }
+      const line = output.slice(offset, lineEnd)
+      offset = lineEnd + 1
+      if (!line.trim()) continue
+      const event = RipgrepEvent.parse(parseJsonStrict(line))
+      if (event.type === "summary") summarySeen = true
+      if (event.type === "end" && RipgrepEnd.parse(event).data.binary_offset != null) binaryStopped = true
+      if (event.type !== "match") continue
+      const record = RipgrepMatch.parse(event).data
+      const filePath = decodeRipgrepText(record.path)
+      const lineNum = record.line_number
+      const lineText = decodeRipgrepText(record.lines).replace(/\r?\n$/, "")
 
       let modTime = mtimeCache.get(filePath)
       if (modTime === undefined && !mtimeCache.has(filePath)) {
         modTime = Filesystem.stat(filePath)?.mtime?.getTime()
         mtimeCache.set(filePath, modTime)
       }
-      if (modTime === undefined) continue
+      if (modTime === undefined) {
+        skippedRecords = true
+        continue
+      }
 
       matches.push({
         path: filePath,
@@ -293,21 +291,27 @@ export const GrepTool = Tool.define("grep", {
     }
 
     matches.sort((a, b) => b.modTime - a.modTime)
+    if (hasErrors && !matches.length) throw new Error(`ripgrep failed: ${errorOutput}`)
 
-    const truncated = matches.length > limit
-    const finalMatches = truncated ? matches.slice(0, limit) : matches
+    const resultCapped = matches.length > limit
+    const streamIncomplete = incomplete || incompleteRecord || !summarySeen
+    const partial = outputCapped || streamIncomplete || binaryStopped
+    const truncated = resultCapped || hasErrors || skippedRecords || partial
+    const finalMatches = matches.slice(0, limit)
 
     if (finalMatches.length === 0) {
       return {
         title: params.pattern,
-        metadata: { matches: 0, truncated: false },
-        data: { matches: [], truncated: false },
-        output: "No files found",
+        metadata: { matches: 0, truncated },
+        data: { matches: [], truncated },
+        output: truncated ? "No visible matches found; some search results were unavailable." : "No files found",
       }
     }
 
     const totalMatches = matches.length
-    const outputLines = [`Found ${totalMatches} matches${truncated ? ` (showing first ${limit})` : ""}`]
+    const outputLines = [
+      `Found ${totalMatches}${partial ? "+" : ""} matches${resultCapped ? ` (showing first ${limit})` : ""}`,
+    ]
 
     let currentFile = ""
     for (const match of finalMatches) {
@@ -318,12 +322,12 @@ export const GrepTool = Tool.define("grep", {
         currentFile = match.path
         outputLines.push(`${match.path}:`)
       }
-      const truncatedLineText =
-        match.lineText.length > MAX_LINE_LENGTH ? match.lineText.substring(0, MAX_LINE_LENGTH) + "..." : match.lineText
+      const line = clampGrepLine(match.lineText)
+      const truncatedLineText = line + (line.length < match.lineText.length ? "..." : "")
       outputLines.push(`  Line ${match.lineNum}: ${truncatedLineText}`)
     }
 
-    if (truncated) {
+    if (resultCapped) {
       outputLines.push("")
       outputLines.push(
         `(Results truncated: showing ${limit} of ${totalMatches} matches (${totalMatches - limit} hidden). Consider using a more specific path or pattern.)`,
@@ -334,13 +338,22 @@ export const GrepTool = Tool.define("grep", {
       outputLines.push("")
       outputLines.push("(Some paths were inaccessible and skipped)")
     }
+    if (skippedRecords) outputLines.push("", "(Some search results could not be read and were skipped)")
+    if (binaryStopped) outputLines.push("", "(Binary data stopped part of the search)")
+    if (streamIncomplete && !outputCapped)
+      outputLines.push("", "(Search output ended before all results were received)")
+    if (outputCapped)
+      outputLines.push(
+        "",
+        "(Search capture limit reached; ordering covers captured results only. Narrow the path or pattern.)",
+      )
 
     return {
       title: params.pattern,
       data: {
         matches: matches
           .slice(0, limit)
-          .map((match) => ({ path: match.path, line: match.lineNum, text: match.lineText.slice(0, MAX_LINE_LENGTH) })),
+          .map((match) => ({ path: match.path, line: match.lineNum, text: clampGrepLine(match.lineText) })),
         truncated,
       },
       metadata: {

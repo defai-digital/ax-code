@@ -6,7 +6,7 @@ export namespace CanonicalOutput {
   export const Grep = z
     .object({
       matches: z
-        .array(z.object({ path: z.string(), line: z.number().int().nonnegative(), text: z.string() }).strict())
+        .array(z.object({ path: z.string(), line: z.number().int().positive(), text: z.string() }).strict())
         .max(100),
       context: z
         .array(

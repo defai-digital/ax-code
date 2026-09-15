@@ -10,6 +10,34 @@ const phrase =
   "OK let me batch all the `data-i18n` attribute additions. I'll batch as many as I can per message this time."
 
 describe("stream-repetition", () => {
+  test("retains incomplete lines across chunk boundaries", () => {
+    const options = { minTotalChars: 0, checkIntervalChars: 1, minSegmentChars: 3, maxSegmentRepeats: 2 }
+    const whole = StreamRepetition.create(options)
+    const split = StreamRepetition.create(options)
+    const first = "a\nbc"
+    const rest = "d\na\nbcd\nbcd\n"
+    expect(split.push(first)).toBeUndefined()
+    const expected = whole.push(first + rest)
+    expect(expected?.unit).toBe("bcd")
+    expect(split.push(rest)).toEqual(expected)
+  })
+
+  test("detects a loop before a large delta evicts it from the analysis window", () => {
+    const loop = `${phrase}\n`.repeat(50)
+    const suffix = Array.from(
+      { length: 150 },
+      (_, i) => `Unique ending ${i} with a different observation for item ${i}.\n`,
+    ).join("")
+    const output = loop + suffix
+    const whole = StreamRepetition.create()
+    const split = StreamRepetition.create()
+    let detection: StreamRepetition.Detection | undefined
+    for (let offset = 0; offset < output.length && !detection; offset += 37)
+      detection = split.push(output.slice(offset, offset + 37))
+    expect(detection).toBeDefined()
+    expect(whole.push(output)).toEqual(detection)
+  })
+
   test.each([1, 37, 512, 10_000])("allows shared setup in distinct fenced tests with %i-character deltas", (size) => {
     const guard = StreamRepetition.create()
     const output = Array.from({ length: 24 }, (_, i) =>

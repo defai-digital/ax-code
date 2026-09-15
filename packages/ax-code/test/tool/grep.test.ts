@@ -7,6 +7,7 @@ import { tmpdir } from "../fixture/fixture"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { CanonicalOutput } from "../../src/tool/canonical-output"
 import { NativeAddon } from "../../src/native/addon"
+import { Process } from "../../src/util/process"
 
 const ctx = {
   sessionID: SessionID.make("ses_test"),
@@ -24,10 +25,182 @@ const projectRoot = path.join(__dirname, "../..")
 class StopAfterAsk extends Error {}
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Instance.disposeAll()
 })
 
 describe("tool.grep", () => {
+  test("external cancellation preserves its reason and reaps the search process", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const controller = new AbortController()
+    const spawn = Process.spawn
+    let child: Process.Child | undefined
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) => {
+      if (!args.includes("--regexp")) return spawn(args, options)
+      child = spawn([process.execPath, "-e", 'process.stdout.write("started"); setInterval(() => {}, 1000)'], options)
+      child.stdout!.once("data", () => controller.abort(new Error("Cancelled external search")))
+      return child
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          (await GrepTool.init()).execute({ pattern: "needle" }, { ...ctx, abort: controller.signal }),
+        ).rejects.toThrow("Cancelled external search")
+        expect(child).toBeDefined()
+        await child!.exited
+        expect(child!.exitCode !== null || child!.signalCode !== null).toBe(true)
+      },
+    })
+  })
+
+  test("external search bounds captured output and reports a lower-bound count", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "large.txt")
+    await writeFile(file, ("needle " + "x".repeat(120) + "\n").repeat(150_000))
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file }, ctx)
+        expect(result.metadata.truncated).toBe(true)
+        expect(result.output).toMatch(/Found \d+\+ matches/)
+        expect(CanonicalOutput.Grep.parse(result.data).matches).toHaveLength(100)
+        expect(result.output).toContain("captured results")
+        expect(result.output).not.toContain("could not be read")
+      },
+    })
+  })
+
+  test.skipIf(process.platform === "win32").each(["control\x1fseparator.ts", "multi\nline.ts", " leading.ts"])(
+    "external search preserves the filename %j",
+    async (name) => {
+      await using tmp = await tmpdir({ git: true })
+      const file = path.join(tmp.path, name)
+      await writeFile(file, "needle\n")
+      vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file }, ctx)
+          expect(CanonicalOutput.Grep.parse(result.data).matches).toEqual([{ path: file, line: 1, text: "needle" }])
+        },
+      })
+    },
+  )
+
+  test("binary-file diagnostics do not swallow another file's matching record", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await writeFile(path.join(tmp.path, "big.bin"), "needle\n" + "x\n".repeat(100_000) + "\x00")
+    for (let i = 0; i < 20; i++) await writeFile(path.join(tmp.path, `text-${i}.ts`), "needle\n")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle" }, ctx)
+        expect(CanonicalOutput.Grep.parse(result.data).matches.filter((row) => row.path.endsWith(".ts"))).toHaveLength(
+          20,
+        )
+        expect(result.output).not.toContain("could not be read")
+      },
+    })
+  })
+
+  test("external search rejects an invalid regular expression instead of reporting no matches", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect((await GrepTool.init()).execute({ pattern: "[" }, ctx)).rejects.toThrow("ripgrep failed")
+      },
+    })
+  })
+
+  test("external search marks partial results as truncated when ripgrep reports an error", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "source.ts")
+    await writeFile(file, "needle\n")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    const spawn = Process.spawn
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) => {
+      if (!args.includes("--regexp")) return spawn(args, options)
+      const output =
+        JSON.stringify({ type: "match", data: { path: { text: file }, lines: { text: "needle\n" }, line_number: 1 } }) +
+        "\n"
+      return spawn(
+        [process.execPath, "-e", `process.stdout.write(${JSON.stringify(output)}); process.exitCode = 2`],
+        options,
+      )
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle" }, ctx)
+        expect(CanonicalOutput.Grep.parse(result.data)).toEqual({
+          matches: [{ path: file, line: 1, text: "needle" }],
+          truncated: true,
+        })
+        expect(result.metadata.truncated).toBe(true)
+        expect(result.output).toContain("inaccessible")
+      },
+    })
+  })
+
+  test.each(["", '{"type":"match","data":'])("external search discloses incomplete output %j", async (tail) => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "source.ts")
+    await writeFile(file, "needle\n")
+    vi.spyOn(NativeAddon, "fs").mockReturnValue(undefined)
+    const spawn = Process.spawn
+    vi.spyOn(Process, "spawn").mockImplementation((args, options) => {
+      if (!args.includes("--regexp")) return spawn(args, options)
+      const output =
+        JSON.stringify({ type: "match", data: { path: { text: file }, lines: { text: "needle\n" }, line_number: 1 } }) +
+        "\n" +
+        tail
+      return spawn([process.execPath, "-e", `process.stdout.write(${JSON.stringify(output)})`], options)
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle" }, ctx)
+        expect(CanonicalOutput.Grep.parse(result.data)).toEqual({
+          matches: [{ path: file, line: 1, text: "needle" }],
+          truncated: true,
+        })
+        expect(result.output).toContain("Found 1+ matches")
+        expect(result.output).toContain("ended before all results")
+        expect(result.output).not.toContain("could not be read")
+      },
+    })
+  })
+
+  test("native scan exhaustion remains truncated when no rows survive containment filtering", async () => {
+    await using tmp = await tmpdir({ git: true })
+    vi.spyOn(NativeAddon, "fs").mockReturnValue({
+      searchContent: vi.fn(() =>
+        JSON.stringify(
+          Array.from({ length: 3 }, (_, i) => ({
+            path: path.join(tmp.path, "..", `outside-${i}.ts`),
+            line: 1,
+            column: 1,
+            matchText: "needle",
+          })),
+        ),
+      ),
+    } as any)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", limit: 2 }, ctx)
+        expect(CanonicalOutput.Grep.parse(result.data)).toEqual({ matches: [], truncated: true })
+        expect(result.output).not.toBe("No files found")
+      },
+    })
+  })
+
   test("a file-scoped include and limit work without context", async () => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "source.ts")
@@ -230,6 +403,115 @@ describe("tool.grep", () => {
     })
 
     expect(requests).toEqual(["external_directory"])
+  })
+
+  test.each([1992, 1991])("native path clamps Unicode with %i padding characters", async (padding) => {
+    await using tmp = await tmpdir({ git: true })
+    const long = "needle " + "A".repeat(padding) + "\u{1F680}" + "B".repeat(50)
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
+      searchContent: vi.fn(() =>
+        JSON.stringify([{ path: path.join(tmp.path, "file.ts"), line: 1, column: 1, matchText: long }]),
+      ),
+    } as any)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle" }, ctx)
+          const [match] = CanonicalOutput.Grep.parse(result.data).matches
+          // A lone surrogate is invalid UTF-16 and would render as U+FFFD.
+          expect(match!.text.isWellFormed()).toBe(true)
+          expect(match!.text).toBe(
+            padding === 1992 ? "needle " + "A".repeat(padding) : "needle " + "A".repeat(padding) + "\u{1F680}",
+          )
+          expect(match!.text.length).toBe(padding === 1992 ? 1999 : 2000)
+          expect(result.output.isWellFormed()).toBe(true)
+          expect(result.output).toContain(match!.text + "...")
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
+    }
+  })
+
+  test.each([1992, 1991])("ripgrep path clamps Unicode with %i padding characters", async (padding) => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "emoji-cut.ts")
+    // Padding puts the rocket's high surrogate exactly at the MAX_LINE_LENGTH cut.
+    await writeFile(file, "needle " + "A".repeat(padding) + "\u{1F680}" + "B".repeat(50) + "\n")
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue(null as any)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file }, ctx)
+          const [match] = CanonicalOutput.Grep.parse(result.data).matches
+          expect(match!.text.isWellFormed()).toBe(true)
+          expect(match!.text).toBe(
+            padding === 1992 ? "needle " + "A".repeat(padding) : "needle " + "A".repeat(padding) + "\u{1F680}",
+          )
+          expect(match!.text.length).toBe(padding === 1992 ? 1999 : 2000)
+          expect(result.output.isWellFormed()).toBe(true)
+          expect(result.output).toContain(match!.text + "...")
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
+    }
+  })
+
+  test("ripgrep path preserves trailing whitespace on the last match line", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "trailing.ts")
+    await writeFile(file, "first\nneedle   \n")
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue(null as any)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file }, ctx)
+          const [match] = CanonicalOutput.Grep.parse(result.data).matches
+          expect(match!.text).toBe("needle   ")
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
+    }
+  })
+
+  test.each([100, 50])("native scan cap stays truncated with %i in-scope matches", async (count) => {
+    await using tmp = await tmpdir({ git: true })
+    const inside = Array.from({ length: count }, (_, i) => ({
+      path: path.join(tmp.path, "file.ts"),
+      line: i + 1,
+      column: 1,
+      matchText: `needle ${i}`,
+    }))
+    const outside = { path: path.join(tmp.path, "..", "outside.ts"), line: 1, column: 1, matchText: "needle out" }
+    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
+      searchContent: vi.fn(() => JSON.stringify([...inside, ...Array.from({ length: 101 - count }, () => outside)])),
+    } as any)
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await (await GrepTool.init()).execute({ pattern: "needle" }, ctx)
+          // The native scan stopped at its cap, so the true total is unknown even
+          // though only `limit` rows survived the containment filter.
+          expect(result.metadata.truncated).toBe(true)
+          expect(CanonicalOutput.Grep.parse(result.data).truncated).toBe(true)
+          expect(result.output).toContain(`Found ${count}+ matches (showing first ${count})`)
+        },
+      })
+    } finally {
+      nativeFs.mockRestore()
+    }
+  })
+
+  test("canonical grep output rejects a zero line number", () => {
+    expect(() =>
+      CanonicalOutput.Grep.parse({ matches: [{ path: "a.ts", line: 0, text: "x" }], truncated: false }),
+    ).toThrow()
   })
 })
 
