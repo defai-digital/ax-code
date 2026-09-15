@@ -147,8 +147,12 @@ export namespace QualityPromotionSignedArchive {
     )
   }
 
-  function evaluateSummary(packagedArchive: QualityPromotionPackagedArchive.ArchiveArtifact, attestation: Attestation) {
-    const archiveReasons = QualityPromotionPackagedArchive.verify(packagedArchive)
+  function evaluateSummary(
+    packagedArchive: QualityPromotionPackagedArchive.ArchiveArtifact,
+    attestation: Attestation,
+    verification: { archiveReasons: string[] },
+  ) {
+    const { archiveReasons } = verification
     const expectedPayloadDigest = computePayloadDigest(packagedArchive)
     const payloadMatches = attestation.payloadDigest === expectedPayloadDigest
     const attestationRecorded =
@@ -234,7 +238,7 @@ export namespace QualityPromotionSignedArchive {
       signatureEncoding: "hex",
       signature: sign(payloadDigest, input.signing.keyMaterial),
     })
-    const summary = evaluateSummary(input.packagedArchive, attestation)
+    const summary = evaluateSummary(input.packagedArchive, attestation, { archiveReasons })
     return ArchiveArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-signed-archive",
@@ -263,7 +267,7 @@ export namespace QualityPromotionSignedArchive {
     if (archive.attestation.signature.length === 0) {
       reasons.push(`signed archive signature is missing for ${archive.source}`)
     }
-    const expectedSummary = evaluateSummary(archive.packagedArchive, archive.attestation)
+    const expectedSummary = evaluateSummary(archive.packagedArchive, archive.attestation, { archiveReasons })
     if (!jsonEqual(archive.summary, expectedSummary)) {
       reasons.push(`signed archive summary mismatch for ${archive.source}`)
     }

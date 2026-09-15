@@ -67,11 +67,14 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
     return [...packets].sort((a, b) => compareStringFields(a, b, ["createdAt", "packetID"]))
   }
 
-  function evaluateSummary(input: {
-    promotion: PromotionReference
-    attestationRecord: QualityPromotionSignedArchiveAttestationRecord.RecordArtifact
-  }) {
-    const attestationRecordReasons = QualityPromotionSignedArchiveAttestationRecord.verify(input.attestationRecord)
+  function evaluateSummary(
+    input: {
+      promotion: PromotionReference
+      attestationRecord: QualityPromotionSignedArchiveAttestationRecord.RecordArtifact
+    },
+    verification: { attestationRecordReasons: string[] },
+  ) {
+    const { attestationRecordReasons } = verification
     const embeddedAuditManifest =
       input.attestationRecord.signedArchive.packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle
         .auditManifest
@@ -156,7 +159,7 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
     }
     const createdAt = new Date().toISOString()
     const packetID = `${input.attestationRecord.recordID}-packet`
-    const summary = evaluateSummary(input)
+    const summary = evaluateSummary(input, { attestationRecordReasons })
     return PacketArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-signed-archive-attestation-packet",
@@ -187,10 +190,13 @@ export namespace QualityPromotionSignedArchiveAttestationPacket {
         `signed archive attestation packet attestation record mismatch for ${packet.source} (${attestationRecordReasons[0]})`,
       )
     }
-    const expectedSummary = evaluateSummary({
-      promotion: packet.promotion,
-      attestationRecord: packet.attestationRecord,
-    })
+    const expectedSummary = evaluateSummary(
+      {
+        promotion: packet.promotion,
+        attestationRecord: packet.attestationRecord,
+      },
+      { attestationRecordReasons },
+    )
     if (!jsonEqual(packet.summary, expectedSummary)) {
       reasons.push(`signed archive attestation packet summary mismatch for ${packet.source}`)
     }

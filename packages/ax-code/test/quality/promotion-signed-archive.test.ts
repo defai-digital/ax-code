@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { spawnSync } from "child_process"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { QualityCalibrationModel } from "../../src/quality/calibration-model"
 import { QualityPromotionAdoptionReview } from "../../src/quality/promotion/promotion-adoption-review"
 import { QualityPromotionArchiveManifest } from "../../src/quality/promotion/promotion-archive-manifest"
@@ -1884,7 +1884,13 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
         handoffPackage: signedArchive.packagedArchive.portableExport.handoffPackage,
       })
 
-      expect(QualityPromotionSignedArchiveReviewDossier.verify(dossier)).toEqual([])
+      const auditVerification = vi.spyOn(QualityPromotionAuditManifest, "verify")
+      try {
+        expect(QualityPromotionSignedArchiveReviewDossier.verify(dossier)).toEqual([])
+        expect(auditVerification.mock.calls.length).toBeLessThanOrEqual(8)
+      } finally {
+        auditVerification.mockRestore()
+      }
 
       await QualityPromotionSignedArchiveReviewDossier.append(dossier)
       await QualityPromotionSignedArchiveReviewDossier.assertPersisted(dossier)
@@ -2196,4 +2202,18 @@ describe("QualityPromotionSignedArchiveReviewDossier", () => {
       await clearSignedArchives()
     }
   })
+})
+
+test("nested archive verification stays bounded and rechecks mutated content", () => {
+  const { packagedArchive } = buildPackagedArchive()
+  const auditVerification = vi.spyOn(QualityPromotionAuditManifest, "verify")
+  try {
+    expect(QualityPromotionPackagedArchive.verify(packagedArchive)).toEqual([])
+    // Five wrapper layers must not multiply validation of the same audit manifest.
+    expect(auditVerification.mock.calls.length).toBeLessThanOrEqual(8)
+    packagedArchive.portableExport.handoffPackage.archiveManifest.exportBundle.auditManifest.source = "tampered-source"
+    expect(QualityPromotionPackagedArchive.verify(packagedArchive).length).toBeGreaterThan(0)
+  } finally {
+    auditVerification.mockRestore()
+  }
 })

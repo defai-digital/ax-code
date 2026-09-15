@@ -153,8 +153,12 @@ export namespace QualityPromotionPortableExport {
     return sortFiles(files)
   }
 
-  function evaluateSummary(handoffPackage: QualityPromotionHandoffPackage.PackageArtifact, files: File[]) {
-    const packageReasons = QualityPromotionHandoffPackage.verify(handoffPackage)
+  function evaluateSummary(
+    handoffPackage: QualityPromotionHandoffPackage.PackageArtifact,
+    files: File[],
+    verification: { packageReasons: string[] },
+  ) {
+    const { packageReasons } = verification
     const expectedFiles = buildFiles(handoffPackage)
     const filesMatch = jsonEqual(files, expectedFiles)
     const digestCoverage = files.every((file) => file.contentDigest.length > 0)
@@ -214,7 +218,7 @@ export namespace QualityPromotionPortableExport {
     const createdAt = new Date().toISOString()
     const exportID = `${input.handoffPackage.packageID}-portable-export`
     const files = buildFiles(input.handoffPackage)
-    const summary = evaluateSummary(input.handoffPackage, files)
+    const summary = evaluateSummary(input.handoffPackage, files, { packageReasons })
     return ExportArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-portable-export",
@@ -242,7 +246,7 @@ export namespace QualityPromotionPortableExport {
     if (!jsonEqual(exportArtifact.files, expectedFiles)) {
       reasons.push(`portable export files mismatch for ${exportArtifact.source}`)
     }
-    const expectedSummary = evaluateSummary(exportArtifact.handoffPackage, exportArtifact.files)
+    const expectedSummary = evaluateSummary(exportArtifact.handoffPackage, exportArtifact.files, { packageReasons })
     if (!jsonEqual(exportArtifact.summary, expectedSummary)) {
       reasons.push(`portable export summary mismatch for ${exportArtifact.source}`)
     }

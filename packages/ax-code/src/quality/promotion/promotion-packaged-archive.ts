@@ -109,8 +109,12 @@ export namespace QualityPromotionPackagedArchive {
     return digest(JSON.stringify(entries))
   }
 
-  function evaluateSummary(portableExport: QualityPromotionPortableExport.ExportArtifact, entries: Entry[]) {
-    const exportReasons = QualityPromotionPortableExport.verify(portableExport)
+  function evaluateSummary(
+    portableExport: QualityPromotionPortableExport.ExportArtifact,
+    entries: Entry[],
+    verification: { exportReasons: string[] },
+  ) {
+    const { exportReasons } = verification
     const expectedEntries = buildEntries(portableExport)
     const entriesMatch = jsonEqual(entries, expectedEntries)
     const digestCoverage = entries.every((entry) => entry.contentDigest.length > 0)
@@ -167,7 +171,7 @@ export namespace QualityPromotionPackagedArchive {
     const createdAt = new Date().toISOString()
     const archiveID = `${input.portableExport.exportID}-packaged-archive`
     const entries = buildEntries(input.portableExport)
-    const summary = evaluateSummary(input.portableExport, entries)
+    const summary = evaluateSummary(input.portableExport, entries, { exportReasons })
     return ArchiveArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-packaged-archive",
@@ -198,7 +202,7 @@ export namespace QualityPromotionPackagedArchive {
     if (archive.packageDigest !== expectedDigest) {
       reasons.push(`packaged archive digest mismatch for ${archive.source}`)
     }
-    const expectedSummary = evaluateSummary(archive.portableExport, archive.entries)
+    const expectedSummary = evaluateSummary(archive.portableExport, archive.entries, { exportReasons })
     if (!jsonEqual(archive.summary, expectedSummary)) {
       reasons.push(`packaged archive summary mismatch for ${archive.source}`)
     }

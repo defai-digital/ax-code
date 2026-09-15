@@ -246,8 +246,12 @@ export namespace QualityPromotionHandoffPackage {
     )
   }
 
-  function evaluateSummary(archiveManifest: QualityPromotionArchiveManifest.ArchiveArtifact, documents: Document[]) {
-    const archiveReasons = QualityPromotionArchiveManifest.verify(archiveManifest)
+  function evaluateSummary(
+    archiveManifest: QualityPromotionArchiveManifest.ArchiveArtifact,
+    documents: Document[],
+    verification: { archiveReasons: string[] },
+  ) {
+    const { archiveReasons } = verification
     const expectedDocuments = buildDocuments(archiveManifest)
     const documentsMatch = jsonEqual(documents, expectedDocuments)
     const digestCoverage = documents.every(
@@ -308,7 +312,7 @@ export namespace QualityPromotionHandoffPackage {
     const createdAt = new Date().toISOString()
     const packageID = `${input.archiveManifest.archiveID}-handoff-package`
     const documents = buildDocuments(input.archiveManifest)
-    const summary = evaluateSummary(input.archiveManifest, documents)
+    const summary = evaluateSummary(input.archiveManifest, documents, { archiveReasons })
     return PackageArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-handoff-package",
@@ -334,7 +338,7 @@ export namespace QualityPromotionHandoffPackage {
     if (!jsonEqual(packet.documents, expectedDocuments)) {
       reasons.push(`handoff package documents mismatch for ${packet.source}`)
     }
-    const expectedSummary = evaluateSummary(packet.archiveManifest, packet.documents)
+    const expectedSummary = evaluateSummary(packet.archiveManifest, packet.documents, { archiveReasons })
     if (!jsonEqual(packet.summary, expectedSummary)) {
       reasons.push(`handoff package summary mismatch for ${packet.source}`)
     }

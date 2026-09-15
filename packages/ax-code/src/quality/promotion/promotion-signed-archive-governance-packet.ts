@@ -65,15 +65,15 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     return packet.promotion.source === promotion.source && packet.promotion.promotionID === promotion.promotionID
   }
 
-  function evaluateSummary(input: {
-    promotion: PromotionReference
-    releasePacket: QualityPromotionReleasePacket.PacketArtifact
-    attestationPacket: QualityPromotionSignedArchiveAttestationPacket.PacketArtifact
-  }) {
-    const decisionBundle =
-      input.releasePacket.releaseDecisionRecord.boardDecision.reviewDossier.submissionBundle.decisionBundle
-    const releasePacketReasons = QualityPromotionReleasePacket.verify(decisionBundle, input.releasePacket)
-    const attestationPacketReasons = QualityPromotionSignedArchiveAttestationPacket.verify(input.attestationPacket)
+  function evaluateSummary(
+    input: {
+      promotion: PromotionReference
+      releasePacket: QualityPromotionReleasePacket.PacketArtifact
+      attestationPacket: QualityPromotionSignedArchiveAttestationPacket.PacketArtifact
+    },
+    verification: { releasePacketReasons: string[]; attestationPacketReasons: string[] },
+  ) {
+    const { releasePacketReasons, attestationPacketReasons } = verification
 
     const releasePacketLinkagePass =
       input.promotion.releasePacketID === input.releasePacket.packetID &&
@@ -180,7 +180,7 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
     }
     const createdAt = new Date().toISOString()
     const packetID = `${input.attestationPacket.packetID}-governance`
-    const summary = evaluateSummary(input)
+    const summary = evaluateSummary(input, { releasePacketReasons, attestationPacketReasons })
     return PacketArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-signed-archive-governance-packet",
@@ -225,11 +225,14 @@ export namespace QualityPromotionSignedArchiveGovernancePacket {
         `signed archive governance packet attestation packet mismatch for ${packet.source} (${attestationPacketReasons[0]})`,
       )
     }
-    const expectedSummary = evaluateSummary({
-      promotion: packet.promotion,
-      releasePacket: packet.releasePacket,
-      attestationPacket: packet.attestationPacket,
-    })
+    const expectedSummary = evaluateSummary(
+      {
+        promotion: packet.promotion,
+        releasePacket: packet.releasePacket,
+        attestationPacket: packet.attestationPacket,
+      },
+      { releasePacketReasons, attestationPacketReasons },
+    )
     if (!jsonEqual(packet.summary, expectedSummary)) {
       reasons.push(`signed archive governance packet summary mismatch for ${packet.source}`)
     }

@@ -72,12 +72,14 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     )
   }
 
-  function evaluateSummary(input: {
-    governancePacket: QualityPromotionSignedArchiveGovernancePacket.PacketArtifact
-    handoffPackage: QualityPromotionHandoffPackage.PackageArtifact
-  }) {
-    const governanceReasons = QualityPromotionSignedArchiveGovernancePacket.verify(input.governancePacket)
-    const handoffReasons = QualityPromotionHandoffPackage.verify(input.handoffPackage)
+  function evaluateSummary(
+    input: {
+      governancePacket: QualityPromotionSignedArchiveGovernancePacket.PacketArtifact
+      handoffPackage: QualityPromotionHandoffPackage.PackageArtifact
+    },
+    verification: { governanceReasons: string[]; handoffReasons: string[] },
+  ) {
+    const { governanceReasons, handoffReasons } = verification
     const handoffPromotion = input.handoffPackage.archiveManifest.exportBundle.auditManifest.promotion
     const handoffReleasePacket = input.handoffPackage.archiveManifest.exportBundle.auditManifest.releasePacket
 
@@ -182,7 +184,7 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
     }
     const createdAt = new Date().toISOString()
     const dossierID = `${input.governancePacket.packetID}-review-dossier`
-    const summary = evaluateSummary(input)
+    const summary = evaluateSummary(input, { governanceReasons, handoffReasons })
     return DossierArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-signed-archive-review-dossier",
@@ -219,10 +221,13 @@ export namespace QualityPromotionSignedArchiveReviewDossier {
         `signed archive review dossier handoff package mismatch for ${dossier.source} (${handoffReasons[0]})`,
       )
     }
-    const expectedSummary = evaluateSummary({
-      governancePacket: dossier.governancePacket,
-      handoffPackage: dossier.handoffPackage,
-    })
+    const expectedSummary = evaluateSummary(
+      {
+        governancePacket: dossier.governancePacket,
+        handoffPackage: dossier.handoffPackage,
+      },
+      { governanceReasons, handoffReasons },
+    )
     if (!jsonEqual(dossier.summary, expectedSummary)) {
       reasons.push(`signed archive review dossier summary mismatch for ${dossier.source}`)
     }

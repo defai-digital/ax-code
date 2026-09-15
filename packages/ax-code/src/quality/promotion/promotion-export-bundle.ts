@@ -63,8 +63,11 @@ export namespace QualityPromotionExportBundle {
     )
   }
 
-  function evaluateSummary(auditManifest: QualityPromotionAuditManifest.ManifestArtifact) {
-    const manifestReasons = QualityPromotionAuditManifest.verify(auditManifest.releasePacket, auditManifest)
+  function evaluateSummary(
+    auditManifest: QualityPromotionAuditManifest.ManifestArtifact,
+    verification: { manifestReasons: string[] },
+  ) {
+    const { manifestReasons } = verification
     const gates = [
       {
         name: "audit-manifest-verification",
@@ -124,7 +127,7 @@ export namespace QualityPromotionExportBundle {
     }
     const createdAt = new Date().toISOString()
     const bundleID = `${input.auditManifest.manifestID}-export-bundle`
-    const summary = evaluateSummary(input.auditManifest)
+    const summary = evaluateSummary(input.auditManifest, { manifestReasons })
     return ExportArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-export-bundle",
@@ -148,7 +151,7 @@ export namespace QualityPromotionExportBundle {
     if (manifestReasons.length > 0) {
       reasons.push(`export bundle audit manifest mismatch for ${bundle.source} (${manifestReasons[0]})`)
     }
-    const expectedSummary = evaluateSummary(bundle.auditManifest)
+    const expectedSummary = evaluateSummary(bundle.auditManifest, { manifestReasons })
     if (!jsonEqual(bundle.summary, expectedSummary)) {
       reasons.push(`export bundle summary mismatch for ${bundle.source}`)
     }

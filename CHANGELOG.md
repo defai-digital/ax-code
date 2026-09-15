@@ -17,6 +17,7 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Reuse child verification results within each signed archive operation to prevent exponential repeated validation while still detecting later content changes.
 - Reject FIFO inputs promptly when fingerprinting source, reading runtime records or model metadata, and retiring promoted skills.
 - Preserve fresh TypeScript diagnostics across serialized snapshot replacements, propagate queued failures, and reclaim idle language servers.
 - Improve goal planning, recovery, revision checks, and headless completion; preserve accurate read-to-write timestamps.

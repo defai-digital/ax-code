@@ -167,8 +167,12 @@ export namespace QualityPromotionArchiveManifest {
     )
   }
 
-  function evaluateSummary(exportBundle: QualityPromotionExportBundle.ExportArtifact, inventory: InventoryItem[]) {
-    const exportReasons = QualityPromotionExportBundle.verify(exportBundle)
+  function evaluateSummary(
+    exportBundle: QualityPromotionExportBundle.ExportArtifact,
+    inventory: InventoryItem[],
+    verification: { exportReasons: string[] },
+  ) {
+    const { exportReasons } = verification
     const expectedInventory = buildInventory(exportBundle)
     const inventoryMatches = jsonEqual(inventory, expectedInventory)
     const digestsPresent = inventory.every((item) => item.digest.length > 0)
@@ -228,7 +232,7 @@ export namespace QualityPromotionArchiveManifest {
     const createdAt = new Date().toISOString()
     const archiveID = `${input.exportBundle.bundleID}-archive-manifest`
     const inventory = buildInventory(input.exportBundle)
-    const summary = evaluateSummary(input.exportBundle, inventory)
+    const summary = evaluateSummary(input.exportBundle, inventory, { exportReasons })
     return ArchiveArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-archive-manifest",
@@ -254,7 +258,7 @@ export namespace QualityPromotionArchiveManifest {
     if (!jsonEqual(archive.inventory, expectedInventory)) {
       reasons.push(`archive manifest inventory mismatch for ${archive.source}`)
     }
-    const expectedSummary = evaluateSummary(archive.exportBundle, archive.inventory)
+    const expectedSummary = evaluateSummary(archive.exportBundle, archive.inventory, { exportReasons })
     if (!jsonEqual(archive.summary, expectedSummary)) {
       reasons.push(`archive manifest summary mismatch for ${archive.source}`)
     }

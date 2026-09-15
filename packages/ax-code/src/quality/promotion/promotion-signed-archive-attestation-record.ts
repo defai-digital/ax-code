@@ -57,12 +57,15 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     return [...records].sort((a, b) => compareStringFields(a, b, ["createdAt", "recordID"]))
   }
 
-  function evaluateSummary(input: {
-    signedArchive: QualityPromotionSignedArchive.ArchiveArtifact
-    trust: QualityPromotionSignedArchiveTrust.TrustSummary
-    attestation: QualityPromotionSignedArchiveAttestationPolicy.Summary
-  }) {
-    const signedArchiveReasons = QualityPromotionSignedArchive.verify(input.signedArchive)
+  function evaluateSummary(
+    input: {
+      signedArchive: QualityPromotionSignedArchive.ArchiveArtifact
+      trust: QualityPromotionSignedArchiveTrust.TrustSummary
+      attestation: QualityPromotionSignedArchiveAttestationPolicy.Summary
+    },
+    verification: { signedArchiveReasons: string[] },
+  ) {
+    const { signedArchiveReasons } = verification
     const trustIdentityPass =
       input.trust.attestedBy === input.signedArchive.attestation.attestedBy &&
       input.trust.keyID === input.signedArchive.attestation.keyID
@@ -150,7 +153,7 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
     }
     const createdAt = new Date().toISOString()
     const recordID = `${input.signedArchive.signedArchiveID}-attestation-record`
-    const summary = evaluateSummary(input)
+    const summary = evaluateSummary(input, { signedArchiveReasons })
     return RecordArtifact.parse({
       schemaVersion: 1,
       kind: "ax-code-quality-promotion-signed-archive-attestation-record",
@@ -183,11 +186,14 @@ export namespace QualityPromotionSignedArchiveAttestationRecord {
         `signed archive attestation record signed archive mismatch for ${record.source} (${signedArchiveReasons[0]})`,
       )
     }
-    const expectedSummary = evaluateSummary({
-      signedArchive: record.signedArchive,
-      trust: record.trust,
-      attestation: record.attestation,
-    })
+    const expectedSummary = evaluateSummary(
+      {
+        signedArchive: record.signedArchive,
+        trust: record.trust,
+        attestation: record.attestation,
+      },
+      { signedArchiveReasons },
+    )
     if (!jsonEqual(record.summary, expectedSummary)) {
       reasons.push(`signed archive attestation record summary mismatch for ${record.source}`)
     }
