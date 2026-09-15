@@ -15,10 +15,15 @@
  * Usage:
  *   pnpm --dir packages/ax-code exec tsx script/verify-cli-review-receipts.ts
  *   pnpm --dir packages/ax-code exec tsx script/verify-cli-review-receipts.ts --root <dir> --revision <sha>
+ *   pnpm --dir packages/ax-code exec tsx script/verify-cli-review-receipts.ts --root <dir> --clis muse,claude,codex
+ *
+ * The reviewed CLI roster defaults to grok,claude,codex. `--clis` selects an
+ * explicit roster; each name must have a receipt contract in CLI_STDOUT.
  *
  * Layout (default root .internal/reports/cli-animation-review):
  *   round-1/revision.txt              revision the round reviewed
  *   round-1/grok/{exit.txt,stdout.jsonl}
+ *   round-1/muse/{exit.txt,stdout.jsonl}
  *   round-1/claude/{exit.txt,stdout.txt}
  *   round-1/codex/{exit.txt,stdout.txt}
  *   dispositions.json                 every finding with its disposition
@@ -31,18 +36,32 @@ import { fileURLToPath } from "node:url"
 import { runReviewRegressions, validateRegression, type ReviewRegression } from "./cli-review-regressions"
 import { parseJsonPayload } from "../src/util/json-value"
 
-const CLI_NAMES = ["grok", "claude", "codex"] as const
-type CliName = (typeof CLI_NAMES)[number]
+/**
+ * How a CLI encodes its answer on stdout.
+ *
+ * - `text`       — the final answer is written as plain text (Claude Code, Codex).
+ * - `jsonl`      — grok streaming JSONL: text arrives as `{"type":"text","data":...}`
+ *                  events that must be concatenated with no separator.
+ * - `muse-jsonl` — muse durable JSONL: text arrives as `run.output.delta` payloads
+ *                  (`payload.text`) with the consolidated answer also recorded on
+ *                  `run.terminal.completed`. Deltas are preferred so the answer is
+ *                  reassembled exactly once.
+ */
+export type VerdictFormat = "text" | "jsonl" | "muse-jsonl"
 
-/** grok writes streaming JSONL; the other two write their final answer as text. */
-const CLI_STDOUT: Record<CliName, string> = {
-  grok: "stdout.jsonl",
-  claude: "stdout.txt",
-  codex: "stdout.txt",
+/** Per-CLI receipt contract: the stdout file name and how its answer is encoded. */
+export const CLI_STDOUT: Record<string, { file: string; format: VerdictFormat }> = {
+  grok: { file: "stdout.jsonl", format: "jsonl" },
+  muse: { file: "stdout.jsonl", format: "muse-jsonl" },
+  claude: { file: "stdout.txt", format: "text" },
+  codex: { file: "stdout.txt", format: "text" },
 }
+
+const DEFAULT_CLIS = ["grok", "claude", "codex"] as const
 
 export namespace CliReviewReceipts {
   export const DefaultRoot = ".internal/reports/cli-animation-review"
+  export const DefaultClis: readonly string[] = DEFAULT_CLIS
   export const RevisionFile = "revision.txt"
   export const DispositionsFile = "dispositions.json"
   export const RoundPrefix = "round-"
@@ -90,8 +109,9 @@ function asString(value: unknown): string | undefined {
  * them (or inserting newlines between fragments) corrupts the verdict JSON, which
  * is why the previous newline-join could never parse grok's answer.
  */
-export function extractVerdicts(raw: string, format: "text" | "jsonl" = "text"): ReceiptVerdict[] {
+export function extractVerdicts(raw: string, format: VerdictFormat = "text"): ReceiptVerdict[] {
   if (format === "text") return scanBalancedObjects(raw)
+  if (format === "muse-jsonl") return scanBalancedObjects(reassembleMuseOutput(raw))
   const parts: string[] = []
   for (const line of raw.split("\n")) {
     if (!line.trim()) continue
@@ -105,6 +125,27 @@ export function extractVerdicts(raw: string, format: "text" | "jsonl" = "text"):
     if ("verdict" in parsed) parts.push(line)
   }
   return scanBalancedObjects(parts.join(""))
+}
+
+/**
+ * Reassemble muse's durable-JSONL answer. Assistant text is streamed as
+ * `run.output.delta` payloads; `run.terminal.completed` repeats the consolidated
+ * answer. Concatenating only the deltas avoids counting the same verdict twice,
+ * and the terminal text is a fallback for a run that emitted no deltas.
+ */
+function reassembleMuseOutput(raw: string): string {
+  const deltas: string[] = []
+  let terminal: string | undefined
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue
+    const parsed = parseJsonPayload(line)
+    if (!isRecord(parsed)) continue
+    const payload = isRecord(parsed.payload) ? parsed.payload : undefined
+    if (!payload || typeof payload.text !== "string") continue
+    if (parsed.payload_type === "run.output.delta") deltas.push(payload.text)
+    else if (parsed.payload_type === "run.terminal.completed") terminal = payload.text
+  }
+  return deltas.length > 0 ? deltas.join("") : (terminal ?? "")
 }
 
 function scanBalancedObjects(text: string): ReceiptVerdict[] {
@@ -186,22 +227,28 @@ export function currentRevision(root: string): string {
   return execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim()
 }
 
-type ParsedArgs = { root: string; revision?: string; quiet: boolean }
+type ParsedArgs = { root: string; revision?: string; quiet: boolean; clis: string[] }
 
 export function parseArgs(argv: string[], root: string): ParsedArgs {
   let reviewRoot = path.join(root, CliReviewReceipts.DefaultRoot)
   let revision: string | undefined
   let quiet = false
+  let clis: string[] = [...DEFAULT_CLIS]
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
     if (arg === "--root") reviewRoot = path.resolve(argv[++i] ?? "")
     else if (arg === "--revision") revision = argv[++i]
+    else if (arg === "--clis")
+      clis = (argv[++i] ?? "")
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
     else if (arg === "--quiet") quiet = true
   }
-  return { root: reviewRoot, revision, quiet }
+  return { root: reviewRoot, revision, quiet, clis }
 }
 
-export function verify(options: { root: string; revision: string }): {
+export function verify(options: { root: string; revision: string; clis?: readonly string[] }): {
   failures: string[]
   lines: string[]
   regressions: ReviewRegression[]
@@ -210,6 +257,12 @@ export function verify(options: { root: string; revision: string }): {
   const lines: string[] = []
   const regressions: ReviewRegression[] = []
   const { root, revision } = options
+  const clis = options.clis ?? DEFAULT_CLIS
+
+  if (clis.length === 0) failures.push("no CLI selected; pass --clis <name,name>")
+  for (const cli of clis) {
+    if (!CLI_STDOUT[cli]) failures.push(`unknown CLI ${cli}; known: ${Object.keys(CLI_STDOUT).join(", ")}`)
+  }
 
   if (!existsSync(root)) {
     return { failures: [`receipt root does not exist: ${root}`], lines, regressions }
@@ -233,10 +286,12 @@ export function verify(options: { root: string; revision: string }): {
       finalRound = finalRound ?? round
       currentRounds.add(round)
     }
-    for (const cli of CLI_NAMES) {
+    for (const cli of clis) {
+      const spec = CLI_STDOUT[cli]
+      if (!spec) continue
       const cliDir = path.join(roundDir, cli)
       const exitRaw = readTextFile(path.join(cliDir, "exit.txt"))?.trim()
-      const stdoutFile = path.join(cliDir, CLI_STDOUT[cli])
+      const stdoutFile = path.join(cliDir, spec.file)
       const stdout = readTextFile(stdoutFile)
       if (exitRaw === undefined) {
         failures.push(`${round}/${cli}: missing exit.txt`)
@@ -250,7 +305,7 @@ export function verify(options: { root: string; revision: string }): {
         failures.push(`${round}/${cli}: empty review output at ${path.relative(root, stdoutFile)}`)
         continue
       }
-      const verdicts = extractVerdicts(stdout, cli === "grok" ? "jsonl" : "text")
+      const verdicts = extractVerdicts(stdout, spec.format)
       if (verdicts.length > 1) failures.push(`${round}/${cli}: multiple verdicts are ambiguous`)
       const last = verdicts.at(-1)
       if (!last) {
@@ -366,7 +421,7 @@ async function main(): Promise<void> {
   const root = repoRoot()
   const args = parseArgs(process.argv.slice(2), root)
   const revision = args.revision ?? currentRevision(root)
-  const { failures, lines, regressions } = verify({ root: args.root, revision })
+  const { failures, lines, regressions } = verify({ root: args.root, revision, clis: args.clis })
   if (currentRevision(root) !== revision) failures.push("Requested review revision does not match repository HEAD")
   if (reviewSourceDirty(root))
     failures.push("Reviewed source has uncommitted changes; commit it and capture a matching review round")
@@ -387,7 +442,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
   console.log(
-    `\nOK: ${CLI_NAMES.length} CLIs, ${lines.filter((l) => l.includes("exit 0")).length} receipts, revision ${revision}`,
+    `\nOK: ${args.clis.length} CLIs, ${lines.filter((l) => l.includes("exit 0")).length} receipts, revision ${revision}`,
   )
 }
 
