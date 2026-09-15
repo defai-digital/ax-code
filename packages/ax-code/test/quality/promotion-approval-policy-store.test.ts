@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { QualityPromotionApprovalPolicy } from "../../src/quality/promotion-approval-policy"
-import { QualityPromotionApprovalPolicyStore } from "../../src/quality/promotion-approval-policy-store"
+import { QualityPromotionApprovalPolicy } from "../../src/quality/promotion/promotion-approval-policy"
+import { QualityPromotionApprovalPolicyStore } from "../../src/quality/promotion/promotion-approval-policy-store"
 import { Global } from "../../src/global"
 import { Storage } from "../../src/storage/storage"
 

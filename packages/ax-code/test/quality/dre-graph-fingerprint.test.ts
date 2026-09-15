@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { indexFingerprint, sessionFingerprint } from "../../src/quality/dre-graph-fingerprint"
+import { indexFingerprint, sessionFingerprint } from "../../src/quality/dre-graph/dre-graph-fingerprint"
 
 describe("quality.dre-graph-fingerprint", () => {
   test("summarizes session list entries for index fingerprints", () => {

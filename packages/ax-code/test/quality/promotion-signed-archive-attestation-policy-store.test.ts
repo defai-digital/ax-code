@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { QualityPromotionSignedArchiveAttestationPolicy } from "../../src/quality/promotion-signed-archive-attestation-policy"
-import { QualityPromotionSignedArchiveAttestationPolicyStore } from "../../src/quality/promotion-signed-archive-attestation-policy-store"
+import { QualityPromotionSignedArchiveAttestationPolicy } from "../../src/quality/promotion/promotion-signed-archive-attestation-policy"
+import { QualityPromotionSignedArchiveAttestationPolicyStore } from "../../src/quality/promotion/promotion-signed-archive-attestation-policy-store"
 import { Global } from "../../src/global"
 import { Storage } from "../../src/storage/storage"
 

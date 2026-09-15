@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { renderDreGraphRollbackBars, summarizeRollbackToolKinds } from "../../src/quality/dre-graph-rollback"
+import { renderDreGraphRollbackBars, summarizeRollbackToolKinds } from "../../src/quality/dre-graph/dre-graph-rollback"
 import { MessageID, PartID } from "../../src/session/schema"
 import type { SessionRollback } from "../../src/session/rollback"
 

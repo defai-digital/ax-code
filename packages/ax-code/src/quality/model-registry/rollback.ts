@@ -1,9 +1,9 @@
 import { Storage } from "../../storage/storage"
-import { QualityPromotionWatch } from "../promotion-watch"
+import { QualityPromotionWatch } from "../promotion/promotion-watch"
 import { QualityReentryContext } from "../reentry-context"
 import { QualityStabilityGuard } from "../stability-guard"
 import { QualityStorageKey } from "../storage-key"
-import { QualityModelRegistry } from "./index"
+import { QualityModelRegistry } from "./"
 
 type PromotionRecord = QualityModelRegistry.PromotionRecord
 

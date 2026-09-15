@@ -1,19 +1,19 @@
-import { QualityPromotionArchiveManifest } from "../promotion-archive-manifest"
-import { QualityPromotionAuditManifest } from "../promotion-audit-manifest"
-import { QualityPromotionExportBundle } from "../promotion-export-bundle"
-import { QualityPromotionHandoffPackage } from "../promotion-handoff-package"
-import { QualityPromotionPackagedArchive } from "../promotion-packaged-archive"
-import { QualityPromotionPortableExport } from "../promotion-portable-export"
-import { QualityPromotionReleasePacket } from "../promotion-release-packet"
-import { QualityPromotionReleasePolicyStore } from "../promotion-release-policy-store"
-import { QualityPromotionSignedArchive } from "../promotion-signed-archive"
-import { QualityPromotionSignedArchiveAttestationPolicy } from "../promotion-signed-archive-attestation-policy"
-import { QualityPromotionSignedArchiveAttestationPolicyStore } from "../promotion-signed-archive-attestation-policy-store"
-import { QualityPromotionSignedArchiveAttestationRecord } from "../promotion-signed-archive-attestation-record"
-import { QualityPromotionSignedArchiveAttestationPacket } from "../promotion-signed-archive-attestation-packet"
-import { QualityPromotionSignedArchiveGovernancePacket } from "../promotion-signed-archive-governance-packet"
-import { QualityPromotionSignedArchiveReviewDossier } from "../promotion-signed-archive-review-dossier"
-import { QualityPromotionSignedArchiveTrust } from "../promotion-signed-archive-trust"
+import { QualityPromotionArchiveManifest } from "../promotion/promotion-archive-manifest"
+import { QualityPromotionAuditManifest } from "../promotion/promotion-audit-manifest"
+import { QualityPromotionExportBundle } from "../promotion/promotion-export-bundle"
+import { QualityPromotionHandoffPackage } from "../promotion/promotion-handoff-package"
+import { QualityPromotionPackagedArchive } from "../promotion/promotion-packaged-archive"
+import { QualityPromotionPortableExport } from "../promotion/promotion-portable-export"
+import { QualityPromotionReleasePacket } from "../promotion/promotion-release-packet"
+import { QualityPromotionReleasePolicyStore } from "../promotion/promotion-release-policy-store"
+import { QualityPromotionSignedArchive } from "../promotion/promotion-signed-archive"
+import { QualityPromotionSignedArchiveAttestationPolicy } from "../promotion/promotion-signed-archive-attestation-policy"
+import { QualityPromotionSignedArchiveAttestationPolicyStore } from "../promotion/promotion-signed-archive-attestation-policy-store"
+import { QualityPromotionSignedArchiveAttestationRecord } from "../promotion/promotion-signed-archive-attestation-record"
+import { QualityPromotionSignedArchiveAttestationPacket } from "../promotion/promotion-signed-archive-attestation-packet"
+import { QualityPromotionSignedArchiveGovernancePacket } from "../promotion/promotion-signed-archive-governance-packet"
+import { QualityPromotionSignedArchiveReviewDossier } from "../promotion/promotion-signed-archive-review-dossier"
+import { QualityPromotionSignedArchiveTrust } from "../promotion/promotion-signed-archive-trust"
 import { QualityStorageKey } from "../storage-key"
 import {
   archiveManifestRecordSummary,
@@ -29,15 +29,15 @@ import {
   signedArchiveRecordSummary,
   signedArchiveReviewDossierRecordSummary,
   signedArchiveTrustRecordSummary,
-} from "../model-registry-artifact-summary"
+} from "./model-registry-artifact-summary"
 import {
   boardDecisionRecordSummary,
   releaseDecisionRecordSummary,
   releasePacketRecordSummary,
   reviewDossierRecordSummary,
   submissionBundleRecordSummary,
-} from "../model-registry-record-summary"
-import { QualityModelRegistry } from "./index"
+} from "./model-registry-record-summary"
+import { QualityModelRegistry } from "./"
 import { promoteReleaseDecisionRecord } from "./promote-bundle"
 import { assertPromotionSummaryPass, firstFailureDetail } from "./promotion-summary"
 

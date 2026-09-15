@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { branchSection } from "../../src/quality/dre-graph-branch-section"
+import { branchSection } from "../../src/quality/dre-graph/dre-graph-branch-section"
 import type { SessionBranchRank } from "../../src/session/branch"
 
 function item(input: Partial<SessionBranchRank.Item> & { id: string; title: string }): SessionBranchRank.Item {

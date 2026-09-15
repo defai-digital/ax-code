@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { style } from "../../src/quality/dre-graph-style"
+import { style } from "../../src/quality/dre-graph/dre-graph-style"
 
 describe("quality.dre-graph-style", () => {
   test("renders theme variables and core DRE graph selectors", () => {

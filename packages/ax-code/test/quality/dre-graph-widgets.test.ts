@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { barChart, chip, dailyChart, flow, gauge, stat, stepSummary } from "../../src/quality/dre-graph-widgets"
+import { barChart, chip, dailyChart, flow, gauge, stat, stepSummary } from "../../src/quality/dre-graph/dre-graph-widgets"
 
 describe("quality.dre-graph-widgets", () => {
   test("escapes chip and stat text", () => {

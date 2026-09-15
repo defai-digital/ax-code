@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { QualityPromotionReleasePolicy } from "../../src/quality/promotion-release-policy"
+import { QualityPromotionReleasePolicy } from "../../src/quality/promotion/promotion-release-policy"
 import { QualityReentryContext } from "../../src/quality/reentry-context"
 import { Storage } from "../../src/storage/storage"
 

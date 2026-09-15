@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { index } from "../../src/quality/dre-graph-index-page"
+import { index } from "../../src/quality/dre-graph/dre-graph-index-page"
 import type { Session } from "../../src/session"
 import type { SessionUsage } from "../../src/session/usage"
 import type { Risk } from "../../src/risk/score"

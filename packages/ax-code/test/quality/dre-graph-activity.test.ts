@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { dreGraphActivityToolLabels, summarizeDreGraphActivityTools } from "../../src/quality/dre-graph-activity"
+import { dreGraphActivityToolLabels, summarizeDreGraphActivityTools } from "../../src/quality/dre-graph/dre-graph-activity"
 
 describe("quality.dre-graph-activity", () => {
   test("summarizes activity into a compact human-readable sentence", () => {

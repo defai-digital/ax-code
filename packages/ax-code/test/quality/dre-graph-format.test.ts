@@ -11,7 +11,7 @@ import {
   time,
   tone,
   validation,
-} from "../../src/quality/dre-graph-format"
+} from "../../src/quality/dre-graph/dre-graph-format"
 
 describe("quality.dre-graph-format", () => {
   test("escapes HTML and script-sensitive JSON", () => {

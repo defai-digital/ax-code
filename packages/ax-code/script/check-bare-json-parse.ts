@@ -35,7 +35,7 @@ export namespace JsonParseGuard {
   export const AllowedFiles: ReadonlySet<string> = new Set([
     "src/bun/node-compat.ts",
     "src/hooks/lifecycle.ts",
-    "src/quality/dre-graph-assets.ts",
+    "src/quality/dre-graph/dre-graph-assets.ts",
   ])
 
   // Pre-existing bare JSON.parse call sites, grandfathered pending
