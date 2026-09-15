@@ -61,6 +61,7 @@ import { isSupportedHost as isAxEngineSupportedHost } from "./ax-engine/platform
 import { resolveAxEngineConnectMode } from "./ax-engine/connection"
 import { axEngineLocalRepository, selectAxEngineLocalModels } from "./ax-engine/local-models"
 import { isRetiredProviderID } from "./retired-providers"
+import { isDedicatedPrivateGpuProviderID } from "./private-gpu/presets"
 import { isGenericCliFallbackModel } from "./cli/ids"
 import { latestAnthropicFamilyModels } from "./anthropic-families"
 import { isHiddenDeepseekLegacySku } from "./deepseek-catalog"
@@ -368,6 +369,16 @@ export namespace Provider {
 
     const configProviders = Object.entries(config.provider ?? {})
 
+    // Runtime loaders canonicalize endpoints (for example adding /v1).
+    // Their model URL remains authoritative for discovery and attachment.
+    function keepsRuntimeEndpoint(providerID: string) {
+      return (
+        providerID === AX_ENGINE_PROVIDER_ID ||
+        LOCAL_LLM_PROVIDER_IDS.some((id) => id === providerID) ||
+        isDedicatedPrivateGpuProviderID(providerID)
+      )
+    }
+
     function mergeProvider(providerID: ProviderID, provider: Partial<Info>) {
       const sanitized = sanitizeProviderAuth(provider)
       const existing = providers[providerID]
@@ -412,6 +423,13 @@ export namespace Provider {
         model.api = {
           ...model.api,
           id: canonicalApiModelID(supportModelID),
+          // Profile selection must see the same endpoint as getSDK, including
+          // a custom-named provider overriding a constrained gateway URL.
+          ...(!keepsRuntimeEndpoint(providerID) &&
+          typeof provider.options.baseURL === "string" &&
+          provider.options.baseURL !== ""
+            ? { url: provider.options.baseURL }
+            : {}),
         }
         if (!supported(providerID, supportModelID, model)) {
           delete provider.models[modelID]
@@ -495,7 +513,12 @@ export namespace Provider {
               existingModel?.api?.npm ??
               modelsDev[providerID]?.npm ??
               "@ai-sdk/openai-compatible",
-            url: model.provider?.api ?? provider?.api ?? existingModel?.api?.url ?? modelsDev[providerID]?.api,
+            url:
+              !keepsRuntimeEndpoint(providerID) &&
+              typeof parsed.options.baseURL === "string" &&
+              parsed.options.baseURL !== ""
+                ? parsed.options.baseURL
+                : (model.provider?.api ?? provider?.api ?? existingModel?.api?.url ?? modelsDev[providerID]?.api),
           },
           status: model.status ?? existingModel?.status ?? "active",
           name,

@@ -8,6 +8,8 @@ Last reviewed: 2026-09-14
 
 Owner: ax-code runtime
 
+For model-specific effort, thinking switches, and reasoning replay, see [current model reasoning controls](current-model-reasoning.md).
+
 ## Optional context and tool controls
 
 Enable each experiment independently in your AX Code configuration:

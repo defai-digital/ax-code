@@ -66,7 +66,7 @@ describe("DeepSeek request wire contract", () => {
     expect(original.thinking.type).toBe("enabled")
   })
 
-  test.each(["deepseek-r1", "qwen3.8-flash"])(
+  test.each(["deepseek-r1", "qwen3.7-flash"])(
     "required tool choice does not inject a DeepSeek thinking switch into %s",
     (id) => {
       const original = { reasoningEffort: "high" }

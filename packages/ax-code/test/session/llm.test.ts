@@ -270,6 +270,159 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 }
 
 describe("session.llm.stream", () => {
+  test.each([
+    { id: "qwen3.8-max", effort: "xhigh" },
+    { id: "qwen3.8-flash", effort: "xhigh" },
+    { id: "glm-5.3", effort: "max" },
+    { id: "deepseek-v4-pro", effort: "high" },
+    { id: "deepseek-flash", effort: "high" },
+    { id: "MiniMax-M2.7", effort: undefined },
+    { id: "MiniMax-M3", effort: undefined },
+    { id: "MiniMax-M3", effort: undefined, unsplit: true },
+    { id: "qwen3.8-max", effort: undefined, required: true },
+    { id: "qwen3.8-flash", effort: undefined, required: true },
+  ])(
+    "sends $id effort=$effort required=$required through the complete LLM path",
+    async ({ id, effort, required, unsplit }) => {
+      const providerID = ProviderID.make("qualified-chat")
+      const modelID = ModelID.make(id)
+      const request = waitRequest(
+        "/chat/completions",
+        new Response('{"error":{"message":"intercepted"}}', {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }),
+      )
+      await using tmp = await tmpdir({
+        config: {
+          enabled_providers: [providerID],
+          provider: {
+            [providerID]: {
+              npm: "@ai-sdk/openai-compatible",
+              options: { apiKey: "test", baseURL: `${state.server.url.origin}/v1` },
+              models: {
+                [modelID]: {
+                  name: id,
+                  reasoning: true,
+                  tool_call: true,
+                  limit: { context: 1_000_000, output: 131_072 },
+                },
+              },
+            },
+          },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = await Provider.getModel(providerID, modelID)
+          vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(true)
+          const sessionID = SessionID.make("session-current-family-wire")
+          const stream = await LLM.stream({
+            sessionID,
+            model,
+            toolChoice: required ? "required" : undefined,
+            user: {
+              id: MessageID.make("user-current-family"),
+              sessionID,
+              role: "user",
+              time: { created: Date.now() },
+              agent: "test",
+              model: { providerID, modelID },
+            },
+            agent: {
+              name: "test",
+              mode: "primary",
+              options: unsplit ? { reasoning_split: false } : {},
+              permission: [],
+            },
+            messages: [
+              { role: "user", content: "Look up alpha and report its value" },
+              {
+                role: "assistant",
+                content: [
+                  { type: "reasoning", text: "Inspect alpha.\nUse the tool result exactly." },
+                  { type: "tool-call", toolCallId: "lookup-current", toolName: "read", input: {} },
+                ],
+              },
+              {
+                role: "tool",
+                content: [
+                  {
+                    type: "tool-result",
+                    toolCallId: "lookup-current",
+                    toolName: "read",
+                    output: { type: "text", value: "731" },
+                  },
+                ],
+              },
+            ],
+            system: [],
+            abort: new AbortController().signal,
+            tools: { read: tool({ inputSchema: z.object({}), description: "Read a record" }) },
+          })
+          const errors: unknown[] = []
+          for await (const event of stream.fullStream) if (event.type === "error") errors.push(event.error)
+          expect(errors).toHaveLength(1)
+          const body = (await request).body
+          expect(body.model).toBe(id)
+          expect(body.reasoning_effort).toBe(effort)
+          expect(body.thinking_budget).toBeUndefined()
+          const messages = body.messages as Array<Record<string, any>>
+          const assistant = messages.find((message) => message.role === "assistant")!
+          if (unsplit) {
+            expect(assistant.reasoning_content).toBeUndefined()
+            expect(assistant.content).toContain("<think>Inspect alpha.\nUse the tool result exactly.</think>")
+          } else expect(assistant.reasoning_content).toBe("Inspect alpha.\nUse the tool result exactly.")
+          expect(assistant.content).not.toContain("<mm:think>")
+          expect(assistant.tool_calls[0].id).toBe("lookup-current")
+          expect(body.tools).toHaveLength(1)
+          if (id.startsWith("MiniMax")) expect(body.reasoning_split).toBe(!unsplit)
+          if (required) {
+            expect(body.tool_choice).toBe("required")
+            expect(body.enable_thinking).toBe(false)
+          }
+        },
+      })
+    },
+  )
+
+  test.each([
+    "https://openrouter.ai/api/v1",
+    "https://api.groq.com/openai/v1",
+    "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  ])("config-only endpoint %s excludes the native GLM profile", async (baseURL) => {
+    const providerID = ProviderID.make("renamed-gateway")
+    const modelID = ModelID.make("glm-5.3")
+    await using tmp = await tmpdir({
+      config: {
+        enabled_providers: [providerID],
+        provider: {
+          [providerID]: {
+            npm: "@ai-sdk/openai-compatible",
+            options: { baseURL, apiKey: "test" },
+            models: {
+              [modelID]: {
+                name: "GLM",
+                reasoning: true,
+                tool_call: true,
+                limit: { context: 1_000_000, output: 131072 },
+              },
+            },
+          },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const m = await Provider.getModel(providerID, modelID)
+        expect(m.api.url).toBe(baseURL)
+        expect(m.variants).toEqual({})
+      },
+    })
+  })
+
   test("selects GPT-6 through the first-party provider and sends tools to Responses", async () => {
     const providerID = ProviderID.make("openai")
     const modelID = ModelID.make("gpt-6-astra")
@@ -833,16 +986,14 @@ describe("session.llm.stream", () => {
         const expectedMaxTokens = ProviderTransform.maxOutputTokens(resolved)
         expect(maxTokens).toBe(expectedMaxTokens)
 
-        // Token Plan runs on the OpenAI-compat endpoint and uses DashScope's
-        // enable_thinking + thinking_budget pair; the Anthropic-shaped
-        // thinking block is stripped and the current Max profile pins
-        // the thinking budget to 16384 despite plugin overrides.
+        // Qwen 3.8 accepts effort instead of a simultaneous token budget.
+        // Canonicalize the plugin alias and strip other SDK dialects.
         expect(body.thinking).toBeUndefined()
         expect(body.enable_thinking).toBe(true)
-        expect(body.thinking_budget).toBe(16384)
+        expect(body.thinking_budget).toBeUndefined()
         expect(body.reasoning).toBeUndefined()
         expect(body.reasoningEffort).toBeUndefined()
-        expect(body.reasoning_effort).toBeUndefined()
+        expect(body.reasoning_effort).toBe("xhigh")
         expect(body.thinkingConfig).toBeUndefined()
       },
     })
