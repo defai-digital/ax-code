@@ -114,6 +114,7 @@ import {
   startupRainCoversChrome,
   shouldStopDigitalCode,
   interruptOverlayPlan,
+  previewOverlayBlocked,
   digitalCodeOverlayActive,
 } from "./component/digital-code-view-model"
 
@@ -341,6 +342,17 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const [endingStyle, setEndingStyle] = createSignal<OverlayStyle>(animationPair.ending)
   const playDigitalCode = (style: OverlayStyle = animationPair.opening) => {
     if (exiting) return
+    // A live ending run owns the screen; a manual opening preview would mount a
+    // second full-screen overlay on top of it.
+    if (
+      previewOverlayBlocked({
+        preview: "opening",
+        opening: digitalCodePlaying(),
+        ending: reverseRainPlaying(),
+        startupPhase: startupRainPhase(),
+      })
+    )
+      return
     setOpeningStyle(style)
     setDigitalCodePlaying(true)
   }
@@ -369,6 +381,18 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
     // A caller that arrives mid-run — quitting during the palette preview —
     // waits for the run already on screen instead of cutting it off.
     if (existing) return existing
+    // A live opening run or the startup cover already owns the screen; a manual
+    // ending preview would mount a second overlay. The exit flourish clears both
+    // signals before it calls this, so quitting is never blocked.
+    if (
+      previewOverlayBlocked({
+        preview: "ending",
+        opening: digitalCodePlaying(),
+        ending: false,
+        startupPhase: startupRainPhase(),
+      })
+    )
+      return Promise.resolve()
     const created = new Promise<void>((resolve) => {
       settleReverseRain = resolve
     })

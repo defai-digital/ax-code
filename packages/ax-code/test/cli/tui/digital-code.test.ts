@@ -37,6 +37,7 @@ import {
   shouldPlayExitDigitalCode,
   shouldStopDigitalCode,
   interruptOverlayPlan,
+  previewOverlayBlocked,
   startupLogoDropLevel,
   startupLogoFrame,
   startupLogoGlyphLevel,
@@ -233,6 +234,36 @@ describe("overlay yields to a selection", () => {
     const source = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui", "app.tsx"), "utf8")
     expect(source).toContain("interruptOverlayPlan({")
     expect(source).toContain("if (plan.ending) endReverseDigitalCode()")
+  })
+})
+
+describe("manual preview commands do not stack overlays", () => {
+  test("an ending preview is refused while the opening run or startup cover is up", () => {
+    // Regression: playReverseDigitalCode set its signal unconditionally, so /ev
+    // during an opening run (or the startup rain/logo) mounted a second
+    // full-screen DigitalCode with its own cursor binding and Kitty player.
+    expect(previewOverlayBlocked({ preview: "ending", opening: true, ending: false, startupPhase: "app" })).toBe(true)
+    expect(previewOverlayBlocked({ preview: "ending", opening: false, ending: false, startupPhase: "rain" })).toBe(true)
+    expect(previewOverlayBlocked({ preview: "ending", opening: false, ending: false, startupPhase: "logo" })).toBe(true)
+    expect(previewOverlayBlocked({ preview: "ending", opening: false, ending: false, startupPhase: "app" })).toBe(false)
+  })
+
+  test("an opening preview is refused while the ending run is up", () => {
+    expect(previewOverlayBlocked({ preview: "opening", opening: false, ending: true, startupPhase: "app" })).toBe(true)
+    expect(previewOverlayBlocked({ preview: "opening", opening: false, ending: false, startupPhase: "app" })).toBe(
+      false,
+    )
+    // The ending run is what blocks the opening preview; the startup cover does
+    // not, because the startup playback itself calls this path.
+    expect(previewOverlayBlocked({ preview: "opening", opening: true, ending: false, startupPhase: "rain" })).toBe(
+      false,
+    )
+  })
+
+  test("both manual preview entry points consult the block helper", () => {
+    const source = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui", "app.tsx"), "utf8")
+    expect(source).toContain('preview: "opening"')
+    expect(source).toContain('preview: "ending"')
   })
 })
 
