@@ -2008,3 +2008,46 @@ test("keeps persisted tool failure signals when tail reminders append a user mes
     },
   })
 })
+
+test("goal planning deadline reaches the provider request before tools are disabled without mutating history", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { streamInput } = await createProcessorFixture(tmp.path)
+      const messages = await Session.messages({ sessionID: streamInput.sessionID })
+      const before = structuredClone(messages)
+      for (const [name, step, isLastStep, expected] of [
+        ["goal-plan-writer", 8, false, false],
+        ["goal-plan-writer", 9, false, true],
+        ["goal-plan-writer", 10, false, true],
+        ["goal-plan-writer", 11, false, true],
+        ["goal-plan-writer", 12, true, false],
+        ["build", 9, false, false],
+      ] as const) {
+        const request = await preparePromptRequest({
+          sessionID: streamInput.sessionID,
+          messages,
+          lastUser: streamInput.user,
+          step,
+          isLastStep,
+          agent: { ...streamInput.agent, name, steps: 12 },
+          model,
+          cache: {},
+          structuredPrompt: "",
+          systemOverride: [],
+        })
+        expect(JSON.stringify(request.requestMessages).includes("tool-enabled model turns left in this segment")).toBe(
+          expected,
+        )
+        expect(
+          JSON.stringify(await request.projectMessages("stripped")).includes(
+            "tool-enabled model turns left in this segment",
+          ),
+        ).toBe(expected)
+      }
+      expect(messages).toEqual(before)
+      expect(await Session.messages({ sessionID: streamInput.sessionID })).toEqual(before)
+    },
+  })
+})
