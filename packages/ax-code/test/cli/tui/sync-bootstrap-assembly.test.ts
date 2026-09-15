@@ -4,7 +4,7 @@ import {
   createStoreBackedBootstrapTasks,
   type SyncBootstrapAssemblyRequests,
   type SyncBootstrapAssemblyStoreState,
-} from "../../../src/cli/cmd/tui/context/sync-bootstrap-assembly"
+} from "../../../src/cli/tui/context/sync-bootstrap-assembly"
 
 function createState() {
   return createStore<SyncBootstrapAssemblyStoreState>({

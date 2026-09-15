@@ -1,11 +1,11 @@
 import { describe, expect, test, vi } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
-import { createTuiCrashHandler, registerTuiCrashHandlers } from "../../../src/cli/cmd/tui/util/lifecycle"
+import { createTuiCrashHandler, registerTuiCrashHandlers } from "../../../src/cli/tui/util/lifecycle"
 
 const PACKAGE_ROOT = path.resolve(import.meta.dirname, "../../..")
-const THREAD_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/thread.ts"), "utf8")
-const WORKER_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/cmd/tui/worker.ts"), "utf8")
+const THREAD_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/tui/thread.ts"), "utf8")
+const WORKER_SRC = readFileSync(path.join(PACKAGE_ROOT, "src/cli/tui/worker.ts"), "utf8")
 
 describe("tui crash handler", () => {
   test("restores the terminal, records the error, and exits non-zero", async () => {

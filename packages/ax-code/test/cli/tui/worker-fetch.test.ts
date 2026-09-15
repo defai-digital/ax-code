@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import { createWorkerFetch } from "../../../src/cli/cmd/tui/thread"
+import { createWorkerFetch } from "../../../src/cli/tui/thread"
 
 function setup(status = 200, body = "ok") {
   const call = vi.fn(async (..._args: unknown[]) => ({ status, body, headers: { "x-test": "preserved" } }))

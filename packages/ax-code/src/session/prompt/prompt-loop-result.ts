@@ -1,0 +1,98 @@
+import { Log } from "../../util/log"
+import { SessionCompaction } from "../compaction"
+import { MessageV2 } from "../message-v2"
+import type { SessionID } from "../schema"
+import { LifecycleHooks } from "@/hooks/lifecycle"
+import { Instance } from "@/project/instance"
+
+const log = Log.create({ service: "session.prompt" })
+
+type PromptLoopResultDeps = {
+  prune: typeof SessionCompaction.prune
+  stream: typeof MessageV2.stream
+  runStopHooks?: typeof LifecycleHooks.runForWorkspace
+}
+
+// Resolve lazily via getters: this module sits on an import cycle with
+// compaction.ts, so when a consumer loads compaction first (e.g. running
+// compaction tests standalone), the SessionCompaction namespace object is
+// still undefined while this module's top level evaluates. Reading the
+// properties eagerly here threw "undefined is not an object" at load time.
+const defaultDeps: PromptLoopResultDeps = {
+  get prune() {
+    return SessionCompaction.prune
+  },
+  get stream() {
+    return MessageV2.stream
+  },
+  get runStopHooks() {
+    return LifecycleHooks.runForWorkspace
+  },
+}
+
+async function fireStopHooks(sessionID: SessionID, runStopHooks: NonNullable<PromptLoopResultDeps["runStopHooks"]>) {
+  try {
+    let cwd: string | undefined
+    try {
+      cwd = Instance.directory
+    } catch {
+      cwd = process.cwd()
+    }
+    await runStopHooks({
+      event: "Stop",
+      sessionID,
+      cwd,
+    })
+  } catch (error) {
+    log.warn("Stop lifecycle hooks failed", {
+      command: "session.prompt.stop-hooks",
+      status: "error",
+      sessionID,
+      error,
+    })
+  }
+}
+
+export async function resolvePromptLoopResult(
+  input: {
+    sessionID: SessionID
+    abort: AbortSignal
+    expectedMessageID?: string
+    // True when this run was itself re-entered with resume_existing to drain
+    // queued prompts: only such a run pairs one queued-prompt callback with
+    // the response it just produced. A first-pass run must leave the queue
+    // untouched so the drain spawns a dedicated run per queued message.
+    resumeExisting: boolean
+    drainJoinerCallbacks: (sessionID: SessionID) => { resolve: (message: MessageV2.WithParts) => void }[]
+    shiftQueuedCallback: (sessionID: SessionID) => { resolve: (message: MessageV2.WithParts) => void } | undefined
+  },
+  deps: PromptLoopResultDeps = defaultDeps,
+): Promise<MessageV2.WithParts> {
+  deps.prune({ sessionID: input.sessionID }).catch((error) =>
+    log.warn("prune failed", {
+      command: "session.prompt.prune",
+      status: "error",
+      sessionID: input.sessionID,
+      error,
+    }),
+  )
+
+  for await (const item of deps.stream(input.sessionID)) {
+    if (item.info.role === "user") continue
+    if (input.expectedMessageID && item.info.id !== input.expectedMessageID) continue
+    // Turn completed: run user-visible Stop hooks (e.g. require-tests-on-stop).
+    if (deps.runStopHooks) await fireStopHooks(input.sessionID, deps.runStopHooks)
+    // Joiners (loop({ resume_existing: true }) on an active run) asked for
+    // exactly this turn's result — resolve them all and drop them from the
+    // queue so the drain does not spawn a redundant loop for them.
+    for (const joiner of input.drainJoinerCallbacks(input.sessionID)) {
+      joiner.resolve(item)
+    }
+    if (input.resumeExisting) {
+      input.shiftQueuedCallback(input.sessionID)?.resolve(item)
+    }
+    return item
+  }
+  if (input.abort.aborted) throw new DOMException("Aborted", "AbortError")
+  throw new Error("Impossible")
+}

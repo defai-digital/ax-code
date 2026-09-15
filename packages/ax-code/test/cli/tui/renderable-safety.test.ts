@@ -5,7 +5,7 @@ import {
   focusRenderable,
   isRenderableAlive,
   renderableChildren,
-} from "../../../src/cli/cmd/tui/util/renderable-safety"
+} from "../../../src/cli/tui/util/renderable-safety"
 
 describe("tui renderable safety", () => {
   test("treats missing and destroyed renderables as unavailable", () => {

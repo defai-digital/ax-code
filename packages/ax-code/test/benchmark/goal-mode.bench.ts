@@ -10,7 +10,7 @@ import { GoalPlanOrchestration } from "../../src/session/goal-plan-orchestration
 import { CreateGoalTool, UpdateGoalTool } from "../../src/tool/goal"
 import { Bus } from "../../src/bus"
 import { SessionStatus } from "../../src/session/status"
-import { executeGoalCommand } from "../../src/session/prompt-goal-command"
+import { executeGoalCommand } from "../../src/session/prompt/prompt-goal-command"
 import { SessionPrompt } from "../../src/session/prompt"
 import { Provider } from "../../src/provider/provider"
 import { LLM } from "../../src/session/llm"

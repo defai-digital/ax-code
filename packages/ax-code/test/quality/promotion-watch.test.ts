@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
-import { QualityPromotionReleasePolicy } from "../../src/quality/promotion-release-policy"
-import { QualityPromotionWatch } from "../../src/quality/promotion-watch"
+import { QualityPromotionReleasePolicy } from "../../src/quality/promotion/promotion-release-policy"
+import { QualityPromotionWatch } from "../../src/quality/promotion/promotion-watch"
 
 function shadowRecord(input: {
   artifactID: string

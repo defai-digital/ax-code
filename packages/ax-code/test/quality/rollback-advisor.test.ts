@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { QualityModelRegistry } from "../../src/quality/model-registry"
-import { QualityPromotionWatch } from "../../src/quality/promotion-watch"
+import { QualityPromotionWatch } from "../../src/quality/promotion/promotion-watch"
 import { QualityRollbackAdvisor } from "../../src/quality/rollback-advisor"
 
 function promotionRecord(input: {

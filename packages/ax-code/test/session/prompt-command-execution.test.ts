@@ -2,8 +2,8 @@ import { afterEach, expect, test, vi, type MockInstance } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Session } from "../../src/session"
-import { executePromptCommand } from "../../src/session/prompt-command-execution"
-import type { PromptInput } from "../../src/session/prompt-input"
+import { executePromptCommand } from "../../src/session/prompt/prompt-command-execution"
+import type { PromptInput } from "../../src/session/prompt/prompt-input"
 import { tmpdir } from "../fixture/fixture"
 
 const model: Provider.Model = {

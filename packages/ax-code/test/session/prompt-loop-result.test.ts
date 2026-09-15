@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { MessageV2 } from "../../src/session/message-v2"
-import { resolvePromptLoopResult } from "../../src/session/prompt-loop-result"
+import { resolvePromptLoopResult } from "../../src/session/prompt/prompt-loop-result"
 import { SessionID } from "../../src/session/schema"
 
 function message(role: "user" | "assistant", id: string): MessageV2.WithParts {

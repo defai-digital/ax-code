@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { footerSessionStatusView } from "../../../src/cli/cmd/tui/routes/session/footer-view-model"
+import { footerSessionStatusView } from "../../../src/cli/tui/routes/session/footer-view-model"
 
 const DEFAULT_LLM_STALE_AFTER_MS = 60_000
 const DEFAULT_TOOL_STALE_AFTER_MS = 90_000

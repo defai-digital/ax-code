@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { promptSubmissionView } from "../../src/cli/cmd/tui/component/prompt/view-model"
+import { promptSubmissionView } from "../../src/cli/tui/component/prompt/view-model"
 
 describe("promptSubmissionView", () => {
   test("reconstructs prompt text from ordered extmarks", () => {

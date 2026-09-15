@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parseTuiJsonPayload } from "../../../src/cli/cmd/tui/util/json"
+import { parseTuiJsonPayload } from "../../../src/cli/tui/util/json"
 
 describe("tui json util", () => {
   test("parses JSON payloads without applying shape validation", () => {

@@ -6,7 +6,7 @@
 // are available, ensuring the TUI does not remain on the home route.
 
 import { describe, expect, test } from "vitest"
-import { resolveSessionFirstRoute, type TuiLaunchDecision } from "@/cli/cmd/tui/navigation/launch-policy"
+import { resolveSessionFirstRoute, type TuiLaunchDecision } from "@/cli/tui/navigation/launch-policy"
 
 /**
  * Simulate the flag-gated decision path in app.tsx:

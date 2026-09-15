@@ -19,7 +19,7 @@ export namespace Rpc {
     onmessage: ((ev: MessageEvent<any>) => any) | null
     /**
      * Optional fast-fail hook. The wire (e.g. process-stdio transport
-     * in `cli/cmd/tui/thread.ts createProcessWire`) calls this when it
+     * in `cli/tui/thread.ts createProcessWire`) calls this when it
      * detects it can no longer deliver messages — broken stdin pipe,
      * child exit, stdout error, etc. The RPC client registers a
      * handler here that immediately rejects every pending call,

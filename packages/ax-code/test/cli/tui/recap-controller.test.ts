@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { createRecapController, type RecapSnapshot } from "../../../src/cli/cmd/tui/routes/session/recap-controller"
+import { createRecapController, type RecapSnapshot } from "../../../src/cli/tui/routes/session/recap-controller"
 
 afterEach(() => vi.useRealTimers())
 

@@ -3,8 +3,8 @@ import { Session } from "../../session"
 import { SessionDebug } from "../../session/debug"
 import { SessionID } from "../../session/schema"
 import { Risk } from "../../risk/score"
-import * as ProbabilisticRolloutReadiness from "../probabilistic-rollout-readiness"
-import * as ProbabilisticRolloutSchema from "../probabilistic-rollout-schema"
+import * as ProbabilisticRolloutReadiness from "./probabilistic-rollout-readiness"
+import * as ProbabilisticRolloutSchema from "./probabilistic-rollout-schema"
 import {
   REVIEW_TOOLS,
   RUNTIME_DEBUG_TOOLS,

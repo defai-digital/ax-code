@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { configureAxEngineLocalRuntime } from "../../../src/cli/cmd/tui/component/dialog-provider"
+import { configureAxEngineLocalRuntime } from "../../../src/cli/tui/component/dialog-provider"
 
 afterEach(() => vi.unstubAllEnvs())
 

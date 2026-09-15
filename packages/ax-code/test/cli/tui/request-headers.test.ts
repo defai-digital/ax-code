@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { directoryRequestHeaders } from "../../../src/cli/cmd/tui/util/request-headers"
+import { directoryRequestHeaders } from "../../../src/cli/tui/util/request-headers"
 
 describe("tui request headers", () => {
   test("includes accept and content-type when requested", () => {

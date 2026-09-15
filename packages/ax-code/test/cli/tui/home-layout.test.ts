@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { homeStatusBarLayout, homeStatusBarMcpWidth } from "../../../src/cli/cmd/tui/routes/home-layout"
+import { homeStatusBarLayout, homeStatusBarMcpWidth } from "../../../src/cli/tui/routes/home-layout"
 
 describe("home status bar layout", () => {
   test("keeps the row inline at its exact required width and stacks below it", () => {

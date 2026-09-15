@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { childAction, firstChildID, nextChildID } from "../../../src/cli/cmd/tui/routes/session/child"
+import { childAction, firstChildID, nextChildID } from "../../../src/cli/tui/routes/session/child"
 
 describe("tui session child helpers", () => {
   test("finds the first child session id", () => {

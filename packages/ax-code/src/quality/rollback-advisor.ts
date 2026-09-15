@@ -1,6 +1,6 @@
 import z from "zod"
 import { QualityModelRegistry } from "./model-registry"
-import { QualityPromotionWatch } from "./promotion-watch"
+import { QualityPromotionWatch } from "./promotion/promotion-watch"
 
 export namespace QualityRollbackAdvisor {
   export const RollbackAction = z.enum(["keep", "observe", "rollback"])

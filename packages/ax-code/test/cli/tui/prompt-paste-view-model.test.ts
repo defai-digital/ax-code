@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { isSummarizedPastePart, summarizedPasteViews } from "../../../src/cli/cmd/tui/component/prompt/paste-view-model"
+import { isSummarizedPastePart, summarizedPasteViews } from "../../../src/cli/tui/component/prompt/paste-view-model"
 
 describe("prompt paste view model", () => {
   test("classifies summarized paste parts", () => {

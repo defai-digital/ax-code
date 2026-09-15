@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { Usage } from "../../../src/cli/cmd/tui/routes/session/usage"
+import { Usage } from "../../../src/cli/tui/routes/session/usage"
 
 function assistant(input: { input?: number; output?: number; reasoning?: number; read?: number; write?: number }) {
   return {

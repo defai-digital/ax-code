@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
-import { createAutonomousTextContinuation, createUserMessage } from "../../src/session/prompt-user-message"
+import { createAutonomousTextContinuation, createUserMessage } from "../../src/session/prompt/prompt-user-message"
 import { ModelID, ProviderID } from "../../src/provider/schema"
-import { resolvePromptIsolationPolicy } from "../../src/session/prompt-runtime-policy"
+import { resolvePromptIsolationPolicy } from "../../src/session/prompt/prompt-runtime-policy"
 import { tmpdir } from "../fixture/fixture"
 
 afterEach(() => vi.unstubAllEnvs())

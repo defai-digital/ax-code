@@ -1,5 +1,5 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest"
-import { createToastStore } from "../../../src/cli/cmd/tui/ui/toast"
+import { createToastStore } from "../../../src/cli/tui/ui/toast"
 
 describe("toast store", async () => {
   beforeEach(() => {

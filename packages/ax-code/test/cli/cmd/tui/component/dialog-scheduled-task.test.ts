@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import type { ScheduledTaskInfo, ScheduledTaskRunInfo } from "@/cli/cmd/tui/component/dialog-scheduled-task-view-model"
+import type { ScheduledTaskInfo, ScheduledTaskRunInfo } from "@/cli/tui/component/dialog-scheduled-task-view-model"
 import {
   runDescription,
   runTitle,
@@ -8,7 +8,7 @@ import {
   sortTasks,
   taskDescription,
   taskStatusLabel,
-} from "@/cli/cmd/tui/component/dialog-scheduled-task-view-model"
+} from "@/cli/tui/component/dialog-scheduled-task-view-model"
 
 function task(overrides: Partial<ScheduledTaskInfo>): ScheduledTaskInfo {
   return {

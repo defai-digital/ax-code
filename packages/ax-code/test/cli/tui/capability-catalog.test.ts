@@ -3,7 +3,7 @@ import {
   capabilityCatalogDescription,
   capabilityCatalogOptions,
   normalizeCapabilityCatalogItems,
-} from "../../../src/cli/cmd/tui/routes/session/capability-catalog"
+} from "../../../src/cli/tui/routes/session/capability-catalog"
 
 describe("tui capability catalog", () => {
   test("groups catalog entries and exposes safety metadata", () => {

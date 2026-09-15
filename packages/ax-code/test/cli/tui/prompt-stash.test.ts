@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parseStashLine } from "../../../src/cli/cmd/tui/component/prompt/stash-util"
+import { parseStashLine } from "../../../src/cli/tui/component/prompt/stash-util"
 
 describe("prompt stash persistence", () => {
   test("parses valid stash jsonl rows", () => {

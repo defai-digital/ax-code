@@ -1,5 +1,5 @@
 import { test, expect } from "vitest"
-import { textareaKeybindingsForConfig } from "../../../src/cli/cmd/tui/component/textarea-keybindings"
+import { textareaKeybindingsForConfig } from "../../../src/cli/tui/component/textarea-keybindings"
 import type { Keybind } from "../../../src/util/keybind"
 
 function key(

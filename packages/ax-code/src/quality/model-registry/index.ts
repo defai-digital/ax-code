@@ -1,13 +1,13 @@
 import z from "zod"
 import { Storage } from "../../storage/storage"
-import * as QualityModelRegistryCanonical from "../model-registry-canonical"
-import * as QualityModelRegistrySchema from "../model-registry-schema"
+import * as QualityModelRegistryCanonical from "./model-registry-canonical"
+import * as QualityModelRegistrySchema from "./model-registry-schema"
 import { QualityStabilityGuard } from "../stability-guard"
 import { QualityStorageKey } from "../storage-key"
 import { QualityCalibrationModel } from "../calibration-model"
-import { QualityPromotionEligibility } from "../promotion-eligibility"
-import { QualityPromotionDecisionBundle } from "../promotion-decision-bundle"
-import { QualityPromotionReleasePolicyStore } from "../promotion-release-policy-store"
+import { QualityPromotionEligibility } from "../promotion/promotion-eligibility"
+import { QualityPromotionDecisionBundle } from "../promotion/promotion-decision-bundle"
+import { QualityPromotionReleasePolicyStore } from "../promotion/promotion-release-policy-store"
 import { QualityReentryContext } from "../reentry-context"
 import { QualityReentryRemediation } from "../reentry-remediation"
 import { jsonEqual } from "../json"
@@ -20,7 +20,7 @@ import {
   sortPromotionRecords,
   sortRollbackRecords,
   teamCarryoverHistory,
-} from "../model-registry-selection"
+} from "./model-registry-selection"
 
 export namespace QualityModelRegistry {
   export const PromotionMetadata = QualityModelRegistrySchema.PromotionMetadata

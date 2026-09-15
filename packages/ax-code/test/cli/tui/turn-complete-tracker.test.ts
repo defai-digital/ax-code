@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { createTurnCompleteTracker } from "../../../src/cli/cmd/tui/util/turn-complete-tracker"
+import { createTurnCompleteTracker } from "../../../src/cli/tui/util/turn-complete-tracker"
 
 describe("createTurnCompleteTracker", () => {
   test("waits for a grandchild after the parent settles and emits once", () => {

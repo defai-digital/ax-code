@@ -4,7 +4,7 @@ import {
   autonomousProgressLabel,
   isAutonomousProducedMessage,
   isLiveAutonomousText,
-} from "@/cli/cmd/tui/routes/session/autonomous-active"
+} from "@/cli/tui/routes/session/autonomous-active"
 
 describe("autonomousActiveView", () => {
   test("idle status is not active", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../src/quality/dre-graph-timeline"
+import { parseDreGraphTimeline, parseDreGraphTimelineStepDurationMs } from "../../src/quality/dre-graph/dre-graph-timeline"
 import type { SessionDre } from "../../src/session/dre"
 
 describe("quality.dre-graph-timeline", () => {

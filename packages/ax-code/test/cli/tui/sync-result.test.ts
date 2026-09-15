@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { createSyncContextValue } from "../../../src/cli/cmd/tui/context/sync-result"
+import { createSyncContextValue } from "../../../src/cli/tui/context/sync-result"
 
 describe("tui sync result", () => {
   test("builds the sync facade around store state and injected actions", () => {

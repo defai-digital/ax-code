@@ -136,8 +136,8 @@ const TASK_MATRIX: EvalTaskSpec[] = [
     expectedRouteClass: "premium",
     fixture: {
       touchedFiles: [
-        { path: "src/cli/cmd/tui/component/prompt/index.tsx", summary: "footer chip rendering" },
-        { path: "src/cli/cmd/tui/app.tsx", summary: "app.toggle.super_long command" },
+        { path: "src/cli/tui/component/prompt/index.tsx", summary: "footer chip rendering" },
+        { path: "src/cli/tui/app.tsx", summary: "app.toggle.super_long command" },
       ],
     },
   },

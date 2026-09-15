@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { handlePromptLoopAgentStepLimit } from "../../src/session/prompt-loop-agent-step-limit"
+import { handlePromptLoopAgentStepLimit } from "../../src/session/prompt/prompt-loop-agent-step-limit"
 import { SessionID } from "../../src/session/schema"
 
 const noDeps = {

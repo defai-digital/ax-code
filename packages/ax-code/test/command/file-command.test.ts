@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Command } from "../../src/command"
-import { commandTemplateText } from "../../src/session/prompt-command-template"
+import { commandTemplateText } from "../../src/session/prompt/prompt-command-template"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 

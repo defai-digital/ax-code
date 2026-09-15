@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { handlePromptLoopGoalContinuation } from "../../src/session/prompt-loop-goal"
+import { handlePromptLoopGoalContinuation } from "../../src/session/prompt/prompt-loop-goal"
 import { SessionID } from "../../src/session/schema"
 
 describe("prompt loop goal continuation", () => {

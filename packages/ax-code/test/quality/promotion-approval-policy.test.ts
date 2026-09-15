@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
-import { QualityPromotionApproval } from "../../src/quality/promotion-approval"
-import { QualityPromotionApprovalPolicy } from "../../src/quality/promotion-approval-policy"
-import { QualityPromotionDecisionBundle } from "../../src/quality/promotion-decision-bundle"
+import { QualityPromotionApproval } from "../../src/quality/promotion/promotion-approval"
+import { QualityPromotionApprovalPolicy } from "../../src/quality/promotion/promotion-approval-policy"
+import { QualityPromotionDecisionBundle } from "../../src/quality/promotion/promotion-decision-bundle"
 
 function bundle(
   requiredOverride: "none" | "allow_warn" | "force",

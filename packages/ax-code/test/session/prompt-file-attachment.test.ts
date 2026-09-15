@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   normalizeDocumentSymbolEnvelopeData,
   resolveFileAttachmentPart,
-} from "../../src/session/prompt-file-attachment"
+} from "../../src/session/prompt/prompt-file-attachment"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 describe("prompt file attachment", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { qualityReadinessSection } from "../../src/quality/dre-graph-quality-readiness"
+import { qualityReadinessSection } from "../../src/quality/dre-graph/dre-graph-quality-readiness"
 import type { ProbabilisticRollout } from "../../src/quality/probabilistic-rollout"
 import type { SessionRisk } from "../../src/session/risk"
 

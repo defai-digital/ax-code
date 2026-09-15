@@ -1,7 +1,7 @@
 import z from "zod"
 import { Storage } from "../storage/storage"
 import { QualityStorageKey } from "./storage-key"
-import { QualityPromotionReleasePolicy } from "./promotion-release-policy"
+import { QualityPromotionReleasePolicy } from "./promotion/promotion-release-policy"
 import { jsonEqual } from "./json"
 import { compareStringFields } from "./sort"
 

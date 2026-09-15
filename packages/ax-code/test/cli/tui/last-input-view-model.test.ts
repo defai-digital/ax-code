@@ -10,7 +10,7 @@ import {
   truncateToCellWidth,
   wrapPreview,
   type PinnedInputCandidate,
-} from "../../../src/cli/cmd/tui/routes/session/last-input-view-model"
+} from "../../../src/cli/tui/routes/session/last-input-view-model"
 
 function parts(map: Record<string, Array<Record<string, unknown>> | undefined>) {
   return map as Record<

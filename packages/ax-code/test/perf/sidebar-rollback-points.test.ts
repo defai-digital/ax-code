@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { SessionRollback } from "@/session/rollback"
-import { SessionRollbackView } from "@/cli/cmd/tui/routes/session/rollback"
+import { SessionRollbackView } from "@/cli/tui/routes/session/rollback"
 import type { ReplayEvent } from "@/replay/event"
 
 // Perf fix (finding 12): the sidebar rollback memo used to run two full

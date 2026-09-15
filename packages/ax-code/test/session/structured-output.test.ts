@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import { MessageV2 } from "../../src/session/message-v2"
-import { createStructuredOutputTool, createStructuredOutputTurn } from "../../src/session/prompt-helpers"
+import { createStructuredOutputTool, createStructuredOutputTurn } from "../../src/session/prompt/prompt-helpers"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { Session } from "../../src/session"
 

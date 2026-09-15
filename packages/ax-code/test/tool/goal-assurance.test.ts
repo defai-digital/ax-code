@@ -12,7 +12,7 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { VerifyProjectTool } from "../../src/tool/verify_project"
 import { UpdateGoalTool } from "../../src/tool/goal"
 import type { Tool } from "../../src/tool/tool"
-import { buildTurnContext } from "../../src/session/prompt-turn-context"
+import { buildTurnContext } from "../../src/session/prompt/prompt-turn-context"
 import * as SourceState from "../../src/quality/source-state"
 import { tmpdir } from "../fixture/fixture"
 

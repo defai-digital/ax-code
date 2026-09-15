@@ -1,5 +1,5 @@
 import { describe, test, expect } from "vitest"
-import { normalizeKeyEventForKeybind } from "../../../src/cli/cmd/tui/util/keys"
+import { normalizeKeyEventForKeybind } from "../../../src/cli/tui/util/keys"
 
 // Legacy terminals cannot report Ctrl+J distinctly: raw mode emits the LF
 // byte, parsed as an UNMODIFIED "linefeed" key (CSI-u reports "\n"). The

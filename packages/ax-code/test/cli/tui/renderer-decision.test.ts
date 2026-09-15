@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { decideTuiRenderer } from "../../../src/cli/cmd/tui/renderer-decision"
+import { decideTuiRenderer } from "../../../src/cli/tui/renderer-decision"
 
 describe("tui renderer decision gate", () => {
   test("retains AX Code TUI without reproducible failures", () => {

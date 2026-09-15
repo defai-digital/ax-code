@@ -11,7 +11,7 @@ import { describe, expect, test } from "vitest"
 // callbacks. Each must now inspect the resolved `.error` and route failures into
 // the toast/error path before any success side effect.
 
-const TUI_ROOT = path.join(__dirname, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.join(__dirname, "../../../src/cli/tui")
 const DIALOG_PROVIDER_SRC = path.join(TUI_ROOT, "component/dialog-provider.tsx")
 
 function sliceFrom(src: string, marker: string, length = 900) {

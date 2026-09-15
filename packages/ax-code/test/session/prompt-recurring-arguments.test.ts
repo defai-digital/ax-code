@@ -5,7 +5,7 @@ import {
   formatLoopInterval,
   parseLoopInterval,
   parseRecurringArguments,
-} from "../../src/session/prompt-recurring-arguments"
+} from "../../src/session/prompt/prompt-recurring-arguments"
 
 describe("parseRecurringArguments", () => {
   test("empty and status render the status view", () => {

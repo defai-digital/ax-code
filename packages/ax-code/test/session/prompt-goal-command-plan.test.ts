@@ -4,8 +4,8 @@ import { Session } from "../../src/session"
 import { SessionGoal } from "../../src/session/goal"
 import { GoalPlan } from "../../src/session/goal-plan"
 import { GoalPlanWriter } from "../../src/session/goal-plan-writer"
-import { executeGoalCommand } from "../../src/session/prompt-goal-command"
-import type { PromptInput } from "../../src/session/prompt-input"
+import { executeGoalCommand } from "../../src/session/prompt/prompt-goal-command"
+import type { PromptInput } from "../../src/session/prompt/prompt-input"
 import { tmpdir } from "../fixture/fixture"
 
 const model = {

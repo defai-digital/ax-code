@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest"
-import { createSessionTreeIndex } from "../../../src/cli/cmd/tui/util/session-tree"
+import { createSessionTreeIndex } from "../../../src/cli/tui/util/session-tree"
 import {
   hasActiveSubagentInSessionTree,
   footerSubagentStatusView,
-} from "../../../src/cli/cmd/tui/routes/session/footer-view-model"
+} from "../../../src/cli/tui/routes/session/footer-view-model"
 
 const sessions = [
   { id: "root" },

@@ -14,6 +14,9 @@ import {
 import { AxEnginePaths } from "../../../src/provider/ax-engine/paths"
 import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
+import { resolveAxEngineModelDefinition } from "../../../src/provider/ax-engine/hub-catalog"
+import { HubCatalog, hubModelID } from "../../../src/provider/ax-engine/hub-model"
+import snapshot from "../../../src/provider/ax-engine/hub-catalog-snapshot.json"
 
 const AXQ27 = {
   modelID: "qwen3.8-27b-axq-6bit",
@@ -287,12 +290,16 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
+    const artifact = HubCatalog.parse(snapshot).models.find(
+      (entry) => entry.id === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-8bit-MTP",
+    )!
+    const modelID = hubModelID(artifact)
+    const definition = await resolveAxEngineModelDefinition(modelID)
+    const requiredBytes = definition.quantizations.mlx!.minDiskBytes
+    expect(requiredBytes).toBeGreaterThan(32 * 1024 ** 3)
     const originalText = Process.text
-    // 40 GiB free: enough for the default qwen3.8-27b-axq-6bit (32 GiB) but not
-    // for qwen3-coder-next-axq-6bit (80 GiB). A call site that drops modelID would wrongly
-    // pass the disk gate for this download.
-    const availableBlocks = (40 * 1024 ** 3) / 1024
+    // Enough for the default alias, but below this pinned variant's own estimate.
+    const availableBlocks = Math.floor((32 * 1024 ** 3 + requiredBytes) / 2 / 1024)
     const spy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
       if (cmd[0] === "df") {
         const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
@@ -307,13 +314,13 @@ describe("ax-engine model storage uses the HF snapshot", () => {
       await fs.writeFile(
         binary,
         `#!/usr/bin/env node\nconsole.log(${JSON.stringify(
-          JSON.stringify({ output_dir: snapshot, download: { revision: COMMIT } }),
+          JSON.stringify({ output_dir: "/unused", download: { revision: COMMIT } }),
         )})\n`,
       )
       await fs.chmod(binary, 0o755)
 
       await expect(
-        downloadModel({ binaryPath: binary, modelID: CODER.modelID, quantization: CODER.quant }),
+        downloadModel({ binaryPath: binary, modelID, quantization: "mlx", binaryVersion: "7.2.1" }),
       ).rejects.toThrow("AX_ENGINE_INSUFFICIENT_DISK")
       expect(
         spy.mock.calls.some(
@@ -321,7 +328,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
             Array.isArray(cmd) &&
             cmd[0] === binary &&
             cmd[1] === "download" &&
-            cmd[2] === CODER.repo &&
+            cmd[2] === modelID &&
             cmd[3] === "--json",
         ),
       ).toBe(false)
@@ -388,48 +395,19 @@ console.log(JSON.stringify({ dest: ${JSON.stringify(snapshot)}, revision: ${JSON
     }
   })
 
-  test("downloadModel keeps Qwen3-Coder-Next on the direct download path", async () => {
-    if (process.platform === "win32") return
-
+  test("downloadModel rejects removed Qwen3-Coder-Next even with a cached snapshot", async () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
     const snapshot = await makeHfSnapshot(hfRoot, CODER.repo, COMMIT)
-    const availableBlocks = (120 * 1024 ** 3) / 1024
-    const originalText = Process.text
-    const textSpy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
-      if (cmd[0] === "df") {
-        const stdout = Buffer.from(`Filesystem 1024-blocks Used Available Capacity Mounted on
-/dev/test 200000000 1000000 ${availableBlocks} 1% ${cmd.at(-1) ?? "/"}
-`)
-        return Promise.resolve({ code: 0, stdout, stderr: Buffer.alloc(0), text: stdout.toString() })
-      }
-      return originalText(cmd, opts)
-    })
+    const textSpy = vi.spyOn(Process, "text")
     const spawnSpy = vi.spyOn(Process, "spawn")
-    try {
-      const binary = path.join(dir.path, "fake-ax-engine")
-      await fs.writeFile(
-        binary,
-        `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: COMMIT }))})\n`,
-      )
-      await fs.chmod(binary, 0o755)
-
-      await downloadModel({ binaryPath: binary, modelID: CODER.modelID, quantization: CODER.quant })
-      expect(
-        spawnSpy.mock.calls.some(
-          ([cmd]) =>
-            Array.isArray(cmd) &&
-            cmd[0] === binary &&
-            cmd[1] === "download" &&
-            cmd[2] === CODER.repo &&
-            cmd.includes("--json"),
-        ),
-      ).toBe(true)
-    } finally {
-      textSpy.mockRestore()
-      spawnSpy.mockRestore()
-    }
+    await expect(
+      downloadModel({ binaryPath: "/never-start", modelID: CODER.modelID, quantization: CODER.quant }),
+    ).rejects.toThrow("AX_ENGINE_MODEL_UNSUPPORTED")
+    expect(textSpy).not.toHaveBeenCalled()
+    expect(spawnSpy).not.toHaveBeenCalled()
+    expect(await Filesystem.exists(snapshot)).toBe(true)
   })
 
   test("getDiskStatus returns a blocker for a dangling cache symlink instead of throwing", async () => {

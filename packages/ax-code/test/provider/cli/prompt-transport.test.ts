@@ -14,7 +14,7 @@ import { PassThrough } from "node:stream"
 import { MessageV2 } from "../../../src/session/message-v2"
 import { SessionID } from "../../../src/session/schema"
 import { ModelID, ProviderID } from "../../../src/provider/schema"
-import { handlePromptLoopError } from "../../../src/session/prompt-loop-errors"
+import { handlePromptLoopError } from "../../../src/session/prompt/prompt-loop-errors"
 import { tmpdir } from "../../fixture/fixture"
 import type { LanguageModelV3CallOptions, LanguageModelV3StreamPart } from "@ai-sdk/provider"
 

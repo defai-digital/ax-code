@@ -10,8 +10,8 @@ import {
   relocatePromptPartAfterEditor,
   setPromptPartSourceRange,
   stringIndexFromDisplayOffset,
-} from "../../../src/cli/cmd/tui/component/prompt/prompt-helpers"
-import type { PromptInfo } from "../../../src/cli/cmd/tui/component/prompt/prompt-info"
+} from "../../../src/cli/tui/component/prompt/prompt-helpers"
+import type { PromptInfo } from "../../../src/cli/tui/component/prompt/prompt-info"
 
 describe("prompt helpers", () => {
   test("expands sourced text parts using display offsets", () => {

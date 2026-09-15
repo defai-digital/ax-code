@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { resolvePromptCache } from "../../src/session/prompt-cache"
+import { resolvePromptCache } from "../../src/session/prompt/prompt-cache"
 
 describe("resolvePromptCache", () => {
   test("reuses cached values when keys match", async () => {

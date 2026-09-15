@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import { resolvePromptLoopResult } from "../../src/session/prompt-loop-result"
+import { resolvePromptLoopResult } from "../../src/session/prompt/prompt-loop-result"
 import type { SessionID } from "../../src/session/schema"
 
 describe("resolvePromptLoopResult Stop hooks", () => {

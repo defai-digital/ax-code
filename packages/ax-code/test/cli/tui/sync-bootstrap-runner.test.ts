@@ -4,7 +4,7 @@ import {
   failBootstrapSpans,
   runBootstrapPhaseSequence,
   runBootstrapPhaseTasks,
-} from "../../../src/cli/cmd/tui/context/sync-bootstrap-runner"
+} from "../../../src/cli/tui/context/sync-bootstrap-runner"
 
 const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0))
 

@@ -8,7 +8,7 @@ import {
   normalizeRuntimeFlagState,
   normalizeWorkflowDashboardState,
   type WorkflowDashboardRun,
-} from "../../../src/cli/cmd/tui/context/sync-runtime-store"
+} from "../../../src/cli/tui/context/sync-runtime-store"
 
 describe("tui sync runtime store", () => {
   test("normalizes legacy debug-engine payloads with missing optional fields", () => {

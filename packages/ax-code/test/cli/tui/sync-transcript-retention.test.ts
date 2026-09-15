@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from "vitest"
 import { createStore, produce } from "solid-js/store"
 import { createHeadlessProjectionState } from "../../../src/runtime/headless/projection"
-import { subscribeStoreBackedSyncEvents } from "../../../src/cli/cmd/tui/context/sync-subscription"
-import { applySessionLeavePrune, applySessionSyncSnapshot } from "../../../src/cli/cmd/tui/context/sync-session-store"
+import { subscribeStoreBackedSyncEvents } from "../../../src/cli/tui/context/sync-subscription"
+import { applySessionLeavePrune, applySessionSyncSnapshot } from "../../../src/cli/tui/context/sync-session-store"
 
-import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
+import type { SyncedSessionRisk } from "../../../src/cli/tui/context/sync-session-risk"
 
 type Message = { id: string; sessionID: string }
 type Part = { id: string; sessionID: string; messageID: string; type: "text"; text: string }

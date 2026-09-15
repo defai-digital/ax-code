@@ -7,7 +7,7 @@ import {
   formatTranscript,
   formatTranscriptJson,
   userRoute,
-} from "../../../src/cli/cmd/tui/util/transcript"
+} from "../../../src/cli/tui/util/transcript"
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
 
 describe("transcript", () => {

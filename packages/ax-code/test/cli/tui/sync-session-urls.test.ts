@@ -3,7 +3,7 @@ import {
   sessionDerivedRequestHeaders,
   sessionGoalURL,
   sessionRiskURL,
-} from "../../../src/cli/cmd/tui/context/sync-session-urls"
+} from "../../../src/cli/tui/context/sync-session-urls"
 
 describe("tui derived session requests", () => {
   test("uses workspace headers for risk and goal data instead of unsupported query parameters", () => {

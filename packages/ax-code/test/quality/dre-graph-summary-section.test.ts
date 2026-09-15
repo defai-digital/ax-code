@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { summary } from "../../src/quality/dre-graph-summary-section"
+import { summary } from "../../src/quality/dre-graph/dre-graph-summary-section"
 import type { SessionDre } from "../../src/session/dre"
 import type { SessionGraph } from "../../src/session/graph"
 

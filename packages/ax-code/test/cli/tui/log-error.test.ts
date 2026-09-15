@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { formatTuiLogError, formatWorkerLoadError } from "../../../src/cli/cmd/tui/util/log-error"
+import { formatTuiLogError, formatWorkerLoadError } from "../../../src/cli/tui/util/log-error"
 
 describe("tui log error formatting", () => {
   test("includes the stack for Error inputs", () => {

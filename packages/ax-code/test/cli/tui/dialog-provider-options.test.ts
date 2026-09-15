@@ -23,7 +23,7 @@ import {
   selectableProviderDefaultModelID,
   withCustomApiProviderDialogEntry,
   withAxTrustProviderDialogEntry,
-} from "../../../src/cli/cmd/tui/component/dialog-provider-options"
+} from "../../../src/cli/tui/component/dialog-provider-options"
 
 function provider(id: string, name = id) {
   return { id, name, models: {} } as any

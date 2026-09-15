@@ -2,11 +2,11 @@ import { describe, expect, test, vi } from "vitest"
 import { createRoot } from "solid-js"
 
 // Exercise the real SDK initializer without rendering its context provider.
-vi.mock("../../../src/cli/cmd/tui/context/helper", () => ({
+vi.mock("../../../src/cli/tui/context/helper", () => ({
   createSimpleContext: (input: { init: (props: unknown) => unknown }) => ({ provider: input.init, use: vi.fn() }),
 }))
 
-import { SDKProvider, type useSDK } from "../../../src/cli/cmd/tui/context/sdk"
+import { SDKProvider, type useSDK } from "../../../src/cli/tui/context/sdk"
 
 function setup(headers?: HeadersInit) {
   const requests: Request[] = []

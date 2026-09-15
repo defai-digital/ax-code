@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { validationSection } from "../../src/quality/dre-graph-validation-section"
+import { validationSection } from "../../src/quality/dre-graph/dre-graph-validation-section"
 import type { SessionRisk } from "../../src/session/risk"
 
 function risk(signals: Partial<SessionRisk.Detail["assessment"]["signals"]>): SessionRisk.Detail {

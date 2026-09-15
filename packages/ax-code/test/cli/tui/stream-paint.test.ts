@@ -5,7 +5,7 @@ import {
   streamPaintTimerMayFire,
   STREAM_PAINT_MAX_MS,
   STREAM_PAINT_MS,
-} from "../../../src/cli/cmd/tui/routes/session/stream-paint"
+} from "../../../src/cli/tui/routes/session/stream-paint"
 
 describe("streamPaintIntervalMs", () => {
   test("short documents paint at the base interval", () => {

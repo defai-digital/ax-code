@@ -5,7 +5,7 @@ import {
   DOUBLE_ESCAPE_REWIND_MS,
   escapeRewindDisarmKey,
   promptEscapeRewindIntent,
-} from "../../../src/cli/cmd/tui/component/prompt/view-model"
+} from "../../../src/cli/tui/component/prompt/view-model"
 
 const IDLE_SESSION = {
   keyName: "escape",
@@ -111,7 +111,7 @@ describe("escapeRewindDisarmKey", () => {
   // consecutive. The disarm must run before any early-return consumer.
   test("prompt handler disarms the rewind window before any early-return consumption", async () => {
     const prompt = await fs.readFile(
-      path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui/component/prompt/index.tsx"),
+      path.resolve(import.meta.dirname, "../../../src/cli/tui/component/prompt/index.tsx"),
       "utf8",
     )
     const disarm = prompt.indexOf("escapeRewindDisarmKey(e.name)")

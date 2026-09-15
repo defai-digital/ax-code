@@ -1,5 +1,5 @@
-import { validateCatalogs } from "../src/cli/cmd/tui/i18n/validate"
-import { dictionaries } from "../src/cli/cmd/tui/i18n"
+import { validateCatalogs } from "../src/cli/tui/i18n/validate"
+import { dictionaries } from "../src/cli/tui/i18n"
 const errors = validateCatalogs()
 if (errors.length) {
   console.error(errors.join("\n"))

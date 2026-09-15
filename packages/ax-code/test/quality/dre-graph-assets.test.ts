@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { executionSummaryScript, live, themeScript, themeToggle } from "../../src/quality/dre-graph-assets"
+import { executionSummaryScript, live, themeScript, themeToggle } from "../../src/quality/dre-graph/dre-graph-assets"
 
 describe("quality.dre-graph-assets", () => {
   test("renders theme bootstrap and toggle scripts", () => {

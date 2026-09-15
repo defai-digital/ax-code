@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { directoryLabel } from "../../../src/cli/cmd/tui/context/directory-view-model"
+import { directoryLabel } from "../../../src/cli/tui/context/directory-view-model"
 
 describe("tui directory view model", () => {
   test("shortens home paths and appends the active branch", () => {

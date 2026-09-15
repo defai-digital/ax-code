@@ -5,7 +5,7 @@ import {
   createBootstrapResponsePlanTasks,
   createProviderBootstrapTask,
   createSessionBootstrapPhaseTasks,
-} from "../../../src/cli/cmd/tui/context/sync-bootstrap-plan"
+} from "../../../src/cli/tui/context/sync-bootstrap-plan"
 
 describe("tui sync bootstrap plan", () => {
   test("routes session bootstrap work to the blocking phase when continue mode is enabled", async () => {

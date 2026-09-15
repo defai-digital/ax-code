@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { agentControlActivityItems } from "@/cli/cmd/tui/routes/session/agent-control-activity"
+import { agentControlActivityItems } from "@/cli/tui/routes/session/agent-control-activity"
 
 describe("agentControlActivityItems", () => {
   test("maps agent-control replay rows into TUI activity items", () => {

@@ -5,7 +5,7 @@ import {
   runModeFlags,
   runModeLabel,
   runModeTransition,
-} from "@/cli/cmd/tui/component/prompt/run-mode-view-model"
+} from "@/cli/tui/component/prompt/run-mode-view-model"
 
 describe("runMode", () => {
   test("maps the dependent boolean pair onto the three-mode ladder", () => {

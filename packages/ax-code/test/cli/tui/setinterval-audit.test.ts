@@ -3,7 +3,7 @@ import { Glob } from "bun"
 import fs from "fs/promises"
 import path from "path"
 
-const TUI_ROOT = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.resolve(import.meta.dirname, "../../../src/cli/tui")
 
 // Strip line / block comments so substring matches don't trigger on
 // comment text. Imperfect (won't handle template-literal // patterns),

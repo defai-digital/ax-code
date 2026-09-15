@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { createSyncStartupCoordinator } from "../../../src/cli/cmd/tui/context/sync-startup"
+import { createSyncStartupCoordinator } from "../../../src/cli/tui/context/sync-startup"
 
 describe("tui sync startup coordinator", () => {
   test("starts bootstrap once and clears the debug-engine poll on stop", () => {

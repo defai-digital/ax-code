@@ -1,0 +1,1776 @@
+import { applyInitialPromptDraft } from "@tui/component/prompt/session-drafts"
+import { useContentDimensions } from "@tui/context/content-dimensions"
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  mapArray,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from "solid-js"
+import { useRoute, useRouteData } from "@tui/context/route"
+import { MAX_SESSION_MESSAGES, useSync } from "@tui/context/sync"
+import { SplitBorder } from "@tui/component/border"
+import { tint, useTheme } from "@tui/context/theme"
+import { ScrollBoxRenderable, addDefaultParsers, MacOSScrollAccel, type ScrollAcceleration, RGBA } from "ax-tui"
+import { Prompt, type PromptRef } from "@tui/component/prompt"
+import type {
+  AssistantMessage as AssistantMessageInfo,
+  Part,
+  ToolPart,
+  UserMessage as UserMessageInfo,
+  TextPart,
+  ReasoningPart,
+} from "@ax-code/sdk/v2"
+import { useLocal } from "@tui/context/local"
+import { Locale } from "@/util/locale"
+import { useKeyboard, useRenderer } from "ax-tui/solid"
+import { useSDK } from "@tui/context/sdk"
+import { useCommandDialog } from "@tui/component/dialog-command"
+import type { DialogContext } from "@tui/ui/dialog"
+import { useKeybind } from "@tui/context/keybind"
+import { scheduleMicrotaskTask } from "@tui/util/microtask"
+import {
+  findRenderableChild,
+  focusRenderable,
+  isRenderableAlive,
+  renderableChildren,
+} from "@tui/util/renderable-safety"
+import { scheduleTuiInterval, scheduleTuiTimeout } from "@tui/util/timer"
+import { Header } from "./header"
+import { useDialog } from "../../ui/dialog"
+import { DialogPrompt } from "../../ui/dialog-prompt"
+import { DialogMessage } from "./dialog-message"
+import { DialogConfirm } from "@tui/ui/dialog-confirm"
+import { loadRevertHistory, mergeRevertHistory, MissingRevertMessageError } from "./revert-history"
+import { DialogActivity } from "./dialog-activity"
+import { DialogCapabilityCatalog } from "./dialog-capability-catalog"
+import { DialogTimeline } from "./dialog-timeline"
+import { DialogQuality } from "./dialog-quality"
+import { DialogWorkflow } from "./dialog-workflow"
+import { DialogForkFromTimeline } from "./dialog-fork-from-timeline"
+import { DialogSessionRename } from "../../component/dialog-session-rename"
+import { DialogDre } from "./dialog-dre"
+import { DialogDreGraph } from "./dialog-dre-graph"
+import { DialogGoal } from "./dialog-goal"
+import { DialogBranch } from "./dialog-branch"
+import { DialogCompare } from "./dialog-compare"
+import { DialogRollback } from "./dialog-rollback"
+import { DialogDiffViewer } from "../../component/dialog-diff-viewer"
+import { SessionRollbackView } from "./rollback"
+import { Sidebar } from "./sidebar"
+import { sessionQualityActions, sessionQualityActionValue } from "./quality"
+import { computeSessionMainPaneWidth } from "./layout"
+import { Flag } from "@/flag/flag"
+import parsers from "../../../../../parsers-config"
+import { Toast, useToast } from "../../ui/toast"
+import { useKV } from "../../context/kv"
+import { usePromptRef } from "../../context/prompt"
+import { useExit } from "../../context/exit"
+import { PermissionPrompt } from "./permission"
+import { QuestionPrompt } from "./question"
+import { UI } from "@/cli/ui.ts"
+import { useTuiConfig } from "../../context/tui-config"
+import { autonomousActiveView } from "./autonomous-active"
+import {
+  AUTONOMOUS_CHROME_PULSE_MAX_ALPHA,
+  AUTONOMOUS_CHROME_PULSE_MIN_ALPHA,
+  pulseAlpha,
+  useAutonomousPulse,
+} from "./autonomous-pulse"
+import { footerSessionStatusOrIdle } from "./footer-view-model"
+import { familySessionIDs, requestsInSessionTree } from "../../util/pending-request-notices"
+import { recoveredAssistantMessageIDs } from "./display"
+import { childAction, firstChildID, nextChildID } from "./child"
+import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
+import { messageScroll, messageTarget, nextVisibleMessage } from "./navigation"
+import { LastInputBanner } from "./last-input-banner"
+import {
+  derivePinnedInputBanner,
+  messagePreviewVisibility,
+  selectPinnedInputCandidate,
+  subagentPanelRows,
+} from "./last-input-view-model"
+import { RevertNotice } from "./revert-notice"
+import { WorkModeNotice } from "@tui/component/work-mode-notice"
+import { IdleRecap } from "./idle-recap"
+import { revertState, hiddenMessageIDs, visibleParts } from "./revert"
+import { displayCommands } from "./display-commands"
+import { sdkErrorMessage } from "./sdk-error-message"
+import { AssistantMessage, QueuedFollowUps, RouteIndicator, UserMessage } from "./transcript"
+import { EventQuery } from "@/replay/query"
+import { buildRouteInfoByMessage } from "./route"
+import { Log } from "@/util/log"
+import { compactionToastForActiveSession } from "./compaction-view-model"
+import { createReconnectRecoveryGate } from "../../util/reconnect-recovery"
+import { recordTuiStartupOnce } from "@tui/util/startup-trace"
+import { isMissingSessionSnapshotError } from "../../context/sync-session-coordinator"
+import { applySessionLeavePrune } from "../../context/sync-session-store"
+import { produce } from "solid-js/store"
+import {
+  createSessionEntrySyncRetryState,
+  nextSessionEntrySyncRetry,
+  type SessionEntrySyncRetryState,
+} from "./entry-sync"
+import {
+  buildSubagentStatusView,
+  mergeSubagentRollupTasks,
+  queueItemsForSessionTree,
+  taskQueueItemsToRollupTasks,
+  type SubagentRollupTask,
+  type SubagentStatusItem,
+} from "./subagent-status-view"
+import { SubagentStatusPanel } from "./subagent-status-panel"
+import { hasNewActiveSubagent } from "./subagent-panel-layout"
+import { SessionRouteContext as context } from "./context"
+import { durableFollowUps } from "../../component/prompt/durable-follow-up"
+
+addDefaultParsers(parsers.parsers)
+
+const log = Log.create({ service: "tui.session" })
+
+type ScrollChild = {
+  id?: string
+  y: number
+}
+
+class CustomSpeedScroll implements ScrollAcceleration {
+  constructor(private speed: number) {}
+
+  tick(_now?: number): number {
+    return this.speed
+  }
+
+  reset(): void {}
+}
+
+export function Session() {
+  const route = useRouteData("session")
+  const { navigate } = useRoute()
+  const sync = useSync()
+  const tuiConfig = useTuiConfig()
+  const kv = useKV()
+  const { theme } = useTheme()
+  const promptRef = usePromptRef()
+  const session = createMemo(() => sync.session.get(route.sessionID))
+  const risk = createMemo(() => sync.session.risk(route.sessionID))
+  // Mirror of the header's autonomous chip — same SessionStatus source —
+  // so the transcript outer border and the header chip flip together.
+  const autonomous = createMemo(() => {
+    const candidate = sync.data.session_status?.[route.sessionID]
+    return autonomousActiveView(footerSessionStatusOrIdle(candidate))
+  })
+  // Breathing pulse for the transcript's outer border while the
+  // autonomous turn is running. Same driver as the assistant text
+  // bubble and the header chip, so the three visual cues breathe
+  // together. Border color is interpolated between a dim and full
+  // theme.accent so the existing "this is autonomous" hue is
+  // preserved — we only modulate brightness.
+  const autonomousBorderPulse = useAutonomousPulse(() => autonomous().active, {
+    animationsEnabled: () => kv.get("animations_enabled", true),
+  })
+  const autonomousBorderColor = createMemo(() => {
+    const alpha = pulseAlpha(
+      autonomousBorderPulse(),
+      AUTONOMOUS_CHROME_PULSE_MIN_ALPHA,
+      AUTONOMOUS_CHROME_PULSE_MAX_ALPHA,
+    )
+    return tint(theme.background, theme.accent, alpha)
+  })
+  const qualityActions = createMemo(() =>
+    sessionQualityActions({
+      sessionID: route.sessionID,
+      quality: risk()?.quality,
+    }),
+  )
+  const hasQualityReadiness = createMemo(() => qualityActions().length > 0)
+  const children = createMemo(() => {
+    const s = session()
+    if (!s) return []
+    const parentID = s.parentID ?? s.id
+    return sync.data.session
+      .filter((x) => x.parentID === parentID || x.id === parentID)
+      .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  })
+  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
+  const [historyLoading, setHistoryLoading] = createSignal(false)
+  const [historyError, setHistoryError] = createSignal("")
+  let historyFlight: { key: string; controller: AbortController; promise: Promise<boolean> } | undefined
+  async function ensureRevertHistory() {
+    const sessionID = route.sessionID
+    const messageID = session()?.revert?.messageID
+    if (!messageID) return true
+    const index = messages().findIndex((message) => message.id === messageID)
+    if (index >= 0 && (undoMessageID(messages(), messageID) || !sync.data.message_truncated[sessionID])) return true
+    const key = `${sessionID}:${messageID}`
+    if (historyFlight?.key === key) return historyFlight.promise
+    historyFlight?.controller.abort()
+    const controller = new AbortController()
+    const client = sdk.client
+    const current = () =>
+      !controller.signal.aborted && route.sessionID === sessionID && session()?.revert?.messageID === messageID
+    setHistoryLoading(true)
+    setHistoryError("")
+    const promise = (async () => {
+      try {
+        const history = await loadRevertHistory({
+          messageID,
+          signal: controller.signal,
+          fetchPage: (before) =>
+            client.session.messages(
+              { sessionID, limit: MAX_SESSION_MESSAGES, before },
+              { throwOnError: true, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]) },
+            ),
+        })
+        if (!current()) return false
+        sync.set(
+          produce((draft) => {
+            mergeRevertHistory(draft, sessionID, history.messages)
+            draft.message_truncated[sessionID] = history.truncated
+          }),
+        )
+        return true
+      } catch (error) {
+        // A new prompt commits the undo: the deleted boundary can disappear
+        // before its session.updated event arrives. Confirm server state before
+        // presenting this normal transition as damaged history.
+        if (current() && error instanceof MissingRevertMessageError) {
+          try {
+            const result = await client.session.get(
+              { sessionID },
+              {
+                throwOnError: true,
+                signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]),
+              },
+            )
+            if (!current()) return false
+            if (result.data && result.data.revert?.messageID !== messageID) {
+              sync.set(
+                produce((draft) => {
+                  const index = draft.session.findIndex((item) => item.id === sessionID)
+                  if (index >= 0) draft.session[index] = result.data!
+                }),
+              )
+              setHistoryError("")
+              return false
+            }
+          } catch (refreshError) {
+            if (current())
+              setHistoryError(sdkErrorMessage(refreshError, "Failed to refresh undo state. Retry history loading."))
+            return false
+          }
+        }
+        if (current()) setHistoryError(sdkErrorMessage(error, "History loading failed. Retry or use Restore all."))
+        return false
+      } finally {
+        if (historyFlight?.controller === controller) {
+          historyFlight = undefined
+          setHistoryLoading(false)
+        }
+      }
+    })()
+    historyFlight = { key, controller, promise }
+    return promise
+  }
+  onCleanup(() => historyFlight?.controller.abort())
+  const queuedFollowUps = createMemo(() => durableFollowUps(sync.data.task_queue, route.sessionID))
+  // Extract task parts per-message with mapArray so a single streamed part
+  // update only re-scans the one message whose parts changed, instead of
+  // rescanning every part of every message (which this memo is read 6+ times
+  // in the JSX). Each message gets its own inner memo keyed by message
+  // identity; the rollup below just concatenates the small per-message lists.
+  const taskPartsByMessage = mapArray(messages, (message) =>
+    createMemo(() => {
+      const parts = sync.data.part[message.id] ?? []
+      const out: SubagentRollupTask[] = []
+      for (const part of parts) {
+        if (part.type !== "tool" || (part as any).tool !== "task") continue
+        const state = (part as any).state ?? {}
+        const status = state.status
+        const input = state.input ?? {}
+        const metadata = state.metadata ?? {}
+        const sessionID = metadata.sessionId ?? metadata.sessionID ?? input.task_id
+        out.push({
+          id: part.id,
+          sessionID: typeof sessionID === "string" ? sessionID : undefined,
+          title: state.title ?? input.description,
+          agent: input.subagent_type,
+          status,
+          startedAt: state.time?.start,
+          lastActivityAt: state.time?.end ?? state.time?.start,
+        })
+      }
+      return out
+    }),
+  )
+  const subagentTasks = createMemo(() => {
+    const tasks = taskPartsByMessage().flatMap((tasksForMessage) => tasksForMessage())
+    const parentID = session()?.parentID ?? route.sessionID
+    const childSessionIDs = children()
+      .filter((item) => item.parentID === parentID)
+      .map((item) => item.id)
+    const queueTasks = taskQueueItemsToRollupTasks(
+      queueItemsForSessionTree(sync.data.task_queue, { parentSessionID: parentID, childSessionIDs }),
+    )
+    return buildSubagentStatusView({
+      tasks: mergeSubagentRollupTasks(tasks, queueTasks),
+      childSessions: children(),
+      statuses: sync.data.session_status,
+      parentSessionID: parentID,
+    })
+  })
+  const requestFamily = createMemo(() => familySessionIDs(sync.data.session, route.sessionID))
+  const permissions = createMemo(() => requestsInSessionTree(sync.data.permission, requestFamily()))
+  const questions = createMemo(() => requestsInSessionTree(sync.data.question, requestFamily()))
+
+  const messagesWithParts = createMemo(() =>
+    messages().map((item) => ({
+      info: item,
+      parts: sync.data.part[item.id] ?? [],
+    })),
+  )
+
+  // Resolve the per-message route indicator once for the whole route instead
+  // of once per rendered message. Previously each RouteIndicator loaded the
+  // full session log (up to 10k rows, MB payloads) to pull out its own
+  // agent.route row — ~50 synchronous SQLite loads on session open. This uses
+  // the indexed, agent.route-filtered query a single time and builds a
+  // Map<messageID, routeInfo>; RouteIndicator just does a Map.get. The
+  // primary-row selection matches the original per-message logic exactly.
+  //
+  // Re-query only when the message set structurally changes (ids added or
+  // removed): agent.route rows arrive alongside new messages, and tracking
+  // the raw array would re-run a full SQLite scan on every streamed
+  // message.updated field write.
+  const messageStructureKey = createMemo(() =>
+    (sync.data.message[route.sessionID] ?? []).map((message) => message.id).join(""),
+  )
+  const routeInfoByMessage = createMemo(() => {
+    void messageStructureKey()
+    const sid = route.sessionID as Parameters<typeof EventQuery.bySessionAndTypeWithTimestamp>[0]
+    const rows = EventQuery.bySessionAndTypeWithTimestamp(sid, "agent.route")
+    return buildRouteInfoByMessage(rows, sync.data.agent)
+  })
+
+  const pending = createMemo(() => {
+    return messages().findLast((x) => x.role === "assistant" && !x.time.completed)?.id
+  })
+
+  const lastAssistant = createMemo(() => {
+    return messages().findLast((x) => x.role === "assistant")
+  })
+  const recoveredAssistantIDs = createMemo(() => recoveredAssistantMessageIDs(messages()))
+
+  const dimensions = useContentDimensions()
+  // Default to auto-showing the sidebar on wide terminals. Narrow terminals
+  // still use the overlay path when the user explicitly toggles it.
+  const [sidebar, setSidebar] = kv.signal<"auto" | "hide">("sidebar", "auto")
+  const [sidebarOpen, setSidebarOpen] = createSignal(false)
+  const [conceal, setConceal] = createSignal(true)
+  const [showThinking, setShowThinking] = kv.signal("thinking_visibility", true)
+  const [timestamps, setTimestamps] = kv.signal<"hide" | "show">("timestamps", "hide")
+  const [metadataDensity, setMetadataDensity] = kv.signal<"auto" | "full" | "compact">(
+    "user_message_metadata_density",
+    "auto",
+  )
+  const [showDetails, setShowDetails] = kv.signal("tool_details_visibility", true)
+  const [showAssistantMetadata] = kv.signal("assistant_metadata_visibility", true)
+  const [showAssistantStats, setShowAssistantStats] = kv.signal("assistant_stats_visibility", true)
+  const [showScrollbar, setShowScrollbar] = kv.signal("scrollbar_visible", true)
+  const [showHeader, setShowHeader] = kv.signal("header_visible", true)
+  const [diffWrapMode] = kv.signal<"word" | "none">("diff_wrap_mode", "word")
+  const [showGenericToolOutput, setShowGenericToolOutput] = kv.signal("generic_tool_output_visibility", false)
+  const [subagentPanelCollapsed, setSubagentPanelCollapsed] = createSignal(false)
+  let previousSubagentSession = ""
+  let previousActiveSubagents = new Set<string>()
+  createEffect(() => {
+    const sessionID = route.sessionID
+    const activeIDs = subagentTasks()
+      .items.filter((item) => item.active)
+      .map((item) => item.id)
+    if (sessionID !== previousSubagentSession || hasNewActiveSubagent(previousActiveSubagents, activeIDs)) {
+      setSubagentPanelCollapsed(false)
+    }
+    previousSubagentSession = sessionID
+    previousActiveSubagents = new Set(activeIDs)
+  })
+  const [stoppingSubagents, setStoppingSubagents] = createSignal<ReadonlySet<string>>(new Set())
+  const [statusTick, setStatusTick] = createSignal(0)
+
+  const wide = createMemo(() => dimensions().width > 120)
+  const sidebarVisible = createMemo(() => {
+    if (session()?.parentID) return false
+    if (sidebarOpen()) return true
+    if (sidebar() === "auto" && wide()) return true
+    return false
+  })
+  // "Visible" includes the narrow-mode overlay (used for the render
+  // gate). "Panel" means the sidebar is rendered as a side column that
+  // reduces the main pane's width — only true when also `wide()`.
+  // Layout math (main pane, prompt) must use the panel signal so the
+  // prompt isn't shrunk when the sidebar is floating as an overlay.
+  const sidebarPanelVisible = createMemo(() => sidebarVisible() && wide())
+  const showTimestamps = createMemo(() => timestamps() === "show")
+  const contentWidth = createMemo(() =>
+    computeSessionMainPaneWidth({
+      terminalWidth: dimensions().width,
+      sidebarVisible: sidebarPanelVisible(),
+      sidebarPreferredWidth: kv.get("sidebar_width"),
+    }),
+  )
+
+  onMount(() => {
+    recordTuiStartupOnce("tui.startup.sessionMounted")
+  })
+
+  createEffect(() => {
+    const sessionID = route.sessionID
+    const cancel = scheduleTuiInterval(
+      () => {
+        const candidate = sync.data.session_status?.[sessionID]
+        if (footerSessionStatusOrIdle(candidate).type === "idle") return
+        setStatusTick((value) => value + 1)
+      },
+      {
+        name: "session-status-tick",
+        delayMs: 1000,
+        unref: true,
+      },
+    )
+    onCleanup(cancel)
+  })
+
+  const scrollAcceleration = createMemo(() => {
+    const tui = tuiConfig
+    if (tui?.scroll_acceleration?.enabled) {
+      return new MacOSScrollAccel()
+    }
+    if (tui?.scroll_speed) {
+      return new CustomSpeedScroll(tui.scroll_speed)
+    }
+
+    return new CustomSpeedScroll(3)
+  })
+
+  const toast = useToast()
+  const sdk = useSDK()
+  createEffect(() => {
+    sdk.setWorkspace(session()?.directory)
+  })
+
+  function openSubagent(item: SubagentStatusItem) {
+    if (!item.sessionID) return
+    navigate({ type: "session", sessionID: item.sessionID })
+  }
+
+  async function stopSubagent(item: SubagentStatusItem) {
+    if (!item.sessionID || stoppingSubagents().has(item.sessionID)) return
+    const sessionID = item.sessionID
+    setStoppingSubagents((prev) => new Set(prev).add(sessionID))
+    try {
+      const aborted = await sdk.client.session.abort({ sessionID })
+      if (aborted.error) {
+        log.warn("subagent stop failed", { error: aborted.error, sessionID })
+        toast.show({
+          message: sdkErrorMessage(aborted.error, "Failed to stop the subagent"),
+          variant: "error",
+        })
+      }
+    } finally {
+      setStoppingSubagents((prev) => {
+        const next = new Set(prev)
+        next.delete(sessionID)
+        return next
+      })
+    }
+  }
+
+  let sessionSyncGeneration = 0
+  const sessionSyncRetryTimers = new Set<() => void>()
+
+  function scheduleSessionSyncRetry(fn: () => void, delay: number) {
+    const cancel = scheduleTuiTimeout(
+      () => {
+        sessionSyncRetryTimers.delete(cancel)
+        fn()
+      },
+      {
+        name: "session-sync-retry",
+        delayMs: delay,
+        unref: true,
+      },
+    )
+    sessionSyncRetryTimers.add(cancel)
+  }
+
+  function runInitialSessionSync(
+    sessionID: string,
+    generation: number,
+    retryState: SessionEntrySyncRetryState,
+    attempt = 1,
+  ) {
+    void sync.session
+      .sync(sessionID, { missing: "throw" })
+      .then(() => {
+        if (generation !== sessionSyncGeneration) return
+        toBottom()
+      })
+      .catch((error) => {
+        if (generation !== sessionSyncGeneration) return
+        if (isMissingSessionSnapshotError(error)) {
+          const nextRetry = nextSessionEntrySyncRetry(retryState)
+          if (nextRetry) {
+            scheduleSessionSyncRetry(
+              () => runInitialSessionSync(sessionID, generation, nextRetry.state, attempt + 1),
+              nextRetry.delayMs,
+            )
+            return
+          }
+        }
+        log.warn("session sync failed", { error, sessionID, attempt })
+        toast.show({
+          message: `Failed to load session: ${sessionID}`,
+          variant: "error",
+        })
+        // Fall back to new-chat surface (Agent default applied via session.new / Home once).
+        navigate({ type: "home" })
+      })
+  }
+
+  createEffect(
+    on(
+      () => route.sessionID,
+      (sessionID) => {
+        const generation = ++sessionSyncGeneration
+        sync.set(
+          produce((draft) => {
+            draft.transcript_generation++
+            draft.active_session = sessionID
+          }),
+        )
+        runInitialSessionSync(sessionID, generation, createSessionEntrySyncRetryState())
+        // ADR-047 D3: when this sessionID effect re-runs or the session route
+        // unmounts, drop heavy transcript projection for the left session and
+        // clear the session-sync fullSynced mark so re-entry reloads without
+        // force. Permission/question/status and the session list row stay.
+        // clear() also bumps the coordinator epoch so an in-flight fetch for
+        // this session cannot re-apply after prune.
+        onCleanup(() => {
+          sync.session.clear(sessionID)
+          sync.set(
+            produce((draft) => {
+              applySessionLeavePrune(draft, sessionID)
+              if (draft.active_session === sessionID) {
+                draft.active_session = undefined
+                draft.transcript_generation++
+              }
+            }),
+          )
+        })
+      },
+    ),
+  )
+  onCleanup(() => {
+    sessionSyncGeneration++
+    for (const cancel of sessionSyncRetryTimers) cancel()
+    sessionSyncRetryTimers.clear()
+  })
+
+  const reconnectSession = createReconnectRecoveryGate({
+    recover: () =>
+      sync.session.sync(route.sessionID, { force: true, missing: "throw" }).catch((error) => {
+        log.warn("session resync after reconnect failed", { error, sessionID: route.sessionID })
+        toast.show({
+          message: "Reconnected, but refreshing the session state failed",
+          variant: "error",
+        })
+      }),
+  })
+  createEffect(
+    on(
+      () => sdk.sseConnected,
+      (connected) => reconnectSession.onConnectionChange(connected),
+    ),
+  )
+  onCleanup(() => reconnectSession.dispose())
+
+  // plan_exit hands off to the build agent. Sync the picker so the chip
+  // matches the synthetic user message the tool created.
+  let lastSwitch: string | undefined = undefined
+  const unsubAgentSwitch = sdk.event.on("message.part.updated", (evt) => {
+    const part = evt.properties.part
+    if (part.type !== "tool") return
+    if (part.sessionID !== route.sessionID) return
+    if (part.state.status !== "completed") return
+    if (part.id === lastSwitch) return
+    if (part.tool !== "plan_exit") return
+    local.agent.set("build")
+    lastSwitch = part.id
+  })
+  onCleanup(() => unsubAgentSwitch())
+
+  // Durable marker is the Auto/Manual divider. Toast only the session
+  // currently on screen so background compactors stay silent.
+  const unsubCompacted = sdk.event.on("session.compacted", (evt) => {
+    const options = compactionToastForActiveSession({
+      compactedSessionID: evt.properties.sessionID,
+      activeSessionID: route.sessionID,
+    })
+    if (!options) return
+    toast.show(options)
+  })
+  onCleanup(() => unsubCompacted())
+
+  let scroll: ScrollBoxRenderable
+  let prompt: PromptRef
+  const keybind = useKeybind()
+  const dialog = useDialog()
+  const renderer = useRenderer()
+
+  // Allow exit when in child session (prompt is hidden)
+  const exit = useExit()
+
+  // Double-click anywhere in a subagent transcript jumps back to the
+  // parent session — mirrors the existing header double-click but
+  // covers the full screen so users don't have to drag focus back up
+  // to the title row. Matches the same SUBAGENT_PARENT_DOUBLE_CLICK_MS
+  // window the header uses. Skipped while a text selection is active so
+  // a user finishing a drag-select isn't bounced out unexpectedly.
+  const SUBAGENT_BODY_DOUBLE_CLICK_MS = 400
+  let lastSubagentBodyClickAt = 0
+  function handleSubagentBodyMouseUp() {
+    if (!session()?.parentID) return
+    if (renderer.getSelection()?.getSelectedText()) return
+    const now = Date.now()
+    if (now - lastSubagentBodyClickAt <= SUBAGENT_BODY_DOUBLE_CLICK_MS) {
+      lastSubagentBodyClickAt = 0
+      const parentID = session()?.parentID
+      if (parentID) navigate({ type: "session", sessionID: parentID })
+      return
+    }
+    lastSubagentBodyClickAt = now
+  }
+
+  createEffect(() => {
+    const currentSession = session()
+    const title = Locale.truncate(currentSession?.title ?? "", 50)
+    const pad = (text: string) => text.padEnd(10, " ")
+    const weak = (text: string) => UI.Style.TEXT_DIM + pad(text) + UI.Style.TEXT_NORMAL
+    const logo = UI.logo("  ").split(/\r?\n/)
+    return exit.message.set(
+      [
+        ...logo,
+        ``,
+        `  ${weak("Session")}${UI.Style.TEXT_NORMAL_BOLD}${title}${UI.Style.TEXT_NORMAL}`,
+        currentSession?.id
+          ? `  ${weak("Continue")}${UI.Style.TEXT_NORMAL_BOLD}ax-code -s ${currentSession.id}${UI.Style.TEXT_NORMAL}`
+          : undefined,
+        ``,
+      ]
+        .filter((line): line is string => line !== undefined)
+        .join("\n"),
+    )
+  })
+
+  useKeyboard((evt) => {
+    if (!session()?.parentID) return
+    if (keybind.match("app_exit", evt)) {
+      void exit.flourish()
+    }
+  })
+
+  function jumpToUserMessage(id?: string) {
+    if (!isRenderableAlive(scroll)) return
+    const target = id ?? lastUserMessageID(messages(), sync.data.part)
+    const child = messageTarget(
+      renderableChildren<ScrollChild>(scroll, { name: "session-last-user-message-children" }),
+      target,
+    )
+    if (child) scroll.scrollBy(child.y - scroll.y - 1)
+  }
+
+  const scrollToMessage = (direction: "next" | "prev", dialog: ReturnType<typeof useDialog>) => {
+    if (!isRenderableAlive(scroll)) return
+    const children = renderableChildren<ScrollChild>(scroll, { name: "session-scroll-message-children" })
+    const targetID = nextVisibleMessage({
+      direction,
+      children,
+      messages: messages(),
+      parts: sync.data.part,
+      scrollTop: scroll.y,
+    })
+    const child = targetID
+      ? findRenderableChild<ScrollChild>(scroll, (item) => item.id === targetID, {
+          name: "session-scroll-message-target",
+        })
+      : undefined
+    scroll.scrollBy(
+      messageScroll({
+        direction,
+        target: child,
+        scrollTop: scroll.y,
+        height: scroll.height,
+      }),
+    )
+    dialog.clear()
+  }
+
+  let cancelScrollTimer: (() => void) | undefined
+  function toBottom() {
+    cancelScrollTimer?.()
+    cancelScrollTimer = scheduleTuiTimeout(
+      () => {
+        cancelScrollTimer = undefined
+        if (!isRenderableAlive(scroll)) return
+        scroll.scrollTo(scroll.scrollHeight)
+      },
+      {
+        name: "session-scroll-to-bottom",
+        delayMs: 50,
+      },
+    )
+  }
+  onCleanup(() => cancelScrollTimer?.())
+
+  const local = useLocal()
+
+  function moveFirstChild() {
+    const next = firstChildID(children())
+    if (next) {
+      navigate({
+        type: "session",
+        sessionID: next,
+      })
+    }
+  }
+
+  function moveChild(direction: number) {
+    const next = nextChildID(children(), session()?.id, direction)
+    if (next) {
+      navigate({
+        type: "session",
+        sessionID: next,
+      })
+    }
+  }
+
+  function childSessionHandler(func: (dialog: DialogContext) => void) {
+    return (dialog: DialogContext) => {
+      if (!childAction(session()?.parentID, dialog.stack.length)) return
+      func(dialog)
+    }
+  }
+
+  function continueBranch(sessionID: string) {
+    navigate({
+      type: "session",
+      sessionID,
+    })
+    scheduleMicrotaskTask(
+      () => {
+        focusRenderable(promptRef.current, { name: "session-continue-branch-focus" })
+      },
+      {
+        name: "session-continue-branch-focus",
+      },
+    )
+  }
+
+  // Transcript search state. `searchMatches` holds matching message IDs in
+  // chronological order and `searchIndex` points at the match the user is
+  // currently looking at; re-invoking the command with the same query steps
+  // to the previous match (wrapping to the latest).
+  let searchQuery = ""
+  let searchMatches: string[] = []
+  let searchIndex = -1
+
+  function searchMessageText(messageID: string) {
+    const revert = session()?.revert
+    const parts = visibleParts(
+      sync.data.part[messageID] ?? [],
+      messageID === revert?.messageID ? revert.partID : undefined,
+    )
+    return parts.reduce((agg, part) => {
+      if (part.type === "text" && !part.synthetic && !part.ignored) {
+        agg += part.text
+      }
+      return agg
+    }, "")
+  }
+
+  function searchMatchIDs(query: string) {
+    const needle = query.toLowerCase()
+    return messages()
+      .filter((message) => !hiddenIDs().has(message.id))
+      .filter((message) => searchMessageText(message.id).toLowerCase().includes(needle))
+      .map((message) => message.id)
+  }
+
+  function scrollToSearchMatch(messageID: string) {
+    if (!isRenderableAlive(scroll)) return false
+    const children = renderableChildren<ScrollChild>(scroll, { name: "session-search-message-children" })
+    // User messages render a box keyed by the message ID; assistant messages
+    // key their text part boxes as text-<partID> instead.
+    const textPart = (sync.data.part[messageID] ?? []).find(
+      (part) => part.type === "text" && !part.synthetic && !part.ignored,
+    )
+    const child =
+      messageTarget(children, messageID) ?? messageTarget(children, textPart ? `text-${textPart.id}` : undefined)
+    if (!child) return false
+    scroll.scrollBy(child.y - scroll.y - 1)
+    return true
+  }
+
+  async function runTranscriptSearch(dialog: DialogContext) {
+    const query = await DialogPrompt.show(dialog, "Search transcript", {
+      value: searchQuery,
+      placeholder: "Search messages",
+    })
+    const needle = query?.trim()
+    if (!needle) return
+    const matches = searchMatchIDs(needle)
+    if (matches.length === 0) {
+      searchQuery = needle
+      searchMatches = []
+      searchIndex = -1
+      toast.show({ message: `No matches for "${needle}"`, variant: "warning", duration: 2000 })
+      return
+    }
+    const currentID = searchMatches[searchIndex]
+    if (needle === searchQuery && currentID && matches.includes(currentID)) {
+      const position = matches.indexOf(currentID)
+      searchIndex = position <= 0 ? matches.length - 1 : position - 1
+    } else {
+      searchIndex = matches.length - 1
+    }
+    searchQuery = needle
+    searchMatches = matches
+    if (!scrollToSearchMatch(matches[searchIndex])) return
+    toast.show({
+      message: `Match ${searchIndex + 1} of ${matches.length} — ${keybind.print("session_search")} again for previous`,
+      variant: "success",
+      duration: 2000,
+    })
+  }
+
+  const command = useCommandDialog()
+  command.register(() => [
+    {
+      title: "Retry loading undo history",
+      value: "session.undo-history",
+      category: "Session",
+      enabled: !!session()?.revert?.messageID,
+      slash: { name: "undo-history" },
+      onSelect: async (dialog) => {
+        if (await ensureRevertHistory()) dialog.clear()
+      },
+    },
+    {
+      title: "Restore all reverted messages and files",
+      value: "session.restore-all",
+      category: "Session",
+      enabled: !!session()?.revert?.messageID,
+      slash: { name: "restore-all" },
+      onSelect: async () => {
+        const sessionID = route.sessionID
+        const boundary = session()?.revert?.messageID
+        if (!boundary) return
+        const ok = await DialogConfirm.show(
+          dialog,
+          "Restore all",
+          "Restore all reverted messages and file changes in this session?",
+        )
+        if (!ok || route.sessionID !== sessionID || session()?.revert?.messageID !== boundary) return
+        try {
+          const result = await sdk.client.session.unrevert({ sessionID }, { throwOnError: true })
+          if (route.sessionID !== sessionID) return
+          sync.set(
+            produce((draft) => {
+              const index = draft.session.findIndex((item) => item.id === sessionID)
+              if (index >= 0 && result.data) draft.session[index] = result.data
+            }),
+          )
+          setHistoryError("")
+          prompt.set({ input: "", parts: [] })
+          toBottom()
+        } catch (error) {
+          toast.show({ message: sdkErrorMessage(error, "Failed to restore all messages and files"), variant: "error" })
+        }
+      },
+    },
+    {
+      title: subagentPanelCollapsed() ? "Expand active agents" : "Collapse active agents",
+      value: "session.subagents.toggle",
+      category: "Session",
+      enabled: subagentTasks().running > 1,
+      onSelect: (dialog) => {
+        setSubagentPanelCollapsed((value) => !value)
+        dialog.clear()
+      },
+    },
+    ...displayCommands({
+      conceal,
+      currentModel: () => local.model.current(),
+      dialogReplaceActivity: (dialog) => dialog.replace(() => <DialogActivity sessionID={route.sessionID} />),
+      dialogReplaceCapability: (dialog) => dialog.replace(() => <DialogCapabilityCatalog />),
+      dialogReplaceDre: (dialog) => dialog.replace(() => <DialogDre sessionID={route.sessionID} />),
+      dialogReplaceDreGraph: (dialog) => dialog.replace(() => <DialogDreGraph sessionID={route.sessionID} />),
+      dialogReplaceGoal: (dialog) =>
+        dialog.replace(() => (
+          <DialogGoal
+            goal={sync.data.session_goal[route.sessionID]}
+            setPrompt={(value) => {
+              prompt.set({ input: value, parts: [] })
+              focusRenderable(prompt, { name: "session-goal-prompt-focus" })
+            }}
+          />
+        )),
+      dialogReplaceQuality: (dialog) =>
+        dialog.replace(() => (
+          <DialogQuality
+            sessionID={route.sessionID}
+            setPrompt={(promptInfo) => {
+              if (!prompt) return
+              prompt.set(promptInfo)
+              focusRenderable(prompt, { name: "session-quality-prompt-focus" })
+            }}
+          />
+        )),
+      dialogReplaceWorkflow: (dialog) => dialog.replace(() => <DialogWorkflow />),
+      dialogReplaceBranch: (dialog) =>
+        dialog.replace(() => (
+          <DialogBranch
+            currentID={route.sessionID}
+            sessions={children().map((item) => ({ id: item.id, title: item.title }))}
+            onSelect={(sessionID) => navigate({ type: "session", sessionID })}
+            onContinue={continueBranch}
+          />
+        )),
+      dialogReplaceCompare: (dialog) =>
+        dialog.replace(() => (
+          <DialogCompare
+            currentID={route.sessionID}
+            sessions={children().map((item) => ({ id: item.id, title: item.title }))}
+          />
+        )),
+      dialogReplaceRollback: (dialog) =>
+        dialog.replace(() => (
+          <DialogRollback
+            sessionID={route.sessionID}
+            messages={messagesWithParts()}
+            onSelect={async (point) => {
+              // The v2 SDK client resolves `{error}` instead of rejecting, so
+              // both calls must check the result — a failed abort or revert
+              // would otherwise fall through to the success path and clobber
+              // the typed prompt while the server never reverted. Thrown
+              // errors are toasted by DialogRollback, which keeps the dialog
+              // open for retry.
+              //
+              // Capture the target session now: route.sessionID is live, and
+              // the abort below awaits — a session switch while it's in
+              // flight would otherwise send the revert (with this point's
+              // messageID/partID from the original session) to whatever
+              // session the user has since navigated to. The abort call
+              // itself runs before any await, so reading route.sessionID
+              // there directly is still safe.
+              const sessionID = route.sessionID
+              const status = sync.data.session_status?.[sessionID]
+              if (status?.type !== "idle") {
+                const aborted = await sdk.client.session.abort({ sessionID: route.sessionID })
+                if (aborted.error) {
+                  log.warn("session rollback abort failed", { error: aborted.error, sessionID })
+                  throw new Error(sdkErrorMessage(aborted.error, "Failed to stop the running session before rollback"))
+                }
+              }
+              const result = await sdk.client.session.revert({
+                sessionID,
+                messageID: point.messageID,
+                partID: point.partID,
+              })
+              if (result.error) {
+                log.warn("session rollback revert failed", { error: result.error, sessionID })
+                throw new Error(sdkErrorMessage(result.error, "Failed to rollback to selected step"))
+              }
+              const messageID = SessionRollbackView.promptID(messagesWithParts(), point)
+              if (messageID) prompt.set(promptState(sync.data.part[messageID] ?? []))
+              toBottom()
+            }}
+          />
+        )),
+      children,
+      dialogReplaceDiffViewer: (dialog) => dialog.replace(() => <DialogDiffViewer sessionID={route.sessionID} />),
+      dialogReplaceTimeline: (dialog) =>
+        dialog.replace(() => (
+          <DialogTimeline
+            onMove={(messageID) => {
+              const child = messageTarget(
+                renderableChildren<ScrollChild>(scroll, { name: "session-timeline-message-children" }),
+                messageID,
+              )
+              if (child) scroll.scrollBy(child.y - scroll.y - 1)
+            }}
+            sessionID={route.sessionID}
+            setPrompt={(promptInfo) => prompt.set(promptInfo)}
+          />
+        )),
+      dialogReplaceFork: (dialog) =>
+        dialog.replace(() => (
+          <DialogForkFromTimeline
+            onMove={(messageID) => {
+              const child = messageTarget(
+                renderableChildren<ScrollChild>(scroll, { name: "session-fork-message-children" }),
+                messageID,
+              )
+              if (child) scroll.scrollBy(child.y - scroll.y - 1)
+            }}
+            sessionID={route.sessionID}
+          />
+        )),
+      dialogReplaceRename: (dialog) => dialog.replace(() => <DialogSessionRename session={route.sessionID} />),
+      jumpToLastUser: () => jumpToUserMessage(),
+      messages,
+      parts: sync.data.part,
+      renderer,
+      routeSessionID: route.sessionID,
+      scroll,
+      scrollToMessage,
+      sdk,
+      session,
+      setConceal,
+      setShowDetails,
+      setShowGenericToolOutput,
+      setShowHeader,
+      setShowScrollbar,
+      setShowThinking,
+      setSidebar,
+      setSidebarOpen,
+      setMetadataDensity: (next) => setMetadataDensity(() => next),
+      setTimestamps,
+      metadataDensity,
+      showAssistantMetadata,
+      showAssistantStats,
+      setShowAssistantStats,
+      showDetails,
+      showGenericToolOutput,
+      showHeader,
+      showScrollbar,
+      showThinking,
+      showTimestamps,
+      sidebarVisible,
+      agents: sync.data.agent,
+      hasQualityReadiness,
+      workflowRuntimeEnabled: Flag.AX_CODE_WORKFLOW_RUNTIME,
+      suggested: route.type === "session",
+      toast,
+    }),
+    ...qualityActions().map((action) => ({
+      title: action.title,
+      value: sessionQualityActionValue(action),
+      category: "Quality",
+      onSelect: (dialog: DialogContext) => {
+        if (prompt) {
+          prompt.set(action.prompt)
+          focusRenderable(prompt, { name: "session-quality-action-prompt-focus" })
+        }
+        dialog.clear()
+      },
+    })),
+    // ─── Debugging & Refactoring Engine slash commands ─────────────
+    //
+    // Gated on AX_CODE_EXPERIMENTAL_DEBUG_ENGINE so users who haven't
+    // opted into DRE don't see orphaned commands in the palette.
+    // Each command scaffolds a prompt message the user can customize
+    // before sending — this is cheaper than a bespoke dialog per tool
+    // and still discoverable via the command palette.
+    {
+      title: "Debug an error (DRE)",
+      value: "debug.analyze",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      onSelect: (dialog) => {
+        promptRef.current?.set({
+          input:
+            "Debug this error using debug_analyze. Paste the error message and stack trace after this line.\n\nError: ",
+          parts: [],
+        })
+        focusRenderable(promptRef.current, { name: "session-dre-debug-prompt-focus" })
+        dialog.clear()
+      },
+    },
+    {
+      title: "Analyze change impact (DRE)",
+      value: "debug.impact",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      onSelect: (dialog) => {
+        promptRef.current?.set({
+          input:
+            "Use impact_analyze to show the blast radius of changing <symbol or file>. Report the risk label before making any edits.",
+          parts: [],
+        })
+        focusRenderable(promptRef.current, { name: "session-dre-impact-prompt-focus" })
+        dialog.clear()
+      },
+    },
+    {
+      title: "Find duplicate code (DRE)",
+      value: "debug.dedup",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      onSelect: (dialog) => {
+        promptRef.current?.set({
+          input: "Run dedup_scan on this project and report the top clusters ranked by extraction value.",
+          parts: [],
+        })
+        focusRenderable(promptRef.current, { name: "session-dre-dedup-prompt-focus" })
+        dialog.clear()
+      },
+    },
+    {
+      title: "Scan for hardcoded values (DRE)",
+      value: "debug.hardcode",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      onSelect: (dialog) => {
+        promptRef.current?.set({
+          input:
+            "Run hardcode_scan and list findings grouped by severity. Focus on inline_secret_shape and inline_url first.",
+          parts: [],
+        })
+        focusRenderable(promptRef.current, { name: "session-dre-hardcode-prompt-focus" })
+        dialog.clear()
+      },
+    },
+    {
+      title: "Plan a refactor (DRE)",
+      value: "debug.refactor",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      onSelect: (dialog) => {
+        promptRef.current?.set({
+          input:
+            "Use refactor_plan to draft a plan for <describe the refactor>. Do not apply anything until I review the plan.",
+          parts: [],
+        })
+        focusRenderable(promptRef.current, { name: "session-dre-refactor-prompt-focus" })
+        dialog.clear()
+      },
+    },
+    {
+      title: "List pending refactor plans (DRE)",
+      value: "debug.plans",
+      category: "Debugging",
+      enabled: Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      hidden: !Flag.AX_CODE_EXPERIMENTAL_DEBUG_ENGINE,
+      onSelect: (dialog) => {
+        const plans = sync.data.debugEngine.plans
+        if (plans.length === 0) {
+          toast.show({
+            message: "No pending refactor plans",
+            variant: "success",
+            duration: 3000,
+          })
+          dialog.clear()
+          return
+        }
+        // Build a human-readable summary and drop it into the prompt
+        // so the user can ask the agent to act on a specific plan.
+        // A richer "select a plan to apply" dialog lands in a later
+        // tier (see PRD-debug-refactor-engine-ui.md §Tier 3).
+        const lines: string[] = [`Pending refactor plans (${plans.length}):`, ""]
+        for (const p of plans) {
+          lines.push(`- [${p.risk}] ${p.kind} — ${p.planId}`)
+          lines.push(`  ${p.affectedFileCount} file(s), ${p.affectedSymbolCount} symbol(s)`)
+        }
+        lines.push("")
+        lines.push("Which plan should we apply? Use refactor_apply with the planId.")
+        promptRef.current?.set({
+          input: lines.join("\n"),
+          parts: [],
+        })
+        focusRenderable(promptRef.current, { name: "session-dre-plans-prompt-focus" })
+        dialog.clear()
+      },
+    },
+    {
+      title: "Undo previous message",
+      value: "session.undo",
+      keybind: "messages_undo",
+      category: "Session",
+      enabled: !!session()?.revert?.messageID || !!undoMessageID(messages(), undefined),
+      slash: {
+        name: "undo",
+      },
+      onSelect: async (dialog) => {
+        // The v2 SDK client resolves `{error}` instead of rejecting, so both
+        // calls must check the result — a failed abort or revert would
+        // otherwise fall through to the success path and clobber the typed
+        // prompt while the server never reverted.
+        //
+        // Capture the target session and undo point now, before the abort
+        // below awaits: route.sessionID / messages() / session() are live
+        // and would reflect a different session if the user navigates away
+        // while the abort is in flight, silently undoing whatever session
+        // they've switched to instead of the one they asked to undo.
+        const sessionID = route.sessionID
+        if (!(await ensureRevertHistory()) || route.sessionID !== sessionID) return
+        const messageID = undoMessageID(messages(), session()?.revert?.messageID)
+        if (!messageID) {
+          dialog.clear()
+          return
+        }
+        const status = sync.data.session_status?.[sessionID]
+        if (status?.type !== "idle") {
+          const aborted = await sdk.client.session.abort({ sessionID })
+          if (aborted.error) {
+            log.warn("session undo abort failed", { error: aborted.error, sessionID })
+            toast.show({
+              message: sdkErrorMessage(aborted.error, "Failed to stop the running session before undo"),
+              variant: "error",
+            })
+            return
+          }
+        }
+        const result = await sdk.client.session.revert({
+          sessionID,
+          messageID,
+        })
+        if (result.error) {
+          log.warn("session undo failed", { error: result.error, sessionID, messageID })
+          toast.show({
+            message: sdkErrorMessage(result.error, "Failed to undo previous message"),
+            variant: "error",
+          })
+          return
+        }
+        prompt.set(promptState(sync.data.part[messageID] ?? []))
+        toBottom()
+        dialog.clear()
+      },
+    },
+    {
+      title: "Redo",
+      value: "session.redo",
+      keybind: "messages_redo",
+      category: "Session",
+      enabled: !!session()?.revert?.messageID,
+      slash: {
+        name: "redo",
+      },
+      onSelect: async (dialog) => {
+        // The v2 SDK client resolves `{error}` instead of rejecting, so both
+        // calls must check the result — a failed unrevert or revert would
+        // otherwise fall through to the success path and clear the typed
+        // prompt / close the dialog while the server never changed.
+        const sessionID = route.sessionID
+        if (!(await ensureRevertHistory()) || route.sessionID !== sessionID) return
+        const messageID = redoMessageID(messages(), session()?.revert?.messageID)
+        if (messageID === null) {
+          toast.show({
+            message: "The undo point is outside the loaded history. Redo cannot safely choose a turn.",
+            variant: "error",
+          })
+          return
+        }
+        if (!messageID) {
+          const result = await sdk.client.session.unrevert({
+            sessionID: route.sessionID,
+          })
+          if (result.error) {
+            log.warn("session redo failed", { error: result.error, sessionID: route.sessionID })
+            toast.show({
+              message: sdkErrorMessage(result.error, "Failed to redo the previous message"),
+              variant: "error",
+            })
+            return
+          }
+          prompt.set({ input: "", parts: [] })
+          dialog.clear()
+          return
+        }
+        const result = await sdk.client.session.revert({
+          sessionID: route.sessionID,
+          messageID,
+        })
+        if (result.error) {
+          log.warn("session redo failed", { error: result.error, sessionID: route.sessionID, messageID })
+          toast.show({
+            message: sdkErrorMessage(result.error, "Failed to redo the previous message"),
+            variant: "error",
+          })
+          return
+        }
+        dialog.clear()
+      },
+    },
+    {
+      title: "Search transcript",
+      value: "session.search",
+      keybind: "session_search",
+      category: "Session",
+      slash: {
+        name: "search",
+        hidden: true,
+      },
+      onSelect: (dialog) => runTranscriptSearch(dialog),
+    },
+    {
+      title: "Go to child session",
+      value: "session.child.first",
+      keybind: "session_child_first",
+      category: "Session",
+      hidden: true,
+      onSelect: (dialog) => {
+        moveFirstChild()
+        dialog.clear()
+      },
+    },
+    {
+      title: "Go to parent session",
+      value: "session.parent",
+      keybind: "session_parent",
+      category: "Session",
+      hidden: true,
+      enabled: !!session()?.parentID,
+      onSelect: childSessionHandler((dialog) => {
+        const parentID = session()?.parentID
+        if (parentID) {
+          navigate({
+            type: "session",
+            sessionID: parentID,
+          })
+        }
+        dialog.clear()
+      }),
+    },
+    {
+      title: "Next child session",
+      value: "session.child.next",
+      keybind: "session_child_cycle",
+      category: "Session",
+      hidden: true,
+      enabled: !!session()?.parentID,
+      onSelect: childSessionHandler((dialog) => {
+        moveChild(1)
+        dialog.clear()
+      }),
+    },
+    {
+      title: "Previous child session",
+      value: "session.child.previous",
+      keybind: "session_child_cycle_reverse",
+      category: "Session",
+      hidden: true,
+      enabled: !!session()?.parentID,
+      onSelect: childSessionHandler((dialog) => {
+        moveChild(-1)
+        dialog.clear()
+      }),
+    },
+  ])
+
+  const revertInfo = createMemo(() => session()?.revert)
+  const revertMessageID = createMemo(() => revertInfo()?.messageID)
+  const revertPartID = createMemo(() => revertInfo()?.partID)
+  const missingRevertHistory = createMemo(
+    () => !!revertMessageID() && !messages().some((message) => message.id === revertMessageID()),
+  )
+  let historyContextKey = ""
+  createEffect(
+    on(
+      () => `${route.sessionID}:${revertMessageID() ?? ""}:${missingRevertHistory()}`,
+      () => {
+        const key = `${route.sessionID}:${revertMessageID() ?? ""}`
+        if (key !== historyContextKey) {
+          historyContextKey = key
+          historyFlight?.controller.abort()
+          historyFlight = undefined
+          setHistoryLoading(false)
+          setHistoryError("")
+        }
+        if (missingRevertHistory()) void ensureRevertHistory()
+      },
+    ),
+  )
+
+  const revert = createMemo(() => revertState(revertInfo(), messages()))
+  const hiddenIDs = createMemo(() => hiddenMessageIDs(messages(), revertMessageID(), revertPartID()))
+  const pinnedInputCandidate = createMemo(() =>
+    selectPinnedInputCandidate({
+      messages: messages(),
+      partsByMessageID: sync.data.part,
+      hiddenIDs: hiddenIDs(),
+      revertMessageID: revertMessageID(),
+      historyTruncated: !!sync.data.message_truncated[route.sessionID],
+    }),
+  )
+  const [inputPreviewGeom, setInputPreviewGeom] = createSignal<{
+    y?: number
+    scrollTop: number
+    viewportHeight: number
+  }>({ scrollTop: 0, viewportHeight: 0 })
+  function readInputPreviewGeom(messageID: string | undefined) {
+    if (!isRenderableAlive(scroll) || !messageID) {
+      setInputPreviewGeom((prev) => {
+        if (prev.y === undefined && prev.scrollTop === 0 && prev.viewportHeight === 0) return prev
+        return { scrollTop: 0, viewportHeight: 0 }
+      })
+      return
+    }
+    const child = messageTarget(
+      renderableChildren<ScrollChild>(scroll, { name: "session-pinned-input-geom" }),
+      messageID,
+    )
+    const next = { y: child?.y, scrollTop: scroll.y, viewportHeight: scroll.height }
+    setInputPreviewGeom((prev) =>
+      prev.y === next.y && prev.scrollTop === next.scrollTop && prev.viewportHeight === next.viewportHeight
+        ? prev
+        : next,
+    )
+  }
+  createEffect(() => {
+    const candidate = pinnedInputCandidate()
+    void messages()
+    void statusTick()
+    void dimensions()
+    readInputPreviewGeom(candidate.state === "ready" ? candidate.messageID : undefined)
+  })
+  onMount(() => {
+    const cancel = scheduleTuiInterval(
+      () => {
+        const candidate = pinnedInputCandidate()
+        readInputPreviewGeom(candidate.state === "ready" ? candidate.messageID : undefined)
+      },
+      { name: "session-pinned-input-geom", delayMs: 200, unref: true },
+    )
+    onCleanup(cancel)
+  })
+  let lastPinnedInputOccupancy = 0
+  const pinnedInput = createMemo(() => {
+    const headerShown = showHeader() && (!sidebarVisible() || !wide())
+    const view = derivePinnedInputBanner({
+      candidate: pinnedInputCandidate(),
+      autonomousActive: autonomous().active,
+      contentColumns: Math.max(0, contentWidth() - 2),
+      terminalHeight: dimensions().height,
+      header: headerShown ? (session()?.parentID ? "subagent" : "session") : "hidden",
+      subagentRows: subagentPanelRows({
+        terminalHeight: dimensions().height,
+        activeCount: subagentTasks().items.filter((item) => item.active).length,
+        collapsed: subagentPanelCollapsed(),
+      }),
+      previewVisibility: messagePreviewVisibility({
+        y: inputPreviewGeom().y,
+        scrollTop: inputPreviewGeom().scrollTop,
+        viewportHeight: inputPreviewGeom().viewportHeight + lastPinnedInputOccupancy,
+        previewRows: 2,
+      }),
+    })
+    lastPinnedInputOccupancy = view.state === "visible" ? view.lineCount + 1 : 0
+    return view
+  })
+  // snap to bottom when session changes
+  createEffect(on(() => route.sessionID, toBottom))
+
+  // Transcript search matches are per-session; drop them on navigation.
+  createEffect(
+    on(
+      () => route.sessionID,
+      () => {
+        searchQuery = ""
+        searchMatches = []
+        searchIndex = -1
+      },
+    ),
+  )
+
+  // Session-keyed Prompt mounts consume route drafts in their ref callback.
+  // A route effect could otherwise address a disposed ref while the next
+  // session record is still loading.
+
+  return (
+    <context.Provider
+      value={{
+        get width() {
+          return contentWidth()
+        },
+        get sessionID() {
+          return route.sessionID
+        },
+        conceal,
+        showThinking,
+        showTimestamps,
+        showDetails,
+        showGenericToolOutput,
+        userMetadataPreference: metadataDensity,
+        diffWrapMode,
+        sync,
+        tui: tuiConfig,
+      }}
+    >
+      <box flexDirection="row">
+        <box
+          flexGrow={1}
+          paddingBottom={1}
+          paddingTop={1}
+          paddingLeft={2}
+          paddingRight={2}
+          gap={1}
+          border={autonomous().active || session()?.parentID ? ["left"] : undefined}
+          customBorderChars={SplitBorder.customBorderChars}
+          borderColor={autonomous().active ? autonomousBorderColor() : theme.primary}
+          onMouseUp={handleSubagentBodyMouseUp}
+        >
+          <Show when={session()}>
+            <Show when={showHeader() && (!sidebarVisible() || !wide())}>
+              <Header />
+            </Show>
+            <SubagentStatusPanel
+              view={subagentTasks()}
+              collapsed={subagentPanelCollapsed()}
+              terminalHeight={dimensions().height}
+              width={contentWidth()}
+              stopping={stoppingSubagents()}
+              onToggle={() => setSubagentPanelCollapsed((prev) => !prev)}
+              onOpen={openSubagent}
+              onStop={stopSubagent}
+            />
+            <LastInputBanner view={pinnedInput()} onJump={jumpToUserMessage} />
+            <scrollbox
+              ref={(r: ScrollBoxRenderable) => (scroll = r)}
+              viewportOptions={{
+                paddingRight: showScrollbar() ? 1 : 0,
+              }}
+              verticalScrollbarOptions={{
+                // ax-tui derives the slider thickness from the scrollbar width
+                // clamped to 1..2 cells; pin it to 1 so the transcript bar is
+                // half its previous weight.
+                width: 1,
+                paddingLeft: 1,
+                visible: showScrollbar(),
+                trackOptions: {
+                  backgroundColor: theme.backgroundElement,
+                  foregroundColor: theme.border,
+                },
+              }}
+              stickyScroll={true}
+              stickyStart="bottom"
+              flexGrow={1}
+              scrollAcceleration={scrollAcceleration()}
+            >
+              <Show when={messages().length === 0 && !session()?.parentID}>
+                <box flexGrow={1} alignItems="center" justifyContent="center" paddingTop={4} paddingBottom={2}>
+                  <text>
+                    <span style={{ fg: theme.accent }}>◦</span>
+                    <span style={{ fg: theme.textMuted }}> Start typing to chat</span>
+                  </text>
+                  <text>
+                    <span style={{ fg: theme.accent }}>◦</span>
+                    <span style={{ fg: theme.textMuted }}> /help for commands</span>
+                  </text>
+                </box>
+              </Show>
+              <Show when={sync.data.message_truncated[route.sessionID]}>
+                <box paddingLeft={2} paddingBottom={1}>
+                  <text fg={theme.textMuted}>
+                    ▲ Showing the most recent {messages().length} messages — earlier history is not loaded
+                  </text>
+                </box>
+              </Show>
+              <Show when={sync.data.message_memory_limited[route.sessionID]}>
+                <box paddingLeft={2} paddingBottom={1}>
+                  <text fg={theme.warning}>
+                    Transcript memory budget exceeded: keeping the newest whole message or Undo history.
+                  </text>
+                </box>
+              </Show>
+              <Show when={sync.data.message_reload[route.sessionID]}>
+                <box paddingLeft={2} paddingBottom={1}>
+                  <text fg={theme.warning}>Some pending transcript updates were released to limit memory.</text>
+                  <text
+                    fg={theme.text}
+                    onMouseUp={() =>
+                      void sync.session
+                        .sync(route.sessionID, { force: true })
+                        .catch(() => toast.show({ message: "Failed to reload transcript", variant: "error" }))
+                    }
+                  >
+                    Reload transcript from saved history
+                  </text>
+                </box>
+              </Show>
+              <Show when={missingRevertHistory() || historyLoading() || historyError()}>
+                <box paddingLeft={2} paddingBottom={1}>
+                  <text fg={theme.warning}>
+                    {historyLoading()
+                      ? "Loading history for Undo / Restore..."
+                      : historyError() || "Older history is needed for Undo / Restore."}
+                  </text>
+                  <text fg={theme.text} onMouseUp={() => void ensureRevertHistory()}>
+                    Retry history loading: /undo-history
+                  </text>
+                  <text fg={theme.text} onMouseUp={() => command.trigger("session.restore-all")}>
+                    Restore all reverted messages and files: /restore-all
+                  </text>
+                </box>
+              </Show>
+              <For each={messages()}>
+                {(message, index) => (
+                  <Switch>
+                    <Match when={message.id === revert()?.messageID}>
+                      <>
+                        <Show when={revertPartID() && message.role === "user"}>
+                          <UserMessage
+                            index={index()}
+                            onMouseUp={() => {
+                              if (renderer.getSelection()?.getSelectedText()) return
+                              dialog.replace(() => (
+                                <DialogMessage
+                                  messageID={message.id}
+                                  sessionID={route.sessionID}
+                                  setPrompt={(promptInfo) => prompt.set(promptInfo)}
+                                />
+                              ))
+                            }}
+                            message={message as UserMessageInfo}
+                            parts={visibleParts(sync.data.part[message.id] ?? [], revertPartID())}
+                            pending={pending()}
+                          />
+                        </Show>
+                        <Show when={revertPartID() && message.role === "assistant"}>
+                          <Show when={!recoveredAssistantIDs().has(message.id)}>
+                            <AssistantMessage
+                              last={lastAssistant()?.id === message.id}
+                              message={message as AssistantMessageInfo}
+                              parts={visibleParts(sync.data.part[message.id] ?? [], revertPartID())}
+                            />
+                          </Show>
+                        </Show>
+                        <Show when={revert()}>
+                          {(state) => <RevertNotice count={state().reverted.length} files={state().diffFiles} />}
+                        </Show>
+                      </>
+                    </Match>
+                    <Match when={revert()?.messageID && hiddenIDs().has(message.id)}>
+                      <></>
+                    </Match>
+                    <Match when={message.role === "user"}>
+                      <>
+                        <UserMessage
+                          index={index()}
+                          onMouseUp={() => {
+                            if (renderer.getSelection()?.getSelectedText()) return
+                            dialog.replace(() => (
+                              <DialogMessage
+                                messageID={message.id}
+                                sessionID={route.sessionID}
+                                setPrompt={(promptInfo) => prompt.set(promptInfo)}
+                              />
+                            ))
+                          }}
+                          message={message as UserMessageInfo}
+                          parts={sync.data.part[message.id] ?? []}
+                          pending={pending()}
+                        />
+                        <RouteIndicator messageID={message.id} routeInfoByMessage={routeInfoByMessage} />
+                      </>
+                    </Match>
+                    <Match when={message.role === "assistant"}>
+                      <Show when={!recoveredAssistantIDs().has(message.id)}>
+                        <AssistantMessage
+                          last={lastAssistant()?.id === message.id}
+                          message={message as AssistantMessageInfo}
+                          parts={sync.data.part[message.id] ?? []}
+                        />
+                      </Show>
+                    </Match>
+                  </Switch>
+                )}
+              </For>
+              <QueuedFollowUps items={queuedFollowUps()} />
+            </scrollbox>
+            <box flexShrink={0}>
+              <Show when={queuedFollowUps().length > 0}>
+                <box height={1} flexShrink={0} paddingLeft={2} onMouseUp={() => command.trigger("session.followups")}>
+                  <text fg={theme.accent}>Follow-ups ({queuedFollowUps().length}) · /queue</text>
+                </box>
+              </Show>
+              <Show when={permissions().length > 0}>
+                <PermissionPrompt request={permissions()[0]} />
+              </Show>
+              <Show when={permissions().length === 0 && questions().length > 0}>
+                <QuestionPrompt request={questions()[0]} />
+              </Show>
+              <Show when={!session()?.parentID}>
+                <IdleRecap sessionID={route.sessionID} />
+              </Show>
+              <Show when={!session()?.parentID}>
+                <WorkModeNotice />
+              </Show>
+              <Prompt
+                sidebarVisible={sidebarPanelVisible}
+                statusTick={statusTick}
+                visible={!session()?.parentID && permissions().length === 0 && questions().length === 0}
+                ref={(r) => {
+                  prompt = r
+                  promptRef.set(r)
+                  // Cache restore has completed before this mounted ref arrives.
+                  // An explicit fork/new draft intentionally takes precedence.
+                  applyInitialPromptDraft({
+                    initial: route.initialPrompt,
+                    set: (initial) => r.set(initial),
+                    consume: () => navigate({ type: "session", sessionID: route.sessionID, initialPrompt: undefined }),
+                  })
+                }}
+                disabled={permissions().length > 0 || questions().length > 0}
+                onSubmit={() => {
+                  toBottom()
+                }}
+                sessionID={route.sessionID}
+              />
+            </box>
+          </Show>
+          <Toast />
+        </box>
+        <Show when={sidebarVisible()}>
+          <Switch>
+            <Match when={wide()}>
+              <Sidebar sessionID={route.sessionID} statusTick={statusTick} />
+            </Match>
+            <Match when={!wide()}>
+              <box
+                position="absolute"
+                top={0}
+                left={0}
+                right={0}
+                bottom={0}
+                alignItems="flex-end"
+                backgroundColor={RGBA.fromInts(0, 0, 0, 70)}
+                onMouseDown={() => {
+                  // Only dismiss the overlay; preserve the user's
+                  // sidebar preference. Setting sidebar to "hide" here
+                  // permanently disables the auto-show on resize, so a
+                  // user who clicks the backdrop in narrow mode would
+                  // never see the sidebar again after resizing wider.
+                  setSidebarOpen(false)
+                }}
+              >
+                <Sidebar sessionID={route.sessionID} overlay statusTick={statusTick} />
+              </box>
+            </Match>
+          </Switch>
+        </Show>
+      </box>
+    </context.Provider>
+  )
+}

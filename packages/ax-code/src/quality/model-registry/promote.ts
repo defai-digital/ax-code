@@ -1,15 +1,15 @@
 import { QualityCalibrationModel } from "../calibration-model"
-import { QualityPromotionAdoptionDissentHandling } from "../promotion-adoption-dissent-handling"
-import { QualityPromotionAdoptionDissentResolution } from "../promotion-adoption-dissent-resolution"
-import { QualityPromotionAdoptionDissentSupersession } from "../promotion-adoption-dissent-supersession"
-import { QualityPromotionAdoptionReview } from "../promotion-adoption-review"
-import { QualityPromotionApproval } from "../promotion-approval"
-import { QualityPromotionApprovalPacket } from "../promotion-approval-packet"
-import { QualityPromotionApprovalPolicy } from "../promotion-approval-policy"
-import { QualityPromotionDecisionBundle } from "../promotion-decision-bundle"
-import { QualityPromotionEligibility } from "../promotion-eligibility"
-import { QualityPromotionReleasePolicyStore } from "../promotion-release-policy-store"
-import { QualityPromotionSubmissionBundle } from "../promotion-submission-bundle"
+import { QualityPromotionAdoptionDissentHandling } from "../promotion/promotion-adoption-dissent-handling"
+import { QualityPromotionAdoptionDissentResolution } from "../promotion/promotion-adoption-dissent-resolution"
+import { QualityPromotionAdoptionDissentSupersession } from "../promotion/promotion-adoption-dissent-supersession"
+import { QualityPromotionAdoptionReview } from "../promotion/promotion-adoption-review"
+import { QualityPromotionApproval } from "../promotion/promotion-approval"
+import { QualityPromotionApprovalPacket } from "../promotion/promotion-approval-packet"
+import { QualityPromotionApprovalPolicy } from "../promotion/promotion-approval-policy"
+import { QualityPromotionDecisionBundle } from "../promotion/promotion-decision-bundle"
+import { QualityPromotionEligibility } from "../promotion/promotion-eligibility"
+import { QualityPromotionReleasePolicyStore } from "../promotion/promotion-release-policy-store"
+import { QualityPromotionSubmissionBundle } from "../promotion/promotion-submission-bundle"
 import { QualityStabilityGuard } from "../stability-guard"
 import { QualityStorageKey } from "../storage-key"
 import {
@@ -24,8 +24,8 @@ import {
   adoptionReviewRecordSummary,
   releasePolicyRecordSummary,
   submissionBundleRecordSummary,
-} from "../model-registry-record-summary"
-import { QualityModelRegistry } from "./index"
+} from "./model-registry-record-summary"
+import { QualityModelRegistry } from "./"
 
 type PromotionMetadata = QualityModelRegistry.PromotionMetadata
 type ActiveRecord = QualityModelRegistry.ActiveRecord

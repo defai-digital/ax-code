@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import {
   createSessionEntrySyncRetryState,
   nextSessionEntrySyncRetry,
-} from "../../../src/cli/cmd/tui/routes/session/entry-sync"
+} from "../../../src/cli/tui/routes/session/entry-sync"
 
 describe("tui session entry sync retry policy", () => {
   test("starts with a short retry delay for fresh sessions", () => {

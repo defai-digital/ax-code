@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
-import { scheduleDeferredStartupTask } from "../../../src/cli/cmd/tui/util/startup-task"
+import { scheduleDeferredStartupTask } from "../../../src/cli/tui/util/startup-task"
 
 describe("tui deferred startup tasks", () => {
   beforeEach(() => {

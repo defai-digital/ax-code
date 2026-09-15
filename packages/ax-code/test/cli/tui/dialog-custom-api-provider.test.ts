@@ -8,7 +8,7 @@ import {
   parseCustomApiProviderModelIDs,
   sameCustomApiBaseURL,
   resolveCustomApiProviderSetup,
-} from "../../../src/cli/cmd/tui/component/dialog-custom-api-provider"
+} from "../../../src/cli/tui/component/dialog-custom-api-provider"
 
 describe("custom API provider TUI helpers", () => {
   test("parses comma- and newline-separated model IDs with safe defaults", () => {

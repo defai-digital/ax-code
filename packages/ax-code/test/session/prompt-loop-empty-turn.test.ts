@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { MessageV2 } from "../../src/session/message-v2"
-import { handlePromptLoopEmptyTurn } from "../../src/session/prompt-loop-empty-turn"
+import { handlePromptLoopEmptyTurn } from "../../src/session/prompt/prompt-loop-empty-turn"
 import { MessageID, SessionID } from "../../src/session/schema"
 
 function assistant(id = MessageID.ascending()) {

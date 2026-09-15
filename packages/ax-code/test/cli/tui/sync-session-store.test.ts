@@ -7,7 +7,7 @@ import {
   capSyncedMessages,
   createSessionSyncSnapshot,
   pruneOrphanSessionRecords,
-} from "../../../src/cli/cmd/tui/context/sync-session-store"
+} from "../../../src/cli/tui/context/sync-session-store"
 
 describe("capSyncedMessages", () => {
   test("passes through results within the cap", () => {

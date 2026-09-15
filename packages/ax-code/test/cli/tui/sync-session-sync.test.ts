@@ -3,9 +3,9 @@ import { createStore, produce } from "solid-js/store"
 import {
   createStoreBackedSessionSyncController,
   type SessionSyncStoreState,
-} from "../../../src/cli/cmd/tui/context/sync-session-sync"
-import { applySessionLeavePrune } from "../../../src/cli/cmd/tui/context/sync-session-store"
-import type { SyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
+} from "../../../src/cli/tui/context/sync-session-sync"
+import { applySessionLeavePrune } from "../../../src/cli/tui/context/sync-session-store"
+import type { SyncedSessionRisk } from "../../../src/cli/tui/context/sync-session-risk"
 
 type Session = { id: string; title: string }
 type Todo = { id: string }

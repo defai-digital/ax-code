@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parsePastedFilePath } from "../../../src/cli/cmd/tui/component/prompt/prompt-filepath"
+import { parsePastedFilePath } from "../../../src/cli/tui/component/prompt/prompt-filepath"
 
 describe("parsePastedFilePath", () => {
   test("decodes shell-escaped macOS iCloud paths", () => {

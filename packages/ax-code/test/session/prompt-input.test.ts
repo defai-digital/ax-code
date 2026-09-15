@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { LoopInput, PromptInput } from "../../src/session/prompt-input"
+import { LoopInput, PromptInput } from "../../src/session/prompt/prompt-input"
 import { SessionID } from "../../src/session/schema"
 
 describe("session prompt input schema", () => {

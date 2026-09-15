@@ -6,10 +6,10 @@ const { createStore, produce }: typeof import("solid-js/store") = createRequire(
   "solid-js/store/dist/store.cjs",
 )
 import type { Message, Part } from "@ax-code/sdk/v2"
-import { createInitialSyncState } from "../../../src/cli/cmd/tui/context/sync-state"
+import { createInitialSyncState } from "../../../src/cli/tui/context/sync-state"
 import { applyHeadlessProjectionEvent } from "../../../src/runtime/headless/projection"
-import { applySessionLeavePrune } from "../../../src/cli/cmd/tui/context/sync-session-store"
-import { retainTranscriptEvent } from "../../../src/cli/cmd/tui/context/sync-transcript-event"
+import { applySessionLeavePrune } from "../../../src/cli/tui/context/sync-session-store"
+import { retainTranscriptEvent } from "../../../src/cli/tui/context/sync-transcript-event"
 
 function fixture() {
   const initial = createInitialSyncState()

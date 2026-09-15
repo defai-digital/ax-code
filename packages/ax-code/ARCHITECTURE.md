@@ -14,6 +14,7 @@
 - keep interface layers in `cli`, server routes, and other entry surfaces
 - keep reusable low-level helpers in shared utility modules, not inside CLI or route files
 - avoid adding new unrelated logic to `src/cli` when it belongs in a domain package
+- keep the TUI application in `src/cli/tui`, not under `src/cli/cmd`
 - group `src/cli/cmd` by concern such as `github-agent/`, `runtime/`, and `storage/`, and keep root command files as thin compatibility shims
 
 ## Testing

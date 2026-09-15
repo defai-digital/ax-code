@@ -54,9 +54,9 @@ export namespace V4Guardrails {
   export const Directories = [
     "src/runtime",
     "src/cli/cmd/tui-v4",
-    "src/cli/cmd/tui/state",
-    "src/cli/cmd/tui/input",
-    "src/cli/cmd/tui/native",
+    "src/cli/tui/state",
+    "src/cli/tui/input",
+    "src/cli/tui/native",
   ] as const
   export type Rule = "effect" | "solid" | "tui"
 

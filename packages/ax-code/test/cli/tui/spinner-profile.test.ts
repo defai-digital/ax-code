@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { shouldUseTuiAnimations } from "../../../src/cli/cmd/tui/component/spinner-profile"
+import { shouldUseTuiAnimations } from "../../../src/cli/tui/component/spinner-profile"
 
 describe("TUI spinner profile", () => {
   test("disables animated AX Code TUI spinners in compiled runtime", () => {

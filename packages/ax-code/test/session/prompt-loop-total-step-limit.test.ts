@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { handlePromptLoopTotalStepLimit } from "../../src/session/prompt-loop-total-step-limit"
+import { handlePromptLoopTotalStepLimit } from "../../src/session/prompt/prompt-loop-total-step-limit"
 import { SessionID } from "../../src/session/schema"
 
 describe("prompt loop total step limit", () => {

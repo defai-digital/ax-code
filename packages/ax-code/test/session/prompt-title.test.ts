@@ -7,7 +7,7 @@ import {
   cleanGeneratedTitle,
   fallbackTitleFromUserText,
   shouldSkipAutomaticTitle,
-} from "../../src/session/prompt-title"
+} from "../../src/session/prompt/prompt-title"
 
 describe("session prompt title", () => {
   test("skips automatic title generation for the managed ax-engine provider", () => {

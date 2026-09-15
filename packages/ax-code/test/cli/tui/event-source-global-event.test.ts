@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest"
-import { createEventSource } from "../../../src/cli/cmd/tui/thread"
+import { createEventSource } from "../../../src/cli/tui/thread"
 
 describe("createEventSource global event forwarding", () => {
   test("forwards global.event RPC payloads to the SDK event handler (regression: upgrade notifications lost)", () => {

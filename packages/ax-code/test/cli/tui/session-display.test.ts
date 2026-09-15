@@ -6,7 +6,7 @@ import {
   scrollDelta,
   scrollTo,
   transcriptItems,
-} from "../../../src/cli/cmd/tui/routes/session/display"
+} from "../../../src/cli/tui/routes/session/display"
 
 function user(id: string): UserMessage {
   return {

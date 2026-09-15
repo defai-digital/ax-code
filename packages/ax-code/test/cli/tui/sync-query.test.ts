@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { findByID, findWorkspace, sessionRuntimeStatus } from "../../../src/cli/cmd/tui/context/sync-query"
+import { findByID, findWorkspace, sessionRuntimeStatus } from "../../../src/cli/tui/context/sync-query"
 
 describe("tui sync query", () => {
   test("finds sorted entities by id", () => {

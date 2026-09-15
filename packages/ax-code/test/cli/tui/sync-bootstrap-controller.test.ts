@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest"
 import { setTimeout as sleep } from "node:timers/promises"
-import { createBootstrapController } from "../../../src/cli/cmd/tui/context/sync-bootstrap-controller"
+import { createBootstrapController } from "../../../src/cli/tui/context/sync-bootstrap-controller"
 
 describe("tui sync bootstrap controller", () => {
   test("deduplicates concurrent bootstrap runs and allows a new run after completion", async () => {

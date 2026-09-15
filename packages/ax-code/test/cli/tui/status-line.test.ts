@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
-import { runStatusLineCommand, statusLineShellCommand } from "../../../src/cli/cmd/tui/util/status-line"
+import { runStatusLineCommand, statusLineShellCommand } from "../../../src/cli/tui/util/status-line"
 import { tmpdir } from "../../fixture/fixture"
 
 describe("statusLineShellCommand", () => {
@@ -77,7 +77,7 @@ describe("runStatusLineCommand", () => {
 describe("status line prompt wiring", () => {
   test("prompt effect discards late results from cancelled runs", async () => {
     const prompt = await fs.readFile(
-      path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui/component/prompt/index.tsx"),
+      path.resolve(import.meta.dirname, "../../../src/cli/tui/component/prompt/index.tsx"),
       "utf8",
     )
     const interval = prompt.indexOf('name: "prompt-status-line"')

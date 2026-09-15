@@ -171,7 +171,7 @@ export namespace Flag {
   //   AX_CODE_NERD_FONT=1/true  → force ON
   //   AX_CODE_NERD_FONT=0/false → force OFF
   //   unset                     → fall through to user kv preference
-  // Resolved at runtime in src/cli/cmd/tui/ui/glyphs.ts.
+  // Resolved at runtime in src/cli/tui/ui/glyphs.ts.
   export const AX_CODE_NERD_FONT_ENV = (() => {
     const value = Env.parseBoolean(process.env["AX_CODE_NERD_FONT"])
     return value

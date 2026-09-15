@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { resolveUserMessageParts } from "../../src/session/prompt-message-parts"
+import { resolveUserMessageParts } from "../../src/session/prompt/prompt-message-parts"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { Permission } from "../../src/permission"
 

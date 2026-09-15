@@ -10,7 +10,7 @@ import {
   sortPromotionRecords,
   sortRollbackRecords,
   teamCarryoverHistory,
-} from "../../src/quality/model-registry-selection"
+} from "../../src/quality/model-registry/model-registry-selection"
 
 function promotion(overrides: Record<string, unknown> = {}) {
   return {

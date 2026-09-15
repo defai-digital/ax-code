@@ -1,4 +1,4 @@
-import { english } from "../../../src/cli/cmd/tui/i18n"
+import { english } from "../../../src/cli/tui/i18n"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
@@ -46,8 +46,8 @@ import {
   startupRainCoversChrome,
   startupRainShowsLogo,
   tickMatrixRain,
-} from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
-import type { MatrixRainRun, MatrixRainState } from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
+} from "../../../src/cli/tui/component/matrix-rain-view-model"
+import type { MatrixRainRun, MatrixRainState } from "../../../src/cli/tui/component/matrix-rain-view-model"
 import { logo } from "../../../src/cli/logo"
 
 // Deterministic PRNG (mulberry32) so frames are reproducible in assertions.
@@ -178,7 +178,7 @@ describe("overlay yields to a selection", () => {
   })
 
   test("both overlays yield when the renderer reports a selection", () => {
-    const dir = "../../../src/cli/cmd/tui/component"
+    const dir = "../../../src/cli/tui/component"
     expect(readFileSync(path.join(import.meta.dirname, dir, "matrix-rain.tsx"), "utf8")).toContain(
       "renderer.hasSelection",
     )
@@ -385,7 +385,7 @@ describe("matrix rain cursor hide", () => {
 
   test("both overlays hide the cursor while they cover the screen", () => {
     const src = readFileSync(
-      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/matrix-rain.tsx"),
+      path.join(import.meta.dirname, "../../../src/cli/tui/component/matrix-rain.tsx"),
       "utf8",
     )
     expect(src).toContain("bindHiddenTerminalCursor")
@@ -412,7 +412,7 @@ describe("matrix rain startup gate", () => {
   })
 
   test("App waits for kv.ready before deciding startup rain", () => {
-    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app.tsx"), "utf8")
+    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui/app.tsx"), "utf8")
     expect(app).toContain("resolveStartupRainPhase")
     expect(app).toContain("initialStartupRainPhase")
     expect(app).toContain("MatrixRainCover")
@@ -493,7 +493,7 @@ describe("startup rain chrome cover", () => {
 
 describe("startup logo beat", () => {
   test("app plays rain, then the logo, then the working screen", () => {
-    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app.tsx"), "utf8")
+    const app = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui/app.tsx"), "utf8")
     expect(app).toContain("startupRainAfterPlayback")
     expect(app).toContain("startupRainShowsLogo")
     expect(app).toContain("StartupLogo")
@@ -501,7 +501,7 @@ describe("startup logo beat", () => {
 
   test("the logo overlay hides the cursor and clips the drop", () => {
     const src = readFileSync(
-      path.join(import.meta.dirname, "../../../src/cli/cmd/tui/component/startup-logo.tsx"),
+      path.join(import.meta.dirname, "../../../src/cli/tui/component/startup-logo.tsx"),
       "utf8",
     )
     expect(src).toContain("bindHiddenTerminalCursor")
@@ -680,7 +680,7 @@ describe("startup logo color", () => {
   })
 
   test("both overlays colorize from the one shared ramp", () => {
-    const dir = "../../../src/cli/cmd/tui/component"
+    const dir = "../../../src/cli/tui/component"
     const palette = readFileSync(path.join(import.meta.dirname, dir, "matrix-rain-palette.ts"), "utf8")
     const rain = readFileSync(path.join(import.meta.dirname, dir, "matrix-rain.tsx"), "utf8")
     const logoOverlay = readFileSync(path.join(import.meta.dirname, dir, "startup-logo.tsx"), "utf8")
@@ -798,7 +798,7 @@ describe("reverse exit rain", () => {
   })
 
   test("the app plays the reverse rain before an explicit exit tears down", () => {
-    const dir = "../../../src/cli/cmd/tui"
+    const dir = "../../../src/cli/tui"
     const app = readFileSync(path.join(import.meta.dirname, dir, "app.tsx"), "utf8")
     expect(app).toContain("MATRIX_RAIN_REVERSE_DURATION_MS")
     expect(app).toContain('direction="up"')
@@ -810,7 +810,7 @@ describe("reverse exit rain", () => {
   })
 
   test("typed exit and the /exit command request the flourish", () => {
-    const dir = "../../../src/cli/cmd/tui"
+    const dir = "../../../src/cli/tui"
     expect(readFileSync(path.join(import.meta.dirname, dir, "component/prompt/index.tsx"), "utf8")).toContain(
       "exit.flourish",
     )
@@ -822,7 +822,7 @@ describe("reverse exit rain", () => {
   })
 
   test("the palette previews the reverse rain alongside the rain", () => {
-    const dir = "../../../src/cli/cmd/tui"
+    const dir = "../../../src/cli/tui"
     const commands = readFileSync(path.join(import.meta.dirname, dir, "app-commands.ts"), "utf8")
     expect(commands).toContain('value: "app.matrix.play_reverse"')
     expect(commands).toContain("playReverseMatrixRain()")
@@ -830,7 +830,7 @@ describe("reverse exit rain", () => {
   })
 
   test("the palette uses the video wording", () => {
-    const commands = readFileSync(path.join(import.meta.dirname, "../../../src/cli/cmd/tui/app-commands.ts"), "utf8")
+    const commands = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui/app-commands.ts"), "utf8")
     expect(commands).toContain('t("command.opening")')
     expect(english("command.opening")).toBe("Play Opening Video")
     expect(commands).toContain('t("command.ending")')
@@ -840,7 +840,7 @@ describe("reverse exit rain", () => {
   })
 
   test("ctrl+c plays the ending video before the app ends", () => {
-    const dir = "../../../src/cli/cmd/tui"
+    const dir = "../../../src/cli/tui"
     expect(readFileSync(path.join(import.meta.dirname, dir, "component/prompt/index.tsx"), "utf8")).toContain(
       "await exit.flourish()",
     )

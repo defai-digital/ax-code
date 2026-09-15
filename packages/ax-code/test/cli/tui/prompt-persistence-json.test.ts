@@ -4,7 +4,7 @@ import {
   decodePromptPersistenceJsonLine,
   decodePromptPersistenceJsonValue,
   parsePromptPersistenceJsonLine,
-} from "../../../src/cli/cmd/tui/component/prompt/persistence-json"
+} from "../../../src/cli/tui/component/prompt/persistence-json"
 
 describe("prompt persistence JSON", () => {
   test("parsePromptPersistenceJsonLine parses JSON lines", () => {

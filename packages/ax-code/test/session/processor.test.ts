@@ -10,14 +10,14 @@ import { Session } from "../../src/session"
 import { LLM } from "../../src/session/llm"
 import { SessionProcessor } from "../../src/session/processor"
 import { MessageV2 } from "../../src/session/message-v2"
-import { resolvePromptLoopErrorTransition } from "../../src/session/prompt-loop-errors"
-import { providerFallbackSwitchState } from "../../src/session/prompt-helpers"
+import { resolvePromptLoopErrorTransition } from "../../src/session/prompt/prompt-loop-errors"
+import { providerFallbackSwitchState } from "../../src/session/prompt/prompt-helpers"
 import { SessionRetry } from "../../src/session/retry"
 import { MessageID, SessionID, PartID } from "../../src/session/schema"
 import { TaskQueue } from "../../src/session/task-queue"
 import { tmpdir } from "../fixture/fixture"
 import * as ImageResize from "../../src/session/image-resize"
-import { preparePromptRequest } from "../../src/session/prompt-request-build"
+import { preparePromptRequest } from "../../src/session/prompt/prompt-request-build"
 
 const model: Provider.Model = {
   id: "test-model" as any,

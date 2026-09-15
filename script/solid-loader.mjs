@@ -43,7 +43,7 @@ const aliases = new Map([
 // tsconfig paths aliases (Bun resolved these natively; tsx does not).
 // Keep in sync with packages/ax-code/tsconfig.json → compilerOptions.paths.
 const pathPrefixes = [
-  ["@tui/", pathToFileURL(path.join(pkgRoot, "src/cli/cmd/tui/")).href],
+  ["@tui/", pathToFileURL(path.join(pkgRoot, "src/cli/tui/")).href],
   ["@/", pathToFileURL(path.join(pkgRoot, "src/")).href],
 ]
 const rebind = new Map([

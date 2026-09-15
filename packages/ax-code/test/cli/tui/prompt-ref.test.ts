@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, test } from "vitest"
-import { createPromptRefState } from "../../../src/cli/cmd/tui/context/prompt"
-import type { PromptRef } from "../../../src/cli/cmd/tui/component/prompt"
+import { createPromptRefState } from "../../../src/cli/tui/context/prompt"
+import type { PromptRef } from "../../../src/cli/tui/component/prompt"
 
 function stubPrompt(input: string): PromptRef {
   const prompt = { input, parts: [] as PromptRef["current"]["parts"] }
@@ -28,7 +28,7 @@ describe("prompt ref", () => {
   })
 
   test("IdleRecap reads prompt input through the reactive PromptRef current getter", () => {
-    const root = path.resolve(import.meta.dirname, "../../../src/cli/cmd/tui")
+    const root = path.resolve(import.meta.dirname, "../../../src/cli/tui")
     const prompt = readFileSync(path.join(root, "context/prompt.tsx"), "utf8")
     const recap = readFileSync(path.join(root, "routes/session/idle-recap.tsx"), "utf8")
     expect(prompt).toContain("createSignal")

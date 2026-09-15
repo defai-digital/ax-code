@@ -14,7 +14,7 @@ When behavior changes, verify against:
 - `packages/ax-code/src/mode/` — pure policy, hybrid, council aggregation, arena ranking, debate, budget, memory, worktree policy, implement-arena scoring
 - `packages/ax-code/src/tool/council.ts` — multi-provider council tool
 - `packages/ax-code/src/tool/arena.ts` and `arena-implement.ts` — plan and implement arena
-- `packages/ax-code/src/session/prompt-routing.ts` — hybrid placement when `modes.default` is `hybrid`
+- `packages/ax-code/src/session/prompt/prompt-routing.ts` — hybrid placement when `modes.default` is `hybrid`
 - `packages/ax-code/src/config/schema-impl.ts` — `modes` config schema
 - `packages/ax-code/src/command/template/{council,arena,mode}.txt` — `/council`, `/arena`, and `/mode` are all in the default slash menu
 

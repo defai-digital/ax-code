@@ -4,7 +4,7 @@ import {
   DIALOG_SELECT_CHROME_HEIGHT,
   dialogOverlayMaxHeight,
   dialogOverlayVisibleBodyHeight,
-} from "../../../src/cli/cmd/tui/ui/dialog-overlay"
+} from "../../../src/cli/tui/ui/dialog-overlay"
 
 describe("tui dialog overlay viewport", () => {
   test("leaves a one-row margin on each side of the overlay", () => {

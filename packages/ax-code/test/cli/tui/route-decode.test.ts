@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { decodeInitialRoutePayload, parseInitialRoutePayload } from "../../../src/cli/cmd/tui/context/route-util"
+import { decodeInitialRoutePayload, parseInitialRoutePayload } from "../../../src/cli/tui/context/route-util"
 
 describe("tui initial route decoding", () => {
   test("parses home routes with validated initial prompts", () => {

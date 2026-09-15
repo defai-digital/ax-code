@@ -12,7 +12,7 @@ import { NamedError } from "@ax-code/util/error"
 import { lazy } from "../util/lazy"
 import { MessageV2 } from "./message-v2"
 import { SessionPrompt } from "./prompt"
-import { PromptIsolationPolicy, type PromptIsolationPolicy as PromptIsolationPolicyType } from "./prompt-runtime-policy"
+import { PromptIsolationPolicy, type PromptIsolationPolicy as PromptIsolationPolicyType } from "./prompt/prompt-runtime-policy"
 import { TaskQueue } from "./task-queue"
 import { ScheduledTaskID, type SessionID, type TaskQueueID } from "./schema"
 import type {

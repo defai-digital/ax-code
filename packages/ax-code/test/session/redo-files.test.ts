@@ -7,7 +7,7 @@ import { SessionRevert } from "../../src/session/revert"
 import { Snapshot } from "../../src/snapshot"
 import { MessageID, PartID } from "../../src/session/schema"
 import { ModelID, ProviderID } from "../../src/provider/schema"
-import { hiddenMessageIDs } from "../../src/cli/cmd/tui/routes/session/revert"
+import { hiddenMessageIDs } from "../../src/cli/tui/routes/session/revert"
 import { tmpdir } from "../fixture/fixture"
 
 test("two undo levels and redo restore files and messages while preserving unrelated edits", async () => {

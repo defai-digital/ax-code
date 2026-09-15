@@ -4,7 +4,7 @@ import {
   connectionChipText,
   footerLivenessIndicator,
   footerLivenessTextFrame,
-} from "../../../src/cli/cmd/tui/component/prompt/liveness-view-model"
+} from "../../../src/cli/tui/component/prompt/liveness-view-model"
 
 describe("prompt footer liveness indicator", () => {
   test("uses native spinner when runtime supports TUI animations", () => {

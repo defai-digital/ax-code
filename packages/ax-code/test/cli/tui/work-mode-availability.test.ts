@@ -11,7 +11,7 @@ import {
   workModePickerOptions,
   withWorkModeHintSeen,
   type AvailabilityProvider,
-} from "../../../src/cli/cmd/tui/component/work-mode-availability"
+} from "../../../src/cli/tui/component/work-mode-availability"
 
 const selectable = { tool_call: true }
 const notSelectable = { tool_call: false }

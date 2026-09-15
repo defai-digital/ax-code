@@ -8,8 +8,8 @@ import {
   promptSubmissionView,
   sanitizePromptInput,
   windowsClipboardTextPaste,
-} from "../../../src/cli/cmd/tui/component/prompt/view-model"
-import type { PromptInfo } from "../../../src/cli/cmd/tui/component/prompt/prompt-info"
+} from "../../../src/cli/tui/component/prompt/view-model"
+import type { PromptInfo } from "../../../src/cli/tui/component/prompt/prompt-info"
 
 function pastedTextPart(text: string, placeholder: string, start: number, end: number): PromptInfo["parts"][number] {
   return {

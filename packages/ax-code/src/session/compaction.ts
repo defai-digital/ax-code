@@ -19,9 +19,9 @@ import { MessageTable, PartTable } from "./session.sql"
 import { ModelID, ProviderID } from "@/provider/schema"
 import { ContextTier } from "./context-tier"
 import { CompactionFallback } from "./compaction-fallback"
-import { isLocalProvider } from "./prompt-provider-fallback"
-import { sessionAssistantPath, zeroTokenUsage } from "./prompt-message-builders"
-import { estimateRequestTokens } from "./prompt-request"
+import { isLocalProvider } from "./prompt/prompt-provider-fallback"
+import { sessionAssistantPath, zeroTokenUsage } from "./prompt/prompt-message-builders"
+import { estimateRequestTokens } from "./prompt/prompt-request"
 import { SystemPrompt } from "./system"
 import type { ModelMessage } from "ai"
 import {
@@ -31,7 +31,7 @@ import {
   effectiveTokenTotal,
 } from "./compaction-budget"
 import { MediaProjection } from "./media-projection"
-import { agentModel } from "./prompt-command-selection"
+import { agentModel } from "./prompt/prompt-command-selection"
 import { SessionEvidence } from "./evidence"
 
 export namespace SessionCompaction {

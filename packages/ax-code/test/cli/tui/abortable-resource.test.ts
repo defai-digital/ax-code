@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { createRoot } from "solid-js"
-import { createAbortableResourceFetcher } from "../../../src/cli/cmd/tui/util/abortable-resource"
+import { createAbortableResourceFetcher } from "../../../src/cli/tui/util/abortable-resource"
 
 describe("createAbortableResourceFetcher", () => {
   test("aborts the previous request and preserves the last value", async () => {

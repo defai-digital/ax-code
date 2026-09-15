@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { coalesceParts } from "@/cli/cmd/tui/routes/session/coalesce"
+import { coalesceParts } from "@/cli/tui/routes/session/coalesce"
 import type { Part, ToolPart } from "@ax-code/sdk/v2"
 
 // Lightweight ToolPart factory — we only need fields the coalescer reads

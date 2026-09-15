@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { parseIntegerEnv } from "../../../src/cli/cmd/tui/util/env"
+import { parseIntegerEnv } from "../../../src/cli/tui/util/env"
 
 describe("tui env utilities", () => {
   test("parses decimal integer environment values", () => {

@@ -3,7 +3,7 @@ import {
   isBareReturnKey,
   isNativeShiftEnter,
   shouldDetectNativeShiftEnter,
-} from "../../../src/cli/cmd/tui/util/native-shift-enter"
+} from "../../../src/cli/tui/util/native-shift-enter"
 
 // The FFI modifier query (isNativeShiftPressed) needs a real keyboard and is
 // covered by manual/on-device verification; everything below is pure logic.

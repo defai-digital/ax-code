@@ -5,7 +5,7 @@ import {
   followUpBody,
   followUpStatus,
   mergeFollowUpSnapshot,
-} from "../../../src/cli/cmd/tui/component/prompt/durable-follow-up"
+} from "../../../src/cli/tui/component/prompt/durable-follow-up"
 
 function row(id: string, status = "queued") {
   return {

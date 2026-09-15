@@ -4,13 +4,13 @@ import { toErrorMessage } from "../util/error-message"
 import { Session } from "."
 import { SessionPrompt } from "./prompt"
 import type { SessionID } from "./schema"
-import { formatLoopInterval } from "./prompt-recurring-arguments"
+import { formatLoopInterval } from "./prompt/prompt-recurring-arguments"
 
 // Loop mode (/loop) — a per-session recurring prompt scheduler
 // (ADR-050, SPEC-2026-07-25-loop-mode).
 //
 // Named SessionRecurring because "loop" already means the agentic step
-// loop inside one turn (session/prompt-loop-*.ts); this module schedules
+// loop inside one turn (session/prompt/prompt-loop-*.ts); this module schedules
 // whole turns on a wall-clock interval instead.
 //
 // Every tick submits an ordinary prompt turn through SessionPrompt.prompt —

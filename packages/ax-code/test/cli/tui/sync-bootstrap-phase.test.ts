@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { settleBootstrapPhase } from "../../../src/cli/cmd/tui/context/sync-bootstrap-phase"
+import { settleBootstrapPhase } from "../../../src/cli/tui/context/sync-bootstrap-phase"
 
 describe("tui sync bootstrap phase", () => {
   test("returns no rejections when every task succeeds", async () => {

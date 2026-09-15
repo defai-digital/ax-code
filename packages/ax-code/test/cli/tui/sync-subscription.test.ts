@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import { createStore } from "solid-js/store"
-import type { SyncEventStoreState } from "../../../src/cli/cmd/tui/context/sync-store-event"
-import { subscribeStoreBackedSyncEvents } from "../../../src/cli/cmd/tui/context/sync-subscription"
+import type { SyncEventStoreState } from "../../../src/cli/tui/context/sync-store-event"
+import { subscribeStoreBackedSyncEvents } from "../../../src/cli/tui/context/sync-subscription"
 
 type Session = { id: string }
 type Todo = { id: string }

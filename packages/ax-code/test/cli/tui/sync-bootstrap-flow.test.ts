@@ -7,9 +7,9 @@ import {
   createSyncBootstrapFlow,
   tuiDeferredBootstrapConcurrency,
   tuiDeferredBootstrapDelayMs,
-} from "../../../src/cli/cmd/tui/context/sync-bootstrap-flow"
-import { createStoreBackedBootstrapTasks } from "../../../src/cli/cmd/tui/context/sync-bootstrap-assembly"
-import { createInitialSyncState } from "../../../src/cli/cmd/tui/context/sync-state"
+} from "../../../src/cli/tui/context/sync-bootstrap-flow"
+import { createStoreBackedBootstrapTasks } from "../../../src/cli/tui/context/sync-bootstrap-assembly"
+import { createInitialSyncState } from "../../../src/cli/tui/context/sync-state"
 
 const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0))
 

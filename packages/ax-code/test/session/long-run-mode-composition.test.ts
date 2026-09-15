@@ -22,8 +22,8 @@ import {
   goalLongRunActive,
   totalStepLimitDecision,
   truncatedModelTurnDecision,
-} from "../../src/session/prompt-autonomous-decisions"
-import { promptLoopLimits } from "../../src/session/prompt-loop-config"
+} from "../../src/session/prompt/prompt-autonomous-decisions"
+import { promptLoopLimits } from "../../src/session/prompt/prompt-loop-config"
 import { SuperLongPolicy } from "../../src/session/super-long-policy"
 
 describe("long-run mode composition", () => {

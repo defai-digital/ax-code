@@ -2,10 +2,10 @@ import { afterEach, describe, expect, test, vi } from "vitest"
 import { createStore } from "solid-js/store"
 import { PasteEvent } from "ax-tui"
 import { Filesystem } from "../../../src/util/filesystem"
-import { Clipboard } from "../../../src/cli/cmd/tui/util/clipboard"
-import { createPromptPaste, type PromptPasteHost } from "../../../src/cli/cmd/tui/component/prompt/prompt-paste"
-import type { PromptInfo } from "../../../src/cli/cmd/tui/component/prompt/prompt-info"
-import { createPromptPasteSubmitGate } from "../../../src/cli/cmd/tui/component/prompt/view-model"
+import { Clipboard } from "../../../src/cli/tui/util/clipboard"
+import { createPromptPaste, type PromptPasteHost } from "../../../src/cli/tui/component/prompt/prompt-paste"
+import type { PromptInfo } from "../../../src/cli/tui/component/prompt/prompt-info"
+import { createPromptPasteSubmitGate } from "../../../src/cli/tui/component/prompt/view-model"
 
 afterEach(() => vi.restoreAllMocks())
 

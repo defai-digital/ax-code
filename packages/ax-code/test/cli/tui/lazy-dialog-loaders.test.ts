@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { createTuiDialogLoaders, replaceLazyDialog } from "../../../src/cli/cmd/tui/tui-dialogs"
-import type { DialogContext } from "../../../src/cli/cmd/tui/ui/dialog"
-import { DialogAlert } from "../../../src/cli/cmd/tui/ui/dialog-alert"
+import { createTuiDialogLoaders, replaceLazyDialog } from "../../../src/cli/tui/tui-dialogs"
+import type { DialogContext } from "../../../src/cli/tui/ui/dialog"
+import { DialogAlert } from "../../../src/cli/tui/ui/dialog-alert"
 
 vi.mock("@tui/ui/dialog-alert", () => ({ DialogAlert: { show: vi.fn() } }))
 

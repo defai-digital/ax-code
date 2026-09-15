@@ -1,7 +1,7 @@
 import { ModelID, ProviderID } from "../../provider/schema"
 import { Session } from "../../session"
 import { MessageV2 } from "../../session/message-v2"
-import { sessionAssistantPath, zeroTokenUsage } from "../../session/prompt-message-builders"
+import { sessionAssistantPath, zeroTokenUsage } from "../../session/prompt/prompt-message-builders"
 import { MessageID, PartID } from "../../session/schema"
 import { Log } from "../../util/log"
 import { defaultWorkflowArtifactRedaction } from "../artifact"

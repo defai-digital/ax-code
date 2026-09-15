@@ -28,11 +28,11 @@ vi.mock("@/util/filesystem", async (importOriginal) => {
   }
 })
 
-import { createKVStore } from "../../../src/cli/cmd/tui/context/kv"
+import { createKVStore } from "../../../src/cli/tui/context/kv"
 import {
   MATRIX_RAIN_ON_START_DEFAULT,
   decideMatrixRainOnStart,
-} from "../../../src/cli/cmd/tui/component/matrix-rain-view-model"
+} from "../../../src/cli/tui/component/matrix-rain-view-model"
 
 function flush() {
   // Drain the microtask queue a few times so promise chains settle.

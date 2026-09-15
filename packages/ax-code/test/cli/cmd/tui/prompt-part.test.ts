@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import type { PromptInfo } from "../../../../src/cli/cmd/tui/component/prompt/history"
-import { assign, strip } from "../../../../src/cli/cmd/tui/component/prompt/part"
+import type { PromptInfo } from "../../../../src/cli/tui/component/prompt/history"
+import { assign, strip } from "../../../../src/cli/tui/component/prompt/part"
 
 describe("prompt part", () => {
   test("strip removes persisted ids from reused file parts", () => {

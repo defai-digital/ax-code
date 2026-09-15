@@ -19,7 +19,7 @@ if (isMainThread) {
   // util/node-options.ts). Record the real entry path in the same breath: the
   // launchers keep argv at "AX-Code /dev/null …" for short macOS job titles, so
   // argv[1] can no longer identify the CLI entrypoint for the TUI backend spawn
-  // (cli/cmd/tui/thread.ts reads AX_CODE_CLI_ENTRY first).
+  // (cli/tui/thread.ts reads AX_CODE_CLI_ENTRY first).
   restoreAxCodeLaunchNodeOptions()
   process.env.AX_CODE_CLI_ENTRY = fileURLToPath(import.meta.url)
 

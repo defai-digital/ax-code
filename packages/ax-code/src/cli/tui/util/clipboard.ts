@@ -1,0 +1,378 @@
+import { platform, release } from "os"
+import clipboardy from "clipboardy"
+import { lazy } from "../../../util/lazy.js"
+import { tmpdir } from "os"
+import path from "path"
+import fs from "fs/promises"
+import { randomBytes } from "crypto"
+import { Filesystem } from "../../../util/filesystem"
+import { Process } from "../../../util/process"
+import { which } from "../../../util/which"
+import { Log } from "../../../util/log"
+import { toErrorMessage } from "../../../util/error-message"
+import { oscMuxFromEnv, wrapOscForMux, type OscMux } from "./osc-passthrough"
+
+const log = Log.create({ service: "tui.clipboard" })
+
+/**
+ * WSL kernels identify as "microsoft" in both WSL1 ("4.4.0-...-Microsoft")
+ * and WSL2 ("5.15....-microsoft-standard-WSL2") release strings.
+ */
+export function isWslRelease(kernelRelease: string): boolean {
+  return /microsoft/i.test(kernelRelease)
+}
+
+/**
+ * Detects Windows Subsystem for Linux. `release().includes("WSL")` misses
+ * WSL1 (no "WSL" in its kernel release), so match "microsoft" instead and
+ * fall back to the WSL-only environment variables.
+ */
+export function isWsl(): boolean {
+  if (platform() !== "linux") return false
+  return isWslRelease(release()) || Boolean(process.env["WSL_DISTRO_NAME"] || process.env["WSLENV"])
+}
+
+/**
+ * Writes text to clipboard via OSC 52 escape sequence.
+ * This allows clipboard operations to work over SSH by having
+ * the terminal emulator handle the clipboard locally.
+ *
+ * GNU Screen (STY) must not use tmux DCS wrapping: Screen consumes an inner
+ * ST and leaves the host terminal with an unterminated OSC 52. Port of
+ * OpenTUI #1334 — BEL-terminated OSC, DCS `\x1bP`…`\x1b\\` chunks of 252.
+ */
+export const OSC52_MAX_BYTES = 100_000
+export { SCREEN_PASSTHROUGH_CHUNK_SIZE, oscMuxFromEnv as osc52MuxFromEnv } from "./osc-passthrough"
+export type Osc52Mux = OscMux
+const CLIPBOARD_PROC_TIMEOUT_MS = 5_000
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+
+export function osc52ClipboardSequence(
+  text: string,
+  mux: Osc52Mux = "none",
+  maxBytes = OSC52_MAX_BYTES,
+): string | undefined {
+  if (Buffer.byteLength(text, "utf8") > maxBytes) return undefined
+  const base64 = Buffer.from(text).toString("base64")
+  // BEL terminator: Screen forwards this intact; ST (`\x1b\\`) is consumed as
+  // the inner DCS end and leaves the outer terminal with a truncated OSC.
+  return wrapOscForMux(`\x1b]52;c;${base64}\x07`, mux)
+}
+
+type ProcWithStdin = {
+  exited: Promise<unknown>
+  stdin: NodeJS.WritableStream | null | undefined
+} & Process.Child
+
+function writeOsc52(text: string): boolean {
+  if (!process.stdout.isTTY) return false
+  const sequence = osc52ClipboardSequence(text, oscMuxFromEnv())
+  if (!sequence) return false
+  process.stdout.write(sequence)
+  return true
+}
+
+function createTimeout(ms: number) {
+  let handle: NodeJS.Timeout | undefined
+  return {
+    promise: new Promise<"timeout">((resolve) => {
+      handle = setTimeout(() => resolve("timeout"), ms)
+    }),
+    clear() {
+      if (handle) clearTimeout(handle)
+    },
+  }
+}
+
+async function waitForExit(proc: ProcWithStdin) {
+  const timeout = createTimeout(CLIPBOARD_PROC_TIMEOUT_MS)
+  try {
+    const result = await Promise.race([
+      proc.exited.then(
+        (code) => ({ type: "done" as const, code }),
+        (error) => ({ type: "error" as const, error }),
+      ),
+      timeout.promise.then(() => ({ type: "timeout" as const })),
+    ])
+    if (result.type === "timeout") {
+      await Process.killProcessTree(proc).catch(() => undefined)
+      throw new Error("Timed out writing to clipboard")
+    }
+    if (result.type === "error") throw result.error
+    // A clipboard tool that exits non-zero (or times out above) did not
+    // copy anything; surface that so `copy()` can decide whether OSC52
+    // already covered the write instead of silently reporting success.
+    if (typeof result.code === "number" && result.code !== 0) {
+      throw new Error(`Clipboard tool exited with code ${result.code}`)
+    }
+  } finally {
+    timeout.clear()
+  }
+}
+
+async function waitForWrite(input: Promise<unknown>) {
+  const timeout = createTimeout(CLIPBOARD_PROC_TIMEOUT_MS)
+  try {
+    const result = await Promise.race([
+      input.then(
+        () => ({ type: "done" as const }),
+        (error) => ({ type: "error" as const, error }),
+      ),
+      timeout.promise.then(() => ({ type: "timeout" as const })),
+    ])
+
+    if (result.type === "error") throw result.error
+    if (result.type === "timeout") throw new Error("Timed out writing to clipboard")
+  } finally {
+    timeout.clear()
+  }
+}
+
+async function waitForStdinDrain(proc: ProcWithStdin) {
+  if (!proc.stdin) return
+  const stdin = proc.stdin
+  const timeout = createTimeout(CLIPBOARD_PROC_TIMEOUT_MS)
+  let cleanup = () => {}
+  try {
+    const drain = new Promise<"drain">((resolve, reject) => {
+      const onDrain = () => resolve("drain")
+      const onError = (error: unknown) => reject(error)
+      stdin.once("drain", onDrain)
+      stdin.once("error", onError)
+      cleanup = () => {
+        stdin.off("drain", onDrain)
+        stdin.off("error", onError)
+      }
+    })
+    const result = await Promise.race([
+      drain,
+      proc.exited.then(
+        () => "exit" as const,
+        (error) => {
+          throw error
+        },
+      ),
+      timeout.promise,
+    ])
+
+    if (result === "timeout") {
+      await Process.killProcessTree(proc).catch(() => undefined)
+      throw new Error("Timed out writing to clipboard")
+    }
+    if (result === "exit") {
+      throw new Error("Clipboard process exited before stdin drained")
+    }
+  } finally {
+    cleanup()
+    timeout.clear()
+  }
+}
+
+async function writeViaProcessStdin(proc: ProcWithStdin, text: string) {
+  if (!proc.stdin) return
+  const wrote = proc.stdin.write(text)
+  if (!wrote) {
+    await waitForStdinDrain(proc)
+  }
+  proc.stdin.end()
+  await waitForExit(proc)
+}
+
+export function decodePngClipboardBase64(value: string): Buffer | undefined {
+  const normalized = value.replace(/\s+/g, "")
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) return undefined
+  const imageBuffer = Buffer.from(normalized, "base64")
+  if (imageBuffer.length < PNG_SIGNATURE.length) return undefined
+  if (!PNG_SIGNATURE.every((byte, index) => imageBuffer[index] === byte)) return undefined
+  return imageBuffer
+}
+
+export namespace Clipboard {
+  export interface Content {
+    data: string
+    mime: string
+  }
+
+  export async function read(): Promise<Content | undefined> {
+    const os = platform()
+
+    if (os === "darwin") {
+      // Unique per-read temp file so two concurrent ax-code instances
+      // (or two overlapping reads in the same process) cannot race on a
+      // shared path and mix each other's clipboard contents.
+      const tmpfile = path.join(tmpdir(), `ax-code-clipboard-${process.pid}-${randomBytes(4).toString("hex")}.png`)
+      try {
+        await Process.run(
+          [
+            "osascript",
+            "-e",
+            'set imageData to the clipboard as "PNGf"',
+            "-e",
+            `set fileRef to open for access POSIX file "${tmpfile}" with write permission`,
+            "-e",
+            "set eof fileRef to 0",
+            "-e",
+            "write imageData to fileRef",
+            "-e",
+            "close access fileRef",
+          ],
+          { nothrow: true },
+        )
+        const buffer = await Filesystem.readBytes(tmpfile)
+        return { data: buffer.toString("base64"), mime: "image/png" }
+      } catch (error) {
+        log.debug("macOS clipboard image read failed", { error })
+      } finally {
+        await fs.rm(tmpfile, { force: true }).catch((error) => {
+          log.debug("clipboard temporary image cleanup failed", { tmpfile, error })
+        })
+      }
+    }
+
+    if (os === "win32" || isWsl()) {
+      const script =
+        "Add-Type -AssemblyName System.Windows.Forms; $img = [System.Windows.Forms.Clipboard]::GetImage(); if ($img) { $ms = New-Object System.IO.MemoryStream; $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); [System.Convert]::ToBase64String($ms.ToArray()) }"
+      const base64 = await Process.text(["powershell.exe", "-NonInteractive", "-NoProfile", "-command", script], {
+        nothrow: true,
+      })
+      if (base64.text) {
+        const imageBuffer = decodePngClipboardBase64(base64.text)
+        if (imageBuffer) return { data: imageBuffer.toString("base64"), mime: "image/png" }
+      }
+    }
+
+    if (os === "linux") {
+      const wayland = await Process.run(["wl-paste", "-t", "image/png"], { nothrow: true })
+      if (wayland.stdout.byteLength > 0) {
+        return { data: Buffer.from(wayland.stdout).toString("base64"), mime: "image/png" }
+      }
+      const x11 = await Process.run(["xclip", "-selection", "clipboard", "-t", "image/png", "-o"], {
+        nothrow: true,
+      })
+      if (x11.stdout.byteLength > 0) {
+        return { data: Buffer.from(x11.stdout).toString("base64"), mime: "image/png" }
+      }
+    }
+
+    const text = await clipboardy.read().catch(() => "")
+    if (text) {
+      return { data: text, mime: "text/plain" }
+    }
+  }
+
+  const getCopyMethod = lazy(() => {
+    const os = platform()
+
+    if (os === "darwin" && which("pbcopy")) {
+      return async (text: string) => {
+        // Feed the text through stdin like the wl-copy/xclip paths below.
+        // The previous osascript approach passed the whole text as a
+        // single argv element, so copies over ARG_MAX (~1 MiB) failed the
+        // spawn with E2BIG — silently, because the error was swallowed —
+        // while the UI still toasted "Copied to clipboard".
+        const proc = Process.spawn(["pbcopy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
+        await writeViaProcessStdin(proc, text)
+      }
+    }
+
+    if (os === "linux") {
+      // WSL has no stock Linux clipboard helper, but the Windows-side
+      // clip.exe is on PATH and reads the clipboard text from stdin.
+      if (isWsl() && which("clip.exe")) {
+        return async (text: string) => {
+          const proc = Process.spawn(["clip.exe"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
+          await writeViaProcessStdin(proc, text)
+        }
+      }
+      if (process.env["WAYLAND_DISPLAY"] && which("wl-copy")) {
+        return async (text: string) => {
+          const proc = Process.spawn(["wl-copy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
+          await writeViaProcessStdin(proc, text)
+        }
+      }
+      if (which("xclip")) {
+        return async (text: string) => {
+          const proc = Process.spawn(["xclip", "-selection", "clipboard"], {
+            stdin: "pipe",
+            stdout: "ignore",
+            stderr: "ignore",
+          })
+          await writeViaProcessStdin(proc, text)
+        }
+      }
+      if (which("xsel")) {
+        return async (text: string) => {
+          const proc = Process.spawn(["xsel", "--clipboard", "--input"], {
+            stdin: "pipe",
+            stdout: "ignore",
+            stderr: "ignore",
+          })
+          await writeViaProcessStdin(proc, text)
+        }
+      }
+      // Linux without any clipboard helper. Falling through to `clipboardy`
+      // surfaces a useless "couldn't find the xsel module" error to the
+      // user (#178) — clipboardy's own internal probe failing, with no
+      // actionable signal. Throw a clean, install-instruction error
+      // instead. OSC52 was already attempted in `copy()` above, so users
+      // on a modern terminal still get clipboard support; `copy()` only
+      // propagates this error when the OSC52 write did not happen.
+      return async () => {
+        throw new Error(
+          "Clipboard unavailable on this Linux session. " +
+            "Install one of: `xclip` (X11), `wl-clipboard` (Wayland), or `xsel`.",
+        )
+      }
+    }
+
+    if (os === "win32") {
+      return async (text: string) => {
+        // Pipe via stdin to avoid PowerShell string interpolation ($env:FOO, $(), etc.)
+        const proc = Process.spawn(
+          [
+            "powershell.exe",
+            "-NonInteractive",
+            "-NoProfile",
+            "-Command",
+            "[Console]::InputEncoding = [System.Text.Encoding]::UTF8; Set-Clipboard -Value ([Console]::In.ReadToEnd())",
+          ],
+          {
+            stdin: "pipe",
+            stdout: "ignore",
+            stderr: "ignore",
+          },
+        )
+
+        await writeViaProcessStdin(proc, text)
+      }
+    }
+
+    return async (text: string) => {
+      await waitForWrite(clipboardy.write(text))
+    }
+  })
+
+  export async function copy(text: string): Promise<void> {
+    // OSC52 runs first (synchronously emits the terminal escape that
+    // most modern terminals translate into a real clipboard write). If
+    // the system-tool path then fails — the most common reason on
+    // Linux is no xclip / wl-copy / xsel installed, which throws an
+    // install-instruction error from the fallback branch — propagating
+    // that rejection to callers like `Selection.copy(.catch(toast.error))`
+    // shows a "Failed to copy" toast even though OSC52 already did the
+    // copy successfully. Swallow the error in that case; the user
+    // already got the clipboard write through the terminal. But when
+    // OSC52 bailed (not a TTY, or the payload exceeded its 100KB limit)
+    // nothing reached the clipboard, so the failure must propagate
+    // instead of letting callers toast success on a lost copy.
+    const osc52Emitted = writeOsc52(text)
+    try {
+      await getCopyMethod()(text)
+    } catch (err) {
+      if (!osc52Emitted) throw err
+      log.warn("system clipboard tool failed; OSC52 may have handled it", {
+        error: toErrorMessage(err),
+      })
+    }
+  }
+}

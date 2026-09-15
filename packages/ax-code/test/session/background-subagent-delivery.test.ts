@@ -9,7 +9,7 @@ import {
 import { SessionCompaction } from "../../src/session/compaction"
 import { MessageV2 } from "../../src/session/message-v2"
 import { SessionPrompt } from "../../src/session/prompt"
-import { syntheticTextPart } from "../../src/session/prompt-message-builders"
+import { syntheticTextPart } from "../../src/session/prompt/prompt-message-builders"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import { TaskQueue } from "../../src/session/task-queue"
 import { WaitForTool } from "../../src/tool/waitfor"

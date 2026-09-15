@@ -1,4 +1,4 @@
-import { english } from "../../../src/cli/cmd/tui/i18n"
+import { english } from "../../../src/cli/tui/i18n"
 import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
@@ -7,9 +7,9 @@ import {
   loadRevertHistory,
   mergeRevertHistory,
   MissingRevertMessageError,
-} from "../../../src/cli/cmd/tui/routes/session/revert-history"
-import { undoMessageID, redoMessageID } from "../../../src/cli/cmd/tui/routes/session/messages"
-import { hiddenMessageIDs, visibleParts } from "../../../src/cli/cmd/tui/routes/session/revert"
+} from "../../../src/cli/tui/routes/session/revert-history"
+import { undoMessageID, redoMessageID } from "../../../src/cli/tui/routes/session/messages"
+import { hiddenMessageIDs, visibleParts } from "../../../src/cli/tui/routes/session/revert"
 
 const history = Array.from({ length: 350 }, (_, index) => ({
   info: { id: `msg_${String(index).padStart(4, "0")}`, role: index % 2 ? "assistant" : "user" },
@@ -35,7 +35,7 @@ describe("recover undo history", () => {
   test.each(["cleared", "changed", "missing", "offline", "navigation"])(
     "missing boundary revalidates authoritative session: %s",
     async (scenario) => {
-      const source = readFileSync(new URL("../../../src/cli/cmd/tui/routes/session/index.tsx", import.meta.url), "utf8")
+      const source = readFileSync(new URL("../../../src/cli/tui/routes/session/index.tsx", import.meta.url), "utf8")
       const start = source.indexOf("  const [historyLoading,")
       const end = source.indexOf("  onCleanup(() => historyFlight?.controller.abort())", start)
       const body = transformSync(source.slice(start, end), { loader: "ts", target: "node26" }).code
@@ -105,7 +105,7 @@ describe("recover undo history", () => {
     },
   )
   test("focused prompt leaves Enter for the open restore confirmation", () => {
-    const source = readFileSync(new URL("../../../src/cli/cmd/tui/component/prompt/index.tsx", import.meta.url), "utf8")
+    const source = readFileSync(new URL("../../../src/cli/tui/component/prompt/index.tsx", import.meta.url), "utf8")
     const start = source.indexOf("  useKeyboard((evt) => {")
     const end = source.indexOf("  const fileStyleId", start)
     const body = transformSync(source.slice(start, end), { loader: "ts" }).code
@@ -147,7 +147,7 @@ describe("recover undo history", () => {
     expect(consumed).toBe(2)
   })
   test("Restore confirmation consumes Enter before refocusing the prompt", () => {
-    const source = readFileSync(new URL("../../../src/cli/cmd/tui/ui/dialog-confirm.tsx", import.meta.url), "utf8")
+    const source = readFileSync(new URL("../../../src/cli/tui/ui/dialog-confirm.tsx", import.meta.url), "utf8")
     const start = source.indexOf("  useKeyboard((evt) => {")
     const end = source.indexOf("  return (", start)
     const body = transformSync(source.slice(start, end), { loader: "ts" }).code
@@ -173,7 +173,7 @@ describe("recover undo history", () => {
   })
   test("actual Solid effects automatically start recovery when the session first appears", async () => {
     const solid: typeof import("solid-js") = createRequire(import.meta.url)("solid-js/dist/solid.cjs")
-    const source = readFileSync(new URL("../../../src/cli/cmd/tui/routes/session/index.tsx", import.meta.url), "utf8")
+    const source = readFileSync(new URL("../../../src/cli/tui/routes/session/index.tsx", import.meta.url), "utf8")
     const start = source.indexOf("  const [historyLoading,")
     const end = source.indexOf("  onCleanup(() => historyFlight?.controller.abort())", start)
     const effectStart = source.indexOf('  let historyContextKey = ""')
@@ -341,7 +341,7 @@ describe("recover undo history", () => {
     expect(store.part[history[0].info.id]).toEqual(history[0].parts)
   })
   test("actual TUI loader shares concurrent requests and drops results after session navigation", async () => {
-    const source = readFileSync(new URL("../../../src/cli/cmd/tui/routes/session/index.tsx", import.meta.url), "utf8")
+    const source = readFileSync(new URL("../../../src/cli/tui/routes/session/index.tsx", import.meta.url), "utf8")
     const start = source.indexOf("  const [historyLoading,")
     const end = source.indexOf("  onCleanup(() => historyFlight?.controller.abort())", start)
     expect(start).toBeGreaterThan(0)

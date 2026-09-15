@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { parseSyncedSessionRisk } from "../../../src/cli/cmd/tui/context/sync-session-risk"
+import { parseSyncedSessionRisk } from "../../../src/cli/tui/context/sync-session-risk"
 
 describe("tui synced session risk parser", () => {
   const debugCase = {

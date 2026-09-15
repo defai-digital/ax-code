@@ -13,7 +13,7 @@ import path from "path"
 // they cannot be imported into a unit test) locking in the routing: inspect
 // the resolved result.error and throw so the existing `.catch` (reset guard,
 // log, toast, keep the prompt mounted for retry) handles the failure.
-const TUI_ROOT = path.join(__dirname, "../../../src/cli/cmd/tui")
+const TUI_ROOT = path.join(__dirname, "../../../src/cli/tui")
 const PERMISSION_PROMPT_SRC = path.join(TUI_ROOT, "routes/session/permission.tsx")
 const QUESTION_PROMPT_SRC = path.join(TUI_ROOT, "routes/session/question.tsx")
 

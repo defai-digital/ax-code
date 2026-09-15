@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { resolveSessionFirstRoute, type TuiLaunchInput } from "@/cli/cmd/tui/navigation/launch-policy"
+import { resolveSessionFirstRoute, type TuiLaunchInput } from "@/cli/tui/navigation/launch-policy"
 
 describe("resolveSessionFirstRoute", () => {
   test("explicit session ID wins over recent sessions", () => {

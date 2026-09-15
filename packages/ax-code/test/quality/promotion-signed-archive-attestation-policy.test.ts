@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
-import { QualityPromotionSignedArchiveAttestationPolicy } from "../../src/quality/promotion-signed-archive-attestation-policy"
-import { QualityPromotionSignedArchiveTrust } from "../../src/quality/promotion-signed-archive-trust"
+import { QualityPromotionSignedArchiveAttestationPolicy } from "../../src/quality/promotion/promotion-signed-archive-attestation-policy"
+import { QualityPromotionSignedArchiveTrust } from "../../src/quality/promotion/promotion-signed-archive-trust"
 
 function trustSummary(input?: {
   overallStatus?: "pass" | "warn" | "fail"

@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events"
 import { describe, expect, test, vi, beforeEach, afterEach } from "vitest"
 
 // Mock terminal cleanup so tests do not touch the real TTY.
-vi.mock("../../../src/cli/cmd/tui/terminal-cleanup", () => ({
+vi.mock("../../../src/cli/tui/terminal-cleanup", () => ({
   resetTuiTerminalState: vi.fn(),
   flushTuiStdout: vi.fn(async () => undefined),
 }))
@@ -12,8 +12,8 @@ import {
   createTuiRejectionHandler,
   guardTuiStdioErrors,
   registerTuiCrashHandlers,
-} from "../../../src/cli/cmd/tui/util/lifecycle"
-import { resetTuiTerminalState, flushTuiStdout } from "../../../src/cli/cmd/tui/terminal-cleanup"
+} from "../../../src/cli/tui/util/lifecycle"
+import { resetTuiTerminalState, flushTuiStdout } from "../../../src/cli/tui/terminal-cleanup"
 
 describe("createTuiCrashHandler", () => {
   const originalExitCode = process.exitCode

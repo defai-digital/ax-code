@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { isAssistantThinkingActive } from "../../../src/cli/cmd/tui/routes/session/thinking-status"
+import { isAssistantThinkingActive } from "../../../src/cli/tui/routes/session/thinking-status"
 
 describe("isAssistantThinkingActive (#378)", () => {
   test("animates only while the session is busy/retry and the last message is incomplete", () => {

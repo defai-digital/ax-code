@@ -4,8 +4,8 @@ import { Snapshot } from "../../snapshot"
 import { FindingSchema, type Finding } from "../finding"
 import { asRecordOrUndefined } from "@/util/record"
 import { uniqueStrings } from "@/util/string-list"
-import * as ProbabilisticRolloutReadiness from "../probabilistic-rollout-readiness"
-import * as ProbabilisticRolloutSchema from "../probabilistic-rollout-schema"
+import * as ProbabilisticRolloutReadiness from "./probabilistic-rollout-readiness"
+import * as ProbabilisticRolloutSchema from "./probabilistic-rollout-schema"
 
 export const REVIEW_TOOLS = new Set([
   "impact_analyze",

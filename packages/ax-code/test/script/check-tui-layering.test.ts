@@ -7,14 +7,14 @@ import { TuiLayeringGuardrails } from "../../script/check-tui-layering"
 describe("script.check-tui-layering", () => {
   test("ignores safe imports and files outside the protected TUI logic layer", async () => {
     await using tmp = await tmpdir()
-    await mkdir(path.join(tmp.path, "src/cli/cmd/tui/routes/session"), { recursive: true })
-    await mkdir(path.join(tmp.path, "src/cli/cmd/tui/ui"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/cli/tui/routes/session"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/cli/tui/ui"), { recursive: true })
     await writeFile(
-      path.join(tmp.path, "src/cli/cmd/tui/routes/session/view-model.ts"),
+      path.join(tmp.path, "src/cli/tui/routes/session/view-model.ts"),
       `import { Locale } from "@/util/locale"\nexport const value = Locale.titlecase("safe")\n`,
     )
     await writeFile(
-      path.join(tmp.path, "src/cli/cmd/tui/ui/dialog.tsx"),
+      path.join(tmp.path, "src/cli/tui/ui/dialog.tsx"),
       `import { useRenderer } from "ax-tui/solid"\nexport const value = useRenderer\n`,
     )
 
@@ -23,20 +23,20 @@ describe("script.check-tui-layering", () => {
 
   test("reports renderer and solid imports in protected pure TUI files", async () => {
     await using tmp = await tmpdir()
-    await mkdir(path.join(tmp.path, "src/cli/cmd/tui/routes/session"), { recursive: true })
-    await mkdir(path.join(tmp.path, "src/cli/cmd/tui/util"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/cli/tui/routes/session"), { recursive: true })
+    await mkdir(path.join(tmp.path, "src/cli/tui/util"), { recursive: true })
     await writeFile(
-      path.join(tmp.path, "src/cli/cmd/tui/routes/session/view-model.ts"),
+      path.join(tmp.path, "src/cli/tui/routes/session/view-model.ts"),
       `import { createMemo } from "solid-js"\nexport const value = createMemo\n`,
     )
     await writeFile(
-      path.join(tmp.path, "src/cli/cmd/tui/util/microtask.ts"),
+      path.join(tmp.path, "src/cli/tui/util/microtask.ts"),
       `import { render } from "ax-tui/solid"\nexport const value = render\n`,
     )
 
     expect((await TuiLayeringGuardrails.check(tmp.path)).map((item) => TuiLayeringGuardrails.format(item))).toEqual([
-      "src/cli/cmd/tui/routes/session/view-model.ts imports solid-js (solid)",
-      "src/cli/cmd/tui/util/microtask.ts imports ax-tui/solid (renderer)",
+      "src/cli/tui/routes/session/view-model.ts imports solid-js (solid)",
+      "src/cli/tui/util/microtask.ts imports ax-tui/solid (renderer)",
     ])
   })
 

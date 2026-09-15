@@ -5,8 +5,8 @@ import {
   createSessionPromptDrafts,
   promptDraftKey,
   type SessionPromptDraft,
-} from "../../../src/cli/cmd/tui/component/prompt/session-drafts"
-import { promptPartExtmarkView } from "../../../src/cli/cmd/tui/component/prompt/prompt-helpers"
+} from "../../../src/cli/tui/component/prompt/session-drafts"
+import { promptPartExtmarkView } from "../../../src/cli/tui/component/prompt/prompt-helpers"
 
 function draft(text = ""): SessionPromptDraft {
   return { prompt: { input: text, parts: [] }, mode: "normal", cursor: text.length, expandedPastes: [] }

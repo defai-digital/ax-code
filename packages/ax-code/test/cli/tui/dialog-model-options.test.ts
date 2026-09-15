@@ -4,7 +4,7 @@ import {
   dialogModelInShortcutList,
   dialogModelOptionDisabled,
   dialogModelPickerCategory,
-} from "../../../src/cli/cmd/tui/component/dialog-model-options"
+} from "../../../src/cli/tui/component/dialog-model-options"
 
 function model(toolcall: boolean, options: Record<string, unknown> = {}, text = true) {
   return {
