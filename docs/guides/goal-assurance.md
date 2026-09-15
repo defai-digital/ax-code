@@ -176,7 +176,8 @@ commands. Existing frozen contracts retain their schema and digest; checkpoints
 warn when an older check has this weakness.
 
 Goal-check freshness also fingerprints resolved file paths reported by successful
-file-editing tools during the current goal, including paths omitted from the
+file-editing tools during the current goal, including every `multiedit` result
+and paths omitted from the
 original source list. Later edits to those files invalidate earlier receipts.
 The frozen contract and digest are unchanged. This tracking uses file-tool result
 metadata; it does not infer arbitrary shell side effects or test coverage.

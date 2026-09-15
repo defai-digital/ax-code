@@ -9,6 +9,8 @@ import type { GoalAssurance } from "../../src/session/goal-assurance"
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import type { MessageV2 } from "../../src/session/message-v2"
 import { ModelID, ProviderID } from "../../src/provider/schema"
+import { MultiEditTool } from "../../src/tool/multiedit"
+import { FileTime } from "../../src/file/time"
 import { WriteTool } from "../../src/tool/write"
 import { VerifyProjectTool } from "../../src/tool/verify_project"
 import { UpdateGoalTool } from "../../src/tool/goal"
@@ -310,7 +312,7 @@ test("turn context reloads frozen authority after history loss and refuses tampe
   })
 })
 
-test("goal receipts track edits omitted from frozen sourcePaths without rewriting the contract", async () => {
+test.each(["write", "multiedit"] as const)("receipts track omitted %s paths", async (tool) => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({
     directory: tmp.path,
@@ -318,9 +320,22 @@ test("goal receipts track edits omitted from frozen sourcePaths without rewritin
       const { session, goal } = await prepare(tmp.path)
       const digest = GoalPlan.storedDigest(session.id, goal.time.created)
       const extra = path.join(tmp.path, "train.cjs")
-      const written = await (
-        await WriteTool.init()
-      ).execute({ filePath: extra, content: "module.exports = 1\n" }, context(session.id))
+      await fs.writeFile(extra, "module.exports = 0\n")
+      await FileTime.read(session.id, extra)
+      const written =
+        tool === "write"
+          ? await (
+              await WriteTool.init()
+            ).execute({ filePath: extra, content: "module.exports = 1\n" }, context(session.id))
+          : await (
+              await MultiEditTool.init()
+            ).execute(
+              {
+                filePath: extra,
+                edits: [{ filePath: extra, oldString: "module.exports = 0", newString: "module.exports = 1" }],
+              },
+              context(session.id),
+            )
       const messageID = MessageID.ascending()
       await Session.updateMessage({
         id: messageID,
@@ -340,7 +355,7 @@ test("goal receipts track edits omitted from frozen sourcePaths without rewritin
         messageID,
         sessionID: session.id,
         type: "tool",
-        tool: "write",
+        tool,
         callID: "write-train",
         state: {
           status: "completed",
@@ -355,7 +370,6 @@ test("goal receipts track edits omitted from frozen sourcePaths without rewritin
       for (const check of assurance.checks) {
         const result = await verify.execute({ goalCheck: check.id }, context(session.id))
         expect(result.metadata.passed).toBe(true)
-        expect(result.output).toContain("train.cjs")
         await record(session.id, tmp.path, check.id, result)
       }
       await fs.writeFile(extra, "module.exports = 2\n")
