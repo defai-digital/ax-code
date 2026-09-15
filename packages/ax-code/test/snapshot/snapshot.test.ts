@@ -43,6 +43,15 @@ class $Proc {
   }
 }
 
+function tokenize(rest: string) {
+  const args: string[] = []
+  const pattern = /"([^"]*)"|'([^']*)'|[^\s]+/g
+  for (const match of rest.matchAll(pattern)) {
+    args.push(match[1] ?? match[2] ?? match[0] ?? "")
+  }
+  return args
+}
+
 function $(strings: TemplateStringsArray, ...values: unknown[]) {
   const parts: string[] = []
   for (let i = 0; i < strings.length; i++) {
@@ -53,8 +62,7 @@ function $(strings: TemplateStringsArray, ...values: unknown[]) {
   const spaceIdx = full.indexOf(" ")
   const cmd = spaceIdx === -1 ? full : full.slice(0, spaceIdx)
   const rest = spaceIdx === -1 ? "" : full.slice(spaceIdx + 1)
-  const args = rest ? rest.split(/\s+/) : []
-  return new $Proc(cmd, args)
+  return new $Proc(cmd, rest ? tokenize(rest) : [])
 }
 import fs from "fs/promises"
 import path from "path"
@@ -71,6 +79,14 @@ const fwd = (...parts: string[]) => path.join(...parts).replaceAll("\\", "/")
 
 afterEach(async () => {
   await Instance.disposeAll()
+  const leakedQuoteDir = path.join(import.meta.dirname, "../..", '"')
+  const leaked = await fs
+    .access(leakedQuoteDir)
+    .then(() => true)
+    .catch(() => false)
+  if (leaked) {
+    throw new Error(`snapshot tests leaked a quoted-path directory at ${leakedQuoteDir}`)
+  }
 })
 
 async function bootstrap() {
@@ -762,6 +778,12 @@ test("escaped non-ASCII filenames modification and restore", async () => {
   })
 })
 
+test("quoted absolute mkdir paths stay inside the temp directory", async () => {
+  await using tmp = await bootstrap()
+  await $`mkdir -p "${tmp.path}/quoted-sub"`.quiet()
+  await expect(fs.access(path.join(tmp.path, "quoted-sub"))).resolves.toBeUndefined()
+})
+
 test("escaped non-ASCII filenames in subdirectories", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
@@ -772,7 +794,7 @@ test("escaped non-ASCII filenames in subdirectories", async () => {
 
       const cjkDir = "\u76ee\u5f55"
       const cyrillicDir = "\u043f\u043e\u0434\u043a\u0430\u0442\u0430\u043b\u043e\u0433"
-      await $`mkdir -p "${tmp.path}/${cjkDir}/${cyrillicDir}"`.quiet()
+      await fs.mkdir(path.join(tmp.path, cjkDir, cyrillicDir), { recursive: true })
       const deepFile = fwd(tmp.path, cjkDir, cyrillicDir, "\u6587\u4ef6.txt")
       await Filesystem.write(deepFile, "deep unicode content")
 
