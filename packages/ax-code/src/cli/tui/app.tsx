@@ -340,10 +340,16 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const animationPair = launchAnimationPair()
   const [openingStyle, setOpeningStyle] = createSignal<OverlayStyle>(animationPair.opening)
   const [endingStyle, setEndingStyle] = createSignal<OverlayStyle>(animationPair.ending)
+  const startOpeningOverlay = (style: OverlayStyle) => {
+    setOpeningStyle(style)
+    setDigitalCodePlaying(true)
+  }
   const playDigitalCode = (style: OverlayStyle = animationPair.opening) => {
     if (exiting) return
-    // A live ending run owns the screen; a manual opening preview would mount a
-    // second full-screen overlay on top of it.
+    // A live ending run or the startup hold/rain/logo cover owns the screen; a
+    // manual opening preview would mount a second full-screen overlay. The
+    // startup playback uses startOpeningOverlay directly so it is not blocked by
+    // its own "rain" phase.
     if (
       previewOverlayBlocked({
         preview: "opening",
@@ -353,8 +359,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
       })
     )
       return
-    setOpeningStyle(style)
-    setDigitalCodePlaying(true)
+    startOpeningOverlay(style)
   }
   const endDigitalCode = (reason: DigitalCodeDoneReason = "timeout") => {
     batch(() => {
@@ -474,7 +479,7 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
         if (next === "hold") return
         batch(() => {
           setStartupRainPhase(next)
-          if (next === "rain") playDigitalCode()
+          if (next === "rain") startOpeningOverlay(animationPair.opening)
         })
       },
     ),

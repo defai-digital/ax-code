@@ -683,14 +683,15 @@ export function interruptOverlayPlan(input: {
 
 /**
  * Whether a manual overlay preview must be refused because another overlay
- * already owns the screen. An opening preview yields to a live ending run; an
- * ending preview yields to a live opening run or the startup cover
- * (`hold`/`rain`/`logo`). Without this, two deliberate previews (e.g. `/ov`
- * followed by `/ev` within the 2.5-3s run) mount two full-screen overlays at
- * once, each binding its own hidden cursor and Kitty image player.
+ * already owns the screen. An opening preview yields to a live ending run or the
+ * startup cover (`hold`/`rain`/`logo`); an ending preview yields to a live
+ * opening run or the startup cover. Without this, two deliberate previews (e.g.
+ * `/ov` followed by `/ev` within the 2.5-3s run, or `/ov` while the startup
+ * logo is up) mount two full-screen overlays at once, each binding its own
+ * hidden cursor and Kitty image player.
  *
- * The startup playback and the exit flourish clear the sibling signals before
- * they play, so they are never blocked by this check.
+ * The startup playback uses an unguarded starter and the exit flourish clears the
+ * sibling signals before it plays, so neither is blocked by this check.
  */
 export function previewOverlayBlocked(input: {
   preview: "opening" | "ending"
@@ -698,8 +699,8 @@ export function previewOverlayBlocked(input: {
   ending: boolean
   startupPhase: StartupRainPhase
 }): boolean {
-  if (input.preview === "opening") return input.ending
-  return input.opening || startupRainCoversChrome(input.startupPhase)
+  const siblingActive = input.preview === "opening" ? input.ending : input.opening
+  return siblingActive || startupRainCoversChrome(input.startupPhase)
 }
 
 /** Renderer surface used to hide the terminal cursor while rain covers the screen. */

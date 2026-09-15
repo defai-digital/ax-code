@@ -248,22 +248,31 @@ describe("manual preview commands do not stack overlays", () => {
     expect(previewOverlayBlocked({ preview: "ending", opening: false, ending: false, startupPhase: "app" })).toBe(false)
   })
 
-  test("an opening preview is refused while the ending run is up", () => {
+  test("an opening preview is refused while the ending run or the startup cover is up", () => {
+    // Regression (codex round-5): the opening branch ignored startupPhase, so a
+    // manual /ov during the startup hold/rain/logo mounted a second overlay while
+    // StartupLogo and DigitalCodeCover were still up. The startup playback now
+    // uses the unguarded startOpeningOverlay starter, so it is the user's manual
+    // preview that is refused.
     expect(previewOverlayBlocked({ preview: "opening", opening: false, ending: true, startupPhase: "app" })).toBe(true)
-    expect(previewOverlayBlocked({ preview: "opening", opening: false, ending: false, startupPhase: "app" })).toBe(
-      false,
+    expect(previewOverlayBlocked({ preview: "opening", opening: false, ending: false, startupPhase: "hold" })).toBe(
+      true,
     )
-    // The ending run is what blocks the opening preview; the startup cover does
-    // not, because the startup playback itself calls this path.
-    expect(previewOverlayBlocked({ preview: "opening", opening: true, ending: false, startupPhase: "rain" })).toBe(
+    expect(previewOverlayBlocked({ preview: "opening", opening: false, ending: false, startupPhase: "rain" })).toBe(
+      true,
+    )
+    expect(previewOverlayBlocked({ preview: "opening", opening: true, ending: false, startupPhase: "logo" })).toBe(true)
+    expect(previewOverlayBlocked({ preview: "opening", opening: false, ending: false, startupPhase: "app" })).toBe(
       false,
     )
   })
 
-  test("both manual preview entry points consult the block helper", () => {
+  test("both manual preview entry points consult the block helper and startup bypasses it", () => {
     const source = readFileSync(path.join(import.meta.dirname, "../../../src/cli/tui", "app.tsx"), "utf8")
     expect(source).toContain('preview: "opening"')
     expect(source).toContain('preview: "ending"')
+    // The startup playback must bypass the guard through the unguarded starter.
+    expect(source).toContain("startOpeningOverlay(animationPair.opening)")
   })
 })
 
