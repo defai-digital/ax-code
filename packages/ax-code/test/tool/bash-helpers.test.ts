@@ -3,6 +3,7 @@ import os from "os"
 import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
+  assertSupportedWindowsRedirect,
   decodeShellLiteral,
   expandLeadingTilde,
   spawnHomeDirectory,
@@ -38,6 +39,25 @@ describe("decodeShellLiteral", () => {
 })
 
 describe("tool.bash helpers", () => {
+  test.each(["nul", "NUL", "'nul'", '"nul"', "./nul", "'logs/NUL.txt'", "'n'ul", "n\\ul", "'CON.log'", "'out. '"])(
+    "rejects Windows-unsupported POSIX redirection target %s",
+    (target) =>
+      expect(() => assertSupportedWindowsRedirect(target, "C:\\Program Files\\Git\\bin\\bash.exe", "win32")).toThrow(
+        /Unsupported Windows redirect target/,
+      ),
+  )
+
+  test.each(["/dev/null", "normal.txt", "null", "console.txt", "'notes/nul-example.txt'"])(
+    "allows supported redirect target %s",
+    (target) => {
+      expect(() => assertSupportedWindowsRedirect(target, "bash.exe", "win32")).not.toThrow()
+    },
+  )
+
+  test("preserves native CMD device handling and non-Windows filenames", () => {
+    expect(() => assertSupportedWindowsRedirect("nul", "C:\\Windows\\System32\\cmd.exe", "win32")).not.toThrow()
+    expect(() => assertSupportedWindowsRedirect("nul", "/bin/bash", "linux")).not.toThrow()
+  })
   test("detects dynamic shell expansion", () => {
     expect(hasDynamicShellExpansion("plain.txt")).toBe(false)
     expect(hasDynamicShellExpansion("$(pwd)/out.txt")).toBe(true)

@@ -168,7 +168,9 @@ describe("tool.bash permissions", () => {
           (testCtx) =>
             bash.execute(
               {
-                command: `cat ${filepath}`,
+                // Bash consumes bare Windows backslashes as escapes. Exercise
+                // the actual external path on Windows as well as POSIX hosts.
+                command: `cat '${filepath.replaceAll("\\", "/").replaceAll("'", "'\\''")}'`,
                 description: "Read external file",
               },
               testCtx,

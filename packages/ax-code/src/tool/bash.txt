@@ -1,5 +1,7 @@
 Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
 
+The actual shell for this tool is `${shell}`. Match command syntax to this shell, even on Windows. In Bash/sh, discard output with `/dev/null`, never `nul` or `NUL`: those can create real Windows reserved-name files that snapshots cannot restore. Prefer keeping stderr visible for diagnosis. An unquoted redirect or `&` is parsed by the outer shell even if the command starts with `cmd /c`; `&` backgrounds a command in Bash. Do not mix CMD operators into an outer Bash command.
+
 All commands run in ${directory} by default. Use the `workdir` parameter if you need to run a command in a different directory. AVOID using `cd <directory> && <command>` patterns - use `workdir` instead.
 
 The workdir override applies only to that call. For repository-relative Git pathspecs, set workdir to the workspace root shown in the environment. Git diff/show pathspecs are relative to the command's working directory; check this base before treating an empty diff as evidence of no changes.
