@@ -23,7 +23,34 @@ const DEFAULT_CONFIG: DesignCheckConfig = {
     "missing-form-labels": "error",
   },
   include: ["**/*.tsx", "**/*.jsx", "**/*.css", "**/*.html", "**/*.vue", "**/*.svelte"],
-  ignore: ["node_modules", "dist", "build", ".next", "coverage"],
+  ignore: [
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    "coverage",
+    // Dependency, vendor, and generated trees. Without these a single
+    // virtualenv or vendored frontend drops thousands of findings from files
+    // the user cannot fix, drowning the first-party signal.
+    ".venv",
+    "venv",
+    "site-packages",
+    "__pycache__",
+    ".tox",
+    "vendor",
+    "target",
+    "bower_components",
+    ".cache",
+    ".turbo",
+    ".svelte-kit",
+    ".nuxt",
+    ".output",
+    ".dart_tool",
+    "Pods",
+    // Never first-party design source, and walking a large object store is the
+    // most expensive thing a repo-wide scan can do.
+    ".git",
+  ],
 }
 
 const SCANNABLE_EXTENSIONS = new Set([".tsx", ".jsx", ".css", ".html", ".vue", ".svelte"])

@@ -260,6 +260,108 @@ describe("Unix node launcher", () => {
     30_000,
   )
 
+  test.skipIf(process.platform === "win32")(
+    "probes the branded runtime once and reuses the cached result",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-probe-cache-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const calls = path.join(root, "calls")
+      const entry = path.join(root, "index-node-tui.js")
+      const cacheHome = path.join(root, "cache-home")
+      await writeFile(entry, "// Test entry point.\n")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          // The branded binary answers the admission probe. It reports the same
+          // version as the outer node so the probe accepts it.
+          `if [ "$1" = "-p" ]; then printf 'probe-inner\\n' >> ${quote(calls)}; printf '%s\\n' ${quote(process.version)}; exit 0; fi`,
+          `printf 'exec\\n' >> ${quote(calls)}`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+        { mode: 0o755 },
+      )
+      const run = () =>
+        execFileAsync(launcher, ["--version"], {
+          env: { ...process.env, XDG_CACHE_HOME: cacheHome, NODE_OPTIONS: "" },
+          timeout: 10_000,
+        }).catch((error: unknown) => error)
+
+      expect(await run()).toMatchObject({ code: 37, signal: null })
+      expect(await run()).toMatchObject({ code: 37, signal: null })
+
+      // One admission probe, two branded execs: the second launch reused the
+      // recorded success instead of booting the probe again.
+      expect(await readFile(calls, "utf8")).toBe("probe-inner\nexec\nexec\n")
+
+      // Admission also depends on OS policy, so a stamp recorded under a
+      // different OS build must not be trusted (e.g. after a system update).
+      const runtimes = await readdir(path.join(cacheHome, "ax-code/libexec"))
+      expect(runtimes).toHaveLength(1)
+      const stamp = path.join(cacheHome, "ax-code/libexec", runtimes[0], "probe.ok")
+      await writeFile(stamp, "stale-identity stale-os\n")
+
+      expect(await run()).toMatchObject({ code: 37, signal: null })
+      expect(await readFile(calls, "utf8")).toBe("probe-inner\nexec\nexec\nprobe-inner\nexec\n")
+      expect(await readFile(stamp, "utf8")).not.toBe("stale-identity stale-os\n")
+    },
+  )
+
+  test.skipIf(process.platform === "win32")("does not cache a failed admission probe", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-probe-fail-"))
+    temporaryRoots.push(root)
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+    const original = path.join(root, "node")
+    const launcher = path.join(root, "launcher")
+    const calls = path.join(root, "calls")
+    const entry = path.join(root, "index-node-tui.js")
+    const cacheHome = path.join(root, "cache-home")
+    await writeFile(entry, "// Test entry point.\n")
+    await writeFile(
+      original,
+      [
+        "#!/bin/sh",
+        `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+        // The branded binary is rejected: it never answers the probe.
+        `if [ "$1" = "-p" ]; then printf 'probe-inner\\n' >> ${quote(calls)}; exit 37; fi`,
+        `printf 'fallback\\n' >> ${quote(calls)}`,
+        "exit 37",
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    )
+    await writeFile(
+      launcher,
+      `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+      { mode: 0o755 },
+    )
+    const run = () =>
+      execFileAsync(launcher, ["--version"], {
+        env: { ...process.env, XDG_CACHE_HOME: cacheHome, NODE_OPTIONS: "" },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+
+    expect(await run()).toMatchObject({ code: 37, signal: null })
+    expect(await run()).toMatchObject({ code: 37, signal: null })
+
+    // A rejected runtime must be re-probed every launch and must never leave a
+    // stamp behind that would let a later launch exec it unprobed.
+    expect(await readFile(calls, "utf8")).toBe("probe-inner\nfallback\nprobe-inner\nfallback\n")
+    const runtimes = await readdir(path.join(cacheHome, "ax-code/libexec"))
+    expect(runtimes).toHaveLength(1)
+    expect(await readdir(path.join(cacheHome, "ax-code/libexec", runtimes[0]))).not.toContain("probe.ok")
+  })
+
   test("brands the Node binary as AX-Code before exec", () => {
     const script = unixNodeLauncherScript()
     expect(script).toContain("brand_and_exec_node")
@@ -267,4 +369,130 @@ describe("Unix node launcher", () => {
     expect(script).toContain("runtime")
     expect(script).not.toMatch(/^exec node /m)
   })
+
+  test.skipIf(process.platform === "win32")(
+    "exports a V8 compile cache so the bundle is not recompiled on every launch",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-compile-cache-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const calls = path.join(root, "calls")
+      const entry = path.join(root, "index-node-tui.js")
+      const cacheHome = path.join(root, "cache-home")
+      await writeFile(entry, "// Test entry point.\n")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          `if [ "$1" = "-e" ]; then exit 0; fi`,
+          `printf 'compile-cache=[%s]\\n' "$NODE_COMPILE_CACHE" >> ${quote(calls)}`,
+          `if [ -d "$NODE_COMPILE_CACHE" ]; then printf 'cache-dir=present\\n' >> ${quote(calls)}; else printf 'cache-dir=absent\\n' >> ${quote(calls)}; fi`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+        { mode: 0o755 },
+      )
+
+      const failure = await execFileAsync(launcher, ["--version"], {
+        env: { ...process.env, XDG_CACHE_HOME: cacheHome, NODE_OPTIONS: "", NODE_COMPILE_CACHE: "" },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+
+      expect(failure).toMatchObject({ code: 37, signal: null })
+      expect(await readFile(calls, "utf8")).toBe(
+        `compile-cache=[${path.join(cacheHome, "ax-code/compile-cache")}]\ncache-dir=present\n`,
+      )
+    },
+  )
+
+  test.skipIf(process.platform === "win32")("never overrides an explicit NODE_COMPILE_CACHE", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-compile-cache-explicit-"))
+    temporaryRoots.push(root)
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+    const original = path.join(root, "node")
+    const launcher = path.join(root, "launcher")
+    const calls = path.join(root, "calls")
+    const entry = path.join(root, "index-node-tui.js")
+    await writeFile(entry, "// Test entry point.\n")
+    await writeFile(
+      original,
+      [
+        "#!/bin/sh",
+        `if [ "$1" = "-e" ]; then exit 0; fi`,
+        `printf 'compile-cache=[%s]\\n' "$NODE_COMPILE_CACHE" >> ${quote(calls)}`,
+        "exit 37",
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    )
+    await writeFile(
+      launcher,
+      `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+      { mode: 0o755 },
+    )
+
+    const failure = await execFileAsync(launcher, ["--version"], {
+      env: {
+        ...process.env,
+        XDG_CACHE_HOME: path.join(root, "cache-home"),
+        NODE_OPTIONS: "",
+        NODE_COMPILE_CACHE: "/tmp/user-chosen-compile-cache",
+      },
+      timeout: 10_000,
+    }).catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({ code: 37, signal: null })
+    expect(await readFile(calls, "utf8")).toBe("compile-cache=[/tmp/user-chosen-compile-cache]\n")
+  })
+
+  test.skipIf(process.platform === "win32")(
+    "keeps the compile cache under ~/.cache when XDG_CACHE_HOME is unset",
+    async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-compile-cache-home-"))
+      temporaryRoots.push(root)
+      const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+      const original = path.join(root, "node")
+      const launcher = path.join(root, "launcher")
+      const calls = path.join(root, "calls")
+      const entry = path.join(root, "index-node-tui.js")
+      const home = path.join(root, "home")
+      await mkdir(home, { recursive: true })
+      await writeFile(entry, "// Test entry point.\n")
+      await writeFile(
+        original,
+        [
+          "#!/bin/sh",
+          `if [ "$1" = "-e" ]; then exit 0; fi`,
+          `printf 'compile-cache=[%s]\\n' "$NODE_COMPILE_CACHE" >> ${quote(calls)}`,
+          "exit 37",
+          "",
+        ].join("\n"),
+        { mode: 0o755 },
+      )
+      await writeFile(
+        launcher,
+        `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+        { mode: 0o755 },
+      )
+
+      const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, NODE_OPTIONS: "", NODE_COMPILE_CACHE: "" }
+      delete env.XDG_CACHE_HOME
+      const failure = await execFileAsync(launcher, ["--version"], { env, timeout: 10_000 }).catch(
+        (error: unknown) => error,
+      )
+
+      expect(failure).toMatchObject({ code: 37, signal: null })
+      // Must not land in a visible ~/ax-code. It stays under ~/.cache, matching
+      // the launcher's own libexec cache, the standalone installer, and
+      // script/node-ffi-runner-args.mjs withCompileCache().
+      expect(await readFile(calls, "utf8")).toBe(`compile-cache=[${path.join(home, ".cache/ax-code/compile-cache")}]\n`)
+    },
+  )
 })

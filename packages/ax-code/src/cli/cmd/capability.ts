@@ -1,7 +1,7 @@
 import { EOL } from "os"
 import type { Argv } from "yargs"
 import { Capability } from "../../capability"
-import { bootstrap } from "../bootstrap"
+import { bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
 
 export function formatCapabilityList(capabilities: Capability.Info[]) {
@@ -32,7 +32,7 @@ const CapabilityListCommand = cmd({
         describe: "file paths used to mark path-matching skills as recommended",
       }),
   async handler(args) {
-    await bootstrap(process.cwd(), async () => {
+    await bootstrapReadonly(process.cwd(), async () => {
       const capabilities = await Capability.list({
         filePaths: (args.file as string[] | undefined)?.map(String),
       })

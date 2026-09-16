@@ -39,6 +39,28 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   shift
   entry="$1"
   shift
+  # Node recompiles the ~23 MB bundle on every cold start because nothing ever
+  # points V8 at a compile cache. Aim it at the user cache dir; the cache is
+  # per Node version, so an upgraded runtime starts a fresh one. An explicit
+  # NODE_COMPILE_CACHE always wins, and a cache dir that cannot be created is
+  # never exported — this must not become a launch failure.
+  # The path matches the standalone installer's launch_node() and
+  # script/node-ffi-runner-args.mjs withCompileCache() so every ax-code entry
+  # point shares one compile cache.
+  if [ -z "\${NODE_COMPILE_CACHE-}" ]; then
+    compile_cache_home=""
+    if [ -n "\${XDG_CACHE_HOME-}" ]; then
+      compile_cache_home="\${XDG_CACHE_HOME}"
+    elif [ -n "\${HOME-}" ]; then
+      compile_cache_home="\$HOME/.cache"
+    fi
+    if [ -n "$compile_cache_home" ]; then
+      NODE_COMPILE_CACHE="$compile_cache_home/ax-code/compile-cache"
+      if mkdir -p "$NODE_COMPILE_CACHE" 2>/dev/null; then
+        export NODE_COMPILE_CACHE
+      fi
+    fi
+  fi
   case "$entry" in
     *[[:space:]]*) launch_modern=0 ;;
     /*) launch_modern=1 ;;
@@ -65,7 +87,11 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   done
   real_dir="$(CDPATH= cd -- "$(dirname -- "$real")" && pwd -P)"
   real="$real_dir/$(basename "$real")"
-  identity="$( { printf '%s\\n' "$real"; ls -di "$real"; } | cksum)"
+  # The identity keys the branded runtime's cache directory AND its admission
+  # stamp, so it must cover everything the branded exec depends on: the node
+  # binary itself and any libnode the relocation loop links in. Otherwise a
+  # swapped libnode would silently reuse a stamp recorded against the old one.
+  identity="$( { printf '%s\\n' "$real"; ls -di "$real"; ls -di "$real_dir"/../lib/libnode* 2>/dev/null; } | cksum)"
   cache="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec/runtime-\${identity%% *}"
   branded="$cache/bin/AX-Code"
   if ! mkdir -p "$cache/bin" "$cache/lib"; then
@@ -94,15 +120,29 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   # Relocation can fail at code-signing or dynamic-library admission. Probe
   # before starting application work, so a fallback never replays a command.
   # Preload hooks belong to the application, not to this startup probe.
-  if ! NODE_OPTIONS= "$node_bin" -e '
-    const { spawnSync } = require("node:child_process");
-    const result = spawnSync(process.argv[1], ["-p", "process.version"], {
-      encoding: "utf8", timeout: 5000, killSignal: "SIGKILL", maxBuffer: 4096,
-      stdio: ["ignore", "pipe", "ignore"]
-    });
-    process.exit(result.status === 0 && result.stdout === process.version + "\\n" ? 0 : 1);
-  ' "$branded" >/dev/null 2>&1; then
-    exec "$node_bin" "$@"
+  #
+  # The probe is the expensive part of a launch (it boots two Node processes),
+  # so a success is recorded and reused. Admission also depends on OS policy,
+  # not just the runtime bytes, so the key covers the node install ($identity,
+  # which includes any libnode linked in) and the OS build: a system update
+  # re-probes instead of reusing a verdict that update may have invalidated.
+  # Deleting $cache, or AX_CODE_SYSTEM_NODE=1 to skip branding entirely, are the
+  # recovery paths if a cached runtime is ever suspected.
+  probe_stamp="$cache/probe.ok"
+  probe_key="$identity $(uname -srm 2>/dev/null)"
+  if [ ! -f "$probe_stamp" ] || [ "$(cat "$probe_stamp" 2>/dev/null)" != "$probe_key" ]; then
+    if ! NODE_OPTIONS= "$node_bin" -e '
+      const { spawnSync } = require("node:child_process");
+      const result = spawnSync(process.argv[1], ["-p", "process.version"], {
+        encoding: "utf8", timeout: 5000, killSignal: "SIGKILL", maxBuffer: 4096,
+        stdio: ["ignore", "pipe", "ignore"]
+      });
+      process.exit(result.status === 0 && result.stdout === process.version + "\\n" ? 0 : 1);
+    ' "$branded" >/dev/null 2>&1; then
+      rm -f "$probe_stamp" 2>/dev/null
+      exec "$node_bin" "$@"
+    fi
+    printf '%s\\n' "$probe_key" > "$probe_stamp.$$" 2>/dev/null && mv -f "$probe_stamp.$$" "$probe_stamp" 2>/dev/null
   fi
   exec "$branded" "$@"
 }`
