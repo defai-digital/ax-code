@@ -6,6 +6,7 @@ const TUI_SRC = path.resolve(import.meta.dirname, "../../../src/cli/tui")
 const APP_SRC = path.join(TUI_SRC, "app.tsx")
 const RENDERER_SRC = path.join(TUI_SRC, "renderer.ts")
 const PROMPT_SRC = path.join(TUI_SRC, "component/prompt/index.tsx")
+const FOOTER_STATUS_ROW_SRC = path.join(TUI_SRC, "component/prompt/footer-status-row.tsx")
 const HOME_SRC = path.join(TUI_SRC, "routes/home.tsx")
 const SESSION_HEADER_SRC = path.join(TUI_SRC, "routes/session/header.tsx")
 const SESSION_DIALOG_SRC = path.join(TUI_SRC, "routes/session/dialog-message.tsx")
@@ -88,9 +89,11 @@ describe("tui console hygiene", () => {
 
   test("keeps stalled prompt status static and interrupt copy direct", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const footerStatusRow = await fs.readFile(FOOTER_STATUS_ROW_SRC, "utf8")
 
     expect(prompt).toContain("when={busyStatus()?.stale}")
-    expect(prompt).toContain('keys="esc" label={uiText("ui.interrupt")}')
+    expect(prompt).toContain('interrupt={status().type !== "idle" ? uiText("ui.interrupt") : undefined}')
+    expect(footerStatusRow).toContain('keys="esc" label={props.interrupt!} noWrap')
   })
 
   test("does not assume fork responses contain session data", async () => {
