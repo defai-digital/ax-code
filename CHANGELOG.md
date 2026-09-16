@@ -6,13 +6,23 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.3] - 2026-09-16
+
+### Changed
+
+- Publish the paired SDK 2.5.27.
+- Ship index-core, diff, and parser native addons in the curl runtime instead of empty package shells that fell back to TypeScript.
+
 ### Fixed
 
-- Ship index-core, diff, and parser native addons in the curl runtime instead of empty package shells that fell back to TypeScript.
-- Activate Windows runtime upgrades into isolated generation directories so file locks from running sessions no longer block installation.
+- Restore Node 26 TUI startup by initializing subagent footer status before the layout memo that reads it.
 - Keep the busy prompt interrupt hint on one line when the footer is crowded.
+- Activate Windows runtime upgrades into isolated generation directories so file locks from running sessions no longer block installation.
 - Serialize snapshot operations across directory instances, retain session-referenced snapshot trees during cleanup, and mark TUI bootstrap incomplete when core requests fail.
 - Reject Windows POSIX-shell redirects to reserved names such as `nul` before they create snapshot-incompatible files.
+- Keep goal receipts current after multi-file edits and complete remaining goal-mode verification gaps.
+- Clear the Fuji train's left-edge trail before the cycle wraps.
+- Resolve shell in AX Engine registry tool descriptions.
 
 ## [7.18.2] - 2026-09-15
 
