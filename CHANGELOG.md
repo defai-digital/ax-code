@@ -6,6 +6,14 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Ship index-core, diff, and parser native addons in the curl runtime instead of empty package shells that fell back to TypeScript.
+- Activate Windows runtime upgrades into isolated generation directories so file locks from running sessions no longer block installation.
+- Keep the busy prompt interrupt hint on one line when the footer is crowded.
+- Serialize snapshot operations across directory instances, retain session-referenced snapshot trees during cleanup, and mark TUI bootstrap incomplete when core requests fail.
+- Reject Windows POSIX-shell redirects to reserved names such as `nul` before they create snapshot-incompatible files.
+
 ## [7.18.2] - 2026-09-15
 
 ### Changed

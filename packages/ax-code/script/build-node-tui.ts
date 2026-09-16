@@ -12,6 +12,7 @@ import { readText, writeText } from "./fs-compat"
 import { resolveLegacyNodeGypPython } from "./node-gyp-python"
 import { unixNodeLauncherScript, windowsNodeLauncherScript } from "./node-launcher"
 import { copyTuiDistPackage, toTuiDistPackageJson, withoutTuiTransformDependencies } from "./tui-dist"
+import { inspectNativeAddonPayload, nativeAddonIncompleteMessage, NATIVE_ADDON_PACKAGES } from "./native-addon-payload"
 import pkg from "../package.json"
 import { resolveNativeTypescript } from "../../ax-code-intel/src/typescript-native"
 
@@ -508,25 +509,24 @@ if (ptyCheck.status !== 0) {
 }
 
 // Ship the @ax-code napi addons (workspace packages, not on npm) + their .node.
-const nativePkgs: Array<[string, string]> = [
-  ["fs", path.join(dir, "..", "ax-code-fs-native")],
-  ["diff", path.join(dir, "..", "ax-code-diff-native")],
-  ["parser", path.join(dir, "..", "ax-code-parser-native")],
-  ["index-core", path.join(dir, "..", "ax-code-index-core")],
-]
 const axScope = path.join(outRoot, "node_modules", "@ax-code")
 fs.mkdirSync(axScope, { recursive: true })
 let shippedNative = 0
-for (const [name, src] of nativePkgs) {
-  if (!fs.existsSync(src)) {
-    console.warn(`native addon source missing: ${src} (run pnpm build:native) — ${name} will fall back to JS`)
+for (const addon of NATIVE_ADDON_PACKAGES) {
+  const src = path.join(dir, "..", addon.dir)
+  const source = inspectNativeAddonPayload(src, addon.binaryName)
+  if (!source.ready) {
+    const message = nativeAddonIncompleteMessage(addon.name, source.missing, src)
+    if (release) throw new Error(message)
+    console.warn(`${message} — ${addon.name} will fall back to JS`)
     continue
   }
   // These workspace packages use @napi-rs/cli only to build their addon. Its
   // pnpm workspace link can point outside the staged runtime, which must never
   // be shipped or represented in the signed runtime manifest. The published
   // addon package has no runtime dependencies, so copy only its package files.
-  fs.cpSync(src, path.join(axScope, name), {
+  const dest = path.join(axScope, addon.name)
+  fs.cpSync(src, dest, {
     recursive: true,
     dereference: true,
     filter: (candidate) => {
@@ -534,7 +534,19 @@ for (const [name, src] of nativePkgs) {
       return relative === "" || !relative.split(path.sep).includes("node_modules")
     },
   })
+  const staged = inspectNativeAddonPayload(dest, addon.binaryName)
+  if (!staged.ready) {
+    const message = nativeAddonIncompleteMessage(addon.name, staged.missing, dest)
+    if (release) throw new Error(message)
+    console.warn(message)
+    continue
+  }
   shippedNative++
+}
+if (release && shippedNative !== NATIVE_ADDON_PACKAGES.length) {
+  throw new Error(
+    `Release requires ${NATIVE_ADDON_PACKAGES.length} native addons, shipped ${shippedNative}. Run pnpm build:native before packaging.`,
+  )
 }
 
 // A release must contain functioning persistent evidence support, not just a
@@ -636,6 +648,6 @@ if (release) {
 }
 
 console.log(
-  `Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/${nativePkgs.length} native addons, bundled node: ${bundledNode ? bundledNodeRuntime?.version : "none"})`,
+  `Full Node TUI distribution complete: ${path.relative(dir, outRoot)} (${shippedNative}/${NATIVE_ADDON_PACKAGES.length} native addons, bundled node: ${bundledNode ? bundledNodeRuntime?.version : "none"})`,
 )
 console.log(`Run: ${path.relative(dir, path.join(outBin, "ax-code"))}`)

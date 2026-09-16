@@ -238,6 +238,9 @@ jobs:
       - name: Build and verify optional persistent evidence cache
         uses: ./.github/actions/build-evidence-cache
 
+      - name: Build remaining native addons
+        run: pnpm build:native index-core diff parser
+
       - name: Build SDK
         run: pnpm exec tsc
         working-directory: packages/sdk/js
@@ -355,6 +358,10 @@ jobs:
           echo "$DOCTOR_OUTPUT"
           if ! echo "$DOCTOR_OUTPUT" | grep -E "Runtime: .* \(${{ matrix.smoke-runtime }}\)" >/dev/null; then
             echo "FAIL: release runtime did not report ${{ matrix.smoke-runtime }}"
+            exit 1
+          fi
+          if ! echo "$DOCTOR_OUTPUT" | grep -F "Native addons: 4/4 installed" >/dev/null; then
+            echo "FAIL: release runtime did not ship all native addons"
             exit 1
           fi
 

@@ -511,6 +511,8 @@ describe("distribution support guardrails", () => {
     expect(buildJob![0]).not.toContain("smoke-runtime: compiled")
     expect(buildJob![0]).not.toContain("find dist -path")
     expect(buildJob![0]).toContain('grep -E "Runtime: .* \\(${{ matrix.smoke-runtime }}\\)"')
+    expect(buildJob![0]).toContain("pnpm build:native index-core diff parser")
+    expect(buildJob![0]).toContain('grep -F "Native addons: 4/4 installed"')
   })
 
   test("release Unix launcher can use bundled node.exe from Windows zips", async () => {
