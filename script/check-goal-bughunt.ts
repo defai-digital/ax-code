@@ -273,6 +273,8 @@ type CliOptions = {
   dir: string
   root: string
   help: boolean
+  target?: string
+  baseline?: string
 }
 
 function parseArgs(argv: readonly string[]): CliOptions {
@@ -291,6 +293,8 @@ function parseArgs(argv: readonly string[]): CliOptions {
     else if (arg === "--help" || arg === "-h") options.help = true
     else if (arg.startsWith("--dir=")) options.dir = arg.slice("--dir=".length)
     else if (arg.startsWith("--root=")) options.root = arg.slice("--root=".length)
+    else if (arg.startsWith("--target=")) options.target = arg.slice("--target=".length)
+    else if (arg.startsWith("--baseline=")) options.baseline = arg.slice("--baseline=".length)
   }
   return options
 }
@@ -462,13 +466,16 @@ async function main() {
   }
 
   // scope
-  const manifest = readJson<{ baseline: string }>(path.join(dir, "batches.json"))
-  const baseline = manifest.baseline
-  const ancestor = git(root, ["merge-base", "--is-ancestor", baseline, "HEAD"])
+  const manifest = readJson<{ baseline: string; scopeBaseline?: string; target?: string }>(
+    path.join(dir, "batches.json"),
+  )
+  const baseline = options.baseline ?? manifest.scopeBaseline ?? manifest.baseline
+  const target = options.target ?? (options.baseline ? "HEAD" : (manifest.target ?? "HEAD"))
+  const ancestor = git(root, ["merge-base", "--is-ancestor", baseline, target])
   const isAncestor = ancestor.status === 0
-  const shas = (git(root, ["rev-list", baseline + "..HEAD"]).stdout ?? "").trim().split(/\r?\n/).filter(Boolean)
+  const shas = (git(root, ["rev-list", `${baseline}..${target}`]).stdout ?? "").trim().split(/\r?\n/).filter(Boolean)
   const mergeCount = Number.parseInt(
-    (git(root, ["rev-list", "--count", "--merges", `${baseline}..HEAD`]).stdout ?? "0").trim() || "0",
+    (git(root, ["rev-list", "--count", "--merges", `${baseline}..${target}`]).stdout ?? "0").trim() || "0",
     10,
   )
   const commits = shas.map((sha) => {
