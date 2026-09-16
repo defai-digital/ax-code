@@ -77,6 +77,23 @@ describe("autonomous question evaluation fixtures", () => {
         confidence: "high",
       },
       {
+        name: "plan_exit Yes is the recommended handoff",
+        question: {
+          question:
+            "Plan at plans/example.md is complete. Would you like to switch to the build agent and start implementing?",
+          header: "Build Agent",
+          options: [
+            {
+              label: "Yes",
+              description: "Recommended: switch to the Dev agent and start implementing the plan",
+            },
+            { label: "No", description: "Stay with the plan agent to continue refining the plan" },
+          ],
+        },
+        expected: ["Yes"],
+        confidence: "high",
+      },
+      {
         name: "not mention wording selects the option to omit",
         question: {
           question: "Which detail should we not mention in the final summary?",

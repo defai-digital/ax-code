@@ -10,7 +10,10 @@ import { tmpdir } from "../fixture/fixture"
 describe("v2-style keyword route", () => {
   test("schema descriptions do not claim specialist auto-routing is removed", async () => {
     const schema = await readFile(path.join(import.meta.dirname, "../../src/config/schema-impl.ts"), "utf-8")
-    const promptInput = await readFile(path.join(import.meta.dirname, "../../src/session/prompt/prompt-input.ts"), "utf-8")
+    const promptInput = await readFile(
+      path.join(import.meta.dirname, "../../src/session/prompt/prompt-input.ts"),
+      "utf-8",
+    )
 
     expect(schema).toContain("Disable automatic specialist agent routing")
     expect(schema).toContain("Specialist agent auto-routing and message-complexity routing settings")
@@ -116,6 +119,34 @@ describe("v2-style keyword route", () => {
     // perf rule matches more keywords + patterns than test rule, so perf wins.
     const result = route("write a performance benchmark test", "build")
     expect(result?.agent).toBe("perf")
+  })
+
+  test("hands plan mode off to Dev on implementation intent", () => {
+    expect(route("start to do", "plan")?.agent).toBe("build")
+    expect(route("approve to start to do . then test and ocmmit", "plan")?.agent).toBe("build")
+    expect(route("go ahead", "plan")?.agent).toBe("build")
+    expect(route("implement the plan", "plan")?.agent).toBe("build")
+    expect(route("switch to the Dev agent", "plan")?.agent).toBe("build")
+    expect(route("commit", "plan")?.agent).toBe("build")
+    expect(route("開始做", "plan")?.agent).toBe("build")
+    expect(route("批准", "plan")?.agent).toBe("build")
+  })
+
+  test("does not leave plan mode on ordinary planning messages", () => {
+    expect(route("the plan should mention tests", "plan")).toBeNull()
+    expect(route("how should we implement this later?", "plan")).toBeNull()
+    expect(route("continue", "plan")).toBeNull()
+    expect(route("did you finish?", "plan")).toBeNull()
+  })
+
+  test("does not treat plan-handoff phrases as a specialist route from Dev", () => {
+    expect(route("start to do", "build")).toBeNull()
+    expect(route("approve to start to do", "build")).toBeNull()
+    expect(route("go ahead", "build")).toBeNull()
+  })
+
+  test("plan handoff beats specialist topic keywords on the same message", () => {
+    expect(route("approve, then write tests", "plan")?.agent).toBe("build")
   })
 
   test("debug-n-fix skill prompt does not route to architect", async () => {

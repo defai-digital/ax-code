@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Auto-switch from plan mode to Dev when the user approves or asks to start implementing, and always expose `plan_exit` so the plan agent can request that handoff.
+
 ## [7.18.3] - 2026-09-16
 
 ### Changed

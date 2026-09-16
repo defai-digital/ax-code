@@ -13,6 +13,25 @@ afterEach(async () => {
 })
 
 describe("tool.registry", () => {
+  test("includes plan_exit without the experimental plan-mode flag", async () => {
+    await using tmp = await tmpdir()
+    const previous = process.env["AX_CODE_EXPERIMENTAL_PLAN_MODE"]
+    delete process.env["AX_CODE_EXPERIMENTAL_PLAN_MODE"]
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const ids = await ToolRegistry.ids()
+          expect(ids).toContain("plan_exit")
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env["AX_CODE_EXPERIMENTAL_PLAN_MODE"]
+      else process.env["AX_CODE_EXPERIMENTAL_PLAN_MODE"] = previous
+    }
+  })
+
   test("includes the built-in list tool", async () => {
     await using tmp = await tmpdir()
 

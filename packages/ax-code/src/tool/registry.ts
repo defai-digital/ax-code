@@ -245,6 +245,7 @@ export namespace ToolRegistry {
   async function all(custom: Tool.Info[], cfg?: ToolConfig, providerID?: ProviderID): Promise<Tool.Info[]> {
     cfg ??= await Config.get()
     const question = Flag.AX_CODE_CLIENT === "cli" || Flag.AX_CODE_ENABLE_QUESTION_TOOL
+    const planExit = question ? [PlanExitTool] : []
     const profile = ToolProfile.resolve(cfg, providerID)
     if (providerID === AX_ENGINE_PROVIDER_ID && profile === "core") {
       // Local coding models have materially smaller context budgets than the
@@ -255,6 +256,7 @@ export namespace ToolRegistry {
       return [
         InvalidTool,
         ...(question ? [QuestionTool] : []),
+        ...planExit,
         BashTool,
         BashOutputTool,
         BashInputTool,
@@ -340,7 +342,10 @@ export namespace ToolRegistry {
       ...(cfg.computer?.provider
         ? [ComputerSnapshotTool, ComputerActionTool, ComputerWatchTool, ComputerPlanTool]
         : []),
-      ...(Flag.AX_CODE_EXPERIMENTAL_PLAN_MODE && Flag.AX_CODE_CLIENT === "cli" ? [PlanExitTool] : []),
+      // plan_exit is the only way the plan agent can hand off to Dev. Keep it
+      // on the same gate as the question tool it uses; do not hide it behind
+      // AX_CODE_EXPERIMENTAL_PLAN_MODE (the plan-agent prompt always names it).
+      ...planExit,
       ...(Flag.AX_CODE_EXPERIMENTAL_BROWSER_AGENT
         ? [
             BrowserOpenTool,

@@ -1,5 +1,5 @@
 import { Agent } from "../../agent/agent"
-import { classifyComplexity, route as routeAgent } from "../../agent/router"
+import { classifyComplexity, route as routeAgent, routePlanHandoff } from "../../agent/router"
 import { Bus } from "../../bus"
 import { NotificationEvent } from "@/notification/events"
 import { Config } from "../../config/config"
@@ -42,8 +42,13 @@ export async function resolveUserMessageRouting(input: {
   const routingDisabled = cfg.routing?.disable === true
   const preserveAgent = input.agentRouting === "preserve"
 
-  if (input.messageText && !preserveAgent && !hasAgentPart && !routingDisabled) {
-    const routeResult = routeAgent(input.messageText, agentName)
+  if (input.messageText && !preserveAgent && !hasAgentPart) {
+    // Plan → Dev is a mode handoff, not specialist topic routing. It still
+    // fires when routing.disable is set so an approval cannot leave the
+    // session stuck in read-only plan mode.
+    const routeResult =
+      (agentName === "plan" ? routePlanHandoff(input.messageText) : null) ??
+      (routingDisabled ? null : routeAgent(input.messageText, agentName))
     if (routeResult) {
       const routedAgent = await Agent.get(routeResult.agent).catch(() => undefined)
       if (routedAgent) {

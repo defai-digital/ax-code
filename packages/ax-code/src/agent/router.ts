@@ -9,7 +9,9 @@
  * once and brought it back in the simpler v2 shape.
  *
  * Two independent functions:
- * - `route()`              — sync, keyword-only, fires whenever a topic keyword scores ≥ 0.4
+ * - `route()`              — sync, keyword-only. Plan → Dev handoff fires on
+ *                            implementation intent; specialist topic rules fire
+ *                            when a keyword/regex score is ≥ 0.4.
  * - `classifyComplexity()` — async LLM call, separate concern (fast-model selection)
  */
 
@@ -241,12 +243,61 @@ export interface RouteResult {
   matched: string[]
 }
 
+const PLAN_HANDOFF_KEYWORDS = [
+  "go ahead",
+  "start implementing",
+  "start implementation",
+  "start to do",
+  "switch to build",
+  "switch to dev",
+  "exit plan",
+  "leave plan",
+]
+
+const PLAN_HANDOFF_PATTERNS = [
+  /\b(approve|approved)\b/i,
+  /^\s*(do\s+it|just\s+do\s+it|ship\s+it|execute|implement|start)\s*[.!]?\s*$/i,
+  /\b(execute|implement)\s+(the\s+)?plan\b/i,
+  /\b(please\s+)?(start|begin)\s+(implement|doing|coding|the\s+work)\b/i,
+  /^\s*commit\s*[.!]?\s*$/i,
+  /\bswitch\s+to\s+(the\s+)?(dev|build|developer)\s+agent\b/i,
+  /開始(做|實作|实现|動手|动手)/,
+  /可以開始|可以开始/,
+  /批准/,
+]
+
+/**
+ * Plan mode is read-only. When the user approves the plan or asks to start
+ * implementing, hand off to the Dev (`build`) agent instead of leaving them
+ * stuck behind the plan-mode reminder.
+ */
+export function routePlanHandoff(message: string): RouteResult | null {
+  const matched: string[] = []
+  for (const kw of PLAN_HANDOFF_KEYWORDS) {
+    if (matchesKeyword(message, kw)) matched.push(kw)
+  }
+  for (const pattern of PLAN_HANDOFF_PATTERNS) {
+    if (pattern.test(message)) matched.push(pattern.source)
+  }
+  if (matched.length === 0) return null
+  return { agent: "build", confidence: 1, matched }
+}
+
 /**
  * Pick the best specialist agent for a message based on keyword/regex matches.
  * Returns null if no rule matches with confidence ≥ 0.4 or the best match equals
- * the current agent (no change needed).
+ * the current agent (no change needed). Plan-mode implementation intent hands
+ * off to Dev before specialist topic rules run.
  */
 export function route(message: string, currentAgent: string): RouteResult | null {
+  if (currentAgent === "plan") {
+    const handoff = routePlanHandoff(message)
+    if (handoff) {
+      log.info("keyword-route", { agent: handoff.agent, confidence: handoff.confidence, matched: handoff.matched })
+      return handoff
+    }
+  }
+
   let best: RouteResult | null = null
 
   for (const rule of RULES) {
