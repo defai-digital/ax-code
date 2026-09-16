@@ -137,7 +137,7 @@
       "z-ai/glm-5.3-flash": {
         "id": "z-ai/glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -485,7 +485,7 @@
       },
       "glm-5.3-flash": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "glm-5.3-flash",
         "interleaved": true,
         "limit": {
@@ -1313,7 +1313,7 @@
       },
       "glm-5.3-flash": {
         "attachment": false,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "glm-5.3-flash",
         "limit": {
           "context": 1000000,
@@ -3724,32 +3724,6 @@
           "output": 65536
         }
       },
-      "gemma-4-e4b-it": {
-        "id": "gemma-4-e4b-it",
-        "name": "Gemma 4 E4B Instruct",
-        "family": "gemma",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-02",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "input": 131072,
-          "output": 16384
-        }
-      },
       "doubao-seed-1-6-flash-250615": {
         "id": "doubao-seed-1-6-flash-250615",
         "name": "Doubao Seed 1.6 Flash",
@@ -4752,8 +4726,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 131072,
+          "input": 131072,
           "output": 32768
         }
       },
@@ -4978,32 +4952,6 @@
           "context": 64000,
           "input": 64000,
           "output": 8192
-        }
-      },
-      "gemma-4-e2b-it": {
-        "id": "gemma-4-e2b-it",
-        "name": "Gemma 4 E2B Instruct",
-        "family": "gemma",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-04-02",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "video",
-            "audio"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "input": 131072,
-          "output": 16384
         }
       },
       "gemma-4-31b-it-isometry": {
@@ -8583,7 +8531,7 @@
       "TEE/glm-5.3-flash": {
         "id": "TEE/glm-5.3-flash",
         "name": "GLM 5.3 Flash TEE",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -11605,7 +11553,7 @@
       "z-ai/glm-5.3-flash": {
         "id": "z-ai/glm-5.3-flash",
         "name": "GLM 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -11720,7 +11668,7 @@
       "z-ai/glm-5.3-flash-uncensored": {
         "id": "z-ai/glm-5.3-flash-uncensored",
         "name": "GLM 5.3 Flash Uncensored",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -13237,29 +13185,6 @@
         "temperature": true,
         "tool_call": false
       },
-      "qwen/qwen3.5-0.8b": {
-        "attachment": true,
-        "family": "qwen3.5",
-        "id": "qwen/qwen3.5-0.8b",
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 32768
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Qwen3.5 0.8B",
-        "reasoning": true,
-        "release_date": "2026-08-16",
-        "tool_call": true
-      },
       "qwen/qwen3.5-122b-a10b": {
         "attachment": false,
         "family": "qwen",
@@ -13356,29 +13281,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "qwen/qwen3.5-2b": {
-        "attachment": true,
-        "family": "qwen3.5",
-        "id": "qwen/qwen3.5-2b",
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 32768
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Qwen3.5 2B",
-        "reasoning": true,
-        "release_date": "2026-08-16",
-        "tool_call": true
-      },
       "qwen/qwen3.5-35b-a3b": {
         "attachment": true,
         "family": "qwen",
@@ -13452,29 +13354,6 @@
         "reasoning": true,
         "release_date": "2026-02-15",
         "temperature": true,
-        "tool_call": true
-      },
-      "qwen/qwen3.5-4b": {
-        "attachment": true,
-        "family": "qwen3.5",
-        "id": "qwen/qwen3.5-4b",
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 32768
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Qwen3.5 4B",
-        "reasoning": true,
-        "release_date": "2026-08-16",
         "tool_call": true
       },
       "qwen/qwen3.5-flash": {
@@ -15271,7 +15150,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -16371,7 +16250,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -18334,7 +18213,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -22172,7 +22051,7 @@
       "scx-ai-gp/glm-5.3-flash": {
         "id": "scx-ai-gp/glm-5.3-flash",
         "name": "GLM-5.3 Flash (SCX.ai)",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -23694,7 +23573,7 @@
       "novita/glm-5.3-flash": {
         "id": "novita/glm-5.3-flash",
         "name": "GLM-5.3 Flash (NovitaAI)",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -24461,7 +24340,7 @@
       "consensusprotocol/glm-5.3-flash": {
         "id": "consensusprotocol/glm-5.3-flash",
         "name": "GLM-5.3 Flash (Consensus Protocol)",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -25934,7 +25813,7 @@
       "zai/glm-5.3-flash": {
         "id": "zai/glm-5.3-flash",
         "name": "GLM-5.3 Flash (Z AI)",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -26511,7 +26390,7 @@
       "runware/glm-5.3-flash": {
         "id": "runware/glm-5.3-flash",
         "name": "GLM-5.3 Flash (Runware)",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -27095,7 +26974,7 @@
       },
       "vichar-ai/glm-5.3-flash": {
         "attachment": false,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "vichar-ai/glm-5.3-flash",
         "limit": {
           "context": 1048000,
@@ -27155,7 +27034,7 @@
           ]
         },
         "name": "DeepSeek V4.1 Flash (Consensus Protocol)",
-        "reasoning": false,
+        "reasoning": true,
         "release_date": "2026-09-10",
         "temperature": true,
         "tool_call": false
@@ -27178,6 +27057,50 @@
         "name": "Atria Dawn Preview (Atria)",
         "reasoning": true,
         "release_date": "2026-09-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "alibaba/glm-5.3": {
+        "attachment": false,
+        "family": "glm",
+        "id": "alibaba/glm-5.3",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3 (Alibaba Cloud)",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "runware/deepseek-v4-1-flash": {
+        "attachment": false,
+        "family": "deepseek",
+        "id": "runware/deepseek-v4-1-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek-V4.1-Flash (Runware)",
+        "reasoning": true,
+        "release_date": "2026-09-15",
         "temperature": true,
         "tool_call": true
       }
@@ -29119,7 +29042,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -30122,7 +30045,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -32582,7 +32505,7 @@
       "z-ai/glm-5.3-flash": {
         "id": "z-ai/glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -32659,7 +32582,7 @@
       },
       "z-ai/glm-5.3-flash-free": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "z-ai/glm-5.3-flash-free",
         "interleaved": {
           "field": "reasoning_content"
@@ -34845,7 +34768,7 @@
       "glm-5-3-flash": {
         "id": "glm-5-3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -36533,7 +36456,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -41758,7 +41681,7 @@
       "zai-org/GLM-5.3-Flash": {
         "id": "zai-org/GLM-5.3-Flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": false,
         "reasoning": true,
         "tool_call": true,
@@ -47100,7 +47023,7 @@
       },
       "glm-5.3-flash-fp4": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "glm-5.3-flash-fp4",
         "interleaved": true,
         "limit": {
@@ -47408,7 +47331,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -47634,15 +47557,14 @@
         "id": "glm-5.3",
         "name": "GLM-5.3",
         "family": "glm",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-08-28",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
@@ -47650,7 +47572,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 262144
+          "output": 128000
         }
       },
       "llama-3.3-70b-instruct": {
@@ -47725,7 +47647,7 @@
         "id": "deepseek-v4.1-flash",
         "limit": {
           "context": 1000000,
-          "output": 13107
+          "output": 32768
         },
         "modalities": {
           "input": [
@@ -48111,7 +48033,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 1048576
+          "output": 65536
         }
       },
       "ling-3.0-tiny": {
@@ -49213,7 +49135,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -49328,7 +49250,7 @@
       "glm-5.3-flash@eu": {
         "id": "glm-5.3-flash@eu",
         "name": "GLM-5.3-Flash (EU)",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -51808,7 +51730,7 @@
       "zai-org/GLM-5.3-Flash": {
         "id": "zai-org/GLM-5.3-Flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -52823,7 +52745,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -53789,7 +53711,7 @@
       "z-ai/glm-5.3-flash": {
         "id": "z-ai/glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -56523,7 +56445,7 @@
       },
       "z-ai/glm-5.3-flash": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "z-ai/glm-5.3-flash",
         "interleaved": {
           "field": "reasoning_content"
@@ -59201,7 +59123,7 @@
       "zai-org/GLM-5.3-Flash": {
         "id": "zai-org/GLM-5.3-Flash",
         "name": "GLM 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -65317,7 +65239,7 @@
       "zai/glm-5.3-flash": {
         "id": "zai/glm-5.3-flash",
         "name": "GLM 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -65381,74 +65303,6 @@
           "output": 1000000
         }
       },
-      "mistral/devstral-2": {
-        "id": "mistral/devstral-2",
-        "name": "Devstral 2",
-        "family": "devstral",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-12-09",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
-      "mistral/mistral-medium": {
-        "id": "mistral/mistral-medium",
-        "name": "Mistral Medium 3.1",
-        "family": "mistral-medium",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-05-07",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "output": 64000
-        }
-      },
-      "mistral/devstral-small-2": {
-        "id": "mistral/devstral-small-2",
-        "name": "Devstral Small 2",
-        "family": "devstral",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-12-09",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "output": 256000
-        }
-      },
       "mistral/mistral-embed": {
         "id": "mistral/mistral-embed",
         "name": "Mistral Embed",
@@ -65490,7 +65344,7 @@
           ]
         },
         "limit": {
-          "context": 256000,
+          "context": 262144,
           "output": 256000
         }
       },
@@ -65505,16 +65359,15 @@
         "release_date": "2024-07-18",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 128000,
-          "output": 128000
+          "context": 60288,
+          "output": 16000
         }
       },
       "mistral/codestral-embed": {
@@ -65558,7 +65411,7 @@
           ]
         },
         "limit": {
-          "context": 32000,
+          "context": 262144,
           "output": 4000
         }
       },
@@ -65582,7 +65435,7 @@
           ]
         },
         "limit": {
-          "context": 256000,
+          "context": 262144,
           "output": 256000
         }
       },
@@ -65605,7 +65458,7 @@
           ]
         },
         "limit": {
-          "context": 256000,
+          "context": 262144,
           "output": 256000
         }
       },
@@ -65665,29 +65518,6 @@
         "modalities": {
           "input": [
             "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 128000,
-          "output": 128000
-        }
-      },
-      "mistral/pixtral-12b": {
-        "id": "mistral/pixtral-12b",
-        "name": "Pixtral 12B",
-        "family": "pixtral",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-09-01",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
           ],
           "output": [
             "text"
@@ -66138,6 +65968,117 @@
         "reasoning": true,
         "release_date": "2026-09-10",
         "tool_call": true
+      },
+      "google/gemini-3.8-live": {
+        "attachment": false,
+        "family": "gemini",
+        "id": "google/gemini-3.8-live",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text",
+            "audio"
+          ]
+        },
+        "name": "Gemini 3.8 Live",
+        "reasoning": false,
+        "release_date": "2026-09-15",
+        "tool_call": false
+      },
+      "google/gemini-3.8-live-extended-thinking": {
+        "attachment": false,
+        "family": "gemini",
+        "id": "google/gemini-3.8-live-extended-thinking",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text",
+            "audio"
+          ]
+        },
+        "name": "Gemini 3.8 Live Extended Thinking",
+        "reasoning": false,
+        "release_date": "2026-09-15",
+        "tool_call": false
+      },
+      "inference-net/schematron-v2-small": {
+        "attachment": false,
+        "family": "o",
+        "id": "inference-net/schematron-v2-small",
+        "limit": {
+          "context": 128000,
+          "output": 4096
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Schematron V2 Small",
+        "reasoning": false,
+        "release_date": "2026-04-16",
+        "tool_call": false
+      },
+      "inference-net/schematron-v2-turbo": {
+        "attachment": false,
+        "family": "o",
+        "id": "inference-net/schematron-v2-turbo",
+        "limit": {
+          "context": 128000,
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Schematron V2 Turbo",
+        "reasoning": false,
+        "release_date": "2026-04-16",
+        "tool_call": false
+      },
+      "openai/gpt-live-1": {
+        "attachment": false,
+        "family": "gpt",
+        "id": "openai/gpt-live-1",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "audio"
+          ],
+          "output": [
+            "text",
+            "audio"
+          ]
+        },
+        "name": "GPT-Live 1",
+        "reasoning": false,
+        "release_date": "2026-09-10",
+        "tool_call": false
       }
     }
   },
@@ -66994,7 +66935,7 @@
       },
       "zai-org/GLM-5.3-Flash": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "zai-org/GLM-5.3-Flash",
         "interleaved": {
           "field": "reasoning_content"
@@ -67121,7 +67062,7 @@
     "env": [
       "STANDARDCOMPUTE_API_KEY"
     ],
-    "npm": "@ai-sdk/openai-compatible",
+    "npm": "@openrouter/ai-sdk-provider",
     "api": "https://api.stdcmpt.com/v1",
     "name": "Standard Compute",
     "doc": "https://standardcompute.com/models",
@@ -67503,6 +67444,29 @@
           "context": 202752,
           "output": 202752
         }
+      },
+      "deepseek/deepseek-v4.1-flash": {
+        "attachment": true,
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4.1-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -67939,30 +67903,6 @@
         "limit": {
           "context": 1000000,
           "output": 128000
-        }
-      },
-      "openai-gpt-52-codex": {
-        "id": "openai-gpt-52-codex",
-        "name": "GPT-5.2 Codex",
-        "family": "gpt",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": false,
-        "release_date": "2025-01-15",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "input": 272000,
-          "output": 65536
         }
       },
       "qwen-3-7-max": {
@@ -68824,7 +68764,7 @@
       "z-ai-glm-5-3-flash": {
         "id": "z-ai-glm-5-3-flash",
         "name": "GLM 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -71902,7 +71842,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -73340,6 +73280,28 @@
         "name": "Atria Dawn Preview",
         "reasoning": true,
         "release_date": "2026-09-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek-v4-1-flash": {
+        "attachment": false,
+        "family": "deepseek",
+        "id": "deepseek-v4-1-flash",
+        "limit": {
+          "context": 1048576,
+          "output": 1048576
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek-V4.1-Flash",
+        "reasoning": true,
+        "release_date": "2026-09-15",
         "temperature": true,
         "tool_call": true
       }
@@ -76095,7 +76057,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -77055,7 +77017,7 @@
       "accounts/fireworks/models/glm-5p3-flash": {
         "id": "accounts/fireworks/models/glm-5p3-flash",
         "name": "GLM 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -77368,6 +77330,313 @@
         "name": "Mistral Large 3 675B Instruct 2512",
         "reasoning": false,
         "release_date": "2025-12-02",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/models/deepseek-v4-pro": {
+        "attachment": false,
+        "experimental": {
+          "modes": {
+            "priority": {
+              "provider": {
+                "body": {
+                  "service_tier": "priority"
+                }
+              }
+            }
+          }
+        },
+        "family": "deepseek-thinking",
+        "id": "accounts/fireworks/models/deepseek-v4-pro",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4 Pro",
+        "reasoning": true,
+        "release_date": "2026-04-24",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/models/minimax-m2p7": {
+        "attachment": false,
+        "family": "minimax",
+        "id": "accounts/fireworks/models/minimax-m2p7",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 196608,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax-M2.7",
+        "provider": {
+          "body": {
+            "service_tier": "priority"
+          }
+        },
+        "reasoning": true,
+        "release_date": "2026-03-18",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/routers/deepseek-flash-latest": {
+        "attachment": true,
+        "experimental": {
+          "modes": {
+            "priority": {
+              "provider": {
+                "body": {
+                  "service_tier": "priority"
+                }
+              }
+            }
+          }
+        },
+        "family": "deepseek-flash",
+        "id": "accounts/fireworks/routers/deepseek-flash-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek Flash Latest",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/routers/deepseek-pro-latest": {
+        "attachment": false,
+        "experimental": {
+          "modes": {
+            "priority": {
+              "provider": {
+                "body": {
+                  "service_tier": "priority"
+                }
+              }
+            }
+          }
+        },
+        "family": "deepseek-thinking",
+        "id": "accounts/fireworks/routers/deepseek-pro-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek Pro Latest",
+        "reasoning": true,
+        "release_date": "2026-08-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/routers/glm-fast-latest": {
+        "attachment": false,
+        "family": "glm",
+        "id": "accounts/fireworks/routers/glm-fast-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048572,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM 5.3 Fast (Latest)",
+        "reasoning": true,
+        "release_date": "2026-08-28",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/routers/glm-flash-latest": {
+        "attachment": true,
+        "experimental": {
+          "modes": {
+            "priority": {
+              "provider": {
+                "body": {
+                  "service_tier": "priority"
+                }
+              }
+            }
+          }
+        },
+        "family": "glm-flash",
+        "id": "accounts/fireworks/routers/glm-flash-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048573,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM Flash Latest (GLM 5.3 Flash)",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/routers/glm-latest": {
+        "attachment": false,
+        "experimental": {
+          "modes": {
+            "priority": {
+              "provider": {
+                "body": {
+                  "service_tier": "priority"
+                }
+              }
+            }
+          }
+        },
+        "family": "glm",
+        "id": "accounts/fireworks/routers/glm-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1048573,
+          "output": 262144
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM Latest",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/routers/minimax-latest": {
+        "attachment": false,
+        "experimental": {
+          "modes": {
+            "priority": {
+              "provider": {
+                "body": {
+                  "service_tier": "priority"
+                }
+              }
+            }
+          }
+        },
+        "family": "minimax",
+        "id": "accounts/fireworks/routers/minimax-latest",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 512000,
+          "output": 512000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "MiniMax Latest",
+        "reasoning": true,
+        "release_date": "2026-06-12",
+        "temperature": true,
+        "tool_call": true
+      },
+      "accounts/fireworks/routers/qwen-max-latest": {
+        "attachment": true,
+        "experimental": {
+          "modes": {
+            "priority": {
+              "provider": {
+                "body": {
+                  "service_tier": "priority"
+                }
+              }
+            }
+          }
+        },
+        "family": "qwen",
+        "id": "accounts/fireworks/routers/qwen-max-latest",
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen Max Latest (Qwen3.8 Max)",
+        "reasoning": true,
+        "release_date": "2026-08-03",
         "temperature": true,
         "tool_call": true
       }
@@ -78554,7 +78823,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM 5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -79527,7 +79796,7 @@
       "glm-5-3-flash": {
         "id": "glm-5-3-flash",
         "name": "GLM 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -81409,7 +81678,7 @@
       "zai-org/GLM-5.3-Flash": {
         "id": "zai-org/GLM-5.3-Flash",
         "name": "GLM 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -82445,7 +82714,7 @@
       "zai-org/GLM-5.3-Flash": {
         "id": "zai-org/GLM-5.3-Flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -85237,7 +85506,7 @@
           ]
         },
         "limit": {
-          "context": 128000,
+          "context": 256000,
           "output": 16384
         }
       },
@@ -85928,8 +86197,8 @@
           ]
         },
         "limit": {
-          "context": 202800,
-          "output": 182520
+          "context": 256000,
+          "output": 32768
         }
       },
       "nvidia/nemotron-3-nano-30b-a3b": {
@@ -89551,8 +89820,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "output": 235929
+          "context": 1048576,
+          "output": 943718
         }
       },
       "moonshotai/kimi-k2.7-code": {
@@ -89934,7 +90203,7 @@
       "z-ai/glm-5.3-flash": {
         "id": "z-ai/glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -90654,7 +90923,7 @@
         "id": "~deepseek/deepseek-pro-latest",
         "limit": {
           "context": 1048576,
-          "output": 384000
+          "output": 943718
         },
         "modalities": {
           "input": [
@@ -91298,7 +91567,7 @@
         },
         "limit": {
           "context": 1000000,
-          "output": 64000
+          "output": 128000
         }
       },
       "openai.gpt-5.4": {
@@ -91384,7 +91653,7 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
-        "release_date": "2025-11-24",
+        "release_date": "2025-11-01",
         "modalities": {
           "input": [
             "text",
@@ -91634,7 +91903,7 @@
         },
         "limit": {
           "context": 1000000,
-          "output": 64000
+          "output": 128000
         }
       },
       "mistral.voxtral-mini-3b-2507": {
@@ -91713,7 +91982,7 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
-        "release_date": "2025-11-24",
+        "release_date": "2025-11-01",
         "modalities": {
           "input": [
             "text",
@@ -92278,7 +92547,7 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
-        "release_date": "2025-11-24",
+        "release_date": "2025-11-01",
         "modalities": {
           "input": [
             "text",
@@ -92939,7 +93208,7 @@
         },
         "limit": {
           "context": 1000000,
-          "output": 64000
+          "output": 128000
         }
       },
       "jp.anthropic.claude-opus-4-8": {
@@ -93318,7 +93587,7 @@
         },
         "limit": {
           "context": 1000000,
-          "output": 64000
+          "output": 128000
         }
       },
       "mistral.voxtral-small-24b-2507": {
@@ -93402,7 +93671,7 @@
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
-        "release_date": "2025-11-24",
+        "release_date": "2025-11-01",
         "modalities": {
           "input": [
             "text",
@@ -93439,7 +93708,7 @@
         },
         "limit": {
           "context": 1000000,
-          "output": 64000
+          "output": 128000
         }
       },
       "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
@@ -94704,6 +94973,106 @@
         "release_date": "2025-04-28",
         "temperature": true,
         "tool_call": true
+      },
+      "apac.anthropic.claude-sonnet-4-20250514-v1:0": {
+        "attachment": true,
+        "family": "claude-sonnet",
+        "id": "apac.anthropic.claude-sonnet-4-20250514-v1:0",
+        "limit": {
+          "context": 200000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 4 (APAC)",
+        "reasoning": true,
+        "release_date": "2025-05-22",
+        "status": "deprecated",
+        "temperature": true,
+        "tool_call": true
+      },
+      "eu.anthropic.claude-sonnet-4-20250514-v1:0": {
+        "attachment": true,
+        "family": "claude-sonnet",
+        "id": "eu.anthropic.claude-sonnet-4-20250514-v1:0",
+        "limit": {
+          "context": 200000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 4 (EU)",
+        "reasoning": true,
+        "release_date": "2025-05-22",
+        "status": "deprecated",
+        "temperature": true,
+        "tool_call": true
+      },
+      "global.anthropic.claude-sonnet-4-20250514-v1:0": {
+        "attachment": true,
+        "family": "claude-sonnet",
+        "id": "global.anthropic.claude-sonnet-4-20250514-v1:0",
+        "limit": {
+          "context": 200000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 4 (Global)",
+        "reasoning": true,
+        "release_date": "2025-05-22",
+        "status": "deprecated",
+        "temperature": true,
+        "tool_call": true
+      },
+      "us.anthropic.claude-sonnet-4-20250514-v1:0": {
+        "attachment": true,
+        "family": "claude-sonnet",
+        "id": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+        "limit": {
+          "context": 200000,
+          "output": 64000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Claude Sonnet 4 (US)",
+        "reasoning": true,
+        "release_date": "2025-05-22",
+        "status": "deprecated",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -95033,23 +95402,22 @@
         "id": "qwen/qwen3.5-397b-a17b",
         "name": "Qwen3.5 397B A17B",
         "family": "qwen",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-15",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 256000,
-          "output": 64000
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen3.6-27b": {
@@ -97507,7 +97875,7 @@
       "zai/glm-5.3-flash": {
         "id": "zai/glm-5.3-flash",
         "name": "GLM-5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -100925,7 +101293,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -102571,7 +102939,7 @@
       "cline-pass/glm-5.3-flash": {
         "id": "cline-pass/glm-5.3-flash",
         "name": "cline-pass/glm-5.3-flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -105176,7 +105544,7 @@
       "z-ai/glm-5.3-flash": {
         "id": "z-ai/glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -107316,7 +107684,7 @@
       },
       "glm-5-3-flash": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "glm-5-3-flash",
         "limit": {
           "context": 1048576,
@@ -107723,7 +108091,7 @@
       "GLM-5.3-Flash": {
         "id": "GLM-5.3-Flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -111393,7 +111761,7 @@
       },
       "glm-5.3-flash": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "glm-5.3-flash",
         "interleaved": {
           "field": "reasoning_content"
@@ -112591,7 +112959,7 @@
       },
       "glm-5.3-flash": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "glm-5.3-flash",
         "interleaved": {
           "field": "reasoning_content"
@@ -113771,7 +114139,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -114060,7 +114428,7 @@
       "zai-org/GLM-5.3-Flash": {
         "id": "zai-org/GLM-5.3-Flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -114278,7 +114646,7 @@
       "zai-org/GLM-5.3-Flash": {
         "id": "zai-org/GLM-5.3-Flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -115249,7 +115617,7 @@
       "hf:zai-org/GLM-5.3-Flash": {
         "id": "hf:zai-org/GLM-5.3-Flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -115808,7 +116176,7 @@
       "zai-org/GLM-5.3-Flash": {
         "id": "zai-org/GLM-5.3-Flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -116503,7 +116871,7 @@
       "@cf/zai-org/glm-5.3-flash": {
         "id": "@cf/zai-org/glm-5.3-flash",
         "name": "Glm 5.3 Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -118730,7 +119098,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -118855,10 +119223,10 @@
           "output": 131072
         }
       },
-      "deepseek-flash": {
+      "deepseek-v4.1-flash": {
         "attachment": true,
         "family": "deepseek-flash",
-        "id": "deepseek-flash",
+        "id": "deepseek-v4.1-flash",
         "interleaved": {
           "field": "reasoning_content"
         },
@@ -120193,7 +120561,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -121524,7 +121892,7 @@
       "glm5.3-flash": {
         "id": "glm5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -123192,7 +123560,7 @@
       "glm-5.3-flash": {
         "id": "glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -124393,7 +124761,7 @@
       "glm-5-3-flash": {
         "id": "glm-5-3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -127861,7 +128229,7 @@
       "zai/glm-5.3-flash": {
         "id": "zai/glm-5.3-flash",
         "name": "GLM-5.3-Flash",
-        "family": "glm",
+        "family": "glm-flash",
         "attachment": true,
         "reasoning": true,
         "tool_call": true,
@@ -130119,7 +130487,7 @@
       },
       "glm-5.3-flash": {
         "attachment": true,
-        "family": "glm",
+        "family": "glm-flash",
         "id": "glm-5.3-flash",
         "interleaved": {
           "field": "reasoning_content"
