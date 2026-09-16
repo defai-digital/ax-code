@@ -46,6 +46,7 @@ import { estimateAutonomousLineDelta } from "./file-content"
 import {
   absolutePathLiterals,
   assertStaticRedirectTarget,
+  assertSupportedWindowsRedirect,
   DYNAMIC_REDIRECTION_DIAGNOSTIC,
   expandLeadingTilde,
   spawnHomeDirectory,
@@ -380,6 +381,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
 
   return {
     description: description
+      .replaceAll("${shell}", shell)
       .replaceAll("${directory}", Instance.directory)
       .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
@@ -933,6 +935,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
                   const target = stripShellQuotes(c.text)
                   if (!target || /^&/.test(target)) continue
                   assertStaticRedirectTarget(target)
+                  assertSupportedWindowsRedirect(c.text, isEval ? shell : scanParts[0])
                   const resolved = await recordResolvedPath(target)
                   if (resolved && isWriteFileRedirect(innerRedirect)) redirectWritePaths.add(resolved)
                 }
@@ -982,6 +985,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
           // Skip command substitution / fd dup (&1 etc.) — opaque or non-path.
           if (!target || /^&/.test(target)) continue
           assertStaticRedirectTarget(target)
+          assertSupportedWindowsRedirect(child.text, shell)
           const literal = expandLeadingTilde(target, home)
           if (!literal) throw new Error(DYNAMIC_REDIRECTION_DIAGNOSTIC)
           // Instance.containsPath(normalized) below records outside-workspace

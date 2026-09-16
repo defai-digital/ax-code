@@ -1,5 +1,7 @@
 Run one focused shell command in ${directory} by default. Use the `workdir` parameter for another directory instead of `cd`.
 
+Actual shell: `${shell}`. Use its syntax. In Bash/sh on Windows, discard output with `/dev/null`, never `nul` or `NUL`, which can create files excluded from snapshots. Keep stderr visible unless suppression is necessary. Unquoted redirects and `&` belong to the outer shell even after `cmd /c`; Bash interprets `&` as background execution.
+
 The workdir override applies to that call only. Set workdir to the workspace root for repository-relative Git pathspecs; otherwise an incorrect path base can silently yield an empty diff.
 
 Use Bash for git, builds, tests, package managers, process control, and aggregate repository queries. Prefer list/glob/grep/read/edit/write for ordinary file discovery, reading, searching, and changes.

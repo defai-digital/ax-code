@@ -1,4 +1,25 @@
 import os from "os"
+import { WindowsSnapshotPaths } from "../snapshot/windows-paths"
+
+/** POSIX redirections on Windows can create real Win32 device-name files. */
+export function assertSupportedWindowsRedirect(word: string, shell: string, platform = process.platform) {
+  if (platform !== "win32") return
+  const name = shell
+    .split(/[\\/]/)
+    .at(-1)
+    ?.replace(/\.exe$/i, "")
+    .toLowerCase()
+  if (!name || !["bash", "sh", "dash", "zsh", "ksh"].includes(name)) return
+  const target = decodeShellLiteral(word)
+  if (!target || !WindowsSnapshotPaths.unsupported(target)) return
+  throw new Error(
+    `Unsupported Windows redirect target ${JSON.stringify(target)} in ${shell}. ` +
+      "This POSIX shell can create a real reserved-name file that Git snapshots cannot restore. " +
+      "Keep output visible, or use /dev/null to discard it; do not use >nul or 2>nul. " +
+      "Unquoted redirects and & are interpreted by the outer shell even when the command starts with cmd /c. " +
+      "For a normal output file, choose a Windows-supported filename.",
+  )
+}
 
 export const DYNAMIC_REDIRECTION_DIAGNOSTIC =
   "Dynamic redirection targets are not allowed. Use literal quoted paths for stdin, stdout and stderr, " +
