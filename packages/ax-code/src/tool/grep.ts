@@ -11,6 +11,7 @@ import { clampGrepLine } from "./grep-line"
 import { decodeGrepPath } from "./grep-path"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { runNativeScan } from "../native/scan"
 import { Env } from "@/util/env"
 import { resolveToolFilePath } from "./file-path"
 import { parseNativeJsonArray } from "../util/native-json"
@@ -109,11 +110,11 @@ export const GrepTool = Tool.define("grep", {
       return searchWithContext({ ...params, path: searchPath, limit, context: params.context, isFile }, ctx.abort)
     const scanLimit = limit + 1
 
-    // Native fast-path: in-process search via Rust addon
+    // Older addons use the cancellable subprocess path, never a synchronous scan.
     const native = NativeAddon.fs()
-    if (native && !(isFile && params.include)) {
+    if (native?.searchContentAsync && native.ScanCancellation && !(isFile && params.include)) {
       try {
-        const json = NativePerf.run(
+        const json = await NativePerf.runAsync(
           "fs.searchContent",
           {
             searchPath,
@@ -122,14 +123,20 @@ export const GrepTool = Tool.define("grep", {
             limit: scanLimit,
           },
           () =>
-            native.searchContent(
-              searchPath,
-              params.pattern,
-              JSON.stringify({
-                glob: params.include,
-                limit: scanLimit,
-                contextLines: 0,
-              }),
+            runNativeScan(
+              () => new native.ScanCancellation(),
+              (cancellation) =>
+                native.searchContentAsync(
+                  searchPath,
+                  params.pattern,
+                  JSON.stringify({
+                    glob: params.include,
+                    limit: scanLimit,
+                    contextLines: 0,
+                  }),
+                  cancellation,
+                ),
+              ctx.abort,
             ),
         )
         // Schema matches `SearchMatch` in crates/ax-code-fs/src/lib.rs.

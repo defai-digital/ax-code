@@ -32,7 +32,7 @@ export async function runAll<T>(
 
 export async function runWithEnvelope<TClient, TPayload>(input: {
   file: string
-  call: (client: LSPClient.Info) => Promise<TClient>
+  call: (client: LSPClient.Info, signal?: AbortSignal) => Promise<TClient>
   reduce: (results: TClient[]) => TPayload
   empty: TPayload
   operation: string
@@ -40,7 +40,7 @@ export async function runWithEnvelope<TClient, TPayload>(input: {
   opts?: ClientOptions
   selectClients: (file: string, opts: ClientOptions) => Promise<ClientSelection>
 }): Promise<SemanticEnvelope<TPayload>> {
-  if (input.dedupKey) {
+  if (input.dedupKey && !input.opts?.signal) {
     return LspScheduler.Inflight.run(input.dedupKey, () => runWithEnvelopeUncollapsed(input))
   }
   return runWithEnvelopeUncollapsed(input)
@@ -48,7 +48,7 @@ export async function runWithEnvelope<TClient, TPayload>(input: {
 
 async function runWithEnvelopeUncollapsed<TClient, TPayload>(input: {
   file: string
-  call: (client: LSPClient.Info) => Promise<TClient>
+  call: (client: LSPClient.Info, signal?: AbortSignal) => Promise<TClient>
   reduce: (results: TClient[]) => TPayload
   empty: TPayload
   operation: string
@@ -56,10 +56,12 @@ async function runWithEnvelopeUncollapsed<TClient, TPayload>(input: {
   selectClients: (file: string, opts: ClientOptions) => Promise<ClientSelection>
 }): Promise<SemanticEnvelope<TPayload>> {
   const opts = input.opts ?? {}
+  opts.signal?.throwIfAborted()
   const selectStarted = performance.now()
   let selection: ClientSelection
   try {
     selection = await input.selectClients(input.file, opts)
+    opts.signal?.throwIfAborted()
   } catch (err) {
     LSPPerf.finishPhase(`${input.operation}.select`, selectStarted, false)
     throw err
@@ -81,52 +83,52 @@ async function runWithEnvelopeUncollapsed<TClient, TPayload>(input: {
     }
   }
 
-  let failures = 0
-  const participatingServerIDs: string[] = []
   const rpcStarted = performance.now()
-  let perClient: Array<TClient | undefined>
-  try {
-    perClient = await Promise.all(
-      clients.map(async (client) => {
-        const releaseActivity = client.activity?.retain()
-        try {
-          return await memoryWork("semantic", async () => {
-            let release: () => void
+  const outcomes = await Promise.all(
+    clients.map(async (client) => {
+      const releaseWaiting = client.activity?.retain()
+      try {
+        return await memoryWork(
+          "semantic",
+          async (signal) => {
+            // The queue can reject its caller before an uncooperative RPC settles.
+            // Keep the client pinned for that entire underlying operation.
+            const releaseRunning = client.activity?.retain()
+            let releaseBudget: (() => void) | undefined
             try {
-              release = await LspScheduler.Budget.acquire(client.serverID)
+              releaseBudget = await LspScheduler.Budget.acquire(client.serverID)
+              signal?.throwIfAborted()
+              const result = await input.call(client, signal)
+              signal?.throwIfAborted()
+              return { result, failed: false, serverID: client.serverID }
             } catch (err) {
-              failures++
-              log.warn("LSP budget acquire failed in runWithEnvelope", {
-                serverID: client.serverID,
-                err: toErrorMessage(err),
-              })
-              return undefined
-            }
-            try {
-              const result = await input.call(client)
-              participatingServerIDs.push(client.serverID)
-              return result
-            } catch (err) {
-              if (isMethodNotFound(err)) return undefined
-              failures++
-              log.warn("LSP client failed in runWithEnvelope", { serverID: client.serverID, err })
-              return undefined
+              if (isMethodNotFound(err)) return { result: undefined, failed: false }
+              throw err
             } finally {
-              release()
+              releaseBudget?.()
+              releaseRunning?.()
             }
-          })
-        } finally {
-          releaseActivity?.()
-        }
-      }),
-    )
-    LSPPerf.finishPhase(`${input.operation}.rpc`, rpcStarted, failures === 0)
-  } catch (err) {
+          },
+          opts.signal,
+        )
+      } catch (err) {
+        opts.signal?.throwIfAborted()
+        log.warn("LSP client failed in runWithEnvelope", { serverID: client.serverID, err: toErrorMessage(err) })
+        return { result: undefined, failed: true }
+      } finally {
+        releaseWaiting?.()
+      }
+    }),
+  ).catch((error) => {
     LSPPerf.finishPhase(`${input.operation}.rpc`, rpcStarted, false)
-    throw err
-  }
-
-  const successful = perClient.filter((result): result is Awaited<TClient> => result !== undefined) as TClient[]
+    throw error
+  })
+  const failures = outcomes.filter((outcome) => outcome.failed).length
+  LSPPerf.finishPhase(`${input.operation}.rpc`, rpcStarted, failures === 0)
+  const participatingServerIDs = outcomes.flatMap((outcome) => (outcome.serverID ? [outcome.serverID] : []))
+  const successful = outcomes
+    .map((outcome) => outcome.result)
+    .filter((value): value is Awaited<TClient> => value !== undefined)
   const status = participantStatus({ participatingServerIDs, failures })
   return {
     data: input.reduce(successful),

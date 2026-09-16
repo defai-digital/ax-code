@@ -23,6 +23,9 @@ const ctx = {
 const projectRoot = path.join(__dirname, "../..")
 
 class StopAfterAsk extends Error {}
+class ScanCancellation {
+  cancel() {}
+}
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -30,6 +33,24 @@ afterEach(async () => {
 })
 
 describe("tool.grep", () => {
+  test("old synchronous-only addons fall back to cancellable ripgrep", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const file = path.join(tmp.path, "source.ts")
+    await writeFile(file, "needle\n")
+    const searchContent = vi.fn(() => {
+      throw new Error("Must not block on the old addon")
+    })
+    vi.spyOn(NativeAddon, "fs").mockReturnValue({ searchContent } as any)
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await (await GrepTool.init()).execute({ pattern: "needle", path: file }, ctx)
+        expect(CanonicalOutput.Grep.parse(result.data).matches).toHaveLength(1)
+        expect(searchContent).not.toHaveBeenCalled()
+      },
+    })
+  })
+
   test.each([0, 1])("binary bytes cannot shift explicit-file line numbers with context=%i", async (context) => {
     await using tmp = await tmpdir({ git: true })
     const file = path.join(tmp.path, "binary.txt")
@@ -91,7 +112,7 @@ describe("tool.grep", () => {
     await using tmp = await tmpdir({ git: true })
     const controller = new AbortController()
     const searchContent = vi.fn(() => "[]")
-    vi.spyOn(NativeAddon, "fs").mockReturnValue({ searchContent } as any)
+    vi.spyOn(NativeAddon, "fs").mockReturnValue({ searchContentAsync: searchContent, ScanCancellation } as any)
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -298,7 +319,8 @@ describe("tool.grep", () => {
   test("native scan exhaustion remains truncated when no rows survive containment filtering", async () => {
     await using tmp = await tmpdir({ git: true })
     vi.spyOn(NativeAddon, "fs").mockReturnValue({
-      searchContent: vi.fn(() =>
+      ScanCancellation,
+      searchContentAsync: vi.fn(() =>
         JSON.stringify(
           Array.from({ length: 3 }, (_, i) => ({
             path: path.join(tmp.path, "..", `outside-${i}.ts`),
@@ -347,7 +369,9 @@ describe("tool.grep", () => {
         })),
       ),
     )
-    const native = vi.spyOn(NativeAddon, "fs").mockReturnValue({ searchContent } as any)
+    const native = vi
+      .spyOn(NativeAddon, "fs")
+      .mockReturnValue({ searchContentAsync: searchContent, ScanCancellation } as any)
     try {
       await Instance.provide({
         directory: tmp.path,
@@ -442,7 +466,8 @@ describe("tool.grep", () => {
       matchText: `needle ${i}`,
     }))
     const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
-      searchContent: vi.fn(() => JSON.stringify(matches)),
+      ScanCancellation,
+      searchContentAsync: vi.fn(() => JSON.stringify(matches)),
     } as any)
 
     try {
@@ -471,7 +496,9 @@ describe("tool.grep", () => {
       matchText: `needle ${i}`,
     }))
     const searchContent = vi.fn((_: string, __: string, ___: string) => JSON.stringify(matches))
-    const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({ searchContent } as any)
+    const nativeFs = vi
+      .spyOn(NativeAddon, "fs")
+      .mockReturnValue({ searchContentAsync: searchContent, ScanCancellation } as any)
 
     try {
       await Instance.provide({
@@ -527,7 +554,8 @@ describe("tool.grep", () => {
     await using tmp = await tmpdir({ git: true })
     const long = "needle " + "A".repeat(padding) + "\u{1F680}" + "B".repeat(50)
     const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
-      searchContent: vi.fn(() =>
+      ScanCancellation,
+      searchContentAsync: vi.fn(() =>
         JSON.stringify([{ path: path.join(tmp.path, "file.ts"), line: 1, column: 1, matchText: long }]),
       ),
     } as any)
@@ -607,7 +635,10 @@ describe("tool.grep", () => {
     }))
     const outside = { path: path.join(tmp.path, "..", "outside.ts"), line: 1, column: 1, matchText: "needle out" }
     const nativeFs = vi.spyOn(NativeAddon, "fs").mockReturnValue({
-      searchContent: vi.fn(() => JSON.stringify([...inside, ...Array.from({ length: 101 - count }, () => outside)])),
+      ScanCancellation,
+      searchContentAsync: vi.fn(() =>
+        JSON.stringify([...inside, ...Array.from({ length: 101 - count }, () => outside)]),
+      ),
     } as any)
     try {
       await Instance.provide({

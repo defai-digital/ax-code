@@ -5,15 +5,17 @@ mod detect;
 mod embedding;
 #[cfg(feature = "evidence-cache")]
 mod evidence;
+mod scan;
 mod watcher;
 
 pub use embedding::*;
+pub use scan::{ScanCancellation, search_content_async, walk_files_async};
 pub use watcher::*;
 
 use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::UNIX_EPOCH;
 
 use globset::{Glob, GlobMatcher};
@@ -89,9 +91,8 @@ static IGNORE_PATTERNS: LazyLock<IgnorePatternsFile> = LazyLock::new(|| {
 });
 
 /// Folder basenames that should always be ignored during walks.
-pub(crate) static IGNORE_FOLDERS: LazyLock<HashSet<String>> = LazyLock::new(|| {
-    IGNORE_PATTERNS.folders.iter().cloned().collect()
-});
+pub(crate) static IGNORE_FOLDERS: LazyLock<HashSet<String>> =
+    LazyLock::new(|| IGNORE_PATTERNS.folders.iter().cloned().collect());
 
 /// Precompiled matchers for hardcoded ignore file patterns. Rebuilding these
 /// on every `is_ignored` call was a measurable CPU cost during directory walks
@@ -111,6 +112,15 @@ static IGNORE_FILE_MATCHERS: LazyLock<Vec<GlobMatcher>> = LazyLock::new(|| {
 
 #[napi]
 pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>> {
+    walk_files_impl(&cwd, &options_json, &AtomicBool::new(false))
+}
+
+fn walk_files_impl(
+    cwd: &str,
+    options_json: &str,
+    cancelled: &AtomicBool,
+) -> napi::Result<Vec<String>> {
+    scan::check(cancelled)?;
     let opts: WalkOptions =
         serde_json::from_str(&options_json).map_err(|e| napi::Error::from_reason(e.to_string()))?;
 
@@ -147,6 +157,7 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
     let mut results = Vec::new();
 
     for entry in builder.build().flatten() {
+        scan::check(cancelled)?;
         // Only include files, skip directories
         if !entry.file_type().is_some_and(|ft| ft.is_file()) {
             continue;
@@ -195,6 +206,7 @@ pub fn walk_files(cwd: String, options_json: String) -> napi::Result<Vec<String>
         }
     }
 
+    scan::check(cancelled)?;
     Ok(results)
 }
 
@@ -276,6 +288,7 @@ pub fn glob_files(cwd: String, pattern: String, limit: u32) -> napi::Result<Stri
 
 /// Per-file search sink that collects matches with context lines.
 struct ContentSink<'a> {
+    cancelled: &'a AtomicBool,
     path: String,
     matcher: &'a grep_regex::RegexMatcher,
     results: &'a mut Vec<SearchMatch>,
@@ -295,6 +308,9 @@ impl<'a> Sink for ContentSink<'a> {
         _searcher: &grep_searcher::Searcher,
         mat: &SinkMatch<'_>,
     ) -> Result<bool, Self::Error> {
+        if self.cancelled.load(Ordering::Relaxed) {
+            return Ok(false);
+        }
         // Flush any pending match (it got all its after-context)
         if let Some(pending) = self.pending.take() {
             self.results.push(pending);
@@ -402,6 +418,16 @@ impl<'a> Sink for ContentSink<'a> {
 
 #[napi]
 pub fn search_content(cwd: String, pattern: String, options_json: String) -> napi::Result<String> {
+    search_content_impl(&cwd, &pattern, &options_json, &AtomicBool::new(false))
+}
+
+fn search_content_impl(
+    cwd: &str,
+    pattern: &str,
+    options_json: &str,
+    cancelled: &AtomicBool,
+) -> napi::Result<String> {
+    scan::check(cancelled)?;
     let opts: SearchOptions =
         serde_json::from_str(&options_json).map_err(|e| napi::Error::from_reason(e.to_string()))?;
 
@@ -428,6 +454,7 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
     let mut results: Vec<SearchMatch> = Vec::new();
 
     for entry in builder.build().flatten() {
+        scan::check(cancelled)?;
         if results.len() >= limit {
             break;
         }
@@ -478,6 +505,7 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
         // works when the reported path is absolute — returning a relative string
         // silently dropped every match when `searchPath != Instance.directory`.
         let mut sink = ContentSink {
+            cancelled,
             path: full.to_string_lossy().into_owned(),
             matcher: &matcher,
             results: &mut results,
@@ -489,7 +517,14 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
         };
 
         // Ignore errors on individual files (binary files, permission errors, etc.)
-        let _ = searcher.search_path(&matcher, &full, &mut sink);
+        if let Ok(file) = std::fs::File::open(&full) {
+            let reader = scan::CancellableReader {
+                inner: file,
+                cancelled,
+            };
+            let _ = searcher.search_reader(&matcher, reader, &mut sink);
+        }
+        scan::check(cancelled)?;
 
         if results.len() >= limit {
             break;
@@ -499,6 +534,7 @@ pub fn search_content(cwd: String, pattern: String, options_json: String) -> nap
     // Truncate to limit in case finish() pushed one more
     results.truncate(limit);
 
+    scan::check(cancelled)?;
     serde_json::to_string(&results).map_err(|e| napi::Error::from_reason(e.to_string()))
 }
 

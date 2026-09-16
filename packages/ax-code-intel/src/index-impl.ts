@@ -418,8 +418,9 @@ export namespace LSP {
     server: LSPServer.Info,
     root: string,
     key: string,
+    signal?: AbortSignal,
   ): Promise<LSPClient.Info | undefined> {
-    if (s.disposed) return undefined
+    if (s.disposed || signal?.aborted) return undefined
     let handle: LSPServer.Handle | undefined
     const spawnStarted = performance.now()
     try {
@@ -440,7 +441,7 @@ export namespace LSP {
     s.spawningProcesses.add(handle.process)
 
     try {
-      if (s.disposed) {
+      if (s.disposed || signal?.aborted) {
         await stopLSPProcessBestEffort(handle.process, { serverID: server.id, root, phase: "disposed-before-init" })
         return undefined
       }
@@ -480,7 +481,7 @@ export namespace LSP {
         return undefined
       }
 
-      if (s.disposed) {
+      if (s.disposed || signal?.aborted) {
         log.info("discarding LSP client completed after instance disposal", { serverID: server.id, root })
         await client.shutdown().catch(() =>
           stopLSPProcessBestEffort(handle.process, {
@@ -545,7 +546,7 @@ export namespace LSP {
       return false
     }
 
-    const task = memoryWork("spawn", () => scheduleClient(s, server, root, key), s.spawnAbort.signal)
+    const task = memoryWork("spawn", (signal) => scheduleClient(s, server, root, key, signal), s.spawnAbort.signal)
     s.spawning.set(key, task)
     task
       .finally(() => {

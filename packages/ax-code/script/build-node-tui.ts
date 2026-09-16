@@ -15,6 +15,7 @@ import { copyTuiDistPackage, toTuiDistPackageJson, withoutTuiTransformDependenci
 import { inspectNativeAddonPayload, nativeAddonIncompleteMessage, NATIVE_ADDON_PACKAGES } from "./native-addon-payload"
 import pkg from "../package.json"
 import { resolveNativeTypescript } from "../../ax-code-intel/src/typescript-native"
+import { pruneParserDistribution } from "./parser-dist"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
 // src/index-node-tui.ts (boot.ts) with esbuild + the AX Code TUI Solid JSX plugin.
@@ -202,6 +203,9 @@ await fs.promises.mkdir(outLib, { recursive: true })
 const result = await esbuild.build({
   entryPoints: [path.join(dir, "src/index-node-tui.ts")],
   bundle: true,
+  minifyWhitespace: true,
+  sourcemap: "external",
+  sourcesContent: false,
   platform: "node",
   format: "esm",
   outfile: path.join(outLib, "index-node-tui.js"),
@@ -262,6 +266,11 @@ if (result.errors.length > 0) {
   for (const e of result.errors) console.error(e.text)
   process.exit(1)
 }
+
+// Keep diagnostic maps beside the build, outside the signed runtime/archive.
+const debugDir = path.join(dir, "dist", `${legacyName}.debug`, "lib")
+await fs.promises.mkdir(debugDir, { recursive: true })
+await fs.promises.rename(path.join(outLib, "index-node-tui.js.map"), path.join(debugDir, "index-node-tui.js.map"))
 
 // Bundle the build-time Node runtime so the shipped TUI runs on a pinned Node
 // instead of whatever `node` is on the user's PATH (ADR-046 Phase 0). The
@@ -563,6 +572,8 @@ if (release) {
     )
   console.log(`Bundled evidence cache verified: ${evidenceCheck.stdout.trim()}`)
 }
+
+pruneParserDistribution(path.join(outRoot, "node_modules"))
 
 // macOS Gatekeeper rejects unsigned native code. Unlike the single Bun-SEA
 // binary, a node-bundled dist carries many native libraries (.node addons and

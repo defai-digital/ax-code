@@ -81,6 +81,98 @@ describe("source cache retention", () => {
 })
 
 describe("LSP admission and idle safety", () => {
+  test("deadline returns a degraded envelope that late success cannot mutate", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "low")
+    vi.useFakeTimers()
+    const gate = deferred()
+    const started = deferred()
+    const client = { serverID: "deadline-late", activity: new ClientActivity() } as LSPClient.Info
+    try {
+      const work = runWithEnvelope({
+        file: "/deadline.ts",
+        operation: "deadline",
+        empty: [] as string[],
+        selectClients: async () => ({ clients: [client], freshSpawnCount: 0 }),
+        call: async () => {
+          started.resolve()
+          await gate.promise
+          return "late"
+        },
+        reduce: (rows) => rows,
+      })
+      await started.promise
+      await vi.advanceTimersByTimeAsync(30_000)
+      const result = await work
+      expect(result.degraded).toBe(true)
+      expect(result.data).toEqual([])
+      expect(result.serverIDs).toEqual([])
+      expect(client.activity.busy).toBe(1)
+      gate.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(client.activity.busy).toBe(0)
+      expect(result.serverIDs).toEqual([])
+    } finally {
+      gate.resolve()
+      vi.useRealTimers()
+    }
+  })
+
+  test("overloaded clients are disclosed as failures instead of a clean result", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "low")
+    const gate = deferred()
+    const clients = Array.from(
+      { length: 67 },
+      (_, i) => ({ serverID: `bounded-${i}`, activity: new ClientActivity() }) as LSPClient.Info,
+    )
+    const work = runWithEnvelope({
+      file: "/bounded.ts",
+      operation: "bounded",
+      empty: [] as string[],
+      selectClients: async () => ({ clients, freshSpawnCount: 0 }),
+      call: async (client) => {
+        await gate.promise
+        return client.serverID
+      },
+      reduce: (rows) => rows,
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    gate.resolve()
+    const result = await work
+    expect(result.degraded).toBe(true)
+    expect(result.completeness).toBe("partial")
+    expect(result.data).toHaveLength(66)
+    expect(clients.every((client) => client.activity.busy === 0)).toBe(true)
+  })
+
+  test("cancelled callers keep uncooperative RPC clients pinned until settlement", async () => {
+    vi.stubEnv("AX_CODE_MEMORY_PROFILE", "low")
+    const gate = deferred()
+    const started = deferred()
+    const controller = new AbortController()
+    const client = { serverID: "cancel-active", activity: new ClientActivity() } as LSPClient.Info
+    const work = runWithEnvelope({
+      file: "/cancel.ts",
+      operation: "cancel",
+      empty: [] as string[],
+      opts: { signal: controller.signal },
+      selectClients: async () => ({ clients: [client], freshSpawnCount: 0 }),
+      call: async () => {
+        started.resolve()
+        await gate.promise
+        return "late"
+      },
+      reduce: (rows) => rows,
+    })
+    const rejected = expect(work).rejects.toThrow("caller cancelled")
+    await started.promise
+    controller.abort(new Error("caller cancelled"))
+    await rejected
+    expect(client.activity.busy).toBe(1)
+    gate.resolve()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(client.activity.busy).toBe(0)
+  })
+
   test("busy work prevents idle expiry and settle begins a new idle period", async () => {
     const activity = new ClientActivity()
     const gate = deferred()

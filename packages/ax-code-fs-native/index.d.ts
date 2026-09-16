@@ -50,6 +50,11 @@ export declare class NativeWatcher {
   get isActive(): boolean
 }
 
+export declare class ScanCancellation {
+  constructor()
+  cancel(): void
+}
+
 /**
  * Split a file into chunks suitable for embedding.
  * Chunks at paragraph/function boundaries when possible, otherwise at line count.
@@ -93,4 +98,17 @@ export declare function scanFiles(cwd: string, configJson: string): string
 
 export declare function searchContent(cwd: string, pattern: string, optionsJson: string): string
 
+export declare function searchContentAsync(
+  cwd: string,
+  pattern: string,
+  optionsJson: string,
+  cancellation: ScanCancellation,
+): Promise<string>
+
 export declare function walkFiles(cwd: string, optionsJson: string): Array<string>
+
+export declare function walkFilesAsync(
+  cwd: string,
+  optionsJson: string,
+  cancellation: ScanCancellation,
+): Promise<string[]>

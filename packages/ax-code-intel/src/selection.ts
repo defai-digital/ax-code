@@ -5,6 +5,7 @@ import { BuiltinServerProfiles } from "./server-profile"
 export type ClientMode = "all" | "semantic"
 
 export type ClientOptions = {
+  signal?: AbortSignal
   mode?: ClientMode
   method?: LSPServer.Method
   methods?: LSPServer.Method[]

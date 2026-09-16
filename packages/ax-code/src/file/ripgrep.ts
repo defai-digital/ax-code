@@ -16,6 +16,7 @@ import { ZipReader, BlobReader, BlobWriter } from "@zip.js/zip.js"
 import { Log } from "@/util/log"
 import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
+import { runNativeScan } from "../native/scan"
 import { Ssrf } from "@/util/ssrf"
 import { Env } from "@/util/env"
 import { parseJsonPayload } from "@/util/json-value"
@@ -310,11 +311,11 @@ export namespace Ripgrep {
     // through without a sentinel.
     const limit = typeof input.limit === "number" && input.limit > 0 ? Math.trunc(input.limit) : undefined
 
-    // Native fast-path: in-process file walker via Rust addon
+    // Use asynchronous native scans only; older addons use the subprocess path.
     const native = NativeAddon.fs()
-    if (native) {
+    if (native?.walkFilesAsync && native.ScanCancellation) {
       try {
-        const results = NativePerf.run(
+        const results = await NativePerf.runAsync(
           "fs.walkFiles",
           {
             cwd: input.cwd,
@@ -323,17 +324,24 @@ export namespace Ripgrep {
             maxDepth: input.maxDepth,
           },
           () =>
-            native.walkFiles(
-              input.cwd,
-              JSON.stringify({
-                glob: input.glob,
-                hidden: input.hidden,
-                maxDepth: input.maxDepth,
-                limit,
-              }),
+            runNativeScan(
+              () => new native.ScanCancellation(),
+              (cancellation) =>
+                native.walkFilesAsync(
+                  input.cwd,
+                  JSON.stringify({
+                    glob: input.glob,
+                    hidden: input.hidden,
+                    maxDepth: input.maxDepth,
+                    limit,
+                  }),
+                  cancellation,
+                ),
+              input.signal,
             ),
         )
         for (const file of results) {
+          input.signal?.throwIfAborted()
           yield file
         }
         return
