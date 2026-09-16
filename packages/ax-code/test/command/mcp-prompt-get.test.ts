@@ -49,23 +49,18 @@ test("Command.get returns the same MCP commit prompt Command.list would", async 
         directory: tmp.path,
         fn: async () => {
           const listed = await Command.list()
-          const fromList = listed.find((command) => command.source === "mcp" && command.mcpPrompt?.name === "commit")
+          const fromList = listed.find((command) => command.name === "commit")
           expect(fromList).toMatchObject({
+            name: "commit",
             source: "mcp",
             mcpPrompt: { client: "override", name: "commit" },
           })
 
-          const fromGet = await Command.get(fromList!.name)
+          const fromGet = await Command.get("commit")
           expect(fromGet).toBeDefined()
           expect(fromGet!.source).toBe("mcp")
-          expect(fromGet!.name).toBe(fromList!.name)
+          expect(fromGet!.name).toBe("commit")
           expect(fromGet!.mcpPrompt).toEqual(fromList!.mcpPrompt)
-
-          const listedCommit = listed.find((command) => command.name === "commit")
-          const gotCommit = await Command.get("commit")
-          expect(gotCommit?.source).toBe(listedCommit?.source)
-          expect(gotCommit?.name).toBe(listedCommit?.name)
-          expect(gotCommit?.mcpPrompt).toEqual(listedCommit?.mcpPrompt)
         },
       })
     })

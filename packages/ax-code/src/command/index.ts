@@ -379,7 +379,10 @@ export namespace Command {
 
   async function mergeMcpPrompts(commands: Record<string, Info>): Promise<Record<string, Info>> {
     const next = { ...commands }
-    for (const [name, prompt] of Object.entries(await MCP.prompts())) {
+    for (const [key, prompt] of Object.entries(await MCP.prompts())) {
+      // MCP catalog keys are `server:prompt`. Yield commit/pr to the prompt
+      // name so slash /commit matches Command.list and GET /command.
+      const name = OVERRIDABLE_BUILTINS.has(prompt.name) ? prompt.name : key
       if (next[name] && !isOverridableBuiltin(next[name])) continue
       next[name] = {
         name,
