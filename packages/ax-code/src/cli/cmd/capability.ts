@@ -35,6 +35,8 @@ const CapabilityListCommand = cmd({
     await bootstrapReadonly(process.cwd(), async () => {
       const capabilities = await Capability.list({
         filePaths: (args.file as string[] | undefined)?.map(String),
+        // One-shot inventory must not spawn MCP children; HTTP /capability keeps the default.
+        mcp: false,
       })
       if (args.json) {
         process.stdout.write(JSON.stringify(capabilities, null, 2) + EOL)

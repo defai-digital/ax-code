@@ -31,10 +31,10 @@ export namespace Capability {
   })
   export type Info = z.infer<typeof Info>
 
-  export async function list(input: { filePaths?: string[] } = {}): Promise<Info[]> {
+  export async function list(input: { filePaths?: string[]; mcp?: boolean } = {}): Promise<Info[]> {
     const [instructions, commands, skills, agents, workflows, config] = await Promise.all([
       instructionEntries(),
-      Command.list(),
+      Command.list({ mcp: input.mcp }),
       Skill.all(),
       Agent.list(),
       WorkflowTemplate.list(),

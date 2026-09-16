@@ -349,36 +349,6 @@ export namespace Command {
       }
     }
 
-    for (const [name, prompt] of Object.entries(await MCP.prompts())) {
-      if (commands[name] && !isOverridableBuiltin(commands[name])) continue
-      commands[name] = {
-        name,
-        source: "mcp",
-        description: prompt.description,
-        mcpPrompt: {
-          client: prompt.client,
-          name: prompt.name,
-        },
-        get template() {
-          return (async () => {
-            const template = await MCP.getPrompt(
-              prompt.client,
-              prompt.name,
-              prompt.arguments
-                ? Object.fromEntries(prompt.arguments.map((argument, i) => [argument.name, `$${i + 1}`]))
-                : {},
-            )
-            return mcpPromptTemplateText({
-              client: prompt.client,
-              name: prompt.name,
-              messages: template?.messages ?? [],
-            })
-          })()
-        },
-        hints: prompt.arguments?.map((_, i) => `$${i + 1}`) ?? [],
-      }
-    }
-
     for (const skill of await Skill.all()) {
       if (skill.userInvocable === false) continue
       // Agent-only builtins stay loadable via the skill tool, but they are not
@@ -407,13 +377,50 @@ export namespace Command {
     }
   })
 
-  export async function get(name: string) {
-    const current = await state()
-    return current.commands[name]
+  async function mergeMcpPrompts(commands: Record<string, Info>): Promise<Record<string, Info>> {
+    const next = { ...commands }
+    for (const [name, prompt] of Object.entries(await MCP.prompts())) {
+      if (next[name] && !isOverridableBuiltin(next[name])) continue
+      next[name] = {
+        name,
+        source: "mcp",
+        description: prompt.description,
+        mcpPrompt: {
+          client: prompt.client,
+          name: prompt.name,
+        },
+        get template() {
+          return (async () => {
+            const template = await MCP.getPrompt(
+              prompt.client,
+              prompt.name,
+              prompt.arguments
+                ? Object.fromEntries(prompt.arguments.map((argument, i) => [argument.name, `$${i + 1}`]))
+                : {},
+            )
+            return mcpPromptTemplateText({
+              client: prompt.client,
+              name: prompt.name,
+              messages: template?.messages ?? [],
+            })
+          })()
+        },
+        hints: prompt.arguments?.map((_, i) => `$${i + 1}`) ?? [],
+      }
+    }
+    return next
   }
 
-  export async function list() {
+  export async function get(name: string) {
     const current = await state()
-    return Object.values(current.commands)
+    if (current.commands[name]) return current.commands[name]
+    const merged = await mergeMcpPrompts(current.commands)
+    return merged[name]
+  }
+
+  export async function list(input: { mcp?: boolean } = {}) {
+    const current = await state()
+    const commands = input.mcp === false ? current.commands : await mergeMcpPrompts(current.commands)
+    return Object.values(commands)
   }
 }

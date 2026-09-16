@@ -2,6 +2,9 @@ import { afterEach, expect, test } from "vitest"
 import fs from "fs/promises"
 import path from "path"
 import { Capability } from "../../src/capability"
+import { Command } from "../../src/command"
+import { Config } from "../../src/config/config"
+import { Global } from "../../src/global"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
@@ -150,6 +153,52 @@ test("catalog warns when agent config still uses deprecated tools", async () => 
       },
     })
   })
+})
+
+test("capability list does not spawn configured MCP servers", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const marker = path.join(tmp.path, "mcp-started")
+  const globalDir = path.join(tmp.path, "global-config")
+  await fs.mkdir(globalDir, { recursive: true })
+  await fs.writeFile(
+    path.join(globalDir, "ax-code.json"),
+    JSON.stringify({
+      $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
+      mcp: {
+        probe: {
+          type: "local",
+          command: [
+            process.execPath,
+            "-e",
+            `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "started"); setInterval(() => {}, 1e9)`,
+          ],
+          timeout: 500,
+        },
+      },
+    }),
+  )
+
+  const previousConfig = Global.Path.config
+  Global.Path.config = globalDir
+  Config.global.reset()
+  try {
+    await withTestHome(path.join(tmp.path, "home"), async () => {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await Capability.list({ mcp: false })
+          await expect(fs.access(marker)).rejects.toMatchObject({ code: "ENOENT" })
+
+          await Command.list()
+          expect(await fs.readFile(marker, "utf8")).toBe("started")
+        },
+      })
+    })
+  } finally {
+    await Instance.disposeAll()
+    Global.Path.config = previousConfig
+    Config.global.reset()
+  }
 })
 
 test("keeps dotted project instruction paths relative in capability names", async () => {
