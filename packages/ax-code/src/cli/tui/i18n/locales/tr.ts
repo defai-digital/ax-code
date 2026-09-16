@@ -981,6 +981,6 @@ export const messages = {
   "animation.sunsetSerenade": "Bench: G\u00fcn bat\u0131m\u0131 serenad\u0131",
   "animation.mahjongMatch": "Mahjong: Oyun",
   "animation.mahjongEnding": "Mahjong: Son Puanlar",
-  "animation.fujiDay": "Fuji Da\u011f\u0131: G\u00fcnd\u00fcz",
+  "animation.fujiDawn": "Fuji Da\u011f\u0131: \u015eafak",
   "animation.fujiNight": "Fuji Da\u011f\u0131: Gece",
 } satisfies Dictionary

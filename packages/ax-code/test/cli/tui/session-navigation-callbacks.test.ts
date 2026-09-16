@@ -6,6 +6,7 @@ import { DialogNavigationWidth, DialogSidebarWidth } from "../../../src/cli/tui/
 import { DialogSessionList } from "../../../src/cli/tui/component/dialog-session-list"
 import { DialogNavigationOptions } from "../../../src/cli/tui/component/dialog-navigation-options"
 import { DialogAttention } from "../../../src/cli/tui/component/dialog-attention"
+import { ChromeWidthAction } from "../../../src/cli/tui/component/chrome-action"
 
 const mocked = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -178,15 +179,22 @@ function navigationProps(initial: ReadonlySet<string> = new Set()) {
 }
 
 describe("session navigation callbacks", () => {
-  test("keeps New, Find and Options visible without an empty attention card", () => {
+  test("keeps New, Find, /navigation, width and Options visible without an empty attention card", () => {
     const tree = mount(() => SessionNavigation(navigationProps()))
     click(tree, "+ New session")
     click(tree, "Find session…")
+    click(tree, "/navigation")
     click(tree, "Navigation options ›")
+    // ChromeWidthAction derives its label internally, so assert its wiring directly.
+    const width = find(tree, (item) => item.type === ChromeWidthAction)
+    expect(width?.props.width).toBe(28)
+    ;(width!.props.onMouseUp as () => void)()
     expect(mocked.trigger.mock.calls).toEqual([
       ["session.new"],
       ["session.navigation.find"],
+      ["session.navigation"],
       ["session.navigation.options"],
+      ["session.navigation.width"],
     ])
     expect(text(tree)).not.toContain("Across workspaces")
     expect(mocked.navigate).not.toHaveBeenCalled()
@@ -201,19 +209,12 @@ describe("session navigation callbacks", () => {
     const picker = mount(() => DialogNavigationOptions({ onCommand: mocked.trigger }))
     const options = picker.props.options as { title: string; value: string }[]
     const select = picker.props.onSelect as (option: { value: string }) => void
-    expect(options.map((option) => option.value)).toEqual([
-      "session.navigation.info",
-      "session.navigation.width",
-      "session.navigation.clear",
-      "session.navigation",
-    ])
+    expect(options.map((option) => option.value)).toEqual(["session.navigation.info", "session.navigation.clear"])
     for (const option of options) select(option)
     expect(mocked.trigger.mock.calls).toEqual([
       ["session.navigation.info"],
       ["session.navigation.info"],
-      ["session.navigation.width"],
       ["session.navigation.clear"],
-      ["session.navigation"],
     ])
     expect(mocked.navigate).not.toHaveBeenCalled()
     expect(mocked.reply).not.toHaveBeenCalled()
@@ -485,10 +486,10 @@ describe("navigation recovery entry and width selection", () => {
     expect(mocked.reply).not.toHaveBeenCalled()
   })
 
-  test.each([20, 24, 28, 30, 32, 36, 40])("persists the %i-column width preset and closes the picker", (width) => {
+  test.each([26, 28, 30, 32, 34, 36, 38])("persists the %i-column width preset and closes the picker", (width) => {
     const tree = mount(DialogNavigationWidth)
     const options = tree.props.options as { title: string; value: number }[]
-    expect(options.map((option) => option.value)).toEqual([20, 24, 28, 30, 32, 36, 40])
+    expect(options.map((option) => option.value)).toEqual([26, 28, 30, 32, 34, 36, 38])
     expect(mocked.setSize).toHaveBeenCalledWith("medium")
     const select = tree.props.onSelect as (option: { title: string; value: number }) => void
     select(options.find((option) => option.value === width)!)
@@ -505,12 +506,12 @@ describe("navigation recovery entry and width selection", () => {
     expect(mount(DialogNavigationWidth).props.current).toBe(28)
   })
 
-  test.each([20, 24, 28, 30, 32, 36, 40])(
+  test.each([26, 28, 30, 32, 34, 36, 38])(
     "persists the %i-column sidebar width preset and closes the picker",
     (width) => {
       const tree = mount(DialogSidebarWidth)
       const options = tree.props.options as { title: string; value: number }[]
-      expect(options.map((option) => option.value)).toEqual([20, 24, 28, 30, 32, 36, 40])
+      expect(options.map((option) => option.value)).toEqual([26, 28, 30, 32, 34, 36, 38])
       expect(tree.props.title).toBe("Sidebar width")
       const select = tree.props.onSelect as (option: { title: string; value: number }) => void
       select(options.find((option) => option.value === width)!)

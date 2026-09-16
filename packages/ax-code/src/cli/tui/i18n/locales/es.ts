@@ -958,6 +958,6 @@ export const messages = {
   "animation.sunsetSerenade": "Bench: Serenata al atardecer",
   "animation.mahjongMatch": "Mahjong: Partida",
   "animation.mahjongEnding": "Mahjong: Puntos finales",
-  "animation.fujiDay": "Monte Fuji: D\u00eda",
+  "animation.fujiDawn": "Monte Fuji: Amanecer",
   "animation.fujiNight": "Monte Fuji: Noche",
 } satisfies Dictionary

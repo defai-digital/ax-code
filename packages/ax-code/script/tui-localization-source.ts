@@ -20,6 +20,7 @@ const technicalLabels = new Set([
   "enter",
   "ctrl+c",
   "/sidebar",
+  "/navigation",
   "/connect",
   "MCP",
   "AX",

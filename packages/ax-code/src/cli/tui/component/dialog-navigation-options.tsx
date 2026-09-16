@@ -15,13 +15,8 @@ export function DialogNavigationOptions(props: { onCommand: (value: string) => v
       title={t("navigation.options")}
       options={[
         { title: t("command.details"), value: "session.navigation.info" },
-        { title: t("command.navigationWidth"), value: "session.navigation.width" },
         { title: t("command.clearNavigation"), value: "session.navigation.clear" },
         ...(kv.get("navigation_cleared_at", 0) ? [{ title: t("navigation.showHidden"), value: "restore" }] : []),
-        {
-          title: kv.get("navigation_visible", true) ? t("command.hideNavigation") : t("command.showNavigation"),
-          value: "session.navigation",
-        },
       ]}
       onSelect={(option) => {
         dialog.clear()

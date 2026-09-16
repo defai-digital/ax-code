@@ -990,6 +990,6 @@ export const messages = {
   "animation.sunsetSerenade": "Bench\uff1a\u5915\u9633\u5c0f\u591c\u66f2",
   "animation.mahjongMatch": "\u9ebb\u5c06\uff1a\u5bf9\u5c40",
   "animation.mahjongEnding": "\u9ebb\u5c06\uff1a\u7ed3\u7b97",
-  "animation.fujiDay": "\u5bcc\u58eb\u5c71\uff1a\u767d\u5929",
+  "animation.fujiDawn": "\u5bcc\u58eb\u5c71\uff1a\u9ece\u660e",
   "animation.fujiNight": "\u5bcc\u58eb\u5c71\uff1a\u591c\u666f",
 } satisfies Dictionary

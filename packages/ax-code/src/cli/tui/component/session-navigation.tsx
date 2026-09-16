@@ -2,6 +2,7 @@ import { useLanguage } from "@tui/context/language"
 import type { BoxRenderable, ScrollBoxRenderable } from "ax-tui"
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, type Setter } from "solid-js"
 import { useKV } from "@tui/context/kv"
+import { NAVIGATION_WIDTH_DEFAULT, chromeWidth } from "../chrome-width"
 import { navigationRailInnerWidth } from "../navigation/navigation-layout"
 import {
   activeNavigationSessions,
@@ -16,6 +17,7 @@ import { useRoute } from "@tui/context/route"
 import { useTheme } from "@tui/context/theme"
 import { useLocal } from "@tui/context/local"
 import { scheduleTuiTimeout } from "../util/timer"
+import { ChromeAction, ChromeWidthAction } from "./chrome-action"
 import { useCommandDialog } from "./dialog-command"
 import { ScheduleStatus } from "./schedule-status"
 import { SplitBorder } from "./border"
@@ -85,6 +87,7 @@ export function SessionNavigation(props: {
   const pendingCount = createMemo(() => knownAttentionRequests(sync.data.permission, sync.data.question).length)
   const slots = createMemo(() => new Map(local.session.slots().map((id, index) => [id, index + 1])))
   const innerWidth = () => navigationRailInnerWidth(props.width)
+  const preferredWidth = () => chromeWidth(kv.get("navigation_width"), NAVIGATION_WIDTH_DEFAULT)
   let scroll: ScrollBoxRenderable | undefined
   const rowNodes = new Map<string, BoxRenderable>()
   const rowIdentity = createMemo(() =>
@@ -298,6 +301,10 @@ export function SessionNavigation(props: {
       </Show>
       <box flexShrink={0} marginTop={1}>
         <ScheduleStatus width={innerWidth()} compact />
+        <box flexShrink={0} flexDirection="row" gap={2} flexWrap="wrap">
+          <ChromeAction onMouseUp={() => command.trigger("session.navigation")}>/navigation</ChromeAction>
+          <ChromeWidthAction width={preferredWidth()} onMouseUp={() => command.trigger("session.navigation.width")} />
+        </box>
         <box onMouseUp={() => command.trigger("session.navigation.options")}>
           <text fg={theme.textMuted} selectable={false}>
             {truncateToCellWidth(uiText("navigation.options"), Math.max(0, innerWidth() - 2))} ›

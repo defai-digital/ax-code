@@ -5,13 +5,13 @@ describe("session layout", () => {
   test("defaults the sidebar to 32 columns and honors width presets", () => {
     expect(computeSidebarWidth(80)).toBe(32)
     expect(computeSidebarWidth(200)).toBe(32)
-    expect(computeSidebarWidth(200, 20)).toBe(20)
-    expect(computeSidebarWidth(200, 40)).toBe(40)
+    expect(computeSidebarWidth(200, 26)).toBe(26)
+    expect(computeSidebarWidth(200, 38)).toBe(38)
     expect(computeSidebarWidth(200, 99)).toBe(32)
   })
 
   test("clamps a wide sidebar so the main pane stays usable", () => {
-    expect(computeSidebarWidth(121, 40)).toBe(37)
+    expect(computeSidebarWidth(121, 38)).toBe(37)
   })
 
   test("subtracts sidebar width and gutter from the main pane", () => {
@@ -25,9 +25,9 @@ describe("session layout", () => {
       computeSessionMainPaneWidth({
         terminalWidth: 130,
         sidebarVisible: true,
-        sidebarPreferredWidth: 40,
+        sidebarPreferredWidth: 38,
       }),
-    ).toBe(86)
+    ).toBe(88)
   })
 
   test("returns the full inner width when the sidebar is hidden", () => {

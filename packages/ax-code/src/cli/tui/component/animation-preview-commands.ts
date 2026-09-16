@@ -54,8 +54,8 @@ const PREVIEWS = [
   {
     family: "Fuji Mountain",
     ending: false,
-    style: "fuji-day",
-    key: "animation.fujiDay",
+    style: "fuji-dawn",
+    key: "animation.fujiDawn",
     value: "app.animation.fuji",
     slash: "fuji",
   },

@@ -1039,6 +1039,6 @@ export const messages = {
   "animation.sunsetSerenade": "Bench: \uc11d\uc591\uc758 \uc138\ub808\ub098\ub370",
   "animation.mahjongMatch": "\ub9c8\uc791: \ub300\uad6d",
   "animation.mahjongEnding": "\ub9c8\uc791: \ucd5c\uc885 \uc810\uc218",
-  "animation.fujiDay": "\ud6c4\uc9c0\uc0b0: \ub0ae",
+  "animation.fujiDawn": "\ud6c4\uc9c0\uc0b0: \uc0c8\ubcbd",
   "animation.fujiNight": "\ud6c4\uc9c0\uc0b0: \ubc24",
 } satisfies Dictionary

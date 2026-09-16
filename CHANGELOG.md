@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Restyle the Fuji Mountain opening as dawn with a vertical sky gradient, move `/navigation` and width controls onto the session rail, and tighten chrome width presets.
+
 ## [7.18.3] - 2026-09-16
 
 ### Changed
