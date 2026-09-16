@@ -95,3 +95,49 @@ test("maps canonical and aliased workspace paths including deleted files", async
   expect(result.additional).toEqual(["deleted.ts"])
   expect(result.external).toEqual([])
 })
+
+test("tracks every multiedit result outside the declared scope using executed metadata", () => {
+  const result = goalSourceScope({
+    cwd,
+    created: 10,
+    sourcePaths: ["src"],
+    messages: [
+      message(
+        {
+          results: [
+            { filediff: { file: absolute("test/first.ts") } },
+            { filediff: { file: absolute("test/second.ts") } },
+            { filediff: { file: absolute("test/first.ts") } },
+            { filediff: { file: absolute("src/covered.ts") } },
+            { filediff: { file: absolute(".ax-code/goals/session/plan.md") } },
+            { filediff: { file: "relative.ts" } },
+            null,
+            { filediff: { file: path.resolve(cwd, "../scratch.ts") } },
+          ],
+        },
+        20,
+        "multiedit",
+      ),
+    ],
+  })
+  expect(result.additional).toEqual(["test/first.ts", "test/second.ts"])
+  expect(result.paths).toEqual(["src", "test/first.ts", "test/second.ts"])
+  expect(result.external).toEqual([path.resolve(cwd, "../scratch.ts")])
+})
+
+test("ignores historical, unsuccessful, and unrelated nested results", () => {
+  const metadata = { results: [{ filediff: { file: absolute("extra.ts") } }] }
+  expect(
+    goalSourceScope({
+      cwd,
+      created: 10,
+      sourcePaths: ["src"],
+      messages: [
+        message(metadata, 9, "multiedit"),
+        message(metadata, 20, "multiedit", "error"),
+        message(metadata, 20, "multiedit", "running"),
+        message(metadata, 20, "read"),
+      ],
+    }),
+  ).toEqual({ paths: ["src"], additional: [], external: [] })
+})

@@ -58,7 +58,8 @@ export function goalSourceScope(input: {
     if (message.info?.role !== "assistant") continue
     for (const part of message.parts ?? []) {
       const record = asRecordOrUndefined(part)
-      if (record?.type !== "tool" || !["edit", "write", "apply_patch"].includes(String(record.tool))) continue
+      if (record?.type !== "tool" || !["edit", "write", "apply_patch", "multiedit"].includes(String(record.tool)))
+        continue
       const state = asRecordOrUndefined(record.state)
       if (state?.status !== "completed") continue
       // A tool can finish after goal creation within a message that started
@@ -69,6 +70,13 @@ export function goalSourceScope(input: {
       const metadata = asRecordOrUndefined(state.metadata)
       add(metadata?.filepath)
       add(asRecordOrUndefined(metadata?.filediff)?.file)
+      // MultiEditTool returns each executed edit's metadata in results, rather
+      // than a top-level filediff. Do not infer changed paths from tool inputs.
+      if (record.tool === "multiedit" && Array.isArray(metadata?.results)) {
+        for (const result of metadata.results) {
+          add(asRecordOrUndefined(asRecordOrUndefined(result)?.filediff)?.file)
+        }
+      }
       if (Array.isArray(metadata?.files)) {
         for (const entry of metadata.files) {
           const file = asRecordOrUndefined(entry)
