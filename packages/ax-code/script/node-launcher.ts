@@ -89,9 +89,12 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   real="$real_dir/$(basename "$real")"
   # The identity keys the branded runtime's cache directory AND its admission
   # stamp, so it must cover everything the branded exec depends on: the node
-  # binary itself and any libnode the relocation loop links in. Otherwise a
+  # binary itself (inode plus byte size, so an in-place rewrite cannot reuse a
+  # stale stamp) and any libnode the relocation loop links in. Otherwise a
   # swapped libnode would silently reuse a stamp recorded against the old one.
-  identity="$( { printf '%s\\n' "$real"; ls -di "$real"; ls -di "$real_dir"/../lib/libnode* 2>/dev/null; } | cksum)"
+  # Size is wc -c, not ls -l: a successful hardlink changes the link count
+  # in ls -l, which would otherwise bust the cache on the next launch.
+  identity="$( { printf '%s\\n' "$real"; ls -di "$real"; wc -c < "$real"; ls -di "$real_dir"/../lib/libnode* 2>/dev/null; } | cksum)"
   cache="\${XDG_CACHE_HOME:-\$HOME/.cache}/ax-code/libexec/runtime-\${identity%% *}"
   branded="$cache/bin/AX-Code"
   if ! mkdir -p "$cache/bin" "$cache/lib"; then
@@ -126,8 +129,8 @@ export const UNIX_BRAND_AND_EXEC_NODE = `brand_and_exec_node() {
   # not just the runtime bytes, so the key covers the node install ($identity,
   # which includes any libnode linked in) and the OS build: a system update
   # re-probes instead of reusing a verdict that update may have invalidated.
-  # Deleting $cache, or AX_CODE_SYSTEM_NODE=1 to skip branding entirely, are the
-  # recovery paths if a cached runtime is ever suspected.
+  # Deleting $cache, or AX_CODE_SYSTEM_NODE=1 to sidestep the bundled runtime
+  # and its cache, are the recovery paths if a cached runtime is ever suspected.
   probe_stamp="$cache/probe.ok"
   probe_key="$identity $(uname -srm 2>/dev/null)"
   if [ ! -f "$probe_stamp" ] || [ "$(cat "$probe_stamp" 2>/dev/null)" != "$probe_key" ]; then

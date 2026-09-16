@@ -57,6 +57,8 @@ describe("design check", () => {
     await fs.writeFile(path.join(tmp.path, "node_modules", "pkg", "style.css"), ".dep { color: #111; }")
     await fs.mkdir(path.join(tmp.path, "vendor"), { recursive: true })
     await fs.writeFile(path.join(tmp.path, "vendor", "lib.css"), ".vendor { color: #222; }")
+    await fs.mkdir(path.join(tmp.path, ".git", "objects"), { recursive: true })
+    await fs.writeFile(path.join(tmp.path, ".git", "objects", "pack.css"), ".git { color: #333; }")
     await fs.writeFile(path.join(tmp.path, "app.css"), ".first-party { color: #fff; }")
 
     const result = await runDesignCheck([tmp.path])

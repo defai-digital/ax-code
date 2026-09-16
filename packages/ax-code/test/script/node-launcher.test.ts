@@ -94,7 +94,8 @@ describe("Unix node launcher", () => {
         original,
         [
           "#!/bin/sh",
-          `if [ "$1" = "-e" ]; then exit 0; fi`,
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `if [ "$1" = "-p" ]; then printf '%s\\n' ${quote(process.version)}; exit 0; fi`,
           `printf '%s\\n' "$*" >> ${quote(calls)}`,
           `printf 'options=[%s] saved=[%s]\\n' "$NODE_OPTIONS" "$AX_CODE_LAUNCH_NODE_OPTIONS" >> ${quote(calls)}`,
           "exit 37",
@@ -362,11 +363,55 @@ describe("Unix node launcher", () => {
     expect(await readdir(path.join(cacheHome, "ax-code/libexec", runtimes[0]))).not.toContain("probe.ok")
   })
 
+  test.skipIf(process.platform === "win32")("re-probes when the node binary is rewritten in place", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ax-code-node-probe-rewrite-"))
+    temporaryRoots.push(root)
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'"
+    const original = path.join(root, "node")
+    const launcher = path.join(root, "launcher")
+    const calls = path.join(root, "calls")
+    const entry = path.join(root, "index-node-tui.js")
+    const cacheHome = path.join(root, "cache-home")
+    const script = (tag: string) =>
+      [
+        "#!/bin/sh",
+        `# ${tag}`,
+        `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+        `if [ "$1" = "-p" ]; then printf 'probe-inner\\n' >> ${quote(calls)}; printf '%s\\n' ${quote(process.version)}; exit 0; fi`,
+        `printf 'exec\\n' >> ${quote(calls)}`,
+        "exit 37",
+        "",
+      ].join("\n")
+    await writeFile(entry, "// Test entry point.\n")
+    await writeFile(original, script("original"), { mode: 0o755 })
+    await writeFile(
+      launcher,
+      `#!/bin/sh\n${UNIX_BRAND_AND_EXEC_NODE}\nbrand_and_exec_node ${quote(original)} ${quote(entry)} "$@"\n`,
+      { mode: 0o755 },
+    )
+    const run = () =>
+      execFileAsync(launcher, ["--version"], {
+        env: { ...process.env, XDG_CACHE_HOME: cacheHome, NODE_OPTIONS: "" },
+        timeout: 10_000,
+      }).catch((error: unknown) => error)
+
+    expect(await run()).toMatchObject({ code: 37, signal: null })
+    expect(await run()).toMatchObject({ code: 37, signal: null })
+    expect(await readFile(calls, "utf8")).toBe("probe-inner\nexec\nexec\n")
+
+    // Same path and typically the same inode; a size change must still
+    // invalidate the cached admission verdict so a patched runtime is re-probed.
+    await writeFile(original, script("rewritten"), { mode: 0o755 })
+    expect(await run()).toMatchObject({ code: 37, signal: null })
+    expect(await readFile(calls, "utf8")).toBe("probe-inner\nexec\nexec\nprobe-inner\nexec\n")
+  })
+
   test("brands the Node binary as AX-Code before exec", () => {
     const script = unixNodeLauncherScript()
     expect(script).toContain("brand_and_exec_node")
     expect(script).toContain('branded="$cache/bin/AX-Code"')
     expect(script).toContain("runtime")
+    expect(script).toContain('wc -c < "$real"')
     expect(script).not.toMatch(/^exec node /m)
   })
 
@@ -386,7 +431,8 @@ describe("Unix node launcher", () => {
         original,
         [
           "#!/bin/sh",
-          `if [ "$1" = "-e" ]; then exit 0; fi`,
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `if [ "$1" = "-p" ]; then printf '%s\\n' ${quote(process.version)}; exit 0; fi`,
           `printf 'compile-cache=[%s]\\n' "$NODE_COMPILE_CACHE" >> ${quote(calls)}`,
           `if [ -d "$NODE_COMPILE_CACHE" ]; then printf 'cache-dir=present\\n' >> ${quote(calls)}; else printf 'cache-dir=absent\\n' >> ${quote(calls)}; fi`,
           "exit 37",
@@ -425,7 +471,8 @@ describe("Unix node launcher", () => {
       original,
       [
         "#!/bin/sh",
-        `if [ "$1" = "-e" ]; then exit 0; fi`,
+        `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+        `if [ "$1" = "-p" ]; then printf '%s\\n' ${quote(process.version)}; exit 0; fi`,
         `printf 'compile-cache=[%s]\\n' "$NODE_COMPILE_CACHE" >> ${quote(calls)}`,
         "exit 37",
         "",
@@ -469,7 +516,8 @@ describe("Unix node launcher", () => {
         original,
         [
           "#!/bin/sh",
-          `if [ "$1" = "-e" ]; then exit 0; fi`,
+          `if [ "$1" = "-e" ]; then exec ${quote(process.execPath)} "$@"; fi`,
+          `if [ "$1" = "-p" ]; then printf '%s\\n' ${quote(process.version)}; exit 0; fi`,
           `printf 'compile-cache=[%s]\\n' "$NODE_COMPILE_CACHE" >> ${quote(calls)}`,
           "exit 37",
           "",

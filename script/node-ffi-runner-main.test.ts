@@ -50,6 +50,48 @@ process.exitCode = 23
   })
 }
 
+test("source runner sets NODE_COMPILE_CACHE for the child", () => {
+  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "ax runner compile-cache ")))
+  try {
+    const entry = path.join(root, "entry.mjs")
+    const cacheHome = path.join(root, "cache")
+    writeFileSync(entry, "process.stdout.write(String(process.env.NODE_COMPILE_CACHE ?? ''))\nprocess.exitCode = 23\n")
+    const result = spawnSync(process.execPath, [path.join(import.meta.dirname, "node-ffi-runner.mjs"), entry], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 20_000,
+      env: { ...process.env, NODE_OPTIONS: "", NODE_COMPILE_CACHE: "", XDG_CACHE_HOME: cacheHome },
+    })
+    expect(result.status, result.stderr).toBe(23)
+    expect(result.stdout).toBe(path.join(cacheHome, "ax-code", "compile-cache"))
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test("source runner preserves an explicit NODE_COMPILE_CACHE", () => {
+  const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "ax runner compile-cache-explicit ")))
+  try {
+    const entry = path.join(root, "entry.mjs")
+    writeFileSync(entry, "process.stdout.write(String(process.env.NODE_COMPILE_CACHE ?? ''))\nprocess.exitCode = 23\n")
+    const result = spawnSync(process.execPath, [path.join(import.meta.dirname, "node-ffi-runner.mjs"), entry], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 20_000,
+      env: {
+        ...process.env,
+        NODE_OPTIONS: "",
+        NODE_COMPILE_CACHE: "/tmp/user-chosen-compile-cache",
+        XDG_CACHE_HOME: path.join(root, "cache"),
+      },
+    })
+    expect(result.status, result.stderr).toBe(23)
+    expect(result.stdout).toBe("/tmp/user-chosen-compile-cache")
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test("TUI runner admits equals-form preloads with spaces and records the Solid loader", () => {
   const root = realpathSync(mkdtempSync(path.join(os.tmpdir(), "ax runner tui ")))
   try {
