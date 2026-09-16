@@ -413,7 +413,10 @@ export namespace Command {
 
   export async function get(name: string) {
     const current = await state()
-    if (current.commands[name]) return current.commands[name]
+    const local = current.commands[name]
+    // Same map as list(): overridable builtins (commit/pr) still yield to MCP
+    // prompts, so slash execution via get() matches GET /command.
+    if (local && !isOverridableBuiltin(local)) return local
     const merged = await mergeMcpPrompts(current.commands)
     return merged[name]
   }
