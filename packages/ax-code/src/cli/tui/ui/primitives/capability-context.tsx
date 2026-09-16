@@ -1,5 +1,6 @@
 import { createMemo, type Accessor } from "solid-js"
 import { Flag } from "@/flag/flag"
+import { isWindowsTerminal } from "@/util/terminal-program"
 import { createSimpleContext } from "@tui/context/helper"
 import { useKV } from "@tui/context/kv"
 import { getTuiRenderProfile } from "@tui/renderer"
@@ -18,6 +19,7 @@ export const { use: useVisualCapability, provider: VisualCapabilityProvider } = 
         colorterm: process.env["COLORTERM"],
         termProgram: process.env["TERM_PROGRAM"],
         term: process.env["TERM"],
+        windowsTerminal: isWindowsTerminal(),
         animationsEnabled: shouldUseTuiAnimations({ userEnabled: kv.get("animations_enabled", true) }),
         nerdFont: resolveNerdFontEnabled({
           env: Flag.AX_CODE_NERD_FONT_ENV,

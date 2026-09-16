@@ -91,13 +91,12 @@ export function createTuiRenderOptionsFromProfile(
   return {
     targetFps: 60,
     gatherStats: false,
-    // Keep the default profile compatibility-first except Ghostty, which is
-    // allowlisted when AX_CODE_TUI_ADVANCED_TERMINAL is unset. The full AX
-    // Code TUI terminal setup performs startup capability probes on the real
-    // TTY and has hung some terminals; Ghostty is a known-good GPU host for
-    // those probes and for Digital Code pixel rain. Explicit 0/false still
-    // opts out. (Kitty keyboard is the exception: a probe-free flags push,
-    // enabled in all profiles unless AX_CODE_TUI_KITTY_KEYBOARD=0.)
+    // Direct Ghostty, Windows Terminal, and VTE sessions auto-select the
+    // advanced profile. Unknown/remote/multiplexed terminals stay compatible
+    // because startup capability probes have hung some terminal paths.
+    // AX_CODE_TUI_ADVANCED_TERMINAL=0/false always opts out. Pixel graphics
+    // still require confirmed runtime capabilities. Kitty keyboard remains
+    // probe-free and enabled unless AX_CODE_TUI_KITTY_KEYBOARD=0.
     exitOnCtrlC: profile.exitOnCtrlC,
     useThread: profile.useThread,
     useMouse: profile.useMouse,

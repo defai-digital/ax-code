@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { resolveTuiAdvancedTerminal } from "../../../src/util/terminal-program"
+import { supportsDigitalCodePixels } from "../../../src/cli/tui/component/digital-code-pixels"
 import {
   clearTuiTerminalTitle,
   createTuiRenderOptionsFromProfile,
@@ -48,6 +50,27 @@ function captureStream(writes: string[] = []) {
 }
 
 describe("tui renderer profile", () => {
+  test.each([{ WT_SESSION: "terminal-session" }, { VTE_VERSION: "7802", TERM: "xterm-256color" }])(
+    "automatic host selection enables the renderer without granting graphics: %j",
+    (env) => {
+      const profile = resolveTuiRenderProfile({
+        advancedTerminal: resolveTuiAdvancedTerminal(env),
+        terminalTitleDisabled: false,
+      })
+      const options = createTuiRenderOptionsFromProfile(profile)
+      expect(options.screenMode).toBe("alternate-screen")
+      expect(options.useThread).toBe(true)
+      expect(options.useMouse).toBe(true)
+      expect(
+        supportsDigitalCodePixels({
+          tty: true,
+          screenMode: profile.screenMode,
+          capabilities: { kitty_graphics: false, remote: false, multiplexer: "none" },
+        }),
+      ).toBe(false)
+    },
+  )
+
   test("keeps the compatibility profile production-safe", () => {
     const profile = resolveTuiRenderProfile({
       advancedTerminal: false,

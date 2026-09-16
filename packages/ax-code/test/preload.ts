@@ -75,7 +75,7 @@ process.env["AX_CODE_DISABLE_DEFAULT_PLUGINS"] = "true"
 // test suite measures what its assertions actually describe.
 process.env["AX_CODE_NATIVE_INDEX"] = "0"
 
-// Production auto-enables the advanced TUI profile on Ghostty when the env
+// Production auto-enables the advanced TUI profile on allowlisted hosts when the env
 // is unset. Tests must not inherit the host terminal; suites that exercise
 // the allowlist pass an explicit env to resolveTuiAdvancedTerminal.
 process.env["AX_CODE_TUI_ADVANCED_TERMINAL"] = "0"

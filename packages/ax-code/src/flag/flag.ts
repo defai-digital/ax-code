@@ -66,9 +66,9 @@ export namespace Flag {
   export const AX_CODE_DISABLE_TERMINAL_TITLE = truthy("AX_CODE_DISABLE_TERMINAL_TITLE")
   // AX Code TUI's full terminal setup enables alternate-screen, capability
   // probes, and a native render thread. Explicit 1/true opts in; explicit
-  // 0/false opts out. When unset, Ghostty is allowlisted (see
-  // resolveTuiAdvancedTerminal). Access-time getter so tests and wrappers
-  // can change process.env after import.
+  // 0/false opts out. When unset, direct Ghostty, Windows Terminal, and VTE
+  // sessions are allowlisted (see resolveTuiAdvancedTerminal). Access-time
+  // getter so tests and wrappers can change process.env after import.
   export declare const AX_CODE_TUI_ADVANCED_TERMINAL: boolean
   // The Kitty keyboard protocol (CSI-u) is pushed with a single
   // fire-and-forget escape the terminal either honors or ignores — unlike

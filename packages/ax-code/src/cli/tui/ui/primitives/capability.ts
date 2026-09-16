@@ -24,6 +24,7 @@ export function resolveVisualCapability(input: {
   colorterm?: string
   termProgram?: string
   term?: string
+  windowsTerminal?: boolean
   animationsEnabled: boolean
   nerdFont: boolean
 }): VisualCapability {
@@ -33,6 +34,7 @@ export function resolveVisualCapability(input: {
     colorterm.includes("24bit") ||
     input.term === "xterm-kitty" ||
     (input.termProgram !== undefined && TRUECOLOR_TERM_PROGRAMS.has(input.termProgram)) ||
+    input.windowsTerminal === true ||
     input.advancedTerminal
   return {
     truecolor,

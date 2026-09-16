@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "vitest"
+import { afterEach, expect, test, vi } from "vitest"
 import { Flag, parsePositiveIntegerFlagValue } from "../../src/flag/flag"
 
 const originalConfigContent = process.env["AX_CODE_CONFIG_CONTENT"]
@@ -13,6 +13,7 @@ const originalTermProgram = process.env["TERM_PROGRAM"]
 const originalTerm = process.env["TERM"]
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   restoreEnv("AX_CODE_CONFIG_CONTENT", originalConfigContent)
   restoreEnv("AX_CODE_MODELS_PATH", originalModelsPath)
   restoreEnv("AX_CODE_MODELS_URL", originalModelsUrl)
@@ -87,7 +88,21 @@ test("session sharding flag reads process.env at access time", () => {
   expect(Flag.AX_CODE_SHARD_SESSIONS).toBe(false)
 })
 
-test("advanced terminal flag allowlists Ghostty unless explicitly disabled", () => {
+test("advanced terminal flag reads host identity and overrides at access time", () => {
+  for (const name of [
+    "WT_SESSION",
+    "VTE_VERSION",
+    "SSH_CONNECTION",
+    "SSH_CLIENT",
+    "SSH_TTY",
+    "MOSH_CONNECTION",
+    "TMUX",
+    "TMUX_PANE",
+    "STY",
+    "ZELLIJ",
+  ]) {
+    vi.stubEnv(name, undefined)
+  }
   delete process.env["AX_CODE_TUI_ADVANCED_TERMINAL"]
   delete process.env["TERM_PROGRAM"]
   process.env["TERM"] = "xterm-256color"
@@ -100,6 +115,17 @@ test("advanced terminal flag allowlists Ghostty unless explicitly disabled", () 
   expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(false)
 
   delete process.env["TERM_PROGRAM"]
+  delete process.env["AX_CODE_TUI_ADVANCED_TERMINAL"]
+  vi.stubEnv("WT_SESSION", "terminal-session")
+  expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(true)
+
+  vi.stubEnv("WT_SESSION", undefined)
+  vi.stubEnv("VTE_VERSION", "7802")
+  expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(true)
+
+  vi.stubEnv("SSH_TTY", "/dev/pts/1")
+  expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(false)
+
   process.env["AX_CODE_TUI_ADVANCED_TERMINAL"] = "1"
   expect(Flag.AX_CODE_TUI_ADVANCED_TERMINAL).toBe(true)
 })

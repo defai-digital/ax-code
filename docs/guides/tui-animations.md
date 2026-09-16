@@ -5,6 +5,9 @@ Scope: TUI opening and ending animations and rendering fallbacks
 Last reviewed: 2026-09-15
 Owner: AX Code TUI maintainers
 
+See [Terminal rendering](terminal-rendering.md) for automatic terminal profiles,
+manual overrides, and the difference between pixel graphics and text rendering.
+
 Each TUI launch randomly selects one of five animation pairs with equal probability (20% each):
 
 - Digital Code: purple/blue falling code for the opening, reverse code for the ending.

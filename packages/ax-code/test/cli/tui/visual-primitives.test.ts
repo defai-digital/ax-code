@@ -95,6 +95,11 @@ describe("resolveVisualCapability", () => {
     expect(resolveVisualCapability({ ...base, advancedTerminal: true }).truecolor).toBe(true)
   })
 
+  test("Windows Terminal keeps truecolor when the advanced profile is disabled", () => {
+    expect(resolveVisualCapability({ ...base, windowsTerminal: true }).truecolor).toBe(true)
+    expect(resolveVisualCapability({ ...base, windowsTerminal: false }).truecolor).toBe(false)
+  })
+
   test("passes through animations and nerd font flags", () => {
     const capability = resolveVisualCapability({ ...base, animationsEnabled: false, nerdFont: true })
     expect(capability.animations).toBe(false)
