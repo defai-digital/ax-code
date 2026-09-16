@@ -550,6 +550,25 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     return submitController.cancelPendingSubmit(message)
   }
 
+  // Subagents run in child sessions: while they work the parent reports
+  // "idle" and the footer would otherwise render a blank row. Project the
+  // most recently active child into the busy row so the spinner and label
+  // keep moving until the whole session tree settles.
+  // Declared before footerLayout: that memo reads this value at creation time.
+  const subagentStatus = createMemo(() => {
+    statusTick()
+    if (!props.sessionID) return
+    if (status().type !== "idle") return
+    const self = sync.data.session.find((item) => item.id === props.sessionID)
+    return footerSubagentStatusView({
+      t: language.t,
+      sessions: sync.data.session,
+      statuses: sync.data.session_status,
+      parentSessionID: self?.parentID ?? props.sessionID,
+      now: Date.now(),
+    })
+  })
+
   // Mode chips (work mode / run mode / sandbox) live in the session sidebar
   // and, on Home, at the front of this footer's right-side hint row via
   // `props.footerRight` (right-aligned, just before the ctrl+c hint) — no
@@ -945,23 +964,6 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     return count
   })
 
-  // Subagents run in child sessions: while they work the parent reports
-  // "idle" and the footer would otherwise render a blank row. Project the
-  // most recently active child into the busy row so the spinner and label
-  // keep moving until the whole session tree settles.
-  const subagentStatus = createMemo(() => {
-    statusTick()
-    if (!props.sessionID) return
-    if (status().type !== "idle") return
-    const self = sync.data.session.find((item) => item.id === props.sessionID)
-    return footerSubagentStatusView({
-      t: language.t,
-      sessions: sync.data.session,
-      statuses: sync.data.session_status,
-      parentSessionID: self?.parentID ?? props.sessionID,
-      now: Date.now(),
-    })
-  })
   const busyStatus = createMemo(() => {
     statusTick()
     const current = status()

@@ -1112,6 +1112,16 @@ describe("AX Code TUI stability guardrails", () => {
     )
   })
 
+  test("declares subagentStatus before footerLayout so prompt startup avoids TDZ", async () => {
+    const prompt = await fs.readFile(PROMPT_SRC, "utf8")
+    const subagentStatus = prompt.indexOf("const subagentStatus = createMemo")
+    const footerLayout = prompt.indexOf("const footerLayout = createMemo")
+
+    expect(subagentStatus).toBeGreaterThan(-1)
+    expect(footerLayout).toBeGreaterThan(-1)
+    expect(subagentStatus).toBeLessThan(footerLayout)
+  })
+
   test("keeps animated spinners out of the compiled runtime render path", async () => {
     const prompt = await fs.readFile(PROMPT_SRC, "utf8")
     const spinner = await fs.readFile(SPINNER_SRC, "utf8")
