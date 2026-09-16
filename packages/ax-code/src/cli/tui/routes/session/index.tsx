@@ -1543,6 +1543,7 @@ export function Session() {
           paddingLeft={2}
           paddingRight={2}
           gap={1}
+          backgroundColor={theme.background}
           border={autonomous().active || session()?.parentID ? ["left"] : undefined}
           customBorderChars={SplitBorder.customBorderChars}
           borderColor={autonomous().active ? autonomousBorderColor() : theme.primary}

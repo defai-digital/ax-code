@@ -30,6 +30,7 @@ import {
   codeDisplayView,
   compactDelegatedLabel,
   streamingTextRenderMode,
+  transcriptDisplayText,
   userMessageMetadataDensity,
 } from "./view-model"
 import { SessionCodeRenderer } from "./render-adapter"
@@ -138,7 +139,7 @@ export function UserMessage(props: {
               <span style={{ fg: color() }}>◆ </span>
               <span style={{ fg: theme.text }}>{uiText("ui.you")}</span>
             </text>
-            <For each={text()}>{(part) => <text fg={theme.text}>{part.text}</text>}</For>
+            <For each={text()}>{(part) => <text fg={theme.text}>{transcriptDisplayText(part.text)}</text>}</For>
             <Show when={files().length}>
               <box flexDirection="row" paddingBottom={metadataVisible() ? 1 : 0} paddingTop={1} gap={1} flexWrap="wrap">
                 <For each={files()}>
@@ -478,7 +479,7 @@ function ReasoningPart(props: { last: boolean; part: ReasoningPart; message: Ass
   const ctx = use()
   const content = createMemo(() => {
     // Some providers send encrypted reasoning data that appears as [REDACTED].
-    return props.part.text.replaceAll("[REDACTED]", "").trim()
+    return transcriptDisplayText(props.part.text.replaceAll("[REDACTED]", "")).trim()
   })
   // Throttle the rendered copy while reasoning streams — the renderer
   // re-processes the full document per paint.
@@ -544,7 +545,7 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
     final: () => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish),
   })
 
-  const trimmed = createMemo(() => paintedText().trim())
+  const trimmed = createMemo(() => transcriptDisplayText(paintedText()).trim())
   const lines = createMemo(() => trimmed().split("\n"))
   const isFinal = createMemo(() => !!props.message.finish && !["tool-calls", "unknown"].includes(props.message.finish))
   // Only fold long completed text. Streaming text always renders in full (via throttle).

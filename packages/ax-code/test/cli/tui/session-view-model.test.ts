@@ -6,6 +6,7 @@ import {
   compactDelegatedLabel,
   codeDisplayView,
   diffDisplayView,
+  transcriptDisplayText,
   parseTodoOutput,
   parseTodoViewItems,
   sessionTaskSummary,
@@ -243,6 +244,13 @@ describe("tui session view model", () => {
       filetype: "markdown",
       content: "# AX Code",
     })
+  })
+
+  test("strips truecolor and cursor CSI so they cannot wrap into a leftover gutter", () => {
+    expect(transcriptDisplayText("\x1b[48;2;0;0;0m現況\x1b[0m")).toBe("現況")
+    expect(transcriptDisplayText("\x1b[15Hhello")).toBe("hello")
+    expect(transcriptDisplayText("\x1b[0;53H")).toBe("")
+    expect(codeDisplayView({ filePath: "message.md", content: "\x1b[48;2;0;0;0m# status" }).content).toBe("# status")
   })
 
   test("streaming text paints plain until finalize, then mounts the rich renderer once", () => {

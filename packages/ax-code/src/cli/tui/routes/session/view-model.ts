@@ -1,8 +1,14 @@
 import type { AssistantMessage, Part, UserMessage } from "@ax-code/sdk/v2"
+import stripAnsi from "strip-ansi"
 import { userRoute, type AgentInfo } from "./route"
 import { filetype } from "./format"
 import { formatTokenCount, formatTokenRate, RATE_MIN_ELAPSED_SECONDS } from "./footer-view-model"
 import { parseTuiJsonPayload } from "../../util/json"
+
+/** Truecolor / cursor CSI in model text wraps into a leftover gutter beside the transcript. */
+export function transcriptDisplayText(content: string) {
+  return stripAnsi(content)
+}
 
 type TodoViewItem = {
   status: string
@@ -254,7 +260,7 @@ export function diffDisplayView(input: {
 export function codeDisplayView(input: { filePath?: string; content?: string }): CodeDisplayView {
   return {
     filetype: filetype(input.filePath),
-    content: input.content ?? "",
+    content: transcriptDisplayText(input.content ?? ""),
   }
 }
 

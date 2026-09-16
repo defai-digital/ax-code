@@ -125,6 +125,7 @@ export function SessionNavigation(props: {
       paddingBottom={1}
       paddingLeft={1}
       paddingRight={0}
+      overflow="hidden"
       backgroundColor={theme.backgroundPanel}
       border={["right"]}
       borderColor={theme.border}
