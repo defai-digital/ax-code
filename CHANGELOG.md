@@ -6,10 +6,6 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
-### Fixed
-
-- Auto-switch from plan mode to Dev when the user approves or asks to start implementing, and always expose `plan_exit` so the plan agent can request that handoff.
-
 ## [7.18.3] - 2026-09-16
 
 ### Changed
@@ -19,6 +15,7 @@ changes belong to AX Coder.
 
 ### Fixed
 
+- Auto-switch from plan mode to Dev when the user approves or asks to start implementing, and always expose `plan_exit` so the plan agent can request that handoff.
 - Restore Node 26 TUI startup by initializing subagent footer status before the layout memo that reads it.
 - Keep the busy prompt interrupt hint on one line when the footer is crowded.
 - Activate Windows runtime upgrades into isolated generation directories so file locks from running sessions no longer block installation.
