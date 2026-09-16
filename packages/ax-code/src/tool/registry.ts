@@ -101,6 +101,7 @@ import { createHash } from "node:crypto"
 import { Instance } from "@/project/instance"
 import { AX_ENGINE_PROVIDER_ID } from "@/provider/ax-engine/constants"
 import AX_ENGINE_BASH_DESCRIPTION from "./bash-ax-engine.txt"
+import { Shell } from "@/shell/shell"
 
 export namespace ToolRegistry {
   const log = Log.create({ service: "tool.registry" })
@@ -456,7 +457,8 @@ export namespace ToolRegistry {
               const next = await tool.init({ agent, model })
               const description =
                 model.providerID === AX_ENGINE_PROVIDER_ID && tool.id === "bash"
-                  ? AX_ENGINE_BASH_DESCRIPTION.replaceAll("${directory}", Instance.directory)
+                  ? AX_ENGINE_BASH_DESCRIPTION.replaceAll("${shell}", Shell.acceptable(cfg.shell))
+                      .replaceAll("${directory}", Instance.directory)
                       .replaceAll("${maxLines}", String(Truncate.MAX_LINES))
                       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES))
                   : next.description

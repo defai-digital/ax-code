@@ -7,6 +7,7 @@ import { ToolRegistry } from "../../src/tool/registry"
 import { SystemPrompt } from "../../src/session/system"
 import type { Provider } from "../../src/provider/provider"
 import { tmpdir } from "../fixture/fixture"
+import { Shell } from "../../src/shell/shell"
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -116,6 +117,10 @@ test("AX Engine retains core by default and coding prompts omit unavailable adva
       })
       expect(core.map((tool) => tool.id)).toContain("submit_goal_plan")
       expect(core.map((tool) => tool.id)).not.toContain("task")
+      const bash = core.find((tool) => tool.id === "bash")
+      expect(bash?.description).toContain(Shell.acceptable())
+      expect(bash?.description).toContain("/dev/null")
+      expect(bash?.description).not.toContain("${shell}")
       const environment = (
         await SystemPrompt.environment({
           id: "test",
