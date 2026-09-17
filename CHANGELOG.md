@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Compute Windows installer SHA-256 with .NET so integrity checks work when `Get-FileHash` is not loaded.
+- Keep Windows runtime-integrity fixtures and Authenticode test doubles visible to `sign-windows-runtime.ps1`.
+
 ## [7.18.8] - 2026-09-17
 
 ### Changed

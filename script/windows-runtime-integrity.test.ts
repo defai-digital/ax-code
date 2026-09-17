@@ -26,6 +26,11 @@ function fixture() {
     fs.mkdirSync(path.dirname(path.join(root, name)), { recursive: true })
     fs.writeFileSync(path.join(root, name), body)
   }
+  // Windows Defender can quarantine a tiny fake node.exe; a real PE stays on disk
+  // so the signer can audit node/bin/node.exe.
+  if (process.platform === "win32" && process.execPath.endsWith(".exe")) {
+    fs.copyFileSync(process.execPath, path.join(root, "node/bin/node.exe"))
+  }
   return root
 }
 afterEach(() => {
@@ -188,8 +193,8 @@ $env:AZURE_TENANT_ID = 'test-tenant'
 $env:AZURE_KEY_VAULT_URL = 'https://test.vault.azure.net'
 $env:AZURE_KEY_VAULT_CERTIFICATE = 'test-certificate'
 $global:Signed = $false
-function Invoke-TestSigning { $global:Signed = $true; $global:LASTEXITCODE = 0 }
-function Get-AuthenticodeSignature([string]$LiteralPath) {
+function global:Invoke-TestSigning { $global:Signed = $true; $global:LASTEXITCODE = 0 }
+function global:Get-AuthenticodeSignature([string]$LiteralPath) {
   $node = $LiteralPath.EndsWith('node.exe')
   $status = if ($node -or $global:Signed) { 'Valid' } else { 'NotSigned' }
   if ('${scenario}' -eq 'bad-node' -and $node) { $status = 'HashMismatch' }

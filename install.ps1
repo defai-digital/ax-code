@@ -218,6 +218,23 @@ function Test-SkipMinisignVerify {
   return $env:AX_CODE_SKIP_MINISIGN_VERIFY -eq "1"
 }
 
+function Get-AxFileSha256([string]$LiteralPath) {
+  # Do not depend on Get-FileHash auto-loading Microsoft.PowerShell.Utility.
+  # Isolated function extraction and some Windows ARM hosts leave that cmdlet
+  # unresolved.
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    $stream = [IO.File]::OpenRead($LiteralPath)
+    try {
+      return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace("-", "").ToLowerInvariant()
+    } finally {
+      $stream.Dispose()
+    }
+  } finally {
+    $sha.Dispose()
+  }
+}
+
 function Get-MinisignToolsRoot {
   $base = $env:LOCALAPPDATA
   if (-not $base) {
@@ -271,7 +288,7 @@ function Install-MinisignBootstrap {
       -Uri $MinisignZipUrl `
       -OutFile $zipPath
 
-    $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-AxFileSha256 $zipPath
     if ($hash -ne $MinisignZipSha256) {
       throw "minisign bootstrap SHA-256 mismatch. expected $MinisignZipSha256, got $hash"
     }
@@ -422,7 +439,7 @@ function Assert-RuntimeIntegrity([string]$Root, $Manifest, [switch]$AllowUnliste
       $item = Get-Item -LiteralPath $target -Force -ErrorAction Stop
       if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Runtime reparse point is not allowed: $relative" }
     }
-    if ($item.PSIsContainer -or $item.Length -ne $entry.size -or (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ine $entry.sha256) {
+    if ($item.PSIsContainer -or $item.Length -ne $entry.size -or (Get-AxFileSha256 $target) -ine $entry.sha256) {
       throw "Runtime integrity mismatch: $relative"
     }
   }

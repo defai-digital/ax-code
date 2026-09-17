@@ -4012,29 +4012,6 @@
           "output": 8192
         }
       },
-      "gemma-4-26b-a4b-uncensored": {
-        "id": "gemma-4-26b-a4b-uncensored",
-        "name": "Gemma 4 26B A4B Uncensored",
-        "family": "gemma",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "release_date": "2026-07-29",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 32768
-        }
-      },
       "doubao-seed-2-0-code-preview-260215": {
         "id": "doubao-seed-2-0-code-preview-260215",
         "name": "Doubao Seed 2.0 Code Preview",
@@ -4885,29 +4862,6 @@
           "context": 6000,
           "input": 6000,
           "output": 512
-        }
-      },
-      "gemma-4-26b-a4b-uncensored:thinking": {
-        "id": "gemma-4-26b-a4b-uncensored:thinking",
-        "name": "Gemma 4 26B A4B Uncensored Thinking",
-        "family": "gemma",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "release_date": "2026-07-29",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "input": 262144,
-          "output": 32768
         }
       },
       "pokee-isaac": {
@@ -8344,29 +8298,6 @@
           "output": 65536
         }
       },
-      "TEE/gpt-oss-20b": {
-        "id": "TEE/gpt-oss-20b",
-        "name": "GPT-OSS 20B TEE",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "input": 131072,
-          "output": 8192
-        }
-      },
       "TEE/qwen2.5-vl-72b-instruct": {
         "id": "TEE/qwen2.5-vl-72b-instruct",
         "name": "Qwen2.5 VL 72B TEE",
@@ -8597,29 +8528,6 @@
           "context": 262144,
           "input": 262144,
           "output": 262144
-        }
-      },
-      "TEE/qwen3.6-35b-a3b-uncensored": {
-        "id": "TEE/qwen3.6-35b-a3b-uncensored",
-        "name": "Qwen3.6 35B A3B Uncensored TEE",
-        "family": "qwen3.6",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "release_date": "2026-05-23",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "input": 131072,
-          "output": 131072
         }
       },
       "TEE/gpt-oss-120b": {
@@ -11939,28 +11847,6 @@
         "release_date": "2026-09-10",
         "tool_call": true
       },
-      "meta-llama/llama-3.1-405b-instruct": {
-        "attachment": false,
-        "family": "llama",
-        "id": "meta-llama/llama-3.1-405b-instruct",
-        "limit": {
-          "context": 131072,
-          "input": 131072,
-          "output": 8192
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Llama 3.1 405B",
-        "reasoning": false,
-        "release_date": "2026-09-10",
-        "tool_call": true
-      },
       "mistralai/mistral-small-24b-instruct-2501": {
         "attachment": false,
         "family": "mistral-small",
@@ -13974,6 +13860,53 @@
         "reasoning": true,
         "release_date": "2026-09-10",
         "temperature": true,
+        "tool_call": true
+      },
+      "qwen/qwen3.8-omni-flash": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-omni-flash",
+        "limit": {
+          "context": 991808,
+          "input": 991808,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video",
+            "audio"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Omni Flash",
+        "reasoning": true,
+        "release_date": "2026-09-17",
+        "tool_call": true
+      },
+      "slowburn/gemma4-31b-splituntied": {
+        "attachment": false,
+        "family": "gemma",
+        "id": "slowburn/gemma4-31b-splituntied",
+        "limit": {
+          "context": 262144,
+          "input": 262144,
+          "output": 32768
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Gemma 4 31B Split-Untied",
+        "reasoning": false,
+        "release_date": "2026-09-17",
         "tool_call": true
       }
     }
@@ -47498,7 +47431,7 @@
           ]
         },
         "limit": {
-          "context": 128072,
+          "context": 131072,
           "output": 13107
         }
       },
@@ -60196,7 +60129,6 @@
       "alibaba/wan-v3.0-video": {
         "id": "alibaba/wan-v3.0-video",
         "name": "Wan v3.0 Video",
-        "family": "o",
         "attachment": true,
         "reasoning": false,
         "tool_call": false,
@@ -60242,7 +60174,6 @@
       "alibaba/wan-v2.7-r2v": {
         "id": "alibaba/wan-v2.7-r2v",
         "name": "Wan v2.7 Reference-to-Video",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -60288,7 +60219,6 @@
       "alibaba/wan-v2.6-t2v": {
         "id": "alibaba/wan-v2.6-t2v",
         "name": "Wan v2.6 Text-to-Video",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -60310,7 +60240,6 @@
       "alibaba/wan-v3.0-video-prime": {
         "id": "alibaba/wan-v3.0-video-prime",
         "name": "Wan v3.0 Video Prime",
-        "family": "o",
         "attachment": true,
         "reasoning": false,
         "tool_call": false,
@@ -60515,7 +60444,6 @@
       "alibaba/wan-v2.6-r2v": {
         "id": "alibaba/wan-v2.6-r2v",
         "name": "Wan v2.6 Reference-to-Video",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -60629,7 +60557,6 @@
       "alibaba/wan-v2.6-i2v-flash": {
         "id": "alibaba/wan-v2.6-i2v-flash",
         "name": "Wan v2.6 Image-to-Video Flash",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -60674,7 +60601,6 @@
       "alibaba/wan-v2.6-r2v-flash": {
         "id": "alibaba/wan-v2.6-r2v-flash",
         "name": "Wan v2.6 Reference-to-Video Flash",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -60696,7 +60622,6 @@
       "alibaba/wan-v2.5-t2v-preview": {
         "id": "alibaba/wan-v2.5-t2v-preview",
         "name": "Wan v2.5 Text-to-Video Preview",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -60763,7 +60688,6 @@
       "alibaba/wan-v2.6-i2v": {
         "id": "alibaba/wan-v2.6-i2v",
         "name": "Wan v2.6 Image-to-Video",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -60899,7 +60823,6 @@
       "alibaba/wan-v2.7-t2v": {
         "id": "alibaba/wan-v2.7-t2v",
         "name": "Wan v2.7 Text-to-Video",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62208,7 +62131,6 @@
       "quiverai/arrow-1.1": {
         "id": "quiverai/arrow-1.1",
         "name": "Arrow 1.1",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62563,7 +62485,6 @@
       "fish-audio/transcribe-1": {
         "id": "fish-audio/transcribe-1",
         "name": "Transcribe-1",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62584,7 +62505,6 @@
       "fish-audio/s2.1-pro-free": {
         "id": "fish-audio/s2.1-pro-free",
         "name": "S2.1 Pro (Free)",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62605,7 +62525,6 @@
       "fish-audio/s2.1-pro": {
         "id": "fish-audio/s2.1-pro",
         "name": "S2.1 Pro",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62626,7 +62545,6 @@
       "fish-audio/s1-free": {
         "id": "fish-audio/s1-free",
         "name": "S1 (Free)",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62647,7 +62565,6 @@
       "fish-audio/s2-pro": {
         "id": "fish-audio/s2-pro",
         "name": "S2 Pro",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62668,7 +62585,6 @@
       "fish-audio/s2-pro-free": {
         "id": "fish-audio/s2-pro-free",
         "name": "S2 Pro (Free)",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62689,7 +62605,6 @@
       "fish-audio/transcribe-1-free": {
         "id": "fish-audio/transcribe-1-free",
         "name": "Transcribe-1 (Free)",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -62710,7 +62625,6 @@
       "fish-audio/s1": {
         "id": "fish-audio/s1",
         "name": "S1",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -63400,7 +63314,6 @@
       "openai/tts-1": {
         "id": "openai/tts-1",
         "name": "TTS-1",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -63956,7 +63869,6 @@
       "openai/tts-1-hd": {
         "id": "openai/tts-1-hd",
         "name": "TTS-1 HD",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -64796,7 +64708,6 @@
       "cohere/rerank-v4-pro": {
         "id": "cohere/rerank-v4-pro",
         "name": "Cohere Rerank 4 Pro",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -64818,7 +64729,6 @@
       "cohere/rerank-v4-fast": {
         "id": "cohere/rerank-v4-fast",
         "name": "Cohere Rerank 4 Fast",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -64862,7 +64772,6 @@
       "cohere/rerank-v3.5": {
         "id": "cohere/rerank-v3.5",
         "name": "Cohere Rerank 3.5",
-        "family": "o",
         "attachment": false,
         "reasoning": false,
         "tool_call": false,
@@ -65654,7 +65563,8 @@
         "name": "GPT Image 2.5 Flare",
         "reasoning": false,
         "release_date": "2026-09-08",
-        "tool_call": false
+        "tool_call": false,
+        "temperature": false
       },
       "openai/gpt-image-2.5-sunburst": {
         "attachment": false,
@@ -65675,7 +65585,8 @@
         "name": "GPT Image 2.5 Sunburst",
         "reasoning": false,
         "release_date": "2026-09-08",
-        "tool_call": false
+        "tool_call": false,
+        "temperature": false
       },
       "bytedance/seed-2.1-turbo": {
         "attachment": true,
@@ -65835,7 +65746,6 @@
       },
       "inference-net/schematron-v2-small": {
         "attachment": false,
-        "family": "o",
         "id": "inference-net/schematron-v2-small",
         "limit": {
           "context": 128000,
@@ -65856,7 +65766,6 @@
       },
       "inference-net/schematron-v2-turbo": {
         "attachment": false,
-        "family": "o",
         "id": "inference-net/schematron-v2-turbo",
         "limit": {
           "context": 128000,
@@ -65896,6 +65805,26 @@
         "name": "GPT-Live 1",
         "reasoning": false,
         "release_date": "2026-09-10",
+        "tool_call": false
+      },
+      "typesafe-ai/jev": {
+        "attachment": false,
+        "id": "typesafe-ai/jev",
+        "limit": {
+          "context": 0,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Jev",
+        "reasoning": false,
+        "release_date": "2026-09-15",
         "tool_call": false
       }
     }
@@ -75211,6 +75140,34 @@
           "context": 500000,
           "output": 500000
         }
+      },
+      "openai/gpt-6-astra": {
+        "attachment": true,
+        "family": "gpt-astra",
+        "id": "openai/gpt-6-astra",
+        "limit": {
+          "context": 1050000,
+          "input": 922000,
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GPT-6 Astra",
+        "provider": {
+          "npm": "@ai-sdk/openai"
+        },
+        "reasoning": true,
+        "release_date": "2026-09-04",
+        "temperature": false,
+        "tool_call": true
       }
     }
   },
@@ -87309,7 +87266,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 384000
+          "output": 393216
         }
       },
       "deepseek/deepseek-v4-flash-0731": {
@@ -87374,8 +87331,8 @@
           ]
         },
         "limit": {
-          "context": 128000,
-          "output": 16000
+          "context": 163840,
+          "output": 16384
         }
       },
       "deepseek/deepseek-r1-0528": {
@@ -90730,8 +90687,8 @@
         "family": "deepseek-flash",
         "id": "~deepseek/deepseek-flash-latest",
         "limit": {
-          "context": 1048576,
-          "output": 943718
+          "context": 1000000,
+          "output": 393216
         },
         "modalities": {
           "input": [
@@ -90754,7 +90711,7 @@
         "id": "~deepseek/deepseek-pro-latest",
         "limit": {
           "context": 1048576,
-          "output": 384000
+          "output": 393216
         },
         "modalities": {
           "input": [
@@ -90790,6 +90747,30 @@
         "name": "Union Alpha",
         "reasoning": false,
         "release_date": "2026-09-16",
+        "temperature": true,
+        "tool_call": true
+      },
+      "qwen/qwen3.8-27b:free": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen/qwen3.8-27b:free",
+        "limit": {
+          "context": 262144,
+          "output": 235929
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen: Qwen3.8 27B (free)",
+        "reasoning": true,
+        "release_date": "2026-08-14",
         "temperature": true,
         "tool_call": true
       }
@@ -106303,6 +106284,29 @@
         "release_date": "2026-09-02",
         "temperature": true,
         "tool_call": true
+      },
+      "bailian/qwen3.8-flash": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "bailian/qwen3.8-flash",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Flash",
+        "reasoning": true,
+        "release_date": "2026-08-26",
+        "tool_call": true
       }
     }
   },
@@ -108179,6 +108183,31 @@
           "context": 204800,
           "output": 131072
         }
+      },
+      "DeepSeek-V4.1-Flash": {
+        "attachment": false,
+        "family": "deepseek-flash",
+        "id": "DeepSeek-V4.1-Flash",
+        "interleaved": {
+          "field": "reasoning_content"
+        },
+        "limit": {
+          "context": 1000000,
+          "output": 384000
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek V4.1 Flash",
+        "reasoning": true,
+        "release_date": "2026-09-10",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -131181,6 +131210,17 @@
       }
     },
     "name": "OCI Generative AI",
+    "npm": "@ai-sdk/openai-compatible"
+  },
+  "ainetcafe": {
+    "api": "https://microquickjs.com/v1",
+    "doc": "https://ainetcafe.com/k3/guides/",
+    "env": [
+      "AINETCAFE_API_KEY"
+    ],
+    "id": "ainetcafe",
+    "models": {},
+    "name": "ainetcafe",
     "npm": "@ai-sdk/openai-compatible"
   }
 }
