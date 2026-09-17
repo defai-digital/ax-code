@@ -36,15 +36,15 @@ describe("client locale contract", () => {
       "zh-CN",
       "ja",
       "ko",
-      "id",
-      "de",
-      "es",
       "fr",
+      "de",
+      "id",
       "it",
       "pt-BR",
-      "vi",
-      "tr",
       "ru",
+      "es",
+      "tr",
+      "vi",
     ])
     expect(validateCatalogs()).toEqual([])
     expect(dictionaries["zh-TW"]["language.title"]).not.toBe(dictionaries["zh-CN"]["language.title"])
