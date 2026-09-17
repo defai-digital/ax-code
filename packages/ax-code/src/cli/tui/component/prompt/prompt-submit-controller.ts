@@ -23,6 +23,7 @@ import { scheduleTuiTimeout } from "@tui/util/timer"
 import { upsert } from "../../context/sync-util"
 import { axEngineDownloadChip, type AxEngineDownloadJobView } from "../ax-engine-downloads-view-model"
 import { isQueueableStatus } from "./follow-up-queue"
+import { isSteerableDraft, steerBusySession, type SteerClient } from "./prompt-steer"
 import { assign } from "./part"
 import { SESSION_CREATE_TIMEOUT_MS } from "@/constants/session-create"
 import { submitPromptRoute } from "./prompt-submit"
@@ -49,7 +50,7 @@ type PromptSubmitSdk = Pick<ReturnType<typeof useSDK>, "url" | "directory" | "ba
         parameters: { id: string; directory?: string },
         options: { signal: AbortSignal },
       ) => Promise<{ data?: Session; error?: unknown }>
-    }
+    } & Partial<SteerClient>
   }
 }
 
@@ -204,7 +205,22 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
     return true
   }
 
+  // Send-now requests arrive through submitSteer(), which arms this flag for
+  // exactly one submit() so the ordinary keyboard path stays unchanged.
+  let steerRequested = false
+
+  async function submitSteer() {
+    steerRequested = true
+    try {
+      return await submit()
+    } finally {
+      steerRequested = false
+    }
+  }
+
   async function submit() {
+    const options = { steer: steerRequested }
+    steerRequested = false
     const input = host.input
     const store = host.store
     const sdk = host.sdk
@@ -492,6 +508,64 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
       )
     retrySubmission = { fingerprint, messageID, followup }
 
+    // Send-now (steer): admit the text into the running generation at its
+    // next step boundary instead of queueing it until the turn ends. Text
+    // only, normal mode only, never a slash command. When the turn has
+    // already ended the ordinary path below takes over so nothing is lost.
+    const steerClient = sdk.client.session
+    if (options?.steer && sessionID && !startingNewSession && steerClient.steering && steerClient.steer) {
+      const steerable =
+        workRouted.kind === "prompt" &&
+        !isKnownSlashCommand &&
+        isSteerableDraft({
+          mode: currentMode,
+          statusType: status().type,
+          hasAttachments: nonTextParts.length > 0,
+        })
+      if (!steerable) {
+        if (nonTextParts.length > 0 && isQueueableStatus(status().type)) {
+          toast.show({
+            variant: "info",
+            message: "Attachments cannot steer a running turn; sent as a follow-up instead",
+            duration: 3000,
+          })
+        }
+        log.info("tui.prompt.submit: steer requested but draft is not steerable", {
+          mode: currentMode,
+          status: status().type,
+          attachments: nonTextParts.length,
+        })
+      } else {
+        submitAction = "Steering submission"
+        setSubmitStage("dispatching")
+        const outcome = await steerBusySession(steerClient as SteerClient, {
+          sessionID,
+          clientID: messageID,
+          text: submitText,
+        })
+        if (nextSubmitAbort.signal.aborted) return
+        if (outcome.kind === "delivered") {
+          finishPendingSubmit()
+          retrySubmission = undefined
+          settlePromptLocally({ clearPrompt: true })
+          toast.show({
+            variant: "info",
+            message: "Sent into the running turn; it applies at the next step",
+            duration: 2500,
+          })
+          log.info("tui.prompt.submit: steered into the running turn", { sessionID, status: outcome.status })
+          return
+        }
+        if (outcome.kind === "failed") {
+          finishPendingSubmit()
+          toast.show({ variant: "error", message: `Steering failed: ${outcome.message}` })
+          log.warn("tui.prompt.submit: steering failed; draft kept", { sessionID, message: outcome.message })
+          return
+        }
+        log.info("tui.prompt.submit: steering fell back to the ordinary path", { sessionID, reason: outcome.reason })
+      }
+    }
+
     try {
       if (startingNewSession) {
         if (!sessionID) throw new Error("Session id allocation failed")
@@ -627,6 +701,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
 
   return {
     submit,
+    submitSteer,
     cancelPendingSubmit,
     dispose,
     get submitInFlight() {

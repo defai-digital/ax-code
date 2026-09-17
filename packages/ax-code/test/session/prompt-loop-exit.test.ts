@@ -130,3 +130,47 @@ describe("prompt loop assistant exit", () => {
     expect(result).toEqual({ action: "stop", reason: "completed" })
   })
 })
+
+describe("prompt loop assistant exit with pending steering", () => {
+  test("a completed turn keeps running when a steering correction is pending", () => {
+    const entries: { message: string }[] = []
+    const result = resolvePromptLoopAssistantExit(
+      {
+        sessionID: SessionID.descending(),
+        lastUserID: "msg_1",
+        lastAssistant: { id: MessageID.make("msg_2"), finish: "stop" },
+        hasPendingSubtask: false,
+        hasPendingSteering: true,
+      },
+      {
+        info(message) {
+          entries.push({ message })
+        },
+      },
+    )
+    expect(result).toEqual({ action: "continue" })
+    expect(entries).toEqual([{ message: "extending loop for pending steering" }])
+  })
+
+  test("an unknown finish also yields to pending steering", () => {
+    const result = resolvePromptLoopAssistantExit({
+      sessionID: SessionID.descending(),
+      lastUserID: "msg_1",
+      lastAssistant: { id: MessageID.make("msg_2"), finish: "unknown" },
+      hasPendingSubtask: false,
+      hasPendingSteering: true,
+    })
+    expect(result).toEqual({ action: "continue" })
+  })
+
+  test("no pending steering leaves the completion decision unchanged", () => {
+    const result = resolvePromptLoopAssistantExit({
+      sessionID: SessionID.descending(),
+      lastUserID: "msg_1",
+      lastAssistant: { id: MessageID.make("msg_2"), finish: "stop" },
+      hasPendingSubtask: false,
+      hasPendingSteering: false,
+    })
+    expect(result).toEqual({ action: "stop", reason: "completed" })
+  })
+})

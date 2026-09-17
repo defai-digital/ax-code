@@ -46,7 +46,8 @@ export const messages = {
   "permission.always": "Consenti sempre",
   "permission.alwaysTitle": "Consenti sempre",
   "permission.future": "Questo consentirà future richieste di {permission} in questo progetto.",
-  "permission.patternsWarning": "Questo consentirà future richieste che corrispondono a questi pattern in questo progetto",
+  "permission.patternsWarning":
+    "Questo consentirà future richieste che corrispondono a questi pattern in questo progetto",
   "permission.patterns": "Pattern",
   "permission.rejectTitle": "Rifiuta autorizzazione",
   "permission.rejectHint": "Indica ad ax-code cosa fare diversamente",
@@ -59,7 +60,8 @@ export const messages = {
   "permission.apply": "applicazione effettiva (modifica i file se ha successo)",
   "permission.shell": "Comando shell",
   "permission.dynamicTitle": "Esegui comando con percorsi che ax-code non può verificare",
-  "permission.dynamicWarning": "Il comando usa una variabile o un pattern glob; impossibile verificare i percorsi in anticipo.",
+  "permission.dynamicWarning":
+    "Il comando usa una variabile o un pattern glob; impossibile verificare i percorsi in anticipo.",
   "permission.external": "Accedi alla directory esterna {path}",
   "permission.repeatTitle": "Continua dopo errori ripetuti",
   "permission.repeatWarning": "Questo mantiene la sessione attiva nonostante gli errori ripetuti.",
@@ -117,7 +119,8 @@ export const messages = {
   "setup.readyHint": "Configurazione completata. Pronto per iniziare.",
   "setup.skip": "Ignora per ora",
   "setup.resume": "Puoi riaprire questa guida con /setup.",
-  "setup.firstTask": "Prova prima una revisione in sola lettura. Controlla il comando proposto e l'ambito prima di approvare.",
+  "setup.firstTask":
+    "Prova prima una revisione in sola lettura. Controlla il comando proposto e l'ambito prima di approvare.",
   "setup.changeLanguage": "Cambia lingue",
   "home.newTask": "Nuova attività",
   "home.describe": "Descrivi un'attività per avviare una nuova conversazione.",
@@ -254,7 +257,8 @@ export const messages = {
   "ui.schedule": "Pianificazione",
   "ui.scheduledTasks": "Attività pianificate",
   "ui.noScheduledTasks": "Nessuna attività pianificata",
-  "ui.askTheAgentToScheduleWorkItOnlyRunsWhileThisProjectBackendIsAlive": "Chiedi all'agente di pianificare lavoro. Viene eseguito solo mentre il backend del progetto è attivo.",
+  "ui.askTheAgentToScheduleWorkItOnlyRunsWhileThisProjectBackendIsAlive":
+    "Chiedi all'agente di pianificare lavoro. Viene eseguito solo mentre il backend del progetto è attivo.",
   "ui.runNow": "esegui ora",
   "ui.delete": "elimina",
   "ui.rename": "rinomina",
@@ -289,7 +293,8 @@ export const messages = {
   "ui.localInference": "Inferenza locale",
   "ui.gettingStarted": "Primi passi",
   "ui.axCodeIncludesModelsYouCanStartWithImmediately": "ax-code include modelli con cui puoi iniziare subito.",
-  "ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc": "Connettiti a oltre 75 provider per usare altri modelli, tra cui Claude, GPT, Gemini, ecc.",
+  "ui.connectFrom75ProvidersToUseOtherModelsIncludingClaudeGptGeminiEtc":
+    "Connettiti a oltre 75 provider per usare altri modelli, tra cui Claude, GPT, Gemini, ecc.",
   "ui.leaderActive": "Tasto leader attivo",
   "ui.pressShortcutKeyOrWaitToCancel": "premi un tasto di scelta rapida o attendi per annullare",
   "ui.finished": "Terminato",
@@ -304,8 +309,8 @@ export const messages = {
   "ui.clickToCollapse": "Fai clic per comprimere",
   "ui.clickToExpand": "Fai clic per espandere",
   "ui.providersAreLoadingPleaseWait": "Caricamento dei provider... attendi",
-  "ui.askAnythingExample": "Chiedi qualsiasi cosa... \"{example}\"",
-  "ui.runACommandExample": "Esegui un comando... \"{example}\"",
+  "ui.askAnythingExample": 'Chiedi qualsiasi cosa... "{example}"',
+  "ui.runACommandExample": 'Esegui un comando... "{example}"',
   "ui.keysToCancel": "{keys} per annullare",
   "ui.compactedXCount": "compattato x{count}",
   "ui.clearPrompt": "Cancella prompt",
@@ -321,16 +326,19 @@ export const messages = {
   "ui.stashList": "Elenco bozze",
   "ui.stash": "Bozze",
   "ui.prompt": "Prompt",
-  "ui.noEditorConfiguredSetVisualOrEditorToUseEditor": "Nessun editor configurato. Imposta VISUAL o EDITOR per usare /editor.",
+  "ui.noEditorConfiguredSetVisualOrEditorToUseEditor":
+    "Nessun editor configurato. Imposta VISUAL o EDITOR per usare /editor.",
   "ui.noMatchingItems": "Nessun elemento corrispondente",
   "ui.invokeSubagent": "Invoca sotto-agente",
   "ui.selectAgent": "Seleziona agente",
   "ui.favorite": "Preferito",
   "ui.navigationWidth": "Larghezza navigazione",
   "ui.sidebarWidth": "Larghezza barra laterale",
-  "ui.widthShrinksAutomaticallyToPreserveTheMainContent": "La larghezza si riduce automaticamente per preservare il contenuto principale",
+  "ui.widthShrinksAutomaticallyToPreserveTheMainContent":
+    "La larghezza si riduce automaticamente per preservare il contenuto principale",
   "ui.workMode": "Modalità di lavoro",
-  "ui.councilAndArenaStayOffTheFooterUntilYouPickThemHere": "Council e Arena restano nascosti dal piè di pagina fino a quando non li selezioni qui",
+  "ui.councilAndArenaStayOffTheFooterUntilYouPickThemHere":
+    "Council e Arena restano nascosti dal piè di pagina fino a quando non li selezioni qui",
   "ui.keyboardShortcuts": "Scorciatoie da tastiera",
   "ui.navigation": "Navigazione",
   "ui.modelsAgents": "Modelli e agenti",
@@ -340,10 +348,13 @@ export const messages = {
   "ui.openWebUi": "Apri interfaccia web",
   "ui.startOrOpenTheAxCodeBrowserUi": "Avvia o apri l'interfaccia browser di AX Code",
   "ui.openDesktop": "Apri Desktop",
-  "ui.getGuidanceForAxCodeDesktopDashboardsAndWorkflowSupervision": "Ricevi indicazioni per dashboard AX Code Desktop e supervisione dei flussi",
+  "ui.getGuidanceForAxCodeDesktopDashboardsAndWorkflowSupervision":
+    "Ricevi indicazioni per dashboard AX Code Desktop e supervisione dei flussi",
   "ui.previewTheOpeningDigitalCodeAnimation": "Anteprima animazione iniziale Digital Code",
-  "ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit": "Anteprima animazione finale Digital Code riprodotta all'uscita",
-  "ui.playTheOverlayOnceAScheduledTaskRunCompletes": "Riproduci l'animazione al completamento di un'attività pianificata",
+  "ui.previewTheEndingDigitalCodeAnimationThatPlaysWhenYouExit":
+    "Anteprima animazione finale Digital Code riprodotta all'uscita",
+  "ui.playTheOverlayOnceAScheduledTaskRunCompletes":
+    "Riproduci l'animazione al completamento di un'attività pianificata",
   "ui.playTheOverlayOnceWhenTheTuiLaunches": "Riproduci l'animazione all'avvio della TUI",
   "ui.recommendedTerminalFontCascadiaCodeNerdFont": "Font terminale consigliato: Cascadia Code Nerd Font",
   "ui.disableDigitalCodeOnTaskCompletion": "Disattiva animazione al completamento attività",
@@ -415,8 +426,10 @@ export const messages = {
   "ui.allowHttp": "Consenti HTTP",
   "ui.useHttpsInstead": "Usa invece HTTPS",
   "ui.onlyContinueWhenThisNetworkIsTrusted": "Continua solo se questa rete è attendibile",
-  "ui.leaveTheTokenBlankToKeepASavedKeyWhenThisUrlIsAlreadyRegistered": "Lascia il token vuoto per mantenere una chiave salvata se questo URL è già registrato.",
-  "ui.commaOrNewlineSeparatedIdsNewModelsDefaultTo128kContext": "ID separati da virgole o a capo. I nuovi modelli hanno come predefinito un contesto di 128k.",
+  "ui.leaveTheTokenBlankToKeepASavedKeyWhenThisUrlIsAlreadyRegistered":
+    "Lascia il token vuoto per mantenere una chiave salvata se questo URL è già registrato.",
+  "ui.commaOrNewlineSeparatedIdsNewModelsDefaultTo128kContext":
+    "ID separati da virgole o a capo. I nuovi modelli hanno come predefinito un contesto di 128k.",
   "ui.updateProvider": "Aggiorna provider",
   "ui.refreshModels": "Aggiorna modelli",
   "ui.reloadModelIdsLimitsAndCapabilitiesFromGetModels": "Ricarica ID modelli, limiti e funzionalità da GET /models",
@@ -427,7 +440,8 @@ export const messages = {
   "ui.useModelsDiscoveredFromModels": "Usa modelli rilevati da /models",
   "ui.youCanIncludeV1ButAxCodeWillAddItIfOmitted": "Puoi includere /v1, ma ax-code lo aggiungerà se omesso.",
   "ui.cliNotFound": "— CLI non trovata",
-  "ui.installTheCliAndEnsureItIsAvailableInYourPathThenCloseThisMessageAndSelectTheProviderAgain": "Installa la CLI e assicurati che sia disponibile nel PATH, quindi chiudi questo messaggio e riseleziona il provider.",
+  "ui.installTheCliAndEnsureItIsAvailableInYourPathThenCloseThisMessageAndSelectTheProviderAgain":
+    "Installa la CLI e assicurati che sia disponibile nel PATH, quindi chiudi questo messaggio e riseleziona il provider.",
   "ui.providerAuthorizationReturnedNoData": "L'autorizzazione del provider non ha restituito dati",
   "ui.waitingForAuthorization": "In attesa di autorizzazione...",
   "ui.copy2": "copia",
@@ -443,7 +457,8 @@ export const messages = {
   "ui.noFileChanges": "Nessuna modifica ai file",
   "ui.noFileDiffsAreAvailableForThisSession": "Nessun diff di file disponibile per questa sessione.",
   "ui.manageSavedFollowUps": "Gestisci follow-up salvati",
-  "ui.savedFollowUpsCouldNotBeRefreshedReconnectToRetry": "Impossibile aggiornare i follow-up salvati; riconnettiti per riprovare",
+  "ui.savedFollowUpsCouldNotBeRefreshedReconnectToRetry":
+    "Impossibile aggiornare i follow-up salvati; riconnettiti per riprovare",
   "ui.savedFollowUpRemainsPausedUntilResumed": "Salvato; il follow-up rimane in pausa fino alla ripresa",
   "ui.editPauseFirst": "Modifica (metti prima in pausa)",
   "ui.retryAfterInspectingPreviousOutput": "Riprova dopo aver esaminato l'output precedente",
@@ -463,9 +478,12 @@ export const messages = {
   "ui.sessionIdCopiedToClipboard": "ID sessione copiato negli appunti",
   "ui.noPreviousSessionToContinue": "Nessuna sessione precedente da continuare",
   "ui.theCurrentSessionWasDeleted": "La sessione corrente è stata eliminata",
-  "ui.providersAreStillLoadingPleaseWaitAbout10SecondsAndTryAgain": "I provider sono ancora in caricamento. Attendi circa 10 secondi e riprova.",
-  "ui.providersFailedToLoadCheckYourConfiguration": "Caricamento dei provider non riuscito — controlla la configurazione",
-  "ui.providersFailedToLoadCouldNotAutoSubmitThePromptArgument": "Caricamento dei provider non riuscito — impossibile inviare automaticamente l'argomento --prompt",
+  "ui.providersAreStillLoadingPleaseWaitAbout10SecondsAndTryAgain":
+    "I provider sono ancora in caricamento. Attendi circa 10 secondi e riprova.",
+  "ui.providersFailedToLoadCheckYourConfiguration":
+    "Caricamento dei provider non riuscito — controlla la configurazione",
+  "ui.providersFailedToLoadCouldNotAutoSubmitThePromptArgument":
+    "Caricamento dei provider non riuscito — impossibile inviare automaticamente l'argomento --prompt",
   "ui.anUnknownErrorHasOccurred": "Si è verificato un errore sconosciuto",
   "ui.updateFailed": "Aggiornamento non riuscito",
   "ui.aFatalErrorOccurred": "Si è verificato un errore irreversibile!",
@@ -500,9 +518,12 @@ export const messages = {
   "ui.retryHistoryLoadingUndoHistory": "Riprova caricamento cronologia: /undo-history",
   "ui.reloadTranscriptFromSavedHistory": "Ricarica trascrizione dalla cronologia salvata",
   "ui.reconnectedButRefreshingTheSessionStateFailed": "Riconnesso, ma aggiornamento dello stato sessione non riuscito",
-  "ui.somePendingTranscriptUpdatesWereReleasedToLimitMemory": "Alcuni aggiornamenti di trascrizione in sospeso sono stati rilasciati per limitare la memoria.",
-  "ui.transcriptMemoryBudgetExceededKeepingTheNewestWholeMessageOrUndoHistory": "Budget memoria trascrizione superato: conservato il messaggio completo più recente o cronologia Annulla.",
-  "ui.theUndoPointIsOutsideTheLoadedHistoryRedoCannotSafelyChooseATurn": "Il punto di annullamento è esterno alla cronologia caricata. Ripristina non può scegliere un turno in modo sicuro.",
+  "ui.somePendingTranscriptUpdatesWereReleasedToLimitMemory":
+    "Alcuni aggiornamenti di trascrizione in sospeso sono stati rilasciati per limitare la memoria.",
+  "ui.transcriptMemoryBudgetExceededKeepingTheNewestWholeMessageOrUndoHistory":
+    "Budget memoria trascrizione superato: conservato il messaggio completo più recente o cronologia Annulla.",
+  "ui.theUndoPointIsOutsideTheLoadedHistoryRedoCannotSafelyChooseATurn":
+    "Il punto di annullamento è esterno alla cronologia caricata. Ripristina non può scegliere un turno in modo sicuro.",
   "ui.exportOptions": "Opzioni di esportazione",
   "ui.filename": "Nome file:",
   "ui.enterFilename": "Inserisci nome file",
@@ -519,7 +540,8 @@ export const messages = {
   "ui.requestedBy": "Richiesto da",
   "ui.agent": "agente",
   "ui.experimentalWebmcpBridgeCall": "Chiamata ponte WebMCP sperimentale",
-  "ui.preFlightRunsTypecheckLintAndTestsInAScratchWorktreeOnlyNoRealFilesChange": "Il pre-flight esegue typecheck, lint e test solo in un worktree temporaneo. Nessun file reale cambia.",
+  "ui.preFlightRunsTypecheckLintAndTestsInAScratchWorktreeOnlyNoRealFilesChange":
+    "Il pre-flight esegue typecheck, lint e test solo in un worktree temporaneo. Nessun file reale cambia.",
   "ui.failedToCopySessionId": "Impossibile copiare ID sessione",
   "ui.failedToCreateWorkspace": "Impossibile creare spazio di lavoro",
   "ui.failedToDeleteSession": "Impossibile eliminare sessione",
@@ -538,7 +560,8 @@ export const messages = {
   "ui.failedToCopySessionTranscript": "Impossibile copiare la trascrizione della sessione",
   "ui.failedToExportSession": "Impossibile esportare la sessione",
   "ui.failedToOpenWorkspaceAfterMultipleRetries": "Impossibile aprire lo spazio di lavoro dopo ripetuti tentativi",
-  "ui.analysisPopulatesAfterTheSessionUsesToolsOrAgentRoutesKeepChatting": "L'analisi si popola dopo che la sessione usa strumenti o percorsi agente. Continua a chattare.",
+  "ui.analysisPopulatesAfterTheSessionUsesToolsOrAgentRoutesKeepChatting":
+    "L'analisi si popola dopo che la sessione usa strumenti o percorsi agente. Continua a chattare.",
   "ui.analyzeChangeImpactDre": "Analizza l'impatto delle modifiche (DRE)",
   "ui.analyzingImpact": "Analisi dell'impatto in corso",
   "ui.applied": "Applicato",
@@ -558,7 +581,8 @@ export const messages = {
   "ui.dreGraph": "Grafo DRE",
   "ui.visual": "Visuale",
   "ui.detail": "Dettaglio",
-  "ui.noExecutionGraphRecordedRunASessionWithToolsOrRoutesToPopulateExecutionEvidence": "Nessun grafo di esecuzione registrato. Esegui una sessione con strumenti o percorsi per generare evidenza di esecuzione.",
+  "ui.noExecutionGraphRecordedRunASessionWithToolsOrRoutesToPopulateExecutionEvidence":
+    "Nessun grafo di esecuzione registrato. Esegui una sessione con strumenti o percorsi per generare evidenza di esecuzione.",
   "ui.branchRanking": "Classifica rami",
   "ui.noBranchFamilyRecorded": "Nessuna famiglia di rami registrata",
   "ui.createAForkFromThisSessionToCompareAlternatives": "Crea un fork da questa sessione per confrontare alternative.",
@@ -570,8 +594,10 @@ export const messages = {
   "ui.theSelectedBranchIsNoLongerAvailable": "Il ramo selezionato non è più disponibile.",
   "ui.executionCompare": "Confronto esecuzioni",
   "ui.noForkTargetAvailable": "Nessuna destinazione di fork disponibile",
-  "ui.noUserMessagesWithTextContentAreAvailableToForkFrom": "Nessun messaggio utente con testo disponibile da cui creare un fork.",
-  "ui.noUserMessagesWithTextContentAreAvailableInThisSession": "Nessun messaggio utente con testo disponibile in questa sessione.",
+  "ui.noUserMessagesWithTextContentAreAvailableToForkFrom":
+    "Nessun messaggio utente con testo disponibile da cui creare un fork.",
+  "ui.noUserMessagesWithTextContentAreAvailableInThisSession":
+    "Nessun messaggio utente con testo disponibile in questa sessione.",
   "ui.sessionGoal": "Obiettivo sessione",
   "ui.pauseCurrentGoal": "Metti in pausa obiettivo corrente",
   "ui.resumeCurrentGoal": "Riprendi obiettivo corrente",
@@ -581,18 +607,24 @@ export const messages = {
   "ui.qualityReadinessRefreshed": "Preparazione qualità aggiornata",
   "ui.qualityReadinessIsNoLongerAvailable": "Preparazione qualità non più disponibile",
   "ui.qualityActionUnavailable": "Azione di qualità non disponibile",
-  "ui.thisReadinessActionIsNoLongerAvailableForTheCurrentSessionSnapshot": "Questa azione di preparazione non è più disponibile per lo snapshot di sessione corrente.",
-  "ui.reSyncTheSessionRiskSnapshotAndRefreshQualityReadinessInPlace": "Risincronizza lo snapshot di rischio della sessione e aggiorna la preparazione qualità sul posto.",
+  "ui.thisReadinessActionIsNoLongerAvailableForTheCurrentSessionSnapshot":
+    "Questa azione di preparazione non è più disponibile per lo snapshot di sessione corrente.",
+  "ui.reSyncTheSessionRiskSnapshotAndRefreshQualityReadinessInPlace":
+    "Risincronizza lo snapshot di rischio della sessione e aggiorna la preparazione qualità sul posto.",
   "ui.copyNextStepPrompt": "Copia prompt passaggio successivo",
   "ui.copyReadinessBrief": "Copia brief di preparazione",
   "ui.copiedQualityNextStepPrompt": "Prompt passaggio successivo copiato",
   "ui.copiedQualityReadinessBrief": "Brief di preparazione qualità copiato",
-  "ui.copyTheCurrentActionSPromptScaffoldToTheClipboard": "Copia l'impalcatura del prompt dell'azione corrente negli appunti.",
-  "ui.copyTheCurrentQualityReadinessSummaryAndGateDetailsToTheClipboard": "Copia il riepilogo della preparazione qualità e i dettagli dei gate negli appunti.",
-  "ui.inspectRecentSessionActivityToVerifyWorkflowEvidenceAndToolOutput": "Ispeziona l'attività recente della sessione per verificare l'evidenza del flusso e l'output degli strumenti.",
+  "ui.copyTheCurrentActionSPromptScaffoldToTheClipboard":
+    "Copia l'impalcatura del prompt dell'azione corrente negli appunti.",
+  "ui.copyTheCurrentQualityReadinessSummaryAndGateDetailsToTheClipboard":
+    "Copia il riepilogo della preparazione qualità e i dettagli dei gate negli appunti.",
+  "ui.inspectRecentSessionActivityToVerifyWorkflowEvidenceAndToolOutput":
+    "Ispeziona l'attività recente della sessione per verificare l'evidenza del flusso e l'output degli strumenti.",
   "ui.rollbackPoints": "Punti di ripristino",
   "ui.noRollbackPointsRecorded": "Nessun punto di ripristino registrato",
-  "ui.runASessionWithStepActivityToCaptureRollbackTargets": "Esegui una sessione con attività per passaggi per acquisire punti di ripristino.",
+  "ui.runASessionWithStepActivityToCaptureRollbackTargets":
+    "Esegui una sessione con attività per passaggi per acquisire punti di ripristino.",
   "ui.timeline": "Cronologia",
   "ui.noTimelineMessageAvailable": "Nessun messaggio cronologico disponibile",
   "ui.workflowRuns": "Esecuzioni flusso",
@@ -606,14 +638,18 @@ export const messages = {
   "ui.backToWorkflowRun": "Torna a esecuzione flusso",
   "ui.returnToTheProjectWorkflowRunList": "Torna all'elenco delle esecuzioni del flusso di progetto.",
   "ui.returnToTheWorkflowRunDetail": "Torna al dettaglio dell'esecuzione del flusso.",
-  "ui.reloadRecentProjectWorkflowRunsFromTheServer": "Ricarica le esecuzioni recenti del flusso di progetto dal server.",
+  "ui.reloadRecentProjectWorkflowRunsFromTheServer":
+    "Ricarica le esecuzioni recenti del flusso di progetto dal server.",
   "ui.reloadThisWorkflowRunDetailFromTheServer": "Ricarica questo dettaglio di esecuzione del flusso dal server.",
   "ui.reloadThisWorkflowRunSEvaluationMetrics": "Ricarica le metriche di valutazione di questa esecuzione del flusso.",
-  "ui.reloadThisWorkflowArtifactWithItsDetailedPayload": "Ricarica questo artefatto del flusso con il relativo payload dettagliato.",
+  "ui.reloadThisWorkflowArtifactWithItsDetailedPayload":
+    "Ricarica questo artefatto del flusso con il relativo payload dettagliato.",
   "ui.viewWorkflowEvalSummary": "Visualizza riepilogo valutazione flusso",
-  "ui.inspectPromotionGateBudgetVerificationTokenUsageAndFindingOutcomeMetrics": "Esamina gate di promozione, budget, verifica, utilizzo token e metriche di esito dei rilievi.",
+  "ui.inspectPromotionGateBudgetVerificationTokenUsageAndFindingOutcomeMetrics":
+    "Esamina gate di promozione, budget, verifica, utilizzo token e metriche di esito dei rilievi.",
   "ui.theRunDetailCouldNotBeLoadedYet": "Il dettaglio dell'esecuzione non può ancora essere caricato.",
-  "ui.theWorkflowEvaluationSummaryCouldNotBeLoadedYet": "Il riepilogo della valutazione del flusso non può ancora essere caricato.",
+  "ui.theWorkflowEvaluationSummaryCouldNotBeLoadedYet":
+    "Il riepilogo della valutazione del flusso non può ancora essere caricato.",
   "ui.theArtifactPayloadCouldNotBeLoadedYet": "Il payload dell'artefatto non può ancora essere caricato.",
   "ui.noTodos": "Nessuna attività",
   "ui.updatingTodos": "Aggiornamento attività...",
@@ -624,10 +660,10 @@ export const messages = {
   "ui.edit": "Modifica",
   "ui.patch": "Patch",
   "ui.list": "Elenca",
-  "ui.codeSearch": "Cerca codice \"",
-  "ui.webSearch": "Cerca web \"",
-  "ui.glob": "Glob \"",
-  "ui.grep": "Grep \"",
+  "ui.codeSearch": 'Cerca codice "',
+  "ui.webSearch": 'Cerca web "',
+  "ui.glob": 'Glob "',
+  "ui.grep": 'Grep "',
   "ui.webfetch": "WebFetch",
   "ui.reason": "Motivo",
   "ui.risk": "Rischio",
@@ -714,9 +750,11 @@ export const messages = {
   "ui.inputTokens": "token di input",
   "ui.outputTokens": "token di output",
   "ui.countMoreLines": "... altre {count} righe",
-  "ui.interfaceChangesApplyImmediatelyConversationLanguageControlsFutureAiReplies": "Le modifiche dell'interfaccia si applicano immediatamente. La lingua di conversazione controlla le risposte future dell'IA.",
+  "ui.interfaceChangesApplyImmediatelyConversationLanguageControlsFutureAiReplies":
+    "Le modifiche dell'interfaccia si applicano immediatamente. La lingua di conversazione controlla le risposte future dell'IA.",
   "ui.clearNavigationList": "Cancellare elenco di navigazione?",
-  "ui.hideOlderIdleSessionsFromThisListSessionsAndFilesAreKeptUseSessionsToResumeThem": "Nascondi le sessioni inattive meno recenti da questo elenco. Sessioni e file vengono conservati; usa /sessions per riprenderle.",
+  "ui.hideOlderIdleSessionsFromThisListSessionsAndFilesAreKeptUseSessionsToResumeThem":
+    "Nascondi le sessioni inattive meno recenti da questo elenco. Sessioni e file vengono conservati; usa /sessions per riprenderle.",
   "action.show": "Mostra: {item}",
   "action.hide": "Nascondi: {item}",
   "action.toggle": "Attiva/disattiva: {item}",
@@ -836,6 +874,7 @@ export const messages = {
   "help.keybind.input_clear": "Cancella campo di input",
   "help.keybind.input_paste": "Incolla dagli appunti",
   "help.keybind.input_submit": "Invia input",
+  "help.keybind.input_submit_steer": "Invia subito nel turno in corso (indirizza)",
   "help.keybind.input_newline": "Inserisci nuova riga nell'input",
   "help.keybind.input_move_left": "Sposta cursore a sinistra nell'input",
   "help.keybind.input_move_right": "Sposta cursore a destra nell'input",
@@ -887,7 +926,8 @@ export const messages = {
   "prompt.exampleTests": "Correggi i test non superati",
   "prompt.collapsePastes": "Comprimi anteprime incollate",
   "prompt.expandPastes": "Espandi anteprime incollate",
-  "mode.overview": "Agent: un agente · Council: revisione multi-modello (≥2 provider) · Arena: confronto candidati (opzionale)",
+  "mode.overview":
+    "Agent: un agente · Council: revisione multi-modello (≥2 provider) · Arena: confronto candidati (opzionale)",
   "mode.agentDescription": "Un agente · modifica i file · predefinito",
   "mode.councilMembers": "Fino a {count} revisori · consultivo, senza modificare file",
   "mode.arenaMembers": "Fino a {count} concorrenti · piano o worktree isolati",

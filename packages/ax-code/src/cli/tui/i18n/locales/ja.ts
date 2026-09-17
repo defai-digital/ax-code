@@ -958,13 +958,15 @@ export const messages = {
   "help.keybind.session_export": "\u30bb\u30c3\u30b7\u30e7\u30f3\u8a18\u9332\u3092\u30a8\u30af\u30b9\u30dd\u30fc\u30c8",
   "help.keybind.session_new": "\u65b0\u3057\u3044\u30bb\u30c3\u30b7\u30e7\u30f3\u3092\u4f5c\u6210",
   "help.keybind.session_list": "\u3059\u3079\u3066\u306e\u30bb\u30c3\u30b7\u30e7\u30f3\u3092\u4e00\u89a7\u8868\u793a",
-  "help.keybind.session_timeline": "\u30bb\u30c3\u30b7\u30e7\u30f3\u306e\u30bf\u30a4\u30e0\u30e9\u30a4\u30f3\u3092\u8868\u793a",
+  "help.keybind.session_timeline":
+    "\u30bb\u30c3\u30b7\u30e7\u30f3\u306e\u30bf\u30a4\u30e0\u30e9\u30a4\u30f3\u3092\u8868\u793a",
   "help.keybind.session_search": "\u4f1a\u8a71\u8a18\u9332\u3092\u691c\u7d22",
   "help.keybind.session_fork": "\u30e1\u30c3\u30bb\u30fc\u30b8\u304b\u3089\u5206\u5c90",
   "help.keybind.session_rename": "\u30bb\u30c3\u30b7\u30e7\u30f3\u540d\u3092\u5909\u66f4",
   "help.keybind.session_delete": "\u30bb\u30c3\u30b7\u30e7\u30f3\u3092\u524a\u9664",
   "help.keybind.stash_delete": "\u4fdd\u5b58\u3057\u305f\u4e0b\u66f8\u304d\u3092\u524a\u9664",
-  "help.keybind.model_provider_list": "\u30e2\u30c7\u30eb\u753b\u9762\u304b\u3089\u30d7\u30ed\u30d0\u30a4\u30c0\u30fc\u4e00\u89a7\u3092\u958b\u304f",
+  "help.keybind.model_provider_list":
+    "\u30e2\u30c7\u30eb\u753b\u9762\u304b\u3089\u30d7\u30ed\u30d0\u30a4\u30c0\u30fc\u4e00\u89a7\u3092\u958b\u304f",
   "help.keybind.model_favorite_toggle": "\u5207\u308a\u66ff\u3048\uff1a\u304a\u6c17\u306b\u5165\u308a",
   "help.keybind.session_interrupt": "\u30bb\u30c3\u30b7\u30e7\u30f3\u3092\u4e2d\u65ad",
   "help.keybind.session_compact": "\u30bb\u30c3\u30b7\u30e7\u30f3\u3092\u5727\u7e2e",
@@ -989,7 +991,8 @@ export const messages = {
   "help.keybind.messages_last": "\u6700\u5f8c\u306e\u30e1\u30c3\u30bb\u30fc\u30b8",
   "help.keybind.messages_next": "\u6b21\u306e\u30e1\u30c3\u30bb\u30fc\u30b8",
   "help.keybind.messages_previous": "\u524d\u306e\u30e1\u30c3\u30bb\u30fc\u30b8",
-  "help.keybind.messages_last_user": "\u6700\u65b0\u306e\u30e6\u30fc\u30b6\u30fc\u30e1\u30c3\u30bb\u30fc\u30b8\u306b\u79fb\u52d5",
+  "help.keybind.messages_last_user":
+    "\u6700\u65b0\u306e\u30e6\u30fc\u30b6\u30fc\u30e1\u30c3\u30bb\u30fc\u30b8\u306b\u79fb\u52d5",
   "help.keybind.messages_copy": "\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u30b3\u30d4\u30fc",
   "help.keybind.messages_undo": "\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u5143\u306b\u623b\u3059",
   "help.keybind.messages_redo": "\u30e1\u30c3\u30bb\u30fc\u30b8\u3092\u3084\u308a\u76f4\u3059",
@@ -1008,6 +1011,8 @@ export const messages = {
   "help.keybind.input_clear": "\u5165\u529b\u3092\u30af\u30ea\u30a2",
   "help.keybind.input_paste": "\u8cbc\u308a\u4ed8\u3051",
   "help.keybind.input_submit": "\u5165\u529b\u3092\u9001\u4fe1",
+  "help.keybind.input_submit_steer":
+    "\u5b9f\u884c\u4e2d\u306e\u30bf\u30fc\u30f3\u306b\u4eca\u3059\u3050\u9001\u4fe1\uff08\u8a98\u5c0e\uff09",
   "help.keybind.input_newline": "\u6539\u884c\u3092\u633f\u5165",
   "help.keybind.input_move_left": "\u30ab\u30fc\u30bd\u30eb\u3092\u5de6\u3078",
   "help.keybind.input_move_right": "\u30ab\u30fc\u30bd\u30eb\u3092\u53f3\u3078",
@@ -1051,8 +1056,10 @@ export const messages = {
   "help.keybind.terminal_suspend": "\u30bf\u30fc\u30df\u30ca\u30eb\u3092\u4e00\u6642\u505c\u6b62",
   "help.keybind.terminal_title_toggle": "\u5207\u308a\u66ff\u3048\uff1a\u7aef\u672b\u30bf\u30a4\u30c8\u30eb",
   "help.keybind.display_thinking": "\u5207\u308a\u66ff\u3048\uff1a\u601d\u8003\u30d6\u30ed\u30c3\u30af",
-  "help.keybind.permission_option_previous": "\u6a29\u9650\u78ba\u8a8d\u306e\u524d\u306e\u9078\u629e\u80a2\u3092\u9078\u629e",
-  "help.keybind.permission_option_next": "\u6a29\u9650\u78ba\u8a8d\u306e\u6b21\u306e\u9078\u629e\u80a2\u3092\u9078\u629e",
+  "help.keybind.permission_option_previous":
+    "\u6a29\u9650\u78ba\u8a8d\u306e\u524d\u306e\u9078\u629e\u80a2\u3092\u9078\u629e",
+  "help.keybind.permission_option_next":
+    "\u6a29\u9650\u78ba\u8a8d\u306e\u6b21\u306e\u9078\u629e\u80a2\u3092\u9078\u629e",
   "help.keybind.permission_fullscreen_toggle": "\u5207\u308a\u66ff\u3048\uff1a\u5168\u753b\u9762",
   "prompt.exampleTodo": "\u30b3\u30fc\u30c9\u5185\u306e TODO \u3092\u4fee\u6b63",
   "prompt.exampleStack": "\u3053\u306e\u30d7\u30ed\u30b8\u30a7\u30af\u30c8\u306e\u6280\u8853\u69cb\u6210\u306f\uff1f",

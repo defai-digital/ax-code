@@ -31,6 +31,19 @@ export function requestsInSessionTree<T extends PendingRequestRef>(
     .toSorted((a, b) => a.sessionID.localeCompare(b.sessionID) || a.id.localeCompare(b.id))
 }
 
+/** Session ids that currently own at least one pending permission or question request. */
+export function sessionIDsWithPendingRequests(
+  ...records: Record<string, PendingRequestRef[] | undefined>[]
+): ReadonlySet<string> {
+  const ids = new Set<string>()
+  for (const record of records) {
+    for (const list of Object.values(record)) {
+      for (const request of list ?? []) ids.add(request.sessionID)
+    }
+  }
+  return ids
+}
+
 export function outsideFamilyRequests(
   requests: Record<string, PendingRequestRef[] | undefined>,
   family: ReadonlySet<string>,

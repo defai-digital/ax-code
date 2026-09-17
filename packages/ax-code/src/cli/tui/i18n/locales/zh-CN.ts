@@ -903,6 +903,8 @@ export const messages = {
   "help.keybind.input_clear": "\u6e05\u9664\u8f93\u5165",
   "help.keybind.input_paste": "\u7c98\u8d34",
   "help.keybind.input_submit": "\u63d0\u4ea4\u8f93\u5165",
+  "help.keybind.input_submit_steer":
+    "\u7acb\u5373\u53d1\u9001\u5230\u8fdb\u884c\u4e2d\u7684\u56de\u5408\uff08\u5f15\u5bfc\uff09",
   "help.keybind.input_newline": "\u63d2\u5165\u6362\u884c",
   "help.keybind.input_move_left": "\u5149\u6807\u5411\u5de6",
   "help.keybind.input_move_right": "\u5149\u6807\u5411\u53f3",
@@ -946,8 +948,10 @@ export const messages = {
   "help.keybind.terminal_suspend": "\u6682\u505c\u7ec8\u7aef",
   "help.keybind.terminal_title_toggle": "\u5207\u6362\uff1a\u7ec8\u7aef\u6807\u9898",
   "help.keybind.display_thinking": "\u5207\u6362\uff1a\u601d\u8003\u5757",
-  "help.keybind.permission_option_previous": "\u9009\u62e9\u6743\u9650\u63d0\u793a\u4e2d\u7684\u4e0a\u4e00\u4e2a\u9009\u9879",
-  "help.keybind.permission_option_next": "\u9009\u62e9\u6743\u9650\u63d0\u793a\u4e2d\u7684\u4e0b\u4e00\u4e2a\u9009\u9879",
+  "help.keybind.permission_option_previous":
+    "\u9009\u62e9\u6743\u9650\u63d0\u793a\u4e2d\u7684\u4e0a\u4e00\u4e2a\u9009\u9879",
+  "help.keybind.permission_option_next":
+    "\u9009\u62e9\u6743\u9650\u63d0\u793a\u4e2d\u7684\u4e0b\u4e00\u4e2a\u9009\u9879",
   "help.keybind.permission_fullscreen_toggle": "\u5207\u6362\uff1a\u5168\u5c4f",
   "prompt.exampleTodo": "\u4fee\u590d\u4ee3\u7801\u4e2d\u7684 TODO",
   "prompt.exampleStack": "\u8fd9\u4e2a\u9879\u76ee\u4f7f\u7528\u54ea\u4e9b\u6280\u672f\uff1f",

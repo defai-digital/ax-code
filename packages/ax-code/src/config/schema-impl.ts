@@ -422,6 +422,11 @@ export const Keybinds = z
     input_clear: z.string().optional().default("ctrl+c").describe("Clear input field"),
     input_paste: z.string().optional().default("ctrl+v").describe("Paste from clipboard"),
     input_submit: z.string().optional().default("return").describe("Submit input"),
+    input_submit_steer: z
+      .string()
+      .optional()
+      .default("ctrl+s")
+      .describe("Send now into the running turn (steer)"),
     input_newline: z
       .string()
       .optional()

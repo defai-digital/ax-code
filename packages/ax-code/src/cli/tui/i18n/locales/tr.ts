@@ -895,6 +895,7 @@ export const messages = {
   "help.keybind.input_clear": "\u0130letiyi temizle",
   "help.keybind.input_paste": "Yap\u0131\u015ft\u0131r",
   "help.keybind.input_submit": "\u0130letiyi g\u00f6nder",
+  "help.keybind.input_submit_steer": "\u00c7al\u0131\u015fan tura hemen g\u00f6nder (y\u00f6nlendir)",
   "help.keybind.input_newline": "Yeni sat\u0131r ekle",
   "help.keybind.input_move_left": "\u0130mleci sola ta\u015f\u0131",
   "help.keybind.input_move_right": "\u0130mleci sa\u011fa ta\u015f\u0131",

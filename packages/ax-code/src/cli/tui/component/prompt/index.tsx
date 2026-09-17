@@ -386,15 +386,21 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
 
   const textareaKeybindings = useTextareaKeybindings({ submit: false, interceptEnter: true })
 
+  // Returns the submit kind: "steer" delivers into the running turn, "submit"
+  // is the ordinary path. Both are truthy so existing `if (isPromptSubmitKey(e))`
+  // guards keep working.
   function isPromptSubmitKey(event: KeyEvent) {
     // Explicit newline binding wins over the built-in Enter->submit fallback so
     // a user can rebind Enter to insert a newline instead of submitting.
     if (keybind.match("input_newline", event)) return false
-    if (keybind.match("input_submit", event)) return true
-    return isUnmodifiedPromptSubmitKey(event)
+    // Send-now: deliver into the running turn instead of the follow-up queue.
+    if (keybind.match("input_submit_steer", event)) return "steer" as const
+    if (keybind.match("input_submit", event)) return "submit" as const
+    return isUnmodifiedPromptSubmitKey(event) ? ("submit" as const) : false
   }
 
   let submit = async () => {}
+  let submitSteer = async () => {}
 
   // submit() must never reject unhandled — AX Code TUI dispatches keyboard handlers
   // fire-and-forget, so a dropped rejection lands on the process-level
@@ -407,14 +413,28 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     })
   }
 
+  function steerSafely() {
+    if (dialog.stack.length > 0) return
+    void submitSteer().catch((error) => {
+      log.warn("tui.prompt.steer: rejected", { error })
+      toast.show({ variant: "error", message: language.t("error.submit") })
+    })
+  }
+
+  function submitByKind(kind: "submit" | "steer") {
+    if (kind === "steer") steerSafely()
+    else submitSafely()
+  }
+
   const pasteSubmitGate = createPromptPasteSubmitGate({ submit: submitSafely })
 
   useKeyboard((evt) => {
     if (evt.defaultPrevented) return
     if (dialog.stack.length > 0) return
     if (!isRenderableAlive(input) || !input.focused) return
-    if (!isPromptSubmitKey(evt)) return
-    log.info("tui.prompt.useKeyboard: submit key detected", { keyName: evt.name })
+    const submitKind = isPromptSubmitKey(evt)
+    if (!submitKind) return
+    log.info("tui.prompt.useKeyboard: submit key detected", { keyName: evt.name, kind: submitKind })
     if (pasteSubmitGate.deferSubmitUntilPasteHandled()) {
       evt.preventDefault()
       evt.stopPropagation()
@@ -425,7 +445,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     }
     evt.preventDefault()
     evt.stopPropagation()
-    submitSafely()
+    submitByKind(submitKind)
   })
 
   const fileStyleId = syntax().getStyleId("extmark.file")!
@@ -545,6 +565,7 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     syncInputCursorColor,
   })
   submit = submitController.submit
+  submitSteer = submitController.submitSteer
 
   function cancelPendingSubmit(message = language.t("error.cancelled")) {
     return submitController.cancelPendingSubmit(message)
@@ -1099,7 +1120,8 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
                   }
                   e.preventDefault()
                   e.stopPropagation()
-                  submitSafely()
+                  if (isPromptSubmitKey(e) === "steer") steerSafely()
+                  else submitSafely()
                   return
                 }
                 // Handle clipboard paste (Ctrl+V) - check for images first on Windows

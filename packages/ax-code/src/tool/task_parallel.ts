@@ -75,6 +75,30 @@ async function assertDepth(sessionID: SessionID) {
   }
 }
 
+type TaskOutcome = {
+  description: string
+  subagent_type: string
+  task_id: string
+  ok: boolean
+  text: string
+  error?: string
+}
+
+// User lifecycle hooks (SubagentStop): observational only, same contract as
+// tool/task.ts. Hook failures never affect the parallel result.
+async function fireSubagentStop(input: { sessionID: string; agent: string; status: "completed" | "failed" }) {
+  try {
+    const { LifecycleHooks } = await import("@/hooks/lifecycle")
+    await LifecycleHooks.runForWorkspace({
+      event: "SubagentStop",
+      sessionID: input.sessionID,
+      args: { agent: input.agent, status: input.status },
+    })
+  } catch (error) {
+    log.warn("SubagentStop lifecycle hooks failed", { sessionID: input.sessionID, error })
+  }
+}
+
 async function runOneTask(input: {
   params: TaskItemInput
   ctx: Tool.Context
@@ -82,14 +106,8 @@ async function runOneTask(input: {
   config: Awaited<ReturnType<typeof Config.get>>
   agent: Agent.Info
   constraints: Awaited<ReturnType<typeof taskParentConstraints>>
-}): Promise<{
-  description: string
-  subagent_type: string
-  task_id: string
-  ok: boolean
-  text: string
-  error?: string
-}> {
+  onSessionCreated?: (sessionID: SessionID) => void
+}): Promise<TaskOutcome> {
   const { params, ctx, model, config, agent, constraints } = input
   // Same fan-out gate as tool/task.ts (ADR-005 deny-by-default; ADR-057 D2):
   // the LAST rule naming `task` decides, regardless of pattern — a scoped
@@ -134,6 +152,7 @@ async function runOneTask(input: {
       ...constraints.permissionDenials,
     ],
   })
+  input.onSessionCreated?.(session.id)
 
   const cancel = () => {
     // Abort propagation IS an interruption of the child turn (same as
@@ -354,7 +373,12 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
         },
       })
 
-      const settled = await Promise.all(
+      // Every child owns its own session and settles independently. A child
+      // that throws before its session exists (or an abort) must not leave
+      // its siblings running as orphans: allSettled lets every lane finish or
+      // fail on its own, and a rejection cancels the sessions that did start.
+      const started: SessionID[] = []
+      const outcomes = await Promise.allSettled(
         resolved.map(async ({ task, agent }) =>
           runOneTask({
             params: task,
@@ -363,9 +387,32 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             config,
             agent,
             constraints,
+            onSessionCreated: (sessionID) => {
+              started.push(sessionID)
+            },
           }),
         ),
       )
+      const rejected = outcomes.find((outcome) => outcome.status === "rejected")
+      if (rejected) {
+        await Promise.all(
+          started.map((sessionID) =>
+            SessionPrompt.cancel(sessionID, { interrupt: true }).catch((error) => {
+              log.warn("failed to cancel sibling parallel subagent", { sessionID, error })
+            }),
+          ),
+        )
+        throw rejected.reason
+      }
+      const settled = outcomes.map((outcome) => (outcome as PromiseFulfilledResult<TaskOutcome>).value)
+
+      for (const outcome of settled) {
+        await fireSubagentStop({
+          sessionID: outcome.task_id,
+          agent: outcome.subagent_type,
+          status: outcome.ok ? "completed" : "failed",
+        })
+      }
 
       const okCount = settled.filter((r) => r.ok).length
       const lines = settled.map((result, index) => {

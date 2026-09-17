@@ -20,10 +20,27 @@ export function resolvePromptLoopAssistantExit(
     lastAssistant?: Pick<MessageV2.Assistant, "id" | "finish"> & { time?: Pick<MessageV2.Assistant["time"], "created"> }
     hasPendingSubtask: boolean
     hasPendingAutonomousWork?: boolean
+    /**
+     * A steering correction was accepted for this generation but has not been
+     * written yet. Ending the run here would reject it with
+     * `generation_ended_before_application` even though the user sent it
+     * while the run was live, so the loop runs one more iteration: the top of
+     * the loop drains the correction into a durable user message and the model
+     * answers it. Bounded by the same ceilings as any other user turn.
+     */
+    hasPendingSteering?: boolean
   },
   deps: PromptLoopAssistantExitDeps = {},
 ): PromptLoopAssistantExitResult {
   const decision = assistantLoopExitDecision(input)
+  if (decision.action !== "continue" && input.hasPendingSteering) {
+    ;(deps.info ?? log.info)("extending loop for pending steering", {
+      command: "session.prompt.loop",
+      status: "ok",
+      sessionID: input.sessionID,
+    })
+    return { action: "continue" }
+  }
   if (decision.action === "complete") {
     ;(deps.info ?? log.info)("exiting loop", {
       command: "session.prompt.loop",

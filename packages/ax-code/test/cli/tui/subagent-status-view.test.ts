@@ -459,3 +459,45 @@ describe("subagentSoloTitle", () => {
     expect(subagentSoloDetails(planner)).toBe("Thinking - 1m04s")
   })
 })
+
+describe("buildSubagentStatusView blocked children", () => {
+  test("a child parked on a permission prompt reads as waiting for approval, never stale, and sorts first", () => {
+    const now = 400_000
+    const view = buildSubagentStatusView({
+      now,
+      parentSessionID: "parent",
+      childSessions: [
+        { id: "busy", parentID: "parent", title: "Explore (@explore subagent)" },
+        { id: "parked", parentID: "parent", title: "Apply fix (@build subagent)" },
+      ],
+      tasks: [],
+      statuses: {
+        busy: { type: "busy", startedAt: 10_000, lastActivityAt: 390_000, waitState: "llm" },
+        // Went quiet long ago because it is waiting on the user, not because it hung.
+        parked: { type: "busy", startedAt: 10_000, lastActivityAt: 20_000, waitState: "tool", activeTool: "bash" },
+      },
+      blockedSessionIDs: new Set(["parked"]),
+    })
+    expect(view.running).toBe(2)
+    expect(view.items.map((item) => item.id)).toEqual(["parked", "busy"])
+    const parked = view.items[0]!
+    expect(parked.blocked).toBe(true)
+    expect(parked.stale).toBe(false)
+    expect(parked.activity).toBe("Waiting for approval")
+    expect(parked.label).toContain("Waiting for approval")
+    expect(parked.label).not.toContain("no update")
+    expect(view.items[1]!.blocked).toBe(false)
+  })
+
+  test("a blocked child with no runtime status still counts as active", () => {
+    const view = buildSubagentStatusView({
+      now: 50_000,
+      parentSessionID: "parent",
+      childSessions: [{ id: "child", parentID: "parent", title: "Review (@reviewer subagent)" }],
+      tasks: [],
+      statuses: {},
+      blockedSessionIDs: new Set(["child"]),
+    })
+    expect(view.items[0]).toMatchObject({ blocked: true, active: true, done: false, activity: "Waiting for approval" })
+  })
+})

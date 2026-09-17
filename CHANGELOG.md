@@ -6,6 +6,33 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- `PostToolUse` lifecycle hooks can hand bounded feedback back to the model: legacy stdout, Claude Code
+  `additionalContext`, block reasons, and exit-2 stderr are appended to the tool result in a `<hook_feedback>` block.
+- `PreToolUse` hooks that answer `permissionDecision: "ask"` now open an interactive-only `hook` permission prompt
+  instead of blocking; the nested Claude Code `hookSpecificOutput` decision shape is accepted.
+- New observation-only `PostToolUseFailure` lifecycle event.
+- Send-now steering from the TUI composer (`ctrl+s`, keybind `input_submit_steer`): a text draft is admitted into the
+  running turn at its next step boundary while plain submits keep using the durable follow-up queue.
+- Subagent status rows show `Waiting for approval` and sort first while a child is parked on a permission or question
+  prompt, instead of reading as stale.
+
+### Changed
+
+- Parallel tool calls emitted in one assistant message run through a session-scoped reader/writer gate: read-only
+  tools overlap, while file edits, `bash`, MCP tools, and batches with non-concurrency-safe children run alone in
+  arrival order.
+- A steering correction admitted while a generation is completing extends the run by one iteration instead of being
+  rejected as `generation_ended_before_application`.
+- `task_parallel` fires `SubagentStop` for every child and cancels already-started siblings when a child fails before
+  its session exists, instead of leaving them running as orphans.
+
+### Fixed
+
+- `multiedit` now appends LSP errors for the changed files to the model-visible result, matching `edit`, `write`, and
+  `apply_patch`.
+
 ## [7.18.6] - 2026-09-17
 
 ### Changed

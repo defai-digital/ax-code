@@ -86,7 +86,11 @@ import {
   useAutonomousPulse,
 } from "./autonomous-pulse"
 import { footerSessionStatusOrIdle } from "./footer-view-model"
-import { familySessionIDs, requestsInSessionTree } from "../../util/pending-request-notices"
+import {
+  familySessionIDs,
+  requestsInSessionTree,
+  sessionIDsWithPendingRequests,
+} from "../../util/pending-request-notices"
 import { recoveredAssistantMessageIDs } from "./display"
 import { childAction, firstChildID, nextChildID } from "./child"
 import { lastUserMessageID, promptState, redoMessageID, undoMessageID } from "./messages"
@@ -326,6 +330,7 @@ export function Session() {
       childSessions: children(),
       statuses: sync.data.session_status,
       parentSessionID: parentID,
+      blockedSessionIDs: sessionIDsWithPendingRequests(sync.data.permission, sync.data.question),
     })
   })
   const requestFamily = createMemo(() => familySessionIDs(sync.data.session, route.sessionID))

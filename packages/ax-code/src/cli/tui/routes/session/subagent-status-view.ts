@@ -60,6 +60,8 @@ export type SubagentStatusItem = {
   done: boolean
   failed: boolean
   stale: boolean
+  /** Parked on a permission or question prompt: a human, not the model, is the bottleneck. */
+  blocked: boolean
   startedAt: number
   lastActivityAt: number
   activity: string
@@ -135,9 +137,11 @@ function activityLabel(input: {
   active: boolean
   done: boolean
   failed: boolean
+  blocked?: boolean
 }) {
   if (input.failed) return "Failed"
   if (input.done) return "Completed"
+  if (input.blocked) return "Waiting for approval"
   if (input.status?.type === "retry") return `Retrying (${input.status.attempt})`
   if (input.status?.type === "busy") {
     if (input.status.waitState === "tool") return toolLabel(input.status.activeTool)
@@ -153,6 +157,12 @@ export function buildSubagentStatusView(input: {
   childSessions: readonly SubagentRollupSession[]
   statuses: Record<string, SubagentRollupStatus | undefined>
   parentSessionID: string
+  /**
+   * Child session ids with a pending permission or question request. A child
+   * waiting on the user reads as blocked, never as stale or silently busy, so
+   * the operator can tell "needs me" apart from "still thinking".
+   */
+  blockedSessionIDs?: ReadonlySet<string>
   now?: number
   staleAfterMs?: number
 }): SubagentStatusView {
@@ -173,7 +183,8 @@ export function buildSubagentStatusView(input: {
     const child = childByID.get(id)
     const task = taskBySessionID.get(id)
     const status = input.statuses[id]
-    const active = status?.type === "busy" || status?.type === "retry" || taskIsActive(task?.status)
+    const blocked = input.blockedSessionIDs?.has(id) === true
+    const active = blocked || status?.type === "busy" || status?.type === "retry" || taskIsActive(task?.status)
     const failed = taskFailed(task?.status)
     const done = !failed && (task?.status === "completed" || (!active && !!child))
     const startedAt = statusStartedAt(status) ?? task?.startedAt ?? child?.startedAt
@@ -182,8 +193,8 @@ export function buildSubagentStatusView(input: {
     const endedAt = active ? now : (task?.endedAt ?? task?.lastActivityAt ?? child?.lastActivityAt ?? now)
     const elapsed = formatElapsed(startedAt, endedAt)
     const inactive = lastActivityAt ? now - lastActivityAt : 0
-    const stale = active && status?.type !== "retry" && !!lastActivityAt && inactive >= staleAfterMs
-    const activity = activityLabel({ status, taskStatus: task?.status, active, done, failed })
+    const stale = active && !blocked && status?.type !== "retry" && !!lastActivityAt && inactive >= staleAfterMs
+    const activity = activityLabel({ status, taskStatus: task?.status, active, done, failed, blocked })
     const staleSuffix = stale ? ` · no update ${formatDuration(inactive)}` : ""
     const elapsedSuffix = elapsed ? ` · ${elapsed}` : ""
     const presentation = sessionPresentation(child)
@@ -198,6 +209,7 @@ export function buildSubagentStatusView(input: {
       done,
       failed,
       stale,
+      blocked,
       startedAt: startedAt ?? 0,
       lastActivityAt,
       activity,
@@ -226,6 +238,7 @@ export function buildSubagentStatusView(input: {
       done,
       failed,
       stale,
+      blocked: false,
       startedAt: task.startedAt ?? 0,
       lastActivityAt: task.lastActivityAt ?? task.startedAt ?? 0,
       activity,
@@ -235,6 +248,9 @@ export function buildSubagentStatusView(input: {
   })
 
   const items = [...boundItems, ...unboundItems].toSorted((a, b) => {
+    // Children waiting on the user come first: they are the only rows the
+    // operator can unblock.
+    if (a.blocked !== b.blocked) return a.blocked ? -1 : 1
     if (a.active !== b.active) return a.active ? -1 : 1
     const agent = (a.agent ?? "").localeCompare(b.agent ?? "")
     if (agent !== 0) return agent

@@ -862,7 +862,8 @@ export const messages = {
   "help.keybind.session_rename": "\u91cd\u65b0\u547d\u540d\u5c0d\u8a71",
   "help.keybind.session_delete": "\u522a\u9664\u5c0d\u8a71",
   "help.keybind.stash_delete": "\u522a\u9664\u5df2\u5132\u5b58\u8349\u7a3f",
-  "help.keybind.model_provider_list": "\u5f9e\u6a21\u578b\u5c0d\u8a71\u65b9\u584a\u958b\u555f\u4f9b\u61c9\u5546\u6e05\u55ae",
+  "help.keybind.model_provider_list":
+    "\u5f9e\u6a21\u578b\u5c0d\u8a71\u65b9\u584a\u958b\u555f\u4f9b\u61c9\u5546\u6e05\u55ae",
   "help.keybind.model_favorite_toggle": "\u5207\u63db\uff1a\u6211\u7684\u6700\u611b",
   "help.keybind.session_interrupt": "\u4e2d\u65b7\u5c0d\u8a71",
   "help.keybind.session_compact": "\u58d3\u7e2e\u5c0d\u8a71",
@@ -906,6 +907,8 @@ export const messages = {
   "help.keybind.input_clear": "\u6e05\u9664\u8f38\u5165",
   "help.keybind.input_paste": "\u8cbc\u4e0a",
   "help.keybind.input_submit": "\u9001\u51fa\u8f38\u5165",
+  "help.keybind.input_submit_steer":
+    "\u7acb\u5373\u9001\u5165\u9032\u884c\u4e2d\u7684\u56de\u5408\uff08\u5f15\u5c0e\uff09",
   "help.keybind.input_newline": "\u63d2\u5165\u63db\u884c",
   "help.keybind.input_move_left": "\u6e38\u6a19\u5411\u5de6",
   "help.keybind.input_move_right": "\u6e38\u6a19\u5411\u53f3",
@@ -949,8 +952,10 @@ export const messages = {
   "help.keybind.terminal_suspend": "\u66ab\u505c\u7d42\u7aef",
   "help.keybind.terminal_title_toggle": "\u5207\u63db\uff1a\u7d42\u7aef\u6a5f\u6a19\u984c",
   "help.keybind.display_thinking": "\u5207\u63db\uff1a\u601d\u8003\u5340\u584a",
-  "help.keybind.permission_option_previous": "\u9078\u64c7\u6b0a\u9650\u63d0\u793a\u4e2d\u7684\u4e0a\u4e00\u500b\u9078\u9805",
-  "help.keybind.permission_option_next": "\u9078\u64c7\u6b0a\u9650\u63d0\u793a\u4e2d\u7684\u4e0b\u4e00\u500b\u9078\u9805",
+  "help.keybind.permission_option_previous":
+    "\u9078\u64c7\u6b0a\u9650\u63d0\u793a\u4e2d\u7684\u4e0a\u4e00\u500b\u9078\u9805",
+  "help.keybind.permission_option_next":
+    "\u9078\u64c7\u6b0a\u9650\u63d0\u793a\u4e2d\u7684\u4e0b\u4e00\u500b\u9078\u9805",
   "help.keybind.permission_fullscreen_toggle": "\u5207\u63db\uff1a\u5168\u87a2\u5e55",
   "prompt.exampleTodo": "\u4fee\u6b63\u7a0b\u5f0f\u78bc\u4e2d\u7684 TODO",
   "prompt.exampleStack": "\u9019\u500b\u5c08\u6848\u4f7f\u7528\u54ea\u4e9b\u6280\u8853\uff1f",

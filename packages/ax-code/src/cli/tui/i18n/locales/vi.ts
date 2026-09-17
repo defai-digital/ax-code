@@ -888,7 +888,8 @@ export const messages = {
   "help.keybind.session_rename": "\u0110\u1ed5i t\u00ean phi\u00ean",
   "help.keybind.session_delete": "X\u00f3a phi\u00ean",
   "help.keybind.stash_delete": "X\u00f3a b\u1ea3n nh\u00e1p \u0111\u00e3 l\u01b0u",
-  "help.keybind.model_provider_list": "M\u1edf danh s\u00e1ch nh\u00e0 cung c\u1ea5p t\u1eeb h\u1ed9p tho\u1ea1i m\u00f4 h\u00ecnh",
+  "help.keybind.model_provider_list":
+    "M\u1edf danh s\u00e1ch nh\u00e0 cung c\u1ea5p t\u1eeb h\u1ed9p tho\u1ea1i m\u00f4 h\u00ecnh",
   "help.keybind.model_favorite_toggle": "Chuy\u1ec3n: Y\u00eau th\u00edch",
   "help.keybind.session_interrupt": "Ng\u1eaft phi\u00ean",
   "help.keybind.session_compact": "N\u00e9n phi\u00ean",
@@ -932,6 +933,8 @@ export const messages = {
   "help.keybind.input_clear": "X\u00f3a y\u00eau c\u1ea7u",
   "help.keybind.input_paste": "D\u00e1n",
   "help.keybind.input_submit": "G\u1eedi y\u00eau c\u1ea7u",
+  "help.keybind.input_submit_steer":
+    "G\u1eedi ngay v\u00e0o l\u01b0\u1ee3t \u0111ang ch\u1ea1y (\u0111i\u1ec1u h\u01b0\u1edbng)",
   "help.keybind.input_newline": "Ch\u00e8n d\u00f2ng m\u1edbi",
   "help.keybind.input_move_left": "Di chuy\u1ec3n con tr\u1ecf tr\u00e1i",
   "help.keybind.input_move_right": "Di chuy\u1ec3n con tr\u1ecf ph\u1ea3i",
@@ -975,8 +978,10 @@ export const messages = {
   "help.keybind.terminal_suspend": "T\u1ea1m d\u1eebng terminal",
   "help.keybind.terminal_title_toggle": "Chuy\u1ec3n: Ti\u00eau \u0111\u1ec1 terminal",
   "help.keybind.display_thinking": "Chuy\u1ec3n: Kh\u1ed1i suy ngh\u0129",
-  "help.keybind.permission_option_previous": "Ch\u1ecdn t\u00f9y ch\u1ecdn tr\u01b0\u1edbc trong l\u1eddi nh\u1eafc quy\u1ec1n",
-  "help.keybind.permission_option_next": "Ch\u1ecdn t\u00f9y ch\u1ecdn ti\u1ebfp theo trong l\u1eddi nh\u1eafc quy\u1ec1n",
+  "help.keybind.permission_option_previous":
+    "Ch\u1ecdn t\u00f9y ch\u1ecdn tr\u01b0\u1edbc trong l\u1eddi nh\u1eafc quy\u1ec1n",
+  "help.keybind.permission_option_next":
+    "Ch\u1ecdn t\u00f9y ch\u1ecdn ti\u1ebfp theo trong l\u1eddi nh\u1eafc quy\u1ec1n",
   "help.keybind.permission_fullscreen_toggle": "Chuy\u1ec3n: To\u00e0n m\u00e0n h\u00ecnh",
   "prompt.exampleTodo": "S\u1eeda TODO trong m\u00e3",
   "prompt.exampleStack": "D\u1ef1 \u00e1n n\u00e0y d\u00f9ng nh\u1eefng c\u00f4ng ngh\u1ec7 n\u00e0o?",

@@ -862,6 +862,7 @@ export const messages = {
   "help.keybind.input_clear": "Bersihkan pesan",
   "help.keybind.input_paste": "Tempel",
   "help.keybind.input_submit": "Kirim pesan",
+  "help.keybind.input_submit_steer": "Kirim sekarang ke giliran yang sedang berjalan (arahkan)",
   "help.keybind.input_newline": "Sisipkan baris baru",
   "help.keybind.input_move_left": "Pindahkan kursor ke kiri",
   "help.keybind.input_move_right": "Pindahkan kursor ke kanan",

@@ -151,3 +151,143 @@ describe("task_parallel prompt routing", () => {
     })
   })
 })
+
+describe("task_parallel sibling lifecycle", () => {
+  async function parent(tmpPath: string) {
+    const parentSession = await Session.create({})
+    const user = await Session.updateMessage({
+      id: MessageID.ascending(),
+      sessionID: parentSession.id,
+      role: "user",
+      time: { created: Date.now() },
+      agent: "build",
+      model: { providerID: "test" as any, modelID: "test-model" as any },
+      tools: {},
+      isolation: { mode: "read-only", network: false },
+      mode: "build",
+    } as any)
+    const assistant = await Session.updateMessage({
+      id: MessageID.ascending(),
+      parentID: user.id,
+      sessionID: parentSession.id,
+      role: "assistant",
+      mode: "build",
+      agent: "build",
+      path: { cwd: tmpPath, root: tmpPath },
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+      modelID: "test-model",
+      providerID: "test",
+      time: { created: Date.now() },
+    } as MessageV2.Assistant)
+    const ctx = {
+      sessionID: parentSession.id,
+      messageID: assistant.id,
+      callID: "",
+      agent: "build",
+      abort: AbortSignal.any([]),
+      messages: [],
+      metadata: () => {},
+      ask: async () => {},
+      extra: {},
+    } as any
+    return { parentSession, ctx }
+  }
+
+  test("fires SubagentStop for every child with its outcome", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx } = await parent(tmp.path)
+        const { LifecycleHooks } = await import("../../src/hooks/lifecycle")
+        const stops: unknown[] = []
+        vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async (input) => {
+          if (input.event === "SubagentStop") stops.push(input.args)
+          return { ok: true, blocked: false, outputs: [] }
+        })
+        let calls = 0
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          calls++
+          const failing = input.parts?.[0]?.text?.includes("fail")
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+              ...(failing ? { error: { name: "UnknownError", data: { message: "boom" } } } : {}),
+            },
+            parts: failing ? [] : [{ type: "text", text: `done ${calls}` }],
+          } as any
+        }) as any)
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute(
+            {
+              tasks: [
+                { description: "one", prompt: "look at one", subagent_type: "explore" },
+                { description: "two", prompt: "fail on two", subagent_type: "explore" },
+              ],
+            },
+            ctx,
+          )
+          expect(result.title).toBe("Parallel digs 1/2 ok")
+          expect(stops.map((item: any) => item.status).toSorted()).toEqual(["completed", "failed"])
+          expect(stops.every((item: any) => item.agent === "explore")).toBe(true)
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+
+  test("a child that fails before its session exists cancels the siblings that already started", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const { ctx, parentSession } = await parent(tmp.path)
+        const originalCreate = Session.create
+        let created = 0
+        vi.spyOn(Session, "create").mockImplementation(async (input: any) => {
+          created++
+          if (created === 2) throw new Error("database busy")
+          return originalCreate(input)
+        })
+        let childStarted!: () => void
+        const started = new Promise<void>((resolve) => {
+          childStarted = resolve
+        })
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined)
+        vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          childStarted()
+          // A long-running child that only the sibling cancellation can stop.
+          await new Promise((resolve) => setTimeout(resolve, 200))
+          return {
+            info: { id: input.messageID, sessionID: input.sessionID, role: "assistant", time: { created: 1 } },
+            parts: [{ type: "text", text: "late" }],
+          } as any
+        }) as any)
+        try {
+          const run = (await TaskParallelTool.init()).execute(
+            {
+              tasks: [
+                { description: "one", prompt: "look at one", subagent_type: "explore" },
+                { description: "two", prompt: "look at two", subagent_type: "explore" },
+              ],
+            },
+            ctx,
+          )
+          await started
+          await expect(run).rejects.toThrow("database busy")
+          const children = await Session.children(parentSession.id)
+          expect(children).toHaveLength(1)
+          expect(cancel).toHaveBeenCalledWith(children[0]!.id, { interrupt: true })
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+})

@@ -943,6 +943,9 @@ export namespace SessionPrompt {
         // the step ceilings.
         hasPendingAutonomousWork:
           effectivelyAutonomous && (activeGoal?.status === "active" || Todo.active(sessionID).length > 0),
+        // A correction admitted at the finish line extends the run by one
+        // iteration instead of being rejected as "generation ended".
+        hasPendingSteering: SessionSteering.hasPending(sessionID, abort),
       })
       if (assistantExit.action === "stop") {
         reason = assistantExit.reason

@@ -427,3 +427,72 @@ describe("TUI conversation language payload", () => {
     expect(body.system).toBeUndefined()
   })
 })
+
+describe("send-now steering", () => {
+  function steerSetup(input: { generation: string | null; receipt?: { status: string; reason?: string } }) {
+    const fixture = setup({ mode: "normal", workMode: "agent", text: "use the other config file" })
+    fixture.host.queueModeEnabled = () => true
+    fixture.host.status = () => ({ type: "busy" })
+    const steering = vi.fn(async () => ({ data: { generation: input.generation } }))
+    const steer = vi.fn(async () => ({ data: input.receipt ?? { status: "accepted" } }))
+    fixture.host.sdk.client = {
+      session: { create: vi.fn(async ({ id }: { id: string }) => ({ data: session(id) })), steering, steer },
+    } as any
+    return { ...fixture, steering, steer }
+  }
+
+  test("the steer gesture delivers text into the running turn and clears the draft", async () => {
+    const { controller, host, requests, steering, steer } = steerSetup({ generation: "gen-1" })
+    await controller.submitSteer()
+    expect(steering).toHaveBeenCalledWith({ sessionID: "ses_test" })
+    expect(steer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionID: "ses_test",
+        expectedGeneration: "gen-1",
+        text: "use the other config file",
+      }),
+    )
+    // No follow-up was queued: nothing hit the async prompt route.
+    expect(requests).toHaveLength(0)
+    expect(host.input.clear).toHaveBeenCalledTimes(1)
+    expect(host.toast.show).toHaveBeenCalledWith(expect.objectContaining({ variant: "info" }))
+  })
+
+  test("without an active generation the steer gesture falls back to the follow-up queue", async () => {
+    const { controller, host, requests, steer } = steerSetup({ generation: null })
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      return Response.json({ id: "queue_saved", status: "waiting_for_idle" }, { status: 202 })
+    }
+    await controller.submitSteer()
+    expect(steer).not.toHaveBeenCalled()
+    expect(requests).toHaveLength(1)
+    expect(new URL(requests[0].url).searchParams.get("followup")).toBe("true")
+    expect(host.input.clear).toHaveBeenCalledTimes(1)
+  })
+
+  test("a vetoed steer keeps the draft and reports the reason", async () => {
+    const { controller, host, requests } = steerSetup({
+      generation: "gen-1",
+      receipt: { status: "rejected", reason: "admission_rejected" },
+    })
+    await controller.submitSteer()
+    expect(requests).toHaveLength(0)
+    expect(host.input.clear).not.toHaveBeenCalled()
+    expect(host.toast.show).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "error", message: "Steering failed: admission_rejected" }),
+    )
+    expect(host.submitPending()).toBe(false)
+  })
+
+  test("the plain submit path never steers", async () => {
+    const { controller, host, requests, steering } = steerSetup({ generation: "gen-1" })
+    host.sdk.fetch = async (url, init) => {
+      requests.push(new Request(url, init))
+      return Response.json({ id: "queue_saved", status: "waiting_for_idle" }, { status: 202 })
+    }
+    await controller.submit()
+    expect(steering).not.toHaveBeenCalled()
+    expect(requests).toHaveLength(1)
+  })
+})

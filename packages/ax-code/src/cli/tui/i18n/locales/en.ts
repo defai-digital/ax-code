@@ -861,6 +861,7 @@ export const messages = {
   "help.keybind.input_clear": "Clear input field",
   "help.keybind.input_paste": "Paste from clipboard",
   "help.keybind.input_submit": "Submit input",
+  "help.keybind.input_submit_steer": "Send now into the running turn (steer)",
   "help.keybind.input_newline": "Insert newline in input",
   "help.keybind.input_move_left": "Move cursor left in input",
   "help.keybind.input_move_right": "Move cursor right in input",

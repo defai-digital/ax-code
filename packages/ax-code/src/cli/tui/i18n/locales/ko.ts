@@ -908,7 +908,8 @@ export const messages = {
   "help.keybind.session_rename": "\uc138\uc158 \uc774\ub984 \ubcc0\uacbd",
   "help.keybind.session_delete": "\uc138\uc158 \uc0ad\uc81c",
   "help.keybind.stash_delete": "\uc800\uc7a5\ub41c \ucd08\uc548 \uc0ad\uc81c",
-  "help.keybind.model_provider_list": "\ubaa8\ub378 \ub300\ud654\uc0c1\uc790\uc5d0\uc11c \uacf5\uae09\uc790 \ubaa9\ub85d \uc5f4\uae30",
+  "help.keybind.model_provider_list":
+    "\ubaa8\ub378 \ub300\ud654\uc0c1\uc790\uc5d0\uc11c \uacf5\uae09\uc790 \ubaa9\ub85d \uc5f4\uae30",
   "help.keybind.model_favorite_toggle": "\uc804\ud658: \uc990\uaca8\ucc3e\uae30",
   "help.keybind.session_interrupt": "\uc138\uc158 \uc911\ub2e8",
   "help.keybind.session_compact": "\uc138\uc158 \uc555\ucd95",
@@ -952,6 +953,8 @@ export const messages = {
   "help.keybind.input_clear": "\uc785\ub825 \uc9c0\uc6b0\uae30",
   "help.keybind.input_paste": "\ubd99\uc5ec\ub123\uae30",
   "help.keybind.input_submit": "\uc785\ub825 \ubcf4\ub0b4\uae30",
+  "help.keybind.input_submit_steer":
+    "\uc9c4\ud589 \uc911\uc778 \ud134\uc5d0 \uc989\uc2dc \ubcf4\ub0b4\uae30(\uc870\uc815)",
   "help.keybind.input_newline": "\uc904 \ubc14\uafc8 \uc0bd\uc785",
   "help.keybind.input_move_left": "\ucee4\uc11c \uc67c\ucabd \uc774\ub3d9",
   "help.keybind.input_move_right": "\ucee4\uc11c \uc624\ub978\ucabd \uc774\ub3d9",
@@ -995,8 +998,10 @@ export const messages = {
   "help.keybind.terminal_suspend": "\ud130\ubbf8\ub110 \uc77c\uc2dc \uc911\uc9c0",
   "help.keybind.terminal_title_toggle": "\uc804\ud658: \ud130\ubbf8\ub110 \uc81c\ubaa9",
   "help.keybind.display_thinking": "\uc804\ud658: \ucd94\ub860 \ube14\ub85d",
-  "help.keybind.permission_option_previous": "\uad8c\ud55c \ud504\ub86c\ud504\ud2b8\uc5d0\uc11c \uc774\uc804 \uc635\uc158 \uc120\ud0dd",
-  "help.keybind.permission_option_next": "\uad8c\ud55c \ud504\ub86c\ud504\ud2b8\uc5d0\uc11c \ub2e4\uc74c \uc635\uc158 \uc120\ud0dd",
+  "help.keybind.permission_option_previous":
+    "\uad8c\ud55c \ud504\ub86c\ud504\ud2b8\uc5d0\uc11c \uc774\uc804 \uc635\uc158 \uc120\ud0dd",
+  "help.keybind.permission_option_next":
+    "\uad8c\ud55c \ud504\ub86c\ud504\ud2b8\uc5d0\uc11c \ub2e4\uc74c \uc635\uc158 \uc120\ud0dd",
   "help.keybind.permission_fullscreen_toggle": "\uc804\ud658: \uc804\uccb4 \ud654\uba74",
   "prompt.exampleTodo": "\ucf54\ub4dc\uc758 TODO \uc218\uc815",
   "prompt.exampleStack": "\uc774 \ud504\ub85c\uc81d\ud2b8\uc758 \uae30\uc220 \uc2a4\ud0dd\uc740?",

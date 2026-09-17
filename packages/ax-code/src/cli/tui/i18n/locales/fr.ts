@@ -893,6 +893,7 @@ export const messages = {
   "help.keybind.input_clear": "Effacer le message",
   "help.keybind.input_paste": "Coller",
   "help.keybind.input_submit": "Envoyer le message",
+  "help.keybind.input_submit_steer": "Envoyer maintenant dans le tour en cours (orienter)",
   "help.keybind.input_newline": "Ins\u00e9rer une nouvelle ligne",
   "help.keybind.input_move_left": "D\u00e9placer le curseur \u00e0 gauche",
   "help.keybind.input_move_right": "D\u00e9placer le curseur \u00e0 droite",
@@ -936,7 +937,8 @@ export const messages = {
   "help.keybind.terminal_suspend": "Suspendre le terminal",
   "help.keybind.terminal_title_toggle": "Basculer : Titre du terminal",
   "help.keybind.display_thinking": "Basculer : Blocs de r\u00e9flexion",
-  "help.keybind.permission_option_previous": "S\u00e9lectionner l\u2019option pr\u00e9c\u00e9dente dans la demande d\u2019autorisation",
+  "help.keybind.permission_option_previous":
+    "S\u00e9lectionner l\u2019option pr\u00e9c\u00e9dente dans la demande d\u2019autorisation",
   "help.keybind.permission_option_next": "S\u00e9lectionner l\u2019option suivante dans la demande d\u2019autorisation",
   "help.keybind.permission_fullscreen_toggle": "Basculer : Plein \u00e9cran",
   "prompt.exampleTodo": "Corriger un TODO du code",

@@ -872,6 +872,7 @@ export const messages = {
   "help.keybind.input_clear": "Eingabe leeren",
   "help.keybind.input_paste": "Einf\u00fcgen",
   "help.keybind.input_submit": "Nachricht senden",
+  "help.keybind.input_submit_steer": "Sofort in den laufenden Durchlauf senden (steuern)",
   "help.keybind.input_newline": "Zeilenumbruch einf\u00fcgen",
   "help.keybind.input_move_left": "Cursor nach links",
   "help.keybind.input_move_right": "Cursor nach rechts",

@@ -30,6 +30,18 @@ that project's runtime and interrupts its active work. Ordinary `ax-code`
 retains its existing foreground lifecycle.
 
 Accepted follow-ups submitted while a session is busy are saved on the server.
+By default they start after the running turn ends, so an unrelated request
+never derails work in progress. To correct the running turn instead, press
+`ctrl+s` (`input_submit_steer` in `keybinds`) with a text-only draft: the text
+is admitted into the active generation and written as a user message at the
+loop's next step boundary, after the in-flight tool calls settle and before the
+next model request. A correction admitted while the turn is finishing extends
+the run by one iteration rather than being dropped. Steering is best-effort: if
+no generation is active any more, the draft is sent through the ordinary path;
+if a hook vetoes it, the draft stays in the composer with the reason. Drafts
+with attachments and slash commands always use the follow-up queue. The same
+delivery is available to other clients through the steering API described in
+[harness controls](harness-controls.md#correct-a-running-generation).
 The composer clears only after acknowledgement. Reattach to the same session
 and use `/queue` to inspect, pause, edit, resume, or cancel them. Editing first
 pauses the item and preserves attachments and model selection; saving does not
