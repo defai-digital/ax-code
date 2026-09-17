@@ -119,7 +119,9 @@ export namespace ProviderTransform {
     // `reasoning_content` whenever a reasoning part is present, so for these
     // providers we must strip the parts before they reach the wire. Groq is the
     // known rejecter: "property 'reasoning_content' is unsupported" — even for
-    // reasoning-capable models like gpt-oss and qwen3.6-27b.
+    // reasoning-capable models like gpt-oss and qwen3.6-27b. The same models
+    // fail the same way when reached through AX Trust (or any other
+    // openai-compatible gateway) because the SDK still emits reasoning_content.
     //
     // All other openai-compatible models are left untouched: many providers
     // (DeepSeek, Qwen, etc.) accept reasoning_content on input and benefit from
@@ -198,7 +200,17 @@ export namespace ProviderTransform {
     // client-side: reasoning parsed out of prefilled think blocks (see
     // assumesPrefilledThinkBlock) must never reach the wire.
     if (isOrnithFamily(model)) return true
-    return model.providerID === "groq"
+    if (model.providerID === "groq") return true
+    // gpt-oss on Groq-compatible gateways (AX Trust groq-openai, custom
+    // OpenAI-compatible Groq, etc.) rejects the same field. Do not key this
+    // off the Trust provider ID: DeepSeek/Qwen on that gateway must keep
+    // reasoning carry-over.
+    return isGptOssFamily(model)
+  }
+
+  function isGptOssFamily(model: Provider.Model): boolean {
+    const id = `${model.id} ${model.api.id}`.toLowerCase()
+    return id.includes("gpt-oss")
   }
 
   function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
@@ -1014,9 +1026,11 @@ export namespace ProviderTransform {
     // Groq's API only accepts `reasoning_effort` values `none` or `default`
     // for reasoning-capable models (Qwen3.6-27B, GPT-OSS-120B). The generic
     // `low`/`medium`/`high` values cause a 400 error: "reasoning_effort must
-    // be one of none or default". Do not auto-generate reasoning-effort
-    // variants; the model still reasons by default without the parameter.
-    if (model.providerID === "groq") {
+    // be one of none or default". The same constraint applies when gpt-oss
+    // is reached through AX Trust or another openai-compatible Groq gateway.
+    // Do not auto-generate reasoning-effort variants; the model still
+    // reasons by default without the parameter.
+    if (model.providerID === "groq" || isGptOssFamily(model)) {
       return {}
     }
 
@@ -1366,7 +1380,7 @@ export namespace ProviderTransform {
       return rest
     }
 
-    if (model.providerID === "groq" || model.providerID === "openrouter") {
+    if (model.providerID === "groq" || model.providerID === "openrouter" || isGptOssFamily(model)) {
       const { reasoningEffort: _reasoningEffort, reasoning_effort: _reasoning_effort, ...rest } = result
       return rest
     }

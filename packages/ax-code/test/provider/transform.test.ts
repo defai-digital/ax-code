@@ -1615,11 +1615,70 @@ describe("ProviderTransform.message - DeepSeek reasoning content", () => {
     expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
   })
 
+  test("AX Trust gpt-oss via @ai-sdk/openai-compatible strips reasoning parts from assistant messages", () => {
+    const msgs = [
+      {
+        role: "assistant",
+        content: [
+          { type: "reasoning", text: "The user wants a line count." },
+          { type: "text", text: "" },
+          {
+            type: "tool-call",
+            toolCallId: "fc_1",
+            toolName: "bash",
+            input: { command: "git ls-files | xargs wc -l" },
+          },
+        ],
+      },
+    ] as any[]
+
+    const result = ProviderTransform.message(
+      msgs,
+      {
+        id: ModelID.make("defai-01-ax-trust-com/openai/gpt-oss-120b"),
+        providerID: ProviderID.make("defai-01-ax-trust-com"),
+        api: {
+          id: "openai/gpt-oss-120b",
+          url: "https://defai-01.ax-trust.com/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+        name: "gpt-oss-120b",
+        capabilities: {
+          temperature: true,
+          reasoning: true,
+          attachment: false,
+          toolcall: true,
+          input: { text: true, audio: false, image: false, video: false, pdf: false },
+          output: { text: true, audio: false, image: false, video: false, pdf: false },
+          interleaved: false,
+        },
+        limit: { context: 128000, output: 8192 },
+        status: "active",
+        options: {},
+        headers: {},
+        release_date: "2025-08-05",
+      },
+      {},
+    )
+
+    expect(result[0].content).toEqual([
+      { type: "text", text: "" },
+      {
+        type: "tool-call",
+        toolCallId: "fc_1",
+        toolName: "bash",
+        input: { command: "git ls-files | xargs wc -l" },
+      },
+    ])
+    expect(result[0].providerOptions?.openaiCompatible?.reasoning_content).toBeUndefined()
+  })
+
   test("non-Groq openai-compatible reasoning models keep reasoning parts (regression guard)", () => {
     // DeepSeek-R1 / Qwen / GLM on many openai-compatible providers accept
     // reasoning_content on input and benefit from cross-turn reasoning
     // carry-over. Stripping would silently degrade their quality, so only
-    // known rejecters (Groq) should have reasoning stripped.
+    // known rejecters (Groq, and gpt-oss on any openai-compatible gateway)
+    // should have reasoning stripped.
     const msgs = [
       {
         role: "assistant",
