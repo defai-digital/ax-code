@@ -697,8 +697,8 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
           ? uiText("ui.previewTheOpeningDigitalCodeAnimation")
           : input.animationPair?.opening === "midnight-dream"
             ? uiText("animation.midnightDream")
-            : input.animationPair?.opening === "fuji-dawn"
-              ? uiText("animation.fujiDawn")
+            : input.animationPair?.opening === "fuji-day"
+              ? uiText("animation.fujiDay")
               : input.animationPair?.opening === "mahjong-match"
                 ? uiText("animation.mahjongMatch")
                 : uiText("animation.classicFoliage"),

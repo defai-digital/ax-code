@@ -1,33 +1,9 @@
-export type FujiStyle = "fuji-dawn" | "fuji-night"
+export type FujiStyle = "fuji-day" | "fuji-night"
 export function isFujiStyle(style: string | undefined): style is FujiStyle {
-  return style === "fuji-dawn" || style === "fuji-night"
+  return style === "fuji-day" || style === "fuji-night"
 }
-
-/** Dawn/night sky stops from the reference widget: top, mid, bottom. */
-export const FUJI_SKY_STOPS: Record<FujiStyle, readonly [string, string, string]> = {
-  "fuji-dawn": ["#1e1b4b", "#4338ca", "#f43f5e"],
-  "fuji-night": ["#030814", "#0c1b33", "#1d3557"],
-}
-
-const hexRgb = (hex: string): readonly [number, number, number] =>
-  [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)) as [number, number, number]
-
-/** Sample the vertical sky gradient. `t` is 0 at the top of the frame. */
-export function fujiSkyRgb(style: FujiStyle, t: number): readonly [number, number, number] {
-  const stops = FUJI_SKY_STOPS[style].map(hexRgb)
-  const x = Math.max(0, Math.min(1, t))
-  const from = x <= 0.5 ? stops[0]! : stops[1]!
-  const to = x <= 0.5 ? stops[1]! : stops[2]!
-  const u = x <= 0.5 ? x * 2 : (x - 0.5) * 2
-  return [0, 1, 2].map((channel) => Math.round(from[channel]! + (to[channel]! - from[channel]!) * u)) as [
-    number,
-    number,
-    number,
-  ]
-}
-
 export function fujiBackground(style: FujiStyle) {
-  return FUJI_SKY_STOPS[style][1]
+  return style === "fuji-day" ? "#a8dadc" : "#101b36"
 }
 export type FujiRun = { text: string; color: string; background?: string }
 // Preserve the user's original artwork, including the left-facing train.
@@ -48,22 +24,22 @@ export function fujiRows(columns: number, rows: number, style: FujiStyle, elapse
   const night = style === "fuji-night"
   const colors = night
     ? {
-        sky: "#e0f2fe",
-        light: "#f1faee",
-        snow: "#e0f2fe",
-        mountain: "#3c6782",
+        sky: "#8ba6d1",
+        light: "#e2eafc",
+        snow: "#d9e5f5",
+        mountain: "#557a85",
         blossom: "#ce91b5",
         trunk: "#aa9292",
         track: "#7b8aab",
       }
     : {
-        sky: "#e0e7ff",
-        light: "#fbbf24",
-        snow: "#fef08a",
-        mountain: "#1e1035",
-        blossom: "#ffb7c5",
+        sky: "#f1faee",
+        light: "#ffb703",
+        snow: "#ffffff",
+        mountain: "#1b4332",
+        blossom: "#ffb5a7",
         trunk: "#6c584c",
-        track: "#1e293b",
+        track: "#495057",
       }
   const grid: FujiRun[][] = Array.from({ length: height }, () =>
     Array.from({ length: width }, () => ({ text: " ", color: colors.sky })),

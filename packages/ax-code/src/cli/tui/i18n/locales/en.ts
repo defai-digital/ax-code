@@ -945,6 +945,6 @@ export const messages = {
   "animation.sunsetSerenade": "Bench: Sunset Serenade",
   "animation.mahjongMatch": "Mahjong: Match",
   "animation.mahjongEnding": "Mahjong: Final Points",
-  "animation.fujiDawn": "Fuji Mountain: Dawn",
+  "animation.fujiDay": "Fuji Mountain: Daytime",
   "animation.fujiNight": "Fuji Mountain: Night",
 } as const

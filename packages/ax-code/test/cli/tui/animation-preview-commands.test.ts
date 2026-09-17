@@ -43,7 +43,7 @@ describe("animation command palette", () => {
       "clear",
       "ending:sunset-serenade",
       "clear",
-      "opening:fuji-dawn",
+      "opening:fuji-day",
       "clear",
       "ending:fuji-night",
       "clear",

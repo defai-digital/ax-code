@@ -64,7 +64,7 @@ async function mount(
     | "golden-foliage"
     | "midnight-dream"
     | "sunset-serenade"
-    | "fuji-dawn"
+    | "fuji-day"
     | "mahjong-match"
     | "mahjong-ending"
     | "fuji-night" = "digital-code",
@@ -143,7 +143,7 @@ describe("ending rain input admission", () => {
 
 test.each([
   "digital-code",
-  "fuji-dawn",
+  "fuji-day",
   "fuji-night",
   "midnight-dream",
   "sunset-serenade",
@@ -202,7 +202,7 @@ test.each([
   "golden-foliage",
   "midnight-dream",
   "sunset-serenade",
-  "fuji-dawn",
+  "fuji-day",
   "fuji-night",
   "mahjong-match",
   "mahjong-ending",
@@ -236,7 +236,7 @@ test.each(["unsupported", "remote", "multiplexer", "missing-resolution"])(
         rendererPtr: 1,
         isDestroyed: false,
       })
-      const done = await mount(true, "fuji-dawn")
+      const done = await mount(true, "fuji-day")
       mocks.tick!()
       expect(mocks.write).not.toHaveBeenCalled()
       mocks.renderer.keyInput.emit("keypress", key("\x1b"))

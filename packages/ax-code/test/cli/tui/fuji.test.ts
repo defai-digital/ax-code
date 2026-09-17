@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest"
-import { fujiRows, fujiBackground, fujiSkyRgb } from "../../../src/cli/tui/component/fuji-view-model"
+import { fujiRows, fujiBackground } from "../../../src/cli/tui/component/fuji-view-model"
 
 describe("Fuji Mountain scenes", () => {
-  test.each(["fuji-dawn", "fuji-night"] as const)("%s clips scenery and train to resized screens", (style) => {
+  test.each(["fuji-day", "fuji-night"] as const)("%s clips scenery and train to resized screens", (style) => {
     for (const [width, height] of [
       [0, 0],
       [1, 1],
@@ -23,7 +23,7 @@ describe("Fuji Mountain scenes", () => {
     }
   })
   test("the train travels and recycles independently of frame rate", () => {
-    const train = (ms: number) => fujiRows(74, 24, "fuji-dawn", ms).slice(18, 22)
+    const train = (ms: number) => fujiRows(74, 24, "fuji-day", ms).slice(18, 22)
     expect(train(0)).not.toEqual(train(500))
     expect(train(0)).toEqual(train(2400))
     expect(train(-100)).toEqual(train(0))
@@ -41,7 +41,7 @@ describe("Fuji Mountain scenes", () => {
   test("the left-facing train travels right-to-left instead of backwards", () => {
     const leftmostInk = (ms: number) => {
       let min = Number.POSITIVE_INFINITY
-      for (const row of fujiRows(74, 20, "fuji-dawn", ms).slice(16)) {
+      for (const row of fujiRows(74, 20, "fuji-day", ms).slice(16)) {
         let column = 0
         for (const run of row) {
           for (let index = 0; index < run.text.length; index++) {
@@ -64,7 +64,7 @@ describe("Fuji Mountain scenes", () => {
     // reset to the right edge. The train never completed its leftward journey.
     const rightmostInk = (ms: number) => {
       let max = -1
-      for (const row of fujiRows(74, 20, "fuji-dawn", ms).slice(16)) {
+      for (const row of fujiRows(74, 20, "fuji-day", ms).slice(16)) {
         let column = 0
         for (const run of row) {
           for (let index = 0; index < run.text.length; index++) {
@@ -79,31 +79,26 @@ describe("Fuji Mountain scenes", () => {
     expect(rightmostInk(2400 - 1)).toBe(-1)
   })
 
-  test("dawn and night preserve Fuji and sakura with distinct sky and celestial colors", () => {
-    const dawn = fujiRows(74, 24, "fuji-dawn", 0),
+  test("day and night preserve Fuji and sakura with distinct sky and celestial colors", () => {
+    const day = fujiRows(74, 24, "fuji-day", 0),
       night = fujiRows(74, 24, "fuji-night", 0)
-    const text = (rows: typeof dawn) => rows.map((r) => r.map((c) => c.text).join("")).join("\n")
-    expect(text(dawn)).toContain(".-'     '-.")
+    const text = (rows: typeof day) => rows.map((r) => r.map((c) => c.text).join("")).join("\n")
+    expect(text(day)).toContain(".-'     '-.")
     expect(text(night)).not.toContain(".-'     '-.")
-    expect(text(dawn)).not.toContain("FUJI MOUNTAIN")
-    for (const scene of [dawn, night]) {
+    expect(text(day)).not.toContain("FUJI MOUNTAIN")
+    for (const scene of [day, night]) {
       expect(text(scene)).toContain('"""""')
       expect(text(scene)).toContain("_.._")
       expect(text(scene)).toContain("===")
     }
-    expect(fujiBackground("fuji-dawn")).toBe("#4338ca")
-    expect(fujiBackground("fuji-night")).toBe("#0c1b33")
-    expect(dawn.flat().some((r) => r.color === "#1e1035")).toBe(true)
-    expect(night.flat().some((r) => r.color === "#3c6782")).toBe(true)
-    expect(fujiSkyRgb("fuji-dawn", 0)).toEqual([0x1e, 0x1b, 0x4b])
-    expect(fujiSkyRgb("fuji-dawn", 1)).toEqual([0xf4, 0x3f, 0x5e])
-    expect(fujiSkyRgb("fuji-night", 0)).toEqual([0x03, 0x08, 0x14])
-    expect(fujiSkyRgb("fuji-night", 1)).toEqual([0x1d, 0x35, 0x57])
+    expect(fujiBackground("fuji-day")).not.toBe(fujiBackground("fuji-night"))
+    expect(day.flat().some((r) => r.color === "#1b4332")).toBe(true)
+    expect(night.flat().some((r) => r.color === "#557a85")).toBe(true)
   })
 })
 
-test("dawn preserves the supplied reference artwork and dawn colors at its original width", () => {
-  const rows = fujiRows(74, 20, "fuji-dawn", 0)
+test("daytime preserves the supplied reference artwork and colors at its original width", () => {
+  const rows = fujiRows(74, 20, "fuji-day", 0)
   const text = rows.map((row) =>
     row
       .map((run) => run.text)
@@ -128,10 +123,10 @@ test("dawn preserves the supplied reference artwork and dawn colors at its origi
     "__________________________________________________________________________",
     "==========================================================================",
   ])
-  expect(rows[2]!.some((run) => run.text.includes(".---.") && run.color === "#fbbf24")).toBe(true)
-  expect(rows[11]!.some((run) => run.text.includes("_.._") && run.color === "#ffb7c5")).toBe(true)
+  expect(rows[2]!.some((run) => run.text.includes(".---.") && run.color === "#ffb703")).toBe(true)
+  expect(rows[11]!.some((run) => run.text.includes("_.._") && run.color === "#ffb5a7")).toBe(true)
   // At this point the complete original left-facing train fits on screen.
-  const train = fujiRows(74, 20, "fuji-dawn", 1200).slice(16)
+  const train = fujiRows(74, 20, "fuji-day", 1200).slice(16)
   expect(train[0]!.map((run) => run.text).join("")).toContain(
     "  _____     ____________________   ____________________ ",
   )

@@ -14,8 +14,8 @@ describe("launch animation pairing", () => {
   test.each([0.4, 0.5, 0.6 - Number.EPSILON])("draw %s pairs Midnight Dream with Sunset Serenade", (draw) => {
     expect(chooseAnimationPair(() => draw)).toEqual({ opening: "midnight-dream", ending: "sunset-serenade" })
   })
-  test.each([0.6, 0.7, 0.8 - Number.EPSILON])("draw %s pairs dawn Fuji with night Fuji", (draw) => {
-    expect(chooseAnimationPair(() => draw)).toEqual({ opening: "fuji-dawn", ending: "fuji-night" })
+  test.each([0.6, 0.7, 0.8 - Number.EPSILON])("draw %s pairs daytime Fuji with night Fuji", (draw) => {
+    expect(chooseAnimationPair(() => draw)).toEqual({ opening: "fuji-day", ending: "fuji-night" })
   })
   test("reading previews and the ending never draws again or changes the opening", () => {
     const random = vi.fn().mockReturnValueOnce(0.125).mockReturnValue(0.375)

@@ -13,14 +13,14 @@ Each TUI launch randomly selects one of five animation pairs with equal probabil
 - Digital Code: purple/blue falling code for the opening, reverse code for the ending.
 - Foliage: classic autumn leaves for the opening, golden leaves for the ending.
 - Bench: Midnight Dream for the opening, Sunset Serenade for the ending.
-- Fuji Mountain: dawn for the opening, night for the ending.
+- Fuji Mountain: daytime for the opening, night for the ending.
 - Mahjong: four-seat match for the opening, final point ledger for the ending.
 
 Fuji Mountain includes a snow-capped mountain, cherry blossoms, and a Shinkansen
 travelling across the foreground. The original 74-column, 20-row artwork is centered without changing its
-proportions; narrow terminals crop the text fallback. Dawn uses an indigo-to-rose
-sky, static clouds, amber sun behind the summit, and pale pink blossoms;
-night uses a deep navy sky, stars, and moon. The original train artwork and both
+proportions; narrow terminals crop the text fallback. Daytime uses the supplied pale
+blue sky, static clouds, golden sun behind the summit, and pale pink blossoms;
+night uses a dark sky, stars, and moon. The original train artwork and both
 platform rows above it are preserved. The train keeps its left-facing nose and
 travels nose-first from right to left, repeating its journey with motion based on
 elapsed time and clipping safely at the screen edges. Local alternate-screen
