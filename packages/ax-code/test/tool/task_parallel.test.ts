@@ -259,15 +259,23 @@ describe("task_parallel sibling lifecycle", () => {
         const started = new Promise<void>((resolve) => {
           childStarted = resolve
         })
-        const cancel = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined)
+        let releaseHang!: () => void
+        const hang = new Promise<void>((resolve) => {
+          releaseHang = resolve
+        })
+        const { LifecycleHooks } = await import("../../src/hooks/lifecycle")
+        const stops: unknown[] = []
+        vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async (input) => {
+          if (input.event === "SubagentStop") stops.push(input)
+          return { ok: true, blocked: false, outputs: [] }
+        })
+        const cancel = vi.spyOn(SessionPrompt, "cancel").mockImplementation(async () => {
+          releaseHang()
+        })
         vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
           childStarted()
-          // A long-running child that only the sibling cancellation can stop.
-          await new Promise((resolve) => setTimeout(resolve, 200))
-          return {
-            info: { id: input.messageID, sessionID: input.sessionID, role: "assistant", time: { created: 1 } },
-            parts: [{ type: "text", text: "late" }],
-          } as any
+          await hang
+          throw new Error("aborted")
         }) as any)
         try {
           const run = (await TaskParallelTool.init()).execute(
@@ -284,6 +292,9 @@ describe("task_parallel sibling lifecycle", () => {
           const children = await Session.children(parentSession.id)
           expect(children).toHaveLength(1)
           expect(cancel).toHaveBeenCalledWith(children[0]!.id, { interrupt: true })
+          expect(stops.some((item: any) => item.sessionID === children[0]!.id && item.args?.status === "failed")).toBe(
+            true,
+          )
         } finally {
           vi.restoreAllMocks()
         }

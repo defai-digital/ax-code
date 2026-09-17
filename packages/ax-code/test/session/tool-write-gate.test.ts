@@ -81,4 +81,27 @@ describe("ToolWriteGate", () => {
       },
     })
   })
+
+  test("abort after grant does not reject or leak the lane", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = SessionID.make("ses_gate_grant_abort")
+        const release = await ToolWriteGate.acquire(session, "exclusive")
+        const controller = new AbortController()
+        const waiting = ToolWriteGate.acquire(session, "exclusive", controller.signal)
+        await settled()
+        expect(ToolWriteGate.inspect(session).waiting).toEqual(["exclusive"])
+        release()
+        const releaseWaiting = await waiting
+        expect(ToolWriteGate.inspect(session)).toEqual({ active: "exclusive", count: 1, waiting: [] })
+        controller.abort()
+        await settled()
+        expect(ToolWriteGate.inspect(session)).toEqual({ active: "exclusive", count: 1, waiting: [] })
+        releaseWaiting()
+        expect(ToolWriteGate.inspect(session)).toEqual({ active: undefined, count: 0, waiting: [] })
+      },
+    })
+  })
 })

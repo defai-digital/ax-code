@@ -374,10 +374,19 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
       })
 
       // Every child owns its own session and settles independently. A child
-      // that throws before its session exists (or an abort) must not leave
-      // its siblings running as orphans: allSettled lets every lane finish or
-      // fail on its own, and a rejection cancels the sessions that did start.
-      const started: SessionID[] = []
+      // that throws before its session exists must cancel siblings immediately
+      // so they do not run to completion as orphans. SubagentStop still fires
+      // for every child that did start, including cancelled ones.
+      const started: { sessionID: SessionID; agent: string }[] = []
+      let failed = false
+      const cancelChild = (sessionID: SessionID) =>
+        SessionPrompt.cancel(sessionID, { interrupt: true }).catch((error) => {
+          log.warn("failed to cancel sibling parallel subagent", { sessionID, error })
+        })
+      const cancelStarted = async () => {
+        failed = true
+        await Promise.all(started.map((child) => cancelChild(child.sessionID)))
+      }
       const outcomes = await Promise.allSettled(
         resolved.map(async ({ task, agent }) =>
           runOneTask({
@@ -388,30 +397,37 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             agent,
             constraints,
             onSessionCreated: (sessionID) => {
-              started.push(sessionID)
+              started.push({ sessionID, agent: agent.name })
+              if (failed) void cancelChild(sessionID)
             },
+          }).catch(async (error) => {
+            await cancelStarted()
+            throw error
           }),
         ),
       )
       const rejected = outcomes.find((outcome) => outcome.status === "rejected")
-      if (rejected) {
-        await Promise.all(
-          started.map((sessionID) =>
-            SessionPrompt.cancel(sessionID, { interrupt: true }).catch((error) => {
-              log.warn("failed to cancel sibling parallel subagent", { sessionID, error })
-            }),
-          ),
-        )
-        throw rejected.reason
-      }
-      const settled = outcomes.map((outcome) => (outcome as PromiseFulfilledResult<TaskOutcome>).value)
-
+      const settled = outcomes.flatMap((outcome) => (outcome.status === "fulfilled" ? [outcome.value] : []))
+      const stopped = new Set(settled.map((outcome) => outcome.task_id))
       for (const outcome of settled) {
         await fireSubagentStop({
           sessionID: outcome.task_id,
           agent: outcome.subagent_type,
           status: outcome.ok ? "completed" : "failed",
         })
+      }
+      if (rejected) {
+        await cancelStarted()
+        for (const child of started) {
+          if (stopped.has(child.sessionID)) continue
+          await fireSubagentStop({
+            sessionID: child.sessionID,
+            agent: child.agent,
+            status: "failed",
+          })
+          stopped.add(child.sessionID)
+        }
+        throw rejected.reason
       }
 
       const okCount = settled.filter((r) => r.ok).length
