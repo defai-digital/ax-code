@@ -263,6 +263,13 @@ export namespace Snapshot {
   }
 
   async function enabled() {
+    // The home directory is not a real workspace: staging `git add .` over
+    // $HOME routinely walks into unrelated, incomplete nested git repos
+    // (e.g. tool caches with an unresolvable HEAD) and aborts the whole
+    // prompt with a snapshot error the user never sees (#466). Skip it
+    // entirely, like the matching guards in auto-index
+    // (src/code-intelligence/auto-index.ts) and File.scan (src/file/index.ts).
+    if (Instance.directory === Filesystem.resolve(Global.Path.home)) return false
     // Snapshots use their own Git store outside the worktree, so an ordinary
     // project directory does not need a .git directory to support undo/redo.
     return (await Config.get()).snapshot !== false
