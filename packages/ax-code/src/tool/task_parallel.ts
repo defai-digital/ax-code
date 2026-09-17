@@ -85,6 +85,8 @@ type TaskOutcome = {
   text: string
   error?: string
   structured?: unknown
+  // Mirrors tool/task.ts: set only when this task requested output_schema.
+  structuredStatus?: "absent" | "captured"
 }
 
 // User lifecycle hooks (SubagentStop): observational only, same contract as
@@ -249,11 +251,20 @@ async function runOneTask(input: {
           ok: false,
           text: "",
           error: `${failure.name}: ${failure.message}`,
+          ...(params.output_schema ? { structuredStatus: "absent" as const } : {}),
         }
       }
     }
 
     const structured = TaskOutputSchema.fromResult(result)
+    // A caller that asked for a schema gets an explicit status on every
+    // outcome shape, matching the single-task tool rather than leaving it to
+    // be inferred from a missing field.
+    const structuredFields = params.output_schema
+      ? structured === undefined
+        ? { structuredStatus: "absent" as const }
+        : { structuredStatus: "captured" as const, structured }
+      : {}
     const error = assistantError(result)
     if (error) {
       return {
@@ -263,7 +274,7 @@ async function runOneTask(input: {
         ok: false,
         text,
         error: `${error.name}: ${assistantErrorMessage(error)}`,
-        ...(structured === undefined ? {} : { structured }),
+        ...structuredFields,
       }
     }
 
@@ -275,6 +286,7 @@ async function runOneTask(input: {
         ok: false,
         text: "",
         error: "Subagent completed without a final response",
+        ...structuredFields,
       }
     }
 
@@ -284,7 +296,7 @@ async function runOneTask(input: {
       task_id: session.id,
       ok: true,
       text,
-      ...(structured === undefined ? {} : { structured }),
+      ...structuredFields,
     }
   } catch (e) {
     await SessionPrompt.cancel(session.id).catch(() => undefined)
@@ -300,6 +312,7 @@ async function runOneTask(input: {
       ok: false,
       text: "",
       error: `${failure.name}: ${failure.message}`,
+      ...(params.output_schema ? { structuredStatus: "absent" as const } : {}),
     }
   }
 }
@@ -470,7 +483,12 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             task_id: r.task_id,
             ok: r.ok,
             error: r.error,
-            ...(r.structured === undefined ? {} : { structured: r.structured }),
+            ...(r.structuredStatus === undefined
+              ? {}
+              : {
+                  structuredStatus: r.structuredStatus,
+                  ...(r.structured === undefined ? {} : { structured: r.structured }),
+                }),
           })),
           writers: isolation.writers,
           readers: isolation.readers,

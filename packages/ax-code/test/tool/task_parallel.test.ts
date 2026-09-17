@@ -302,3 +302,97 @@ describe("task_parallel sibling lifecycle", () => {
     })
   })
 })
+
+describe("task_parallel structured output", () => {
+  test("captures a structured task result and reports its status", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: { bash: false, edit: false, read: true },
+          isolation: { mode: "read-only", network: false },
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => ({
+          info: {
+            id: input.messageID,
+            sessionID: input.sessionID,
+            role: "assistant",
+            time: { created: Date.now(), completed: Date.now() },
+            structured: { verdict: "ok" },
+          },
+          parts: [],
+        })) as any)
+
+        try {
+          const result = await (
+            await TaskParallelTool.init()
+          ).execute(
+            {
+              tasks: [
+                {
+                  description: "audit module",
+                  prompt: "audit the module",
+                  subagent_type: "explore",
+                  output_schema: { type: "object", properties: { verdict: { type: "string" } } },
+                },
+              ],
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          // A structured-only child counts as a successful, usable result.
+          expect(result.metadata.results).toHaveLength(1)
+          expect(result.metadata.results[0]).toMatchObject({
+            ok: true,
+            structuredStatus: "captured",
+            structured: { verdict: "ok" },
+          })
+          expect(result.output).toContain("<task_structured_output>")
+          expect(result.output).toContain('"verdict": "ok"')
+          expect(promptSpy.mock.calls[0]![0]).toMatchObject({ format: { type: "json_schema" } })
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+})

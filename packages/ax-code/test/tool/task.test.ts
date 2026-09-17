@@ -1241,4 +1241,97 @@ describe("tool.task", () => {
       },
     })
   })
+
+  test("captures a structured subagent result without a prose finalize retry", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        let calls = 0
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async (input: any) => {
+          calls++
+          return {
+            info: {
+              id: input.messageID,
+              sessionID: input.sessionID,
+              role: "assistant",
+              time: { created: Date.now(), completed: Date.now() },
+              structured: { bugs: ["a"] },
+            },
+            parts: [],
+          } as any
+        }) as any)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "find bugs",
+              prompt: "find bugs",
+              subagent_type: "general",
+              output_schema: { type: "object", properties: { bugs: { type: "array" } } },
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          // A captured structured value is usable evidence on its own, so the
+          // empty-prose finalize retry must not run a second prompt.
+          expect(calls).toBe(1)
+          expect(result.metadata.emptyResult).toBe(false)
+          expect(result.metadata.structuredStatus).toBe("captured")
+          expect(result.metadata.structured).toEqual({ bugs: ["a"] })
+          expect(result.output).toContain("<task_structured_output>")
+          expect(result.output).toContain('"bugs"')
+          // The caller's schema is forwarded to the child turn.
+          expect(promptSpy.mock.calls[0]![0]).toMatchObject({ format: { type: "json_schema" } })
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
+        }
+      },
+    })
+  })
 })
