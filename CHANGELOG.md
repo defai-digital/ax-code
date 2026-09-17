@@ -6,9 +6,17 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.6] - 2026-09-17
+
 ### Changed
 
+- Publish the paired SDK 2.5.30.
 - Skip native evidence rebuilds on main and dev pushes that do not touch crates or addon inputs, matching pull requests.
+
+### Fixed
+
+- Keep TodoWrite status live during delegated tasks for every prompt family.
+- Point oversized CLI argv errors at MiniMax Code CLI and Qoder CLI as stdin-capable alternatives.
 
 ## [7.18.5] - 2026-09-17
 
