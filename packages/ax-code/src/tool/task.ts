@@ -590,6 +590,10 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
             finalizeError: !!finalizeError,
             finalizeErrorName: finalizeError?.name,
             finalizeErrorMessage: finalizeError?.message,
+            // A failed task cannot have captured a structured result, but a
+            // caller that asked for one must still see that status explicitly
+            // rather than inferring it from a missing field.
+            ...(params.output_schema ? { structuredStatus: "absent" as const } : {}),
           },
           [
             `task_id: ${session.id} (for resuming to continue this task if needed)`,

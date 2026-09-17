@@ -589,10 +589,90 @@ describe("tool.task", () => {
           expect(result.metadata.subagentError).toBe(true)
           expect(result.metadata.errorName).toBe("Error")
           expect(result.metadata.errorMessage).toContain("provider may be unresponsive")
+          // No output_schema was requested, so the metadata shape is unchanged.
+          expect(result.metadata.structuredStatus).toBeUndefined()
         } finally {
           promptSpy.mockRestore()
           cancelSpy.mockRestore()
           removeSpy.mockRestore()
+        }
+      },
+    })
+  })
+
+  test("reports structuredStatus absent when a schema-requesting task fails recoverably", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const parent = await Session.create({})
+        const user = await Session.updateMessage({
+          id: MessageID.ascending(),
+          sessionID: parent.id,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "build",
+          model: { providerID: "test" as any, modelID: "test-model" as any },
+          tools: {},
+          mode: "build",
+        } as any)
+        const assistant = await Session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: user.id,
+          sessionID: parent.id,
+          role: "assistant",
+          mode: "build",
+          agent: "build",
+          path: { cwd: tmp.path, root: tmp.path },
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+          modelID: "test-model",
+          providerID: "test",
+          time: { created: Date.now() },
+        } as MessageV2.Assistant)
+
+        const promptSpy = vi.spyOn(SessionPrompt, "prompt").mockImplementation((async () => {
+          throw new Error("Subagent timed out after 10 minutes — provider may be unresponsive")
+        }) as any)
+        const cancelSpy = vi.spyOn(SessionPrompt, "cancel").mockResolvedValue(undefined as never)
+
+        try {
+          const result = await (
+            await TaskTool.init()
+          ).execute(
+            {
+              description: "Analyze Python code for bugs",
+              prompt: "find bugs",
+              subagent_type: "general",
+              output_schema: { type: "object", properties: { bugs: { type: "array" } } },
+            },
+            {
+              sessionID: parent.id,
+              messageID: assistant.id,
+              callID: "",
+              agent: "build",
+              abort: AbortSignal.any([]),
+              messages: [],
+              metadata: () => {},
+              ask: async () => {},
+              extra: {},
+            } as any,
+          )
+
+          // The caller asked for a schema, so the status is explicit rather
+          // than something it must infer from a missing field.
+          expect(result.metadata.structuredStatus).toBe("absent")
+          expect(result.metadata.structured).toBeUndefined()
+          // A failed run must not fabricate a structured block.
+          expect(result.output).not.toContain("<task_structured_output>")
+        } finally {
+          promptSpy.mockRestore()
+          cancelSpy.mockRestore()
         }
       },
     })
