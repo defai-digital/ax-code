@@ -262,6 +262,8 @@ test("Windows argv guard accounts for shim escaping and returns no prompt conten
   } catch (error) {
     expect(error).toMatchObject({ isRetryable: false, requestBodyValues: undefined })
     expect(String(error)).not.toContain(secretPrompt)
+    expect(String(error)).toContain("minimax-cli")
+    expect(String(error)).toContain("qoder-cli")
   }
 })
 
