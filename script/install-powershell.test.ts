@@ -299,7 +299,7 @@ function Invoke-ReleaseDownload {
 }
 function Verify-DownloadedArchive {
   param([string]$ArchivePath, [string]$SignatureUrl, [string]$SignaturePath)
-  Assert-Equal (Get-FileHash -LiteralPath $ArchivePath).Hash (Get-FileHash -LiteralPath $script:FixtureArchive).Hash
+  Assert-Equal (Get-AxFileSha256 $ArchivePath) (Get-AxFileSha256 $script:FixtureArchive)
 }
 Assert-Equal (Install-FromRelease) "9.9.9"
 Assert-InstalledBundle
@@ -799,8 +799,11 @@ function Invoke-TestMinisign { $global:LASTEXITCODE = 0 }
 function Assert-MinisignAvailable {}
 function Get-MinisignCommand { return "Invoke-TestMinisign" }
 $AxCodeMinisignPublicKey = "test-key"
+$rootPath = [IO.Path]::GetFullPath($Source).TrimEnd('\', '/')
 $entries = @(Get-ChildItem -LiteralPath $Source -File -Recurse | ForEach-Object {
-  [ordered]@{ path = $_.FullName.Substring($Source.Length + 1).Replace('\', '/'); size = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+  $fullPath = [IO.Path]::GetFullPath($_.FullName)
+  $relative = $fullPath.Substring($rootPath.Length).TrimStart('\', '/').Replace('\', '/')
+  [ordered]@{ path = $relative; size = $_.Length; sha256 = Get-AxFileSha256 $_.FullName }
 })
 [ordered]@{ schema = "ax-code.runtime-integrity.v1"; algorithm = "sha256"; files = $entries } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Source "runtime-integrity.json")
 Set-Content -LiteralPath (Join-Path $Source "runtime-integrity.json.minisig") -Value "test-signature"

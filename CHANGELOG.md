@@ -26,6 +26,7 @@ changes belong to AX Coder.
   evaluated.
 - Compute Windows installer SHA-256 with .NET so integrity checks work when `Get-FileHash` is not loaded.
 - Keep Windows runtime-integrity fixtures and Authenticode test doubles visible to `sign-windows-runtime.ps1`.
+- Build integrity-fixture relative paths without `$Source.Length + 1`, which truncated `source bundle` paths.
 
 ## [7.18.7] - 2026-09-17
 
