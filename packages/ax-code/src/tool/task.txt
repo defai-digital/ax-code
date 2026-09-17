@@ -12,3 +12,5 @@ Use task_parallel only for independent read-only tasks with distinct deliverable
 Foreground is the default and waits for the final result. Set background=true only when useful independent work can continue. It returns task_id and running state; completion is delivered automatically. Do not sleep, poll, or ask for status. If the result is needed now, use waitfor.
 
 Resume with task_id to retain the child's context instead of starting discovery again. A new invocation without task_id starts fresh. Summarize relevant findings for the user; the child's final message is not directly visible to them. Stop once the assigned question is resolved and disclose unresolved evidence.
+
+Pass output_schema (a JSON Schema object) when the result must be machine-checkable rather than prose. The child must return that shape; the captured value comes back in the result metadata as `structured` and in a <task_structured_output> block. External $ref is rejected. Not supported with background=true — use the foreground when you need a validated structured result.

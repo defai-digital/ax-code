@@ -1,5 +1,6 @@
 import { taskParentConstraints } from "./task-constraints"
 import { assistantError, assistantErrorMessage, errorDetails, isAbortError } from "./task-errors"
+import { TaskOutputSchema } from "./task-output-schema"
 import { Tool } from "./tool"
 import DESCRIPTION from "./task_parallel.txt"
 import z from "zod"
@@ -46,6 +47,7 @@ const TaskItem = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
   prompt: z.string().describe("The task for the agent to perform"),
   subagent_type: z.string().describe("The type of specialized agent to use for this task"),
+  output_schema: TaskOutputSchema.Parameter.optional(),
 })
 
 const parameters = z.object({
@@ -82,6 +84,7 @@ type TaskOutcome = {
   ok: boolean
   text: string
   error?: string
+  structured?: unknown
 }
 
 // User lifecycle hooks (SubagentStop): observational only, same contract as
@@ -177,6 +180,10 @@ async function runOneTask(input: {
     ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
   }
 
+  // Caller-supplied schema, validated at the tool boundary before any child
+  // session exists, mapped onto the shared structured-output turn.
+  const structuredFormat = params.output_schema ? TaskOutputSchema.toFormat(params.output_schema) : undefined
+
   try {
     if (ctx.abort.aborted) throw new DOMException("Aborted", "AbortError")
     const promptParts = await resolvePromptParts(params.prompt)
@@ -192,6 +199,7 @@ async function runOneTask(input: {
         toolsScope: "turn",
         isolation: constraints.isolation,
         parts: promptParts,
+        format: structuredFormat,
       }),
       SUBAGENT_TIMEOUT_MS,
       `Subagent timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes`,
@@ -200,7 +208,9 @@ async function runOneTask(input: {
     if (ctx.abort.aborted) throw new DOMException("Aborted", "AbortError")
     let text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
     const firstError = assistantError(result)
-    if (text.trim().length === 0 && !firstError) {
+    // A child that satisfied output_schema produced usable evidence even with
+    // no prose, so the empty-result finalize retry must not run.
+    if (text.trim().length === 0 && !firstError && TaskOutputSchema.fromResult(result) === undefined) {
       try {
         result = await withTimeout(
           SessionPrompt.prompt({
@@ -212,6 +222,7 @@ async function runOneTask(input: {
             tools: { ...taskTools, task: false, task_parallel: false },
             isolation: constraints.isolation,
             toolsScope: "turn",
+            format: structuredFormat,
             parts: [
               {
                 type: "text",
@@ -242,6 +253,7 @@ async function runOneTask(input: {
       }
     }
 
+    const structured = TaskOutputSchema.fromResult(result)
     const error = assistantError(result)
     if (error) {
       return {
@@ -251,10 +263,11 @@ async function runOneTask(input: {
         ok: false,
         text,
         error: `${error.name}: ${assistantErrorMessage(error)}`,
+        ...(structured === undefined ? {} : { structured }),
       }
     }
 
-    if (text.trim().length === 0) {
+    if (text.trim().length === 0 && structured === undefined) {
       return {
         description: params.description,
         subagent_type: agent.name,
@@ -271,6 +284,7 @@ async function runOneTask(input: {
       task_id: session.id,
       ok: true,
       text,
+      ...(structured === undefined ? {} : { structured }),
     }
   } catch (e) {
     await SessionPrompt.cancel(session.id).catch(() => undefined)
@@ -443,6 +457,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
           "<task_result>",
           body,
           "</task_result>",
+          ...(result.structured === undefined ? [] : ["", TaskOutputSchema.render(result.structured)]),
         ].join("\n")
       })
 
@@ -455,6 +470,7 @@ export const TaskParallelTool = Tool.define("task_parallel", async (ctx) => {
             task_id: r.task_id,
             ok: r.ok,
             error: r.error,
+            ...(r.structured === undefined ? {} : { structured: r.structured }),
           })),
           writers: isolation.writers,
           readers: isolation.readers,

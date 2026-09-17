@@ -18,6 +18,7 @@ import { Permission } from "@/permission"
 import { Log } from "@/util/log"
 import { withTimeout } from "@/util/timeout"
 import { ToolBoolean } from "./schema"
+import { TaskOutputSchema } from "./task-output-schema"
 
 const MAX_DEPTH = 5
 export const MAX_BACKGROUND_SUBAGENTS = 8
@@ -74,6 +75,7 @@ const parameters = z.object({
   background: ToolBoolean.optional().describe(
     "Run the agent in the background. Returns immediately with a task_id. You will be notified when it completes. DO NOT sleep, poll, or proactively check on its progress. Default false.",
   ),
+  output_schema: TaskOutputSchema.Parameter.optional(),
 })
 
 type TaskMetadata = {
@@ -91,6 +93,10 @@ type TaskMetadata = {
   finalizeError?: boolean
   finalizeErrorName?: string
   finalizeErrorMessage?: string
+  // Set only when the caller requested output_schema, so schema-less callers
+  // keep an unchanged result shape. `structured` is the captured payload.
+  structuredStatus?: "absent" | "captured"
+  structured?: unknown
 }
 
 function taskResult(title: string, metadata: TaskMetadata, output: string) {
@@ -242,6 +248,15 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
     description,
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
+      // Fail before any child session exists. A background task cannot return a
+      // validated structured result, so accepting this combination would spawn
+      // work whose contract the caller can never observe.
+      if (params.output_schema && params.background) {
+        throw new Error(
+          "output_schema is not supported with background: true — run the task in the foreground so its structured result can be validated and returned.",
+        )
+      }
+      const structuredFormat = params.output_schema ? TaskOutputSchema.toFormat(params.output_schema) : undefined
       let depth = 0
       let parent: SessionID | undefined = ctx.sessionID
       let aborted = false
@@ -447,6 +462,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
             toolsScope: "turn",
             isolation: constraints.isolation,
             parts: promptParts,
+            format: structuredFormat,
           }),
           SUBAGENT_TIMEOUT_MS,
           `Subagent timed out after ${SUBAGENT_TIMEOUT_MS / 60_000} minutes — provider may be unresponsive`,
@@ -455,7 +471,9 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         ensureNotAborted()
         let text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
         const firstError = assistantError(result)
-        if (text.trim().length === 0 && !firstError) {
+        // A child that satisfied output_schema produced usable evidence even
+        // with no prose, so the empty-result finalize retry must not run.
+        if (text.trim().length === 0 && !firstError && TaskOutputSchema.fromResult(result) === undefined) {
           finalizeAttempted = true
           const finalizeMessageID = MessageID.ascending()
           try {
@@ -475,6 +493,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
                   ...taskTools,
                   task: false,
                 },
+                format: structuredFormat,
                 parts: [
                   {
                     type: "text",
@@ -584,7 +603,8 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
 
       const text = result.parts.findLast((x) => x.type === "text")?.text ?? ""
       const error = assistantError(result)
-      const emptyResult = text.trim().length === 0
+      const structured = TaskOutputSchema.fromResult(result)
+      const emptyResult = text.trim().length === 0 && structured === undefined
       const recoveredFromEmpty = finalizeAttempted && !emptyResult
       const recoveredResultNeedsReview = recoveredFromEmpty && needsRecoveredResultReview(text)
       const finalizeErrorText = finalizeError
@@ -618,6 +638,7 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
         "<task_result>",
         taskResultText,
         "</task_result>",
+        ...(structured === undefined ? [] : ["", TaskOutputSchema.render(structured)]),
       ].join("\n")
 
       await fireSubagentStop({
@@ -641,6 +662,11 @@ export const TaskTool = Tool.define("task", async (ctx?) => {
           finalizeError: !!finalizeError,
           finalizeErrorName: finalizeError?.name,
           finalizeErrorMessage: finalizeError?.message,
+          ...(params.output_schema
+            ? structured === undefined
+              ? { structuredStatus: "absent" as const }
+              : { structuredStatus: "captured" as const, structured }
+            : {}),
         },
         output,
       )

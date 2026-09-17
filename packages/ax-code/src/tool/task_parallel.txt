@@ -16,3 +16,5 @@ Limits:
 - Same depth and timeout rules as the single task tool
 
 When the digs finish, summarize the combined evidence for the user. Each result includes a task_id you can resume later with the task tool.
+
+Set output_schema on an individual task (a JSON Schema object) when that result must be machine-checkable rather than prose. Each child then returns that shape; captured values appear per result in both the metadata and a <task_structured_output> block. External $ref is rejected.
