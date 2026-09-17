@@ -595,7 +595,7 @@ jobs:
         run: |
           set -euo pipefail
           URL="https://download.ax-code.com/releases/download/${AX_CODE_RELEASE_TAG}/release-ready.json"
-          for attempt in $(seq 1 120); do
+          for _ in $(seq 1 120); do
             if curl -fsS "$URL" | jq -e --arg tag "$AX_CODE_RELEASE_TAG" '.tag_name == $tag and .verified == true' >/dev/null; then
               exit 0
             fi
