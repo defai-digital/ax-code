@@ -61,8 +61,8 @@ catalogs:
       specifier: 6.0.146
       version: 6.0.146
     ax-tui:
-      specifier: jsr:@defai-digital/ax-tui@0.1.5
-      version: 0.1.5
+      specifier: jsr:@defai-digital/ax-tui@0.1.6
+      version: 0.1.6
     diff:
       specifier: 8.0.3
       version: 8.0.3
@@ -350,7 +350,7 @@ importers:
         version: 3.1.3(@ai-sdk/openai-compatible@2.0.38(zod@4.3.6))(@ai-sdk/provider-utils@4.0.33(zod@4.3.6))(@ai-sdk/provider@3.0.8)(ai@6.0.146(zod@4.3.6))(zod@4.3.6)
       ax-tui:
         specifier: "catalog:"
-        version: "@jsr/defai-digital__ax-tui@0.1.5(@typescript/typescript6@6.0.2)"
+        version: "@jsr/defai-digital__ax-tui@0.1.6(@typescript/typescript6@6.0.2)"
       bonjour-service:
         specifier: 1.3.0
         version: 1.3.0
@@ -1979,11 +1979,11 @@ packages:
     resolution:
       { integrity: sha512-4JQNk+3mVzK3xh2rqd6RB4J46qUR19azEHBneZyTZM+c456qOrbbM/5xcR8huNCCcbVt7+UmizG6GuUvPvKUYg== }
 
-  "@jsr/defai-digital__ax-tui@0.1.5":
+  "@jsr/defai-digital__ax-tui@0.1.6":
     resolution:
       {
-        integrity: sha512-IUx2rhHk16yIUisrTVFpd7uMIKNBIXXB+s1IGVjVq7BujMDMEM6vhJzd8uPeMTZg24jst640mdCI2KN9n+cZsQ==,
-        tarball: https://npm.jsr.io/~/11/@jsr/defai-digital__ax-tui/0.1.5.tgz,
+        integrity: sha512-ocOzY5+0co7zseZxWthZ6NihjyEOjIHm43zykxVf6WMJjwqhIcBKDJdVIR/nkRPIC9pECEwOdFKWDaCgrk/KDw==,
+        tarball: https://npm.jsr.io/~/11/@jsr/defai-digital__ax-tui/0.1.6.tgz,
       }
 
   "@leichtgewicht/ip-codec@2.0.5":
@@ -8940,7 +8940,7 @@ snapshots:
 
   "@jsdevtools/ono@7.1.3": {}
 
-  "@jsr/defai-digital__ax-tui@0.1.5(@typescript/typescript6@6.0.2)":
+  "@jsr/defai-digital__ax-tui@0.1.6(@typescript/typescript6@6.0.2)":
     dependencies:
       "@babel/core": 7.29.6
       "@babel/preset-typescript": 7.27.1(@babel/core@7.29.6)

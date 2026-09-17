@@ -14,6 +14,9 @@ const DEFAULTS: Record<string, string> = {
   "codex-cli": "codex-cli",
   "grok-build-cli": "grok-build-cli",
   "kimi-cli": "kimi-cli",
+  "muse-cli": "muse-cli",
+  "minimax-cli": "minimax-cli",
+  "qoder-cli": "qoder-cli",
 }
 
 const KIMI_CODE_LEGACY_MODEL_IDS = new Set(["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"])
@@ -147,11 +150,87 @@ async function resolveKimiModel(): Promise<CliModelInfo> {
   return { model: DEFAULTS["kimi-cli"]!, source: "default" }
 }
 
+function museConfigDir() {
+  const testHome = process.env.AX_CODE_TEST_HOME?.trim()
+  if (testHome) return join(testHome, ".config", "muse")
+  const xdg = process.env.XDG_CONFIG_HOME?.trim()
+  if (xdg) return join(xdg, "muse")
+  return join(homeDir(), ".config", "muse")
+}
+
+async function resolveMuseModel(): Promise<CliModelInfo> {
+  const envModel = process.env.MUSE_MODEL?.trim()
+  if (envModel) return { model: envModel, source: "MUSE_MODEL" }
+
+  const settings = await readJson(join(museConfigDir(), "settings.json"))
+  const model = settings ? resolveJsonModelString(settings.model) : undefined
+  if (model) {
+    const testHome = process.env.AX_CODE_TEST_HOME?.trim()
+    const source = testHome
+      ? "test-home ~/.config/muse/settings.json"
+      : process.env.XDG_CONFIG_HOME?.trim()
+        ? "$XDG_CONFIG_HOME/muse/settings.json"
+        : "~/.config/muse/settings.json"
+    return { model, source }
+  }
+
+  return { model: DEFAULTS["muse-cli"]!, source: "default" }
+}
+
+function minimaxDataDir() {
+  const testHome = process.env.AX_CODE_TEST_HOME?.trim()
+  if (testHome) return join(testHome, ".minimax")
+  const dataDir = process.env.MINIMAX_DATA_DIR?.trim() || process.env.MAVIS_DATA_DIR?.trim()
+  if (dataDir) return dataDir
+  return join(homeDir(), ".minimax")
+}
+
+function resolveYamlDefaultModel(yaml: string): string | undefined {
+  const match = yaml.match(/^\s*defaultModel:\s*(?:"([^"]+)"|'([^']+)'|([^\s#]+))/m)
+  const value = match?.[1] ?? match?.[2] ?? match?.[3]
+  return value?.trim() || undefined
+}
+
+async function resolveMiniMaxModel(): Promise<CliModelInfo> {
+  const envModel = process.env.MCODE_MODEL?.trim()
+  if (envModel) return { model: envModel, source: "MCODE_MODEL" }
+
+  const configPath = join(minimaxDataDir(), "config.yaml")
+  const yaml = await readText(configPath)
+  const model = yaml ? resolveYamlDefaultModel(yaml) : undefined
+  if (model) {
+    const testHome = process.env.AX_CODE_TEST_HOME?.trim()
+    const source = testHome
+      ? "test-home ~/.minimax/config.yaml"
+      : process.env.MINIMAX_DATA_DIR?.trim()
+        ? "$MINIMAX_DATA_DIR/config.yaml"
+        : process.env.MAVIS_DATA_DIR?.trim()
+          ? "$MAVIS_DATA_DIR/config.yaml"
+          : "~/.minimax/config.yaml"
+    return { model, source }
+  }
+
+  return { model: DEFAULTS["minimax-cli"]!, source: "default" }
+}
+
+async function resolveQoderModel(): Promise<CliModelInfo> {
+  return resolveModelFromJsonSettings({
+    envVar: "QODER_MODEL",
+    settingsPath: ".qoder/settings.json",
+    sourceLabel: "~/.qoder/settings.json",
+    defaultModel: DEFAULTS["qoder-cli"]!,
+    read: resolveModelFromObject,
+  })
+}
+
 const RESOLVERS: Record<string, () => Promise<CliModelInfo>> = {
   "claude-code": resolveClaudeModel,
   "codex-cli": resolveCodexModel,
   "grok-build-cli": async () => ({ model: DEFAULTS["grok-build-cli"]!, source: "default" }),
   "kimi-cli": resolveKimiModel,
+  "muse-cli": resolveMuseModel,
+  "minimax-cli": resolveMiniMaxModel,
+  "qoder-cli": resolveQoderModel,
 }
 
 export async function resolveCliModel(providerID: string): Promise<CliModelInfo> {

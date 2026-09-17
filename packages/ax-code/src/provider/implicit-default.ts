@@ -42,7 +42,7 @@ export function preferredDefaultSkuForProvider(providerID: string): string | und
   if (providerID === "alibaba-coding-plan" || providerID === "alibaba-coding-plan-cn") return "qwen3-coder-plus"
   if (providerID.startsWith("alibaba")) return FAMILY_DEFAULTS.qwen.modelID
   if (providerID.startsWith("minimax")) return "MiniMax-M3"
-  if (providerID === "meta") return "muse-spark-1.3"
+  if (providerID === "meta" || providerID === "muse-cli") return "muse-spark-1.3"
   if (providerID === "google" || providerID === "google-vertex") return "gemini-3.8-flash"
   if (providerID === "groq") return "openai/gpt-oss-20b"
   return undefined

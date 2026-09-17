@@ -12,7 +12,7 @@ describe("tui provider list view model", () => {
   })
 
   test("filters retired provider IDs", () => {
-    expect(disabledProviderIDs({ disabled_providers: ["xai", "qoder-cli", "openrouter"] }, [])).toEqual(["openrouter"])
+    expect(disabledProviderIDs({ disabled_providers: ["xai", "gemini-cli", "openrouter"] }, [])).toEqual(["openrouter"])
   })
 
   test("filters IDs that are already present in the connected list", () => {

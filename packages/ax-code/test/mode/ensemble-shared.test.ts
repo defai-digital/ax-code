@@ -30,12 +30,12 @@ describe("resolveConnectedProviderID", () => {
   })
 
   test("maps colloquial names for cli providers", () => {
-    const cliConnected = ["grok-build-cli", "kimi-cli", "claude-code", "codex-cli"]
+    const cliConnected = ["grok-build-cli", "kimi-cli", "claude-code", "codex-cli", "qoder-cli"]
     expect(resolveConnectedProviderID("gemini", cliConnected)).toBeUndefined()
     expect(resolveConnectedProviderID("kimi", cliConnected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("Kimi Code", cliConnected)).toBe("kimi-cli")
     expect(resolveConnectedProviderID("Grok Build CLI", cliConnected)).toBe("grok-build-cli")
-    expect(resolveConnectedProviderID("qodercli", cliConnected)).toBeUndefined()
+    expect(resolveConnectedProviderID("qodercli", cliConnected)).toBe("qoder-cli")
     expect(resolveConnectedProviderID("claude", cliConnected)).toBe("claude-code")
     expect(resolveConnectedProviderID("openai", cliConnected)).toBe("codex-cli")
     expect(resolveConnectedProviderID("chatgpt", cliConnected)).toBe("codex-cli")
@@ -47,6 +47,12 @@ describe("resolveConnectedProviderID", () => {
     expect(resolveConnectedProviderID("minimax", connected)).toBe("minimax-coding-plan")
     expect(resolveConnectedProviderID("MiniMax Token Plan", connected)).toBe("minimax-coding-plan")
     expect(resolveConnectedProviderID("deepseek", connected)).toBeUndefined()
+  })
+
+  test("prefers bundled CLI ids when both CLI and hosted providers are connected", () => {
+    expect(resolveConnectedProviderID("muse", ["meta", "muse-cli"])).toBe("muse-cli")
+    expect(resolveConnectedProviderID("mcode", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-cli")
+    expect(resolveConnectedProviderID("minimax", ["minimax-coding-plan", "minimax-cli"])).toBe("minimax-cli")
   })
 
   test("maps plan-provider colloquial names to the connected first-party id", () => {

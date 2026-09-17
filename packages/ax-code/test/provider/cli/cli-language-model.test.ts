@@ -1088,8 +1088,40 @@ describe("CliLanguageModel", () => {
     expect(cmd).not.toContain("write file")
   })
 
-  test("does not define the retired qoder-cli bridge", () => {
-    expect(CLI_PROVIDER_DEFINITIONS["qoder-cli"]).toBeUndefined()
+  test("passes Qoder CLI prompt through headless print stdin", () => {
+    process.env.AX_CODE_AUTONOMOUS = "false"
+    try {
+      const definition = CLI_PROVIDER_DEFINITIONS["qoder-cli"]
+      expect(definition).toBeDefined()
+
+      const cmd = buildCliCommand(
+        {
+          providerID: "qoder-cli",
+          modelID: "qoder-cli",
+          binary: "qodercli",
+          args: definition?.args ?? [],
+          parser: definition!.parser,
+          promptMode: definition?.promptMode ?? "stdin",
+          workspaceArg: definition?.workspaceArg,
+        },
+        "write file",
+        "/repo",
+      )
+
+      expect(cmd).toEqual([
+        "qodercli",
+        "-p",
+        "--output-format",
+        "stream-json",
+        "--permission-mode",
+        "dont_ask",
+        "--cwd",
+        "/repo",
+      ])
+      expect(cmd).not.toContain("write file")
+    } finally {
+      restoreAutonomous()
+    }
   })
 
   test("adds autonomous-only flags by default", () => {
@@ -1167,6 +1199,123 @@ describe("CliLanguageModel", () => {
     )
 
     expect(cmd).toEqual(["grok", "--prompt-file", "/tmp/prompt.txt"])
+  })
+
+  test("passes Muse CLI prompt file through headless exec", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["muse-cli"]
+    expect(definition).toBeDefined()
+
+    const cmd = buildCliCommand(
+      {
+        providerID: "muse-cli",
+        modelID: "muse-cli",
+        binary: "muse",
+        args: definition?.args ?? [],
+        parser: definition!.parser,
+        promptMode: definition?.promptMode ?? "file",
+        promptFlag: definition?.promptFlag,
+        workspaceArg: definition?.workspaceArg,
+      },
+      "/tmp/prompt.txt",
+      "/repo",
+    )
+
+    expect(cmd).toEqual([
+      "muse",
+      "exec",
+      "--json",
+      "--approval-mode",
+      "never",
+      "--disable-approval",
+      "--trust-workspace",
+      "--workspace",
+      "/repo",
+      "--prompt-file",
+      "/tmp/prompt.txt",
+    ])
+    expect(cmd).not.toContain("--disable-write")
+    expect(cmd).not.toContain("--yolo")
+  })
+
+  test("passes Muse CLI model and effort flags", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["muse-cli"]
+    const cmd = buildCliCommand(
+      {
+        providerID: "muse-cli",
+        modelID: "muse-spark-1.3",
+        binary: "muse",
+        args: definition?.args ?? [],
+        parser: definition!.parser,
+        promptMode: definition?.promptMode ?? "file",
+        promptFlag: definition?.promptFlag,
+      },
+      "/tmp/prompt.txt",
+      undefined,
+      "max",
+    )
+
+    expect(cmd).toContain("--model")
+    expect(cmd[cmd.indexOf("--model") + 1]).toBe("muse-spark-1.3")
+    expect(cmd).toContain("--reasoning-effort")
+    expect(cmd[cmd.indexOf("--reasoning-effort") + 1]).toBe("max")
+  })
+
+  test("passes MiniMax Code CLI prompt through headless exec stdin", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["minimax-cli"]
+    expect(definition).toBeDefined()
+
+    const cmd = buildCliCommand(
+      {
+        providerID: "minimax-cli",
+        modelID: "minimax-cli",
+        binary: "mcode",
+        args: definition?.args ?? [],
+        parser: definition!.parser,
+        promptMode: definition?.promptMode ?? "stdin",
+        workspaceArg: definition?.workspaceArg,
+      },
+      "write file",
+      "/repo",
+    )
+
+    expect(cmd).toEqual([
+      "mcode",
+      "exec",
+      "--output-format",
+      "stream-json",
+      "--permission",
+      "full",
+      "--prompt-mode",
+      "coding",
+      "--input",
+      "-",
+      "--cwd",
+      "/repo",
+    ])
+    expect(cmd).not.toContain("write file")
+    expect(cmd).not.toContain("mmx")
+  })
+
+  test("passes MiniMax Code CLI model and effort flags", () => {
+    const definition = CLI_PROVIDER_DEFINITIONS["minimax-cli"]
+    const cmd = buildCliCommand(
+      {
+        providerID: "minimax-cli",
+        modelID: "MiniMax-M3",
+        binary: "mcode",
+        args: definition?.args ?? [],
+        parser: definition!.parser,
+        promptMode: definition?.promptMode ?? "stdin",
+      },
+      "write file",
+      undefined,
+      "high",
+    )
+
+    expect(cmd).toContain("--model")
+    expect(cmd[cmd.indexOf("--model") + 1]).toBe("MiniMax-M3")
+    expect(cmd).toContain("--effort")
+    expect(cmd[cmd.indexOf("--effort") + 1]).toBe("high")
   })
 
   test("maps effort to each supported CLI's native arguments", () => {

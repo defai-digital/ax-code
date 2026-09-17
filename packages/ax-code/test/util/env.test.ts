@@ -202,6 +202,8 @@ describe("Env.sanitize", () => {
     const originalAnthropic = process.env.ANTHROPIC_API_KEY
     const originalXai = process.env.XAI_API_KEY
     const originalKimi = process.env.KIMI_API_KEY
+    const originalMeta = process.env.META_API_KEY
+    const originalMiniMax = process.env.MINIMAX_API_KEY
 
     try {
       process.env.GEMINI_API_KEY = "gemini-key"
@@ -209,6 +211,8 @@ describe("Env.sanitize", () => {
       process.env.ANTHROPIC_API_KEY = "anthropic-key"
       process.env.XAI_API_KEY = "xai-key"
       process.env.KIMI_API_KEY = "kimi-key"
+      process.env.META_API_KEY = "meta-key"
+      process.env.MINIMAX_API_KEY = "minimax-key"
 
       const env = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "codex-cli")
 
@@ -218,6 +222,15 @@ describe("Env.sanitize", () => {
       expect(env.ANTHROPIC_API_KEY).toBeUndefined()
       expect(env.XAI_API_KEY).toBeUndefined()
       expect(env.KIMI_API_KEY).toBeUndefined()
+      expect(env.META_API_KEY).toBeUndefined()
+
+      const muse = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "muse-cli")
+      expect(muse.META_API_KEY).toBe("meta-key")
+      expect(muse.OPENAI_API_KEY).toBeUndefined()
+
+      const minimax = Env.withCliProviderKeys(Env.sanitize({ PATH: "/bin" }), "minimax-cli")
+      expect(minimax.MINIMAX_API_KEY).toBe("minimax-key")
+      expect(minimax.OPENAI_API_KEY).toBeUndefined()
     } finally {
       if (originalGemini === undefined) delete process.env.GEMINI_API_KEY
       else process.env.GEMINI_API_KEY = originalGemini
@@ -229,6 +242,10 @@ describe("Env.sanitize", () => {
       else process.env.XAI_API_KEY = originalXai
       if (originalKimi === undefined) delete process.env.KIMI_API_KEY
       else process.env.KIMI_API_KEY = originalKimi
+      if (originalMeta === undefined) delete process.env.META_API_KEY
+      else process.env.META_API_KEY = originalMeta
+      if (originalMiniMax === undefined) delete process.env.MINIMAX_API_KEY
+      else process.env.MINIMAX_API_KEY = originalMiniMax
     }
   })
 })

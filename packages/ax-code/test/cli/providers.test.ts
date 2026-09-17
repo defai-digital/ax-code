@@ -55,9 +55,11 @@ describe("providers command", () => {
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("gemini-cli")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("codex-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("grok-build-cli")).toBe(true)
-    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("qoder-cli")).toBe(false)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("qoder-cli")).toBe(true)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("antigravity-cli")).toBe(false)
     expect(DEFAULT_LOGIN_PROVIDER_IDS.has("kimi-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("muse-cli")).toBe(true)
+    expect(DEFAULT_LOGIN_PROVIDER_IDS.has("minimax-cli")).toBe(true)
   })
 
   test("providers login accepts default Cloud API provider ids directly", async () => {
@@ -204,14 +206,14 @@ describe("providers command", () => {
     const warnSpy = vi.spyOn(prompts.log, "warn").mockImplementation(() => {})
 
     try {
-      await Auth.set("qoder-cli", { type: "api", key: "cli" })
+      await Auth.set("gemini-cli", { type: "api", key: "cli" })
       await ProvidersListCommand.handler({} as any)
 
-      expect(infoSpy.mock.calls.some(([message]) => String(message).includes("qoder-cli"))).toBe(false)
+      expect(infoSpy.mock.calls.some(([message]) => String(message).includes("gemini-cli"))).toBe(false)
       expect(
         warnSpy.mock.calls.some(([message]) => {
           const text = String(message)
-          return text.includes("qoder-cli") && text.includes("retired") && text.includes("providers logout qoder-cli")
+          return text.includes("gemini-cli") && text.includes("retired") && text.includes("providers logout gemini-cli")
         }),
       ).toBe(true)
       expect(outroSpy).toHaveBeenCalledWith("0 credentials (1 retired credential ignored)")
@@ -232,15 +234,15 @@ describe("providers command", () => {
     const confirmSpy = vi.spyOn(prompts, "confirm")
 
     try {
-      await ProvidersLoginCommand.handler({ url: "qoder-cli" } as any)
-      await ProvidersLoginCommand.handler({ url: "QODER-CLI" } as any)
+      await ProvidersLoginCommand.handler({ url: "gemini-cli" } as any)
+      await ProvidersLoginCommand.handler({ url: "GEMINI-CLI" } as any)
 
-      expect(errorSpy).toHaveBeenCalledWith('Provider "qoder-cli" has been retired and is no longer supported.')
-      expect(errorSpy).toHaveBeenCalledWith('Provider "QODER-CLI" has been retired and is no longer supported.')
+      expect(errorSpy).toHaveBeenCalledWith('Provider "gemini-cli" has been retired and is no longer supported.')
+      expect(errorSpy).toHaveBeenCalledWith('Provider "GEMINI-CLI" has been retired and is no longer supported.')
       expect(passwordSpy).not.toHaveBeenCalled()
       expect(confirmSpy).not.toHaveBeenCalled()
-      expect(await Auth.get("qoder-cli")).toBeUndefined()
-      expect(await Auth.get("QODER-CLI")).toBeUndefined()
+      expect(await Auth.get("gemini-cli")).toBeUndefined()
+      expect(await Auth.get("GEMINI-CLI")).toBeUndefined()
       expect(outroSpy).toHaveBeenCalledWith("Done")
     } finally {
       introSpy.mockRestore()
@@ -446,14 +448,14 @@ describe("providers command", () => {
     const infoSpy = vi.spyOn(prompts.log, "info").mockImplementation(() => {})
 
     try {
-      await Config.updateGlobal({ disabled_providers: ["qoder-cli"] })
+      await Config.updateGlobal({ disabled_providers: ["gemini-cli"] })
 
-      await ProvidersDisableCommand.handler({ provider: "qoder-cli" } as any)
-      await ProvidersEnableCommand.handler({ provider: "qoder-cli" } as any)
+      await ProvidersDisableCommand.handler({ provider: "gemini-cli" } as any)
+      await ProvidersEnableCommand.handler({ provider: "gemini-cli" } as any)
 
-      expect(errorSpy).toHaveBeenCalledWith('Provider "qoder-cli" has been retired and cannot be disabled.')
-      expect(errorSpy).toHaveBeenCalledWith('Provider "qoder-cli" has been retired and cannot be enabled.')
-      expect((await Config.getGlobal()).disabled_providers).toEqual(["qoder-cli"])
+      expect(errorSpy).toHaveBeenCalledWith('Provider "gemini-cli" has been retired and cannot be disabled.')
+      expect(errorSpy).toHaveBeenCalledWith('Provider "gemini-cli" has been retired and cannot be enabled.')
+      expect((await Config.getGlobal()).disabled_providers).toEqual(["gemini-cli"])
       expect(outroSpy).toHaveBeenCalledWith("Done")
     } finally {
       await Config.updateGlobal({ disabled_providers: [] }).catch(() => undefined)

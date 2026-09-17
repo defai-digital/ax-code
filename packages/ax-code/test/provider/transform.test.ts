@@ -2439,6 +2439,16 @@ describe("ProviderTransform.variants", () => {
       expect(result.high).toEqual({ reasoningEffort: "high" })
     })
 
+    test("Muse Code CLI is a Muse family provider", () => {
+      const model = createMockModel({
+        id: "muse-spark-1.3",
+        providerID: "muse-cli",
+        family: "muse",
+        api: { id: "muse-spark-1.3", npm: "cli" },
+      })
+      expect(ProviderTransform.isMuseFamily(model)).toBe(true)
+    })
+
     test("Muse family match ignores muse tokens in the provider path", () => {
       const gateway = createMockModel({
         id: "accounts/muse-tools/models/custom-model",

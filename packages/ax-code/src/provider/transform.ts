@@ -468,7 +468,7 @@ export namespace ProviderTransform {
     api: { id: string }
     family?: string
   }): boolean {
-    if (model.providerID === "meta") return true
+    if (model.providerID === "meta" || model.providerID === "muse-cli") return true
     const segment = model.id ? modelIdFinalSegment(model.id).toLowerCase() : ""
     const blob = `${segment} ${model.api.id} ${model.family ?? ""}`.toLowerCase()
     return blob.includes("muse")

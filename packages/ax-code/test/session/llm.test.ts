@@ -3836,7 +3836,7 @@ describe("session.llm.streamIdleWatchdog", () => {
       delete process.env["AX_CODE_STREAM_IDLE_TIMEOUT_MS"]
       expect(LLM.isCliProviderID("kimi-cli")).toBe(true)
       expect(LLM.isCliProviderID("custom-cli")).toBe(true)
-      expect(LLM.isCliProviderID("qoder-cli")).toBe(false)
+      expect(LLM.isCliProviderID("qoder-cli")).toBe(true)
       expect(LLM.isCliProviderID("openai")).toBe(false)
       expect(LLM.streamIdleTimeoutMs("kimi-cli")).toBe(900_000)
       expect(LLM.streamIdleTimeoutMs("ax-engine")).toBe(900_000)

@@ -10,10 +10,23 @@ changes belong to AX Coder.
 
 - Index Go, Python, Rust, Java, and Ruby symbols through the native tree-sitter parser when LSP returns none.
 - Add a Ruby on Rails skill for Zeitwerk, tests, and bundle conventions without booting the Rails process.
+- Add Muse Code CLI (`muse-cli`) as a bundled CLI provider.
+- Add MiniMax Code CLI (`minimax-cli`) as a bundled CLI provider.
+- Restore Qoder CLI (`qoder-cli`) as a bundled CLI provider.
+- Add Italian language support for the TUI and conversation preferences.
+
+### Changed
+
+- Consume AX TUI 0.1.6, including the longer stdin escape-sequence timeout that stops mid-sequence terminal replies from being typed into the prompt.
+- Group CJK languages first in the language picker and sort remaining locales by English names.
 
 ### Fixed
 
 - Spawn Shopify `ruby-lsp` for Ruby instead of RuboCop, and keep it out of startup prewarm.
+- Recover reasoning-only completions and expire loop checkpoints.
+- Pass each CLI provider's workspace flag through the connect probe so Muse `--trust-workspace` is paired with `--workspace`.
+- Stream MiniMax Code CLI assistant deltas without replaying the consolidated `item.completed` text.
+- Treat Qoder nested authentication errors as login failures and ignore non-JSON stream banners.
 
 ## [7.18.4] - 2026-09-17
 

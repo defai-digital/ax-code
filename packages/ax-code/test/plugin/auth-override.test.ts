@@ -44,7 +44,7 @@ describe("plugin.auth-override", () => {
             'import { writeFile } from "node:fs/promises"',
             "export default async () => ({",
             "  auth: {",
-            "    provider: 'qoder-cli',",
+            "    provider: 'gemini-cli',",
             "    methods: [{ type: 'api', label: 'Retired' }],",
             `    loader: async () => { await writeFile(${JSON.stringify(marker)}, "called"); return {} },`,
             "  },",
@@ -55,7 +55,7 @@ describe("plugin.auth-override", () => {
       },
     })
     const marker = path.join(tmp.path, "retired-loader-ran")
-    await Auth.set("qoder-cli", { type: "api", key: "stale-key" })
+    await Auth.set("gemini-cli", { type: "api", key: "stale-key" })
 
     try {
       const methods = await Instance.provide({
@@ -67,10 +67,10 @@ describe("plugin.auth-override", () => {
         },
       })
 
-      expect(methods[ProviderID.make("qoder-cli")]).toBeUndefined()
+      expect(methods[ProviderID.make("gemini-cli")]).toBeUndefined()
       await expect(fs.access(marker)).rejects.toThrow()
     } finally {
-      await Auth.remove("qoder-cli").catch(() => undefined)
+      await Auth.remove("gemini-cli").catch(() => undefined)
     }
   })
 

@@ -23,6 +23,12 @@ describe("application contracts", () => {
 
   test("classifies provider connection choices", () => {
     expect(CLI_PROVIDER_IDS).toContain("grok-build-cli")
+    expect(CLI_PROVIDER_IDS).toContain("muse-cli")
+    expect(CLI_PROVIDER_IDS).toContain("minimax-cli")
+    expect(CLI_PROVIDER_IDS).toContain("qoder-cli")
+    expect(providerConnectCategory("muse-cli")).toBe("cli")
+    expect(providerConnectCategory("minimax-cli")).toBe("cli")
+    expect(providerConnectCategory("qoder-cli")).toBe("cli")
     expect(providerConnectCategory("ax-engine")).toBe("ax-engine")
     expect(providerConnectCategory("lmstudio")).toBe("local")
     expect(providerConnectCategory("local-llm")).toBe("local")

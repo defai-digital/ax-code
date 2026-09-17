@@ -22,6 +22,7 @@ const GROK_CLI_IDS = ["grok-build-cli"]
 const OPENAI_IDS = ["openai", "codex-cli"]
 const CLAUDE_IDS = ["anthropic", "claude-code"]
 const KIMI_IDS = ["kimi-cli", "kimi-cloud-plan"]
+const MUSE_IDS = ["muse-cli", "meta"]
 const ALIBABA_PLAN_IDS = [
   "alibaba-token-plan",
   "alibaba-coding-plan",
@@ -29,7 +30,7 @@ const ALIBABA_PLAN_IDS = [
   "alibaba-coding-plan-cn",
 ]
 const ZAI_PLAN_IDS = ["zai-coding-plan", "zai", "zhipuai-coding-plan", "zhipuai"]
-const MINIMAX_PLAN_IDS = ["minimax-coding-plan", "minimax-cn-coding-plan", "minimax", "minimax-cn"]
+const MINIMAX_PLAN_IDS = ["minimax-cli", "minimax-coding-plan", "minimax-cn-coding-plan", "minimax", "minimax-cn"]
 
 /** Colloquial names users type ("grok", "codex") → connected provider IDs. */
 const PROVIDER_ALIASES: Record<string, string[]> = {
@@ -51,11 +52,22 @@ const PROVIDER_ALIASES: Record<string, string[]> = {
   google: ["google"],
   kimi: KIMI_IDS,
   "kimi-code": KIMI_IDS,
+  muse: MUSE_IDS,
+  "muse-cli": MUSE_IDS,
+  "muse-code": MUSE_IDS,
+  "muse-spark": MUSE_IDS,
+  meta: MUSE_IDS,
   "kimi-code-cli": KIMI_IDS,
+  qoder: ["qoder-cli"],
+  qodercli: ["qoder-cli"],
+  "qoder-cli": ["qoder-cli"],
   moonshot: KIMI_IDS,
   "moonshot-ai": KIMI_IDS,
   moonshotai: KIMI_IDS,
   minimax: MINIMAX_PLAN_IDS,
+  mcode: MINIMAX_PLAN_IDS,
+  "minimax-cli": MINIMAX_PLAN_IDS,
+  "minimax-code": MINIMAX_PLAN_IDS,
   "minimax-coding": MINIMAX_PLAN_IDS,
   "minimax-coding-plan": MINIMAX_PLAN_IDS,
   "minimax-token-plan": MINIMAX_PLAN_IDS,
@@ -107,10 +119,18 @@ const FAMILY_MODEL_PREFIXES: Record<string, string[]> = {
   "zai-coding-plan": ["glm"],
   "zhipuai-coding-plan": ["glm"],
   minimax: ["minimax"],
+  "minimax-cli": ["minimax"],
+  mcode: ["minimax"],
+  "minimax-code": ["minimax"],
   "minimax-coding-plan": ["minimax"],
   "minimax-token-plan": ["minimax"],
   kimi: ["kimi", "k3", "moonshot"],
   "kimi-cli": ["kimi", "k3", "moonshot"],
+  muse: ["muse"],
+  "muse-cli": ["muse"],
+  "muse-code": ["muse"],
+  "muse-spark": ["muse"],
+  meta: ["muse"],
   "kimi-code": ["kimi", "k3", "moonshot"],
   moonshot: ["kimi", "k3", "moonshot"],
   moonshotai: ["kimi", "k3", "moonshot"],

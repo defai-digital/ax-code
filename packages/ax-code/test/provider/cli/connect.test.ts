@@ -1,6 +1,32 @@
 import { describe, expect, test, vi } from "vitest"
+import { PassThrough } from "node:stream"
 import { checkCliProviderAuth, probeCliLanguageModel } from "../../../src/provider/cli/connect"
 import { Process } from "../../../src/util/process"
+import { Instance } from "../../../src/project/instance"
+import { tmpdir } from "../../fixture/fixture"
+
+function successfulChild(output: string) {
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  const stdin = new PassThrough()
+  const exited = new Promise<number>((resolve) => {
+    setTimeout(() => {
+      stdout.end(output)
+      stderr.end()
+      resolve(0)
+    }, 0)
+  })
+  return {
+    stdout,
+    stderr,
+    stdin,
+    exited,
+    exitCode: null,
+    signalCode: null,
+    kill: () => true,
+    pid: 123,
+  } as any
+}
 
 describe("probeCliLanguageModel", () => {
   test("succeeds when the CLI process exits cleanly", async () => {
@@ -146,6 +172,63 @@ describe("probeCliLanguageModel", () => {
       await expect(checkCliProviderAuth("claude-code", "claude")).resolves.toContain("Claude CLI is not logged in")
     } finally {
       runSpy.mockRestore()
+    }
+  })
+
+  test("probe passes bundled workspaceArg into the spawned CLI", async () => {
+    await using tmp = await tmpdir()
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementation(() => successfulChild('{"payload_type":"run.output.delta","payload":{"text":"OK"}}\n'))
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await probeCliLanguageModel({
+            providerID: "muse-cli",
+            modelID: "muse-cli",
+            binary: "muse",
+          })
+        },
+      })
+
+      const cmd = spawn.mock.calls[0]?.[0] as string[]
+      expect(cmd).toContain("--trust-workspace")
+      expect(cmd).toContain("--workspace")
+      expect(cmd[cmd.indexOf("--workspace") + 1]).toBe(tmp.path)
+    } finally {
+      spawn.mockRestore()
+    }
+  })
+
+  test("probe passes MiniMax --cwd from the bundled definition", async () => {
+    await using tmp = await tmpdir()
+    const spawn = vi
+      .spyOn(Process, "spawn")
+      .mockImplementation(() =>
+        successfulChild('{"type":"item.completed","item":{"id":"item_1","type":"assistant_message","text":"OK"}}\n'),
+      )
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          await probeCliLanguageModel({
+            providerID: "minimax-cli",
+            modelID: "minimax-cli",
+            binary: "mcode",
+          })
+        },
+      })
+
+      const cmd = spawn.mock.calls[0]?.[0] as string[]
+      expect(cmd).toContain("--cwd")
+      expect(cmd[cmd.indexOf("--cwd") + 1]).toBe(tmp.path)
+      expect(cmd).toContain("--input")
+      expect(cmd).toContain("-")
+    } finally {
+      spawn.mockRestore()
     }
   })
 })

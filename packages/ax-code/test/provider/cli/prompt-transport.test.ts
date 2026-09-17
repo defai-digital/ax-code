@@ -57,7 +57,7 @@ async function collect(stream: ReadableStream<LanguageModelV3StreamPart>) {
 }
 
 describe.each(["doGenerate", "doStream"] as const)("%s prompt transport", (method) => {
-  test.each(["claude-code", "codex-cli", "grok-build-cli"])(
+  test.each(["claude-code", "codex-cli", "grok-build-cli", "muse-cli", "minimax-cli", "qoder-cli"])(
     "%s delivers the complete large prompt without putting it in argv",
     async (providerID) => {
       await using tmp = await tmpdir()
@@ -82,7 +82,7 @@ process.stdout.write(crypto.createHash("sha256").update(input).digest("hex") + "
           throw Object.assign(new Error("spawn ENAMETOOLONG"), { code: "ENAMETOOLONG" })
         }
         expect(cmd).not.toContain(expected)
-        if (providerID === "grok-build-cli") {
+        if (providerID === "grok-build-cli" || providerID === "muse-cli") {
           expect(cmd).not.toContain("-p")
           const flag = cmd.indexOf("--prompt-file")
           expect(flag).toBeGreaterThan(0)

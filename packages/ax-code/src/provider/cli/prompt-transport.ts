@@ -24,7 +24,7 @@ export function assertCliCommandSize(cmd: string[], providerID: string, platform
   throw new APICallError({
     message:
       `${providerID} CLI command line exceeds AX Code's safe process argument budget. ` +
-      "Select codex-cli, claude-code, or grok-build-cli for large prompts, or reduce the session context. " +
+      "Select codex-cli, claude-code, grok-build-cli, or muse-cli for large prompts, or reduce the session context. " +
       "This request was not sent to the CLI and will not be retried automatically.",
     url: `cli:${providerID}`,
     requestBodyValues: undefined,

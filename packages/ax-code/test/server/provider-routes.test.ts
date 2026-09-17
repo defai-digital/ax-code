@@ -65,7 +65,7 @@ describe("provider routes", () => {
   test("rejects retired provider auth writes while allowing stale credential removal", async () => {
     await using tmp = await tmpdir({ git: true })
     const directory = encodeURIComponent(tmp.path)
-    const providerID = "qoder-cli"
+    const providerID = "gemini-cli"
     await Auth.set(providerID, { type: "api", key: "stale-key" })
 
     try {
@@ -128,7 +128,7 @@ describe("provider routes", () => {
     expect(ids).toContain("custom-private-gpu")
     expect(ids).toContain("grok-build-cli")
     expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "ax-studio", "local-llm"]))
-    expect(ids).not.toContain("qoder-cli")
+    expect(ids).toContain("qoder-cli")
     expect(ids).not.toContain("gemini-cli")
     expect(ids).not.toContain("antigravity-cli")
     expect(ids).toContain("kimi-cli")
@@ -246,9 +246,9 @@ describe("provider routes", () => {
     ).toBe(false)
     expect(
       shouldShowProviderInList({
-        key: "QODER-CLI",
+        key: "GEMINI-CLI",
         disabled: new Set(),
-        enabled: new Set(["QODER-CLI"]),
+        enabled: new Set(["GEMINI-CLI"]),
       }),
     ).toBe(false)
   })

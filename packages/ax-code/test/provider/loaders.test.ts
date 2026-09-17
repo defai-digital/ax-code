@@ -131,14 +131,14 @@ describe("CLI provider loaders", () => {
 })
 
 describe("online provider loaders", () => {
-  test("retired qoder-cli provider is not loaded from project config", async () => {
+  test("retired gemini-cli provider is not loaded from project config", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         await writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
-            provider: { "qoder-cli": {} },
+            provider: { "gemini-cli": {} },
           }),
         )
       },
@@ -148,7 +148,7 @@ describe("online provider loaders", () => {
       directory: tmp.path,
       fn: async () => {
         const providers = await Provider.list()
-        expect(providers[ProviderID.make("qoder-cli")]).toBeUndefined()
+        expect(providers[ProviderID.make("gemini-cli")]).toBeUndefined()
       },
     })
   })

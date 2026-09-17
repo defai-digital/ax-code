@@ -13,6 +13,9 @@ describe("cloud API providers: DeepSeek + Meta Muse Spark", () => {
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("zai")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-coding-plan")
     expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-cn-coding-plan")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("muse-cli")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("minimax-cli")
+    expect(DEFAULT_SETUP_PROVIDER_IDS).toContain("qoder-cli")
     expect(
       shouldShowProviderInList({
         key: "deepseek",

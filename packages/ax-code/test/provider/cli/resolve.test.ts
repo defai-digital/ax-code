@@ -188,8 +188,48 @@ describe("resolveCliModel", () => {
     expect(info.source).toBe("default")
   })
 
-  test("does not resolve retired qoder-cli settings", async () => {
-    expect(await resolveCliModel("qoder-cli")).toEqual({ model: "unknown", source: "none" })
+  test("returns default for qoder-cli when no config", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.QODER_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.QODER_MODEL
+    try {
+      const info = await resolveCliModel("qoder-cli")
+      expect(info).toEqual({ model: "qoder-cli", source: "default" })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.QODER_MODEL = originalModel
+      else delete process.env.QODER_MODEL
+    }
+  })
+
+  test("qoder-cli reads settings from isolated test home", async () => {
+    await using tmp = await tmpdir()
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.QODER_MODEL
+    process.env.AX_CODE_TEST_HOME = tmp.path
+    delete process.env.QODER_MODEL
+    try {
+      const settingsDir = path.join(tmp.path, ".qoder")
+      await fs.mkdir(settingsDir, { recursive: true })
+      await fs.writeFile(
+        path.join(settingsDir, "settings.json"),
+        JSON.stringify({ model: { name: "bailian-intl/qwen3.8-max-tp" } }),
+      )
+
+      const info = await resolveCliModel("qoder-cli")
+      expect(info).toEqual({
+        model: "bailian-intl/qwen3.8-max-tp",
+        source: "~/.qoder/settings.json",
+      })
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.QODER_MODEL = originalModel
+      else delete process.env.QODER_MODEL
+    }
   })
 
   async function withKimiEnv(
@@ -340,6 +380,123 @@ describe("resolveCliModel", () => {
       expect(info).toEqual({
         model: "kimi-code/k3",
         source: "~/.kimi-code/config.toml",
+      })
+    })
+  })
+
+  async function withMuseEnv(
+    values: { home?: string; model?: string | null; xdg?: string | null },
+    run: () => Promise<void>,
+  ) {
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.MUSE_MODEL
+    const originalXdg = process.env.XDG_CONFIG_HOME
+    if (values.home !== undefined) process.env.AX_CODE_TEST_HOME = values.home
+    if (values.model === null) delete process.env.MUSE_MODEL
+    else if (values.model !== undefined) process.env.MUSE_MODEL = values.model
+    if (values.xdg === null) delete process.env.XDG_CONFIG_HOME
+    else if (values.xdg !== undefined) process.env.XDG_CONFIG_HOME = values.xdg
+    try {
+      await run()
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.MUSE_MODEL = originalModel
+      else delete process.env.MUSE_MODEL
+      if (originalXdg !== undefined) process.env.XDG_CONFIG_HOME = originalXdg
+      else delete process.env.XDG_CONFIG_HOME
+    }
+  }
+
+  test("returns default for muse-cli when no config", async () => {
+    await using tmp = await tmpdir()
+    await withMuseEnv({ home: tmp.path, model: null, xdg: null }, async () => {
+      const info = await resolveCliModel("muse-cli")
+      expect(info).toEqual({ model: "muse-cli", source: "default" })
+    })
+  })
+
+  test("muse-cli respects MUSE_MODEL env var", async () => {
+    await using tmp = await tmpdir()
+    await withMuseEnv({ home: tmp.path, model: "muse-spark-1.3", xdg: null }, async () => {
+      const info = await resolveCliModel("muse-cli")
+      expect(info).toEqual({ model: "muse-spark-1.3", source: "MUSE_MODEL" })
+    })
+  })
+
+  test("muse-cli reads model from ~/.config/muse/settings.json", async () => {
+    await using tmp = await tmpdir()
+    await withMuseEnv({ home: tmp.path, model: null, xdg: null }, async () => {
+      const configDir = path.join(tmp.path, ".config", "muse")
+      await fs.mkdir(configDir, { recursive: true })
+      await fs.writeFile(
+        path.join(configDir, "settings.json"),
+        JSON.stringify({ schema_version: 1, provider: "meta", model: "muse-spark-1.3-contributor" }),
+      )
+
+      const info = await resolveCliModel("muse-cli")
+      expect(info).toEqual({
+        model: "muse-spark-1.3-contributor",
+        source: "test-home ~/.config/muse/settings.json",
+      })
+    })
+  })
+
+  async function withMiniMaxEnv(
+    values: { home?: string; model?: string | null; dataDir?: string | null },
+    run: () => Promise<void>,
+  ) {
+    const originalHome = process.env.AX_CODE_TEST_HOME
+    const originalModel = process.env.MCODE_MODEL
+    const originalDataDir = process.env.MINIMAX_DATA_DIR
+    const originalMavis = process.env.MAVIS_DATA_DIR
+    if (values.home !== undefined) process.env.AX_CODE_TEST_HOME = values.home
+    if (values.model === null) delete process.env.MCODE_MODEL
+    else if (values.model !== undefined) process.env.MCODE_MODEL = values.model
+    if (values.dataDir === null) delete process.env.MINIMAX_DATA_DIR
+    else if (values.dataDir !== undefined) process.env.MINIMAX_DATA_DIR = values.dataDir
+    delete process.env.MAVIS_DATA_DIR
+    try {
+      await run()
+    } finally {
+      if (originalHome !== undefined) process.env.AX_CODE_TEST_HOME = originalHome
+      else delete process.env.AX_CODE_TEST_HOME
+      if (originalModel !== undefined) process.env.MCODE_MODEL = originalModel
+      else delete process.env.MCODE_MODEL
+      if (originalDataDir !== undefined) process.env.MINIMAX_DATA_DIR = originalDataDir
+      else delete process.env.MINIMAX_DATA_DIR
+      if (originalMavis !== undefined) process.env.MAVIS_DATA_DIR = originalMavis
+      else delete process.env.MAVIS_DATA_DIR
+    }
+  }
+
+  test("returns default for minimax-cli when no config", async () => {
+    await using tmp = await tmpdir()
+    await withMiniMaxEnv({ home: tmp.path, model: null, dataDir: null }, async () => {
+      const info = await resolveCliModel("minimax-cli")
+      expect(info).toEqual({ model: "minimax-cli", source: "default" })
+    })
+  })
+
+  test("minimax-cli respects MCODE_MODEL env var", async () => {
+    await using tmp = await tmpdir()
+    await withMiniMaxEnv({ home: tmp.path, model: "MiniMax-M3", dataDir: null }, async () => {
+      const info = await resolveCliModel("minimax-cli")
+      expect(info).toEqual({ model: "MiniMax-M3", source: "MCODE_MODEL" })
+    })
+  })
+
+  test("minimax-cli reads defaultModel from ~/.minimax/config.yaml", async () => {
+    await using tmp = await tmpdir()
+    await withMiniMaxEnv({ home: tmp.path, model: null, dataDir: null }, async () => {
+      const configDir = path.join(tmp.path, ".minimax")
+      await fs.mkdir(configDir, { recursive: true })
+      await fs.writeFile(path.join(configDir, "config.yaml"), 'defaultModel: "minimax_oauth/MiniMax-M3"\n')
+
+      const info = await resolveCliModel("minimax-cli")
+      expect(info).toEqual({
+        model: "minimax_oauth/MiniMax-M3",
+        source: "test-home ~/.minimax/config.yaml",
       })
     })
   })

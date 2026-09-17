@@ -129945,6 +129945,105 @@
       }
     }
   },
+  "muse-cli": {
+    "id": "muse-cli",
+    "name": "Muse Code CLI",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "muse-cli": {
+        "id": "muse-cli",
+        "name": "Muse Code CLI",
+        "family": "muse",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-09-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
+  "minimax-cli": {
+    "id": "minimax-cli",
+    "name": "MiniMax Code CLI",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "minimax-cli": {
+        "id": "minimax-cli",
+        "name": "MiniMax Code CLI",
+        "family": "minimax",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-09-17",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 1048576,
+          "output": 512000
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
+  "qoder-cli": {
+    "id": "qoder-cli",
+    "name": "Qoder CLI",
+    "env": [],
+    "npm": "cli",
+    "models": {
+      "qoder-cli": {
+        "id": "qoder-cli",
+        "name": "Qoder CLI",
+        "family": "qoder",
+        "attachment": true,
+        "reasoning": false,
+        "tool_call": false,
+        "temperature": false,
+        "release_date": "2026-06-01",
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "limit": {
+          "context": 200000,
+          "output": 16384
+        },
+        "options": {},
+        "status": "active"
+      }
+    }
+  },
   "ollama": {
     "id": "ollama",
     "env": [

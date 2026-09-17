@@ -23,20 +23,31 @@ describe("promptToText", () => {
     expect(promptToText(prompt, { providerID: "codex-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "grok-build-cli" })).toContain("built-in web search")
     expect(promptToText(prompt, { providerID: "kimi-cli" })).toContain("built-in web search")
-    expect(promptToText(prompt, { providerID: "qoder-cli" })).not.toContain("built-in web search")
+    expect(promptToText(prompt, { providerID: "muse-cli" })).toContain("built-in web search")
+    expect(promptToText(prompt, { providerID: "minimax-cli" })).toContain("built-in web search")
+    expect(promptToText(prompt, { providerID: "qoder-cli" })).toContain("built-in web search")
+    expect(promptToText(prompt, { providerID: "gemini-cli" })).not.toContain("built-in web search")
   })
 
   test("warns CLI providers that background tasks die with the per-turn process", () => {
     const prompt: LanguageModelV3Prompt = [{ role: "user", content: [{ type: "text", text: "scan the repo" }] }]
 
-    for (const providerID of ["claude-code", "codex-cli", "grok-build-cli", "kimi-cli"]) {
+    for (const providerID of [
+      "claude-code",
+      "codex-cli",
+      "grok-build-cli",
+      "kimi-cli",
+      "muse-cli",
+      "minimax-cli",
+      "qoder-cli",
+    ]) {
       const result = promptToText(prompt, { providerID })
       expect(result).toContain("<cli_background_tasks>")
       expect(result).toContain("background task you started")
       expect(result).toContain("never delivered across turns")
     }
     // Non-CLI and unknown providers get no process-model hint.
-    expect(promptToText(prompt, { providerID: "qoder-cli" })).not.toContain("<cli_background_tasks>")
+    expect(promptToText(prompt, { providerID: "gemini-cli" })).not.toContain("<cli_background_tasks>")
     expect(promptToText(prompt)).not.toContain("<cli_background_tasks>")
   })
 
