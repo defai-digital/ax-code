@@ -109,6 +109,7 @@ pages are the ones linked here.
 - [Skill and Plugin Catalog](reference/skills-and-plugins.md) — bundled skills, project skills, plugins, and evals.
 - [Isolation Policy Packs](policies/README.md) — machine-readable policy examples.
 - [Release Verification](release/README.md) — canonical minisign public key and verification command.
+- [Windows Runtime Integrity](guides/windows-runtime-integrity.md) — signatures, installed-file verification, and antivirus evidence.
 - [Security Policy](../SECURITY.md) — threat model, credential storage, and supported versions.
 
 ## Documentation boundaries

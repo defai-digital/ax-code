@@ -1,3 +1,4 @@
+import { sealWindowsRuntime } from "./seal-windows-runtime"
 import childProcess from "child_process"
 import { whichSync } from "./which"
 import crypto from "crypto"
@@ -284,6 +285,25 @@ async function main() {
     prepareSignaturePath(sig, options)
 
     if (!options.verifyOnly) {
+      if (!options.dryRun && /^ax-code-windows-(x64|arm64)\.zip$/.test(path.basename(asset))) {
+        sealWindowsRuntime(asset, (manifest) => {
+          runMinisign(
+            [
+              "-S",
+              "-s",
+              options.secretKey,
+              "-m",
+              manifest,
+              "-x",
+              `${manifest}.minisig`,
+              "-t",
+              "AX Code Windows runtime integrity",
+            ],
+            { dryRun: false },
+          )
+          runMinisign(["-V", "-p", options.publicKey, "-m", manifest, "-x", `${manifest}.minisig`], { dryRun: false })
+        })
+      }
       const digest = await sha256File(asset)
       console.log(`Signing ${path.relative(ROOT, asset)}`)
       runMinisign(

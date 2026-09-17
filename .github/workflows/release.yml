@@ -167,13 +167,13 @@ jobs:
           - os: windows-2022
             targets: win32-x64
             build-script: script/build-node-tui.ts
-            build-args: --release --arch x64
+            build-args: --release --arch x64 --defer-windows-signing
             smoke-bin: dist/ax-code-windows-x64/bin/ax-code.cmd
             smoke-runtime: node-bundled
           - os: windows-11-arm
             targets: win32-arm64
             build-script: script/build-node-tui.ts
-            build-args: --release --arch arm64
+            build-args: --release --arch arm64 --defer-windows-signing
             smoke-bin: dist/ax-code-windows-arm64/bin/ax-code.cmd
             smoke-runtime: node-bundled
           # Ubuntu 24.04 LTS glibc baseline for Desktop/server hosts (amd64).
@@ -319,6 +319,22 @@ jobs:
             echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
           } >> "$GITHUB_ENV"
 
+      - name: Setup Windows signing toolchain
+        if: runner.os == 'Windows'
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install AzureSignTool
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $directory = Join-Path $env:RUNNER_TEMP "ax-code-signing"
+          dotnet tool install AzureSignTool --tool-path $directory --version 7.0.1
+          if ($LASTEXITCODE -ne 0) { throw "AzureSignTool installation failed" }
+          "AZURE_SIGNTOOL_PATH=$(Join-Path $directory 'AzureSignTool.exe')" | Out-File $env:GITHUB_ENV -Append
+
       - name: Build
         working-directory: packages/ax-code
         run: pnpm exec tsx ${{ matrix.build-script }} ${{ matrix.build-args }}
@@ -326,6 +342,34 @@ jobs:
           AX_CODE_VERSION: ${{ env.AX_CODE_RELEASE_TAG }}
           AX_CODE_CHANNEL: ${{ env.AX_CODE_RELEASE_CHANNEL }}
           AX_CODE_RELEASE: "true"
+
+      # Keep vault credentials out of dependency installation and compilation.
+      - name: Sign and repackage Windows runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          AX_WINDOWS_TARGET: ${{ matrix.targets == 'win32-x64' && 'windows-x64' || 'windows-arm64' }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_KEY_VAULT_URL: https://keyvault-defai.vault.azure.net
+          AZURE_KEY_VAULT_CERTIFICATE: cert-defai
+          WINDOWS_CERTIFICATE_SHA1: FC40F1109912C025E751E804AA9BD1538A2D12EF
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $PWD "packages/ax-code/dist/ax-code-$env:AX_WINDOWS_TARGET"
+          & ./script/sign-windows-runtime.ps1 -Root $root -ReportPath (Join-Path $env:RUNNER_TEMP "windows-signatures.json")
+          node -e 'const m = require("./script/runtime-manifest.cjs"); m.writeDistributionManifest(process.argv[1]); m.writeRuntimeManifest(process.argv[1])' $root
+          if ($LASTEXITCODE -ne 0) { throw "Final Windows manifest generation failed" }
+          Compress-Archive -Path "$root/*" -DestinationPath "$root.zip" -Force
+
+      - name: Upload Windows signature audit
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: signatures-${{ matrix.targets }}
+          path: ${{ runner.temp }}/windows-signatures.json
+          if-no-files-found: warn
 
       - name: Verify relocated native TypeScript runtime
         run: node script/verify-typescript-native.cjs packages/ax-code/dist/ax-code-${{ matrix.targets == 'win32-x64' && 'windows-x64' || matrix.targets == 'win32-arm64' && 'windows-arm64' || matrix.targets }}
@@ -579,6 +623,9 @@ jobs:
             test -f "$asset"
             test -f "$signature"
             minisign -V -p docs/release/ax-minisign.pub -m "$asset" -x "$signature"
+          done
+          for arch in x64 arm64; do
+            pnpm exec tsx script/seal-windows-runtime.ts "$VERIFY_DIR/ax-code-windows-$arch.zip" docs/release/ax-minisign.pub
           done
 
       - name: Publish verified release

@@ -1,0 +1,6 @@
+{
+  "body": "AX Code Minisign interoperability fixture\r\n",
+  "publicKey": "RWTm9X1NVQI/HyQSJfj31SYdWEngOy7uBHthb+y8bk8YcY5vcmCMdjef",
+  "prehashed": "untrusted comment: signature from minisign secret key\nRUTm9X1NVQI/H4BVjgU2uwyVdTFQLp4FmPV2/0SR+RBNCMIlFyMjbCRPSsh8IdWXfkJT63erlTjowjKcq72wD5L13H9z3QWkhQk=\ntrusted comment: AX Code test fixture\nZq+frax3zG5XfegP+U2hRUu4uJ7wIoyBpheGJ2uHxkgDfRL2bWkmJ0GZ2+2FQQihjyptGKtPoNIiFVpb2P2jCw==\n",
+  "legacy": "untrusted comment: signature from minisign secret key\nRWTm9X1NVQI/HxP2oA/PvOnG9taUIg8TIeWY6wxpsoWy+CpiSpFUz9bWXuW+nHis5awTSYo7c56GI2xG/7fiXrFj9ad1OEhQiQk=\ntrusted comment: AX Code test fixture\nTRWcSEPEZtuWVOlAmcxP5PbVQvwNUCSru5I+ZSBH9qB3LMqhY5/S8aKCrwaGyD6w+bJQalKedRmtbBqf0aWjCQ==\n"
+}

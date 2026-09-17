@@ -623,11 +623,33 @@ if (process.platform === "darwin") {
   )
 }
 
+if (release && process.platform === "win32" && !process.argv.includes("--defer-windows-signing")) {
+  const signed = spawnSync(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-File",
+      path.resolve(dir, "../../script/sign-windows-runtime.ps1"),
+      "-Root",
+      outRoot,
+    ],
+    { stdio: "inherit" },
+  )
+  if (signed.error) throw signed.error
+  if (signed.status !== 0) throw new Error("Windows runtime signing and audit failed")
+}
+
 // The release archive is protected by Minisign after this build completes. Keep
 // a deterministic manifest inside it so Desktop packaging can prove that the
 // non-native runtime, including lib/index-node-tui.js, survived staging unchanged.
 const runtimeManifest = writeRuntimeManifest(outRoot)
 console.log(`Wrote runtime manifest (${runtimeManifest.files.length} non-native entries)`)
+
+if (release && process.platform === "win32") {
+  const { writeDistributionManifest } = require(path.resolve(dir, "../../script/runtime-manifest.cjs"))
+  writeDistributionManifest(outRoot)
+}
 
 if (release) {
   // Archive the WHOLE tree (bin + lib + node_modules + node/), not just bin/ —

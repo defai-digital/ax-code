@@ -1,6 +1,28 @@
-import { createHash } from "node:crypto"
+import { createHash, generateKeyPairSync, sign } from "node:crypto"
 import { describe, expect, test } from "vitest"
+import { verifyMinisign } from "../../src/installation/minisign"
 import { Installation } from "../../src/installation"
+
+const signingKey = generateKeyPairSync("ed25519")
+const keyId = Buffer.from("0102030405060708", "hex")
+const publicKey = Buffer.concat([
+  Buffer.from("Ed"),
+  keyId,
+  signingKey.publicKey.export({ format: "der", type: "spki" }).subarray(-32),
+]).toString("base64")
+function signatureResponse(script: string) {
+  const detached = sign(null, createHash("blake2b512").update(script).digest(), signingKey.privateKey)
+  const comment = "test installer"
+  return new Response(
+    [
+      "untrusted comment: test",
+      Buffer.concat([Buffer.from("ED"), keyId, detached]).toString("base64"),
+      `trusted comment: ${comment}`,
+      sign(null, Buffer.concat([detached, Buffer.from(comment)]), signingKey.privateKey).toString("base64"),
+      "",
+    ].join("\n"),
+  )
+}
 
 function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -28,6 +50,7 @@ function withTestDependencies<T>(
         const result = await options.run?.(cmd, opts)
         return result ?? { code: 0, stdout: "", stderr: "" }
       },
+      verifyInstallerSignature: (body, signature) => verifyMinisign(body, signature, publicKey),
       which: (cmd) => options.which?.(cmd) ?? [],
       ...(options.platform ? { platform: options.platform } : {}),
     },
@@ -398,6 +421,37 @@ describe("installation", () => {
       expect(calls.some((cmd) => cmd[0] === "brew" && cmd[1] === "link")).toBe(false)
     })
 
+    test.each(["win32", "linux"] as const)(
+      "rejects missing or forged installer signatures on %s before execution",
+      async (platform) => {
+        for (const kind of ["missing", "forged"]) {
+          let invoked = false
+          const script = "untrusted installer"
+          await expect(
+            withTestDependencies(
+              {
+                platform,
+                fetch: (url) => {
+                  if (url.endsWith(".sha256")) return new Response(createHash("sha256").update(script).digest("hex"))
+                  if (url.endsWith(".minisig"))
+                    return kind === "missing"
+                      ? new Response("missing", { status: 404 })
+                      : signatureResponse("different installer")
+                  return new Response(script)
+                },
+                run: () => {
+                  invoked = true
+                  return { code: 0, stdout: "", stderr: "" }
+                },
+              },
+              () => Installation.upgrade("curl", "7.18.7"),
+            ),
+          ).rejects.toThrow()
+          expect(invoked).toBe(false)
+        }
+      },
+    )
+
     test("pipes the bash installer to bash with VERSION on non-Windows", async () => {
       const script = "#!/bin/bash\necho install\n"
       const calls: Array<{ cmd: string[]; env?: Record<string, string>; input?: Uint8Array }> = []
@@ -406,6 +460,7 @@ describe("installation", () => {
         {
           platform: "linux",
           fetch: (url) => {
+            if (url.endsWith("/install.minisig")) return signatureResponse(script)
             if (url.endsWith("/install")) return new Response(script, { status: 200 })
             if (url.endsWith("/install.sha256")) return new Response(createHash("sha256").update(script).digest("hex"))
             return new Response("not found", { status: 404 })
@@ -434,6 +489,7 @@ describe("installation", () => {
           platform: "win32",
           fetch: (url) => {
             urls.push(url)
+            if (url.endsWith("/install.ps1.minisig")) return signatureResponse(script)
             if (url.endsWith("/install.ps1")) return new Response(script, { status: 200 })
             if (url.endsWith("/install.ps1.sha256"))
               return new Response(createHash("sha256").update(script).digest("hex"))
@@ -457,6 +513,7 @@ describe("installation", () => {
       expect(urls).toEqual([
         "https://download.ax-code.com/releases/download/v5.3.0/install.ps1",
         "https://download.ax-code.com/releases/download/v5.3.0/install.ps1.sha256",
+        "https://download.ax-code.com/releases/download/v5.3.0/install.ps1.minisig",
       ])
     })
 
@@ -546,6 +603,7 @@ describe("installation", () => {
         {
           platform: "linux",
           fetch: (url) => {
+            if (url.endsWith("/install.minisig")) return signatureResponse(script)
             if (url.endsWith("/install")) return new Response(script, { status: 200 })
             if (url.endsWith("/install.sha256"))
               return new Response(`${expected.toUpperCase()}  install\n`, { status: 200 })

@@ -1,3 +1,4 @@
+import { verifyMinisign } from "./minisign"
 import { standaloneInstallRoot, isWithinInstallPrefix } from "./install-layout"
 import path from "path"
 import os from "os"
@@ -141,6 +142,7 @@ export namespace Installation {
     // Injectable so the Windows installer branch can be exercised in tests
     // regardless of the host OS.
     platform: NodeJS.Platform
+    verifyInstallerSignature: typeof verifyMinisign
   }
 
   const defaultDependencies: Dependencies = {
@@ -150,6 +152,7 @@ export namespace Installation {
     // would actually resolve, not ax-code's own fallback install locations.
     which: (cmd) => whichAll(cmd, undefined, { extraDirs: false }),
     platform: process.platform,
+    verifyInstallerSignature: verifyMinisign,
   }
 
   let dependencies = defaultDependencies
@@ -265,6 +268,10 @@ export namespace Installation {
       if (requireDigest || msg.startsWith("Install script integrity check failed")) throw e
       log.warn("could not verify install script integrity", { error: e })
     }
+    // A same-origin digest detects corruption but does not authenticate the
+    // publisher. Verify before writing or executing the downloaded script.
+    const signature = await fetchOk(`${scriptUrl}.minisig`)
+    dependencies.verifyInstallerSignature(bodyBytes, await signature.text())
     return bodyBytes
   }
 
@@ -284,7 +291,7 @@ export namespace Installation {
   }
 
   // Windows-native self-upgrade: download the versioned PowerShell installer
-  // with a required digest, then run it with Windows PowerShell. The installer
+  // with a required digest and pinned signature, then run it with Windows PowerShell. The installer
   // minisign-verifies the release archive itself against a pinned public key,
   // matching the bash path.
   async function upgradeWindows(target: string) {

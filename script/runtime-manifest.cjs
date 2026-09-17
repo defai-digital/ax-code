@@ -194,3 +194,51 @@ module.exports = {
   walkFiles,
   writeRuntimeManifest,
 }
+
+// Final Windows distribution metadata is separate from the pre-sign Desktop
+// manifest. Hash native bytes only after Authenticode has finished.
+const INTEGRITY_NAME = "runtime-integrity.json"
+const INTEGRITY_METADATA = new Set([MANIFEST_NAME, INTEGRITY_NAME, `${INTEGRITY_NAME}.minisig`])
+function createDistributionManifest(runtimeRoot) {
+  const seen = new Set()
+  const files = walkEntries(runtimeRoot)
+    .filter((entry) => !INTEGRITY_METADATA.has(entry.path))
+    .map((entry) => {
+      if (entry.type !== "file") throw new Error(`Windows distribution cannot contain symlinks: ${entry.path}`)
+      const name = entry.path.split(path.sep).join("/")
+      if (
+        !/^(?:lib\/|node\/|node_modules\/|bin\/|package(?:-lock)?\.json$)/.test(name) ||
+        seen.has(name.toLowerCase())
+      ) {
+        throw new Error(`Unsupported or duplicate Windows distribution path: ${name}`)
+      }
+      seen.add(name.toLowerCase())
+      if (
+        name
+          .split("/")
+          .some(
+            (part) =>
+              !part ||
+              /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(part) ||
+              /[<>:"\\|?*\x00-\x1f]/.test(part) ||
+              /[. ]$/.test(part),
+          )
+      ) {
+        throw new Error(`Invalid Windows distribution path: ${name}`)
+      }
+      const file = path.join(runtimeRoot, entry.path)
+      return { path: name, size: fs.statSync(file).size, sha256: hashFile(file) }
+    })
+  for (const required of ["lib/index-node-tui.js", "node/bin/node.exe", "bin/ax-code.cmd", "package.json"]) {
+    if (!files.some((entry) => entry.path === required)) throw new Error(`Distribution is missing ${required}`)
+  }
+  return { schema: "ax-code.runtime-integrity.v1", algorithm: "sha256", files }
+}
+function writeDistributionManifest(runtimeRoot) {
+  const manifest = createDistributionManifest(runtimeRoot)
+  fs.writeFileSync(path.join(runtimeRoot, INTEGRITY_NAME), `${JSON.stringify(manifest, null, 2)}\n`)
+  return manifest
+}
+module.exports.INTEGRITY_NAME = INTEGRITY_NAME
+module.exports.createDistributionManifest = createDistributionManifest
+module.exports.writeDistributionManifest = writeDistributionManifest

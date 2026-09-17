@@ -11,6 +11,22 @@ import {
 const workflow = readFileSync(".github/workflows/release.yml", "utf8")
 
 describe("release asset workflow", () => {
+  test("signs Windows payloads before archival and keeps vault credentials out of compilation", () => {
+    const build = workflow.indexOf("- name: Build\n")
+    const signing = workflow.indexOf("- name: Sign and repackage Windows runtime")
+    const smoke = workflow.indexOf("- name: Smoke — release runtime")
+    const upload = workflow.indexOf("- name: Upload build artifacts")
+    expect(build).toBeGreaterThan(-1)
+    expect(signing).toBeGreaterThan(build)
+    expect(smoke).toBeGreaterThan(signing)
+    expect(upload).toBeGreaterThan(smoke)
+    expect(workflow.slice(build, signing)).not.toContain("AZURE_CLIENT_SECRET")
+    const gate = workflow.slice(signing, smoke)
+    expect(gate).toContain("sign-windows-runtime.ps1")
+    expect(gate.indexOf("Compress-Archive")).toBeGreaterThan(gate.indexOf("writeDistributionManifest"))
+    expect(gate).not.toContain("continue-on-error")
+  })
+
   test("builds default evidence support and verifies the packaged storage capability", () => {
     const action = readFileSync(".github/actions/build-evidence-cache/action.yml", "utf8")
     const build = readFileSync("packages/ax-code/script/build-node-tui.ts", "utf8")

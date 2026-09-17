@@ -792,3 +792,103 @@ if (-not $failure) { throw "Invalid installed version was accepted" }
 `)
   })
 })
+
+const integrityFixture = String.raw`
+function Test-SkipMinisignVerify { return $false }
+function Invoke-TestMinisign { $global:LASTEXITCODE = 0 }
+function Assert-MinisignAvailable {}
+function Get-MinisignCommand { return "Invoke-TestMinisign" }
+$AxCodeMinisignPublicKey = "test-key"
+$entries = @(Get-ChildItem -LiteralPath $Source -File -Recurse | ForEach-Object {
+  [ordered]@{ path = $_.FullName.Substring($Source.Length + 1).Replace('\', '/'); size = $_.Length; sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
+})
+[ordered]@{ schema = "ax-code.runtime-integrity.v1"; algorithm = "sha256"; files = $entries } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Source "runtime-integrity.json")
+Set-Content -LiteralPath (Join-Path $Source "runtime-integrity.json.minisig") -Value "test-signature"
+`
+
+describe.skipIf(!available)("authenticated runtime staging", () => {
+  test.skipIf(process.platform !== "win32")(
+    "preserves authenticated metadata in an activated runtime generation",
+    async () => {
+      await runInstaller(
+        integrityFixture +
+          String.raw`
+Install-NodeBundleTree $Source "9.9.9"
+Install-NodeBundleTree $Source "9.9.9"
+$active = [IO.File]::ReadAllText((Join-Path $InstallRoot ".active-runtime"))
+$runtime = Split-Path -Parent (Split-Path -Parent (Join-Path $InstallRoot $active))
+Assert-Equal (Test-Path (Join-Path $runtime "runtime-integrity.json.minisig")) $true
+[void](Get-VerifiedRuntimeIntegrity $runtime)
+`,
+      )
+    },
+  )
+
+  test("retains verified metadata during first installation", async () => {
+    await runInstaller(
+      integrityFixture +
+        String.raw`
+Install-NodeBundleTree $Source
+Assert-InstalledBundle
+Assert-Equal (Test-Path (Join-Path $InstallRoot "runtime-integrity.json")) $true
+Assert-Equal (Test-Path (Join-Path $InstallRoot "runtime-integrity.json.minisig")) $true
+[void](Get-VerifiedRuntimeIntegrity $InstallRoot)
+`,
+    )
+  })
+  test("preserves explicit authentication opt-out while rejecting damaged payload bytes", async () => {
+    await runInstaller(
+      integrityFixture +
+        String.raw`
+function Test-SkipMinisignVerify { return $true }
+function Get-MinisignCommand { throw "Verification was explicitly disabled" }
+[void](Get-VerifiedRuntimeIntegrity $Source)
+Add-Content -LiteralPath (Join-Path $Source "lib/index-node-tui.js") -Value "changed"
+$failed = $false
+try { [void](Get-VerifiedRuntimeIntegrity $Source) } catch { $failed = $true }
+Assert-Equal $failed $true
+`,
+    )
+  })
+  test.each(["signature", "payload"])("rejects invalid %s before candidate execution or replacement", async (kind) => {
+    const damage =
+      kind === "signature"
+        ? "function Invoke-TestMinisign { $global:LASTEXITCODE = 1 }"
+        : 'Add-Content -LiteralPath (Join-Path $Source "lib/index-node-tui.js") -Value "tampered"'
+    await runInstaller(
+      integrityFixture +
+        String.raw`
+New-PreviousInstall
+$script:Executed = $false
+function Assert-NodeBundleRuntime { $script:Executed = $true }
+` +
+        damage +
+        String.raw`
+$failed = $false
+try { Install-NodeBundleTree $Source } catch { $failed = $true }
+Assert-Equal $failed $true
+Assert-Equal $script:Executed $false
+Assert-PreviousInstall
+`,
+    )
+  })
+  test("rejects staging corruption before executing the candidate", async () => {
+    await runInstaller(
+      integrityFixture +
+        String.raw`
+New-PreviousInstall
+$script:Executed = $false
+function Assert-NodeBundleRuntime { $script:Executed = $true }
+function Copy-Item([string]$LiteralPath, [string]$Destination, [switch]$Recurse, [switch]$Force) {
+  Microsoft.PowerShell.Management\Copy-Item -LiteralPath $LiteralPath -Destination $Destination -Recurse:$Recurse -Force:$Force
+  if ($LiteralPath -eq (Join-Path $Source "lib")) { Add-Content -LiteralPath (Join-Path $Destination "index-node-tui.js") -Value "corrupt staging" }
+}
+$failed = $false
+try { Install-NodeBundleTree $Source } catch { $failed = $true }
+Assert-Equal $failed $true
+Assert-Equal $script:Executed $false
+Assert-PreviousInstall
+`,
+    )
+  })
+})

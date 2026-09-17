@@ -6,6 +6,9 @@ on:
     paths:
       - install.ps1
       - script/install-powershell.test.ts
+      - script/windows-runtime-integrity.test.ts
+      - script/sign-windows-runtime.ps1
+      - script/runtime-manifest.cjs
       - script/install-download.test.ts
       - packages/ax-code/src/util/powershell-env.ts
       - .github/scripts/assert-windows-runtime.ps1
@@ -15,6 +18,9 @@ on:
     paths:
       - install.ps1
       - script/install-powershell.test.ts
+      - script/windows-runtime-integrity.test.ts
+      - script/sign-windows-runtime.ps1
+      - script/runtime-manifest.cjs
       - script/install-download.test.ts
       - packages/ax-code/src/util/powershell-env.ts
       - .github/scripts/assert-windows-runtime.ps1
@@ -26,6 +32,11 @@ on:
         description: Published runtime version to install with the candidate installer
         required: true
         type: string
+      defender_scan:
+        description: Require an enabled Defender scan and retain evidence (does not qualify Kaspersky)
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -61,7 +72,7 @@ jobs:
           checkout: "false"
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Test installer replacement and rollback
-        run: pnpm exec vitest run script/install-powershell.test.ts script/install-download.test.ts
+        run: pnpm exec vitest run script/install-powershell.test.ts script/install-download.test.ts script/windows-runtime-integrity.test.ts
       - name: Test runtime probes with PowerShell 7
         env:
           AX_TEST_POWERSHELL: pwsh
@@ -90,3 +101,16 @@ jobs:
             & $Probe -Launcher $Launcher -Backend -Version $Version
           }
           & $Probe -Launcher $Launcher -Doctor
+
+      - name: Scan installed runtime with Defender
+        if: github.event_name == 'workflow_dispatch' && inputs.defender_scan
+        shell: powershell
+        run: |
+          & .github/scripts/scan-windows-runtime.ps1 -Root (Join-Path $HOME ".ax-code") -ReportDirectory (Join-Path $env:RUNNER_TEMP "ax-code-defender-evidence")
+      - name: Upload Defender evidence
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.defender_scan
+        uses: actions/upload-artifact@v7
+        with:
+          name: defender-${{ matrix.label }}
+          path: ${{ runner.temp }}/ax-code-defender-evidence/
+          if-no-files-found: warn

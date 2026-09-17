@@ -356,6 +356,7 @@ function Verify-DownloadedArchive {
   $previousErrorAction = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
   try {
+    $global:LASTEXITCODE = $null
     $output = & $minisign -Vm $ArchivePath -x $SignaturePath -P $AxCodeMinisignPublicKey 2>&1
     $exitCode = $LASTEXITCODE
   } finally {
@@ -368,6 +369,79 @@ function Verify-DownloadedArchive {
       $details = "minisign exited with status $exitCode"
     }
     throw "minisign verification failed for $(Split-Path -Leaf $ArchivePath). $details"
+  }
+}
+
+function Get-VerifiedRuntimeIntegrity([string]$Root) {
+  $manifestPath = Join-Path $Root "runtime-integrity.json"
+  if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+    if (Test-Path -LiteralPath "$manifestPath.minisig") { throw "Runtime integrity manifest is missing" }
+    Write-Warn "Legacy runtime archive has no installed-file integrity manifest; archive signature verification still applies."
+    return $null
+  }
+  if (Test-SkipMinisignVerify) {
+    Write-Warn "Runtime manifest authentication is explicitly disabled; file hashes alone do not establish publisher trust."
+  } else {
+    Assert-MinisignAvailable
+    $minisign = Get-MinisignCommand
+    if (-not $minisign) { throw "Runtime integrity verification requires minisign" }
+    $previousErrorAction = $ErrorActionPreference
+    try {
+      $ErrorActionPreference = "Continue"
+      $global:LASTEXITCODE = $null
+      $output = & $minisign -Vm $manifestPath -x "$manifestPath.minisig" -P $AxCodeMinisignPublicKey 2>&1
+      $exitCode = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previousErrorAction }
+    if ($exitCode -ne 0) { throw "Runtime integrity signature verification failed: $output" }
+  }
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+  Assert-RuntimeIntegrity $Root $manifest
+  return $manifest
+}
+
+function Assert-RuntimeIntegrity([string]$Root, $Manifest, [switch]$AllowUnlistedFiles) {
+  if ($null -eq $Manifest) { return }
+  if ($Manifest.schema -ne "ax-code.runtime-integrity.v1" -or $Manifest.algorithm -ne "sha256" -or @($Manifest.files).Count -eq 0) {
+    throw "Invalid runtime integrity manifest"
+  }
+  $rootPath = [IO.Path]::GetFullPath($Root)
+  if ((Get-Item -LiteralPath $rootPath -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Runtime root is a reparse point" }
+  $expected = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  foreach ($entry in $Manifest.files) {
+    $relative = $entry.path
+    if ($relative -isnot [string] -or $relative -notmatch '^(?:lib/|node/|node_modules/|bin/|package(?:-lock)?\.json$)' -or
+        $relative -match '[<>:"\\|?*\x00-\x1f]' -or $relative -match '(^|/)(\.{1,2}|[^/]*[. ])(/|$)' -or
+        $relative -match '(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.[^/]*)?(/|$)' -or
+        $relative.Contains('//') -or $relative.EndsWith('/') -or -not $expected.Add($relative) -or
+        $entry.sha256 -cnotmatch '^[a-f0-9]{64}$' -or ($entry.size -isnot [int] -and $entry.size -isnot [long]) -or $entry.size -lt 0 -or [Math]::Truncate($entry.size) -ne $entry.size) {
+      throw "Invalid runtime integrity entry: $relative"
+    }
+    $target = $rootPath
+    foreach ($part in $relative.Split('/')) {
+      $target = Join-Path $target $part
+      $item = Get-Item -LiteralPath $target -Force -ErrorAction Stop
+      if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Runtime reparse point is not allowed: $relative" }
+    }
+    if ($item.PSIsContainer -or $item.Length -ne $entry.size -or (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ine $entry.sha256) {
+      throw "Runtime integrity mismatch: $relative"
+    }
+  }
+  foreach ($required in @("lib/index-node-tui.js", "node/bin/node.exe", "bin/ax-code.cmd", "package.json")) {
+    if (-not $expected.Contains($required)) { throw "Runtime integrity manifest omits $required" }
+  }
+  if ($AllowUnlistedFiles) { return }
+  foreach ($directory in @("lib", "node", "node_modules", "bin")) {
+    # Walk one directory at a time and reject reparse points before recursion.
+    $pending = [Collections.Generic.Stack[string]]::new()
+    $pending.Push((Join-Path $rootPath $directory))
+    while ($pending.Count -gt 0) {
+      foreach ($item in Get-ChildItem -LiteralPath $pending.Pop() -Force) {
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Runtime reparse point is not allowed: $($item.FullName)" }
+        if ($item.PSIsContainer) { $pending.Push($item.FullName); continue }
+        $relative = $item.FullName.Substring($rootPath.Length + 1).Replace('\', '/')
+        if (-not $expected.Contains($relative)) { throw "Runtime file is not listed in manifest: $relative" }
+      }
+    }
   }
 }
 
@@ -472,6 +546,7 @@ function Install-VersionedNodeBundle([string]$StagedRoot, [string]$ExpectedVersi
   $utf8 = [System.Text.UTF8Encoding]::new($false)
   $activated = $false
   try {
+    [void](Get-VerifiedRuntimeIntegrity $runtime)
     Assert-NodeBundleRuntime $runtime
     Assert-NodeFfiRuntime (Join-Path $runtime "node\bin\node.exe")
     & {
@@ -532,6 +607,7 @@ if not defined AX_CODE_RUNTIME exit /b 1
 }
 
 function Install-NodeBundleTreeUnlocked([string]$Root, [string]$ExpectedVersion = "local") {
+  $integrity = Get-VerifiedRuntimeIntegrity $Root
   $launcher = Join-Path $Root "bin\ax-code.cmd"
   $lib = Join-Path $Root "lib"
   $entry = Join-Path $lib "index-node-tui.js"
@@ -574,6 +650,11 @@ function Install-NodeBundleTreeUnlocked([string]$Root, [string]$ExpectedVersion 
     Copy-Item -LiteralPath $nodeDir -Destination (Join-Path $stagingRoot "node") -Recurse -Force
     Copy-Item -LiteralPath $nodeModules -Destination (Join-Path $stagingRoot "node_modules") -Recurse -Force
     Copy-Item -LiteralPath $packageJson -Destination (Join-Path $stagingRoot "package.json") -Force
+    foreach ($relative in @("package-lock.json", "bin/ax-code", "runtime-manifest.json", "runtime-integrity.json", "runtime-integrity.json.minisig")) {
+      $source = Join-Path $Root $relative
+      if (Test-Path -LiteralPath $source -PathType Leaf) { Copy-Item -LiteralPath $source -Destination (Join-Path $stagingRoot $relative) -Force }
+    }
+    Assert-RuntimeIntegrity $stagingRoot $integrity
     Assert-NodeBundleRuntime $stagingRoot
 
     # A real existing Node install may have DLLs or module files held open by
@@ -590,7 +671,7 @@ function Install-NodeBundleTreeUnlocked([string]$Root, [string]$ExpectedVersion 
     # Move complete old trees aside before replacement. Windows can retain
     # loaded native files; never partially delete the active runtime or ignore
     # a failed move. User configuration and other install-root files stay put.
-    $paths = @("lib", "node", "node_modules", "package.json", "bin\ax-code.cmd", "bin\ax-code.exe")
+    $paths = @("lib", "node", "node_modules", "package.json", "package-lock.json", "runtime-manifest.json", "runtime-integrity.json", "runtime-integrity.json.minisig", "bin\ax-code", "bin\ax-code.cmd", "bin\ax-code.exe")
     $backedUp = @()
     $installed = @()
     try {
@@ -610,6 +691,7 @@ function Install-NodeBundleTreeUnlocked([string]$Root, [string]$ExpectedVersion 
           $installed += $relative
         }
       }
+      Assert-RuntimeIntegrity $InstallRoot $integrity -AllowUnlistedFiles
       Assert-NodeBundleRuntime $InstallRoot
       Assert-NodeFfiRuntime (Join-Path $InstallNodeDir "bin\node.exe")
       # The actual launcher can fail even when invoking Node directly works.
