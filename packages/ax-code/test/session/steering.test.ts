@@ -55,6 +55,32 @@ describe("generation-scoped steering", () => {
     })
   })
 
+  test("keeps an applied receipt when post-commit notification throws", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const id = SessionID.ascending()
+        const controller = new AbortController()
+        SessionSteering.begin(id, controller.signal)
+        const input = {
+          expectedGeneration: SessionSteering.view(id).generation!,
+          clientID: "notify_fail",
+          text: "Keep going",
+        }
+        await SessionSteering.submit(id, input, async () => {})
+        await expect(
+          SessionSteering.drain(id, controller.signal, async ({ beforeCommit, afterCommit }) => {
+            beforeCommit()
+            afterCommit()
+            throw new Error("bus publish failed")
+          }),
+        ).resolves.toBe(true)
+        expect(SessionSteering.view(id).receipts[0].status).toBe("applied")
+      },
+    })
+  })
+
   test("rejects stale generations before hooks and cancellation during hooks", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

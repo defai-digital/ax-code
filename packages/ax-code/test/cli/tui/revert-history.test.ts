@@ -104,7 +104,15 @@ describe("recover undo history", () => {
       )
     },
   )
-  test("focused prompt leaves Enter for the open restore confirmation", () => {
+  // The sliced callback references both submitSafely and steerSafely, so the
+  // standalone evaluation must inject both — and exercise both branches.
+  // Injecting only submitSafely left the steer branch as an unguarded free
+  // variable: driving submitKind === "steer" threw
+  // "ReferenceError: steerSafely is not defined" without any test failing.
+  test.each([
+    ["submit", (): boolean | "steer" => true],
+    ["steer", (): boolean | "steer" => "steer"],
+  ] as const)("focused prompt routes %s without leaking it to the open restore confirmation", (kind, submitKey) => {
     const source = readFileSync(new URL("../../../src/cli/tui/component/prompt/index.tsx", import.meta.url), "utf8")
     const start = source.indexOf("  useKeyboard((evt) => {")
     const end = source.indexOf("  const fileStyleId", start)
@@ -112,6 +120,7 @@ describe("recover undo history", () => {
     let handler!: (event: any) => void
     const dialog = { stack: [{}] }
     let submitted = 0
+    let steered = 0
     let consumed = 0
     new Function(
       "useKeyboard",
@@ -123,6 +132,7 @@ describe("recover undo history", () => {
       "pasteSubmitGate",
       "autocomplete",
       "submitSafely",
+      "steerSafely",
       body,
     )(
       (fn: typeof handler) => {
@@ -131,19 +141,22 @@ describe("recover undo history", () => {
       dialog,
       { focused: true },
       () => true,
-      () => true,
+      submitKey,
       { info() {} },
       { deferSubmitUntilPasteHandled: () => false },
       undefined,
       () => submitted++,
+      () => steered++,
     )
     const key = { name: "return", preventDefault: () => consumed++, stopPropagation: () => consumed++ }
     handler(key)
     expect(submitted).toBe(0)
+    expect(steered).toBe(0)
     expect(consumed).toBe(0)
     dialog.stack = []
     handler(key)
-    expect(submitted).toBe(1)
+    expect(submitted).toBe(kind === "submit" ? 1 : 0)
+    expect(steered).toBe(kind === "steer" ? 1 : 0)
     expect(consumed).toBe(2)
   })
   test("Restore confirmation consumes Enter before refocusing the prompt", () => {

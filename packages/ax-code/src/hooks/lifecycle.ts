@@ -189,7 +189,9 @@ export namespace LifecycleHooks {
   function boundFeedback(text: string, limit: number) {
     const trimmed = text.trim()
     if (trimmed.length <= limit) return trimmed
-    return `${trimmed.slice(0, limit)}\n[hook feedback truncated to ${limit} characters]`
+    const suffix = `\n[hook feedback truncated to ${limit} characters]`
+    if (limit <= suffix.length) return trimmed.slice(0, limit)
+    return `${trimmed.slice(0, limit - suffix.length)}${suffix}`
   }
 
   /**
@@ -495,11 +497,16 @@ export namespace LifecycleHooks {
       outputs.push(result)
       if (input.event === "PostToolUse") {
         const text = decodePostToolUseFeedback(hook, result)
-        if (text !== undefined && feedbackChars < MAX_FEEDBACK_CHARS_TOTAL) {
-          const room = MAX_FEEDBACK_CHARS_TOTAL - feedbackChars
-          const piece = text.length > room ? boundFeedback(text, room) : text
-          feedback.push(piece)
-          feedbackChars += piece.length
+        if (text !== undefined) {
+          const separator = feedback.length === 0 ? 0 : 2
+          const room = MAX_FEEDBACK_CHARS_TOTAL - feedbackChars - separator
+          if (room > 0) {
+            const piece = text.length > room ? boundFeedback(text, room) : text
+            if (piece.length > 0) {
+              feedback.push(piece)
+              feedbackChars += piece.length + separator
+            }
+          }
         }
       }
       if (hook.protocol === "claude-code" && BLOCKABLE_EVENTS.has(input.event)) {

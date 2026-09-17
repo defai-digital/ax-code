@@ -173,12 +173,13 @@ export namespace SessionSteering {
           },
         })
       } catch (error) {
-        // A notification failure after commit must not misreport saved text.
+        // A notification failure after commit must not misreport saved text,
+        // and must not abort the loop after the correction is already durable.
         if (item.receipt.status !== "applied") {
           item.receipt.status = "rejected"
           item.receipt.reason = "application_rejected"
           item.text = undefined
-        } else throw error
+        }
       }
     }
     return applied

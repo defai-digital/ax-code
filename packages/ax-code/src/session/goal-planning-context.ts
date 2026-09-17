@@ -4,6 +4,25 @@ import { Env } from "../util/env"
 
 export const GOAL_CONTEXT_BYTES = 16 * 1024
 
+/** Convert a file: URL to a local path. Windows rejects drive-letter-less
+ * file:// URLs in fileURLToPath; fall back to the decoded pathname only when
+ * the URL has no remote host, so file://evil/etc/passwd is not treated as local.
+ */
+export function localFileUrlPath(url: string): string | undefined {
+  try {
+    return fileURLToPath(url)
+  } catch {
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol !== "file:") return undefined
+      if (parsed.hostname && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") return undefined
+      return decodeURIComponent(parsed.pathname) || undefined
+    } catch {
+      return undefined
+    }
+  }
+}
+
 export type GoalContextPart = {
   type: string
   text?: string
@@ -32,18 +51,7 @@ export function goalPlanningContext(messages: readonly MessageV2.WithParts[], pa
         // Keep local source references; explicitly disclose inaccessible media.
         let reference = part.source?.type === "file" ? part.source.path : undefined
         if (!reference && part.url?.startsWith("file:")) {
-          try {
-            reference = fileURLToPath(part.url)
-          } catch {
-            // fileURLToPath rejects drive-letter-less file:// URLs on Windows
-            // (e.g. imported/WSL/Unix-session attachments). Fall back to the
-            // decoded URL pathname so the writer still sees a local reference.
-            try {
-              reference = decodeURIComponent(new URL(part.url).pathname) || undefined
-            } catch {
-              /* The unavailable reference remains explicit below. */
-            }
-          }
+          reference = localFileUrlPath(part.url)
         }
         lines.push(
           reference

@@ -465,7 +465,7 @@ describe("LifecycleHooks PostToolUse feedback", () => {
       { event: "PostToolUse", tool: "edit", args: {}, cwd: process.cwd() },
     )
     expect(result.feedback).toBeDefined()
-    expect(result.feedback!.length).toBeLessThanOrEqual(8_000 + 200)
+    expect(result.feedback!.length).toBeLessThanOrEqual(8_000)
     expect(result.feedback).toContain("[hook feedback truncated to 4000 characters]")
   })
 
