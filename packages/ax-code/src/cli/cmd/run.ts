@@ -6,6 +6,7 @@ import { pathToFileURL } from "url"
 import { UI } from "../ui"
 import { cmd } from "./cmd"
 import { bootstrap } from "../bootstrap"
+import { confirmDirectoryScope } from "../directory-scope-prompt"
 import { buildAttachAuthHeaders } from "../attach-auth"
 import { EOL } from "os"
 import { Filesystem } from "../../util/filesystem"
@@ -529,6 +530,13 @@ export const RunCommand = cmd({
     })()
     const runtimeDirectory = directory || callerCwd
     const pathDisplayRoot = directory && path.isAbsolute(directory) ? path.resolve(directory) : process.cwd()
+
+    // Skip when attaching: --attach connects to an already-running instance
+    // rather than scanning `directory` locally, so there's nothing to guard.
+    if (!args.attach) {
+      const scopeGate = await confirmDirectoryScope(runtimeDirectory)
+      if (!scopeGate.proceed) exitEarly(scopeGate.message ?? "Aborted.")
+    }
 
     const files: { type: "file"; url: string; filename: string; mime: string }[] = []
     if (args.file) {

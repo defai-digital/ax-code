@@ -30,6 +30,7 @@ import { formatWorkerLoadError } from "./util/log-error"
 import { parseTuiJsonPayload } from "./util/json"
 import { hasExplicitNetworkBindFlag } from "./util/network-flags"
 import { Flag } from "@/flag/flag"
+import { confirmDirectoryScope } from "@/cli/directory-scope-prompt"
 import { createTuiRejectionHandler, registerTuiCrashHandlers, registerTuiProcessHandler } from "./util/lifecycle"
 import { readOptionalJsonState } from "./util/optional-json-state"
 import { toErrorMessage } from "@/util/error-message"
@@ -729,6 +730,13 @@ export const TuiThreadCommand = cmd({
         return
       }
       const cwd = Filesystem.resolve(process.cwd())
+
+      const scopeGate = await confirmDirectoryScope(cwd)
+      if (!scopeGate.proceed) {
+        UI.error(scopeGate.message ?? "Aborted.")
+        process.exitCode = 1
+        return
+      }
 
       const backendTransport = tuiBackendTransport()
       const file = backendTransport === "worker" ? await target() : undefined

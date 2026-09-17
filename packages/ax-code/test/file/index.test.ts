@@ -1175,6 +1175,36 @@ describe("file/index Filesystem patterns", () => {
         else process.env.AX_CODE_TEST_HOME = previousTestHome
       }
     })
+
+    // Regression: only the exact home directory used to get the shallow-scan
+    // treatment — launching from ~/Desktop or ~/Downloads by mistake still
+    // triggered a full recursive walk. DirectoryScope.wellKnownBroadPaths()
+    // must cover these home subfolders too.
+    test("scans a Desktop-style home subfolder shallowly too", async () => {
+      await using tmp = await tmpdir()
+      const desktop = path.join(tmp.path, "Desktop")
+      await fs.mkdir(path.join(desktop, "one", "two", "three"), { recursive: true })
+      await fs.writeFile(path.join(desktop, "one", "two", "three", "deep.txt"), "deep", "utf-8")
+
+      const previousTestHome = process.env.AX_CODE_TEST_HOME
+      process.env.AX_CODE_TEST_HOME = tmp.path
+      try {
+        await Instance.provide({
+          directory: desktop,
+          fn: async () => {
+            await File.init()
+            const dirs = await File.search({ query: "", type: "directory", limit: 1000 })
+
+            expect(dirs).toContain("one/")
+            expect(dirs).toContain("one/two/")
+            expect(dirs).not.toContain("one/two/three/")
+          },
+        })
+      } finally {
+        if (previousTestHome === undefined) delete process.env.AX_CODE_TEST_HOME
+        else process.env.AX_CODE_TEST_HOME = previousTestHome
+      }
+    })
   })
 
   describe("File.read() - diff/patch", () => {

@@ -14,6 +14,7 @@ import { Project } from "../project/project"
 import type { ProjectID } from "../project/schema"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
+import { DirectoryScope } from "../file/directory-scope"
 import { NativeAddon } from "../native/addon"
 import { toErrorMessage } from "../util/error-message"
 
@@ -255,15 +256,19 @@ export namespace AutoIndex {
       })
     }
 
-    // The home directory is not a real workspace: the desktop web UI
-    // launches its managed `ax-code serve` with cwd = home, and a bulk
-    // index there walks the user's entire disk. Skip it entirely, like
-    // the matching guards in File.scan (src/file/index.ts) and LSP
-    // prewarmWorkspace (src/lsp/index-impl.ts). Instance.directory is
-    // realpath'd at context creation, so resolve the raw $HOME too —
-    // a symlinked home would otherwise dodge the comparison.
-    if (Instance.directory === Filesystem.resolve(Global.Path.home)) {
-      log.info("skipping: home directory is not an indexable workspace", { projectID })
+    // Home, Desktop, Downloads, Documents, and filesystem roots are not real
+    // workspaces: the desktop web UI launches its managed `ax-code serve`
+    // with cwd = home, and a bulk index there (or a user launching from
+    // Desktop/Downloads by mistake) walks the user's entire disk. Skip it
+    // entirely, like the matching guards in File.scan (src/file/index.ts)
+    // and LSP prewarmWorkspace (src/lsp/index-impl.ts). Instance.directory
+    // is realpath'd at context creation, so DirectoryScope resolves each
+    // candidate too — a symlinked home would otherwise dodge the comparison.
+    if (
+      DirectoryScope.isFilesystemRoot(Instance.directory) ||
+      DirectoryScope.wellKnownBroadPaths().some((candidate) => Filesystem.resolve(candidate) === Instance.directory)
+    ) {
+      log.info("skipping: broad directory is not an indexable workspace", { projectID })
       setState(projectID, {
         state: "idle",
         completed: 0,

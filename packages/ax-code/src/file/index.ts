@@ -7,11 +7,11 @@ import fuzzysort from "fuzzysort"
 import ignore from "ignore"
 import path from "path"
 import z from "zod"
-import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
 import { Log } from "../util/log"
 import { parseNumstatLine, parsePathLine } from "../util/git-output"
+import { DirectoryScope } from "./directory-scope"
 import { Protected } from "./protected"
 import { Ripgrep } from "./ripgrep"
 import { deletedFileStatus, parseModifiedNumstat, untrackedFileStatus } from "./status"
@@ -406,24 +406,29 @@ export namespace File {
   })
 
   async function scan() {
-    if (Instance.directory === path.parse(Instance.directory).root) return
-    // The home directory is never a sensible target for a full recursive file
-    // index: it spans ~/Library, caches, and countless nested node_modules. The
-    // full-scan branch below walks the whole tree synchronously via the native
-    // Ripgrep walker, which can block the event loop for tens of seconds (e.g.
-    // when the desktop web UI launches a managed `ax-code serve` with cwd set to
-    // the user's home). Trigger the shallow two-level listing whenever the
-    // instance directory IS the home directory, regardless of how the project id
-    // resolved — a plain home directory without a `.git` gets a directory-hash
-    // id rather than the "global" id, so gating on the id let the expensive path
-    // through and stalled startup.
-    // Compare resolved-to-resolved: Instance.directory is realpath'd at
-    // context creation, while Global.Path.home is the raw $HOME — a
-    // symlinked home directory would otherwise dodge the guard.
-    const isHomeDirectory = Instance.directory === Filesystem.resolve(Global.Path.home)
+    if (DirectoryScope.isFilesystemRoot(Instance.directory)) return
+    // The home directory (and well-known home subfolders like Desktop,
+    // Downloads, Documents) are never a sensible target for a full recursive
+    // file index: they span countless unrelated files, caches, and nested
+    // node_modules. The full-scan branch below walks the whole tree
+    // synchronously via the native Ripgrep walker, which can block the event
+    // loop for tens of seconds (e.g. when the desktop web UI launches a
+    // managed `ax-code serve` with cwd set to the user's home, or a user
+    // launches from Desktop/Downloads by mistake). Trigger the shallow
+    // two-level listing whenever the instance directory IS one of those
+    // well-known broad directories, regardless of how the project id
+    // resolved — a plain broad directory without a `.git` gets a
+    // directory-hash id rather than the "global" id, so gating on the id let
+    // the expensive path through and stalled startup.
+    // Instance.directory is realpath'd at context creation; DirectoryScope's
+    // well-known paths are compared resolved-to-resolved so a symlinked home
+    // directory doesn't dodge the guard.
+    const isKnownBroadDirectory = DirectoryScope.wellKnownBroadPaths().some(
+      (candidate) => Filesystem.resolve(candidate) === Instance.directory,
+    )
     const next: Entry = { files: [], dirs: [] }
 
-    if (isHomeDirectory) {
+    if (isKnownBroadDirectory) {
       const dirs = new Set<string>()
       const protectedNames = Protected.names()
       const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])

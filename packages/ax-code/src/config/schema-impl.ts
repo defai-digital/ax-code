@@ -628,6 +628,24 @@ export const Info = z
         ignore: z.array(z.string()).optional(),
       })
       .optional(),
+    directoryScope: z
+      .object({
+        enabled: z
+          .boolean()
+          .optional()
+          .describe(
+            "Warn before indexing an unusually broad directory (home, Desktop, Downloads, Documents, a filesystem root, or a very large top-level listing). Default: true.",
+          ),
+        maxTopLevelEntries: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Top-level entry count above which a directory is treated as broad. Default: 300."),
+        extraDenylist: z.array(z.string()).optional().describe("Additional absolute paths always treated as broad."),
+      })
+      .optional()
+      .describe("Controls the startup guard against launching ax-code in an overly broad directory."),
     plugin: z.string().array().optional(),
     snapshot: z
       .boolean()

@@ -64,6 +64,12 @@ export namespace Flag {
   // Disables both the terminal tab title (OSC 0) and the tab progress
   // indicator (OSC 9;4) the TUI writes while a session is working.
   export const AX_CODE_DISABLE_TERMINAL_TITLE = truthy("AX_CODE_DISABLE_TERMINAL_TITLE")
+  // Access-time getter (see the dynamic-flag block at the bottom of this
+  // file). A hard, one-way disable for TUI mouse capture: it beats the
+  // `mouse` tui.json setting because project-level tui.json files are
+  // untrusted input and must never keep the terminal's own mouse behavior
+  // suppressed against the user's wish. It can only disable, never force on.
+  export declare const AX_CODE_DISABLE_MOUSE: boolean
   // AX Code TUI's full terminal setup enables alternate-screen, capability
   // probes, and a native render thread. Explicit 1/true opts in; explicit
   // 0/false opts out. When unset, direct Ghostty, Windows Terminal, and VTE
@@ -230,6 +236,13 @@ export namespace Flag {
   // rows populate themselves without user intervention. See v2.3.9
   // release notes.
   export const AX_CODE_DISABLE_AUTO_INDEX = truthy("AX_CODE_DISABLE_AUTO_INDEX")
+  // Skips the startup confirmation before indexing an unusually broad
+  // directory (home, Desktop, Downloads, Documents, a filesystem root, or a
+  // very large top-level listing) — see cli/directory-scope-prompt.ts. For
+  // power users and CI/scripted invocations that intentionally run broad.
+  // Access-time getter (dynamic-flag block at the bottom of this file) so a
+  // wrapper script setting this after process start still takes effect.
+  export declare const AX_CODE_ALLOW_BROAD_DIR: boolean
   export declare const AX_CODE_DISABLE_FILETIME_CHECK: boolean
   export const AX_CODE_EXPERIMENTAL_PLAN_MODE = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_PLAN_MODE")
   export const AX_CODE_EXPERIMENTAL_WORKSPACES = AX_CODE_EXPERIMENTAL || truthy("AX_CODE_EXPERIMENTAL_WORKSPACES")
@@ -273,6 +286,15 @@ Object.defineProperty(Flag, "AX_CODE_TUI_ADVANCED_TERMINAL", {
 // This must be evaluated at access time, not module load time,
 // because external tooling may set this env var at runtime
 defineBooleanFlag("AX_CODE_DISABLE_PROJECT_CONFIG")
+
+// Evaluated per access so `AX_CODE_DISABLE_MOUSE=1 ax-code` works even when a
+// wrapper sets it after this module loads. Truthy semantics: only an explicit
+// true/1/yes/on disables capture; 0/false/unset leaves capture on.
+defineBooleanFlag("AX_CODE_DISABLE_MOUSE")
+
+// Evaluated per access (not at module load) so tests and wrapper scripts can
+// set/unset it around a single invocation.
+defineBooleanFlag("AX_CODE_ALLOW_BROAD_DIR")
 
 // This must be evaluated at access time so runtime toggles (server routes/tests)
 // remain immediately effective.
