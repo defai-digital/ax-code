@@ -199,11 +199,9 @@ describe("install script", () => {
   test("resolves the latest CLI version from the releases list, not /releases/latest", async () => {
     const text = await readFile(installScript, "utf-8")
     expect(text).toContain("latest_cli_version")
-    expect(text).toContain("https://api.github.com/repos/defai-digital/ax-code/releases?per_page=50")
+    expect(text).toContain("https://download.ax-code.com/releases.json")
     expect(text).toContain('"tag_name":[[:space:]]*"v[0-9]+\\.[0-9]+\\.[0-9]+"')
-    expect(text).toContain(
-      'url="https://github.com/defai-digital/ax-code/releases/download/v${specific_version}/$filename"',
-    )
+    expect(text).toContain('url="https://download.ax-code.com/releases/download/v${specific_version}/$filename"')
     expect(text).not.toContain("https://github.com/defai-digital/ax-code/releases/latest/download/$filename")
     expect(text).not.toContain("https://api.github.com/repos/defai-digital/ax-code/releases/latest")
 
@@ -230,11 +228,11 @@ printf '%s' '{"tag_name": "v7.8.1"}' | extract
     expect(text).toContain("[string]$Version")
     expect(text).toContain("[string]$Binary")
     expect(text).toContain("[switch]$NoModifyPath")
-    expect(text).toContain("https://api.github.com/repos/$Repo/releases?per_page=50")
+    expect(text).toContain("https://download.ax-code.com/releases.json")
     expect(text).toContain('if (-not $tag -or $tag -notmatch "^v\\d+\\.\\d+\\.\\d+$")')
     expect(text).toContain("Where-Object { [string]$_.name -eq $FileName }")
     expect(text).not.toContain("https://github.com/$Repo/releases/latest/download/$filename")
-    expect(text).toContain("https://github.com/$Repo/releases/download/v$specificVersion/$filename")
+    expect(text).toContain("https://download.ax-code.com/releases/download/v$specificVersion/$filename")
     expect(text).toContain('$filename = "$App-windows-$arch.zip"')
     expect(text).toContain('return "x64"')
     expect(text).toContain('return "arm64"')

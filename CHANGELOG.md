@@ -6,7 +6,16 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.4] - 2026-09-17
+
 ### Changed
+
+- Publish signed installation and update downloads at `download.ax-code.com`, independent of source repository visibility.
+- Move Homebrew and Winget package downloads to the verified R2 release mirror.
+- Publish the paired SDK 2.5.28.
+- Reduce bundled runtime payload and bound native scan and LSP work.
+- Enable advanced rendering for direct Windows Terminal and VTE sessions.
+- Stabilize source-runner compile caching and probe identity.
 
 - Restyle the Fuji Mountain opening as dawn with a vertical sky gradient, move `/navigation` and width controls onto the session rail, and tighten chrome width presets.
 

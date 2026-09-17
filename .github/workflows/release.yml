@@ -591,6 +591,7 @@ jobs:
           node script/github-release-assets.mjs publish --repo "$REPOSITORY" --tag "$TAG"
 
       - name: Wait for verified public R2 mirror
+        if: ${{ !contains(inputs.tag || github.ref_name, '-') }}
         run: |
           set -euo pipefail
           URL="https://download.ax-code.com/releases/download/${AX_CODE_RELEASE_TAG}/release-ready.json"

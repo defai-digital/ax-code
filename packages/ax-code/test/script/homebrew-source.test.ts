@@ -62,7 +62,7 @@ describe("distribution support guardrails", () => {
 
   test("default formula installs the node-bundled distribution", async () => {
     const text = await readFile(homebrewDefaultScript, "utf-8")
-    expect(text).toContain("github.com/defai-digital/ax-code/releases/download")
+    expect(text).toContain("download.ax-code.com/releases/download")
     expect(text).toContain('gh release download "${TAG}"')
     expect(text).toContain('--repo "${SOURCE_REPO}"')
     expect(text).toContain('gh repo clone "${repo}"')
@@ -374,7 +374,7 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("- homebrew")
     expect(text).toContain("- windows")
     expect(text).toContain("- linux")
-    expect(text).toContain("https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install")
+    expect(text).toContain("https://download.ax-code.com/releases/download/v${VERSION}/install")
     expect(text).toContain("curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors")
     expect(text).not.toContain("api.github.com/repos/${{ github.repository }}/contents/install")
     expect(text).toContain('SHELL=/bin/zsh bash "$RUNNER_TEMP/ax-install" --version "$VERSION"')
@@ -454,7 +454,7 @@ describe("distribution support guardrails", () => {
     expect(linuxJob![0]).toContain("set-isolated-home-env.sh")
     expect(linuxJob![0]).toContain("ubuntu-24.04")
     expect(linuxJob![0]).toContain("ubuntu-24.04-arm")
-    expect(linuxJob![0]).toContain("https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install")
+    expect(linuxJob![0]).toContain("https://download.ax-code.com/releases/download/v${VERSION}/install")
     expect(linuxJob![0]).toContain("curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors")
     expect(linuxJob![0]).toContain("/bin/bash -lic 'command -v ax-code'")
 
