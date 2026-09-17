@@ -5,6 +5,7 @@ import {
   clearTuiTerminalTitle,
   createTuiRenderOptionsFromProfile,
   destroyTuiRenderer,
+  getTuiRenderProfile,
   resolveTuiRenderProfile,
   setTuiTerminalProgress,
   setTuiTerminalTitle,
@@ -91,6 +92,59 @@ describe("tui renderer profile", () => {
     // Kitty keyboard is probe-free (fire-and-forget flags push) and enabled
     // in all profiles by default — Shift+Enter newline depends on it.
     expect(options.useKittyKeyboard).toEqual({})
+  })
+
+  test("mouse capture is on by default and opts out through tui.json", () => {
+    const base = { advancedTerminal: false, terminalTitleDisabled: false }
+
+    // Default stays capture-on: footer shortcut chips, click-to-focus,
+    // autocomplete/dialog clicks, and in-TUI wheel scrolling depend on it.
+    expect(resolveTuiRenderProfile(base).useMouse).toBe(true)
+    // An explicit true is the same as omitting the key.
+    expect(resolveTuiRenderProfile({ ...base, mouse: true }).useMouse).toBe(true)
+    // Opting out reaches the ax-tui render options unchanged.
+    const optedOut = resolveTuiRenderProfile({ ...base, mouse: false })
+    expect(optedOut.useMouse).toBe(false)
+    expect(createTuiRenderOptionsFromProfile(optedOut).useMouse).toBe(false)
+    // The setting is independent of the profile: the advanced profile can
+    // disable capture too.
+    expect(
+      resolveTuiRenderProfile({ advancedTerminal: true, terminalTitleDisabled: false, mouse: false }).useMouse,
+    ).toBe(false)
+  })
+
+  test("AX_CODE_DISABLE_MOUSE beats the tui.json mouse setting", () => {
+    const base = { advancedTerminal: false, terminalTitleDisabled: false }
+
+    // A hard, one-way disable: an untrusted project tui.json must never be
+    // able to force capture back on over the user's escape hatch.
+    expect(resolveTuiRenderProfile({ ...base, mouse: true, disableMouse: true }).useMouse).toBe(false)
+    expect(resolveTuiRenderProfile({ ...base, mouse: false, disableMouse: true }).useMouse).toBe(false)
+    // A pure disabler: when unset (false), tui.json decides.
+    expect(resolveTuiRenderProfile({ ...base, mouse: false, disableMouse: false }).useMouse).toBe(false)
+    expect(resolveTuiRenderProfile({ ...base, mouse: true, disableMouse: false }).useMouse).toBe(true)
+  })
+
+  test("getTuiRenderProfile reads AX_CODE_DISABLE_MOUSE at access time", () => {
+    const previous = process.env["AX_CODE_DISABLE_MOUSE"]
+    try {
+      delete process.env["AX_CODE_DISABLE_MOUSE"]
+      expect(getTuiRenderProfile(true).useMouse).toBe(true)
+
+      // Even an explicit config opt-in cannot win over the env escape hatch.
+      process.env["AX_CODE_DISABLE_MOUSE"] = "1"
+      expect(getTuiRenderProfile(true).useMouse).toBe(false)
+
+      // Truthy semantics: 0/false is not a disable.
+      process.env["AX_CODE_DISABLE_MOUSE"] = "0"
+      expect(getTuiRenderProfile(true).useMouse).toBe(true)
+
+      process.env["AX_CODE_DISABLE_MOUSE"] = "yes"
+      expect(getTuiRenderProfile(true).useMouse).toBe(false)
+    } finally {
+      if (previous === undefined) delete process.env["AX_CODE_DISABLE_MOUSE"]
+      else process.env["AX_CODE_DISABLE_MOUSE"] = previous
+    }
   })
 
   test("kitty keyboard opt-out disables the flags push in both profiles", () => {

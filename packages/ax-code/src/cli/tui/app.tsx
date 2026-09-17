@@ -138,7 +138,10 @@ export function tui(input: TuiInput) {
       const unguard = win32InstallCtrlCGuard()
       const unresize = installResizeInputGuard()
       try {
-        const renderProfile = getTuiRenderProfile()
+        // Resolve mouse capture from tui.json `mouse` here: this is the one
+        // profile the renderer actually mounts with, so it must carry the
+        // config value (AX_CODE_DISABLE_MOUSE still wins inside the resolver).
+        const renderProfile = getTuiRenderProfile(input.config.mouse)
         // Claim the terminal tab title before the renderer mounts (kimi-code
         // style: one fire-and-forget OSC 0 write at startup). Entry already
         // wrote this for the default TUI path; repeating it here covers attach
@@ -159,63 +162,67 @@ export function tui(input: TuiInput) {
           resolve()
         }
 
-        renderTui(() => {
-          return (
-            <ErrorBoundary
-              fallback={(error, reset) => (
-                <ErrorComponent error={error} reset={reset} onExit={onExit} mode={FALLBACK_COLOR_MODE} />
-              )}
-            >
-              <ArgsProvider {...input.args}>
-                <ExitProvider onExit={onExit}>
-                  <KVProvider>
-                    <ToastProvider>
-                      <RouteProvider>
-                        <TuiConfigProvider config={input.config}>
-                          <SDKProvider
-                            url={input.url}
-                            directory={input.directory}
-                            fetch={input.fetch}
-                            headers={input.headers}
-                            events={input.events}
-                          >
-                            <LanguageProvider>
-                              <SyncProvider>
-                                <ThemeProvider mode={FALLBACK_COLOR_MODE}>
-                                  <LocalProvider>
-                                    <KeybindProvider>
-                                      <PromptStashProvider>
-                                        <AxEngineDownloadsProvider>
-                                          <DialogProvider>
-                                            <CommandProvider>
-                                              <FrecencyProvider>
-                                                <PromptHistoryProvider>
-                                                  <PromptRefProvider>
-                                                    <VisualCapabilityProvider>
-                                                      <App onSnapshot={input.onSnapshot} />
-                                                    </VisualCapabilityProvider>
-                                                  </PromptRefProvider>
-                                                </PromptHistoryProvider>
-                                              </FrecencyProvider>
-                                            </CommandProvider>
-                                          </DialogProvider>
-                                        </AxEngineDownloadsProvider>
-                                      </PromptStashProvider>
-                                    </KeybindProvider>
-                                  </LocalProvider>
-                                </ThemeProvider>
-                              </SyncProvider>
-                            </LanguageProvider>
-                          </SDKProvider>
-                        </TuiConfigProvider>
-                      </RouteProvider>
-                    </ToastProvider>
-                  </KVProvider>
-                </ExitProvider>
-              </ArgsProvider>
-            </ErrorBoundary>
-          )
-        })
+        renderTui(
+          () => {
+            return (
+              <ErrorBoundary
+                fallback={(error, reset) => (
+                  <ErrorComponent error={error} reset={reset} onExit={onExit} mode={FALLBACK_COLOR_MODE} />
+                )}
+              >
+                <ArgsProvider {...input.args}>
+                  <ExitProvider onExit={onExit}>
+                    <KVProvider>
+                      <ToastProvider>
+                        <RouteProvider>
+                          <TuiConfigProvider config={input.config}>
+                            <SDKProvider
+                              url={input.url}
+                              directory={input.directory}
+                              fetch={input.fetch}
+                              headers={input.headers}
+                              events={input.events}
+                            >
+                              <LanguageProvider>
+                                <SyncProvider>
+                                  <ThemeProvider mode={FALLBACK_COLOR_MODE}>
+                                    <LocalProvider>
+                                      <KeybindProvider>
+                                        <PromptStashProvider>
+                                          <AxEngineDownloadsProvider>
+                                            <DialogProvider>
+                                              <CommandProvider>
+                                                <FrecencyProvider>
+                                                  <PromptHistoryProvider>
+                                                    <PromptRefProvider>
+                                                      <VisualCapabilityProvider>
+                                                        <App onSnapshot={input.onSnapshot} />
+                                                      </VisualCapabilityProvider>
+                                                    </PromptRefProvider>
+                                                  </PromptHistoryProvider>
+                                                </FrecencyProvider>
+                                              </CommandProvider>
+                                            </DialogProvider>
+                                          </AxEngineDownloadsProvider>
+                                        </PromptStashProvider>
+                                      </KeybindProvider>
+                                    </LocalProvider>
+                                  </ThemeProvider>
+                                </SyncProvider>
+                              </LanguageProvider>
+                            </SDKProvider>
+                          </TuiConfigProvider>
+                        </RouteProvider>
+                      </ToastProvider>
+                    </KVProvider>
+                  </ExitProvider>
+                </ArgsProvider>
+              </ErrorBoundary>
+            )
+          },
+          undefined,
+          renderProfile,
+        )
         recordTuiStartup("tui.startup.renderDispatched")
       } catch (error) {
         unresize()

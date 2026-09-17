@@ -162,6 +162,57 @@ test("drops a wholly invalid notifications value but keeps other fields", async 
   })
 })
 
+test("accepts mouse as a first-class option", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "tui.json"),
+        JSON.stringify({
+          theme: "salvaged-theme",
+          mouse: false,
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await TuiConfig.get()
+      // If `mouse` were not a recognized TuiOptions key, the strict schema
+      // would reject it and salvage would silently drop it, leaving the
+      // renderer to capture the mouse again despite the user's opt-out.
+      expect(config.mouse).toBe(false)
+    },
+  })
+})
+
+test("drops a non-boolean mouse value without discarding the rest of the file", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await fs.writeFile(
+        path.join(dir, "tui.json"),
+        JSON.stringify({
+          theme: "salvaged-theme",
+          mouse: "no",
+        }),
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const config = await TuiConfig.get()
+      // The invalid value drops alone and `mouse` stays unset, which keeps the
+      // documented default (capture on). A typo therefore cannot silently
+      // change mouse behavior; the user has to write a real boolean.
+      expect(config.mouse).toBeUndefined()
+      expect(config.theme).toBe("salvaged-theme")
+    },
+  })
+})
+
 test("migration filters unknown and non-string keybinds before writing tui.json", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {

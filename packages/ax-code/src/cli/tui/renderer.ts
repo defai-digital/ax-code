@@ -40,6 +40,10 @@ export function resolveTuiRenderProfile(input: {
   terminalTitleDisabled: boolean
   kittyKeyboard?: boolean
   modifyOtherKeys?: boolean
+  /** tui.json `mouse` (default true). */
+  mouse?: boolean
+  /** AX_CODE_DISABLE_MOUSE — a hard, one-way disable that beats `mouse`. */
+  disableMouse?: boolean
 }): TuiRenderProfile {
   const { advancedTerminal, terminalTitleDisabled } = input
   return {
@@ -52,9 +56,11 @@ export function resolveTuiRenderProfile(input: {
     useThread: advancedTerminal,
     // Mouse support is safe in compatible mode — unlike the advanced
     // profile's capability probes, it does not trigger terminal capability
-    // probes that can hang. Enable it so footer toggle buttons (Fast-model,
-    // Autonomous, Sandbox) are clickable in all terminal profiles.
-    useMouse: true,
+    // probes that can hang. On by default so footer toggle buttons
+    // (Fast-model, Autonomous, Sandbox) are clickable in all terminal
+    // profiles; `tui.json` `mouse: false` opts out, and AX_CODE_DISABLE_MOUSE
+    // is a hard disable that untrusted project config cannot override.
+    useMouse: !input.disableMouse && (input.mouse ?? true),
     // Kitty keyboard is likewise probe-free (a single fire-and-forget flags
     // push), so it is decoupled from the advanced profile and enabled by
     // default — Shift+Enter/Ctrl+Enter newline bindings depend on it.
@@ -73,12 +79,16 @@ export function resolveTuiRenderProfile(input: {
   }
 }
 
-export function getTuiRenderProfile(): TuiRenderProfile {
+export function getTuiRenderProfile(mouse?: boolean): TuiRenderProfile {
   return resolveTuiRenderProfile({
     advancedTerminal: Flag.AX_CODE_TUI_ADVANCED_TERMINAL,
     terminalTitleDisabled: Flag.AX_CODE_DISABLE_TERMINAL_TITLE,
     kittyKeyboard: Flag.AX_CODE_TUI_KITTY_KEYBOARD,
     modifyOtherKeys: Flag.AX_CODE_TUI_MODIFY_OTHER_KEYS,
+    // `mouse` is the resolved tui.json value (undefined when unset).
+    mouse,
+    // Read per call: AX_CODE_DISABLE_MOUSE is an access-time flag.
+    disableMouse: Flag.AX_CODE_DISABLE_MOUSE,
   })
 }
 
@@ -256,11 +266,17 @@ export async function destroyTuiRenderer(
   if (destroyError) throw destroyError
 }
 
-export function renderTui(root: TuiRenderRoot, options?: Parameters<typeof createTuiRenderOptions>[0]) {
+export function renderTui(
+  root: TuiRenderRoot,
+  options?: Parameters<typeof createTuiRenderOptions>[0],
+  // Callers that already resolved a profile from TUI config pass it in so the
+  // renderer does not fall back to the config-less default. Defaults to the
+  // env-derived profile for tests and other entry points.
+  profile: TuiRenderProfile = getTuiRenderProfile(),
+) {
   // Bootstrap and backend startup can run other console-attached programs.
   // Recheck output encoding immediately before the native renderer emits UTF-8.
   ensureWindowsUtf8Console()
-  const profile = getTuiRenderProfile()
   // xterm modifyOtherKeys is the complementary path for terminals that do not
   // support Kitty keyboard reporting. The native renderer owns Kitty setup,
   // parsing, and clean teardown in both profiles. Native terminal setup also

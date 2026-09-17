@@ -185,7 +185,9 @@ describe("AX Code TUI stability guardrails", () => {
     expect(renderer).toContain("allowTerminalTitle: !terminalTitleDisabled")
     expect(renderer).toContain("autoFocus: false")
     expect(renderer).toContain("openConsoleOnError: false")
-    expect(renderer).toContain("useMouse: true")
+    // Mouse capture is on by default but configurable: tui.json `mouse` opts
+    // out, and AX_CODE_DISABLE_MOUSE hard-disables it and wins over config.
+    expect(renderer).toContain("useMouse: !input.disableMouse && (input.mouse ?? true)")
     // Kitty keyboard is decoupled from the advanced profile (probe-free
     // flags push) and on by default; the opt-out flag disables it.
     expect(renderer).toContain("useKittyKeyboard: input.kittyKeyboard ?? true")

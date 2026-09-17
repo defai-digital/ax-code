@@ -63,6 +63,12 @@ export const TuiOptions = z.object({
     .enum(["auto", "stacked"])
     .optional()
     .describe("Control diff rendering style: 'auto' adapts to terminal width, 'stacked' always shows single column"),
+  mouse: z
+    .boolean()
+    .optional()
+    .describe(
+      "Capture terminal mouse input for in-TUI clicks, hover, selection, and wheel scrolling (default true). Set false to hand the mouse back to the terminal: its native right-click menu, text selection, and copy/paste return, while footer shortcut chips, click-to-focus, clickable dialog options, and in-TUI wheel scrolling stop responding. AX_CODE_DISABLE_MOUSE=1 is an environment escape hatch that always disables capture, whatever this file says",
+    ),
   idle_recap: z
     .object({
       enabled: z.boolean().optional().describe("Show a short recap banner after an idle turn (default true)"),
