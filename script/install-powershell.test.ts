@@ -104,7 +104,9 @@ ${body}
     )
     const result = spawnSync(powershell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-File", script], {
       encoding: "utf8",
-      timeout: 20_000,
+      // Windows on Arm GitHub runners can take longer than 20s to cold-start
+      // powershell.exe, which previously surfaced as spawnSync ETIMEDOUT.
+      timeout: 60_000,
       env: powershellEnvironment(powershell, {
         ...process.env,
         AX_TEST_INSTALLER: installer,
