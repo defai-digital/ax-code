@@ -9,6 +9,7 @@ import { CodeGraphQuery } from "../../src/code-intelligence/query"
 import { CodeGraphBuilder } from "../../src/code-intelligence/builder"
 import { EvidenceCache } from "../../src/evidence/cache"
 import { SyntacticExtractor } from "../../src/code-intelligence/syntactic"
+import { NativeAddon } from "../../src/native/addon"
 import { LSP } from "@ax-code/ax-code-intel"
 
 Log.init({ print: false })
@@ -100,11 +101,98 @@ describe("SyntacticExtractor.extract", () => {
   })
 
   test("declines unsupported languages and oversized sources", async () => {
-    expect(SyntacticExtractor.supported("go")).toBe(false)
-    expect(await SyntacticExtractor.extract("go", "func main() {}")).toBeUndefined()
+    expect(SyntacticExtractor.supported("erb")).toBe(false)
+    expect(SyntacticExtractor.supported("brainfuck")).toBe(false)
+    expect(await SyntacticExtractor.extract("erb", "<%= hello %>")).toBeUndefined()
 
     const huge = `const x = 1\n`.repeat(150_000) // > 1.5MB
     expect(await SyntacticExtractor.extract("typescript", huge)).toBeUndefined()
+  })
+
+  test("keeps TypeScript on the WASM path even when native has a grammar", async () => {
+    const extractSymbols = vi.fn(() => {
+      throw new Error("native must not parse TypeScript")
+    })
+    vi.spyOn(NativeAddon, "parser").mockReturnValue({
+      hasGrammar: () => true,
+      extractSymbols,
+      parseBatch: () => "[]",
+      supportedLanguages: () => ["typescript"],
+    })
+    try {
+      const symbols = await SyntacticExtractor.extract("typescript", "export function keep() {}\n")
+      expect(symbols?.some((s) => s.name === "keep")).toBe(true)
+      expect(extractSymbols).not.toHaveBeenCalled()
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
+  test("uses the native parser for Go and flattens nested symbols", async () => {
+    vi.spyOn(NativeAddon, "parser").mockReturnValue({
+      hasGrammar: (language: string) => language === "go",
+      extractSymbols: () =>
+        JSON.stringify([
+          {
+            name: "Greeter",
+            kind: "class",
+            qualifiedName: "Greeter",
+            range: { startLine: 0, startChar: 0, endLine: 6, endChar: 1 },
+            children: [
+              {
+                name: "Greet",
+                kind: "method",
+                qualifiedName: "Greeter::Greet",
+                range: { startLine: 2, startChar: 0, endLine: 4, endChar: 1 },
+                children: [],
+              },
+            ],
+          },
+        ]),
+      parseBatch: () => "[]",
+      supportedLanguages: () => ["go"],
+    })
+    try {
+      expect(SyntacticExtractor.supported("go")).toBe(true)
+      const symbols = await SyntacticExtractor.extract("go", "package p\n")
+      expect(symbols?.map((s) => `${s.kind}:${s.qualified}`)).toEqual(["class:Greeter", "method:Greeter::Greet"])
+      expect(symbols?.every((s) => s.signature === null)).toBe(true)
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
+  test("returns undefined when the native parser is unavailable", async () => {
+    vi.spyOn(NativeAddon, "parser").mockReturnValue(undefined)
+    try {
+      expect(SyntacticExtractor.supported("go")).toBe(false)
+      expect(await SyntacticExtractor.extract("python", "def greet():\n  return 1\n")).toBeUndefined()
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+
+  test("extracts Python through the native parser when the addon is loaded", async () => {
+    if (!NativeAddon.parser()?.hasGrammar("python")) return
+    const symbols = await SyntacticExtractor.extract(
+      "python",
+      ["class Animal:", "  def speak(self):", "    return self", ""].join("\n"),
+    )
+    const kinds = new Map(symbols!.map((s) => [s.qualified, s.kind]))
+    expect(kinds.get("Animal")).toBe("class")
+    expect(kinds.get("Animal::speak")).toBe("function")
+  })
+
+  test("extracts Ruby through the native parser when the addon is loaded", async () => {
+    if (!NativeAddon.parser()?.hasGrammar("ruby")) return
+    const symbols = await SyntacticExtractor.extract(
+      "ruby",
+      ["module Bank", "  class Account", "    def deposit(amount)", "    end", "  end", "end", ""].join("\n"),
+    )
+    const kinds = new Map(symbols!.map((s) => [s.qualified, s.kind]))
+    expect(kinds.get("Bank")).toBe("module")
+    expect(kinds.get("Bank::Account")).toBe("class")
+    expect(kinds.get("Bank::Account::deposit")).toBe("method")
   })
 
   test("caps the number of symbols per file", async () => {

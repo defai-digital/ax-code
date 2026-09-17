@@ -38,7 +38,7 @@ export {
 } from "./web-servers"
 export {
   Gopls,
-  Rubocop,
+  RubyLsp,
   ElixirLS,
   Zls,
   CSharp,

@@ -6,6 +6,15 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Added
+
+- Index Go, Python, Rust, Java, and Ruby symbols through the native tree-sitter parser when LSP returns none.
+- Add a Ruby on Rails skill for Zeitwerk, tests, and bundle conventions without booting the Rails process.
+
+### Fixed
+
+- Spawn Shopify `ruby-lsp` for Ruby instead of RuboCop, and keep it out of startup prewarm.
+
 ## [7.18.4] - 2026-09-17
 
 ### Changed

@@ -58,18 +58,17 @@ export const Gopls: Info = {
   },
 }
 
-export const Rubocop: Info = {
+export const RubyLsp: Info = {
   id: "ruby-lsp",
-  root: NearestRoot(["Gemfile"]),
+  root: NearestRoot(["Gemfile", "Gemfile.lock", ".ruby-version"]),
   extensions: [".rb", ".rake", ".gemspec", ".ru"],
   async spawn(root) {
     return toolServer(root, {
-      name: "rubocop",
-      install: ["gem", "install", "rubocop", "--bindir", codeIntelHost().binDir()],
+      name: "ruby-lsp",
+      install: ["gem", "install", "ruby-lsp", "--bindir", codeIntelHost().binDir()],
       require: ["ruby", "gem"],
       missing: "Ruby not found, please install Ruby first",
       missingLevel: "info",
-      args: ["--lsp"],
     })
   },
 }

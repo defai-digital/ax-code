@@ -39,7 +39,7 @@ export namespace LSPServer {
   export const Oxlint = _Defs.Oxlint
   export const Biome = _Defs.Biome
   export const Gopls = _Defs.Gopls
-  export const Rubocop = _Defs.Rubocop
+  export const RubyLsp = _Defs.RubyLsp
   export const Ty = _Defs.Ty
   export const Pyright = _Defs.Pyright
   export const ElixirLS = _Defs.ElixirLS
