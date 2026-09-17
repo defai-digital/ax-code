@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: public, current-state
-Last reviewed: 2026-08-21
+Last reviewed: 2026-09-16
 Owner: AX Code maintainers
 
 AX Code is an open-source coding-agent runtime for reviewable, reversible work: every session is recorded as a
@@ -41,6 +41,8 @@ pages are the ones linked here.
 | Build a desktop or native host                           | [Native SDK Transport](sdk/native-transport.md)                         |
 
 ## Getting started
+
+- [Standard and Business](getting-started/editions.md) — open-source Standard, free commercial use, planned proprietary Business, and public-access status.
 
 - [Why AX Code](why-ax-code.md) — what AX Code optimizes for, its intended audience, how it differs, and what it does
   not claim.

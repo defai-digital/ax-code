@@ -2,10 +2,28 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-08-21
+Last reviewed: 2026-09-16
 Owner: ax-code runtime
 
 If the root [README](../../README.md) is the fastest way to install AX Code, this page is the fastest way to understand it.
+
+## Editions and availability
+
+Start with **AX Code Standard**, the open-source edition that is free for personal and
+commercial use. Use local or cloud models; AX Engine provides a native local inference
+path on supported Apple Silicon Macs. Existing permissions, change review, and local
+execution evidence remain core capabilities.
+
+**Business** is a planned proprietary offering for organization governance through AX
+Trust and business workflows through AutomatosX. Using Standard at work does not itself
+require a Business license. See [Standard and Business](editions.md) for details.
+
+v8.0 is upcoming. Public GitHub installers are currently inaccessible while the original
+repository remains private; check the [website guide](https://ax-code.app/en/download/)
+for installation updates. Already installed? Open a terminal in your project, run
+`ax-code`, then use `/connect` inside the TUI to choose a provider. Begin with a question
+about the project, request a small change, and review the diff and project checks before
+committing. Use `ax-code doctor` if the installed runtime needs diagnosis.
 
 ## What AX Code Is
 

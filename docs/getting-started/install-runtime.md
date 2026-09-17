@@ -2,12 +2,27 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-13
+Last reviewed: 2026-09-16
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
 
-## Recommended Path
+## Public availability
+
+As of 2026-09-16, the original repository is private. Anonymous requests for the GitHub
+release installers below return 404, and the Homebrew formula references an archive in
+that same repository. The commands document existing channels; they are not currently
+working public download instructions. Do not work around this by embedding private
+GitHub credentials in a public installer.
+
+AX Code Standard remains open source and free for personal and commercial use. The
+planned proprietary Business components have separate licensing; this does not change
+Standard's license. See [Standard and Business](editions.md) for details and the
+[website guide](https://ax-code.app/en/download/) for public installation updates.
+Public installers and their signed assets must be reachable and verified before the
+website advertises a one-line installation command.
+
+## Recommended Path (when public release access is available)
 
 Use a supported packaged installer unless you are developing from a checkout. The release installer is the primary CLI path on macOS and Linux; use the native PowerShell installer on Windows.
 

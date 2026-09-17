@@ -23,6 +23,23 @@ Built by [DEFAI Digital](https://github.com/defai-digital).
 
 ---
 
+## Standard and Business
+
+**AX Code Standard** is open-source AI coding for individuals and teams, built to work
+with local and cloud models. It remains free for personal and commercial use under
+Apache-2.0, with the existing upstream license notices preserved. Companies can use
+Standard without buying Business. Model-provider and hardware costs are separate.
+
+**AX Code Business** is a planned, separately licensed proprietary offering built around
+AX Trust governance and the AutomatosX ecosystem: company-managed AI access, centrally
+retained records, and connected internal workflows. Standard keeps the complete core
+coding experience, local evidence, and basic safety capabilities.
+
+v8.0 is upcoming. Business features, pricing, and deployment availability are not yet
+being announced as generally available. Computer use (CUA) is planned for v8.1.
+Read [Standard and Business](docs/getting-started/editions.md) for the edition boundaries,
+local inference scope, licensing, and current public-access status.
+
 ## The problem
 
 Coding agents now write real code in real repositories. The gap is what happens after the agent says it is done: which files it touched, which decisions it made, whether the result passes your checks, how one attempt compared with another, and how to undo the specific step that went wrong.
@@ -126,6 +143,14 @@ ax-code
 Use `auto` (default) to restore detection or `normal` for normal cache and concurrency budgets. Both profiles start semantic analysis on demand; ordinary reads do not prewarm language servers. On a host with sufficient headroom, `AX_CODE_MEMORY_PROFILE=normal AX_CODE_LSP_PREWARM=1 ax-code` restores speculative startup/read prewarming to reduce first-query latency. The evidence cache uses bounded memory by default; RocksDB is opt-in. These controls preserve model selection and required checks; they do not certify arbitrary projects for low-RAM hardware. See [Memory usage](docs/guides/memory-usage.md) for limits and workload guidance.
 
 ## Get started
+
+**Public downloads are temporarily unavailable (2026-09-16).** The original GitHub
+repository is private, so the release installer URLs below return 404 for anonymous
+users. Homebrew also downloads its archive from that repository. These commands document
+the existing channels; they are not currently usable public installation paths. See the
+[website guide](https://ax-code.app/en/download/) for installation updates. The Standard
+open-source direction does not itself change repository visibility or restore downloads.
+
 
 ### macOS (Apple Silicon)
 
@@ -252,6 +277,8 @@ Everyday use:
 
 ## Documentation
 
+- [Standard and Business](docs/getting-started/editions.md) — free commercial use, planned Business capabilities, and availability
+
 - [Why AX Code](docs/why-ax-code.md) — what it optimizes for, who it is for, and how it differs from other agents
 - [Start Here](docs/getting-started/start-here.md) — product mental model and shortest paths by use case
 - [Execution Evidence](docs/guides/execution-evidence.md) — graph, replay, compare, risk, rollback, trace, and audit export
@@ -263,7 +290,7 @@ Everyday use:
 
 ## Community
 
-Report bugs, feature requests, and questions through [GitHub Issues](https://github.com/defai-digital/ax-code/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for the current contribution policy and [Discord](https://discord.gg/gf9UyPxaN2) for community discussion.
+While the repository is private, GitHub Issues requires repository access. Report bugs, feature requests, and questions through [GitHub Issues](https://github.com/defai-digital/ax-code/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for the current contribution policy and [Discord](https://discord.gg/gf9UyPxaN2) for community discussion.
 
 ## Provenance
 
@@ -279,6 +306,9 @@ These notices preserve license provenance and upstream credit. They do not mean 
 
 ## License
 
-AX Code is licensed under the [Apache License, Version 2.0](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital).
+AX Code Standard is licensed under the [Apache License, Version 2.0](LICENSE) — Copyright (c) 2025 [DEFAI Private Limited](https://github.com/defai-digital).
 
 Portions derived from MIT-licensed projects (notably OpenCode) remain under the [MIT License](LICENSE-MIT). The terminal UI framework is the standalone ax-tui project (MIT), derived from OpenTUI with attribution retained. See [NOTICE](NOTICE) and [LICENSE-MIT](LICENSE-MIT).
+
+Planned proprietary Business components will carry a separate commercial license. This
+does not change the licenses of Standard, previously distributed code, or upstream portions.

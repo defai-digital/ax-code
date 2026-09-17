@@ -26,7 +26,7 @@ changes belong to AX Coder.
 - Enable advanced rendering for direct Windows Terminal and VTE sessions.
 - Stabilize source-runner compile caching and probe identity.
 
-- Restyle the Fuji Mountain opening as dawn with a vertical sky gradient, move `/navigation` and width controls onto the session rail, and tighten chrome width presets.
+- Move `/navigation` and width controls onto the session rail, and tighten chrome width presets.
 
 ## [7.18.3] - 2026-09-16
 
