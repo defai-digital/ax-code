@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, verify } from "node:crypto"
 
 // Keep aligned with docs/release/ax-minisign.pub and both standalone installers.
+// This is the published Minisign verifying key, not a credential.
 export const RELEASE_PUBLIC_KEY = "RWSlDu++afxCz01OqhYWhfo8+L8pVbSYXJBEb2zoWBuK0WACIzbGVZRO"
 
 function decode(value: string, size: number) {
