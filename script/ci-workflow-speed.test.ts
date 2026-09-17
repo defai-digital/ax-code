@@ -26,7 +26,7 @@ describe("CI workflow speed policy", () => {
     expect(repoStructure).toContain("pnpm run test:scripts")
   })
 
-  test("native evidence rebuilds skip unchanged pull requests and cache cargo", () => {
+  test("native evidence rebuilds skip unchanged pull requests and pushes and cache cargo", () => {
     const lane = workflowJob(ci, "evidence-native")
     const action = readFileSync(".github/actions/build-evidence-cache/action.yml", "utf8")
     expect(lane).toBeDefined()
@@ -34,6 +34,10 @@ describe("CI workflow speed policy", () => {
     expect(lane).toContain("steps.native.outputs.run")
     expect(lane).toContain("script/ci-native-evidence-needed.ts")
     expect(lane).toContain("Skipping native evidence rebuild")
+    expect(lane).toContain('event_name="${{ github.event_name }}"')
+    expect(lane).toContain("/compare/${before}...${{ github.sha }}")
+    expect(lane).toContain('github.event.pull_request.number')
+    expect(lane).not.toContain('if [ "${{ github.event_name }}" != "pull_request" ]; then')
     expect(action).toContain("Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1")
     expect(action).toContain("workspaces: crates -> target")
   })

@@ -6,6 +6,10 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Skip native evidence rebuilds on main and dev pushes that do not touch crates or addon inputs, matching pull requests.
+
 ## [7.18.5] - 2026-09-17
 
 ### Added

@@ -76,13 +76,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
+          event_name="${{ github.event_name }}"
+          files=""
+          if [ "$event_name" = "pull_request" ]; then
+            files="$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename' || true)"
+          elif [ "$event_name" = "push" ]; then
+            before="${{ github.event.before }}"
+            if [ -z "$before" ] || [ "$before" = "0000000000000000000000000000000000000000" ]; then
+              echo "No previous commit; rebuilding native evidence."
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            files="$(gh api --paginate "repos/${{ github.repository }}/compare/${before}...${{ github.sha }}" --jq '.files[].filename' || true)"
+          else
+            echo "Rebuilding native evidence for ${event_name}."
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          files="$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename' || true)"
-          if [ -z "$files" ]; then
-            echo "Could not list pull request files; rebuilding native evidence."
+          file_count="$(printf '%s\n' "$files" | awk 'NF { n++ } END { print n+0 }')"
+          if [ "$file_count" -eq 0 ] || [ "$file_count" -ge 300 ]; then
+            echo "Could not list a complete changed-file set (${file_count} files); rebuilding native evidence."
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -94,7 +107,7 @@ jobs:
       - name: Skip unchanged native evidence rebuild
         if: steps.native.outputs.run != 'true'
         shell: bash
-        run: echo "Skipping native evidence rebuild; crates and addon inputs are unchanged on this pull request."
+        run: echo "Skipping native evidence rebuild; crates and addon inputs are unchanged."
       - name: Install deps
         if: steps.native.outputs.run == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
