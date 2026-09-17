@@ -30,7 +30,22 @@ const fresh = {
 
 describe("client locale contract", () => {
   test("all supported languages have complete distinct catalogs with exact placeholders", () => {
-    expect(LOCALES).toEqual(["en", "zh-TW", "zh-CN", "ja", "ko", "es", "pt-BR", "fr", "de", "ru", "id", "tr", "vi"])
+    expect(LOCALES).toEqual([
+      "en",
+      "zh-TW",
+      "zh-CN",
+      "ja",
+      "ko",
+      "es",
+      "pt-BR",
+      "fr",
+      "de",
+      "ru",
+      "id",
+      "tr",
+      "vi",
+      "it",
+    ])
     expect(validateCatalogs()).toEqual([])
     expect(dictionaries["zh-TW"]["language.title"]).not.toBe(dictionaries["zh-CN"]["language.title"])
     expect(validateCatalogs({ bad: { ...dictionaries.en, "permission.future": "Future {wrong}" } })).toContain(

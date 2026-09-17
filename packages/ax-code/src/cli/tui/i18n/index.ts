@@ -1,4 +1,5 @@
 import { messages as vi } from "./locales/vi"
+import { messages as it } from "./locales/it"
 import { messages as tr } from "./locales/tr"
 import { messages as id } from "./locales/id"
 import { messages as ru } from "./locales/ru"
@@ -35,6 +36,7 @@ export const dictionaries: Record<InterfaceLanguage, Dictionary> = {
   id,
   tr,
   vi,
+  it,
 }
 export const LANGUAGE_LABELS: Record<InterfaceLanguage, string> = {
   en: "English",
@@ -50,6 +52,7 @@ export const LANGUAGE_LABELS: Record<InterfaceLanguage, string> = {
   id: "Bahasa Indonesia",
   tr: "T\u00fcrk\u00e7e",
   vi: "Ti\u1ebfng Vi\u1ec7t",
+  it: "Italiano",
 }
 
 export function isInterfaceLanguage(value: unknown): value is InterfaceLanguage {
@@ -88,6 +91,7 @@ const CONVERSATION_NAMES: Record<InterfaceLanguage, string> = {
   id: "Indonesian",
   tr: "Turkish",
   vi: "Vietnamese",
+  it: "Italian",
 }
 
 export function conversationInstruction(locale: ConversationLanguage): string | undefined {

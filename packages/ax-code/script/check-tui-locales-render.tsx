@@ -231,7 +231,7 @@ try {
     }
   }
   console.log(
-    "Native locale dialogs passed: 13 locales, 36/80 columns, live switch, picker, setup language/connect/skip, help/status live switching, listener disposal, and cancel action.",
+    `Native locale dialogs passed: ${LOCALES.length} locales, 36/80 columns, live switch, picker, setup language/connect/skip, help/status live switching, listener disposal, and cancel action.`,
   )
 } finally {
   await fs.rm(state, { recursive: true, force: true })
