@@ -79,7 +79,8 @@ describe("distribution support guardrails", () => {
     expect(text).toContain("depends_on arch: :arm64")
     expect(text).toContain("depends_on :macos")
     expect(text).toContain('license "Apache-2.0"')
-    expect(text).not.toContain('version "${VERSION}"')
+    // Custom download hosts do not get GitHub release-tag version inference.
+    expect(text).toContain('version "${VERSION}"')
     // node-bundled: install the whole tree into libexec and depend on node, not
     // a single compiled binary. Bun is gone entirely.
     expect(text).toContain('libexec.install Dir["*"]')

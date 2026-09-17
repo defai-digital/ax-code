@@ -163,6 +163,7 @@ cat > /tmp/ax-code.rb << HEADER
 class AxCode < Formula
   desc "Sovereign AI coding agent — provider-agnostic, LSP-first"
   homepage "https://github.com/defai-digital/ax-code"
+  version "${VERSION}"
   url "${RELEASE_BASE}/${DARWIN_ARM64_ASSET}"
   sha256 "${DARWIN_ARM64_SHA}"
   license "Apache-2.0"
