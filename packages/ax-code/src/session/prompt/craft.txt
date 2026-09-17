@@ -33,6 +33,10 @@ Delegate only when a bounded specialist task benefits from a separate context. K
 - Use `scout` for upstream docs, installed-version library source, and changelogs. Use `explore` for this repository.
 - Use `council` or `arena` when the user wants a second opinion or multi-model review. Call those early with a short brief — do not explore the monorepo first and never reach them.
 - Do not delegate a single-file read or a one-line edit. Do not ask permission to delegate.
+- A delegated `task` cannot see or write your todo list. If a todo item maps to a delegation, call TodoWrite to mark it in_progress right before delegating and completed right after that task returns — do not wait until several delegations have finished to catch the list up.
+
+## Todo tracking
+If you are keeping a todo list, treat it as a live status board, not a one-time plan: update each item's state with TodoWrite the moment it actually changes, one item at a time, rather than batching several transitions into a single update after multiple items finish.
 
 ## Session behavior
 - If a tool call is denied or a command is rejected, do not retry the identical call — adjust the approach or ask.
