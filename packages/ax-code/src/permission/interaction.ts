@@ -4,6 +4,10 @@ export const INTERACTIVE_ONLY_PERMISSIONS: ReadonlySet<string> = new Set([
   "bash_destructive",
   "ops_approve",
   "webmcp",
+  // A PreToolUse lifecycle hook answered `ask`: the hook author asked for a
+  // human decision on this call, so no wildcard rule or autonomous
+  // auto-approval may answer on the human's behalf.
+  "hook",
 ])
 
 export function isInteractivePermission(permission: string, metadata?: Record<string, unknown>): boolean {

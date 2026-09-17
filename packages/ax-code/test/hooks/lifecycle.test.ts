@@ -337,7 +337,7 @@ describe("LifecycleHooks claude-code wire protocol", () => {
     expect(result.blockReason).toBe("prompt rejected")
   })
 
-  test("permissionDecision ask degrades to a fail-safe block", async () => {
+  test("permissionDecision ask is surfaced for interactive confirmation instead of blocking", async () => {
     const result = await LifecycleHooks.runHooks(
       [
         {
@@ -348,8 +348,144 @@ describe("LifecycleHooks claude-code wire protocol", () => {
       ],
       { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
     )
+    expect(result.blocked).toBe(false)
+    expect(result.ok).toBe(true)
+    expect(result.ask).toEqual({ reason: "hook requested user confirmation" })
+  })
+
+  test("a later deny wins over an earlier ask", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.log(JSON.stringify({permissionDecision:'ask', reason:'confirm first'}))"`,
+        },
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.log(JSON.stringify({permissionDecision:'deny', reason:'policy'}))"`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
     expect(result.blocked).toBe(true)
-    expect(result.blockReason).toBe("hook requested user confirmation")
+    expect(result.blockReason).toBe("policy")
+    expect(result.ask).toBeUndefined()
+  })
+
+  test("accepts the nested Claude Code hookSpecificOutput decision shape", async () => {
+    const payload = JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: "nested reason",
+      },
+    })
+    const direct = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PreToolUse",
+          protocol: "claude-code",
+          command: `node -e 'console.log(JSON.stringify(${JSON.stringify(JSON.parse(payload))}))'`,
+        },
+      ],
+      { event: "PreToolUse", tool: "bash", args: {}, cwd: process.cwd() },
+    )
+    expect(direct.blocked).toBe(true)
+    expect(direct.blockReason).toBe("nested reason")
+  })
+})
+
+describe("LifecycleHooks PostToolUse feedback", () => {
+  test("legacy PostToolUse stdout becomes bounded model-visible feedback", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [
+        { event: "PostToolUse", command: `echo "run the formatter"` },
+        { event: "PostToolUse", command: `echo "   "` },
+        { event: "PostToolUse", command: `echo "second hook"` },
+      ],
+      { event: "PostToolUse", tool: "edit", args: {}, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(false)
+    expect(result.feedback).toBe("run the formatter\n\nsecond hook")
+  })
+
+  test("the builtin format-after-edit pack now reaches the model", async () => {
+    const hooks = LifecycleHooks.listBuiltinPacks().find((p) => p.name === "format-after-edit")!.hooks
+    const result = await LifecycleHooks.runHooks(hooks, {
+      event: "PostToolUse",
+      tool: "edit",
+      args: {},
+      cwd: process.cwd(),
+    })
+    expect(result.feedback).toContain("[hook:format-after-edit]")
+  })
+
+  test("claude-code PostToolUse additionalContext, block reason, and exit-2 stderr are feedback", async () => {
+    const context = JSON.stringify({
+      hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: "lint passed" },
+    })
+    const block = JSON.stringify({ decision: "block", reason: "tests failed: 2 assertions" })
+    const result = await LifecycleHooks.runHooks(
+      [
+        {
+          event: "PostToolUse",
+          protocol: "claude-code",
+          command: `node -e 'console.log(JSON.stringify(${JSON.stringify(JSON.parse(context))}))'`,
+        },
+        {
+          event: "PostToolUse",
+          protocol: "claude-code",
+          command: `node -e 'console.log(JSON.stringify(${JSON.stringify(JSON.parse(block))}))'`,
+        },
+        {
+          event: "PostToolUse",
+          protocol: "claude-code",
+          command: `node -e "console.error('formatter changed 3 files');process.exit(2)"`,
+        },
+        // Non-zero exits other than 2 contribute nothing.
+        { event: "PostToolUse", protocol: "claude-code", command: `node -e "console.log('noise');process.exit(1)"` },
+      ],
+      { event: "PostToolUse", tool: "edit", args: {}, cwd: process.cwd() },
+    )
+    // PostToolUse is not blockable even under the protocol decoder.
+    expect(result.blocked).toBe(false)
+    expect(result.feedback).toBe("lint passed\n\ntests failed: 2 assertions\n\nformatter changed 3 files")
+  })
+
+  test("feedback is bounded per hook and in aggregate", async () => {
+    const big = `node -e "process.stdout.write('x'.repeat(5000))"`
+    const result = await LifecycleHooks.runHooks(
+      [
+        { event: "PostToolUse", command: big },
+        { event: "PostToolUse", command: big },
+        { event: "PostToolUse", command: big },
+      ],
+      { event: "PostToolUse", tool: "edit", args: {}, cwd: process.cwd() },
+    )
+    expect(result.feedback).toBeDefined()
+    expect(result.feedback!.length).toBeLessThanOrEqual(8_000 + 200)
+    expect(result.feedback).toContain("[hook feedback truncated to 4000 characters]")
+  })
+
+  test("PreToolUse hooks never produce feedback", async () => {
+    const result = await LifecycleHooks.runHooks([{ event: "PreToolUse", command: `echo "ignored"` }], {
+      event: "PreToolUse",
+      tool: "edit",
+      args: {},
+      cwd: process.cwd(),
+    })
+    expect(result.feedback).toBeUndefined()
+  })
+
+  test("PostToolUseFailure is an accepted observation-only event", async () => {
+    const result = await LifecycleHooks.runHooks(
+      [{ event: "PostToolUseFailure", command: "exit 2", blockOnFailure: true, protocol: "claude-code" }],
+      { event: "PostToolUseFailure", tool: "bash", args: { error: "boom" }, cwd: process.cwd() },
+    )
+    expect(result.blocked).toBe(false)
+    expect(result.ok).toBe(true)
   })
 
   test("exit 1 is a non-blocking error for protocol entries", async () => {

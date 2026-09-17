@@ -28,6 +28,8 @@ import { Instance } from "../../project/instance"
 import { Truncate } from "@/tool/truncate"
 import { uniqueStrings } from "@/util/string-list"
 import { isRecord } from "@/util/record"
+import { defer } from "@/util/defer"
+import { ToolWriteGate } from "../tool-write-gate"
 import type { SessionProcessor } from "../processor"
 import { permissionRulesetFromLegacyTools } from "./prompt-permission"
 import { estimateToolDefinitionTokens } from "./prompt-request"
@@ -139,12 +141,63 @@ export function isolationRetryState(input: {
  * closure remains surface-specific (registry isolation, MCP permission, etc.)
  * while plugin and user lifecycle hooks stay consistent.
  */
+/** Permission name used when a PreToolUse hook answers `ask`. Interactive-only. */
+export const HOOK_CONFIRMATION_PERMISSION = "hook"
+
+/**
+ * Tools that mutate the workspace, run code, or reach outside the process
+ * and therefore take the exclusive lane of the session write gate when the
+ * model calls them in parallel with other tools. Everything else is shared.
+ * MCP tools are exclusive: their side effects are unknown to the harness.
+ */
+const EXCLUSIVE_TOOL_IDS: ReadonlySet<string> = new Set([
+  "edit",
+  "write",
+  "multiedit",
+  "apply_patch",
+  "notebook_edit",
+  "refactor_apply",
+  "bash",
+  "bash_input",
+  "ops_apply",
+])
+
+export function toolGateMode(input: {
+  toolID: string
+  args: unknown
+  childSafe?: (call: { tool: string; parameters: unknown }) => boolean
+}): "shared" | "exclusive" {
+  if (EXCLUSIVE_TOOL_IDS.has(input.toolID)) return "exclusive"
+  if (input.toolID === "batch") {
+    // A batch is only as safe as its least safe child.
+    const calls = isRecord(input.args) && Array.isArray(input.args["tool_calls"]) ? input.args["tool_calls"] : []
+    for (const call of calls) {
+      if (!isRecord(call) || typeof call["tool"] !== "string") return "exclusive"
+      if (!input.childSafe?.({ tool: call["tool"], parameters: call["parameters"] })) return "exclusive"
+    }
+  }
+  return "shared"
+}
+
+/** Wrap PostToolUse hook feedback so the model can tell it apart from tool output. */
+export function formatHookFeedback(feedback: string) {
+  return `\n\n<hook_feedback event="PostToolUse">\n${feedback}\n</hook_feedback>`
+}
+
 export async function runToolLifecycle<T>(input: {
   toolID: string
   sessionID: string
   callID?: string
   args: unknown
   cwd: string
+  /**
+   * Permission channel of the calling tool. When present, a PreToolUse hook
+   * that answers `ask` is routed here as an interactive-only `hook`
+   * permission; when absent the ask degrades to a fail-safe block.
+   */
+  ask?: Tool.Context["ask"]
+  /** Receives bounded PostToolUse hook feedback for inclusion in the tool result. */
+  onFeedback?: (feedback: string) => void
   execute(): Promise<T>
 }): Promise<T> {
   await Plugin.trigger(
@@ -157,6 +210,7 @@ export async function runToolLifecycle<T>(input: {
     { args: input.args },
   )
 
+  let askReason: string | undefined
   try {
     const { LifecycleHooks } = await import("@/hooks/lifecycle")
     const pre = await LifecycleHooks.runForWorkspace({
@@ -175,12 +229,44 @@ export async function runToolLifecycle<T>(input: {
           .join("\n")
       throw new Error(`PreToolUse hook blocked tool ${input.toolID}: ${detail || "hook failed"}`)
     }
+    if (pre.ask) {
+      if (!input.ask) throw new Error(`PreToolUse hook blocked tool ${input.toolID}: ${pre.ask.reason}`)
+      askReason = pre.ask.reason
+    }
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("PreToolUse hook blocked")) throw error
     // Hook load/run failures must not brick the agent loop.
   }
 
-  const result = await input.execute()
+  if (askReason !== undefined && input.ask) {
+    // Outside the try above so a user rejection propagates as the ordinary
+    // Permission.RejectedError the processor already understands.
+    await input.ask({
+      permission: HOOK_CONFIRMATION_PERMISSION,
+      patterns: [input.toolID],
+      always: [],
+      metadata: { requireInteractive: true, tool: input.toolID, reason: askReason },
+    })
+  }
+
+  let result: T
+  try {
+    result = await input.execute()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    void import("@/hooks/lifecycle")
+      .then(({ LifecycleHooks }) =>
+        LifecycleHooks.runForWorkspace({
+          event: "PostToolUseFailure",
+          sessionID: input.sessionID,
+          tool: input.toolID,
+          args: { args: input.args, error: message.slice(0, 4_000) },
+          cwd: input.cwd,
+        }),
+      )
+      .catch(() => undefined)
+    throw error
+  }
 
   await Plugin.trigger(
     "tool.execute.after",
@@ -195,13 +281,14 @@ export async function runToolLifecycle<T>(input: {
 
   try {
     const { LifecycleHooks } = await import("@/hooks/lifecycle")
-    await LifecycleHooks.runForWorkspace({
+    const post = await LifecycleHooks.runForWorkspace({
       event: "PostToolUse",
       sessionID: input.sessionID,
       tool: input.toolID,
       args: input.args,
       cwd: input.cwd,
     })
+    if (post.feedback && input.onFeedback) input.onFeedback(post.feedback)
   } catch {
     // Post hooks are evidence/automation helpers and remain non-fatal.
   }
@@ -469,12 +556,53 @@ export async function resolveTools(input: ResolveToolsInput) {
     const exposeDispatcher = (item.id === "batch" || item.id === "read_recipe") && isolationPolicy === "escalate"
     const ctx = context(args, options, undefined, exposeDispatcher)
 
-    return runToolLifecycle({
+    // Direct model calls in one step run concurrently in the AI SDK; the
+    // write gate serializes mutating tools against everything else. Batch
+    // workers (fail-closed policy) already run under Batch's own barrier and
+    // inside the batch call's lane, so they must not re-enter the gate.
+    const releaseLane =
+      isolationPolicy === "escalate"
+        ? await ToolWriteGate.acquire(
+            ctx.sessionID,
+            toolGateMode({
+              toolID: item.id,
+              args,
+              childSafe: (call) => registryDispatcher?.concurrencySafe?.(call) === true,
+            }),
+            ctx.abort,
+          )
+        : undefined
+    try {
+      return await invokeRegistryToolLifecycle(inputTool, ctx)
+    } finally {
+      releaseLane?.()
+    }
+  }
+
+  async function invokeRegistryToolLifecycle(
+    inputTool: {
+      item: (typeof registryTools)[number]
+      args: any
+      options: InvocationOptions
+      isolationPolicy: "escalate" | "fail-closed"
+    },
+    ctx: Tool.Context,
+  ): Promise<Tool.InvocationResult> {
+    const { item, args, options, isolationPolicy } = inputTool
+    const exposeDispatcher = (item.id === "batch" || item.id === "read_recipe") && isolationPolicy === "escalate"
+    let hookFeedback: string | undefined
+    const lifecycle = await runToolLifecycle({
       toolID: item.id,
       sessionID: ctx.sessionID,
       callID: ctx.callID,
       args,
       cwd: Instance.directory,
+      // Batch workers run fail-closed: no interactive prompts from nested
+      // workers, so a hook `ask` there degrades to a block like isolation.
+      ask: isolationPolicy === "escalate" ? (req) => ctx.ask(req) : undefined,
+      onFeedback: (feedback) => {
+        hookFeedback = feedback
+      },
       execute: async () => {
         let result: Awaited<ReturnType<typeof item.execute>> | undefined
         if (isolationPolicy === "fail-closed") {
@@ -554,6 +682,8 @@ export async function resolveTools(input: ResolveToolsInput) {
         }
       },
     })
+    if (hookFeedback === undefined) return lifecycle
+    return { ...lifecycle, output: `${lifecycle.output}${formatHookFeedback(hookFeedback)}` }
   }
 
   registryDispatcher = {
@@ -643,12 +773,19 @@ export async function resolveTools(input: ResolveToolsInput) {
     // Wrap execute to add plugin hooks and format output
     mcpTool.execute = async (args, opts) => {
       const ctx = context(args, opts)
+      let hookFeedback: string | undefined
+      const releaseLane = await ToolWriteGate.acquire(ctx.sessionID, "exclusive", ctx.abort)
+      using _lane = defer(releaseLane)
       const result = await runToolLifecycle({
         toolID: key,
         sessionID: ctx.sessionID,
         callID: opts.toolCallId,
         args,
         cwd: Instance.directory,
+        ask: (req) => ctx.ask(req),
+        onFeedback: (feedback) => {
+          hookFeedback = feedback
+        },
         execute: async () => {
           const policy = item.webmcp
           const call = policy ? WebMcpProfile.validateCall(policy.profile, policy.toolName, args) : args
@@ -685,7 +822,11 @@ export async function resolveTools(input: ResolveToolsInput) {
       const { textParts, attachments } = collectMcpToolResult(result)
 
       const outputText = textParts.length ? `[Untrusted MCP tool content from ${key}]\n\n${textParts.join("\n\n")}` : ""
-      const truncated = await Truncate.output(outputText, {}, input.agent)
+      const truncated = await Truncate.output(
+        hookFeedback === undefined ? outputText : `${outputText}${formatHookFeedback(hookFeedback)}`,
+        {},
+        input.agent,
+      )
       const metadata = {
         ...(result.metadata ?? {}),
         truncated: truncated.truncated,
@@ -737,6 +878,7 @@ export async function resolveTools(input: ResolveToolsInput) {
           callID: ctx.callID,
           args,
           cwd: Instance.directory,
+          ask: (req) => ctx.ask(req),
           execute: async () => {
             ctx.abort.throwIfAborted()
             await ctx.ask({ permission: "tool_search", patterns: [args.query], always: ["*"], metadata: {} })

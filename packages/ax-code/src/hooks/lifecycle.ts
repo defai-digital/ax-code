@@ -9,8 +9,9 @@
  * - config `hooks` field
  *
  * Observation-only events (ADR-057): SessionStart, SessionEnd, PostCompact,
- * Interrupt. They are NOT in BLOCKABLE_EVENTS, so a non-zero exit can never
- * veto anything — `runHooks` logs the failure and continues.
+ * Interrupt, PostToolUseFailure. They are NOT in BLOCKABLE_EVENTS, so a
+ * non-zero exit can never veto anything — `runHooks` logs the failure and
+ * continues.
  *
  * Claude Code wire protocol (ADR-048 D4, opt-in per entry): a hook entry may
  * declare `"protocol": "claude-code"`. For blockable events (PreToolUse,
@@ -19,12 +20,26 @@
  * - exit 2 blocks and surfaces stderr as the reason (a structured stdout
  *   `reason` wins when present; malformed stdout still blocks — fail-safe)
  * - exit 0 with stdout JSON `{"permissionDecision": "allow"|"deny"|"ask",
- *   "reason"?}` maps to proceed / block with reason / block fail-safe
- *   ("ask" has no Permission.ask channel at this layer — no ruleset or
- *   tool-call context — so it degrades to a block; documented deviation)
+ *   "reason"?}` maps to proceed / block with reason / interactive
+ *   confirmation. The nested Claude Code shape
+ *   `{"hookSpecificOutput": {"permissionDecision", "permissionDecisionReason"}}`
+ *   is accepted as an alias. "ask" is surfaced as `RunResult.ask`; the tool
+ *   lifecycle routes it through the calling tool's permission channel (an
+ *   interactive-only `hook` permission), and sites without such a channel
+ *   (UserPromptSubmit) keep the fail-safe block.
  * - any other exit is a non-blocking error
  * Observation-only events ignore the decoder entirely (fail-open preserved),
  * and entries without the field behave byte-identically to the legacy path.
+ *
+ * PostToolUse feedback: a PostToolUse hook can hand text back to the model.
+ * Legacy entries contribute their trimmed stdout; `protocol: "claude-code"`
+ * entries contribute `hookSpecificOutput.additionalContext`, a
+ * `{"decision": "block", "reason"}` reason, or exit-2 stderr. Feedback is
+ * bounded (per hook and in total) and appended to the tool result by the
+ * tool lifecycle; it never replaces the tool output and never blocks.
+ *
+ * PostToolUseFailure fires (observation-only) when a tool throws after
+ * PreToolUse admitted it; its args carry the error message.
  *
  * Security note: hook child processes receive `Env.sanitize(process.env)` by
  * default. This removes ambient secrets, credential helpers, credential-bearing
@@ -72,9 +87,13 @@ export namespace LifecycleHooks {
     if (next) next()
     else activeHooks--
   }
+  /** Per-hook and aggregate ceilings for model-visible PostToolUse feedback. */
+  const MAX_FEEDBACK_CHARS_PER_HOOK = 4_000
+  const MAX_FEEDBACK_CHARS_TOTAL = 8_000
   const EventNameSchema = z.enum([
     "PreToolUse",
     "PostToolUse",
+    "PostToolUseFailure",
     "Stop",
     "UserPromptSubmit",
     "PreCompact",
@@ -101,35 +120,105 @@ export namespace LifecycleHooks {
     pack: z.string().max(500).optional(),
   })
 
-  /** Structured stdout contract for `protocol: "claude-code"` entries. */
-  const ClaudeCodeDecisionSchema = z.object({
-    permissionDecision: z.enum(["allow", "deny", "ask"]),
-    reason: z.string().optional(),
-  })
+  /**
+   * Structured stdout contract for `protocol: "claude-code"` entries. The
+   * flat shape is AX Code's documented form; the nested `hookSpecificOutput`
+   * shape is what Claude Code hooks actually emit, so both are accepted.
+   */
+  const ClaudeCodeDecisionSchema = z
+    .object({
+      permissionDecision: z.enum(["allow", "deny", "ask"]).optional(),
+      reason: z.string().optional(),
+      decision: z.enum(["approve", "block"]).optional(),
+      hookSpecificOutput: z
+        .object({
+          permissionDecision: z.enum(["allow", "deny", "ask"]).optional(),
+          permissionDecisionReason: z.string().optional(),
+          additionalContext: z.string().optional(),
+        })
+        .partial()
+        .optional(),
+    })
+    .partial()
+
+  type ClaudeCodeDecision = z.infer<typeof ClaudeCodeDecisionSchema>
+
+  function parseStructuredStdout(output: RunResult["outputs"][number]): ClaudeCodeDecision | undefined {
+    const text = output.stdout.trim()
+    const parsed = text.startsWith("{") ? parseJsonPayload(text) : undefined
+    const decision = parsed === undefined ? undefined : ClaudeCodeDecisionSchema.safeParse(parsed)
+    return decision?.success ? decision.data : undefined
+  }
+
+  function permissionDecisionOf(structured: ClaudeCodeDecision | undefined) {
+    return structured?.permissionDecision ?? structured?.hookSpecificOutput?.permissionDecision
+  }
+
+  function permissionReasonOf(structured: ClaudeCodeDecision | undefined) {
+    return structured?.reason ?? structured?.hookSpecificOutput?.permissionDecisionReason
+  }
 
   /**
    * Decode a finished hook process under Claude Code wire semantics. Only
    * consulted for blockable events on entries that opted in via `protocol`.
    * Exit 2 always blocks (structured `reason` beats raw stderr; malformed
    * stdout still blocks). On exit 0 a `permissionDecision` of `deny` blocks
-   * with its reason, and `ask` degrades to a fail-safe block because the hook
-   * layer has no Permission.ask channel (no ruleset / tool-call context).
+   * with its reason and `ask` requests interactive confirmation, which the
+   * caller must either route to a permission channel or treat as a block.
    */
-  function decodeClaudeCodeDecision(output: RunResult["outputs"][number]): { block: boolean; reason?: string } {
+  function decodeClaudeCodeDecision(output: RunResult["outputs"][number]): {
+    block: boolean
+    ask?: boolean
+    reason?: string
+  } {
     const stderr = output.stderr.trim()
-    const text = output.stdout.trim()
-    const parsed = text.startsWith("{") ? parseJsonPayload(text) : undefined
-    const decision = parsed === undefined ? undefined : ClaudeCodeDecisionSchema.safeParse(parsed)
-    const structured = decision?.success ? decision.data : undefined
+    const structured = parseStructuredStdout(output)
+    const reason = permissionReasonOf(structured)
     if (output.exit === 2) {
-      return { block: true, reason: structured?.reason ?? (stderr || undefined) }
+      return { block: true, reason: reason ?? (stderr || undefined) }
     }
     if (output.exit !== 0 || !structured) return { block: false }
-    if (structured.permissionDecision === "allow") return { block: false }
-    if (structured.permissionDecision === "deny") {
-      return { block: true, reason: structured.reason ?? (stderr || undefined) }
+    const decision = permissionDecisionOf(structured)
+    if (decision === undefined || decision === "allow") return { block: false }
+    if (decision === "deny") {
+      return { block: true, reason: reason ?? (stderr || undefined) }
     }
-    return { block: true, reason: structured.reason ?? "hook requested user confirmation" }
+    return { block: false, ask: true, reason: reason ?? "hook requested user confirmation" }
+  }
+
+  function boundFeedback(text: string, limit: number) {
+    const trimmed = text.trim()
+    if (trimmed.length <= limit) return trimmed
+    return `${trimmed.slice(0, limit)}\n[hook feedback truncated to ${limit} characters]`
+  }
+
+  /**
+   * Model-visible feedback from a finished PostToolUse hook. Legacy entries
+   * hand back their stdout; protocol entries hand back the Claude Code
+   * `additionalContext`, a block reason, or exit-2 stderr. Timeouts and
+   * unexpected exits contribute nothing so a broken hook cannot spam the
+   * model.
+   */
+  function decodePostToolUseFeedback(hook: HookCommand, output: RunResult["outputs"][number]): string | undefined {
+    if (hook.protocol !== "claude-code") {
+      if (output.exit !== 0) return undefined
+      const text = boundFeedback(output.stdout, MAX_FEEDBACK_CHARS_PER_HOOK)
+      return text.length > 0 ? text : undefined
+    }
+    if (output.exit === 2) {
+      const structured = parseStructuredStdout(output)
+      const text = boundFeedback(structured?.reason ?? output.stderr, MAX_FEEDBACK_CHARS_PER_HOOK)
+      return text.length > 0 ? text : undefined
+    }
+    if (output.exit !== 0) return undefined
+    const structured = parseStructuredStdout(output)
+    if (!structured) return undefined
+    const pieces: string[] = []
+    if (structured.decision === "block" && structured.reason) pieces.push(structured.reason)
+    const context = structured.hookSpecificOutput?.additionalContext
+    if (context) pieces.push(context)
+    const text = boundFeedback(pieces.join("\n"), MAX_FEEDBACK_CHARS_PER_HOOK)
+    return text.length > 0 ? text : undefined
   }
 
   /** Events where a blockOnFailure hook with non-zero exit vetoes the action. */
@@ -162,6 +251,17 @@ export namespace LifecycleHooks {
     blocked: boolean
     /** Block reason surfaced by the claude-code protocol decoder, when set. */
     blockReason?: string
+    /**
+     * A PreToolUse protocol hook answered `ask`: the action is admissible only
+     * after interactive confirmation. Callers without a permission channel
+     * must treat this as a block. A later deny still wins over an ask.
+     */
+    ask?: { reason: string }
+    /**
+     * Bounded, model-visible text handed back by PostToolUse hooks, joined in
+     * hook order. Undefined when no hook produced feedback.
+     */
+    feedback?: string
     outputs: Array<{ command: string; exit: number; stdout: string; stderr: string }>
   }
 
@@ -387,9 +487,21 @@ export namespace LifecycleHooks {
     const outputs: RunResult["outputs"] = []
     let blocked = false
     let blockReason: string | undefined
+    let ask: RunResult["ask"]
+    const feedback: string[] = []
+    let feedbackChars = 0
     for (const hook of selected) {
       const result = await runHook(hook, input)
       outputs.push(result)
+      if (input.event === "PostToolUse") {
+        const text = decodePostToolUseFeedback(hook, result)
+        if (text !== undefined && feedbackChars < MAX_FEEDBACK_CHARS_TOTAL) {
+          const room = MAX_FEEDBACK_CHARS_TOTAL - feedbackChars
+          const piece = text.length > room ? boundFeedback(text, room) : text
+          feedback.push(piece)
+          feedbackChars += piece.length
+        }
+      }
       if (hook.protocol === "claude-code" && BLOCKABLE_EVENTS.has(input.event)) {
         // Opted-in entries follow Claude Code wire semantics instead of the
         // legacy blockOnFailure check.
@@ -404,6 +516,10 @@ export namespace LifecycleHooks {
           blockReason = decoded.reason
           break
         }
+        if (decoded.ask) {
+          // Keep evaluating: a later hook may still deny, and deny wins.
+          ask = ask ?? { reason: decoded.reason ?? "hook requested user confirmation" }
+        }
         if (result.exit !== 0) {
           log.warn("lifecycle hook non-zero", { event: input.event, tool: input.tool, exit: result.exit })
         }
@@ -417,7 +533,14 @@ export namespace LifecycleHooks {
         }
       }
     }
-    return { ok: !blocked, blocked, ...(blockReason === undefined ? {} : { blockReason }), outputs }
+    return {
+      ok: !blocked,
+      blocked,
+      ...(blockReason === undefined ? {} : { blockReason }),
+      ...(blocked || ask === undefined ? {} : { ask }),
+      ...(feedback.length === 0 ? {} : { feedback: feedback.join("\n\n") }),
+      outputs,
+    }
   }
 
   export async function runForWorkspace(input: RunInput & { packNames?: string[] }): Promise<RunResult> {

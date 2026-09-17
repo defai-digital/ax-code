@@ -102,6 +102,9 @@ const RISK_PERMISSIONS: ReadonlySet<string> = new Set([
   // mode must never auto-approve either.
   "bash_destructive",
   "isolation_escalation",
+  // PreToolUse hook `ask` confirmation. INTERACTIVE_ONLY as well; listed here
+  // so autonomous mode never auto-approves it.
+  "hook",
   // Multi-agent orchestration: parallel subagents and ensemble fan-outs
   // carry the same cost/privilege implications as `task`, and the runtime
   // already deny-gates them in restricted agent rulesets.

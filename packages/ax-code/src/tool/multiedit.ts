@@ -190,15 +190,19 @@ export const MultiEditTool = Tool.define("multiedit", {
     }
 
     const changed = files.filter((file) => current.get(file) !== original.get(file))
-    const { diagnostics } = await collectDiagnostics(changed)
+    const { diagnostics, output: diagOutput } = await collectDiagnostics(changed)
 
+    // The last sub-edit's text is the model-visible result; the LSP errors
+    // for every changed file must ride along with it exactly as edit, write,
+    // and apply_patch do. Without this, a multiedit that introduces a type
+    // error is reported to the model as a clean success.
     return {
       title: relativePath(titlePath),
       metadata: {
         diagnostics,
         results: results.map((r) => r.metadata),
       },
-      output: results.at(-1)?.output ?? "",
+      output: `${results.at(-1)?.output ?? ""}${diagOutput}`,
     }
   },
 })

@@ -112,3 +112,42 @@ describe("tool.multiedit", () => {
     })
   })
 })
+
+describe("tool.multiedit diagnostics", () => {
+  test("appends LSP errors for changed files to the model-visible output", async () => {
+    const { LSP } = await import("@ax-code/ax-code-intel")
+    const { vi } = await import("vitest")
+    await using tmp = await tmpdir()
+    const file = path.join(tmp.path, "a.ts")
+    await fs.writeFile(file, "const one = 1\n", "utf-8")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await FileTime.read(ctx.sessionID, file)
+        vi.spyOn(LSP, "touchFile").mockResolvedValue(undefined as any)
+        vi.spyOn(LSP, "diagnostics").mockResolvedValue({
+          [file]: [
+            {
+              severity: 1,
+              message: "Type 'string' is not assignable to type 'number'.",
+              range: { start: { line: 0, character: 6 }, end: { line: 0, character: 9 } },
+            },
+          ],
+        } as any)
+        try {
+          const tool = await MultiEditTool.init()
+          const result = await tool.execute(
+            { filePath: file, edits: [{ filePath: file, oldString: "1", newString: '"one"' }] },
+            ctx as any,
+          )
+          expect(result.output).toContain("LSP errors detected in this file, please fix:")
+          expect(result.output).toContain("not assignable")
+          expect(result.output).toContain(`<diagnostics file="${file}">`)
+        } finally {
+          vi.restoreAllMocks()
+        }
+      },
+    })
+  })
+})

@@ -88,9 +88,19 @@ Send `POST /session/{sessionID}/steering` with:
 
 Use the UUID from GET, not the example UUID. `accepted` means the correction is pending. `applied` means it was
 written as a user message at a loop boundary and includes its message ID; it does not guarantee provider completion.
-`rejected` means it was not applied. Lifecycle hooks may veto admission. Completion or cancellation rejects pending
-corrections, and an old generation cannot admit text to its successor. Identical retries return the same retained
-receipt; different content under an existing client ID returns HTTP 409.
+`rejected` means it was not applied. Lifecycle hooks may veto admission. An accepted correction extends a generation
+that was about to complete by one more iteration, so a correction sent at the finish line is applied instead of
+rejected; cancellation and errors still reject pending corrections, and an old generation cannot admit text to its
+successor. Identical retries return the same retained receipt; different content under an existing client ID returns
+HTTP 409. The TUI `ctrl+s` send-now gesture uses this endpoint.
+
+## Parallel tool calls in one step
+
+When the model emits several tool calls in one assistant message, the runtime executes them concurrently through a
+session-scoped reader/writer gate. Read-only tools share the lane and overlap; file edits, `bash`, `bash_input`,
+notebook edits, `ops_apply`, MCP tools, and any `batch` containing a non-concurrency-safe child take the exclusive lane
+and run alone in arrival order. A call aborted while waiting never runs. Batch keeps its own ordering barrier for the
+calls it dispatches, and child sessions have their own gate.
 
 Receipts are process-local, with at most 256 per session and 32 pending requests. Terminal receipts and inactive session
 entries can be evicted. After a restart, obtain the new generation and reconcile saved messages; this API does not

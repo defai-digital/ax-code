@@ -9,20 +9,34 @@ Lifecycle hooks let you run shell commands on agent events without rebuilding th
 
 ## Events
 
-| Event                | When                                                                                                                                                                               | Can block?                   |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| **PreToolUse**       | Before a tool executes                                                                                                                                                             | Yes (`blockOnFailure: true`) |
-| **PostToolUse**      | After a tool completes                                                                                                                                                             | No                           |
-| **Stop**             | When a session turn completes (packs may run on stop via automation)                                                                                                               | No                           |
-| **UserPromptSubmit** | When a user prompt is submitted, before the message is persisted                                                                                                                   | Yes (`blockOnFailure: true`) |
-| **PreCompact**       | Before session compaction runs (`args`: `{ auto, overflow }`)                                                                                                                      | No                           |
-| **SubagentStop**     | When a `task` subagent finishes (`args`: `{ agent, status }`)                                                                                                                      | No                           |
-| **SessionStart**     | When a top-level session is created (`args`: `{ sessionID, title, time }`)                                                                                                         | No                           |
-| **SessionEnd**       | When a session is removed or archived (`args`: `{ sessionID, reason }`, `reason` is `"remove"` or `"archive"`)                                                                     | No                           |
-| **PostCompact**      | After a session compaction completes successfully (`args`: `{ sessionID, reason }`, `reason` is `"auto"` or `"manual"`; not fired when compaction bails, e.g. on context overflow) | No                           |
-| **Interrupt**        | When a user or operator explicitly cancels a running turn (`args`: `{ sessionID }`; not fired on normal turn completion or internal cleanup)                                       | No                           |
+| Event                  | When                                                                                                                                                                               | Can block?                   |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| **PreToolUse**         | Before a tool executes                                                                                                                                                             | Yes (`blockOnFailure: true`) |
+| **PostToolUse**        | After a tool completes (`args`: the tool arguments). Bounded stdout / structured feedback is appended to the tool result the model sees; see below                                 | No                           |
+| **PostToolUseFailure** | After a tool throws (`args`: `{ args, error }`, error text capped at 4,000 characters). Fire-and-forget; the error still reaches the model unchanged                               | No                           |
+| **Stop**               | When a session turn completes (packs may run on stop via automation)                                                                                                               | No                           |
+| **UserPromptSubmit**   | When a user prompt is submitted, before the message is persisted                                                                                                                   | Yes (`blockOnFailure: true`) |
+| **PreCompact**         | Before session compaction runs (`args`: `{ auto, overflow }`)                                                                                                                      | No                           |
+| **SubagentStop**       | When a `task` subagent finishes (`args`: `{ agent, status }`)                                                                                                                      | No                           |
+| **SessionStart**       | When a top-level session is created (`args`: `{ sessionID, title, time }`)                                                                                                         | No                           |
+| **SessionEnd**         | When a session is removed or archived (`args`: `{ sessionID, reason }`, `reason` is `"remove"` or `"archive"`)                                                                     | No                           |
+| **PostCompact**        | After a session compaction completes successfully (`args`: `{ sessionID, reason }`, `reason` is `"auto"` or `"manual"`; not fired when compaction bails, e.g. on context overflow) | No                           |
+| **Interrupt**          | When a user or operator explicitly cancels a running turn (`args`: `{ sessionID }`; not fired on normal turn completion or internal cleanup)                                       | No                           |
 
-The four session lifecycle events (`SessionStart`, `SessionEnd`, `PostCompact`, `Interrupt`) are observation-only: they fire and forget, never block the lifecycle path, and their payloads carry ids/reasons/timestamps only — never conversation text, summaries, or tool output. Subagent sessions do not fire `SessionStart` (they already surface via `SubagentStop`).
+The four session lifecycle events (`SessionStart`, `SessionEnd`, `PostCompact`, `Interrupt`) and `PostToolUseFailure` are observation-only: they fire and forget, never block the lifecycle path, and their payloads carry ids/reasons/timestamps only — never conversation text, summaries, or tool output. Subagent sessions do not fire `SessionStart` (they already surface via `SubagentStop`). `SubagentStop` fires for children started by both `task` and `task_parallel`.
+
+## PostToolUse feedback reaches the model
+
+A `PostToolUse` hook can hand text back to the model. It is appended to the tool result inside a
+`<hook_feedback event="PostToolUse">` block, after the tool's own output; it never replaces the output and never blocks.
+
+- Legacy entries (no `protocol`): trimmed stdout of a hook that exited 0.
+- `protocol: "claude-code"` entries: `hookSpecificOutput.additionalContext`, the `reason` of a
+  `{"decision": "block", "reason": "..."}` verdict, or stderr when the hook exits 2. Other non-zero exits contribute nothing.
+
+Feedback is capped at 4,000 characters per hook and 8,000 characters per tool call, so a noisy hook cannot flood the
+context. This is what makes the `format-after-edit` pack useful: its reminder now lands in the model's next turn instead
+of only in the log.
 
 These names map to AX Code’s internal plugin triggers (`tool.execute.before` / `tool.execute.after`) plus session-level prompt, compaction, subagent, and stop hooks. Synthetic continuation prompts (internal `agentRouting: "preserve"` prompts) do not fire `UserPromptSubmit`.
 
@@ -92,9 +106,16 @@ check:
 - **Exit 2** blocks the action; the hook's stderr is surfaced as the reason.
   Malformed stdout still blocks (fail-safe).
 - **Exit 0** with stdout JSON `{"permissionDecision": "allow"|"deny"|"ask", "reason"?}`:
-  `allow` proceeds; `deny` blocks with `reason`; `ask` currently also blocks
-  fail-safe with the reason (default `"hook requested user confirmation"`)
-  because the hook layer has no interactive permission prompt channel.
+  `allow` proceeds; `deny` blocks with `reason`; `ask` pauses the tool call on an
+  interactive `hook` permission prompt that shows the reason (default
+  `"hook requested user confirmation"`). The prompt is interactive-only: no
+  `always` rule, wildcard grant, or autonomous auto-approval can answer it, and a
+  headless run rejects it, which the model sees as an ordinary permission
+  rejection. A later hook that answers `deny` wins over an earlier `ask`.
+  `UserPromptSubmit` has no tool call to attach a prompt to, so `ask` still
+  blocks there. The nested Claude Code shape
+  `{"hookSpecificOutput": {"permissionDecision": "...", "permissionDecisionReason": "..."}}`
+  is accepted as an alias.
 - **Any other exit** is a non-blocking error (logged, action proceeds).
 
 Observation-only events ignore the decoder entirely — they can never block.
@@ -102,7 +123,7 @@ Entries without the `protocol` field behave exactly as before.
 
 Environment variables available to hook commands:
 
-- `HOOK_EVENT` — PreToolUse | PostToolUse | Stop | UserPromptSubmit | PreCompact | SubagentStop | SessionStart | SessionEnd | PostCompact | Interrupt
+- `HOOK_EVENT` — PreToolUse | PostToolUse | PostToolUseFailure | Stop | UserPromptSubmit | PreCompact | SubagentStop | SessionStart | SessionEnd | PostCompact | Interrupt
 - `HOOK_TOOL` — tool id
 - `HOOK_SESSION_ID`
 - `HOOK_ARGS_JSON` — JSON tool arguments

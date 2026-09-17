@@ -587,6 +587,26 @@ export function PermissionPrompt(props: { request: PermissionRequest }) {
       }
     }
 
+    if (permission === "hook") {
+      // A PreToolUse lifecycle hook answered `ask`. The pattern is the tool id
+      // and the hook's own reason travels in metadata; both are plain text
+      // from repository-controlled hook output.
+      const reason = typeof props.request.metadata?.reason === "string" ? props.request.metadata.reason : ""
+      const tool = typeof props.request.metadata?.tool === "string" ? props.request.metadata.tool : ""
+      return {
+        icon: "⚙",
+        title: t("permission.tool", { tool: tool || permission }),
+        body: (
+          <box paddingLeft={1} flexDirection="column">
+            <text fg={theme.textMuted}>{"PreToolUse hook requested confirmation"}</text>
+            <Show when={reason}>
+              <text fg={theme.text}>{reason}</text>
+            </Show>
+          </box>
+        ),
+      }
+    }
+
     return {
       icon: "⚙",
       title: t("permission.tool", { tool: permission }),

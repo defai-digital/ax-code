@@ -653,7 +653,7 @@ describe("session.prompt-tools", () => {
     const phases = (tool: string) => events.filter((event) => event.tool === tool).map((event) => event.phase)
     expect(phases("batch")).toEqual(["plugin:before", "PreToolUse", "plugin:after", "PostToolUse"])
     expect(phases("permitted")).toEqual(["plugin:before", "PreToolUse", "plugin:after", "PostToolUse"])
-    expect(phases("denied")).toEqual(["plugin:before", "PreToolUse"])
+    expect(phases("denied")).toEqual(["plugin:before", "PreToolUse", "PostToolUseFailure"])
     for (const hidden of [
       "bash",
       ...isolationDisabledIDs,
@@ -887,4 +887,389 @@ describe("session.prompt-tools", () => {
       })
     },
   )
+})
+
+describe("session.prompt-tools lifecycle hook channels", () => {
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    await Instance.disposeAll()
+  })
+
+  test("routes a PreToolUse ask through the tool's interactive-only hook permission", async () => {
+    await using tmp = await tmpdir()
+    const order: string[] = []
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async ({ event }) => {
+      order.push(`lifecycle:${event}`)
+      if (event === "PreToolUse") return { ok: true, blocked: false, ask: { reason: "confirm rm" }, outputs: [] }
+      return { ok: true, blocked: false, outputs: [] }
+    })
+    const ask = vi.fn(async (req: any) => {
+      order.push(`ask:${req.permission}`)
+    })
+
+    const result = await Instance.provide({
+      directory: tmp.path,
+      fn: () =>
+        runToolLifecycle({
+          toolID: "bash",
+          sessionID: "ses_ask",
+          callID: "call_ask",
+          args: { command: "rm -rf build" },
+          cwd: tmp.path,
+          ask,
+          async execute() {
+            order.push("execute")
+            return "done"
+          },
+        }),
+    })
+
+    expect(result).toBe("done")
+    expect(order).toEqual(["lifecycle:PreToolUse", "ask:hook", "execute", "lifecycle:PostToolUse"])
+    expect(ask).toHaveBeenCalledWith({
+      permission: "hook",
+      patterns: ["bash"],
+      always: [],
+      metadata: { requireInteractive: true, tool: "bash", reason: "confirm rm" },
+    })
+  })
+
+  test("a rejected hook confirmation stops the tool and surfaces the ordinary rejection", async () => {
+    await using tmp = await tmpdir()
+    const execute = vi.fn(async () => "unexpected")
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async ({ event }) =>
+      event === "PreToolUse"
+        ? { ok: true, blocked: false, ask: { reason: "confirm" }, outputs: [] }
+        : { ok: true, blocked: false, outputs: [] },
+    )
+
+    await expect(
+      Instance.provide({
+        directory: tmp.path,
+        fn: () =>
+          runToolLifecycle({
+            toolID: "bash",
+            sessionID: "ses_reject",
+            callID: "call_reject",
+            args: {},
+            cwd: tmp.path,
+            ask: async () => {
+              throw new Permission.RejectedError()
+            },
+            execute,
+          }),
+      }),
+    ).rejects.toBeInstanceOf(Permission.RejectedError)
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  test("a PreToolUse ask without a permission channel degrades to a fail-safe block", async () => {
+    await using tmp = await tmpdir()
+    const execute = vi.fn(async () => "unexpected")
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async ({ event }) =>
+      event === "PreToolUse"
+        ? { ok: true, blocked: false, ask: { reason: "needs a human" }, outputs: [] }
+        : { ok: true, blocked: false, outputs: [] },
+    )
+
+    await expect(
+      Instance.provide({
+        directory: tmp.path,
+        fn: () =>
+          runToolLifecycle({
+            toolID: "bash",
+            sessionID: "ses_noask",
+            callID: "call_noask",
+            args: {},
+            cwd: tmp.path,
+            execute,
+          }),
+      }),
+    ).rejects.toThrow("PreToolUse hook blocked tool bash: needs a human")
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  test("appends PostToolUse hook feedback to registry tool output", async () => {
+    await using tmp = await tmpdir()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "probe",
+        description: "probe",
+        parameters: z.object({}),
+        execute: async () => ({ title: "Probe", output: "tool output", metadata: {} }),
+      },
+    ] as any)
+    vi.spyOn(MCP, "tools").mockResolvedValue({})
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async ({ event }) =>
+      event === "PostToolUse"
+        ? { ok: true, blocked: false, feedback: "[hook:format-after-edit] run prettier", outputs: [] }
+        : { ok: true, blocked: false, outputs: [] },
+    )
+    vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+
+    const result = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          session: { id: "ses_feedback", permission: [] } as any,
+          model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } } as any,
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_feedback" }, partFromToolCall: () => undefined } as any,
+        })
+        return (tools.probe.execute as any)({}, { toolCallId: "call_fb", abortSignal: new AbortController().signal })
+      },
+    })
+
+    expect(result.output).toBe(
+      'tool output\n\n<hook_feedback event="PostToolUse">\n[hook:format-after-edit] run prettier\n</hook_feedback>',
+    )
+    expect(result.title).toBe("Probe")
+  })
+
+  test("appends PostToolUse hook feedback to MCP tool output", async () => {
+    await using tmp = await tmpdir()
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([])
+    vi.spyOn(MCP, "tools").mockResolvedValue({
+      remote_echo: {
+        description: "echo",
+        inputSchema: z.object({ text: z.string() }),
+        execute: async () => ({ content: [{ type: "text", text: "hello" }] }),
+      } as any,
+    })
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async ({ event }) =>
+      event === "PostToolUse"
+        ? { ok: true, blocked: false, feedback: "audited", outputs: [] }
+        : { ok: true, blocked: false, outputs: [] },
+    )
+    vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+
+    const result = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          session: { id: "ses_mcp_fb", permission: [] } as any,
+          model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } } as any,
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_mcp_fb" }, partFromToolCall: () => undefined } as any,
+        })
+        return (tools.remote_echo.execute as any)(
+          { text: "hello" },
+          { toolCallId: "call_mcp_fb", abortSignal: new AbortController().signal },
+        )
+      },
+    })
+
+    expect(result.output).toContain("hello")
+    expect(result.output).toContain('<hook_feedback event="PostToolUse">\naudited\n</hook_feedback>')
+  })
+
+  test("fires PostToolUseFailure when the tool throws and skips PostToolUse", async () => {
+    await using tmp = await tmpdir()
+    const events: { event: string; args?: unknown }[] = []
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockImplementation(async ({ event, args }) => {
+      events.push({ event, args })
+      return { ok: true, blocked: false, outputs: [] }
+    })
+
+    await expect(
+      Instance.provide({
+        directory: tmp.path,
+        fn: () =>
+          runToolLifecycle({
+            toolID: "bash",
+            sessionID: "ses_fail",
+            callID: "call_fail",
+            args: { command: "false" },
+            cwd: tmp.path,
+            async execute() {
+              throw new Error("exit 1")
+            },
+          }),
+      }),
+    ).rejects.toThrow("exit 1")
+
+    // The failure hook is fire-and-forget; give it a tick to be recorded.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(events.map((item) => item.event)).toEqual(["PreToolUse", "PostToolUseFailure"])
+    expect(events[1]?.args).toEqual({ args: { command: "false" }, error: "exit 1" })
+  })
+})
+
+describe("session.prompt-tools parallel write gate", () => {
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    await Instance.disposeAll()
+  })
+
+  test("classifies gate lanes by tool id and batch children", async () => {
+    const { toolGateMode } = await import("../../src/session/prompt/prompt-tools")
+    expect(toolGateMode({ toolID: "read", args: {} })).toBe("shared")
+    expect(toolGateMode({ toolID: "task", args: {} })).toBe("shared")
+    for (const id of ["edit", "write", "multiedit", "apply_patch", "bash", "bash_input", "notebook_edit"]) {
+      expect(toolGateMode({ toolID: id, args: {} })).toBe("exclusive")
+    }
+    const childSafe = (call: { tool: string }) => call.tool === "read"
+    expect(toolGateMode({ toolID: "batch", args: { tool_calls: [{ tool: "read", parameters: {} }] }, childSafe })).toBe(
+      "shared",
+    )
+    expect(
+      toolGateMode({
+        toolID: "batch",
+        args: {
+          tool_calls: [
+            { tool: "read", parameters: {} },
+            { tool: "edit", parameters: {} },
+          ],
+        },
+        childSafe,
+      }),
+    ).toBe("exclusive")
+    expect(toolGateMode({ toolID: "batch", args: { tool_calls: "nope" } })).toBe("shared")
+  })
+
+  test("a parallel read waits for an in-flight edit while two reads overlap", async () => {
+    await using tmp = await tmpdir()
+    const events: string[] = []
+    let releaseEdit!: () => void
+    const editDone = new Promise<void>((resolve) => {
+      releaseEdit = resolve
+    })
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "edit",
+        description: "edit",
+        parameters: z.object({}),
+        execute: async () => {
+          events.push("edit:start")
+          await editDone
+          events.push("edit:end")
+          return { title: "edit", output: "edited", metadata: {} }
+        },
+      },
+      {
+        id: "read",
+        description: "read",
+        parameters: z.object({ name: z.string() }),
+        execute: async (args: { name: string }) => {
+          events.push(`read:${args.name}:start`)
+          await new Promise((resolve) => setTimeout(resolve, 10))
+          events.push(`read:${args.name}:end`)
+          return { title: "read", output: "text", metadata: {} }
+        },
+      },
+    ] as any)
+    vi.spyOn(MCP, "tools").mockResolvedValue({})
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+    vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          session: { id: "ses_gate", permission: [] } as any,
+          model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } } as any,
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_gate" }, partFromToolCall: () => undefined } as any,
+        })
+        const call = (tool: string, args: unknown, id: string) =>
+          (tools[tool].execute as any)(args, { toolCallId: id, abortSignal: new AbortController().signal })
+
+        // Same step, model emitted: edit, read a, read b.
+        const edit = call("edit", {}, "c1")
+        const readA = call("read", { name: "a" }, "c2")
+        const readB = call("read", { name: "b" }, "c3")
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        expect(events).toEqual(["edit:start"])
+        releaseEdit()
+        await Promise.all([edit, readA, readB])
+        expect(events.slice(0, 2)).toEqual(["edit:start", "edit:end"])
+        // Both reads started before either finished: they shared the lane.
+        expect(events.indexOf("read:b:start")).toBeLessThan(events.indexOf("read:a:end"))
+      },
+    })
+  })
+
+  test("an aborted call waiting on the gate does not run", async () => {
+    await using tmp = await tmpdir()
+    let releaseEdit!: () => void
+    const editDone = new Promise<void>((resolve) => {
+      releaseEdit = resolve
+    })
+    const secondEdit = vi.fn(async () => ({ title: "edit", output: "edited", metadata: {} }))
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      {
+        id: "edit",
+        description: "edit",
+        parameters: z.object({ n: z.number() }),
+        execute: async (args: { n: number }) => {
+          if (args.n === 2) return secondEdit()
+          await editDone
+          return { title: "edit", output: "edited", metadata: {} }
+        },
+      },
+    ] as any)
+    vi.spyOn(MCP, "tools").mockResolvedValue({})
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+    vi.spyOn(Permission, "ask").mockResolvedValue(undefined)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          session: { id: "ses_gate_abort", permission: [] } as any,
+          model: { providerID: "test-provider", api: { id: "test-model", npm: "@ai-sdk/openai-compatible" } } as any,
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          processor: { message: { id: "msg_gate_abort" }, partFromToolCall: () => undefined } as any,
+        })
+        const first = (tools.edit.execute as any)(
+          { n: 1 },
+          { toolCallId: "e1", abortSignal: new AbortController().signal },
+        )
+        const controller = new AbortController()
+        const second = (tools.edit.execute as any)({ n: 2 }, { toolCallId: "e2", abortSignal: controller.signal })
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        controller.abort()
+        await expect(second).rejects.toThrow()
+        releaseEdit()
+        await first
+        expect(secondEdit).not.toHaveBeenCalled()
+      },
+    })
+  })
 })
