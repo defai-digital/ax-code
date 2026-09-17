@@ -132,7 +132,7 @@ Use `auto` (default) to restore detection or `normal` for normal cache and concu
 Use the standalone release installer (recommended; Homebrew is not required):
 
 ```bash
-curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
+curl -fsSL https://download.ax-code.com/install | bash
 ```
 
 If you already manage tools with Homebrew, it remains a supported alternative:
@@ -150,13 +150,13 @@ Existing Homebrew users do not need to migrate. Use one installation channel for
 ### Windows
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://download.ax-code.com/install.ps1 | iex"
 ```
 
 ### Ubuntu 24.04+
 
 ```bash
-curl -fsSL https://github.com/defai-digital/ax-code/releases/latest/download/install | bash
+curl -fsSL https://download.ax-code.com/install | bash
 ```
 
 Then:

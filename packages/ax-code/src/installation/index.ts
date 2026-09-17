@@ -9,8 +9,8 @@ import {
   HOMEBREW_TAP,
   LEGACY_HOMEBREW_TAP,
   HOMEBREW_FORMULA_API_URL,
-  GITHUB_RELEASES_API_URL,
-  GITHUB_REPO_URL,
+  RELEASE_INDEX_URL,
+  RELEASE_DOWNLOAD_ORIGIN,
 } from "@/constants/project"
 import { Flag } from "../flag/flag"
 import { Log } from "../util/log"
@@ -273,7 +273,10 @@ export namespace Installation {
     const version = semver.valid(target)
     if (!version) throw new Error("Invalid installer release version")
     target = version
-    const bodyBytes = await fetchInstallerScript(`${GITHUB_REPO_URL}/releases/download/v${target}/install`, true)
+    const bodyBytes = await fetchInstallerScript(
+      `${RELEASE_DOWNLOAD_ORIGIN}/releases/download/v${target}/install`,
+      true,
+    )
     return dependencies.run(["bash"], {
       input: bodyBytes,
       env: { VERSION: target },
@@ -288,7 +291,10 @@ export namespace Installation {
     const version = semver.valid(target)
     if (!version) throw new Error("Invalid installer release version")
     target = version
-    const bodyBytes = await fetchInstallerScript(`${GITHUB_REPO_URL}/releases/download/v${target}/install.ps1`, true)
+    const bodyBytes = await fetchInstallerScript(
+      `${RELEASE_DOWNLOAD_ORIGIN}/releases/download/v${target}/install.ps1`,
+      true,
+    )
     // mkdtemp appends a random suffix and creates the private directory atomically.
     // @scan-suppress security_scan — os.tmpdir plus a trusted constant prefix
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-upgrade-"))
@@ -372,11 +378,11 @@ export namespace Installation {
     // `/releases/latest` is whichever non-prerelease GitHub published last.
     // CLI (`vX.Y.Z`) and Desktop (`desktop-vX.Y.Z`) are sibling releases, so a
     // later Desktop publish would make self-update resolve a non-semver tag.
-    const data = await fetchJson(GitHubReleases, GITHUB_RELEASES_API_URL)
+    const data = await fetchJson(GitHubReleases, RELEASE_INDEX_URL)
     for (const release of data) {
       if (CLI_RELEASE_TAG.test(release.tag_name)) return release.tag_name.slice(1)
     }
-    throw new Error("No stable CLI GitHub release (vX.Y.Z) found")
+    throw new Error("No stable CLI public release (vX.Y.Z) found")
   }
 
   export async function upgrade(m: Method, target: string): Promise<void> {

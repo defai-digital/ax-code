@@ -50,10 +50,13 @@ describe("installation", () => {
   })
 
   describe("latest", () => {
-    test("reads release version from GitHub releases", async () => {
+    test("reads release version from the public distribution index", async () => {
       const result = await withTestDependencies(
         {
-          fetch: () => jsonResponse([{ tag_name: "v1.2.3" }]),
+          fetch: (url) => {
+            expect(url).toBe("https://download.ax-code.com/releases.json")
+            return jsonResponse([{ tag_name: "v1.2.3" }])
+          },
         },
         () => Installation.latest("unknown"),
       )
@@ -73,7 +76,7 @@ describe("installation", () => {
       expect(result).toBe("3.9.9")
     })
 
-    test("raises when GitHub only has desktop or prerelease tags", async () => {
+    test("raises when the public index only has desktop or prerelease tags", async () => {
       const promise = withTestDependencies(
         {
           fetch: () => jsonResponse([{ tag_name: "desktop-v4.0.0" }, { tag_name: "v4.0.0-beta.1" }]),
@@ -81,7 +84,7 @@ describe("installation", () => {
         () => Installation.latest("curl"),
       )
 
-      await expect(promise).rejects.toThrow(/No stable CLI GitHub release/)
+      await expect(promise).rejects.toThrow(/No stable CLI public release/)
     })
 
     test("reads brew formulae API versions", async () => {
@@ -304,8 +307,8 @@ describe("installation", () => {
       ).rejects.toThrow("release digest is missing")
       expect(invoked).toBe(false)
       expect(urls).toEqual([
-        "https://github.com/defai-digital/ax-code/releases/download/v7.16.5/install",
-        "https://github.com/defai-digital/ax-code/releases/download/v7.16.5/install.sha256",
+        "https://download.ax-code.com/releases/download/v7.16.5/install",
+        "https://download.ax-code.com/releases/download/v7.16.5/install.sha256",
       ])
     })
 
@@ -452,8 +455,8 @@ describe("installation", () => {
       expect(ps?.slice(-2)).toEqual(["-Version", "5.3.0"])
       expect(calls.some((cmd) => cmd[0] === "bash")).toBe(false)
       expect(urls).toEqual([
-        "https://github.com/defai-digital/ax-code/releases/download/v5.3.0/install.ps1",
-        "https://github.com/defai-digital/ax-code/releases/download/v5.3.0/install.ps1.sha256",
+        "https://download.ax-code.com/releases/download/v5.3.0/install.ps1",
+        "https://download.ax-code.com/releases/download/v5.3.0/install.ps1.sha256",
       ])
     })
 
@@ -478,8 +481,8 @@ describe("installation", () => {
       ).rejects.toThrow("release digest is missing")
       expect(invoked).toBe(false)
       expect(urls).toEqual([
-        "https://github.com/defai-digital/ax-code/releases/download/v7.16.5/install.ps1",
-        "https://github.com/defai-digital/ax-code/releases/download/v7.16.5/install.ps1.sha256",
+        "https://download.ax-code.com/releases/download/v7.16.5/install.ps1",
+        "https://download.ax-code.com/releases/download/v7.16.5/install.ps1.sha256",
       ])
     })
 

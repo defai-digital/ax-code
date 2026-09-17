@@ -65,7 +65,7 @@ function writeYaml(file: string, lines: string[]) {
 
 export async function generateManifests(argv = process.argv.slice(2)) {
   const args = parseArgs(argv)
-  const base = `https://github.com/${repository}/releases/download/${args.tag}`
+  const base = `https://download.ax-code.com/releases/download/${args.tag}`
   const assets = [
     { arch: "x64", file: "ax-code-windows-x64.zip" },
     { arch: "arm64", file: "ax-code-windows-arm64.zip" },

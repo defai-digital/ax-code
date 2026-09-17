@@ -39,7 +39,7 @@ if ! [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z-]+)*$ ]]; then
   exit 1
 fi
 TAG="v${VERSION}"
-RELEASE_BASE="https://github.com/defai-digital/ax-code/releases/download/${TAG}"
+RELEASE_BASE="https://download.ax-code.com/releases/download/${TAG}"
 SOURCE_REPO="${GITHUB_REPOSITORY:-defai-digital/ax-code}"
 MINISIGN_PUBLIC_KEY="${AX_CODE_MINISIGN_PUBLIC_KEY:-docs/release/ax-minisign.pub}"
 RELEASE_READ_TOKEN="${GH_TOKEN:-}"

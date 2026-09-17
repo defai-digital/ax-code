@@ -51,7 +51,7 @@ installer bootstraps a pinned official minisign build (SHA-256 verified)
 into %LOCALAPPDATA%\ax-code\tools\minisign.
 
 Examples:
-  irm https://github.com/defai-digital/ax-code/releases/latest/download/install.ps1 | iex
+  irm https://download.ax-code.com/install.ps1 | iex
   .\install.ps1 -Version 5.8.0
   .\install.ps1 -Binary C:\path\to\ax-code.cmd
   .\install.ps1 -Uninstall
@@ -176,7 +176,7 @@ function Get-MinisignNativeArchDir {
 
 function Get-LatestVersion([string]$FileName) {
   $releases = Invoke-RestMethod `
-    -Uri "https://api.github.com/repos/$Repo/releases?per_page=50" `
+    -Uri "https://download.ax-code.com/releases.json" `
     -UseBasicParsing `
     -Headers @{ "User-Agent" = "$App-installer" }
 
@@ -201,10 +201,10 @@ function Resolve-ReleaseDownload {
 
   if ($requested) {
     $specificVersion = $requested.TrimStart("v")
-    $url = "https://github.com/$Repo/releases/download/v$specificVersion/$filename"
+    $url = "https://download.ax-code.com/releases/download/v$specificVersion/$filename"
   } else {
     $specificVersion = Get-LatestVersion $filename
-    $url = "https://github.com/$Repo/releases/download/v$specificVersion/$filename"
+    $url = "https://download.ax-code.com/releases/download/v$specificVersion/$filename"
   }
 
   return @{

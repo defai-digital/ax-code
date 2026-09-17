@@ -103,7 +103,7 @@ jobs:
           # Pin the installer to the release under test. Fetching `main` can
           # silently test a newer script, while the unauthenticated Contents
           # API can return 403 under shared-runner rate limits.
-          INSTALLER_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install"
+          INSTALLER_URL="https://download.ax-code.com/releases/download/v${VERSION}/install"
           curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "$INSTALLER_URL" -o "$RUNNER_TEMP/ax-install"
           curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "$INSTALLER_URL.sha256" -o "$RUNNER_TEMP/ax-install.sha256"
           EXPECTED_DIGEST="$(awk '{print $1}' "$RUNNER_TEMP/ax-install.sha256")"
@@ -339,7 +339,7 @@ jobs:
           $Version = "${{ steps.version.outputs.version }}"
           $Installer = Join-Path $env:RUNNER_TEMP "install.ps1"
           $InstallerSig = "$Installer.minisig"
-          $Base = "https://github.com/${{ github.repository }}/releases/download/v$Version"
+          $Base = "https://download.ax-code.com/releases/download/v$Version"
           Invoke-WebRequest -Uri "$Base/install.ps1" -OutFile $Installer -UseBasicParsing
           Invoke-WebRequest -Uri "$Base/install.ps1.minisig" -OutFile $InstallerSig -UseBasicParsing
 
@@ -473,7 +473,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           # Use the installer committed with the release, not a moving `main`
           # branch or the rate-limited unauthenticated Contents API.
-          INSTALLER_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/install"
+          INSTALLER_URL="https://download.ax-code.com/releases/download/v${VERSION}/install"
           curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "$INSTALLER_URL" -o "$RUNNER_TEMP/ax-install"
           curl -fsSL --retry 3 --retry-delay 2 --retry-all-errors "$INSTALLER_URL.sha256" -o "$RUNNER_TEMP/ax-install.sha256"
           EXPECTED_DIGEST="$(awk '{print $1}' "$RUNNER_TEMP/ax-install.sha256")"

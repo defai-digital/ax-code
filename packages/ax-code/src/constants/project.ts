@@ -40,13 +40,17 @@ export const CONFIG_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/conf
 export const TUI_SCHEMA_URL = `${RAW_MAIN_BASE}/packages/${PACKAGE_NAME}/tui.schema.json`
 
 /** Standalone Unix installer for new installations; upgrades pin an explicit release. */
-export const INSTALL_SCRIPT_URL = `${GITHUB_REPO_URL}/releases/latest/download/install`
+export const INSTALL_SCRIPT_URL = "https://download.ax-code.com/install"
 
 /** Standalone Windows installer for new installations; upgrades pin an explicit release. */
-export const INSTALL_PS1_SCRIPT_URL = `${GITHUB_REPO_URL}/releases/latest/download/install.ps1`
+export const INSTALL_PS1_SCRIPT_URL = "https://download.ax-code.com/install.ps1"
 
 // Homebrew distribution. All DefAI Digital projects publish into one shared
 // tap; LEGACY_HOMEBREW_TAP keeps upgrades working for pre-migration installs.
 export const HOMEBREW_TAP = `${GITHUB_ORG}/tap`
 export const LEGACY_HOMEBREW_TAP = GITHUB_REPO_SLUG
 export const HOMEBREW_FORMULA_API_URL = `https://formulae.brew.sh/api/formula/${PACKAGE_NAME}.json`
+
+/** Public binary distribution, independent of source repository visibility. */
+export const RELEASE_DOWNLOAD_ORIGIN = "https://download.ax-code.com"
+export const RELEASE_INDEX_URL = `${RELEASE_DOWNLOAD_ORIGIN}/releases.json`
