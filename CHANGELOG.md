@@ -30,6 +30,9 @@ changes belong to AX Coder.
 - Pass each CLI provider's workspace flag through the connect probe so Muse `--trust-workspace` is paired with `--workspace`.
 - Stream MiniMax Code CLI assistant deltas without replaying the consolidated `item.completed` text.
 - Treat Qoder nested authentication errors as login failures and ignore non-JSON stream banners.
+- Wait past AX TUI 0.1.6's 100ms Escape timeout before asserting locale-picker dismiss.
+- Keep plugin auth hooks from treating restored Qoder CLI as a retired provider.
+- Refresh the bundled models snapshot.
 
 ## [7.18.4] - 2026-09-17
 

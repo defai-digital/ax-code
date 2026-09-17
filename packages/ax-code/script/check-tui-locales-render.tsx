@@ -129,8 +129,8 @@ try {
         setup.mockInput.pressKey("END")
         setup.mockInput.pressKey("RETURN")
         await setup.flush()
-        assert.equal(kvStore.get("setup_resume_v1"), false)
-        assert.equal(dialog.stack.length, 0)
+        assert.equal(kvStore.get("setup_resume_v1"), false, `${locale}: skip did not clear resume`)
+        assert.equal(dialog.stack.length, 0, `${locale}: setup skip left dialog stack at ${dialog.stack.length}`)
 
         dialog.replace(() => (
           <SetupWizard
@@ -168,10 +168,17 @@ try {
           assert(setup.captureCharFrame().includes(LANGUAGE_LABELS[target]), `${locale}: cannot reach ${target}`)
           setup.mockInput.pressArrow("down")
         }
+        // AX TUI 0.1.6 holds a lone ESC for 100ms so split CSI sequences are
+        // not typed as keys. Wait past that timeout before asserting dismiss.
+        setup.renderer.clearSelection()
         setup.mockInput.pressKey("ESCAPE")
-        await new Promise((resolve) => setTimeout(resolve, 50))
+        await new Promise((resolve) => setTimeout(resolve, 150))
         await setup.flush()
-        assert.equal(dialog.stack.length, 0)
+        assert.equal(
+          dialog.stack.length,
+          0,
+          `${locale}: language picker escape left dialog stack at ${dialog.stack.length}\n${setup.captureCharFrame()}`,
+        )
         let decision = "none"
         dialog.replace(() => (
           <DialogConfirm

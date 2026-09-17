@@ -48,11 +48,11 @@ describe("resolvePluginProviders", () => {
 
   test("does not let plugins resurrect retired providers", () => {
     const result = resolvePluginProviders({
-      hooks: [hookWithAuth("qoder-cli")],
+      hooks: [hookWithAuth("gemini-cli")],
       existingProviders: {},
       disabled: new Set(),
-      enabled: new Set(["qoder-cli"]),
-      providerNames: { "qoder-cli": "Qoder CLI" },
+      enabled: new Set(["gemini-cli"]),
+      providerNames: { "gemini-cli": "Gemini CLI" },
     })
     expect(result).toEqual([])
   })
