@@ -27,6 +27,7 @@ The default `/` menu is a control plane (`/plan`, `/review`, `/debug`, `/status`
 | `incident-observability` | Evidence-first incident diagnosis before a patch             | `/incident-observability` |
 | `auth-boundaries`        | Authn/authz, tenant isolation, negative tests                | `/auth-boundaries`        |
 | `queue-worker`           | Idempotent queue/worker changes and duplicate delivery       | `/queue-worker`           |
+| `ruby-on-rails`          | Rails conventions without booting the Rails process          | Agent-only                |
 
 Skills use `SKILL.md` with YAML frontmatter (`name`, `description`, optional `paths`, `allowed-tools`).
 

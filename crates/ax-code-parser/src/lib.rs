@@ -53,6 +53,7 @@ fn get_language(name: &str) -> Option<Language> {
         "go" => Some(tree_sitter_go::LANGUAGE.into()),
         "rust" => Some(tree_sitter_rust::LANGUAGE.into()),
         "java" => Some(tree_sitter_java::LANGUAGE.into()),
+        "ruby" => Some(tree_sitter_ruby::LANGUAGE.into()),
         _ => None,
     }
 }
@@ -128,6 +129,7 @@ fn classify_node<'a>(
         "go" => classify_go(node, source, kind),
         "rust" => classify_rust(node, source, kind),
         "java" => classify_java(node, source, kind),
+        "ruby" => classify_ruby(node, source, kind),
         _ => None,
     }
 }
@@ -428,6 +430,42 @@ fn classify_java<'a>(
     }
 }
 
+// ─── Ruby classifier ───────────────────────────────────────────────
+
+fn classify_ruby<'a>(
+    node: &Node<'a>,
+    source: &[u8],
+    kind: &str,
+) -> Option<(String, String, Option<Node<'a>>)> {
+    match kind {
+        "method" | "singleton_method" => {
+            let name_node = find_child_by_field(node, "name")?;
+            Some((
+                node_text(&name_node, source).to_string(),
+                "method".into(),
+                Some(name_node),
+            ))
+        }
+        "class" => {
+            let name_node = find_child_by_field(node, "name")?;
+            Some((
+                node_text(&name_node, source).to_string(),
+                "class".into(),
+                Some(name_node),
+            ))
+        }
+        "module" => {
+            let name_node = find_child_by_field(node, "name")?;
+            Some((
+                node_text(&name_node, source).to_string(),
+                "module".into(),
+                Some(name_node),
+            ))
+        }
+        _ => None,
+    }
+}
+
 // ─── Visibility detection ──────────────────────────────────────────
 
 fn detect_visibility(node: &Node, source: &[u8], lang: &str) -> Option<String> {
@@ -509,6 +547,9 @@ fn detect_visibility(node: &Node, source: &[u8], lang: &str) -> Option<String> {
             }
             None
         }
+        // Ruby visibility is stateful (`private`/`protected` affect later
+        // methods). Do not guess from the current node.
+        "ruby" => None,
         _ => None,
     }
 }
@@ -595,6 +636,7 @@ pub fn supported_languages() -> Vec<String> {
         "go".into(),
         "rust".into(),
         "java".into(),
+        "ruby".into(),
     ]
 }
 
@@ -860,6 +902,72 @@ public enum Color {
     }
 
     #[test]
+    fn test_ruby_symbols() {
+        let source = r#"
+module Bank
+  class Account
+    def initialize(balance)
+      @balance = balance
+    end
+
+    def self.open(balance)
+      new(balance)
+    end
+
+    def deposit(amount)
+      @balance += amount
+    end
+  end
+end
+"#;
+        let symbols = extract_symbols_internal(source, "ruby").unwrap();
+        let names: Vec<&str> = symbols.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            names.contains(&"Bank"),
+            "should find module Bank: {:?}",
+            names
+        );
+        let bank = symbols.iter().find(|s| s.name == "Bank").unwrap();
+        let bank_children: Vec<&str> = bank.children.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            bank_children.contains(&"Account"),
+            "Bank should contain Account: {:?}",
+            bank_children
+        );
+        let account = bank.children.iter().find(|s| s.name == "Account").unwrap();
+        let methods: Vec<&str> = account.children.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            methods.contains(&"initialize"),
+            "Account should have initialize: {:?}",
+            methods
+        );
+        assert!(
+            methods.contains(&"open"),
+            "Account should have singleton method open: {:?}",
+            methods
+        );
+        assert!(
+            methods.contains(&"deposit"),
+            "Account should have deposit: {:?}",
+            methods
+        );
+        assert!(account.children.iter().all(|s| s.kind == "method"));
+    }
+
+    #[test]
+    fn test_ruby_erb_does_not_fail() {
+        let source = "<%= render @user %> <% if true %>hello<% end %>";
+        let symbols = extract_symbols_internal(source, "ruby").unwrap();
+        assert!(
+            symbols
+                .iter()
+                .all(|s| s.kind == "method" || s.kind == "class" || s.kind == "module"),
+            "ERB parsed as Ruby must not invent unknown kinds: {:?}",
+            symbols
+        );
+    }
+
+    #[test]
     fn test_unsupported_language() {
         let result = extract_symbols_internal("code", "brainfuck");
         assert!(result.is_err());
@@ -873,6 +981,7 @@ public enum Color {
         assert!(get_language("go").is_some());
         assert!(get_language("rust").is_some());
         assert!(get_language("java").is_some());
+        assert!(get_language("ruby").is_some());
         assert!(get_language("brainfuck").is_none());
     }
 

@@ -5,6 +5,8 @@ import { createRequire } from "node:module"
 import { lazy } from "@/util/lazy"
 import { Log } from "../util/log"
 import { toErrorMessage } from "../util/error-message"
+import { parseJsonResult } from "@/util/json-value"
+import { NativeAddon } from "../native/addon"
 import type { CodeNodeKind } from "./schema.sql"
 
 // Syntactic fallback extraction for the code-intelligence builder.
@@ -41,7 +43,25 @@ export namespace SyntacticExtractor {
   // the LSP path.
   const MAX_SYMBOLS_PER_FILE = 2_000
 
+  // Matches builder-impl MAX_SYMBOL_DEPTH. Native symbols are nested;
+  // flatten them with the same bound so a cyclic or pathological tree
+  // cannot recurse without limit.
+  const MAX_SYMBOL_DEPTH = 64
+
   const SIGNATURE_MAX_CHARS = 200
+
+  const NODE_KINDS = new Set<CodeNodeKind>([
+    "function",
+    "method",
+    "class",
+    "interface",
+    "type",
+    "variable",
+    "constant",
+    "module",
+    "parameter",
+    "enum",
+  ])
 
   export type Symbol = {
     kind: CodeNodeKind
@@ -66,7 +86,23 @@ export namespace SyntacticExtractor {
   }
 
   export function supported(lang: string): boolean {
-    return lang in GRAMMARS
+    if (lang in GRAMMARS) return true
+    // ERB is mixed HTML/Ruby. Never treat it as a native Ruby parse.
+    if (lang === "erb") return false
+    return nativeHasGrammar(lang)
+  }
+
+  function nativeHasGrammar(lang: string): boolean {
+    try {
+      return NativeAddon.parser()?.hasGrammar(lang) === true
+    } catch (err) {
+      log.warn("native parser hasGrammar failed", { lang, err: toErrorMessage(err) })
+      return false
+    }
+  }
+
+  function grammarIdentity(lang: string): string {
+    return GRAMMARS[lang] ?? `native:${lang}`
   }
 
   // Resolve .wasm FILE PATHS with createRequire rather than importing the
@@ -125,7 +161,7 @@ export namespace SyntacticExtractor {
   }
 
   // Bump this identity whenever the extractor or bundled grammar contract changes.
-  const CACHE_VERSION = "syntactic-v1"
+  const CACHE_VERSION = "syntactic-v2"
   const CachedSymbols = z
     .array(
       z.object({
@@ -155,7 +191,7 @@ export namespace SyntacticExtractor {
   export async function extract(lang: string, text: string): Promise<Symbol[] | undefined> {
     if (evidenceCacheMode() === "off" || !supported(lang) || text.length > MAX_SOURCE_BYTES)
       return extractFresh(lang, text)
-    const key = EvidenceCache.key(CACHE_VERSION, lang, GRAMMARS[lang], EvidenceCache.digest(text))
+    const key = EvidenceCache.key(CACHE_VERSION, lang, grammarIdentity(lang), EvidenceCache.digest(text))
     const cached = await EvidenceCache.get(key, CachedSymbols)
     if (cached) return cached
     const symbols = await extractFresh(lang, text)
@@ -169,6 +205,90 @@ export namespace SyntacticExtractor {
       log.info("skipping syntactic extraction, source too large", { lang, size: text.length })
       return undefined
     }
+    // Keep JS/TS/bash on the WASM walkers. Native also has grammars for
+    // TypeScript/JavaScript, but those extractors do not emit signatures
+    // that the WASM path already tests.
+    if (lang in GRAMMARS) return extractWasm(lang, text)
+    return extractNative(lang, text)
+  }
+
+  function extractNative(lang: string, text: string): Symbol[] | undefined {
+    const parser = NativeAddon.parser()
+    if (!parser) return undefined
+    let raw: string
+    try {
+      raw = parser.extractSymbols(text, lang)
+    } catch (err) {
+      log.warn("native syntactic extraction failed", { lang, err: toErrorMessage(err) })
+      return undefined
+    }
+    const parsed = parseJsonResult(raw)
+    if (!parsed.ok) {
+      log.warn("native syntactic extraction returned invalid JSON", { lang, err: toErrorMessage(parsed.error) })
+      return undefined
+    }
+    const tree = NativeSymbolList.safeParse(parsed.value)
+    if (!tree.success) {
+      log.warn("native syntactic extraction failed schema", { lang })
+      return undefined
+    }
+    const symbols: Symbol[] = []
+    flattenNative(tree.data, symbols, 0)
+    return symbols
+  }
+
+  type NativeSymbolNode = {
+    name: string
+    kind: string
+    qualifiedName: string
+    range: { startLine: number; startChar: number; endLine: number; endChar: number }
+    children: NativeSymbolNode[]
+  }
+
+  const NativeRange = z.object({
+    startLine: z.number().int().min(0),
+    startChar: z.number().int().min(0),
+    endLine: z.number().int().min(0),
+    endChar: z.number().int().min(0),
+  })
+
+  const NativeSymbolNode: z.ZodType<NativeSymbolNode> = z.lazy(() =>
+    z.object({
+      name: z.string(),
+      kind: z.string(),
+      qualifiedName: z.string(),
+      range: NativeRange,
+      children: z.array(NativeSymbolNode).default([]),
+    }),
+  )
+
+  const NativeSymbolList = z.array(NativeSymbolNode).max(MAX_SYMBOLS_PER_FILE)
+
+  function flattenNative(nodes: NativeSymbolNode[], symbols: Symbol[], depth: number): boolean {
+    if (depth > MAX_SYMBOL_DEPTH) return true
+    for (const node of nodes) {
+      if (NODE_KINDS.has(node.kind as CodeNodeKind)) {
+        if (
+          !push(symbols, {
+            kind: node.kind as CodeNodeKind,
+            name: node.name,
+            qualified: node.qualifiedName || node.name,
+            startLine: node.range.startLine,
+            startChar: node.range.startChar,
+            endLine: node.range.endLine,
+            endChar: node.range.endChar,
+            signature: null,
+          })
+        ) {
+          return false
+        }
+      }
+      if (node.children.length > 0 && !flattenNative(node.children, symbols, depth + 1)) return false
+    }
+    return true
+  }
+
+  async function extractWasm(lang: string, text: string): Promise<Symbol[] | undefined> {
     const language = await loadLanguage(lang)
     if (!language) return undefined
 

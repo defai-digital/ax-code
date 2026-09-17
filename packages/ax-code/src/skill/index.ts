@@ -201,6 +201,7 @@ export namespace Skill {
     "cloud-ops-runpod",
     "vyos-firewall",
     "junos-firewall",
+    "ruby-on-rails",
   ])
 
   /** Visible reliability pack — also listed as slash commands. */
@@ -223,6 +224,7 @@ export namespace Skill {
     "simplify",
     "verify",
     "run",
+    "ruby-on-rails",
   ])
 
   const BuiltinSkillEntry = z.object({

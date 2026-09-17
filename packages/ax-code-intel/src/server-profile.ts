@@ -73,7 +73,7 @@ export const BuiltinServerProfiles: Record<string, BuiltinServerProfile> = {
   oxlint: AUXILIARY_LINT_PROFILE,
   biome: AUXILIARY_LINT_PROFILE,
   gopls: PRIMARY_SEMANTIC_PROFILE,
-  "ruby-lsp": SECONDARY_SEMANTIC_PROFILE,
+  "ruby-lsp": STARTUP_DEFERRED_SEMANTIC_PROFILE,
   ty: PRIMARY_SEMANTIC_PROFILE,
   pyright: PRIMARY_SEMANTIC_PROFILE,
   "elixir-ls": SECONDARY_SEMANTIC_PROFILE,
