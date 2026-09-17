@@ -1,3 +1,4 @@
+import { isMissingAnswer, MISSING_ANSWER_RECOVERY } from "./prompt/prompt-missing-answer"
 import { SessionSteering } from "./steering"
 import { NativePerf } from "@/perf/native"
 import { SessionID, type MessageID, type PartID, type SessionStop } from "./schema"
@@ -481,6 +482,7 @@ export namespace SessionPrompt {
     let lastTodoDeadlineSignature: string | undefined
     let lastTodoContextSignature: string | undefined
     let stagnantTodoRetries = 0
+    let missingAnswerRetries = 0
     let emptyModelTurnRetries = 0
     let truncatedModelTurnRetries = 0
     let previousTruncatedModelOutputPrefix: string | undefined
@@ -1457,6 +1459,40 @@ export namespace SessionPrompt {
         }
       }
       const updatedGoal = await addPromptGoalUsage({ sessionID, message: processor.message })
+
+      if (
+        processor.message.finish === "stop" &&
+        !processor.message.error &&
+        !processor.message.summary &&
+        !abort.aborted &&
+        isMissingAnswer(await MessageV2.parts(processor.message.id))
+      ) {
+        // One retry for the entire invocation, in supervised and autonomous
+        // modes. Existing step/deadline limits still apply; tool calls are
+        // never reconstructed from reasoning or replayed by this recovery.
+        if (missingAnswerRetries >= 1) {
+          await publishPromptFailure({
+            sessionID,
+            assistant: processor.message,
+            message: "The model repeatedly ended without an answer or a tool call after one recovery attempt.",
+          })
+          reason = "stalled"
+          break
+        }
+        missingAnswerRetries += 1
+        log.warn("missing answer recovery", {
+          command: "session.prompt.loop",
+          status: "retry",
+          errorCode: "MISSING_MODEL_ANSWER",
+          sessionID,
+          messageID: processor.message.id,
+          attempt: missingAnswerRetries,
+        })
+        // A failed forced summary must not regain tools through this path.
+        if (lastTurnWasForceTextOnly) armForceTextOnlyTurn(lastTurnForceTextReason ?? "other")
+        await createAutonomousTextContinuation({ sessionID, messages: msgs, text: MISSING_ANSWER_RECOVERY })
+        continue
+      }
 
       // When autonomous (explicitly or via active goal), when the model ends
       // a turn cleanly but leaves todos pending, inject a continuation user

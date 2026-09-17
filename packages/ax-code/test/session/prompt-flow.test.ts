@@ -1776,6 +1776,89 @@ describe("session.prompt flow", () => {
     }
   })
 
+  test.each([
+    [false, false],
+    [true, false],
+    [false, true],
+    [true, true],
+  ])("handles reasoning-only stop (autonomous=%s, repeated=%s)", async (autonomous, repeated) => {
+    await using tmp = await tmpdir({ git: true })
+    const previous = process.env.AX_CODE_AUTONOMOUS
+    process.env.AX_CODE_AUTONOMOUS = String(autonomous)
+    try {
+      modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(model)
+      summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+      let calls = 0
+      streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+        expect(JSON.stringify(input.messages)).not.toContain("Agent-loop checkpoint:")
+        const first = calls++ === 0 || repeated
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            yield { type: "start-step" }
+            if (first) {
+              yield { type: "reasoning-start", id: "r" }
+              yield {
+                type: "reasoning-delta",
+                id: "r",
+                text: ']<]minimax[>[<tool_call><invoke name="bash">not executable</invoke></tool_call>',
+              }
+              yield { type: "reasoning-end", id: "r" }
+            } else {
+              yield { type: "text-start", id: "t" }
+              yield { type: "text-delta", id: "t", text: "The deployment was verified." }
+              yield { type: "text-end", id: "t" }
+            }
+            yield {
+              type: "finish-step",
+              finishReason: "stop",
+              usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120 },
+            }
+            yield { type: "finish" }
+          })(),
+        } as any
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Reasoning-only recovery" })
+          await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: model.providerID, modelID: model.id },
+            noReply: true,
+            parts: [
+              { type: "text", text: "Agent-loop checkpoint: Tools are disabled for your next turn.", synthetic: true },
+            ],
+          })
+          const result = await SessionPrompt.prompt({
+            sessionID: session.id,
+            agent: "build",
+            model: { providerID: model.providerID, modelID: model.id },
+            parts: [{ type: "text", text: "did you publish?" }],
+          })
+          expect(calls).toBe(2)
+          if (repeated) {
+            expect(result.info.role === "assistant" && result.info.error?.data.message).toContain(
+              "after one recovery attempt",
+            )
+          } else {
+            expect(result.parts.some((p) => p.type === "text" && p.text.includes("deployment was verified"))).toBe(true)
+          }
+          const messages = await Session.messages({ sessionID: session.id })
+          expect(
+            messages.some((m) => m.parts.some((p) => p.type === "text" && p.text.startsWith("Agent-loop checkpoint:"))),
+          ).toBe(true)
+          expect(messages.flatMap((m) => m.parts).filter((p) => p.type === "tool")).toHaveLength(0)
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      if (previous === undefined) delete process.env.AX_CODE_AUTONOMOUS
+      else process.env.AX_CODE_AUTONOMOUS = previous
+    }
+  })
+
   test("stops autonomous mode with a diagnostic after repeated empty model turns", async () => {
     await using tmp = await tmpdir({
       git: true,

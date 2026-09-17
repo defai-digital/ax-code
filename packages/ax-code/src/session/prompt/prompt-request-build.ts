@@ -1,3 +1,4 @@
+import { projectCurrentLoopControls } from "./prompt-missing-answer"
 import { ReasoningPolicy } from "../../control-plane/reasoning-policy"
 import type { Agent } from "../../agent/agent"
 import { NativePerf } from "../../perf/native"
@@ -48,7 +49,7 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   // durable transcript (for example: previous assistant answer + current user
   // rewrite request). Clone-based callers keep `messages` as the full loop
   // history while plugins and model conversion operate on the bounded view.
-  const requestMessagesSource = input.requestMessagesSource ?? messages
+  const requestMessagesSource = projectCurrentLoopControls(input.requestMessagesSource ?? messages)
 
   await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: requestMessagesSource })
   // The per-message conversion cache relies on message objects being
