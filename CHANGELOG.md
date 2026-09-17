@@ -6,6 +6,8 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.5] - 2026-09-17
+
 ### Added
 
 - Index Go, Python, Rust, Java, and Ruby symbols through the native tree-sitter parser when LSP returns none.
@@ -17,6 +19,7 @@ changes belong to AX Coder.
 
 ### Changed
 
+- Publish the paired SDK 2.5.29.
 - Consume AX TUI 0.1.6, including the longer stdin escape-sequence timeout that stops mid-sequence terminal replies from being typed into the prompt.
 - Group CJK languages first in the language picker and sort remaining locales by English names.
 
