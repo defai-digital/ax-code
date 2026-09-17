@@ -1128,8 +1128,17 @@ describe("session.prompt-tools parallel write gate", () => {
   test("classifies gate lanes by tool id and batch children", async () => {
     const { toolGateMode } = await import("../../src/session/prompt/prompt-tools")
     expect(toolGateMode({ toolID: "read", args: {} })).toBe("shared")
-    expect(toolGateMode({ toolID: "task", args: {} })).toBe("shared")
-    for (const id of ["edit", "write", "multiedit", "apply_patch", "bash", "bash_input", "notebook_edit"]) {
+    for (const id of [
+      "edit",
+      "write",
+      "multiedit",
+      "apply_patch",
+      "bash",
+      "bash_input",
+      "notebook_edit",
+      "task",
+      "task_parallel",
+    ]) {
       expect(toolGateMode({ toolID: id, args: {} })).toBe("exclusive")
     }
     const childSafe = (call: { tool: string }) => call.tool === "read"

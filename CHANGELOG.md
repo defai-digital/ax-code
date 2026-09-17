@@ -38,6 +38,8 @@ changes belong to AX Coder.
 - Aborting a tool after it acquired the session write gate no longer leaks the exclusive lane.
 - `task_parallel` cancels started siblings as soon as a child fails before its session exists, and still fires
   `SubagentStop` for every child that started.
+- Put `task` and `task_parallel` on the exclusive write-gate lane so parallel subagents cannot interleave with parent
+  file edits.
 
 ## [7.18.6] - 2026-09-17
 

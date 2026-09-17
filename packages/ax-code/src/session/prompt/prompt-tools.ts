@@ -160,6 +160,8 @@ const EXCLUSIVE_TOOL_IDS: ReadonlySet<string> = new Set([
   "bash",
   "bash_input",
   "ops_apply",
+  "task",
+  "task_parallel",
 ])
 
 export function toolGateMode(input: {
