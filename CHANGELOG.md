@@ -6,6 +6,8 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.7] - 2026-09-17
+
 ### Added
 
 - `PostToolUse` lifecycle hooks can hand bounded feedback back to the model: legacy stdout, Claude Code
@@ -20,6 +22,7 @@ changes belong to AX Coder.
 
 ### Changed
 
+- Publish the paired SDK 2.5.31.
 - Parallel tool calls emitted in one assistant message run through a session-scoped reader/writer gate: read-only
   tools overlap, while file edits, `bash`, MCP tools, and batches with non-concurrency-safe children run alone in
   arrival order.
@@ -32,6 +35,9 @@ changes belong to AX Coder.
 
 - `multiedit` now appends LSP errors for the changed files to the model-visible result, matching `edit`, `write`, and
   `apply_patch`.
+- Aborting a tool after it acquired the session write gate no longer leaks the exclusive lane.
+- `task_parallel` cancels started siblings as soon as a child fails before its session exists, and still fires
+  `SubagentStop` for every child that started.
 
 ## [7.18.6] - 2026-09-17
 
