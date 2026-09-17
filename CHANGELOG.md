@@ -6,6 +6,25 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.8] - 2026-09-17
+
+### Changed
+
+- Publish the paired SDK 2.5.32.
+- Skip snapshot staging when the workspace is the home directory, so launching from `$HOME` no longer walks nested
+  incomplete git repos and abort the prompt.
+- Harden Windows release signing and installed-runtime integrity verification.
+- Give Windows ARM PowerShell installer tests a 60s spawn budget.
+
+### Fixed
+
+- Forward POSIX `file://` attachment paths to the goal writer on Windows instead of dropping them as unavailable.
+- Do not treat `file://` URLs with a remote host as local attachment paths.
+- Keep PostToolUse hook feedback, including truncation markers, within the 8,000-character budget.
+- Do not abort a turn after a steering correction is already committed if a later notification fails.
+- Inject `steerSafely` into the revert-history keyboard-handler source-slice test so the steer branch is actually
+  evaluated.
+
 ## [7.18.7] - 2026-09-17
 
 ### Added
