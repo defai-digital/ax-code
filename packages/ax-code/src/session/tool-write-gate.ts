@@ -49,7 +49,13 @@ export namespace ToolWriteGate {
       current.count += 1
       head.resolve()
     }
-    if (current.count === 0 && current.queue.length === 0) state().delete(sessionID)
+    // Every entry `lane()` adds via `lanes.set()` is removed here once the
+    // session's gate goes fully idle (no holder, no waiters) — the map never
+    // outlives concurrently active sessions.
+    if (current.count === 0 && current.queue.length === 0) {
+      const lanes = state()
+      lanes.delete(sessionID)
+    }
   }
 
   function release(sessionID: SessionID, current: Lane) {
@@ -86,14 +92,22 @@ export namespace ToolWriteGate {
     }
     if (abort?.aborted) throw abortError(abort)
     await new Promise<void>((resolve, reject) => {
+      let settled = false
       const waiter: Waiter = { mode, resolve, reject }
       const onAbort = () => {
+        if (settled) return
         const index = current.queue.indexOf(waiter)
-        if (index >= 0) current.queue.splice(index, 1)
+        // Already granted: the caller owns releaseOnce. Aborting the tool is
+        // their job; rejecting here would leak the lane.
+        if (index < 0) return
+        settled = true
+        current.queue.splice(index, 1)
         drain(sessionID, current)
         reject(abortError(abort!))
       }
       waiter.resolve = () => {
+        if (settled) return
+        settled = true
         abort?.removeEventListener("abort", onAbort)
         resolve()
       }
