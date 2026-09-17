@@ -421,11 +421,6 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     })
   }
 
-  function submitByKind(kind: "submit" | "steer") {
-    if (kind === "steer") steerSafely()
-    else submitSafely()
-  }
-
   const pasteSubmitGate = createPromptPasteSubmitGate({ submit: submitSafely })
 
   useKeyboard((evt) => {
@@ -445,7 +440,11 @@ function SessionPrompt(props: PromptProps & { draftKey: string }) {
     }
     evt.preventDefault()
     evt.stopPropagation()
-    submitByKind(submitKind)
+    // Inlined (rather than a shared helper) so this useKeyboard callback stays
+    // self-contained: test/cli/tui/revert-history.test.ts slices this exact
+    // source range and evaluates it standalone.
+    if (submitKind === "steer") steerSafely()
+    else submitSafely()
   })
 
   const fileStyleId = syntax().getStyleId("extmark.file")!
