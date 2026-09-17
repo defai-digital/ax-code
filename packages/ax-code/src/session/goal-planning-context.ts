@@ -35,7 +35,14 @@ export function goalPlanningContext(messages: readonly MessageV2.WithParts[], pa
           try {
             reference = fileURLToPath(part.url)
           } catch {
-            /* The unavailable reference remains explicit below. */
+            // fileURLToPath rejects drive-letter-less file:// URLs on Windows
+            // (e.g. imported/WSL/Unix-session attachments). Fall back to the
+            // decoded URL pathname so the writer still sees a local reference.
+            try {
+              reference = decodeURIComponent(new URL(part.url).pathname) || undefined
+            } catch {
+              /* The unavailable reference remains explicit below. */
+            }
           }
         }
         lines.push(
