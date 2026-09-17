@@ -4,8 +4,9 @@
  * Verifies the commit scope of the animation review fix.
  *
  * A focused commit must not carry local-only material into the public history:
- * no `.internal/` content, no `AGENTS.md`, and no `ax-code.json` (the untracked
- * local config). This script makes that checkable instead of asserted: it
+ * no `.internal/` content, no root agent-instruction file (`AGENTS.md`,
+ * `CLAUDE.md`, `GEMINI.md`), and no `ax-code.json` (the untracked local config).
+ * This script makes that checkable instead of asserted: it
  * proves the baseline is an ancestor of HEAD, the range is non-empty, and then
  * enumerates every path of every commit in the range — including deletions and
  * both sides of a rename — rejecting any forbidden path.
@@ -21,7 +22,7 @@ import path from "node:path"
 export namespace CliReviewCommitScope {
   /** Path segments that may never appear in a review-fix commit. */
   export const ForbiddenSegments = [".internal"] as const
-  export const ForbiddenBasenames = ["AGENTS.md", "ax-code.json"] as const
+  export const ForbiddenBasenames = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", "ax-code.json"] as const
 }
 
 export type CommitEntry = { sha: string; subject: string; paths: string[] }

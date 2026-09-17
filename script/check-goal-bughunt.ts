@@ -4,6 +4,7 @@ import { createHash } from "node:crypto"
 import { existsSync, readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { LOCAL_ONLY_ROOT_FILES } from "./repository-policy"
 
 /**
  * Project-owned verifier for the goal/agentic cross-CLI bug hunt.
@@ -217,7 +218,12 @@ const SCOPE_PREFIX_ALLOWLIST = [
   "packages/ax-code/test/tool/",
 ] as const
 const SCOPE_FILE_ALLOWLIST = new Set(["script/check-goal-bughunt.ts", "script/goal-bughunt.test.ts"])
-const FORBIDDEN_PATH = /(^|\/)\.internal(\/|$)|(^|\/)AGENTS\.md$/i
+// Derived from the shared local-only list so a newly declared agent-instruction
+// file cannot be forgotten here.
+const FORBIDDEN_PATH = new RegExp(
+  `(^|/)\\.internal(/|$)|(^|/)(?:${LOCAL_ONLY_ROOT_FILES.map((file) => file.replace(/\./g, "\\.")).join("|")})$`,
+  "i",
+)
 
 export function scopeAllowed(file: string) {
   if (FORBIDDEN_PATH.test(file)) return false
@@ -231,7 +237,7 @@ export function scopeErrors(input: {
   mergeCount: number
   commits: readonly { sha: string; paths: readonly string[] }[]
   trackedInternal: readonly string[]
-  trackedAgents: readonly string[]
+  trackedAgentFiles: readonly string[]
 }): string[] {
   const errors: string[] = []
   if (!input.isAncestor) errors.push(`${input.baseline} is not an ancestor of HEAD`)
@@ -245,7 +251,7 @@ export function scopeErrors(input: {
     }
   }
   for (const file of input.trackedInternal) errors.push(`tracked local-only path: ${file}`)
-  for (const file of input.trackedAgents) errors.push(`tracked local-only path: ${file}`)
+  for (const file of input.trackedAgentFiles) errors.push(`tracked local-only path: ${file}`)
   return errors
 }
 
@@ -488,10 +494,12 @@ async function main() {
     return { sha, paths }
   })
   const trackedInternal = (git(root, ["ls-files", "--", ".internal"]).stdout ?? "").split(/\r?\n/).filter(Boolean)
-  const trackedAgents = (git(root, ["ls-files", "--", "AGENTS.md"]).stdout ?? "").split(/\r?\n/).filter(Boolean)
+  const trackedAgentFiles = (git(root, ["ls-files", "--", ...LOCAL_ONLY_ROOT_FILES]).stdout ?? "")
+    .split(/\r?\n/)
+    .filter(Boolean)
   return report(
     "commit-scope",
-    scopeErrors({ baseline, isAncestor, mergeCount, commits, trackedInternal, trackedAgents }),
+    scopeErrors({ baseline, isAncestor, mergeCount, commits, trackedInternal, trackedAgentFiles }),
   )
 }
 

@@ -14,6 +14,25 @@ if git diff --cached --diff-filter=d -U0 |
   exit 1
 fi
 
+# Local-only path guard: `.internal/` and the root agent-instruction files
+# (AGENTS.md, CLAUDE.md, GEMINI.md) must never be committed or pushed to
+# GitHub. `.gitignore` blocks a plain `git add`, but `git add -f` bypasses it,
+# and on a public repo a pushed commit is already public before CI can react --
+# so block it locally.
+# Uses the same command and pathspecs as script/check-tracked-internal.ts
+# (LOCAL_ONLY_PATHSPECS in script/repository-policy.ts, the authoritative CI
+# guard) so the two cannot drift apart.
+# A nested `AGENTS.md` (e.g. packages/ax-code/test/AGENTS.md) is a legitimate
+# tracked fixture and is intentionally not matched.
+LOCAL_ONLY_TRACKED=$(git ls-files -- .internal AGENTS.md CLAUDE.md GEMINI.md)
+if [ -n "$LOCAL_ONLY_TRACKED" ]; then
+  echo "ERROR: local-only paths are tracked and must never be committed or pushed:"
+  printf '%s\n' "$LOCAL_ONLY_TRACKED" | sed 's/^/  - /'
+  echo "Unstage them with: git rm --cached -- <path>"
+  echo "These paths are gitignored; do not force-add them."
+  exit 1
+fi
+
 # The models snapshot is no longer regenerated on every commit. Freshness is
 # enforced by the scheduled `.github/workflows/models-drift.yml` job, which
 # runs `tsx script/update-models.ts --check` and fails on drift. Regenerate

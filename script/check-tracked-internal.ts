@@ -1,9 +1,16 @@
 #!/usr/bin/env -S npx tsx
 import { spawnSync } from "node:child_process"
-import { unapprovedTrackedInternalPaths } from "./repository-policy"
+import {
+  INTERNAL_ONLY_ROOTS,
+  LOCAL_ONLY_PATHSPECS,
+  LOCAL_ONLY_ROOT_FILES,
+  unapprovedTrackedInternalPaths,
+} from "./repository-policy"
 
-// Local-only paths that must never be committed or pushed to GitHub.
-const LOCAL_ONLY_PATTERNS = [".internal", "AGENTS.md"] as const
+// Local-only paths that must never be committed or pushed to GitHub. The
+// pathspec list is shared with .husky/pre-commit so the two guards cannot
+// drift apart.
+const INTERNAL_ROOT = INTERNAL_ONLY_ROOTS[0]
 
 function trackedPaths(patterns: readonly string[]) {
   const result = spawnSync("git", ["ls-files", "--", ...patterns], { encoding: "utf8" })
@@ -17,19 +24,27 @@ function trackedPaths(patterns: readonly string[]) {
     .filter(Boolean)
 }
 
-const trackedInternal = trackedPaths([LOCAL_ONLY_PATTERNS[0]])
+let failed = false
+
+const trackedInternal = trackedPaths([INTERNAL_ROOT])
 const unapproved = unapprovedTrackedInternalPaths(trackedInternal)
-if (unapproved.length > 0 || trackedInternal.length > 0) {
+if (unapproved.length > 0) {
   console.error("Internal-only files must not be tracked:")
-  for (const file of unapproved.length > 0 ? unapproved : trackedInternal) console.error(`- ${file}`)
+  for (const file of unapproved) console.error(`- ${file}`)
+  failed = true
+}
+
+const trackedRootFiles = trackedPaths(LOCAL_ONLY_ROOT_FILES)
+if (trackedRootFiles.length > 0) {
+  console.error("Local-only root files must not be tracked:")
+  for (const file of trackedRootFiles) console.error(`- ${file}`)
+  failed = true
+}
+
+if (failed) {
+  console.error("These paths are gitignored; do not force-add them.")
+  console.error("Untrack them with: git rm --cached -- <path>")
   process.exit(1)
 }
 
-const trackedAgents = trackedPaths([LOCAL_ONLY_PATTERNS[1]])
-if (trackedAgents.length > 0) {
-  console.error("AGENTS.md is local-only and must not be tracked:")
-  for (const file of trackedAgents) console.error(`- ${file}`)
-  process.exit(1)
-}
-
-console.log("No local-only files (.internal, AGENTS.md) are tracked")
+console.log(`No local-only files (${LOCAL_ONLY_PATHSPECS}) are tracked`)

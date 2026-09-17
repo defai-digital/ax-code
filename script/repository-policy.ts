@@ -1,5 +1,16 @@
 export const INTERNAL_ONLY_ROOTS = [".internal"] as const
 
+// Root-level agent-instruction files that are local-only: they hold private
+// project memory and must never be committed or pushed to GitHub. Matched as
+// exact root pathspecs, so nested fixtures such as
+// `packages/ax-code/test/AGENTS.md` stay trackable.
+export const LOCAL_ONLY_ROOT_FILES = ["AGENTS.md", "CLAUDE.md", "GEMINI.md"] as const
+
+// Every local-only pathspec, in the exact order both the pre-commit hook and
+// script/check-tracked-internal.ts must use. Single source of truth so the two
+// guards cannot drift apart.
+export const LOCAL_ONLY_PATHSPECS = [...INTERNAL_ONLY_ROOTS, ...LOCAL_ONLY_ROOT_FILES].join(" ")
+
 // Empty on purpose: nothing under `.internal/` may be tracked or published.
 export const APPROVED_TRACKED_INTERNAL_FILES = [] as const
 

@@ -13,6 +13,7 @@ import {
   type ReviewRun,
   type TriageEntry,
 } from "./check-goal-bughunt"
+import { LOCAL_ONLY_ROOT_FILES } from "./repository-policy"
 
 const BASELINE = "3eeab62e3c7feb1c7c0a0ae59fff26d5fb7503d0"
 const batches: Batch[] = [
@@ -215,7 +216,9 @@ describe("commit scope gate", () => {
     expect(scopeAllowed("packages/ax-code/test/session/goal-source-scope.test.ts")).toBe(true)
     expect(scopeAllowed("script/check-goal-bughunt.ts")).toBe(true)
     expect(scopeAllowed(".internal/reports/goal-agentic-bughunt/batches.json")).toBe(false)
-    expect(scopeAllowed("AGENTS.md")).toBe(false)
+    // Every declared local-only agent-instruction file is rejected, not just
+    // AGENTS.md, so the goal-scope gate cannot leak CLAUDE.md/GEMINI.md.
+    for (const file of LOCAL_ONLY_ROOT_FILES) expect(scopeAllowed(file)).toBe(false)
     expect(scopeAllowed("packages/ax-code/src/provider/models.ts")).toBe(false)
     expect(scopeAllowed("docs/guides/autonomous.md")).toBe(false)
   })
@@ -227,7 +230,7 @@ describe("commit scope gate", () => {
       mergeCount: 0,
       commits: [{ sha: "a".repeat(40), paths: ["packages/ax-code/src/session/goal.ts"] }],
       trackedInternal: [] as string[],
-      trackedAgents: [] as string[],
+      trackedAgentFiles: [] as string[],
     }
     expect(scopeErrors(base)).toEqual([])
     expect(scopeErrors({ ...base, isAncestor: false }).join("\n")).toContain("not an ancestor")
@@ -237,7 +240,7 @@ describe("commit scope gate", () => {
       scopeErrors({ ...base, commits: [{ sha: "b".repeat(40), paths: [".internal/x.md"] }] }).join("\n"),
     ).toContain("out-of-scope")
     expect(scopeErrors({ ...base, trackedInternal: [".internal/plan.md"] }).join("\n")).toContain("tracked local-only")
-    expect(scopeErrors({ ...base, trackedAgents: ["AGENTS.md"] }).join("\n")).toContain("tracked local-only")
+    expect(scopeErrors({ ...base, trackedAgentFiles: ["CLAUDE.md"] }).join("\n")).toContain("tracked local-only")
   })
 })
 
