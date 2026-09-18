@@ -35,6 +35,8 @@ changes belong to AX Coder.
   a prefix `startsWith` check, and realpath the parent so a symlink directory cannot smuggle the file out.
 - Skip LSP prewarm on a filesystem root, matching File.scan and auto-index.
 - Directory-scope trust write failures no longer crash CLI startup after the user confirms a broad directory.
+- Honor comments and trailing commas in global `ax-code.jsonc` when reading `directoryScope`.
+- Escape `<` in structured subagent output so a child cannot close the parent delimiter.
 
 ## [7.18.8] - 2026-09-17
 

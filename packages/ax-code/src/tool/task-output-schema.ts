@@ -87,9 +87,8 @@ export namespace TaskOutputSchema {
 
   /** Renders the captured value as a delimited block for the parent model. */
   export function render(value: unknown): string {
-    return ["<task_structured_output>", JSON.stringify(value, null, 2) ?? "null", "</task_structured_output>"].join(
-      "\n",
-    )
+    const json = (JSON.stringify(value, null, 2) ?? "null").replaceAll("<", "\\u003c")
+    return ["<task_structured_output>", json, "</task_structured_output>"].join("\n")
   }
 
   /**

@@ -68,6 +68,31 @@ describe("confirmDirectoryScope", () => {
       expect(result.message).toMatch(/AX_CODE_ALLOW_BROAD_DIR/)
     }))
 
+  test("JSONC comments in ax-code.jsonc still apply directoryScope.enabled=false", () =>
+    withCleanTrustState(async () => {
+      const jsoncPath = path.join(Global.Path.config, "ax-code.jsonc")
+      const previous = await fs.readFile(jsoncPath, "utf-8").catch(() => undefined)
+      await fs.mkdir(Global.Path.config, { recursive: true })
+      await fs.writeFile(
+        jsoncPath,
+        `{
+          // user config commonly has comments
+          "directoryScope": {
+            "enabled": false,
+          },
+        }`,
+      )
+      try {
+        stdin.isTTY = false
+        stdout.isTTY = false
+        const result = await confirmDirectoryScope(Global.Path.home)
+        expect(result.proceed).toBe(true)
+      } finally {
+        if (previous === undefined) await fs.rm(jsoncPath, { force: true })
+        else await fs.writeFile(jsoncPath, previous)
+      }
+    }))
+
   test("AX_CODE_ALLOW_BROAD_DIR=1 skips the check entirely, even non-interactively", () =>
     withCleanTrustState(async () => {
       stdin.isTTY = false

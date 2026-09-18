@@ -1,4 +1,5 @@
 import * as prompts from "@clack/prompts"
+import { parse as parseJsonc, type ParseError as JsoncParseError } from "jsonc-parser"
 import path from "path"
 import { mergeDeep } from "remeda"
 import { DirectoryScopeTrust } from "../config/directory-scope-trust"
@@ -45,12 +46,19 @@ async function loadGlobalSettings(): Promise<DirectoryScopeSettings> {
   const files = ["config.json", "ax-code.json", "ax-code.jsonc"].map((name) => path.join(Global.Path.config, name))
   let settings: DirectoryScopeSettings = {}
   for (const file of files) {
-    const parsed = await Filesystem.readJson<{ directoryScope?: unknown }>(file).catch((error) => {
+    const text = await Filesystem.readText(file).catch((error) => {
       if (Filesystem.isEnoent(error)) return undefined
       log.warn("failed to read global config for directoryScope settings", { file, error })
       return undefined
     })
-    if (parsed?.directoryScope) settings = mergeDeep(settings, sanitize(parsed.directoryScope))
+    if (text === undefined) continue
+    const errors: JsoncParseError[] = []
+    const parsed = parseJsonc(text, errors, { allowTrailingComma: true }) as { directoryScope?: unknown } | undefined
+    if (errors.length || !parsed || typeof parsed !== "object") {
+      log.warn("failed to parse global config for directoryScope settings", { file })
+      continue
+    }
+    if (parsed.directoryScope) settings = mergeDeep(settings, sanitize(parsed.directoryScope))
   }
   return settings
 }
