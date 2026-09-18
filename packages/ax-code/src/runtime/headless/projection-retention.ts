@@ -92,7 +92,13 @@ function boundPending(state: State) {
     const size = book.sizes.get(id)!
     total -= sizeTotal(size)
     if (size.sessionID) (state.message_reload ??= {})[size.sessionID] = true
-    forgetProjectionMessage(state, id)
+    // Pass the owning session so the eviction raises that session's floor
+    // (like every other eviction path here does). Without it, a message
+    // that keeps streaming parts after being evicted for exceeding the
+    // pending budget gets re-admitted by the very next part event —
+    // undoing this eviction and instead evicting an unrelated, still
+    // legitimately-pending message in its place.
+    forgetProjectionMessage(state, id, size.sessionID)
   }
 }
 export function forgetProjectionMessage(state: State, messageID: string, evictedSessionID?: string) {

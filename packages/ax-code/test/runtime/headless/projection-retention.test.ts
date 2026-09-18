@@ -73,6 +73,27 @@ describe("transcript retention regressions", () => {
     expect(Object.keys(state.part).length).toBeLessThanOrEqual(128)
     expect(payloadBytes).toBeLessThanOrEqual(1024 * 1024)
   })
+
+  test("a pending message evicted for the aggregate bound cannot be resurrected by its own later parts", () => {
+    const { state, part } = fixture()
+    // Fill the pending-message-count cap exactly (small payloads so only the
+    // 128-message cap triggers, not the 1MB byte cap).
+    for (let index = 0; index < 128; index++) part(`pending_${index}`)
+    expect(Object.keys(state.part).length).toBe(128)
+
+    // One more pending message tips it over the cap; pending_0 (oldest) is evicted.
+    part("pending_128")
+    expect(state.part.pending_0).toBeUndefined()
+    expect(Object.keys(state.part).length).toBe(128)
+
+    // A further part update for the evicted messageID must stay rejected
+    // (its message record never arrived) instead of being re-admitted and
+    // bumping out a different, still-legitimately-pending message.
+    part("pending_0")
+    expect(state.part.pending_0).toBeUndefined()
+    expect(state.part.pending_1).toBeDefined()
+    expect(Object.keys(state.part).length).toBe(128)
+  })
 })
 
 // These assertions measure retained serialized payload, not process RSS.
