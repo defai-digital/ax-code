@@ -46,7 +46,7 @@ changes belong to AX Coder.
 - Skip snapshot staging when the workspace is the home directory, so launching from `$HOME` no longer walks nested
   incomplete git repos and abort the prompt.
 - Harden Windows release signing and installed-runtime integrity verification.
-- Give Windows ARM PowerShell installer tests a 60s spawn budget.
+- Give Windows ARM PowerShell installer tests a 60s spawn budget and a 120s Vitest timeout.
 
 ### Fixed
 

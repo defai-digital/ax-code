@@ -109,7 +109,7 @@ function runPowerShell(root: string, body: string) {
   fs.writeFileSync(script, body)
   return spawnSync(powershell, ["-NoProfile", "-NonInteractive", "-File", script], {
     encoding: "utf8",
-    timeout: 30000,
+    timeout: 60_000,
     env: {
       ...process.env,
       AX_TEST_BUNDLE: root,
@@ -126,7 +126,7 @@ foreach ($statement in $ast.EndBlock.Statements) {
 }
 $manifest = Get-Content -LiteralPath (Join-Path $env:AX_TEST_BUNDLE "runtime-integrity.json") -Raw | ConvertFrom-Json
 `
-describe.skipIf(!available)("PowerShell distribution admission", () => {
+describe.skipIf(!available)("PowerShell distribution admission", { timeout: 120_000 }, () => {
   test.each(["lib/index-node-tui.js", "node_modules/@ax-code/fs/addon.node"])("rejects changed %s", (relative) => {
     const root = fixture()
     writeDistributionManifest(root)

@@ -124,7 +124,7 @@ ${body}
   }
 }
 
-describe.skipIf(!available)("PowerShell runtime installation", () => {
+describe.skipIf(!available)("PowerShell runtime installation", { timeout: 120_000 }, () => {
   test.skipIf(process.platform !== "win32").each([0, 23])(
     "keeps a running launcher session alive with exit code %s",
     async (exitCode) => {
@@ -809,7 +809,7 @@ $entries = @(Get-ChildItem -LiteralPath $Source -File -Recurse | ForEach-Object 
 Set-Content -LiteralPath (Join-Path $Source "runtime-integrity.json.minisig") -Value "test-signature"
 `
 
-describe.skipIf(!available)("authenticated runtime staging", () => {
+describe.skipIf(!available)("authenticated runtime staging", { timeout: 120_000 }, () => {
   test.skipIf(process.platform !== "win32")(
     "preserves authenticated metadata in an activated runtime generation",
     async () => {
