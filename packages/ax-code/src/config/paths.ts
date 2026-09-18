@@ -42,14 +42,19 @@ export namespace ConfigPaths {
   export async function directories(directory: string, worktree: string) {
     return [
       Global.Path.config,
+      // Filesystem.up walks closest-to-farthest; reverse so a closer
+      // directory's .ax-code config is merged after (and overrides) a
+      // farther one, matching projectFiles()'s precedence.
       ...(!Flag.AX_CODE_DISABLE_PROJECT_CONFIG
-        ? await Array.fromAsync(
-            Filesystem.up({
-              targets: [".ax-code"],
-              start: directory,
-              stop: worktree,
-            }),
-          )
+        ? (
+            await Array.fromAsync(
+              Filesystem.up({
+                targets: [".ax-code"],
+                start: directory,
+                stop: worktree,
+              }),
+            )
+          ).toReversed()
         : []),
       ...(await Array.fromAsync(
         Filesystem.up({
@@ -63,7 +68,10 @@ export namespace ConfigPaths {
   }
 
   export async function policyDirectories(directory: string, worktree: string) {
-    const dirs = await directories(directory, worktree)
+    // directories() orders its .ax-code walk farthest-to-closest (closer
+    // directories are meant to be merged last and win). Policy lookup is
+    // first-match-wins instead, so it needs the opposite order here.
+    const dirs = (await directories(directory, worktree)).toReversed()
     const userPolicyDir = path.resolve(Global.Path.home, ".ax-code")
     const projectDirs: string[] = []
     const userDirs: string[] = []
@@ -151,21 +159,47 @@ export namespace ConfigPaths {
     // var — users control those and legitimately need to reference
     // e.g. their own custom endpoint URLs stored in env vars.
     const envSource = trusted ? process.env : Env.sanitize(process.env)
-    text = text.replace(/\{env:([^}]+)\}/g, (_, varName) => {
-      const value = envSource[varName]
-      // Tokens appear inside JSONC strings, so splice the escaped string
-      // contents rather than raw environment bytes. This mirrors {file:}
-      // substitution below and preserves quotes, backslashes, and controls.
-      if (value !== undefined) return JSON.stringify(value).slice(1, -1)
-      log.warn("config references an unavailable environment variable", {
-        source: source(input),
-        variable: varName,
-        trusted,
-      })
-      return ""
-    })
+    // Track the character ranges of substituted env values in the output
+    // text (rather than using a plain .replace()) so the {file:} scan
+    // below can skip over them — an env var's value can coincidentally
+    // contain a `{file:...}`-shaped substring, which must not be
+    // reinterpreted as a file reference the config author never wrote.
+    const envRanges: Array<[number, number]> = []
+    {
+      const envMatches = Array.from(text.matchAll(/\{env:([^}]+)\}/g))
+      let out = ""
+      let cursor = 0
+      for (const match of envMatches) {
+        const varName = match[1]!
+        const index = match.index!
+        out += text.slice(cursor, index)
+        const value = envSource[varName]
+        let replacement: string
+        if (value !== undefined) {
+          // Tokens appear inside JSONC strings, so splice the escaped
+          // string contents rather than raw environment bytes. This
+          // mirrors {file:} substitution below and preserves quotes,
+          // backslashes, and controls.
+          replacement = JSON.stringify(value).slice(1, -1)
+        } else {
+          log.warn("config references an unavailable environment variable", {
+            source: source(input),
+            variable: varName,
+            trusted,
+          })
+          replacement = ""
+        }
+        envRanges.push([out.length, out.length + replacement.length])
+        out += replacement
+        cursor = index + match[0].length
+      }
+      out += text.slice(cursor)
+      text = out
+    }
 
-    const fileMatches = Array.from(text.matchAll(/\{file:[^}]+\}/g))
+    const fileMatches = Array.from(text.matchAll(/\{file:[^}]+\}/g)).filter(
+      (match) => !envRanges.some(([start, end]) => match.index! < end && match.index! + match[0].length > start),
+    )
     if (!fileMatches.length) return text
 
     const configDir = dir(input)
