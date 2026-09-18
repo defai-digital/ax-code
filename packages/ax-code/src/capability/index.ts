@@ -163,7 +163,7 @@ export namespace Capability {
         tags: template.tags,
         revision: template.revision,
         specHash: template.specHash,
-        requiresWorkflowRuntime: true,
+        requiresWorkflowRuntime: !isWorkflowTemplateAlwaysAvailable(template.id),
         permissionImpact: template.spec.permissions,
       }),
     }
