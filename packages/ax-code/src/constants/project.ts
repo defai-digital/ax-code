@@ -28,7 +28,7 @@ export const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_RE
 export const GITHUB_LATEST_RELEASE_API_URL = `https://api.github.com/repos/${GITHUB_REPO_SLUG}/releases/latest`
 
 /** GitHub Action reference (`owner/repo/path`) used in generated workflow YAML. */
-export const GITHUB_ACTION_REF = `${GITHUB_REPO_SLUG}/github`
+export const GITHUB_ACTION_REF = `${GITHUB_REPO_SLUG}/packages/integration-github`
 
 // Raw content served from the default branch.
 const RAW_MAIN_BASE = `https://raw.githubusercontent.com/${GITHUB_REPO_SLUG}/main`

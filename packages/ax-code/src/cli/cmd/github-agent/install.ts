@@ -214,7 +214,7 @@ jobs:
           persist-credentials: false
 
       - name: Run ax-code
-        uses: ${GITHUB_ACTION_REF}@latest${envStr}
+        uses: ${GITHUB_ACTION_REF}@main${envStr}
         with:
           model: ${provider}/${model}`,
             )
