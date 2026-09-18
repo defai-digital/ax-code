@@ -151,7 +151,6 @@ the existing channels; they are not currently usable public installation paths. 
 [website guide](https://ax-code.app/en/download/) for installation updates. The Standard
 open-source direction does not itself change repository visibility or restore downloads.
 
-
 ### macOS (Apple Silicon)
 
 Use the standalone release installer (recommended; Homebrew is not required):
@@ -228,11 +227,14 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 
 ## Providers and models
 
-| Family                   | Providers                                                                                                                               | Model source                                                      |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Cloud API providers      | Google, DeepSeek, Meta (Muse Spark), GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI | Hosted provider model catalogs bundled with AX Code               |
-| CLI providers            | Claude Code, Codex CLI, Grok Build CLI, Kimi Code CLI                                                                                   | One model ID per CLI bridge, reusing the local vendor CLI session |
-| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                                                              | Curated AXQ 6-bit MLX models served from the live catalog         |
+| Family                   | Providers                                                                                                                                   | Model source                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Cloud API providers      | Google, DeepSeek, Meta (Muse Spark), GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI     | Hosted provider model catalogs bundled with AX Code                    |
+| CLI providers            | Claude Code, Codex CLI, Grok Build CLI, Kimi Code, Muse Code, MiniMax Code, Qoder                                                           | One model ID per CLI bridge, reusing the local vendor CLI session      |
+| AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                                                                  | The managed AXQ 6-bit MLX model selection served from the live catalog |
+| Local LLM runtimes       | Ollama, LM Studio, AX Studio, or any OpenAI-compatible endpoint                                                                             | Models discovered from the local runtime's endpoint                    |
+| Private GPU cloud        | Catalog: Nebius, Fireworks AI, Together AI, Baseten, NVIDIA NIM, Deep Infra; dedicated: RunPod, SageMaker, Volcengine Ark, custom, and more | API-key catalogs or URL+token endpoints that expose `/v1/models`       |
+| AX Trust                 | Managed gateway connections (base URL + client API key)                                                                                     | Models discovered from the connected gateway                           |
 
 CLI bridges reuse a local vendor CLI and its login session. AX Code records its own tool execution in full; activity that happens inside a vendor CLI process is visible only through that bridge's output.
 
@@ -258,27 +260,27 @@ Evidence and review:
 
 Everyday use:
 
-| Command                   | Purpose                                                         |
-| ------------------------- | --------------------------------------------------------------- |
-| `ax-code`                 | Open the interactive terminal UI                                |
-| `ax-code run "<task>"`    | Run a one-shot headless task                                    |
-| `ax-code init`            | Create or update repository `AGENTS.md` (`--wiki` adds AX Wiki) |
-| `ax-code index`           | Build the code-intelligence graph                               |
-| `ax-code wiki`            | Plan, generate, update, or lint the AX Wiki                     |
-| `ax-code providers login` | Configure provider credentials                                  |
-| `ax-code models`          | List available provider/model IDs                               |
-| `ax-code mcp add`         | Add a local or remote MCP server                                |
-| `ax-code mcp remove`      | Remove a configured MCP server                                  |
-| `ax-code agent create`    | Generate a custom project or global agent                       |
-| `ax-code serve`           | Start the local HTTP/OpenAPI server                             |
-| `ax-code doctor`          | Diagnose install, runtime, storage, and auth                    |
+| Command                   | Purpose                                                             |
+| ------------------------- | ------------------------------------------------------------------- |
+| `ax-code`                 | Open the interactive terminal UI                                    |
+| `ax-code run "<task>"`    | Run a one-shot headless task                                        |
+| `ax-code init`            | Create or update repository `AGENTS.md` (`--wiki` adds AX Wiki)     |
+| `ax-code index`           | Build the code-intelligence graph                                   |
+| `ax-code wiki`            | Plan, generate, update, or lint the AX Wiki                         |
+| `ax-code providers login` | Configure provider credentials                                      |
+| `ax-code models`          | List available provider/model IDs                                   |
+| `ax-code mcp add`         | Add a local or remote MCP server                                    |
+| `ax-code mcp remove`      | Remove a configured MCP server                                      |
+| `ax-code agent create`    | Generate a custom project or global agent                           |
+| `ax-code serve`           | Start the local HTTP/OpenAPI server                                 |
+| `ax-code runtime start`   | Run a persistent project server; `status`/`attach`/`stop` manage it |
+| `ax-code doctor`          | Diagnose install, runtime, storage, and auth                        |
 
 `ax-code --help` lists the full command set.
 
 ## Documentation
 
 - [Standard and Business](docs/getting-started/editions.md) — free commercial use, planned Business capabilities, and availability
-
 - [Why AX Code](docs/why-ax-code.md) — what it optimizes for, who it is for, and how it differs from other agents
 - [Start Here](docs/getting-started/start-here.md) — product mental model and shortest paths by use case
 - [Execution Evidence](docs/guides/execution-evidence.md) — graph, replay, compare, risk, rollback, trace, and audit export
@@ -290,7 +292,7 @@ Everyday use:
 
 ## Community
 
-While the repository is private, GitHub Issues requires repository access. Report bugs, feature requests, and questions through [GitHub Issues](https://github.com/defai-digital/ax-code/issues). See [CONTRIBUTING.md](CONTRIBUTING.md) for the current contribution policy and [Discord](https://discord.gg/gf9UyPxaN2) for community discussion.
+While the repository is private, GitHub Issues requires repository access. Report bugs, feature requests, and questions through [GitHub Issues](https://github.com/defai-digital/ax-code/issues), and see [CONTRIBUTING.md](CONTRIBUTING.md) for the current contribution policy. For community discussion, join [Discord](https://discord.gg/gf9UyPxaN2).
 
 ## Provenance
 

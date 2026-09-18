@@ -10,16 +10,16 @@ Install dependencies from the repo root:
 pnpm install
 ```
 
-Run the CLI from this package on Node:
+Run the CLI from this package (from `packages/ax-code`):
 
 ```bash
 pnpm dev
 ```
 
-Or use the root workspace wrapper:
+Or use the root workspace wrapper (from the repo root; it builds the SDK types first and loads `../../.env` when present):
 
 ```bash
-pnpm dev
+pnpm run dev
 ```
 
 ## Testing
@@ -37,6 +37,13 @@ pnpm test:live
 pnpm test:risk
 pnpm test:ci -- deterministic --coverage --coverage-summary-out ../../.internal/reports/testing/coverage-summary.json --coverage-report-out ../../.internal/reports/testing/coverage-report.md
 pnpm perf:index --config perf-index.jsonc
+```
+
+To run a single test file, use `AX_TEST_FILES` (comma-separated) — positional
+vitest filters are unreliable in vitest 4:
+
+```bash
+AX_TEST_FILES=test/session/foo.test.ts pnpm exec vitest run
 ```
 
 ### Test Groups
@@ -87,7 +94,7 @@ Artifacts:
 
 GitHub Actions runs the `ax-code` workflow on `packages/ax-code/**` changes.
 
-- PRs and pushes to `dev` run the deterministic lane: typecheck, grouped deterministic tests, risk summary artifact upload, and coverage artifact upload.
+- PRs and pushes to `dev` or `main` run the deterministic lane: typecheck, grouped deterministic tests, risk summary artifact upload, and coverage artifact upload.
 - The deterministic lane writes coverage output and summaries under `.internal/reports/testing/`.
 - PR workflows try to download the latest successful `dev` coverage summary and include line/function trend deltas in the step summary. Branch trend is reported as unavailable until the vitest LCOV reporter emits branch counters.
 - `workflow_dispatch` can optionally run the live lane.
