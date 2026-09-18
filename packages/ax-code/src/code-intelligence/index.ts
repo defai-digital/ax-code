@@ -692,7 +692,7 @@ export namespace CodeIntelligence {
       if (!byFile.has(row.file) && byFile.size >= SIGNAL_WARMUP_SCAN_LIMIT) continue
       const weight = SIGNAL_WEIGHTS[row.signal_type] ?? 1
       const age = Math.max(0, now - row.last_seen_at)
-      const decay = Math.exp(-age / SIGNAL_DECAY_HALF_LIFE_MS)
+      const decay = Math.exp((-Math.LN2 * age) / SIGNAL_DECAY_HALF_LIFE_MS)
       byFile.set(row.file, (byFile.get(row.file) ?? 0) + weight * row.hit_count * decay)
     }
     return [...byFile.entries()]

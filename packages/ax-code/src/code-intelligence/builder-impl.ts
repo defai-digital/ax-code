@@ -67,11 +67,50 @@ function isEscaped(text: string, index: number) {
   return count % 2 === 1
 }
 
+// Keywords after which a bare `/` starts an expression (a regex literal)
+// rather than continuing one (division). Used only to disambiguate `/` in
+// the state machine below — an imperfect heuristic is fine here since the
+// goal is just to stop stray quotes inside regex literals (e.g. `/['"]/`)
+// from corrupting string-state tracking, not to fully parse JS/TS.
+const REGEX_CONTEXT_KEYWORDS = new Set([
+  "return",
+  "typeof",
+  "instanceof",
+  "in",
+  "of",
+  "new",
+  "delete",
+  "void",
+  "throw",
+  "yield",
+  "do",
+  "else",
+  "case",
+])
+
 function isIgnoredImportMatch(text: string, index: number) {
-  let state: "code" | "line-comment" | "block-comment" | "single" | "double" | "template" = "code"
+  let state: "code" | "line-comment" | "block-comment" | "single" | "double" | "template" | "regex" | "regex-class" =
+    "code"
+  // Whether the last completed token in "code" state was a value
+  // (identifier, number, string, closing `)`/`]`) as opposed to an
+  // operator/keyword/start-of-expression — used to tell a division `/`
+  // apart from the start of a regex literal.
+  let prevWasValue = false
+  let word = ""
+
+  const flushWord = () => {
+    if (!word) return
+    const isNumber = /^[0-9]/.test(word)
+    prevWasValue = isNumber || !REGEX_CONTEXT_KEYWORDS.has(word)
+    word = ""
+  }
+
   for (let i = 0; i < index; i++) {
     const ch = text[i]
     const next = text[i + 1]
+    const isWordChar = /[A-Za-z0-9_$]/.test(ch)
+
+    if (state === "code" && !isWordChar) flushWord()
 
     if (state === "line-comment") {
       if (ch === "\n" || ch === "\r") state = "code"
@@ -85,15 +124,45 @@ function isIgnoredImportMatch(text: string, index: number) {
       continue
     }
     if (state === "single") {
-      if (ch === "'" && !isEscaped(text, i)) state = "code"
+      if (ch === "'" && !isEscaped(text, i)) {
+        state = "code"
+        prevWasValue = true
+      }
       continue
     }
     if (state === "double") {
-      if (ch === '"' && !isEscaped(text, i)) state = "code"
+      if (ch === '"' && !isEscaped(text, i)) {
+        state = "code"
+        prevWasValue = true
+      }
       continue
     }
     if (state === "template") {
-      if (ch === "`" && !isEscaped(text, i)) state = "code"
+      if (ch === "`" && !isEscaped(text, i)) {
+        state = "code"
+        prevWasValue = true
+      }
+      continue
+    }
+    if (state === "regex-class") {
+      // Inside a `[...]` character class, an unescaped `/` (and any quote
+      // character) does not end the regex literal.
+      if (ch === "]" && !isEscaped(text, i)) state = "regex"
+      continue
+    }
+    if (state === "regex") {
+      if (ch === "[" && !isEscaped(text, i)) {
+        state = "regex-class"
+      } else if (ch === "/" && !isEscaped(text, i)) {
+        state = "code"
+        prevWasValue = true
+      }
+      continue
+    }
+
+    // state === "code"
+    if (isWordChar) {
+      word += ch
       continue
     }
 
@@ -109,6 +178,21 @@ function isIgnoredImportMatch(text: string, index: number) {
       state = "double"
     } else if (ch === "`") {
       state = "template"
+    } else if (ch === "/") {
+      if (prevWasValue) {
+        // Division; the result is itself a value.
+        prevWasValue = true
+      } else {
+        state = "regex"
+      }
+    } else if (ch === ")" || ch === "]") {
+      prevWasValue = true
+    } else if (/\s/.test(ch)) {
+      // Whitespace does not change value-ness.
+    } else {
+      // Any other punctuation (operators, `(`, `[`, `{`, `}`, `,`, `;`,
+      // `:`, `=`, ...) puts us back in an expression-start context.
+      prevWasValue = false
     }
   }
   return state !== "code"
@@ -118,8 +202,15 @@ function isBuiltinModule(name: string): boolean {
   return BUILTIN_MODULES.has(name)
 }
 
-export function parseImportSpecifiers(text: string, absPath: string): string[] {
-  const imports: string[] = []
+// One originating import specifier plus its resolved-path candidates, in
+// resolution-priority order (bare resolved path, then extensions, then
+// `index`+extensions). Callers that need to create at most one edge per
+// import statement should pick the first candidate that resolves to a real
+// file, not treat every candidate as an independent edge.
+export type ImportCandidateGroup = { specifier: string; candidates: string[] }
+
+function parseImportCandidateGroups(text: string, absPath: string): ImportCandidateGroup[] {
+  const groups: ImportCandidateGroup[] = []
   const seen = new Set<string>()
   const dir = path.dirname(absPath)
 
@@ -141,19 +232,24 @@ export function parseImportSpecifiers(text: string, absPath: string): string[] {
       // loop below only ever appends a *second* extension on top of the
       // resolved path (e.g. "./bar.ts" -> ".../bar.ts.ts"), so the edge
       // silently never resolves. Try the resolved path as-is first.
-      imports.push(resolved)
+      const candidates = [resolved]
       for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
-        imports.push(resolved + ext)
+        candidates.push(resolved + ext)
       }
       for (const ext of [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]) {
-        imports.push(path.join(resolved, `index${ext}`))
+        candidates.push(path.join(resolved, `index${ext}`))
       }
+      groups.push({ specifier: modulePath, candidates })
     } else {
-      imports.push(modulePath)
+      groups.push({ specifier: modulePath, candidates: [modulePath] })
     }
   }
 
-  return imports
+  return groups
+}
+
+export function parseImportSpecifiers(text: string, absPath: string): string[] {
+  return parseImportCandidateGroups(text, absPath).flatMap((group) => group.candidates)
 }
 
 // LSP's textDocument/documentSymbol returns DocumentSymbol objects with
@@ -548,7 +644,7 @@ export namespace CodeGraphBuilder {
         completeness: "partial" | "lsp-only"
         timings: IndexTimings
         nativeTree?: any
-        imports: string[]
+        imports: ImportCandidateGroup[]
       }
 
   export function indexFile(projectID: ProjectID, absPath: string, opts: IndexFileOptions = {}): Promise<IndexResult> {
@@ -920,7 +1016,7 @@ export namespace CodeGraphBuilder {
       completeness,
       timings,
       nativeTree,
-      imports: parseImportSpecifiers(text, absPath),
+      imports: parseImportCandidateGroups(text, absPath),
     }
   }
 
@@ -1032,28 +1128,32 @@ export namespace CodeGraphBuilder {
       // Build a set of existing file paths in the graph for resolution.
       const existingFiles = new Set(CodeGraphQuery.listFiles(projectID).map((f) => f.path))
 
-      for (const importPath of prepared.imports) {
-        // If the import resolves to a file in the graph, create an edge.
-        if (existingFiles.has(importPath)) {
-          // Find the target file's module symbol (or first symbol).
-          const targetNodes = CodeGraphQuery.nodesInFile(projectID, importPath)
-          const toNode = targetNodes.find((n) => n.kind === "module") ?? targetNodes[0]
-          if (toNode) {
-            edgeInserts.push({
-              id: CodeEdgeID.ascending(),
-              project_id: projectID,
-              kind: "imports",
-              from_node: fromNode.id,
-              to_node: toNode.id,
-              file: prepared.absPath,
-              range_start_line: 0,
-              range_start_char: 0,
-              range_end_line: 0,
-              range_end_char: 0,
-              time_created: prepared.now,
-              time_updated: prepared.now,
-            })
-          }
+      for (const group of prepared.imports) {
+        // Only one candidate is ever the file a bundler/Node would actually
+        // resolve to — take the first match in resolution-priority order
+        // (bare path, then extensions, then index+extensions) instead of
+        // creating an edge for every candidate that happens to exist.
+        const importPath = group.candidates.find((candidate) => existingFiles.has(candidate))
+        if (!importPath) continue
+
+        // Find the target file's module symbol (or first symbol).
+        const targetNodes = CodeGraphQuery.nodesInFile(projectID, importPath)
+        const toNode = targetNodes.find((n) => n.kind === "module") ?? targetNodes[0]
+        if (toNode) {
+          edgeInserts.push({
+            id: CodeEdgeID.ascending(),
+            project_id: projectID,
+            kind: "imports",
+            from_node: fromNode.id,
+            to_node: toNode.id,
+            file: prepared.absPath,
+            range_start_line: 0,
+            range_start_char: 0,
+            range_end_line: 0,
+            range_end_char: 0,
+            time_created: prepared.now,
+            time_updated: prepared.now,
+          })
         }
       }
     }
