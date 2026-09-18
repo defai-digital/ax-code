@@ -72,22 +72,33 @@ export function withSpanSync<T>(
   fn: (span: Span) => T,
 ): T {
   if (!Telemetry.enabled()) return fn(noop)
+
+  // Only OTel setup (module load / tracer / span creation) falls back to a
+  // noop span here. `fn` must not be reachable from this try: if it were,
+  // an error `fn` throws would be caught by this same block (after already
+  // being rethrown below) and `fn` would run a second time via the
+  // `fn(noop)` fallback — silently double-executing side effects and
+  // replacing the original error with whatever the second run produces.
+  let span: Span
+  let SpanStatusCode: { OK: number; ERROR: number }
   try {
-    const { trace, SpanStatusCode } = require("@opentelemetry/api")
-    const tracer = trace.getTracer("ax-code")
-    const span = tracer.startSpan(name, { attributes })
-    try {
-      const result = fn(span)
-      span.setStatus({ code: SpanStatusCode.OK })
-      return result
-    } catch (err) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message: toErrorMessage(err) })
-      throw err
-    } finally {
-      span.end()
-    }
+    const otel = require("@opentelemetry/api")
+    SpanStatusCode = otel.SpanStatusCode
+    const tracer = otel.trace.getTracer("ax-code")
+    span = tracer.startSpan(name, { attributes })
   } catch {
     log.warn("withSpanSync telemetry support unavailable; falling back to noop")
     return fn(noop)
+  }
+
+  try {
+    const result = fn(span)
+    span.setStatus({ code: SpanStatusCode.OK })
+    return result
+  } catch (err) {
+    span.setStatus({ code: SpanStatusCode.ERROR, message: toErrorMessage(err) })
+    throw err
+  } finally {
+    span.end()
   }
 }
