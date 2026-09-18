@@ -5,6 +5,8 @@ import type { Provider } from "../../src/provider/provider"
 import { ModelID, ProviderID } from "../../src/provider/schema"
 import { SessionID, MessageID, PartID } from "../../src/session/schema"
 import { Question } from "../../src/question"
+import { renderReadText } from "../../src/tool/read-text"
+import { estimateRequestTokens } from "../../src/session/prompt/prompt-request"
 import { BlastRadius } from "../../src/session/blast-radius"
 
 const sessionID = SessionID.make("session")
@@ -1858,6 +1860,72 @@ test("evidence projection respects conversion cache, compaction and recipe-hidde
       "Exact read output is already visible",
     )
     expect((second.parts[0] as MessageV2.ToolPart).state).toMatchObject({ output })
+  } finally {
+    vi.unstubAllEnvs()
+  }
+})
+
+test("normal message conversion reduces repeated bounded reads without changing canonical results", async () => {
+  const rendered = await renderReadText(
+    "/workspace/source.ts",
+    1,
+    50,
+    new AbortController().signal,
+    Array.from({ length: 100 }, (_, i) => `export const value${i} = "${"source evidence ".repeat(8)}"`).join("\n"),
+  )
+  expect(rendered.truncated).toBe(true)
+  const input: MessageV2.WithParts[] = [0, 1, 2].map((i) => ({
+    info: assistantInfo(`bounded-${i}`, "bounded-user"),
+    parts: [
+      {
+        ...basePart(`bounded-${i}`, `bounded-part-${i}`),
+        type: "tool",
+        tool: "read",
+        callID: `bounded-call-${i}`,
+        state: {
+          status: "completed",
+          input: { filePath: "/workspace/source.ts", limit: 50 },
+          output: rendered.output,
+          title: "source.ts",
+          metadata: {},
+          time: { start: 0, end: 1 },
+        },
+      },
+    ],
+  }))
+  const canonical = structuredClone(input)
+  try {
+    vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "off")
+    const before = await MessageV2.toModelMessages(input, model, { cache: true })
+    vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "memory")
+    const after = await MessageV2.toModelMessages(input, model, { cache: true })
+    const bytesBefore = Buffer.byteLength(JSON.stringify(before))
+    const bytesAfter = Buffer.byteLength(JSON.stringify(after))
+    const estimateBefore = estimateRequestTokens({ system: [], messages: before })
+    const estimateAfter = estimateRequestTokens({ system: [], messages: after })
+    expect(bytesAfter).toBeLessThan(bytesBefore / 2)
+    expect(estimateAfter).toBeLessThan(estimateBefore / 2)
+    expect(after.filter((m) => m.role === "tool")).toHaveLength(3)
+    expect(JSON.stringify(after).match(/Use offset=51 to continue/g)).toHaveLength(3)
+    expect(JSON.stringify(after).match(/omitted source content is still unavailable/g)).toHaveLength(2)
+    expect(input).toEqual(canonical)
+    const rebuilt = await MessageV2.toModelMessages(input.slice(1), model, { cache: true })
+    expect(JSON.stringify(rebuilt)).not.toContain("bounded-call-0")
+    expect(JSON.stringify(rebuilt)).toContain("value49")
+    vi.stubEnv("AX_CODE_EVIDENCE_CACHE", "off")
+    expect(await MessageV2.toModelMessages(input, model, { cache: true })).toEqual(before)
+    process.stdout.write(
+      "BOUNDED_EVIDENCE_EVAL " +
+        JSON.stringify({
+          kind: "fixed-fixture-not-provider-usage",
+          bytesBefore,
+          bytesAfter,
+          estimateBefore,
+          estimateAfter,
+          preservedToolResults: 3,
+        }) +
+        "\n",
+    )
   } finally {
     vi.unstubAllEnvs()
   }

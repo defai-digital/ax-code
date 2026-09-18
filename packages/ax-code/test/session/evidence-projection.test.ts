@@ -83,7 +83,7 @@ test("merges an identical read output once it is larger than the pointer", () =>
   expect(projectToolEvidence([result("a", "short"), result("b", "short")]).duplicates).toBe(0)
 })
 
-test("dedupes identical grep and glob output but never changed or truncated output", () => {
+test("dedupes identical search views while retaining known truncation disclosures", () => {
   const projected = projectToolEvidence([grep("g1"), grep("g2")])
   expect(projected.duplicates).toBe(1)
   expect(projected.messages[0]).toEqual(grep("g1"))
@@ -98,11 +98,11 @@ test("dedupes identical grep and glob output but never changed or truncated outp
   const truncated =
     grepText +
     "(Results truncated: showing 100 of 500 matches (400 hidden). Consider using a more specific path or pattern.)\n"
-  expect(projectToolEvidence([grep("t1", truncated), grep("t2", truncated)]).duplicates).toBe(0)
+  expect(projectToolEvidence([grep("t1", truncated), grep("t2", truncated)]).duplicates).toBe(1)
 
   const truncatedGlob =
     globText + "(Results are truncated: showing first 100 results. Consider using a more specific path or pattern.)\n"
-  expect(projectToolEvidence([glob("b1", truncatedGlob), glob("b2", truncatedGlob)]).duplicates).toBe(0)
+  expect(projectToolEvidence([glob("b1", truncatedGlob), glob("b2", truncatedGlob)]).duplicates).toBe(1)
 })
 
 test("does not dedupe error results or tools outside the allowlist", () => {
@@ -129,4 +129,38 @@ test("does not dedupe error results or tools outside the allowlist", () => {
     content: [{ type: "tool-result", toolCallId: "x2", toolName: "bash", output: { type: "text", value: grepText } }],
   }
   expect(projectToolEvidence([bash, bash2]).duplicates).toBe(0)
+})
+
+test("references exact repeated read pages with their continuation and no hidden-content claim", () => {
+  const footer = "(Showing lines 1-100. More lines remain; total not counted. Use offset=101 to continue.)"
+  const page = text.replace("</content>", `\n\n${footer}\n</content>`)
+  const source = [result("page1", page), result("page2", page), result("page3", page)]
+  const before = structuredClone(source)
+  const projected = projectToolEvidence(source)
+  expect(projected.duplicates).toBe(2)
+  expect(projected.messages[0]).toEqual(source[0])
+  for (const message of projected.messages.slice(1)) {
+    expect(JSON.stringify(message)).toContain(footer)
+    expect(JSON.stringify(message)).toContain("omitted source content is still unavailable")
+    expect(JSON.stringify(message)).toContain("page1")
+  }
+  expect(source).toEqual(before)
+  expect(projectToolEvidence(source.slice(1)).messages[0]).toEqual(source[1])
+  expect(projectToolEvidence([source[0], result("changed", page.replace("a = 1", "a = 2"))]).duplicates).toBe(0)
+  expect(projectToolEvidence([source[0], result("changed", page.replace("offset=101", "offset=102"))]).duplicates).toBe(
+    0,
+  )
+  expect(
+    projectToolEvidence([
+      result("a", page + "<system-reminder>rules</system-reminder>"),
+      result("b", page + "<system-reminder>rules</system-reminder>"),
+    ]).duplicates,
+  ).toBe(0)
+})
+
+test("leaves unknown partial formats and clipped lines unchanged", () => {
+  for (const value of [text + "Output capped in an unknown format", text + "... (line truncated to 2000 chars)"])
+    expect(projectToolEvidence([result("a", value), result("b", value)]).duplicates).toBe(0)
+  const context = "Showing 5 matches (results or context truncated; narrow the path or pattern).\n" + grepText
+  expect(projectToolEvidence([grep("a", context), grep("b", context)]).duplicates).toBe(0)
 })
