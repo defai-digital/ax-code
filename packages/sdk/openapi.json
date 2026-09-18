@@ -36958,6 +36958,29 @@
               }
             }
           },
+          "directoryScope": {
+            "description": "Controls the startup guard against launching ax-code in an overly broad directory.",
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "description": "Warn before indexing an unusually broad directory (home, Desktop, Downloads, Documents, a filesystem root, or a very large top-level listing). Default: true.",
+                "type": "boolean"
+              },
+              "maxTopLevelEntries": {
+                "description": "Top-level entry count above which a directory is treated as broad. Default: 300.",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "extraDenylist": {
+                "description": "Additional absolute paths always treated as broad.",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "plugin": {
             "type": "array",
             "items": {

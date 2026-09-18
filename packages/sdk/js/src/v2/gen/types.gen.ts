@@ -303,6 +303,23 @@ export type Config = {
   watcher?: {
     ignore?: Array<string>
   }
+  /**
+   * Controls the startup guard against launching ax-code in an overly broad directory.
+   */
+  directoryScope?: {
+    /**
+     * Warn before indexing an unusually broad directory (home, Desktop, Downloads, Documents, a filesystem root, or a very large top-level listing). Default: true.
+     */
+    enabled?: boolean
+    /**
+     * Top-level entry count above which a directory is treated as broad. Default: 300.
+     */
+    maxTopLevelEntries?: number
+    /**
+     * Additional absolute paths always treated as broad.
+     */
+    extraDenylist?: Array<string>
+  }
   plugin?: Array<string>
   /**
    * Enable or disable snapshot tracking. When false, filesystem snapshots are not recorded and undoing or reverting will not undo/redo file changes. Defaults to true.
