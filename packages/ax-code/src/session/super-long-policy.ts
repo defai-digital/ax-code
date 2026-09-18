@@ -190,18 +190,28 @@ export namespace SuperLongPolicy {
      * code path that also writes the envs.
      */
     scoped?: boolean
+    /**
+     * ScopedFlag.superLongManagedButUnrecorded() — true when some other
+     * directory has reconciled this process's env mirror but the current
+     * directory hasn't yet. The env vars below belong to that other
+     * directory, not this one, so skip them and fall straight through to
+     * this directory's own config/model-default resolution.
+     */
+    scopedManagedButUnrecorded?: boolean
   }): StateDecision {
     if (input.scoped !== undefined) {
       return { enabled: input.scoped, source: "scoped" }
     }
-    const env = input.env ?? process.env
-    const sessionOverride = Env.parseBoolean(env[SESSION_OVERRIDE_ENV])
-    if (sessionOverride !== undefined) {
-      return { enabled: sessionOverride, source: "session-override" }
-    }
-    const base = Env.parseBoolean(env[BASE_ENV])
-    if (base !== undefined) {
-      return { enabled: base, source: "env" }
+    if (!input.scopedManagedButUnrecorded) {
+      const env = input.env ?? process.env
+      const sessionOverride = Env.parseBoolean(env[SESSION_OVERRIDE_ENV])
+      if (sessionOverride !== undefined) {
+        return { enabled: sessionOverride, source: "session-override" }
+      }
+      const base = Env.parseBoolean(env[BASE_ENV])
+      if (base !== undefined) {
+        return { enabled: base, source: "env" }
+      }
     }
     return state({
       modelID: input.modelID,

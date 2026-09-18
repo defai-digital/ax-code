@@ -88,6 +88,7 @@ function superLongRuntimeState(config: Config.Info | undefined, explicitModel?: 
     providerID,
     config: SuperLongPolicy.fromConfig(config?.super_long),
     scoped: ScopedFlag.superLong(),
+    scopedManagedButUnrecorded: ScopedFlag.superLongManagedButUnrecorded(),
   })
 }
 

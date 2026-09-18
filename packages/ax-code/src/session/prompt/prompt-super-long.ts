@@ -30,6 +30,7 @@ export async function enforceSuperLongDeadline(input: {
     providerID: input.lastUser.model.providerID,
     config: input.config,
     scoped: ScopedFlag.superLong(),
+    scopedManagedButUnrecorded: ScopedFlag.superLongManagedButUnrecorded(),
   })
   const enabled = input.autonomous && state.enabled
   // Skip entirely when disabled — a misconfigured duration must not stop

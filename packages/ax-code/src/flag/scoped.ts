@@ -100,6 +100,19 @@ export namespace ScopedFlag {
     return peek("AX_CODE_SUPER_LONG")
   }
 
+  /**
+   * True when AX_CODE_SUPER_LONG has been reconciled by some directory in
+   * this process but not yet by the current instance directory — i.e. the
+   * process-global env mirrors a stale, unrelated directory's value and
+   * SuperLongPolicy.runtimeState must not fall back to it. Unlike
+   * autonomous()/smartLlm(), super-long has no fixed feature default (it's
+   * model-dependent), so callers use this to skip straight past the env
+   * checks to their own config/model-default resolution instead.
+   */
+  export function superLongManagedButUnrecorded(): boolean {
+    return peek("AX_CODE_SUPER_LONG") === undefined && !!resolveDirectory?.() && isManaged("AX_CODE_SUPER_LONG")
+  }
+
   /** Smart-LLM routing for the current instance directory. */
   export function smartLlm(): boolean {
     const scoped = peek("AX_CODE_SMART_LLM")

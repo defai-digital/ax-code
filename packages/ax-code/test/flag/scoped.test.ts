@@ -62,6 +62,28 @@ describe("ScopedFlag", () => {
     expect(ScopedFlag.isManaged("AX_CODE_SUPER_LONG")).toBe(true)
   })
 
+  test("superLongManagedButUnrecorded flags a directory whose own value was never recorded", () => {
+    currentDirectory = "/project-a"
+    expect(ScopedFlag.superLongManagedButUnrecorded()).toBe(false)
+
+    ScopedFlag.recordCurrent("AX_CODE_SUPER_LONG", true)
+    process.env["AX_CODE_SUPER_LONG"] = "true"
+
+    // Directory B never reconciled its own super-long state, so it must
+    // not trust A's process-global mirror.
+    currentDirectory = "/project-b"
+    expect(ScopedFlag.superLong()).toBeUndefined()
+    expect(ScopedFlag.superLongManagedButUnrecorded()).toBe(true)
+
+    // Once B records its own value, it's no longer "unrecorded".
+    ScopedFlag.recordCurrent("AX_CODE_SUPER_LONG", false)
+    expect(ScopedFlag.superLongManagedButUnrecorded()).toBe(false)
+
+    // Outside an instance context, there's no directory to be "unrecorded" for.
+    currentDirectory = undefined
+    expect(ScopedFlag.superLongManagedButUnrecorded()).toBe(false)
+  })
+
   test("smartLlm shields a directory from another directory's env write", () => {
     currentDirectory = "/project-b"
     ScopedFlag.recordCurrent("AX_CODE_SMART_LLM", true)
