@@ -97,7 +97,7 @@ export function FixedContextDialog(props: {
         <Match when={state().phase === "result"}>
           <box paddingLeft={2} paddingRight={2} paddingBottom={1} gap={1}>
             <text fg={theme.primary}>AX Trust cache: {state().result?.cache.status}</text>
-            <scrollbox height={Math.max(3, Math.min(12, dimensions().height - 12))}>
+            <scrollbox focused height={Math.max(3, Math.min(12, dimensions().height - 12))}>
               <text fg={theme.text} wrapMode="word">
                 {state().result?.answer}
               </text>

@@ -502,7 +502,9 @@ export async function resolveTools(input: ResolveToolsInput) {
             title: val.title,
             metadata: val.metadata,
             status: "running",
-            input: args,
+            // Progress updates retain the processor's canonical, redacted
+            // input; execution args may still contain credentials.
+            input: match.state.input,
             time: {
               start: match.state.time?.start ?? Date.now(),
             },

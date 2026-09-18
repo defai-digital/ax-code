@@ -71,6 +71,7 @@ try {
         await setup.renderOnce()
       }
       assert(ready)
+      let requests = 0
       let requestSignal: AbortSignal | undefined
       let resolve!: (value: {
         answer: string
@@ -84,6 +85,7 @@ try {
           model="trust/model"
           directory="/workspace"
           run={async (files, question, signal) => {
+            requests++
             assert.deepEqual(files, ["value.py"])
             assert.equal(question, "What does it return?")
             requestSignal = signal
@@ -110,7 +112,11 @@ try {
       await setup.renderOnce()
       assert(setup.captureCharFrame().includes("Asking AX Trust"))
       resolve({
-        answer: "It returns 43.",
+        answer: [
+          "It returns 43.",
+          ...Array.from({ length: 38 }, (_, index) => `Answer line ${index + 2}.`),
+          "Answer complete.",
+        ].join("\n"),
         cache: { status: "HIT" },
         contextDigest: "hash",
         providerID: "trust",
@@ -120,13 +126,45 @@ try {
       await setup.renderOnce()
       assert(setup.captureCharFrame().includes("It returns 43."))
       assert(setup.captureCharFrame().includes("cache: HIT"))
+      assert(!setup.captureCharFrame().includes("Answer complete."), "long answer did not overflow")
+      // Drive terminal key input without mouse focus so the entire answer stays
+      // accessible when mouse support is disabled.
+      setup.mockInput.pressArrow("down")
+      await setup.flush()
+      await setup.renderOnce()
+      assert(!setup.captureCharFrame().includes("It returns 43."), "Down did not scroll the answer")
+      setup.mockInput.pressArrow("up")
+      await setup.flush()
+      await setup.renderOnce()
+      assert(setup.captureCharFrame().includes("It returns 43."), "Up did not return to the answer start")
+      for (let page = 0; page < 10; page++) setup.mockInput.pressKey("\u001b[6~")
+      await setup.flush()
+      await setup.renderOnce()
+      assert(setup.captureCharFrame().includes("Answer complete."), "PageDown could not reach the answer end")
+      setup.mockInput.pressKey("\u001b[5~")
+      await setup.flush()
+      await setup.renderOnce()
+      assert(!setup.captureCharFrame().includes("Answer complete."), "PageUp did not scroll the answer")
+      setup.mockInput.pressKey("HOME")
+      await setup.flush()
+      await setup.renderOnce()
+      assert(setup.captureCharFrame().includes("It returns 43."), "Home did not return to the answer start")
+      setup.mockInput.pressKey("END")
+      await setup.flush()
+      await setup.renderOnce()
+      assert(setup.captureCharFrame().includes("Answer complete."), "End did not reach the answer end")
       setup.mockInput.pressKey("r")
       await setup.flush()
       await setup.renderOnce()
+      assert(
+        setup.captureCharFrame().includes("Question about selected files"),
+        "repeat did not restore question input",
+      )
       setup.mockInput.pressKey("RETURN")
       await new Promise((r) => setTimeout(r, 30))
       await setup.flush()
       await setup.renderOnce()
+      assert.equal(requests, 2, "repeat did not focus the question input for resubmission")
       setup.mockInput.pressKey("ESCAPE")
       await new Promise((r) => setTimeout(r, 150))
       await setup.flush()
@@ -147,7 +185,9 @@ try {
       setup.renderer.destroy()
     }
   }
-  console.log("Fixed-context native dialogs passed: file/question input, result, repeat and cancel at 50/80 columns.")
+  console.log(
+    "Fixed-context native dialogs passed: file/question input, keyboard answer scrolling, repeat and cancel at 50/80 columns.",
+  )
 } finally {
   await fs.rm(state, { recursive: true, force: true })
 }

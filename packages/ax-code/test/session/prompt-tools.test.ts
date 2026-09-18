@@ -726,6 +726,62 @@ describe("session.prompt-tools", () => {
     })
   })
 
+  test.each(["command", "cmd"])("preserves redacted bash %s input during progress updates", async (field) => {
+    await using tmp = await tmpdir()
+    const args = { [field]: "API_KEY=placeholder-token-value echo ready" }
+    const storedInput = { command: "API_KEY=[redacted] echo ready" }
+    const running = {
+      id: "prt_progress",
+      sessionID: "ses_progress",
+      messageID: "msg_progress",
+      type: "tool",
+      tool: "bash",
+      callID: "call_progress",
+      state: { status: "running", input: storedInput, time: { start: 1 } },
+    }
+    const update = vi.spyOn(Session, "updatePart").mockResolvedValue(running as any)
+    const execute = vi.fn(async (_args: unknown, ctx: any) => {
+      await ctx.metadata({ metadata: { output: "ready" } })
+      return { title: "Bash", output: "ready", metadata: {} }
+    })
+    vi.spyOn(ToolRegistry, "tools").mockResolvedValue([
+      { id: "bash", description: "Progress probe", parameters: z.object({ command: z.string() }), execute },
+    ] as any)
+    vi.spyOn(MCP, "tools").mockResolvedValue({})
+    vi.spyOn(Plugin, "trigger").mockImplementation(
+      (async (_name: string, _input: unknown, output: unknown) => output) as any,
+    )
+    vi.spyOn(LifecycleHooks, "runForWorkspace").mockResolvedValue({ ok: true, blocked: false, outputs: [] })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tools = await resolveTools({
+          agent: { name: "build", permission: [{ permission: "*", pattern: "*", action: "allow" }] } as any,
+          session: { id: "ses_progress", permission: [] } as any,
+          model: {
+            providerID: "test-provider",
+            api: { id: "test-model", npm: "@ai-sdk/openai-compatible" },
+          } as any,
+          tools: {},
+          bypassAgentCheck: false,
+          messages: [],
+          isolation: { mode: "workspace-write", network: true, protected: [] },
+          processor: { message: { id: "msg_progress" }, partFromToolCall: () => running } as any,
+        })
+        await (tools.bash.execute as any)(args, {
+          toolCallId: "call_progress",
+          abortSignal: new AbortController().signal,
+        })
+      },
+    })
+
+    expect(execute).toHaveBeenCalledWith(args, expect.any(Object))
+    expect(update).toHaveBeenCalledOnce()
+    expect(update.mock.calls[0][0]).toMatchObject({ state: { input: storedInput, metadata: { output: "ready" } } })
+    expect(JSON.stringify(update.mock.calls)).not.toContain("placeholder-token-value")
+  })
+
   test("does not expose the Batch dispatcher capability to ordinary tools", async () => {
     await using tmp = await tmpdir()
     let exposed: unknown

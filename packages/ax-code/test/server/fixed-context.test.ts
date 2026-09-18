@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import fs from "node:fs/promises"
+import path from "node:path"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { tmpdir } from "../fixture/fixture"
-import { FixedContextError } from "../../src/provider/fixed-context"
+import { FixedContextError, readFixedContextFiles } from "../../src/provider/fixed-context"
 
 const state = vi.hoisted(() => ({ run: vi.fn() }))
 vi.mock("../../src/provider/fixed-context-operation", async (load) => ({
@@ -52,6 +54,22 @@ test("read permission failures stay actionable HTTP errors", async () => {
   const response = await request(tmp.path, input)
   expect(response.status).toBe(400)
   expect(await response.json()).toMatchObject({ message: "Read permission is not allowed for a selected file." })
+})
+
+test.each([
+  ["non-directory ancestor", "value.py/child"],
+  ["null byte", "invalid\0path"],
+  ["oversized path component", "x".repeat(256)],
+])("HTTP rejects a selected path with %s as an actionable input error", async (_label, file) => {
+  await using tmp = await tmpdir({ git: true })
+  await fs.writeFile(path.join(tmp.path, "value.py"), "value = 42")
+  state.run.mockImplementation(async (selected, directory) => {
+    await readFixedContextFiles({ directory, files: selected.files, allowRead: () => true })
+    return output
+  })
+  const response = await request(tmp.path, { ...input, files: [file] })
+  expect(response.status).toBe(400)
+  expect(await response.json()).toMatchObject({ message: expect.stringContaining("Selected file") })
 })
 
 test("HTTP cancellation reaches the shared operation", async () => {

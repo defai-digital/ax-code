@@ -65,6 +65,32 @@ describe("tool.bash", () => {
     })
   })
 
+  test.skipIf(process.platform === "win32")(
+    "redacts command-derived descriptions without changing executed assignments",
+    async () => {
+      await using tmp = await tmpdir()
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const bash = await BashTool.init()
+          const metadata = vi.fn()
+          const result = await bash.execute(
+            {
+              command: `API_KEY=placeholder-token-value "${process.execPath}" -e "process.stdout.write(String(process.env.API_KEY.length))"`,
+            },
+            { ...ctx, metadata },
+          )
+
+          expect(result.metadata.exit).toBe(0)
+          expect(result.output).toBe(String("placeholder-token-value".length))
+          expect(result.title).toContain("API_KEY=[redacted]")
+          expect(result.metadata.description).toBe(result.title)
+          expect(JSON.stringify([result, metadata.mock.calls])).not.toContain("placeholder-token-value")
+        },
+      })
+    },
+  )
+
   test("preserves interleaved UTF-8 sequences split across foreground stream chunks", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

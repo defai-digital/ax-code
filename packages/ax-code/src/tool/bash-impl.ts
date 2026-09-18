@@ -390,7 +390,7 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
       .replaceAll("${maxBytes}", String(Truncate.MAX_BYTES)),
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
-      const description = params.description ?? params.command.slice(0, 80)
+      const description = params.description ?? Env.redactInlineEnvAssignments(params.command).slice(0, 80)
       if (params.workdir !== undefined) {
         resolveToolFilePath(params.workdir, Instance.directory)
       }
