@@ -43,8 +43,10 @@ export interface MockAgentOptions {
   replies: string[]
   /** Optional pre-configured tool-call stubs. When the mock agent's
    *  `tool()` method is called with a matching name, it returns the
-   *  configured output. Also included in `RunResult.toolCalls`. */
-  toolCalls?: Array<{ tool: string; input: unknown; output: string }>
+   *  configured output. Also included in `RunResult.toolCalls`.
+   *  `status` defaults to `"completed"`; set it to `"error"` to
+   *  exercise `assertToolFailure`. */
+  toolCalls?: Array<{ tool: string; input: unknown; output: string; status?: "completed" | "error" }>
 }
 
 function makeMockResult(text: string, toolCalls: ToolCallInfo[]): RunResult {
@@ -132,7 +134,7 @@ export function createMockAgent(options: MockAgentOptions): Agent {
     tool: tc.tool,
     input: tc.input,
     output: tc.output,
-    status: "completed" as const,
+    status: tc.status ?? "completed",
   }))
 
   function nextReply(): string {
