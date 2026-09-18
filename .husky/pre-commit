@@ -33,6 +33,18 @@ if [ -n "$LOCAL_ONLY_TRACKED" ]; then
   exit 1
 fi
 
+# Session dumps and user runtime config. GitHub secret scanning has already
+# flagged branded SessionIDs in historical session-ses_*.md files as generic
+# passwords; keep them untracked going forward.
+LOCAL_DUMP_TRACKED=$(git ls-files -- ':(glob)session-ses_*.md' ':(glob)**/session-ses_*.md' 'ax-code.json' ':(glob)**/ax-code.json')
+if [ -n "$LOCAL_DUMP_TRACKED" ]; then
+  echo "ERROR: local dump/config files are tracked and must never be committed or pushed:"
+  printf '%s\n' "$LOCAL_DUMP_TRACKED" | sed 's/^/  - /'
+  echo "Unstage them with: git rm --cached -- <path>"
+  echo "These paths are gitignored; do not force-add them."
+  exit 1
+fi
+
 # The models snapshot is no longer regenerated on every commit. Freshness is
 # enforced by the scheduled `.github/workflows/models-drift.yml` job, which
 # runs `tsx script/update-models.ts --check` and fails on drift. Regenerate

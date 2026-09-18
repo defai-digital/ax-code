@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process"
 import {
   INTERNAL_ONLY_ROOTS,
+  LOCAL_DUMP_PATHSPECS,
   LOCAL_ONLY_PATHSPECS,
   LOCAL_ONLY_ROOT_FILES,
   unapprovedTrackedInternalPaths,
@@ -41,10 +42,17 @@ if (trackedRootFiles.length > 0) {
   failed = true
 }
 
+const trackedDumps = trackedPaths(LOCAL_DUMP_PATHSPECS)
+if (trackedDumps.length > 0) {
+  console.error("Local dump/config files must not be tracked:")
+  for (const file of trackedDumps) console.error(`- ${file}`)
+  failed = true
+}
+
 if (failed) {
   console.error("These paths are gitignored; do not force-add them.")
   console.error("Untrack them with: git rm --cached -- <path>")
   process.exit(1)
 }
 
-console.log(`No local-only files (${LOCAL_ONLY_PATHSPECS}) are tracked`)
+console.log(`No local-only files (${LOCAL_ONLY_PATHSPECS} ${LOCAL_DUMP_PATHSPECS.join(" ")}) are tracked`)

@@ -27,7 +27,8 @@ desktop/packages/electron/resources/ax-code/
 /result
 refs
 Session.vim
-/ax-code.json
+ax-code.json
+session-ses_*.md
 a.out
 target
 

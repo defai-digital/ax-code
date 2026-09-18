@@ -6,6 +6,8 @@ import {
   INTERNAL_ONLY_ROOTS,
   isApprovedTrackedInternalPath,
   isInternalOnlyPath,
+  isLocalDumpPath,
+  LOCAL_DUMP_PATHSPECS,
   LOCAL_ONLY_PATHSPECS,
   LOCAL_ONLY_ROOT_FILES,
   unapprovedTrackedInternalPaths,
@@ -42,12 +44,31 @@ describe("repository internal-only path policy", () => {
     expect(LOCAL_ONLY_PATHSPECS).toBe(".internal AGENTS.md CLAUDE.md GEMINI.md")
   })
 
+  test("rejects accidental session dumps and user runtime config", () => {
+    expect(isLocalDumpPath("packages/ax-code/session-ses_2d8c.md")).toBe(true)
+    expect(isLocalDumpPath("session-ses_abc.md")).toBe(true)
+    expect(isLocalDumpPath("packages/ax-code/ax-code.json")).toBe(true)
+    expect(isLocalDumpPath("ax-code.json")).toBe(true)
+    expect(isLocalDumpPath("packages/ax-code/test/AGENTS.md")).toBe(false)
+    expect(isLocalDumpPath("packages/ax-code/src/session/llm.ts")).toBe(false)
+    const ignore = readFileSync(".gitignore", "utf8")
+    expect(ignore).toMatch(/^ax-code\.json$/m)
+    expect(ignore).toMatch(/^session-ses_\*\.md$/m)
+    expect(LOCAL_DUMP_PATHSPECS).toEqual([
+      ":(glob)session-ses_*.md",
+      ":(glob)**/session-ses_*.md",
+      "ax-code.json",
+      ":(glob)**/ax-code.json",
+    ])
+  })
+
   test("pre-commit hook blocks staged local-only paths", () => {
     // `.gitignore` cannot stop `git add -f`, so the hook is the local
     // prevention layer. Deriving the expectation from the shared constant
     // locks it to script/check-tracked-internal.ts instead of a copied literal.
     const hook = readFileSync(".husky/pre-commit", "utf8")
     expect(hook).toContain(`git ls-files -- ${LOCAL_ONLY_PATHSPECS}`)
+    expect(hook).toContain(`git ls-files -- ${LOCAL_DUMP_PATHSPECS.map((spec) => `'${spec}'`).join(" ")}`)
     expect(hook).toContain("git rm --cached")
   })
 

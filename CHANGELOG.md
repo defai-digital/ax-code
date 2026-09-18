@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Ignore `ax-code.json` and `session-ses_*.md` dumps in any directory, and fail pre-commit plus repo-structure if they
+  are force-added. Historical SessionID false positives stay in git history; they are not credentials.
+
 ### Fixed
 
 - Localize the fixed-file question command title and AX Trust category so TUI locale checks pass.
