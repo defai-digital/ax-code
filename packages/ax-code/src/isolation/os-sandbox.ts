@@ -306,6 +306,16 @@ ${networkRule}
       "--tmpfs",
       "/tmp",
     ]
+    // Mirror the Seatbelt backend's tempWriteRoots() allowance: TMPDIR/TMP/TEMP
+    // (and os.tmpdir()) commonly resolve outside /tmp — containers, systemd
+    // PrivateTmp, custom CI temp dirs. Without this, a command writing there
+    // (mktemp, a build tool staging under $TMPDIR) hits the read-only
+    // `--ro-bind / /` base even though the app-layer isolation policy and the
+    // Seatbelt backend both intend to allow it.
+    for (const tmpRoot of tempWriteRoots()) {
+      if (tmpRoot === "/tmp") continue
+      if (fs.existsSync(tmpRoot)) args.push("--tmpfs", tmpRoot)
+    }
     for (const root of roots) {
       args.push("--bind", root, root)
     }

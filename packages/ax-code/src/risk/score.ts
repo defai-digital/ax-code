@@ -450,8 +450,14 @@ export namespace Risk {
           const fp = (input.filePath ?? input.file_path ?? "") as string
           if (fp) files.add(fp)
         }
-        if (tool === "apply_patch") {
-          const patchText = (input.patch ?? "") as string
+        if (tool === "apply_patch" || tool === "refactor_apply") {
+          // apply_patch's field is `patchText`; refactor_apply's is `patch`
+          // (both hold unified-diff-shaped text). Reading `input.patch` alone
+          // was wrong for apply_patch — its params have no `patch` key — so
+          // every apply_patch-driven file/line count silently stayed empty
+          // whenever no diff snapshot had been recorded yet, and refactor_apply
+          // (the only DRE tool that writes files) was never inspected at all.
+          const patchText = (input.patchText ?? input.patch ?? "") as string
           const list = [
             ...patchText.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm),
             ...patchText.matchAll(/^[+-]{3}\s+[ab]\/(.+)$/gm),

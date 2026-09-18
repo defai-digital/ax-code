@@ -223,6 +223,86 @@ describe("session.risk", () => {
     })
   })
 
+  test("counts apply_patch's patchText and refactor_apply's patch as file/line churn", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const sid = session.id
+
+        try {
+          Recorder.begin(sid)
+          Recorder.emit({
+            type: "session.start",
+            sessionID: sid,
+            agent: "build",
+            model: "test/model",
+            directory: tmp.path,
+          })
+          // apply_patch's tool input field is `patchText`, not `patch`.
+          Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "apply_patch",
+            callID: "call-apply-patch",
+            input: {
+              patchText: "*** Begin Patch\n*** Update File: src/foo.ts\n@@\n-old line\n+new line\n*** End Patch\n",
+            },
+          })
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "apply_patch",
+            callID: "call-apply-patch",
+            status: "completed",
+            output: "applied",
+            metadata: {},
+            durationMs: 1,
+          })
+          // refactor_apply's tool input field is `patch` (a unified diff).
+          Recorder.emit({
+            type: "tool.call",
+            sessionID: sid,
+            tool: "refactor_apply",
+            callID: "call-refactor-apply",
+            input: {
+              planId: "plan-1",
+              patch: "--- a/src/bar.ts\n+++ b/src/bar.ts\n@@\n-old\n+new\n+another\n",
+            },
+          })
+          Recorder.emit({
+            type: "tool.result",
+            sessionID: sid,
+            tool: "refactor_apply",
+            callID: "call-refactor-apply",
+            status: "completed",
+            output: "applied",
+            metadata: {},
+            durationMs: 1,
+          })
+          Recorder.emit({
+            type: "session.end",
+            sessionID: sid,
+            reason: "completed",
+            totalSteps: 0,
+          })
+          Recorder.end(sid)
+
+          await new Promise((resolve) => setTimeout(resolve, 50))
+
+          const assessment = Risk.fromSession(sid)
+          expect(assessment.signals.filesChanged).toBe(2)
+          expect(assessment.signals.linesChanged).toBeGreaterThan(0)
+          expect(assessment.signals.diffState).toBe("derived")
+        } finally {
+          await Session.remove(sid)
+        }
+      },
+    })
+  })
+
   test("loads review replay readiness when requested", async () => {
     await using tmp = await tmpdir({ git: true })
 
