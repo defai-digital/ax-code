@@ -37,6 +37,15 @@ afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true })
 })
 
+describe("Windows signing audit records", () => {
+  test("keeps path objects under Windows PowerShell 5.1 array concatenation", () => {
+    const source = fs.readFileSync(path.resolve("script/sign-windows-runtime.ps1"), "utf8")
+    expect(source).toContain("List[object]")
+    expect(source).toContain("[pscustomobject]")
+    expect(source).not.toMatch(/\$records \+= \[ordered\]@\{/)
+  })
+})
+
 describe("final distribution manifest", () => {
   test("rejects files the Windows installer cannot stage", () => {
     const root = fixture()
@@ -206,8 +215,10 @@ function global:Get-AuthenticodeSignature([string]$LiteralPath) {
 & $env:AX_TEST_SIGNER -Root $env:AX_TEST_BUNDLE ${scenario === "verify-unsigned" ? "-VerifyOnly" : ""}
 `,
       )
-      if (scenario === "valid") expect(result.status, result.stderr).toBe(0)
-      else expect(result.status, result.stdout).not.toBe(0)
+      if (scenario === "valid") {
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stdout).toContain("node/bin/node.exe")
+      } else expect(result.status, result.stdout).not.toBe(0)
     },
   )
 })

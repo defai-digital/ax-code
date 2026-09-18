@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep Windows signing audit records as objects so Windows PowerShell 5.1 still reports `node/bin/node.exe` in the
+  bundled Node check.
+
 ## [7.18.9] - 2026-09-18
 
 ### Added

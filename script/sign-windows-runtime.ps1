@@ -25,7 +25,9 @@ while ($pending.Count -gt 0) {
     if ($item.PSIsContainer) { $pending.Push($item.FullName) } else { $files += $item }
   }
 }
-$records = @()
+# Windows PowerShell 5.1 enumerates OrderedDictionary on array +=, which drops
+# .path and fails the bundled Node audit even after the file was inspected.
+$records = [Collections.Generic.List[object]]::new()
 foreach ($file in $files) {
   if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Cannot sign reparse point: $($file.FullName)" }
   $stream = [IO.File]::OpenRead($file.FullName)
@@ -55,9 +57,14 @@ foreach ($file in $files) {
   if ($signature.Status -ne "Valid" -or $null -eq $signature.TimeStamperCertificate) {
     throw "Missing valid Authenticode signature or timestamp: $relative"
   }
-  $records += [ordered]@{ path = $relative; subject = $signature.SignerCertificate.Subject; thumbprint = $signature.SignerCertificate.Thumbprint; timestampSubject = $signature.TimeStamperCertificate.Subject }
+  [void]$records.Add([pscustomobject]@{
+    path = $relative
+    subject = $signature.SignerCertificate.Subject
+    thumbprint = $signature.SignerCertificate.Thumbprint
+    timestampSubject = $signature.TimeStamperCertificate.Subject
+  })
 }
 if (-not ($records | Where-Object { $_.path -eq "node/bin/node.exe" })) { throw "Bundled Node executable was not audited" }
-$report = ConvertTo-Json -InputObject @($records) -Depth 4
+$report = ConvertTo-Json -InputObject @($records.ToArray()) -Depth 4
 if ($ReportPath) { [IO.File]::WriteAllText($ReportPath, $report, [Text.UTF8Encoding]::new($false)) }
 $report
