@@ -192,7 +192,7 @@ export function prefixErrors(input: {
       errors.push(`${fix.id}: no captured pre-fix failing run`)
       continue
     }
-    if (prefix.exitCode === 0 || prefix.exitCode === null)
+    if (typeof prefix.exitCode !== "number" || prefix.exitCode === 0)
       errors.push(`${fix.id}: pre-fix run must be a captured nonzero exit, got ${prefix.exitCode}`)
     const text = input.readLog(prefix.log)
     if (text === undefined) {

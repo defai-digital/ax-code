@@ -21,7 +21,8 @@ changes belong to AX Coder.
 - Escape all regex metacharacters when building the goal-bughunt forbidden-path list.
 - Prefer a nonempty `cmd` alias when bash `command` is blank, both at execute parse and persistence redaction.
 - Redact inline credentials in persisted `monitor` commands and `bash_input` stdin, including quoted `KEY="value"`
-  assignments.
+  assignments and assignments after `&&`, `|`, or `(`.
+- Map invalid fixed-context file paths (`ENOTDIR`, `ENAMETOOLONG`, null bytes) to 400-class errors instead of 500.
 
 ## [7.19.0] - 2026-09-18
 

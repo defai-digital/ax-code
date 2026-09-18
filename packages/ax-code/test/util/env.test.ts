@@ -72,6 +72,39 @@ describe("Env.redactInlineEnvAssignments", () => {
     expect(Env.redactInlineEnvAssignments("API_KEY='placeholder-token-value' curl")).toBe("API_KEY=[redacted] curl")
   })
 
+  test.each([
+    "API_KEY=prefix\"middle\"'suffix' run",
+    'API_KEY="placeholder\\"token" run',
+    "API_KEY='placeholder'\\''token' run",
+    "API_KEY=placeholder\\ token run",
+    "API_KEY=placeholder\\;token run",
+    "API_KEY=placeholder\\\ntoken run",
+  ])("redacts the complete quoted or escaped shell word: %s", (command) => {
+    expect(Env.redactInlineEnvAssignments(command)).toBe("API_KEY=[redacted] run")
+  })
+
+  test.each([
+    ["true&&API_KEY=placeholder run", "true&&API_KEY=[redacted] run"],
+    ["false||API_KEY=placeholder run", "false||API_KEY=[redacted] run"],
+    ["printf ready|API_KEY=placeholder cat", "printf ready|API_KEY=[redacted] cat"],
+    ["(API_KEY=placeholder run)", "(API_KEY=[redacted] run)"],
+    ["API_KEY=placeholder&&printf ready", "API_KEY=[redacted]&&printf ready"],
+    ["API_KEY=placeholder>output.log", "API_KEY=[redacted]>output.log"],
+  ])("recognizes shell operator boundaries: %s", (command, expected) => {
+    expect(Env.redactInlineEnvAssignments(command)).toBe(expected)
+  })
+
+  test("recognizes URL userinfo assembled from quoted literal segments", () => {
+    expect(Env.redactInlineEnvAssignments("FETCH_URL=https://user:'placeholder'@example.test/path run")).toBe(
+      "FETCH_URL=[redacted] run",
+    )
+  })
+
+  test("preserves safe quoted and escaped assignments verbatim", () => {
+    const command = 'NAME=prefix"middle"\'suffix\' LABEL=hello\\ world PATH="/usr/bin" run --api-key=unchanged'
+    expect(Env.redactInlineEnvAssignments(command)).toBe(command)
+  })
+
   test("is idempotent", () => {
     const once = Env.redactInlineEnvAssignments("AWS_SECRET_ACCESS_KEY=awskey AWS_REGION=us-east-1 aws s3 ls")
     expect(Env.redactInlineEnvAssignments(once)).toBe(once)

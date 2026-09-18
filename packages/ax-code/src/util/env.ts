@@ -151,14 +151,43 @@ export namespace Env {
     )
   }
 
-  // Inline `KEY=VALUE` spellings in shell command lines. The prefix boundary
-  // (start, whitespace, or `;`) keeps flag spellings like `--env=production`
-  // untouched because `-` is not a valid assignment boundary.
-  const INLINE_ENV_ASSIGNMENT = /(^|[\s;])((?:[A-Za-z_][A-Za-z0-9_]*)=)(?:"([^"]*)"|'([^']*)'|([^\s"';]+))/g
+  // Assignment starts after shell separators. A flag's `-` is deliberately
+  // not a boundary, so spellings like `--env=production` stay unchanged.
+  const INLINE_ENV_ASSIGNMENT = /(^|[\s;|&(])([A-Za-z_][A-Za-z0-9_]*=)/g
   // Any assigned value carrying credentials as URL userinfo
   // (scheme://user:pass@…) is redacted even when the variable name looks
   // innocuous (e.g. FOO=postgres://u:pw@host/db).
   const URL_USERINFO_VALUE = /^[a-z][a-z0-9+.-]*:\/\/[^/\s]*@/
+
+  // Read one literal shell word, including concatenated quoted segments and
+  // escaped separators. This does not evaluate shell expansions. Unclosed
+  // quotes conservatively consume the remainder of the persisted copy.
+  function inlineEnvWord(value: string, start: number): { end: number; literal: string } {
+    let quote: "'" | '"' | undefined
+    let literal = ""
+    let end = start
+    for (; end < value.length; end++) {
+      const char = value[end]!
+      const next = value[end + 1]
+      if (char === "\\" && quote !== "'" && next !== undefined && (quote === undefined || /[$`"\\\n]/.test(next))) {
+        if (next !== "\n") literal += next
+        end++
+        continue
+      }
+      if (quote !== undefined) {
+        if (char === quote) quote = undefined
+        else literal += char
+        continue
+      }
+      if (char === '"' || char === "'") {
+        quote = char
+        continue
+      }
+      if (/[\s;|&()<>]/.test(char)) break
+      literal += char
+    }
+    return { end, literal }
+  }
 
   /**
    * Redact inline `KEY=VALUE` credential assignments from a shell command
@@ -167,17 +196,22 @@ export namespace Env {
    * copy is for durable records only.
    */
   export function redactInlineEnvAssignments(value: string): string {
-    return value.replace(
-      INLINE_ENV_ASSIGNMENT,
-      (match, prefix: string, assignment: string, doubleQuoted?: string, singleQuoted?: string, bare?: string) => {
-        const assigned = doubleQuoted ?? singleQuoted ?? bare ?? ""
-        const name = assignment.slice(0, -1)
-        const sensitiveName =
-          isSensitiveName(name) || PAT_NAME.test(name) || WEBHOOK_NAME.test(name) || CREDENTIAL_URL_NAME.test(name)
-        if (!sensitiveName && !URL_USERINFO_VALUE.test(assigned)) return match
-        return `${prefix}${assignment}[redacted]`
-      },
-    )
+    const parts: string[] = []
+    let copied = 0
+    let scanned = 0
+    for (const match of value.matchAll(INLINE_ENV_ASSIGNMENT)) {
+      if (match.index < scanned) continue
+      const start = match.index + match[0].length
+      const word = inlineEnvWord(value, start)
+      scanned = word.end
+      const name = match[2]!.slice(0, -1)
+      const sensitiveName =
+        isSensitiveName(name) || PAT_NAME.test(name) || WEBHOOK_NAME.test(name) || CREDENTIAL_URL_NAME.test(name)
+      if (word.end === start || (!sensitiveName && !URL_USERINFO_VALUE.test(word.literal))) continue
+      parts.push(value.slice(copied, start), "[redacted]")
+      copied = word.end
+    }
+    return parts.length === 0 ? value : parts.join("") + value.slice(copied)
   }
 
   // Interpret an environment-variable string as a tri-state boolean.
