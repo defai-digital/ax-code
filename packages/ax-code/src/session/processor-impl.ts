@@ -86,9 +86,12 @@ export namespace SessionProcessor {
    * execution. Returns a shallow copy so the caller's input is untouched.
    */
   export function redactPersistedBashInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
-    const command = input["command"]
-    if (tool !== "bash" || typeof command !== "string") return input
-    return { ...input, command: Env.redactInlineEnvAssignments(command) }
+    if (tool !== "bash") return input
+    const raw = typeof input["command"] === "string" ? input["command"] : input["cmd"]
+    if (typeof raw !== "string") return input
+    const next = { ...input, command: Env.redactInlineEnvAssignments(raw) }
+    delete next.cmd
+    return next
   }
 
   export type Info = Awaited<ReturnType<typeof create>>

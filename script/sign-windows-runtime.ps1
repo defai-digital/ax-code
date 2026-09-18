@@ -57,7 +57,7 @@ foreach ($file in $files) {
   if ($signature.Status -ne "Valid" -or $null -eq $signature.TimeStamperCertificate) {
     throw "Missing valid Authenticode signature or timestamp: $relative"
   }
-  [void]$records.Add([pscustomobject]@{
+  [void]$records.Add([pscustomobject][ordered]@{
     path = $relative
     subject = $signature.SignerCertificate.Subject
     thumbprint = $signature.SignerCertificate.Thumbprint
