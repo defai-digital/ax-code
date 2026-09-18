@@ -166,8 +166,12 @@ export namespace Planner {
       if (aborted) break
       if (batch.canRunInParallel && batch.phases.length > 1) {
         // Parallel execution
-        for (let i = 0; i < batch.phases.length; i += options.maxParallelPhases) {
-          const phases = batch.phases.slice(i, i + options.maxParallelPhases)
+        // Clamp to at least 1: a caller-supplied maxParallelPhases <= 0 (or
+        // non-finite) would otherwise never advance `i`, hanging this loop
+        // forever on an empty `phases` slice every iteration.
+        const step = Number.isFinite(options.maxParallelPhases) ? Math.max(1, Math.floor(options.maxParallelPhases)) : 1
+        for (let i = 0; i < batch.phases.length; i += step) {
+          const phases = batch.phases.slice(i, i + step)
           const batchResults = await Promise.allSettled(
             phases.map((phase) => executePhase(plan, phase, executor, options)),
           )
