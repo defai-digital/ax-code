@@ -332,7 +332,6 @@ export const WorkflowSpecV1 = z
           path: ["phases", index, "id"],
         })
       }
-      phaseIds.add(phase.id)
 
       if (
         phase.maxParallel !== undefined &&
@@ -355,6 +354,8 @@ export const WorkflowSpecV1 = z
           })
         }
       }
+
+      phaseIds.add(phase.id)
 
       for (const output of phase.outputs) {
         if (!artifactIds.has(output)) {

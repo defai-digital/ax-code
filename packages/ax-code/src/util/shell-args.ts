@@ -19,17 +19,17 @@ export function parseShellArgs(input: string): string[] {
       escape = false
       continue
     }
-    if (char === "\\") {
-      escape = true
-      tokenStarted = true
-      continue
-    }
     if (quote) {
       if (char === quote) {
         quote = undefined
         continue
       }
       current += char
+      tokenStarted = true
+      continue
+    }
+    if (char === "\\") {
+      escape = true
       tokenStarted = true
       continue
     }
