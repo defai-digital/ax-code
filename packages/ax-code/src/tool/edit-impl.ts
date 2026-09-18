@@ -479,12 +479,35 @@ const WhitespaceNormalizedReplacer: Replacer = function* (content, find) {
         // the word count at 6: combining many short words with flexible
         // `\s+` separators creates exponential-backtracking regexes that
         // can hang the edit tool on adversarial input (ReDoS). For longer
-        // searches we fall back to yielding the normalized find text as
-        // the match — the caller handles multi-line matching separately
-        // via `findLines`, so this branch is only best-effort.
+        // searches, map the normalized match back to raw indices instead
+        // (no regex, so no ReDoS risk regardless of word count).
         const words = find.trim().split(/\s+/)
         if (words.length > 6) {
-          yield find
+          const rawIndices: number[] = []
+          let normalized = ""
+          let prevWasWs = true
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i]
+            if (/\s/.test(ch)) {
+              if (!prevWasWs) {
+                normalized += " "
+                rawIndices.push(i)
+              }
+              prevWasWs = true
+            } else {
+              normalized += ch
+              rawIndices.push(i)
+              prevWasWs = false
+            }
+          }
+          normalized = normalized.trimEnd()
+          const matchStart = normalized.indexOf(normalizedFind)
+          const matchEndIndex = matchStart + normalizedFind.length - 1
+          if (matchStart !== -1 && matchEndIndex < rawIndices.length) {
+            const rawStart = rawIndices[matchStart]!
+            const rawEnd = rawIndices[matchEndIndex]! + 1
+            yield { text: line.slice(rawStart, rawEnd), index: lineStart + rawStart }
+          }
         } else if (words.length > 0) {
           const pattern = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+")
           try {
