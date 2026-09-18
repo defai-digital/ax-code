@@ -138,7 +138,11 @@ export namespace AutoIndex {
     // entry when the cap is exceeded (FIFO on insertion order).
     if (stateByProject.size > MAX_STATE_ENTRIES) {
       for (const [k, v] of stateByProject) {
-        if (v.state === "idle") {
+        // Never evict the entry this call just wrote — an idle-eviction
+        // pass that runs after `set(key, next)` can otherwise land on
+        // `key` itself (e.g. a just-completed project) and immediately
+        // discard the completion data this call is trying to persist.
+        if (k !== key && v.state === "idle") {
           stateByProject.delete(k)
           break
         }

@@ -383,8 +383,12 @@ export namespace CodeGraphQuery {
       // treat a sibling worktree's files as in-scope, find them absent from
       // `livePaths`, and delete their graph rows. Require the match to be
       // the prefix itself or the prefix followed by a path separator.
-      const escaped = scopePrefix.replace(/([%_\\])/g, "\\$1")
-      const boundary = escaped + path.sep
+      // Escape the boundary (prefix + separator) as one unit: on Windows,
+      // path.sep is "\", the same character as the ESCAPE char below, so
+      // escaping scopePrefix alone and appending an unescaped separator
+      // would leave a bare "\" directly before the "%" wildcard, which
+      // SQLite reads as an escaped literal "%" instead of the wildcard.
+      const boundary = (scopePrefix + path.sep).replace(/([%_\\])/g, "\\$1")
       return db
         .select({ path: CodeFileTable.path })
         .from(CodeFileTable)
