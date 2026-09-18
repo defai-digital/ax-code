@@ -172,8 +172,13 @@ impl IndexStore {
         });
 
         self.with_conn(|conn| {
-      // Range query: name >= prefix AND name < prefix+\uFFFF (avoids LIKE)
-      let upper = format!("{prefix}\u{FFFF}");
+      // Range query: name >= prefix AND name < prefix+max_codepoint (avoids
+      // LIKE). Must use the true maximum Unicode scalar value (U+10FFFF),
+      // not U+FFFF (end of the Basic Multilingual Plane only) \u2014 UTF-8 byte
+      // comparison preserves codepoint order, so a name whose next
+      // character is outside the BMP (e.g. an astral-plane emoji, U+10000+)
+      // would sort after "prefix\u{FFFF}" and be wrongly excluded.
+      let upper = format!("{prefix}\u{10FFFF}");
       let mut sql = format!(
         "SELECT {SELECT_COLS} FROM code_node WHERE project_id = ?1 AND name >= ?2 AND name < ?3"
       );

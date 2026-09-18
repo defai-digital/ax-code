@@ -341,6 +341,7 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
     let mut depth: i32 = 0;
     let mut scope_start: Option<usize> = None;
     let mut in_block_comment = false;
+    let mut seen_open_brace = false;
 
     for (i, line) in lines.iter().enumerate() {
         if scope_start.is_none()
@@ -350,6 +351,7 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
             scope_start = Some(i);
             depth = 0;
             in_block_comment = false;
+            seen_open_brace = false;
         }
         if scope_start.is_some() {
             let bytes = line.as_bytes();
@@ -385,24 +387,30 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
                             j += 1;
                         }
                     }
-                    b'{' => depth += 1,
+                    b'{' => {
+                        depth += 1;
+                        seen_open_brace = true;
+                    }
                     b'}' => depth -= 1,
                     _ => {}
                 }
                 j += 1;
             }
-            if depth <= 0 && scope_start.is_some() {
+            // Only close the scope once we've actually seen its opening
+            // brace — a multi-line signature (e.g. params split across
+            // lines before `{`) would otherwise report depth 0 on the
+            // signature line itself and close the scope before it starts.
+            if seen_open_brace && depth <= 0 && scope_start.is_some() {
                 let start = scope_start.unwrap();
-                if i > start {
-                    scopes.push(FunctionScope {
-                        start: start + 1,
-                        end: i + 1,
-                        content: lines[start..=i].join("\n"),
-                    });
-                }
+                scopes.push(FunctionScope {
+                    start: start + 1,
+                    end: i + 1,
+                    content: lines[start..=i].join("\n"),
+                });
                 scope_start = None;
                 depth = 0;
                 in_block_comment = false;
+                seen_open_brace = false;
             }
         }
     }
@@ -619,13 +627,15 @@ fn is_alphabet_constant(s: &str) -> bool {
         || s.contains("0123456789")
 }
 
-fn strip_comments(line: &str, in_block: &mut bool) -> String {
+fn strip_comments(line: &str, in_block: &mut bool, quote: &mut Option<u8>) -> String {
     // Comment delimiters inside string/template literals are data (most
     // notably the `//` in every http(s) URL). Replace actual comment bytes
     // with spaces instead of removing them so detector columns still map to
-    // the original source line.
+    // the original source line. `quote` is threaded across calls (like
+    // `in_block`) because template literals commonly span multiple lines;
+    // resetting it per line would let a `/*` or `//` inside a multi-line
+    // template flip the scanner into incorrect comment state.
     let mut out = line.as_bytes().to_vec();
-    let mut quote: Option<u8> = None;
     let mut escaped = false;
     let mut i = 0;
 
@@ -643,21 +653,21 @@ fn strip_comments(line: &str, in_block: &mut bool) -> String {
             continue;
         }
 
-        if let Some(delimiter) = quote {
+        if let Some(delimiter) = *quote {
             let byte = out[i];
             if escaped {
                 escaped = false;
             } else if byte == b'\\' {
                 escaped = true;
             } else if byte == delimiter {
-                quote = None;
+                *quote = None;
             }
             i += 1;
             continue;
         }
 
         if matches!(out[i], b'"' | b'\'' | b'`') {
-            quote = Some(out[i]);
+            *quote = Some(out[i]);
             i += 1;
             continue;
         }
@@ -718,6 +728,7 @@ fn scan_hardcodes(
     let lines: Vec<&str> = content.lines().collect();
     let mut findings = Vec::new();
     let mut in_block_comment = false;
+    let mut in_string: Option<u8> = None;
     let patterns = &*HARDCODE_PATTERNS;
 
     for (i, &line) in lines.iter().enumerate() {
@@ -728,7 +739,7 @@ fn scan_hardcodes(
             continue;
         }
 
-        let stripped = strip_comments(line, &mut in_block_comment);
+        let stripped = strip_comments(line, &mut in_block_comment, &mut in_string);
         if stripped.trim().is_empty() {
             continue;
         }
