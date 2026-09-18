@@ -521,7 +521,7 @@ export class BrowserRuntime {
       }
       case "scroll": {
         const direction = (params.direction as string) || "down"
-        const amount = (params.amount as number) || 300
+        const amount = typeof params.amount === "number" ? params.amount : 300
         const deltaY = direction === "up" ? -amount : direction === "down" ? amount : 0
         const deltaX = direction === "left" ? -amount : direction === "right" ? amount : 0
         if (uid) {
@@ -572,7 +572,7 @@ export class BrowserRuntime {
       }
       case "waitFor": {
         const text = params.text as string | undefined
-        const timeout = (params.timeout as number) || 30_000
+        const timeout = typeof params.timeout === "number" ? params.timeout : 30_000
         if (text) {
           await pwPage.waitForSelector(`text=${text}`, { timeout })
           return `Waited for text "${text}"`

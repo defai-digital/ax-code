@@ -104,16 +104,11 @@ export const GlobTool = Tool.define("glob", {
 
     const limit = RESULT_LIMIT
     const files = []
-    let truncated = false
     for await (const file of Ripgrep.files({
       cwd: search,
       glob: [params.pattern],
       signal: ctx.abort,
     })) {
-      if (files.length >= limit) {
-        truncated = true
-        break
-      }
       const full = path.resolve(search, file)
       const stats = Filesystem.stat(full)?.mtime?.getTime() ?? 0
       files.push({
@@ -122,11 +117,13 @@ export const GlobTool = Tool.define("glob", {
       })
     }
     files.sort((a, b) => b.mtime - a.mtime)
+    const truncated = files.length > limit
+    const visibleFiles = truncated ? files.slice(0, limit) : files
 
     const output = []
-    if (files.length === 0) output.push("No files found")
-    if (files.length > 0) {
-      output.push(...files.map((f) => f.path))
+    if (visibleFiles.length === 0) output.push("No files found")
+    if (visibleFiles.length > 0) {
+      output.push(...visibleFiles.map((f) => f.path))
       if (truncated) {
         output.push("")
         output.push(
@@ -137,9 +134,9 @@ export const GlobTool = Tool.define("glob", {
 
     return {
       title,
-      data: { paths: files.map((file) => file.path), truncated },
+      data: { paths: visibleFiles.map((file) => file.path), truncated },
       metadata: {
-        count: files.length,
+        count: visibleFiles.length,
         truncated,
       },
       output: output.join("\n"),
