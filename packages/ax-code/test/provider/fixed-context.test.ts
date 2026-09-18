@@ -90,6 +90,11 @@ describe("fresh context file admission", () => {
     await expect(readFixedContextFiles({ ...input, files: ["missing"] })).rejects.toThrow(
       "Selected files must exist inside the current directory.",
     )
+    const cancelled = new AbortController()
+    cancelled.abort()
+    await expect(readFixedContextFiles({ ...input, signal: cancelled.signal })).rejects.toThrow(
+      "The fixed-context question was cancelled or timed out.",
+    )
     await expect(readFixedContextFiles({ ...input, files: ["code", "code"] })).rejects.toThrow("once")
     await fs.mkdir(path.join(tmp.path, "dir"))
     await expect(readFixedContextFiles({ ...input, files: ["dir"] })).rejects.toThrow()

@@ -19,6 +19,9 @@ const INSTRUCTION =
 function fail(message: string): never {
   throw new FixedContextError({ message })
 }
+function throwIfCancelled(signal?: AbortSignal) {
+  if (signal?.aborted) fail("The fixed-context question was cancelled or timed out.")
+}
 function hash(value: string) {
   return createHash("sha256").update(value).digest("hex")
 }
@@ -48,7 +51,7 @@ export async function readFixedContextFiles(input: {
   const result: ContextFile[] = []
   let remaining = MAX_CONTEXT_BYTES
   for (const name of input.files) {
-    input.signal?.throwIfAborted()
+    throwIfCancelled(input.signal)
     const lexical = path.resolve(root, name)
     const canonical = await fs.realpath(lexical).catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") fail("Selected files must exist inside the current directory.")
@@ -72,7 +75,7 @@ export async function readFixedContextFiles(input: {
       const buffer = Buffer.alloc(remaining + 1)
       let length = 0
       while (length < buffer.length) {
-        input.signal?.throwIfAborted()
+        throwIfCancelled(input.signal)
         const { bytesRead } = await handle.read(buffer, length, buffer.length - length, null)
         if (bytesRead === 0) break
         length += bytesRead
@@ -159,7 +162,7 @@ export async function generateFixedContext(
   const result = await Promise.race([
     cancelled.promise,
     Promise.resolve().then(() => {
-      abortSignal.throwIfAborted()
+      throwIfCancelled(abortSignal)
       return language.doGenerate({
         prompt: [
           ...request.system.map((content) => ({ role: "system" as const, content })),
