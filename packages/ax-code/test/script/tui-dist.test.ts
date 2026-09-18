@@ -53,7 +53,7 @@ const runtimeFiles = [
   "chart/src/index.js",
   "chart/src/renderables.js",
   "vendor/manifest.json",
-  "vendor/darwin-arm64/libopentui.dylib",
+  "vendor/darwin-arm64/libaxtui.dylib",
   "vendor/darwin-arm64/LICENSE",
   "assets/markdown/tree-sitter-markdown.wasm",
   "assets/markdown/highlights.scm",

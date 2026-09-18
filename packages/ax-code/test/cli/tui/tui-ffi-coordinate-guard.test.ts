@@ -82,7 +82,8 @@ describe("AX Code TUI FFI coordinate guard", () => {
     for (const method of POINT_DRAW_METHODS) {
       const body = SRC.slice(SRC.indexOf(`${method}(buffer`))
       const guardBeforeCall = body.indexOf("ffiCellOrigin")
-      const ffiCall = body.indexOf(`this.opentui.symbols.${method}(`)
+      const ffiCall = body.indexOf(`this.native.symbols.${method}(`)
+      expect(ffiCall, `${method} native call is missing`).toBeGreaterThanOrEqual(0)
       expect(guardBeforeCall, `${method} is not guarded by ffiCellOrigin`).toBeGreaterThanOrEqual(0)
       expect(guardBeforeCall, `${method} guard must run before its FFI call`).toBeLessThan(ffiCall)
     }
