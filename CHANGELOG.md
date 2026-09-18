@@ -6,10 +6,27 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.19.2] - 2026-09-18
+
 ### Changed
 
+- Publish the paired SDK 2.5.36.
+- Consume AX TUI 1.0.1 and 1.0.2.
 - Open a draft GitHub release after Release validate so maintainers can see the new tag on the Releases page before
   signed assets are published. Public Latest still changes only after publish.
+
+### Fixed
+
+- Patch and edit: preserve trailing blank lines and CRLF, keep unprefixed Add-File lines, key move+update by source
+  path, append chunks at the correct position, and tighten replace ambiguity, JSX, and brace-depth handling.
+- Config and commands: honor `ax-code.jsonc` vs `.json` precedence, nested `.ax-code` directories, `{env:}`/`{file:}`
+  substitution, and stop `.ax-code/commands/*.md` from overriding protected builtins.
+- Shell, glob, and browser tools: keep backslashes inside quotes, fix glob truncation ordering, and treat falsy-zero
+  scroll/`waitFor` values as valid.
+- Telemetry and ACP: pair OTLP steps across provider retries, keep gRPC `message.part.updated` subscriptions, fix SSE
+  reconnect backoff, and page ACP results correctly.
+- Planner, memory, and headless: stop `maxParallelPhases <= 0` from hanging, keep replan failure counts accurate, and
+  clear stale projected task/message fields.
 
 ## [7.19.1] - 2026-09-18
 
