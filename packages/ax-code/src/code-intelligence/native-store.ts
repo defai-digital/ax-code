@@ -187,6 +187,10 @@ export namespace NativeStore {
     return result ? parseNativeStoreJson<FileRow[]>(result, []) : []
   }
 
+  export function deleteFile(projectID: ProjectID, path: string): void {
+    op("deleteFile", { projectID, path }, (store) => store.deleteFile(projectID, path))
+  }
+
   export function pruneOrphanFiles(
     projectID: ProjectID,
     livePaths: string[],

@@ -323,6 +323,7 @@ export namespace CodeGraphQuery {
   }
 
   export function deleteFile(projectID: ProjectID, path: string): void {
+    if (useNative) return NativeStore.deleteFile(projectID, path)
     Database.use((db) =>
       db
         .delete(CodeFileTable)
