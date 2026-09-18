@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from "vitest"
 import fs from "fs/promises"
+import os from "os"
 import path from "path"
 import { Command } from "../../src/command"
+import { FileCommand } from "../../src/command/file-command"
 import { commandTemplateText } from "../../src/session/prompt/prompt-command-template"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
@@ -58,6 +60,50 @@ Review branch $ARGUMENTS.
       },
     })
   })
+})
+
+test("orders project file-backed commands ahead of same-named global ones", async () => {
+  // Regression test: home is an ancestor of the project directory (mirrors
+  // ~/code/myrepo nested under ~), so the global command's location string
+  // (".../home/.agents/...") sorts alphabetically before the project
+  // command's location string (".../home/code/myrepo/.agents/..."). Scope
+  // must break that tie so the project override is not silently shadowed.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "ax-code-file-command-"))
+  const home = path.join(root, "home")
+  const project = path.join(home, "code", "myrepo")
+  try {
+    await fs.mkdir(path.join(home, ".agents", "commands"), { recursive: true })
+    await fs.writeFile(
+      path.join(home, ".agents", "commands", "deploy.md"),
+      `---
+description: Global deploy
+---
+Global deploy template.
+`,
+    )
+    await fs.mkdir(path.join(project, ".agents", "commands"), { recursive: true })
+    await fs.writeFile(
+      path.join(project, ".agents", "commands", "deploy.md"),
+      `---
+description: Project deploy
+---
+Project deploy template.
+`,
+    )
+
+    await withTestHome(home, async () => {
+      const results = await FileCommand.discover({ directory: project, worktree: project })
+      const deployEntries = results.filter((entry) => entry.name === "deploy")
+      expect(deployEntries).toHaveLength(2)
+      // The project-scoped entry must come first: Command.state() keeps
+      // whichever same-named entry appears first in discover()'s array.
+      expect(deployEntries[0].scope).toBe("project")
+      expect(deployEntries[0].description).toBe("Project deploy")
+      expect(deployEntries[1].scope).toBe("user")
+    })
+  } finally {
+    await fs.rm(root, { recursive: true, force: true })
+  }
 })
 
 test("surfaces invalid file-backed command frontmatter", async () => {

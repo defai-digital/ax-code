@@ -47,6 +47,7 @@ export namespace FileCommand {
 
   const FRONTMATTER_FIELDS = new Set(["description", "agent", "model", "subtask", "workflow"])
   const COMMAND_PATTERN = "commands/**/*.md"
+  const SCOPE_PRIORITY: Record<Scope, number> = { project: 0, user: 1, config: 2 }
 
   export async function parse(input: {
     name: string
@@ -173,7 +174,16 @@ export namespace FileCommand {
       results.push(...(await scanRoot({ root: root.root, sourceTool: root.sourceTool, scope: "project" })))
     }
 
-    return results.sort((a, b) => a.name.localeCompare(b.name) || a.location.localeCompare(b.location))
+    // Sort by name for stable display, but break ties on scope (project before
+    // user) rather than the location string: a project's absolute path can sort
+    // after a global one purely due to path characters (e.g. "code/myrepo" vs
+    // ".agents"), which would silently let a global command shadow a
+    // same-named project override in the "first entry wins" merge in
+    // Command.state(). Array.prototype.sort is stable, so entries that also
+    // share a scope keep their original discovery order (closer project roots,
+    // then farther ones; global roots in their fixed .agents/.opencode/.claude
+    // order).
+    return results.sort((a, b) => a.name.localeCompare(b.name) || SCOPE_PRIORITY[a.scope] - SCOPE_PRIORITY[b.scope])
   }
 
   async function scanRoot(input: { root: string; sourceTool: SourceTool; scope: Scope }) {
