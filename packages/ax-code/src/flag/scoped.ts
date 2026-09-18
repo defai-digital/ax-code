@@ -81,7 +81,14 @@ export namespace ScopedFlag {
 
   /** Autonomous mode for the current instance directory, env fallback. */
   export function autonomous(): boolean {
-    return peek("AX_CODE_AUTONOMOUS") ?? Flag.AX_CODE_AUTONOMOUS
+    const scoped = peek("AX_CODE_AUTONOMOUS")
+    if (scoped !== undefined) return scoped
+    // Once a route/config reconciliation has (re)written this process-global
+    // env, its value belongs to whichever directory wrote it last. A new
+    // directory with no setting of its own must use the feature's default
+    // (on), not inherit that stale mirror.
+    if (resolveDirectory?.() && isManaged("AX_CODE_AUTONOMOUS")) return true
+    return Flag.AX_CODE_AUTONOMOUS
   }
 
   /**

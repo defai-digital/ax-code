@@ -18,8 +18,8 @@ const app = "ax-code"
 const testHome = Flag.AX_CODE_TEST_HOME
 const pathHome = testHome || os.homedir()
 const fallback = (dir: string | undefined, envName: string, sub: string) => {
-  if (process.env[envName]) return dir ?? process.env[envName]
   if (testHome) return path.join(pathHome, sub)
+  if (process.env[envName]) return dir ?? process.env[envName]
   return dir ?? path.join(pathHome, sub)
 }
 
@@ -124,6 +124,11 @@ void (async () => {
             ),
           ),
         )
+        // Actually delete this run's own trash dir in the background. The
+        // startup sweep below races this IIFE and reads the cache directory
+        // well before `trash` exists here, so it never catches it — remove
+        // it directly instead of relying on that sweep.
+        void fs.rm(trash, { recursive: true, force: true }).catch(() => {})
       }
     } catch (e) {
       cleaned = false
