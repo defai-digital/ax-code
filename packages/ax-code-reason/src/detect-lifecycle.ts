@@ -117,11 +117,15 @@ function findFunctionScopes(content: string): FunctionScope[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    // Detect function-like declarations (function, method, arrow)
+    // Detect function-like declarations (function, method, arrow). The
+    // control-flow exclusion must be anchored to the start of the line —
+    // an unanchored negative lookahead can be bypassed by the regex engine
+    // trying a match starting mid-keyword (e.g. at the "o" in "for ("),
+    // where the lookahead's own keyword search no longer sees the keyword.
+    const isControlFlowLine = /^\s*(?:if|for|while|switch|catch|class)\s*\(/.test(line)
     if (
-      /(?!.*\b(?:if|for|while|switch|catch|class)\s*\()(?:function\s+\w+|(?:async\s+)?(?:\w+\s*\(|=>\s*\{)|\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{)/.test(
-        line,
-      ) &&
+      !isControlFlowLine &&
+      /(?:function\s+\w+|(?:async\s+)?(?:\w+\s*\(|=>\s*\{)|\w+\s*\([^)]*\)\s*(?::\s*\w+)?\s*\{)/.test(line) &&
       depth === 0
     ) {
       isFunctionLike = true

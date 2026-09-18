@@ -149,10 +149,19 @@ function findAsyncScopes(lines: LineInfo[]): Array<{ start: number; end: number 
   let scopeStart = -1
   let inAsync = false
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     if (/\basync\b/.test(line.code) && /(?:function|=>|\()/.test(line.code) && depth === 0) {
-      inAsync = true
-      scopeStart = line.num
+      // Only treat this as opening a real block scope if a "{" is actually
+      // in evidence — an expression-bodied arrow (`async () => foo()`) has
+      // no block of its own and must not stay "open" until whatever
+      // unrelated `}` happens to appear next at depth 0.
+      const nextLine = lines[i + 1]
+      const hasBrace = line.code.includes("{") || (nextLine !== undefined && nextLine.code.trim().startsWith("{"))
+      if (hasBrace) {
+        inAsync = true
+        scopeStart = line.num
+      }
     }
 
     for (const ch of line.code) {
