@@ -116,6 +116,24 @@ describe("fresh context file admission", () => {
     }
     await expect(readFixedContextFiles({ ...input, signal: AbortSignal.abort() })).rejects.toThrow()
   })
+  test("rejects lexical escapes before resolving any external filesystem path", async () => {
+    await using tmp = await tmpdir()
+    await using external = await tmpdir()
+    const outside = path.join(external.path, "private.txt")
+    await fs.writeFile(outside, "must not inspect")
+    const realpath = vi.spyOn(fs, "realpath")
+    try {
+      for (const file of [outside, path.relative(tmp.path, outside), path.join(external.path, "missing.txt")]) {
+        realpath.mockClear()
+        await expect(
+          readFixedContextFiles({ directory: tmp.path, files: [file], allowRead: () => true }),
+        ).rejects.toThrow("Selected files must stay inside the current directory.")
+        expect(realpath.mock.calls).toEqual([[tmp.path]])
+      }
+    } finally {
+      realpath.mockRestore()
+    }
+  })
 })
 
 describe("real bundled SDK transport", () => {
