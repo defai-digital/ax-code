@@ -5,6 +5,7 @@ import { Config } from "../config/config"
 import { Global } from "../global"
 import { Instance } from "../project/instance"
 import { Filesystem } from "../util/filesystem"
+import { Env } from "../util/env"
 import { Lock } from "../util/lock"
 
 export namespace McpTrust {
@@ -57,18 +58,14 @@ export namespace McpTrust {
       .digest("hex")
   }
 
+  // A record key is secret-bearing when the repository's canonical secret
+  // detector matches it, plus `cookie` (which the keyword pattern does not
+  // cover). Secret values must not shape the fingerprint — only whether the
+  // key is present — so rotating a credential never silently untrusts a
+  // server. The previous hand-rolled list missed hyphenated names such as
+  // `X-Api-Key`, letting their values leak into the digest.
   function isSensitiveRecordKey(key: string) {
-    const lower = key.toLowerCase()
-    return (
-      lower === "authorization" ||
-      lower === "cookie" ||
-      lower.includes("apikey") ||
-      lower.includes("api_key") ||
-      lower.includes("token") ||
-      lower.includes("secret") ||
-      lower.includes("password") ||
-      lower === "key"
-    )
+    return key.toLowerCase() === "cookie" || Env.isSensitiveName(key)
   }
 
   function recordFingerprintShape(record: Record<string, string> | undefined) {

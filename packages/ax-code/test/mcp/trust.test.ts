@@ -217,6 +217,33 @@ test("MCP trust fingerprints do not derive from secret values", () => {
   expect(withChangedNonSecretHeader).not.toBe(withExtraHeader)
 })
 
+test("MCP trust fingerprints treat hyphenated API-key headers as secret", () => {
+  const first = McpTrust.fingerprint("remote", {
+    type: "remote",
+    url: "https://mcp.example.com",
+    headers: {
+      "X-Api-Key": "secret-a",
+    },
+  })
+  const rotated = McpTrust.fingerprint("remote", {
+    type: "remote",
+    url: "https://mcp.example.com",
+    headers: {
+      "X-Api-Key": "secret-b",
+    },
+  })
+  const emptied = McpTrust.fingerprint("remote", {
+    type: "remote",
+    url: "https://mcp.example.com",
+    headers: {
+      "X-Api-Key": "",
+    },
+  })
+
+  expect(rotated).toBe(first)
+  expect(emptied).not.toBe(first)
+})
+
 test("project MCP trust updates do not overwrite malformed trust JSON", async () => {
   await using tmp = await tmpdir({ git: true })
   const malformed = "{not json"
