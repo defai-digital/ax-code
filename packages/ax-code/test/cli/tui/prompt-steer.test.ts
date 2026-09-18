@@ -81,4 +81,16 @@ describe("prompt steer delivery", () => {
       message: "409 conflict",
     })
   })
+
+  test("does not start requests when the submission was already cancelled", async () => {
+    const { fake, calls } = client({ generation: "gen-1", receipt: { status: "accepted" } })
+    const outcome = await steerBusySession(fake, {
+      sessionID: "ses_1",
+      clientID: "msg_1",
+      text: "use the other file",
+      signal: AbortSignal.abort(),
+    })
+    expect(outcome).toEqual({ kind: "failed", message: "steering request cancelled" })
+    expect(calls).toEqual([])
+  })
 })

@@ -19,15 +19,19 @@
 export type SteerReceiptStatus = "accepted" | "applied" | "rejected"
 
 export type SteerClient = {
-  steering(parameters: {
-    sessionID: string
-  }): Promise<{ data?: { generation: string | null } | undefined; error?: unknown }>
-  steer(parameters: {
-    sessionID: string
-    expectedGeneration: string
-    clientID: string
-    text: string
-  }): Promise<{ data?: { status: SteerReceiptStatus; reason?: string } | undefined; error?: unknown }>
+  steering(
+    parameters: { sessionID: string },
+    options?: { signal?: AbortSignal },
+  ): Promise<{ data?: { generation: string | null } | undefined; error?: unknown }>
+  steer(
+    parameters: {
+      sessionID: string
+      expectedGeneration: string
+      clientID: string
+      text: string
+    },
+    options?: { signal?: AbortSignal },
+  ): Promise<{ data?: { status: SteerReceiptStatus; reason?: string } | undefined; error?: unknown }>
 }
 
 export type SteerOutcome =
@@ -46,18 +50,26 @@ export function isSteerableDraft(input: { mode: string; statusType: string | und
 
 export async function steerBusySession(
   client: SteerClient,
-  input: { sessionID: string; clientID: string; text: string },
+  input: { sessionID: string; clientID: string; text: string; signal?: AbortSignal },
 ): Promise<SteerOutcome> {
-  const state = await client.steering({ sessionID: input.sessionID }).catch((error: unknown) => ({
+  if (input.signal?.aborted) return { kind: "failed", message: "steering request cancelled" }
+  const options = input.signal ? { signal: input.signal } : undefined
+  const state = await client.steering({ sessionID: input.sessionID }, options).catch((error: unknown) => ({
     data: undefined,
     error,
   }))
+  // A cancelled lookup can still resolve after its editor closes. Never start
+  // the mutating request from that stale result, even if the client ignores abort.
+  if (input.signal?.aborted) return { kind: "failed", message: "steering request cancelled" }
   if (state.error) return { kind: "failed", message: errorText(state.error) }
   const generation = state.data?.generation
   if (!generation) return { kind: "fallback", reason: "generation_not_active" }
 
   const receipt = await client
-    .steer({ sessionID: input.sessionID, expectedGeneration: generation, clientID: input.clientID, text: input.text })
+    .steer(
+      { sessionID: input.sessionID, expectedGeneration: generation, clientID: input.clientID, text: input.text },
+      options,
+    )
     .catch((error: unknown) => ({ data: undefined, error }))
   if (receipt.error) return { kind: "failed", message: errorText(receipt.error) }
   const data = receipt.data

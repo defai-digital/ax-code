@@ -162,7 +162,7 @@ export namespace Env {
   // Read one literal shell word, including concatenated quoted segments and
   // escaped separators. This does not evaluate shell expansions. Unclosed
   // quotes conservatively consume the remainder of the persisted copy.
-  function inlineEnvWord(value: string, start: number): { end: number; literal: string } {
+  function inlineEnvWord(value: string, start: number, sensitiveName: boolean): { end: number; literal: string } {
     let quote: "'" | '"' | undefined
     let literal = ""
     let end = start
@@ -173,6 +173,18 @@ export namespace Env {
         if (next !== "\n") literal += next
         end++
         continue
+      }
+      if (
+        sensitiveName &&
+        quote !== "'" &&
+        (char === "`" ||
+          (char === "$" && (next === "(" || next === "{")) ||
+          (quote === undefined && (char === "(" || ((char === "<" || char === ">") && next === "("))))
+      ) {
+        // Nested expansions and arrays need a full shell grammar to locate
+        // their end. Hide the remaining persisted command instead of leaking
+        // a literal suffix. Safe assignments keep scanning for later secrets.
+        return { end: value.length, literal: "" }
       }
       if (quote !== undefined) {
         if (char === quote) quote = undefined
@@ -202,11 +214,11 @@ export namespace Env {
     for (const match of value.matchAll(INLINE_ENV_ASSIGNMENT)) {
       if (match.index < scanned) continue
       const start = match.index + match[0].length
-      const word = inlineEnvWord(value, start)
-      scanned = word.end
       const name = match[2]!.slice(0, -1)
       const sensitiveName =
         isSensitiveName(name) || PAT_NAME.test(name) || WEBHOOK_NAME.test(name) || CREDENTIAL_URL_NAME.test(name)
+      const word = inlineEnvWord(value, start, sensitiveName)
+      scanned = word.end
       if (word.end === start || (!sensitiveName && !URL_USERINFO_VALUE.test(word.literal))) continue
       parts.push(value.slice(copied, start), "[redacted]")
       copied = word.end

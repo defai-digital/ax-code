@@ -444,13 +444,14 @@ describe("send-now steering", () => {
   test("the steer gesture delivers text into the running turn and clears the draft", async () => {
     const { controller, host, requests, steering, steer } = steerSetup({ generation: "gen-1" })
     await controller.submitSteer()
-    expect(steering).toHaveBeenCalledWith({ sessionID: "ses_test" })
+    expect(steering).toHaveBeenCalledWith({ sessionID: "ses_test" }, { signal: expect.any(AbortSignal) })
     expect(steer).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionID: "ses_test",
         expectedGeneration: "gen-1",
         text: "use the other config file",
       }),
+      { signal: expect.any(AbortSignal) },
     )
     // No follow-up was queued: nothing hit the async prompt route.
     expect(requests).toHaveLength(0)
@@ -494,5 +495,47 @@ describe("send-now steering", () => {
     await controller.submit()
     expect(steering).not.toHaveBeenCalled()
     expect(requests).toHaveLength(1)
+  })
+
+  test.each(["cancel", "dispose"] as const)("%s prevents steering after a late generation lookup", async (action) => {
+    const { controller, host, requests, steering, steer } = steerSetup({ generation: "gen-1" })
+    const lookup = Promise.withResolvers<{ data: { generation: string } }>()
+    steering.mockImplementation(() => lookup.promise)
+    const pending = controller.submitSteer()
+    expect(steering).toHaveBeenCalledOnce()
+
+    if (action === "cancel") expect(controller.cancelPendingSubmit()).toBe(true)
+    else controller.dispose()
+    lookup.resolve({ data: { generation: "gen-1" } })
+    await pending
+
+    expect(steer).not.toHaveBeenCalled()
+    expect(requests).toHaveLength(0)
+    expect(host.input.clear).not.toHaveBeenCalled()
+    expect(host.history.append).not.toHaveBeenCalled()
+  })
+
+  test("cancelling an in-flight steering request aborts its transport and keeps the draft", async () => {
+    const { controller, host, steering, requests } = steerSetup({ generation: "gen-1" })
+    const receipt = Promise.withResolvers<{ data: { status: "accepted" } }>()
+    let signal: AbortSignal | undefined
+    host.sdk.client.session.steer = async (_parameters, options) => {
+      signal = options?.signal
+      return receipt.promise
+    }
+    const pending = controller.submitSteer()
+    await vi.waitFor(() => expect(signal).toBeInstanceOf(AbortSignal))
+    expect(steering).toHaveBeenCalledWith({ sessionID: "ses_test" }, { signal })
+
+    expect(controller.cancelPendingSubmit()).toBe(true)
+    expect(signal?.aborted).toBe(true)
+    receipt.resolve({ data: { status: "accepted" } })
+    await pending
+
+    expect(requests).toHaveLength(0)
+    expect(host.input.clear).not.toHaveBeenCalled()
+    expect(host.history.append).not.toHaveBeenCalled()
+    expect(host.submitPending()).toBe(false)
+    expect(controller.submitInFlight).toBe(false)
   })
 })

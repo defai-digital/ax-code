@@ -105,6 +105,24 @@ describe("Env.redactInlineEnvAssignments", () => {
     expect(Env.redactInlineEnvAssignments(command)).toBe(command)
   })
 
+  test.each([
+    "API_KEY=$(echo<placeholder) run",
+    'API_KEY="$(printf "%s" "placeholder value")" run',
+    "API_KEY=${MISSING:-placeholder value} run",
+    "API_KEY=`printf placeholder` run",
+    "API_KEY=<(printf placeholder) run",
+    "API_KEY=(placeholder) run",
+  ])("conservatively redacts complex sensitive assignment suffixes: %s", (command) => {
+    expect(Env.redactInlineEnvAssignments(command)).toBe("API_KEY=[redacted]")
+  })
+
+  test("continues scanning after safe expansions and preserves quoted expansion literals", () => {
+    expect(Env.redactInlineEnvAssignments("SAFE=$(printf x) API_KEY=placeholder run")).toBe(
+      "SAFE=$(printf x) API_KEY=[redacted] run",
+    )
+    expect(Env.redactInlineEnvAssignments("API_KEY='$(printf placeholder)' run")).toBe("API_KEY=[redacted] run")
+  })
+
   test("is idempotent", () => {
     const once = Env.redactInlineEnvAssignments("AWS_SECRET_ACCESS_KEY=awskey AWS_REGION=us-east-1 aws s3 ls")
     expect(Env.redactInlineEnvAssignments(once)).toBe(once)

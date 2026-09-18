@@ -1,6 +1,7 @@
 // Exercise real Solid dialogs with the native renderer and isolated user state.
 import assert from "node:assert/strict"
 import fs from "node:fs/promises"
+import { writeSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import type { ParentProps } from "solid-js"
@@ -18,6 +19,7 @@ const { ThemeProvider } = await import("../src/cli/tui/context/theme")
 const { KeybindProvider } = await import("../src/cli/tui/context/keybind")
 const { ToastProvider } = await import("../src/cli/tui/ui/toast")
 const { DialogProvider, useDialog } = await import("../src/cli/tui/ui/dialog")
+const { DialogPrompt } = await import("../src/cli/tui/ui/dialog-prompt")
 const { FixedContextDialog } = await import("../src/cli/tui/component/dialog-fixed-context")
 const { createEffect } = await import("solid-js")
 
@@ -181,12 +183,84 @@ try {
       await setup.renderOnce()
       assert.equal(dialog.stack.length, 0)
       assert(!setup.captureCharFrame().includes("Late answer"))
+
+      const pendingConfirm = Promise.withResolvers<void>()
+      let confirmations = 0
+      dialog.replace(() => (
+        <DialogPrompt
+          title="Pending question"
+          value="Question draft"
+          onConfirm={async () => {
+            confirmations++
+            await pendingConfirm.promise
+          }}
+        />
+      ))
+      await setup.flush()
+      await setup.renderOnce()
+      setup.mockInput.pressKey("RETURN")
+      await setup.flush()
+      setup.mockInput.pressKey("RETURN")
+      await setup.flush()
+      const failures: string[] = []
+      if (confirmations !== 1) failures.push(`pending prompt submitted ${confirmations} times`)
+      dialog.clear()
+      dialog.replace(() => (
+        <FixedContextDialog
+          model="trust/model"
+          run={async () => {
+            throw new Error("Replacement dialog must not submit")
+          }}
+        />
+      ))
+      await setup.flush()
+      await setup.renderOnce()
+      pendingConfirm.resolve()
+      await setup.flush()
+      await setup.renderOnce()
+      if (!setup.captureCharFrame().includes("Ask about fixed files")) {
+        failures.push("late prompt completion closed the replacement question dialog")
+      }
+      if (failures.length) writeSync(2, failures.join("\n") + "\n")
+      assert.deepEqual(failures, [])
+      dialog.clear()
+
+      let retries = 0
+      dialog.replace(() => (
+        <DialogPrompt
+          title="Retry question"
+          onConfirm={async () => {
+            retries++
+            if (retries === 1) throw new Error("Try again")
+          }}
+        />
+      ))
+      await setup.flush()
+      await setup.renderOnce()
+      setup.mockInput.pressKey("RETURN")
+      await setup.flush()
+      await setup.renderOnce()
+      assert(setup.captureCharFrame().includes("Retry question"), "failed confirmation closed its prompt")
+      setup.mockInput.pressKey("RETURN")
+      await setup.flush()
+      await setup.renderOnce()
+      assert.equal(retries, 2, "failed confirmation prevented retry")
+      assert.equal(dialog.stack.length, 0, "successful retry did not close its prompt")
+
+      let cancelledSubmissions = 0
+      dialog.replace(() => <DialogPrompt title="Cancelled question" onConfirm={() => cancelledSubmissions++} />)
+      await setup.flush()
+      await setup.renderOnce()
+      setup.mockInput.pressKey("RETURN")
+      dialog.clear()
+      await setup.flush()
+      assert.equal(cancelledSubmissions, 0, "closed prompt still started its deferred confirmation")
     } finally {
       setup.renderer.destroy()
     }
   }
   console.log(
-    "Fixed-context native dialogs passed: file/question input, keyboard answer scrolling, repeat and cancel at 50/80 columns.",
+    "Fixed-context native dialogs passed: file/question input, keyboard scrolling, repeat/cancel, single submission, retry and replacement ownership at 50/80 columns.",
   )
 } finally {
   await fs.rm(state, { recursive: true, force: true })

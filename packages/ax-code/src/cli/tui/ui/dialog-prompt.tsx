@@ -33,22 +33,35 @@ export function DialogPrompt(props: DialogPromptProps) {
   const toast = useToast()
   const { theme } = useTheme()
   let textarea: TextareaRenderable
+  let active = true
+  let pending = false
+  onCleanup(() => {
+    active = false
+  })
 
   function runDialogPromptAction(action: () => unknown, failureMessage: string) {
+    if (!active || pending) return
+    pending = true
     void Promise.resolve()
-      .then(action)
+      .then(() => {
+        if (active) return action()
+      })
       .then(() => {
         // Only auto-clear on success when the caller hasn't opted to manage the
         // dialog lifecycle itself. Awaiting `action` first ensures async confirm
         // handlers (e.g. provider auth) keep the prompt open until they resolve.
-        if (props.autoClose !== false) dialog.clear()
+        if (active && props.autoClose !== false) dialog.clear()
       })
       .catch((error) => {
         log.warn("dialog prompt confirm failed", { error, title: props.title })
+        if (!active) return
         toast.show({
           message: error instanceof Error ? error.message : failureMessage,
           variant: "error",
         })
+      })
+      .finally(() => {
+        pending = false
       })
   }
 
@@ -83,10 +96,8 @@ export function DialogPrompt(props: DialogPromptProps) {
         <Show when={props.description}>{(description) => description()()}</Show>
         <textarea
           onSubmit={() => {
-            runDialogPromptAction(
-              () => props.onConfirm?.(textarea.plainText),
-              `Failed to confirm ${props.title.toLowerCase()}`,
-            )
+            const value = textarea.plainText
+            runDialogPromptAction(() => props.onConfirm?.(value), `Failed to confirm ${props.title.toLowerCase()}`)
           }}
           height={3}
           keyBindings={[{ name: "return", action: "submit" }]}

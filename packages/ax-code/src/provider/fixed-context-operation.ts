@@ -39,6 +39,33 @@ export const FixedContextOutput = z
   })
   .meta({ ref: "FixedContextOutput" })
 
+async function withCancellation<T>(load: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  const cancelled = () => new FixedContextError({ message: "The fixed-context question was cancelled or timed out." })
+  if (signal?.aborted) throw cancelled()
+  if (!signal) return load()
+  const aborted = Promise.withResolvers<never>()
+  const onAbort = () => aborted.reject(cancelled())
+  signal.addEventListener("abort", onAbort, { once: true })
+  try {
+    // Provider and agent setup may be shared with other callers. Stop waiting
+    // without cancelling that shared work or starting the next request stage.
+    const result = await Promise.race([
+      aborted.promise,
+      Promise.resolve().then(() => {
+        if (signal.aborted) throw cancelled()
+        return load()
+      }),
+    ])
+    if (signal.aborted) throw cancelled()
+    return result
+  } catch (error) {
+    if (signal.aborted) throw cancelled()
+    throw error
+  } finally {
+    signal.removeEventListener("abort", onAbort)
+  }
+}
+
 export async function askFixedContext(
   input: z.infer<typeof FixedContextInput>,
   directory: string,
@@ -46,29 +73,32 @@ export async function askFixedContext(
 ) {
   const selected = FixedContextInput.parse(input)
   validateFixedContextQuestion(selected.question)
-  signal?.throwIfAborted()
-  const config = await Config.get()
+  const config = await withCancellation(() => Config.get(), signal)
   const configured = config.provider?.[selected.providerID]
   if (configured?.management !== "ax-trust" && !isAxTrustProviderID(selected.providerID))
     throw new FixedContextError({ message: "Select a connected AX Trust provider for fixed-context questions." })
-  const model = await Provider.getModel(selected.providerID, selected.modelID)
+  const model = await withCancellation(() => Provider.getModel(selected.providerID, selected.modelID), signal)
   if (model.api.npm !== "@ai-sdk/openai-compatible")
     throw new FixedContextError({ message: "This command requires an AX Trust OpenAI-compatible chat connection." })
-  const agent = await Agent.get(await Agent.defaultAgent())
-  const context = await readFixedContextFiles({
-    directory,
-    files: selected.files,
+  const agentName = await withCancellation(() => Agent.defaultAgent(), signal)
+  const agent = await withCancellation(() => Agent.get(agentName), signal)
+  const context = await withCancellation(
+    () =>
+      readFixedContextFiles({
+        directory,
+        files: selected.files,
+        signal,
+        allowRead: (file) => Permission.evaluate("read", file, agent.permission).action === "allow",
+      }),
     signal,
-    allowRead: (file) => Permission.evaluate("read", file, agent.permission).action === "allow",
-  })
+  )
   const request = buildFixedContextRequest({
     ...context,
     model: model.api.id,
     question: selected.question,
     maxTokens: selected.maxTokens,
   })
-  signal?.throwIfAborted()
-  const language = await Provider.getLanguage(model)
+  const language = await withCancellation(() => Provider.getLanguage(model), signal)
   if (language.specificationVersion !== "v3")
     throw new FixedContextError({ message: "This command requires the bundled version 3 chat adapter." })
   const result = await generateFixedContext(language, request, signal)

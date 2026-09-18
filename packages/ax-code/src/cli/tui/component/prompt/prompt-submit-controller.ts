@@ -542,6 +542,7 @@ export function createPromptSubmitController(host: PromptSubmitHost) {
           sessionID,
           clientID: messageID,
           text: submitText,
+          signal: nextSubmitAbort.signal,
         })
         if (nextSubmitAbort.signal.aborted) return
         if (outcome.kind === "delivered") {

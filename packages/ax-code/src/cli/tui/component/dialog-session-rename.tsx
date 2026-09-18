@@ -41,7 +41,6 @@ export function DialogSessionRename(props: DialogSessionRenameProps) {
           // v2 SDK resolves with { error } instead of rejecting on failure.
           throw new Error(errorMessage(result.error, "Failed to rename session"))
         }
-        dialog.clear()
       }}
       onCancel={() => dialog.clear()}
     />
