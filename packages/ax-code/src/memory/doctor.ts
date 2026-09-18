@@ -152,7 +152,7 @@ function inspectDuplicateContent(
     const key = normalizeContent(entry.body)
     if (!key) continue
     const first = seen.get(key)
-    if (!first) {
+    if (first === undefined) {
       seen.set(key, entry.name)
       continue
     }

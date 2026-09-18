@@ -133,9 +133,15 @@ function buildCommands(info: ProjectInfo): string {
   const cmds: string[] = []
 
   cmds.push(`${install}    # Install dependencies`)
-  if (scripts.build) cmds.push(`${run} build   # Build project`)
+  if (scripts.build) {
+    cmds.push(packageManager === "bun" ? "bun run build   # Build project" : `${run} build   # Build project`)
+  }
   if (scripts.test) {
-    cmds.push(packageManager === "npm" ? "npm test    # Run tests" : `${run} test    # Run tests`)
+    cmds.push(
+      packageManager === "npm" || packageManager === "bun"
+        ? `${packageManager} run test    # Run tests`
+        : `${run} test    # Run tests`,
+    )
   }
   if (scripts.lint) cmds.push(`${run} lint    # Lint code`)
   if (scripts.dev) cmds.push(`${run} dev     # Development mode`)
