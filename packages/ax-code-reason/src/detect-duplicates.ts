@@ -186,6 +186,10 @@ function commonDirectory(files: string[]): string {
     if (split.every((s) => s[i] === seg)) common.push(seg)
     else break
   }
+  // If the common prefix consumed the shortest path's every segment, that
+  // last segment is that file's filename (every entry is a file path, not
+  // a directory) — drop it so the result is always a directory.
+  if (common.length === minLen) common.pop()
   return common.join("/")
 }
 
