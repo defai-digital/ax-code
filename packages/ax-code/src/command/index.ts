@@ -307,6 +307,7 @@ export namespace Command {
     }
 
     for (const [name, command] of Object.entries(cfg.command ?? {})) {
+      if (commands[name] && !isOverridableBuiltin(commands[name])) continue
       commands[name] = {
         name,
         agent: command.agent,
