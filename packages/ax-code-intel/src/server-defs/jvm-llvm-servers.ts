@@ -403,7 +403,7 @@ export const JDTLS: Info = {
       return
     }
     const javaMajorVersion = await run(["java", "-version"]).then((result) => {
-      const m = /"(\d+)\.\d+\.\d+"/.exec(result.stderr.toString())
+      const m = /"(\d+)(?:\.\d+\.\d+)?"/.exec(result.stderr.toString())
       return !m ? undefined : parseInt(m[1], 10)
     })
     if (javaMajorVersion == null || javaMajorVersion < 21) {
