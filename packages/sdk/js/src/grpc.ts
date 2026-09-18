@@ -2338,7 +2338,9 @@ function matchesEventSubscription(event: AxCodeGrpcRuntimeEvent, request: AxCode
   if (
     event.type === "server.connected" ||
     event.type === "server.heartbeat" ||
-    event.type === "server.instance.disposed"
+    event.type === "server.instance.disposed" ||
+    event.type === "server.resync_required" ||
+    event.type === "server.serialization_error"
   ) {
     return true
   }

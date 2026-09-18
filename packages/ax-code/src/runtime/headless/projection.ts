@@ -452,7 +452,7 @@ function removeMessage<
   messageID: string,
 ) {
   removeByID(state.message[sessionID] ?? [], messageID)
-  forgetProjectionMessage(state, messageID)
+  forgetProjectionMessage(state, messageID, sessionID)
 }
 
 function upsertPart<

@@ -79,6 +79,21 @@ describe("planner replan hook", () => {
     expect(plan.phasesCompleted).toBe(3) // 2 replan phases + follow-up
   })
 
+  test("nested replan success still decrements the original failed count", async () => {
+    const plan = Planner.create("test", [{ name: "first", fallbackStrategy: "replan", maxRetries: 0 }])
+    const onReplan: Replanner = async ({ depth }) => {
+      if (depth === 1) return [{ name: "inner", fallbackStrategy: "replan", maxRetries: 0 }]
+      return [{ name: "recovered", fallbackStrategy: "abort", maxRetries: 0 }]
+    }
+    const result = await Planner.execute(
+      plan,
+      async (phase) => (phase.name === "recovered" ? ok(phase.id) : fail(phase.id)),
+      { onReplan, maxReplanDepth: 3 },
+    )
+    expect(result.success).toBe(true)
+    expect(plan.phasesFailed).toBe(0)
+  })
+
   test("aborts when onReplan returns null", async () => {
     const plan = Planner.create("test", [
       { name: "first", fallbackStrategy: "replan", maxRetries: 0 },

@@ -1122,6 +1122,41 @@ describe("gRPC SDK facade", () => {
     ])
   })
 
+  test("HTTP bridge delivers server resync signals to session-scoped subscribers", async () => {
+    const client = createAxCodeGrpcClientFromHttp({
+      baseUrl: "http://127.0.0.1:4096",
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
+        const request = url instanceof Request ? url : new Request(url, init)
+        const parsed = new URL(request.url)
+        if (parsed.pathname === "/event") {
+          return sseResponse([
+            {
+              type: "server.resync_required",
+              properties: { reason: "server_restarted", cursor: "0" },
+            },
+            { type: "server.serialization_error", properties: { error: "circular" } },
+            { type: "session.status", properties: { sessionID: "sess-2", status: { type: "idle" } } },
+            { type: "message.updated", properties: { info: { id: "msg-1", sessionID: "sess-1" } } },
+          ])
+        }
+        return new Response("not found", { status: 404 })
+      }) as typeof fetch,
+    })
+    const events = []
+    const eventAbort = new AbortController()
+
+    for await (const event of client.subscribeEvents({ sessionID: "sess-1" }, { signal: eventAbort.signal })) {
+      events.push(event)
+      if (events.length === 3) eventAbort.abort()
+    }
+
+    expect(events).toEqual([
+      { type: "server.resync_required", properties: { reason: "server_restarted", cursor: "0" } },
+      { type: "server.serialization_error", properties: { error: "circular" } },
+      { type: "message.updated", properties: { info: { id: "msg-1", sessionID: "sess-1" } } },
+    ])
+  })
+
   test("HTTP bridge maps provider auth settings to the headless backend", async () => {
     const calls: Array<{ path: string; method: string; body: string }> = []
     const client = createAxCodeGrpcClientFromHttp({

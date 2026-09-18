@@ -10,7 +10,7 @@ changes belong to AX Coder.
 
 ### Changed
 
-- Publish the paired SDK 2.5.36.
+- Publish the paired SDK 2.5.37.
 - Consume AX TUI 1.0.1 and 1.0.2.
 - Open a draft GitHub release after Release validate so maintainers can see the new tag on the Releases page before
   signed assets are published. Public Latest still changes only after publish.
@@ -26,8 +26,13 @@ changes belong to AX Coder.
   scroll/`waitFor` values as valid.
 - Telemetry and ACP: pair OTLP steps across provider retries, keep gRPC `message.part.updated` subscriptions, fix SSE
   reconnect backoff, and page ACP results correctly.
-- Planner, memory, and headless: stop `maxParallelPhases <= 0` from hanging, keep replan failure counts accurate, and
-  clear stale projected task/message fields.
+- Planner, memory, and headless: stop `maxParallelPhases <= 0` from hanging, keep nested replan failure counts
+  accurate, raise the session floor when a projected message is removed, and deliver `server.resync_required` to
+  session-scoped gRPC subscribers.
+- Point generated GitHub Action workflows at `packages/integration-github@main` instead of a nonexistent `github`
+  path and an invalid `@latest` ref.
+- Hash hyphenated MCP `X-Api-Key` headers as presence-only in the trust fingerprint, and delete native-index
+  `code_file` rows on `deleteFile` so list/get cannot return removed paths.
 
 ## [7.19.1] - 2026-09-18
 

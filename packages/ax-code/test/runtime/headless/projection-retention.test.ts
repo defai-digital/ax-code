@@ -35,6 +35,20 @@ describe("transcript retention regressions", () => {
     expect(state.message.session.map((item) => item.id)).toEqual(["m2", "m3"])
   })
 
+  test("message.removed raises the session floor so later parts cannot resurrect the message", () => {
+    const { state, message, part } = fixture()
+    message("m1")
+    part("m1")
+    applyHeadlessProjectionEvent(state, {
+      type: "message.removed",
+      properties: { sessionID: "session", messageID: "m1" },
+    })
+    expect(state.message.session).toEqual([])
+    expect(state.part.m1).toBeUndefined()
+    part("m1", "late snapshot")
+    expect(state.part.m1).toBeUndefined()
+  })
+
   test("leave clears part-before-message snapshots and their pending delta protection", () => {
     const { state, message, part } = fixture()
     part("m1", "hello")

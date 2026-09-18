@@ -292,7 +292,8 @@ export namespace Planner {
    * Calls `options.onReplan`. If it returns phases, runs each sequentially
    * with the same executor, applying that phase's own fallback strategy
    * (recursively bounded by `maxReplanDepth`). Returns whether the plan
-   * should abort.
+   * should abort, and whether a replacement phase recovered the original
+   * failure.
    */
   async function runReplan(
     plan: TaskPlan,
@@ -303,20 +304,20 @@ export namespace Planner {
     depth: number,
     results: PhaseResult[],
     warnings: string[],
-  ): Promise<{ aborted: boolean }> {
+  ): Promise<{ aborted: boolean; recovered: boolean }> {
     if (!options.onReplan) {
       warnings.push(`Phase "${failed.name}" used "replan" but no onReplan callback was provided — aborting`)
-      return { aborted: true }
+      return { aborted: true, recovered: false }
     }
     if (depth > options.maxReplanDepth) {
       warnings.push(`Phase "${failed.name}": replan depth ${depth} exceeds maxReplanDepth — aborting`)
-      return { aborted: true }
+      return { aborted: true, recovered: false }
     }
 
     const replacement = await options.onReplan({ failed, plan, error, depth })
     if (!replacement || replacement.length === 0) {
       warnings.push(`Phase "${failed.name}": replan returned no phases — aborting`)
-      return { aborted: true }
+      return { aborted: true, recovered: false }
     }
 
     const startIdx = plan.phases.length
@@ -353,16 +354,20 @@ export namespace Planner {
           results,
           warnings,
         )
-        if (inner.aborted) return { aborted: true }
+        if (inner.aborted) return inner
+        if (inner.recovered && !recovered) {
+          plan.phasesFailed = Math.max(0, plan.phasesFailed - 1)
+          recovered = true
+        }
       } else if (next.fallbackStrategy === "abort") {
         warnings.push(`Replan phase "${next.name}" failed with abort strategy — stopping plan`)
-        return { aborted: true }
+        return { aborted: true, recovered }
       } else if (next.fallbackStrategy === "skip") {
         plan.phasesSkipped++
         warnings.push(`Replan phase "${next.name}" failed — skipped`)
       }
     }
-    return { aborted: false }
+    return { aborted: false, recovered }
   }
 
   async function executePhase(
