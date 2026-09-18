@@ -44,6 +44,10 @@ export function verifyWindowsRuntimeArchive(archive: string, publicKey: string) 
   try {
     execFileSync("unzip", ["-q", path.resolve(archive), "-d", root])
     const manifestPath = path.join(root, "runtime-integrity.json")
+    if (!fs.existsSync(manifestPath)) throw new Error("Sealed Windows distribution is missing runtime-integrity.json")
+    if (!fs.existsSync(`${manifestPath}.minisig`)) {
+      throw new Error("Sealed Windows distribution is missing runtime-integrity.json.minisig")
+    }
     execFileSync("minisign", ["-V", "-p", path.resolve(publicKey), "-m", manifestPath, "-x", `${manifestPath}.minisig`])
     const expected = JSON.parse(fs.readFileSync(manifestPath, "utf8"))
     if (JSON.stringify(expected) !== JSON.stringify(createDistributionManifest(root))) {
