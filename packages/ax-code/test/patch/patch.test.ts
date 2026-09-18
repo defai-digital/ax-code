@@ -30,7 +30,7 @@ describe("Patch namespace", () => {
       expect(result.hunks[0]).toEqual({
         type: "add",
         path: "test.txt",
-        contents: "Hello World",
+        contents: "Hello World\n",
       })
     })
 
@@ -42,7 +42,7 @@ describe("Patch namespace", () => {
       expect(result.hunks[0]).toEqual({
         type: "add",
         path: "test.txt",
-        contents: "Hello World",
+        contents: "Hello World\n",
       })
     })
 
@@ -246,7 +246,7 @@ PATCH`
       expect(result.deleted).toHaveLength(0)
 
       const content = await fs.readFile(result.added[0], "utf-8")
-      expect(content).toBe("Hello World\nThis is a new file")
+      expect(content).toBe("Hello World\nThis is a new file\n")
     })
 
     test("should delete an existing file", async () => {
