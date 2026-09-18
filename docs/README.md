@@ -19,6 +19,9 @@ pages are the ones linked here.
 
 ## Choose by task
 
+For standalone questions about selected files through AX Trust caching, see
+[Fixed-context questions](guides/fixed-context-questions.md).
+
 | I want to…                                               | Start here                                                              |
 | -------------------------------------------------------- | ----------------------------------------------------------------------- |
 | Decide whether AX Code fits my work                      | [Why AX Code](why-ax-code.md)                                           |

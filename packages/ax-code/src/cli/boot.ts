@@ -3,6 +3,7 @@ import "../dre-glue"
 import { NamedError } from "@ax-code/util/error"
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
+import { AskCommand } from "./cmd/ask"
 import { AcpCommand } from "./cmd/acp"
 import { AuditCommand } from "./cmd/audit"
 import { ReplayCommand } from "./cmd/replay"
@@ -74,6 +75,7 @@ const cmds = [
   AttachCommand,
   HeadlessRunCommand,
   RunCommand,
+  AskCommand,
   GenerateCommand,
   DebugCommand,
   DoctorCommand,

@@ -283,6 +283,7 @@ Everyday use:
 - [Standard and Business](docs/getting-started/editions.md) — free commercial use, planned Business capabilities, and availability
 - [Why AX Code](docs/why-ax-code.md) — what it optimizes for, who it is for, and how it differs from other agents
 - [Start Here](docs/getting-started/start-here.md) — product mental model and shortest paths by use case
+- [Fixed-context questions](docs/guides/fixed-context-questions.md) — ask about selected files through AX Trust caching
 - [Execution Evidence](docs/guides/execution-evidence.md) — graph, replay, compare, risk, rollback, trace, and audit export
 - [Verified Multi-Model Changes](docs/guides/verified-multi-model-change.md) — council review and arena implementation
 - [Documentation Hub](docs/README.md) — guides, architecture, providers, and reference
