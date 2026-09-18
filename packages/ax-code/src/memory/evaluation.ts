@@ -107,7 +107,10 @@ export async function evaluate(projectRoot: string, opts: MemoryEvaluationOption
     }
     const results = await recall(projectRoot, query)
     const returned = results.map((result) => result.entry.name)
-    const returnedRanks = new Map(returned.map((name, resultIndex) => [name, resultIndex + 1]))
+    const returnedRanks = new Map<string, number>()
+    for (const [resultIndex, name] of returned.entries()) {
+      if (!returnedRanks.has(name)) returnedRanks.set(name, resultIndex + 1)
+    }
     const expectedRanks = item.expected.map((expected) => ({
       name: expected,
       rank: returnedRanks.get(expected) ?? null,
