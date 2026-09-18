@@ -241,6 +241,36 @@ export namespace ACP {
                 return
             }
           }
+          if (part.type === "text" && part.synthetic === true && part.text) {
+            // Synthetic notices (e.g. the provider-fallback message in
+            // prompt-impl.ts) are written whole via Session.updatePart and
+            // never go through message.part.delta, so this is the only
+            // live-session path that can forward them — mirror
+            // processMessage's replay handling instead of silently dropping
+            // them (they'd otherwise only appear after a session reload).
+            const message = await this.sdk.session
+              .message(
+                { sessionID: part.sessionID, messageID: part.messageID, directory: session.cwd },
+                { throwOnError: true },
+              )
+              .then((x) => x.data)
+              .catch((error) => {
+                log.error("unexpected error when fetching message", { error })
+                return undefined
+              })
+            if (!message) return
+            await this.connection
+              .sessionUpdate({
+                sessionId,
+                update: {
+                  sessionUpdate: message.info.role === "user" ? "user_message_chunk" : "agent_message_chunk",
+                  content: { type: "text", text: part.text, annotations: { audience: ["assistant"] } },
+                },
+              })
+              .catch((error) => {
+                log.error("failed to send synthetic text to ACP", { error })
+              })
+          }
           return
         }
         case "message.part.delta": {
