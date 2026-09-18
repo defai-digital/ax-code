@@ -87,8 +87,10 @@ export namespace SessionProcessor {
    */
   export function redactPersistedBashInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
     if (tool !== "bash") return input
-    const raw = typeof input["command"] === "string" ? input["command"] : input["cmd"]
-    if (typeof raw !== "string") return input
+    const command = typeof input["command"] === "string" && input["command"].trim() !== "" ? input["command"] : undefined
+    const cmd = typeof input["cmd"] === "string" && input["cmd"].trim() !== "" ? input["cmd"] : undefined
+    const raw = command ?? cmd
+    if (raw === undefined) return input
     const next: Record<string, unknown> = { ...input, command: Env.redactInlineEnvAssignments(raw) }
     delete next.cmd
     return next

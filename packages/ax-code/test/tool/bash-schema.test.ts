@@ -28,6 +28,9 @@ describe("BashTool schema", () => {
         expect(tool.parameters.parse({ command: "echo canonical", cmd: "echo alias" })).toMatchObject({
           command: "echo canonical",
         })
+        expect(tool.parameters.parse({ command: "  ", cmd: "echo alias" })).toMatchObject({
+          command: "echo alias",
+        })
 
         const schema = z.toJSONSchema(tool.parameters) as { properties: Record<string, unknown> }
         expect(Object.keys(schema.properties)).not.toContain("cmd")

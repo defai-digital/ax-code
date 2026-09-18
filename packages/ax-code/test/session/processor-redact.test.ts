@@ -17,3 +17,12 @@ test("prefers command over cmd when both are present", () => {
   })
   expect(redacted).toEqual({ command: "echo canonical" })
 })
+
+test("falls back to cmd when command is blank", () => {
+  const redacted = SessionProcessor.redactPersistedBashInput("bash", {
+    command: "  ",
+    cmd: "GH_TOKEN=placeholder-token-value ./deploy",
+  })
+  expect(redacted.command).toContain("[redacted]")
+  expect(redacted).not.toHaveProperty("cmd")
+})
