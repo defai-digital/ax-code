@@ -85,12 +85,16 @@ export namespace Telemetry {
     const rows = EventQuery.bySessionWithTimestamp(sessionID)
     if (rows.length === 0) return
 
-    const stepFinishes = new Map<number, { event: Extract<ReplayEvent, { type: "step.finish" }>; time: number }>()
+    // `stepIndex` is the provider-retry `attempt` counter, reset to 0 for
+    // every new step's processor — it is NOT unique across a session's
+    // steps, so finishes cannot be keyed by it. Pair each `step.start` with
+    // the next unconsumed `step.finish` in row order instead.
+    const stepFinishes: Array<{ event: Extract<ReplayEvent, { type: "step.finish" }>; time: number }> = []
     const toolResults = new Map<string, { event: Extract<ReplayEvent, { type: "tool.result" }>; time: number }>()
     for (const row of rows) {
       const event = row.event_data
-      if (event.type === "step.finish" && !stepFinishes.has(event.stepIndex)) {
-        stepFinishes.set(event.stepIndex, { event, time: row.time_created })
+      if (event.type === "step.finish") {
+        stepFinishes.push({ event, time: row.time_created })
       }
       if (event.type === "tool.result" && !toolResults.has(event.callID)) {
         toolResults.set(event.callID, { event, time: row.time_created })
@@ -107,6 +111,7 @@ export namespace Telemetry {
     // Tool spans nest under the most recent step span (falling back to the
     // session span for tool calls seen before any step).
     let stepCtx = sessionCtx
+    let stepFinishIndex = 0
 
     for (const row of rows) {
       const event = row.event_data
@@ -126,7 +131,8 @@ export namespace Telemetry {
             },
             sessionCtx,
           )
-          const finish = stepFinishes.get(event.stepIndex)
+          const finish = stepFinishes[stepFinishIndex]
+          stepFinishIndex++
           if (finish) {
             stepSpan.setAttribute("step.finish_reason", finish.event.finishReason)
             stepSpan.setAttribute("step.tokens.input", finish.event.tokens.input)
