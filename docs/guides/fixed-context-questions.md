@@ -15,6 +15,8 @@ ax-code ask --file src/value.py \
 ```
 
 Replace the provider/model with an authorized model on your AX Trust connection.
+The provider must be an AX Trust connection. The `options.axTrust` session
+affinity setting does not enable or disable this command.
 The command reads the file again on every invocation, supplies its complete
 contents as fixed context, and adds the gateway's semantic-cache contract. You
 do not need to add headers or install embeddings. AX Trust must have the feature

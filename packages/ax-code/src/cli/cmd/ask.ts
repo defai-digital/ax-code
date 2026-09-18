@@ -2,7 +2,7 @@ import { Agent } from "@/agent/agent"
 import { Config } from "@/config/config"
 import { Permission } from "@/permission"
 import { Provider } from "@/provider/provider"
-import { shouldSendAxTrustPromptCacheKey } from "@/provider/ax-trust-cache"
+import { isAxTrustProviderID } from "@/mode/provider-category"
 import {
   buildFixedContextRequest,
   FixedContextError,
@@ -57,13 +57,8 @@ export const AskCommand = cmd({
         const selected = Provider.parseModel(args.model)
         const config = await Config.get()
         const configured = config.provider?.[selected.providerID]
-        if (
-          !shouldSendAxTrustPromptCacheKey({
-            providerID: selected.providerID,
-            management: configured?.management,
-            axTrust: configured?.options?.axTrust,
-          })
-        )
+        // The axTrust option controls session affinity, not provider identity.
+        if (configured?.management !== "ax-trust" && !isAxTrustProviderID(selected.providerID))
           throw new FixedContextError({ message: "Select a connected AX Trust provider for fixed-context questions." })
         const model = await Provider.getModel(selected.providerID, selected.modelID)
         if (model.api.npm !== "@ai-sdk/openai-compatible")

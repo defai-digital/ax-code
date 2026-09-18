@@ -8,6 +8,7 @@ import { parseJsonStrict } from "../../src/util/json-value"
 
 const state = vi.hoisted(() => ({
   management: "ax-trust",
+  axTrust: undefined as boolean | undefined,
   allow: "allow",
   calls: 0,
   loads: 0,
@@ -15,7 +16,9 @@ const state = vi.hoisted(() => ({
 }))
 vi.mock("../../src/cli/bootstrap", () => ({ bootstrapReadonly: async (_: string, cb: () => Promise<unknown>) => cb() }))
 vi.mock("../../src/config/config", () => ({
-  Config: { get: async () => ({ provider: { fixture: { management: state.management } } }) },
+  Config: {
+    get: async () => ({ provider: { fixture: { management: state.management, options: { axTrust: state.axTrust } } } }),
+  },
 }))
 vi.mock("../../src/agent/agent", () => ({
   Agent: { defaultAgent: async () => "build", get: async () => ({ permission: [] }) },
@@ -53,6 +56,7 @@ import { AskCommand } from "../../src/cli/cmd/ask"
 const cwd = process.cwd()
 beforeEach(() => {
   state.management = "ax-trust"
+  state.axTrust = undefined
   state.allow = "allow"
   state.calls = 0
   state.loads = 0
@@ -118,6 +122,27 @@ test("non-AX Trust provider is rejected without opening transport", async () => 
   state.management = "custom-api"
   await expect(run(["ask", "-f", "missing", "-m", "fixture/public/model", "Explain the source?"])).rejects.toThrow(
     "AX Trust",
+  )
+  expect(state.loads).toBe(0)
+})
+
+test("disabling session affinity does not disable fixed-context questions", async () => {
+  await using tmp = await tmpdir()
+  process.chdir(tmp.path)
+  await fs.writeFile(path.join(tmp.path, "value.py"), "def value(): return 42")
+  state.axTrust = false
+  vi.spyOn(process.stdout, "write").mockReturnValue(true)
+  vi.spyOn(process.stderr, "write").mockReturnValue(true)
+  await run(["ask", "-f", "value.py", "-m", "fixture/public/model", "--max-tokens", "1024", "Explain the source?"])
+  expect(state.calls).toBe(1)
+  expect(state.bodies[0]).toMatchObject({ max_tokens: 1024 })
+})
+
+test("session affinity opt-in does not identify a generic provider as AX Trust", async () => {
+  state.management = "custom-api"
+  state.axTrust = true
+  await expect(run(["ask", "-f", "missing", "-m", "fixture/public/model", "Explain the source?"])).rejects.toThrow(
+    "Select a connected AX Trust provider",
   )
   expect(state.loads).toBe(0)
 })

@@ -5,6 +5,7 @@ import path from "node:path"
 import type { LanguageModelV3 } from "@ai-sdk/provider"
 import { NamedError } from "@ax-code/util/error"
 import z from "zod"
+import { abortAfterAny } from "@/util/abort"
 
 export const FixedContextError = NamedError.create("FixedContextError", z.object({ message: z.string() }))
 export const FIXED_CONTEXT_HEADER = "X-AX-Semantic-Cache"
@@ -144,11 +145,19 @@ export async function generateFixedContext(
   request: FixedContextRequest,
   signal?: AbortSignal,
 ) {
-  const abortSignal = AbortSignal.any([AbortSignal.timeout(90_000), ...(signal ? [signal] : [])])
-  abortSignal.throwIfAborted()
-  const result = await Promise.resolve()
-    .then(() =>
-      language.doGenerate({
+  if (signal?.aborted) fail("The fixed-context question was cancelled or timed out.")
+  const deadline = abortAfterAny(90_000, ...(signal ? [signal] : []))
+  const abortSignal = deadline.signal
+  const cancelled = Promise.withResolvers<never>()
+  const onAbort = () => cancelled.reject(abortSignal.reason)
+  abortSignal.addEventListener("abort", onAbort, { once: true })
+  // Some custom transports do not interrupt body reads on abort. Bound our
+  // wait independently, while still forwarding the signal to cancel I/O.
+  const result = await Promise.race([
+    cancelled.promise,
+    Promise.resolve().then(() => {
+      abortSignal.throwIfAborted()
+      return language.doGenerate({
         prompt: [
           ...request.system.map((content) => ({ role: "system" as const, content })),
           { role: "user", content: [{ type: "text", text: request.body.messages.at(-1)!.content }] },
@@ -157,8 +166,9 @@ export async function generateFixedContext(
         maxOutputTokens: request.body.max_tokens,
         headers: { [FIXED_CONTEXT_HEADER]: FIXED_CONTEXT_CONTRACT },
         abortSignal,
-      }),
-    )
+      })
+    }),
+  ])
     .catch((error: unknown) => {
       if (abortSignal.aborted) fail("The fixed-context question was cancelled or timed out.")
       const status = z.object({ statusCode: z.number().int() }).safeParse(error)
@@ -168,7 +178,11 @@ export async function generateFixedContext(
           : "Fixed-context request failed; check the selected AX Trust connection.",
       )
     })
-  abortSignal.throwIfAborted()
+    .finally(() => {
+      abortSignal.removeEventListener("abort", onAbort)
+      deadline.clearTimeout()
+    })
+  if (abortSignal.aborted) fail("The fixed-context question was cancelled or timed out.")
   if (
     result.finishReason.unified !== "stop" ||
     result.content.some((part) => part.type !== "text" && part.type !== "reasoning")

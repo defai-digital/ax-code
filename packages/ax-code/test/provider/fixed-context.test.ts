@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
@@ -190,4 +190,99 @@ describe("real bundled SDK transport", () => {
       generateFixedContext(provider.chatModel(context.model), buildFixedContextRequest(context)),
     ).rejects.toThrow("complete text")
   })
+})
+
+test("cancellation settles even when the response body ignores the fetch signal", async () => {
+  const controller = new AbortController()
+  let body!: ReadableStreamDefaultController<Uint8Array>
+  let received!: () => void
+  const started = new Promise<void>((resolve) => {
+    received = resolve
+  })
+  const provider = createOpenAICompatible({
+    name: "fixture",
+    baseURL: "https://gateway.invalid/v1",
+    fetch: async () => {
+      received()
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            body = controller
+          },
+        }),
+        {
+          headers: { "content-type": "application/json" },
+        },
+      )
+    },
+  })
+  let settled = false
+  const result = generateFixedContext(
+    provider.chatModel(context.model),
+    buildFixedContextRequest(context),
+    controller.signal,
+  ).catch((error: unknown) => {
+    settled = true
+    return error
+  })
+  await started
+  controller.abort()
+  try {
+    await vi.waitFor(() => expect(settled).toBe(true), { timeout: 200 })
+    expect(await result).toMatchObject({ message: "The fixed-context question was cancelled or timed out." })
+  } finally {
+    body.error(new Error("fixture cleanup"))
+    await result
+  }
+})
+
+test("cancellation before deferred adapter invocation sends no request", async () => {
+  const controller = new AbortController()
+  let calls = 0
+  const provider = createOpenAICompatible({
+    name: "fixture",
+    baseURL: "https://gateway.invalid/v1",
+    fetch: async () => {
+      calls++
+      return new Response(JSON.stringify(completion()), { headers: { "content-type": "application/json" } })
+    },
+  })
+  const result = generateFixedContext(
+    provider.chatModel(context.model),
+    buildFixedContextRequest(context),
+    controller.signal,
+  )
+  controller.abort()
+  await expect(result).rejects.toThrow()
+  expect(calls).toBe(0)
+})
+
+test("the 90-second deadline settles an unresponsive adapter without retrying", async () => {
+  vi.useFakeTimers()
+  try {
+    let calls = 0
+    let received!: () => void
+    const started = new Promise<void>((resolve) => {
+      received = resolve
+    })
+    const provider = createOpenAICompatible({
+      name: "fixture",
+      baseURL: "https://gateway.invalid/v1",
+      fetch: async () => {
+        calls++
+        received()
+        return new Promise<Response>(() => {})
+      },
+    })
+    const result = generateFixedContext(provider.chatModel(context.model), buildFixedContextRequest(context)).catch(
+      (error: unknown) => error,
+    )
+    await started
+    await vi.advanceTimersByTimeAsync(90_000)
+    expect(await result).toMatchObject({ message: "The fixed-context question was cancelled or timed out." })
+    expect(calls).toBe(1)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    vi.useRealTimers()
+  }
 })
