@@ -58,7 +58,12 @@ export namespace ExecutionController {
           if (signal.validationRequired) {
             return { phase: "validate", reason: "validation_required", validationStatus: "pending" }
           }
-          return { phase: "summarize", reason: "execution_completed" }
+          // Explicitly reset validationStatus: a prior validate/recover cycle
+          // on an earlier execution attempt may have left it "failed", which
+          // would otherwise carry over and make AgentControl reject the
+          // eventual "complete" transition even though this attempt never
+          // required validation.
+          return { phase: "summarize", reason: "execution_completed", validationStatus: "not_required" }
         }
         return { phase: "execute", reason: signal.executionStarted ? "execution_in_progress" : "awaiting_execution" }
       case "validate":

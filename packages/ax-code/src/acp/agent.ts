@@ -397,22 +397,24 @@ export namespace ACP {
 
     async unstable_listSessions(params: ListSessionsRequest): Promise<ListSessionsResponse> {
       try {
-        const cursor = parseListSessionsCursor(params.cursor)
+        // The cursor is an offset into the sorted list, not a timestamp: a
+        // timestamp cursor can't distinguish "already returned" from "not yet
+        // returned" sessions that share the exact boundary timestamp, and
+        // silently drops any tied sessions beyond the page limit.
+        const offset = parseListSessionsCursor(params.cursor) ?? 0
         const limit = 100
         const sessions = await this.sdk.session
           .list({ directory: params.cwd ?? undefined, roots: true }, { throwOnError: true })
           .then((x) => x.data ?? [])
         const sorted = sessions.toSorted((a, b) => sessionUpdatedMs(b) - sessionUpdatedMs(a))
-        const filtered = cursor !== undefined ? sorted.filter((s) => sessionUpdatedMs(s) < cursor) : sorted
-        const page = filtered.slice(0, limit)
+        const page = sorted.slice(offset, offset + limit)
         const entries: SessionInfo[] = page.map((session) => ({
           sessionId: session.id,
           cwd: session.directory,
           title: session.title,
           updatedAt: new Date(sessionUpdatedMs(session)).toISOString(),
         }))
-        const last = page[page.length - 1]
-        const next = filtered.length > limit && last ? String(sessionUpdatedMs(last)) : undefined
+        const next = offset + limit < sorted.length ? String(offset + limit) : undefined
         const response: ListSessionsResponse = { sessions: entries }
         if (next) response.nextCursor = next
         return response

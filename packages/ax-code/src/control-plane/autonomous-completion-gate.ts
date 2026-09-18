@@ -358,9 +358,27 @@ export namespace AutonomousCompletionGate {
   function resolveWithAssistantText(unresolved: Map<string, EmptySubagentResult>, text: string) {
     if (unresolved.size === 0 || !isExplicitResolution(text)) return
 
-    const matches = [...unresolved.entries()].filter(([, result]) => referencesResult(text, result))
-    if (matches.length > 0) {
-      for (const [key] of matches) unresolved.delete(key)
+    // ID references are unambiguous, so every match is safe to resolve.
+    const idMatches = [...unresolved.entries()].filter(([, result]) => referencesResultById(text, result))
+    if (idMatches.length > 0) {
+      for (const [key] of idMatches) unresolved.delete(key)
+      return
+    }
+
+    // Description/word-overlap matches are heuristic and can collide across
+    // differently-worded entries — only resolve them together when every
+    // matched entry describes the same work (e.g. two identical retries of
+    // one task); if the matched entries describe genuinely different work,
+    // the overlap is coincidental and we don't know which one the text
+    // actually addressed, so don't guess.
+    const descriptionMatches = [...unresolved.entries()].filter(([, result]) =>
+      referencesResultByDescription(text, result),
+    )
+    if (descriptionMatches.length > 0) {
+      const uniqueDescriptions = new Set(descriptionMatches.map(([, result]) => normalize(result.description ?? "")))
+      if (uniqueDescriptions.size <= 1) {
+        for (const [key] of descriptionMatches) unresolved.delete(key)
+      }
       return
     }
 
@@ -447,11 +465,16 @@ export namespace AutonomousCompletionGate {
     "why",
   ])
 
-  function referencesResult(text: string, result: EmptySubagentResult) {
+  function referencesResultById(text: string, result: EmptySubagentResult) {
     const normalized = normalize(text)
     if (result.taskID && normalized.includes(normalize(result.taskID))) return true
     if (result.callID && normalized.includes(normalize(result.callID))) return true
+    return false
+  }
+
+  function referencesResultByDescription(text: string, result: EmptySubagentResult) {
     if (!result.description) return false
+    const normalized = normalize(text)
 
     const description = normalize(result.description)
     if (description.length > 0 && normalized.includes(description)) return true

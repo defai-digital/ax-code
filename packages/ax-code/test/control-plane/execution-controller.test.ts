@@ -207,6 +207,7 @@ describe("ExecutionController", () => {
     expect(ExecutionController.decide({ state, signal: { executionCompleted: true } })).toEqual({
       phase: "summarize",
       reason: "execution_completed",
+      validationStatus: "not_required",
     })
   })
 
