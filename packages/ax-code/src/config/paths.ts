@@ -82,7 +82,7 @@ export namespace ConfigPaths {
   }
 
   export function fileInDirectory(dir: string, name: string) {
-    return [path.join(dir, `${name}.jsonc`), path.join(dir, `${name}.json`)]
+    return [path.join(dir, `${name}.json`), path.join(dir, `${name}.jsonc`)]
   }
 
   export const JsonError = NamedError.create(
