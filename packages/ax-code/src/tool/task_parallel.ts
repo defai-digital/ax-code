@@ -173,12 +173,11 @@ async function runOneTask(input: {
     ...constraints.tools,
     todowrite: false,
     todoread: false,
-    task: false,
     task_parallel: false,
     // No fan-out means no background tasks to wait on — hide waitfor too.
-    waitfor: false,
-    list_background_tasks: false,
-    message_background_task: false,
+    ...(canFanOut
+      ? {}
+      : { task: false, waitfor: false, list_background_tasks: false, message_background_task: false }),
     ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
   }
 
