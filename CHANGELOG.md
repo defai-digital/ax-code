@@ -6,10 +6,26 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.19.0] - 2026-09-18
+
+### Added
+
+- Add `ax-code ask` for AX Trust fixed-context questions over selected files, with cache status and no retry or model
+  fallback.
+- Accept `cmd` as a compatibility alias for the `bash` tool `command` parameter without advertising it in the schema.
+- Fill Fuji day/night sky as a vertical gradient in pixel output, and fill mountain, snow, and blossom interiors.
+
+### Changed
+
+- Publish the paired SDK 2.5.34.
+- Hide `/ov`, `/ev`, and animation preview slash names from the command palette while keeping the commands available.
+- Store Windows signing audit records as `PSCustomObject` items in a `List` so PowerShell 5.1 still reports
+  `node/bin/node.exe`.
+
 ### Fixed
 
-- Keep Windows signing audit records as objects so Windows PowerShell 5.1 still reports `node/bin/node.exe` in the
-  bundled Node check.
+- Derive Windows signing relative paths from `GetFullPath` instead of `$Root.Length + 1`.
+- Reject non-AX-Trust providers and in-flight cancellation for `ax-code ask` before opening transport.
 
 ## [7.18.9] - 2026-09-18
 
