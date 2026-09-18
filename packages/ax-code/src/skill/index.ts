@@ -82,10 +82,11 @@ export namespace Skill {
     const parsed = Info.pick({ name: true, description: true }).safeParse(data)
     if (!parsed.success) return
 
-    if (state.skills[parsed.data.name]) {
+    const existing = state.skills[parsed.data.name]
+    if (existing && !existing.builtin) {
       log.warn("duplicate skill name", {
         name: parsed.data.name,
-        existing: state.skills[parsed.data.name].location,
+        existing: existing.location,
         duplicate: match,
       })
       state.duplicateNames.add(parsed.data.name)
