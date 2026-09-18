@@ -86,14 +86,24 @@ export namespace SessionProcessor {
    * execution. Returns a shallow copy so the caller's input is untouched.
    */
   export function redactPersistedBashInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
-    if (tool !== "bash") return input
-    const command = typeof input["command"] === "string" && input["command"].trim() !== "" ? input["command"] : undefined
-    const cmd = typeof input["cmd"] === "string" && input["cmd"].trim() !== "" ? input["cmd"] : undefined
-    const raw = command ?? cmd
-    if (raw === undefined) return input
-    const next: Record<string, unknown> = { ...input, command: Env.redactInlineEnvAssignments(raw) }
-    delete next.cmd
-    return next
+    if (tool === "bash") {
+      const command = typeof input["command"] === "string" && input["command"].trim() !== "" ? input["command"] : undefined
+      const cmd = typeof input["cmd"] === "string" && input["cmd"].trim() !== "" ? input["cmd"] : undefined
+      const raw = command ?? cmd
+      if (raw === undefined) return input
+      const next: Record<string, unknown> = { ...input, command: Env.redactInlineEnvAssignments(raw) }
+      delete next.cmd
+      return next
+    }
+    if (tool === "monitor") {
+      if (typeof input["command"] !== "string") return input
+      return { ...input, command: Env.redactInlineEnvAssignments(input["command"]) }
+    }
+    if (tool === "bash_input") {
+      if (typeof input["input"] !== "string") return input
+      return { ...input, input: Env.redactInlineEnvAssignments(input["input"]) }
+    }
+    return input
   }
 
   export type Info = Awaited<ReturnType<typeof create>>

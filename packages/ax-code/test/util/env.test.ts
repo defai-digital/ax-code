@@ -66,6 +66,10 @@ describe("Env.redactInlineEnvAssignments", () => {
     expect(Env.redactInlineEnvAssignments('SECRET_KEY=abc; echo "SECRET_KEY=abc"')).toBe(
       'SECRET_KEY=[redacted]; echo "SECRET_KEY=abc"',
     )
+    expect(Env.redactInlineEnvAssignments('GITHUB_TOKEN="placeholder-token-value" gh api')).toBe(
+      "GITHUB_TOKEN=[redacted] gh api",
+    )
+    expect(Env.redactInlineEnvAssignments("API_KEY='placeholder-token-value' curl")).toBe("API_KEY=[redacted] curl")
   })
 
   test("is idempotent", () => {

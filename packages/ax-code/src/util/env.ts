@@ -154,7 +154,7 @@ export namespace Env {
   // Inline `KEY=VALUE` spellings in shell command lines. The prefix boundary
   // (start, whitespace, or `;`) keeps flag spellings like `--env=production`
   // untouched because `-` is not a valid assignment boundary.
-  const INLINE_ENV_ASSIGNMENT = /(^|[\s;])((?:[A-Za-z_][A-Za-z0-9_]*)=)([^\s"';]+)/g
+  const INLINE_ENV_ASSIGNMENT = /(^|[\s;])((?:[A-Za-z_][A-Za-z0-9_]*)=)(?:"([^"]*)"|'([^']*)'|([^\s"';]+))/g
   // Any assigned value carrying credentials as URL userinfo
   // (scheme://user:pass@…) is redacted even when the variable name looks
   // innocuous (e.g. FOO=postgres://u:pw@host/db).
@@ -167,13 +167,17 @@ export namespace Env {
    * copy is for durable records only.
    */
   export function redactInlineEnvAssignments(value: string): string {
-    return value.replace(INLINE_ENV_ASSIGNMENT, (match, prefix: string, assignment: string, assigned: string) => {
-      const name = assignment.slice(0, -1)
-      const sensitiveName =
-        isSensitiveName(name) || PAT_NAME.test(name) || WEBHOOK_NAME.test(name) || CREDENTIAL_URL_NAME.test(name)
-      if (!sensitiveName && !URL_USERINFO_VALUE.test(assigned)) return match
-      return `${prefix}${assignment}[redacted]`
-    })
+    return value.replace(
+      INLINE_ENV_ASSIGNMENT,
+      (match, prefix: string, assignment: string, doubleQuoted?: string, singleQuoted?: string, bare?: string) => {
+        const assigned = doubleQuoted ?? singleQuoted ?? bare ?? ""
+        const name = assignment.slice(0, -1)
+        const sensitiveName =
+          isSensitiveName(name) || PAT_NAME.test(name) || WEBHOOK_NAME.test(name) || CREDENTIAL_URL_NAME.test(name)
+        if (!sensitiveName && !URL_USERINFO_VALUE.test(assigned)) return match
+        return `${prefix}${assignment}[redacted]`
+      },
+    )
   }
 
   // Interpret an environment-variable string as a tri-state boolean.

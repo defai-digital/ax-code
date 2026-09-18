@@ -20,6 +20,8 @@ changes belong to AX Coder.
 - Refresh the bundled models snapshot.
 - Escape all regex metacharacters when building the goal-bughunt forbidden-path list.
 - Prefer a nonempty `cmd` alias when bash `command` is blank, both at execute parse and persistence redaction.
+- Redact inline credentials in persisted `monitor` commands and `bash_input` stdin, including quoted `KEY="value"`
+  assignments.
 
 ## [7.19.0] - 2026-09-18
 
