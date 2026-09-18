@@ -6,8 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.19.1] - 2026-09-18
+
 ### Changed
 
+- Publish the paired SDK 2.5.35.
 - Ignore `ax-code.json` and `session-ses_*.md` dumps in any directory, and fail pre-commit plus repo-structure if they
   are force-added. Historical SessionID false positives stay in git history; they are not credentials.
 
@@ -15,6 +18,8 @@ changes belong to AX Coder.
 
 - Localize the fixed-file question command title and AX Trust category so TUI locale checks pass.
 - Refresh the bundled models snapshot.
+- Escape all regex metacharacters when building the goal-bughunt forbidden-path list.
+- Prefer a nonempty `cmd` alias when bash `command` is blank, both at execute parse and persistence redaction.
 
 ## [7.19.0] - 2026-09-18
 
