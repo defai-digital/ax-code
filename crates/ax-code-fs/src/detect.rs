@@ -342,6 +342,7 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
     let mut scope_start: Option<usize> = None;
     let mut in_block_comment = false;
     let mut seen_open_brace = false;
+    let mut in_string: Option<u8> = None;
 
     for (i, line) in lines.iter().enumerate() {
         if scope_start.is_none()
@@ -352,6 +353,7 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
             depth = 0;
             in_block_comment = false;
             seen_open_brace = false;
+            in_string = None;
         }
         if scope_start.is_some() {
             let bytes = line.as_bytes();
@@ -367,6 +369,22 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
                     }
                     continue;
                 }
+                // Quote state is threaded across lines the same way
+                // in_block_comment already is, so a string/template literal
+                // left open at end-of-line (e.g. a multi-line backtick
+                // template) stays "open" on the next line instead of being
+                // silently forgotten — otherwise a `{`/`}` inside it would
+                // be miscounted as a real brace and corrupt `depth`.
+                if let Some(quote) = in_string {
+                    if bytes[j] == b'\\' {
+                        j += 2; // skip escaped char
+                        continue;
+                    } else if bytes[j] == quote {
+                        in_string = None;
+                    }
+                    j += 1;
+                    continue;
+                }
                 match bytes[j] {
                     b'/' if j + 1 < len && bytes[j + 1] == b'/' => break, // line comment
                     b'/' if j + 1 < len && bytes[j + 1] == b'*' => {
@@ -374,18 +392,8 @@ fn find_function_scopes(content: &str) -> Vec<FunctionScope> {
                         j += 1;
                     }
                     b'"' | b'\'' | b'`' => {
-                        let quote = bytes[j];
+                        in_string = Some(bytes[j]);
                         j += 1;
-                        while j < len {
-                            if bytes[j] == b'\\' {
-                                j += 1;
-                            }
-                            // skip escaped char
-                            else if bytes[j] == quote {
-                                break;
-                            }
-                            j += 1;
-                        }
                     }
                     b'{' => {
                         depth += 1;

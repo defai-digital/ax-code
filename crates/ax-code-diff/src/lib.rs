@@ -59,36 +59,50 @@ pub fn edit_replace(
 
     for (idx, strategy) in STRATEGIES.iter().enumerate() {
         let candidates = strategy(&content, &old_string);
+        // Uniqueness must be judged by distinct match LOCATION, not by
+        // whether each candidate string individually happens to be unique:
+        // fuzzy strategies can return textually different candidates (e.g.
+        // different indentation) for genuinely different match locations,
+        // and each could independently look "unique" in `content` even
+        // though the strategy actually found 2+ places old_string matches.
+        let mut locations: std::collections::BTreeMap<usize, &str> = std::collections::BTreeMap::new();
         for search in &candidates {
-            let first_idx = content.find(search.as_str());
-            if first_idx.is_none() {
+            if search.is_empty() {
                 continue;
             }
-            not_found = false;
-            let first = first_idx.unwrap();
-            let last = content.rfind(search.as_str()).unwrap();
-            if first != last {
-                continue; // not unique
+            let mut cursor = 0;
+            while let Some(rel) = content[cursor..].find(search.as_str()) {
+                let start = cursor + rel;
+                locations.entry(start).or_insert(search.as_str());
+                cursor = start + search.len();
             }
-            // Perform the replacement
-            let new_content = format!(
-                "{}{}{}",
-                &content[..first],
-                new_string,
-                &content[first + search.len()..]
-            );
-            let diff = generate_unified_diff("file", &content, &new_content);
-            let (additions, deletions) = compute_diff_stats(&content, &new_content);
-            let result = EditReplaceResult {
-                new_content,
-                unified_diff: diff,
-                additions,
-                deletions,
-                strategy: STRATEGY_NAMES[idx].to_string(),
-            };
-            return serde_json::to_string(&result)
-                .map_err(|e| napi::Error::from_reason(format!("JSON serialization error: {}", e)));
         }
+        if locations.is_empty() {
+            continue;
+        }
+        not_found = false;
+        if locations.len() != 1 {
+            continue; // ambiguous: more than one match location
+        }
+        let (&first, &search) = locations.iter().next().unwrap();
+        // Perform the replacement
+        let new_content = format!(
+            "{}{}{}",
+            &content[..first],
+            new_string,
+            &content[first + search.len()..]
+        );
+        let diff = generate_unified_diff("file", &content, &new_content);
+        let (additions, deletions) = compute_diff_stats(&content, &new_content);
+        let result = EditReplaceResult {
+            new_content,
+            unified_diff: diff,
+            additions,
+            deletions,
+            strategy: STRATEGY_NAMES[idx].to_string(),
+        };
+        return serde_json::to_string(&result)
+            .map_err(|e| napi::Error::from_reason(format!("JSON serialization error: {}", e)));
     }
 
     if not_found {
