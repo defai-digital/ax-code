@@ -54,14 +54,14 @@ export async function readFixedContextFiles(input: {
     throwIfCancelled(input.signal)
     if (name.includes("\0")) fail("Selected file paths must not contain null bytes.")
     const lexical = path.resolve(root, name)
+    if (!inside(root, lexical)) fail("Selected files must stay inside the current directory.")
     const canonical = await fs.realpath(lexical).catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT" || error.code === "ENOTDIR")
         fail("Selected files must exist inside the current directory.")
       if (error.code === "ENAMETOOLONG") fail("Selected file paths exceed the filesystem path length limit.")
       throw error
     })
-    if (!inside(root, lexical) || !inside(root, canonical))
-      fail("Selected files must stay inside the current directory.")
+    if (!inside(root, canonical)) fail("Selected files must stay inside the current directory.")
     if (!input.allowRead(lexical) || !input.allowRead(canonical))
       fail("Read permission is not allowed for a selected file. Use an approved normal session or select another file.")
     if (selected.has(canonical)) fail("Select each file only once, including symlink aliases.")
