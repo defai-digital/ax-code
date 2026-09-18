@@ -88,15 +88,25 @@ export namespace Telemetry {
     // `stepIndex` is the provider-retry `attempt` counter, reset to 0 for
     // every new step's processor — it is NOT unique across a session's
     // steps, so finishes cannot be keyed by it. Pair each `step.start` with
-    // the next unconsumed `step.finish` in row order instead.
-    const stepFinishes: Array<{ event: Extract<ReplayEvent, { type: "step.finish" }>; time: number }> = []
+    // the `step.finish` that occurs before the *next* `step.start`, not
+    // just the next unconsumed one in the whole session: a retried attempt
+    // (session/processor-impl.ts's retry loop) emits a brand-new
+    // `step.start` without ever emitting a `step.finish` for the failed
+    // attempt, so purely-sequential pairing would mis-attribute a later
+    // step's finish to an earlier, failed/interrupted attempt.
+    const stepFinishByStart = new Map<number, { event: Extract<ReplayEvent, { type: "step.finish" }>; time: number }>()
     const toolResults = new Map<string, { event: Extract<ReplayEvent, { type: "tool.result" }>; time: number }>()
-    for (const row of rows) {
+    let pendingStartRow = -1
+    for (const [i, row] of rows.entries()) {
       const event = row.event_data
-      if (event.type === "step.finish") {
-        stepFinishes.push({ event, time: row.time_created })
-      }
-      if (event.type === "tool.result" && !toolResults.has(event.callID)) {
+      if (event.type === "step.start") {
+        pendingStartRow = i
+      } else if (event.type === "step.finish") {
+        if (pendingStartRow !== -1) {
+          stepFinishByStart.set(pendingStartRow, { event, time: row.time_created })
+          pendingStartRow = -1
+        }
+      } else if (event.type === "tool.result" && !toolResults.has(event.callID)) {
         toolResults.set(event.callID, { event, time: row.time_created })
       }
     }
@@ -111,9 +121,8 @@ export namespace Telemetry {
     // Tool spans nest under the most recent step span (falling back to the
     // session span for tool calls seen before any step).
     let stepCtx = sessionCtx
-    let stepFinishIndex = 0
 
-    for (const row of rows) {
+    for (const [rowIndex, row] of rows.entries()) {
       const event = row.event_data
       const time = row.time_created
       switch (event.type) {
@@ -131,8 +140,7 @@ export namespace Telemetry {
             },
             sessionCtx,
           )
-          const finish = stepFinishes[stepFinishIndex]
-          stepFinishIndex++
+          const finish = stepFinishByStart.get(rowIndex)
           if (finish) {
             stepSpan.setAttribute("step.finish_reason", finish.event.finishReason)
             stepSpan.setAttribute("step.tokens.input", finish.event.tokens.input)
