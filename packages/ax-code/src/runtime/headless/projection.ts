@@ -187,7 +187,10 @@ export function applyHeadlessProjectionEvent<
 
     case "task.queue.created":
     case "task.queue.updated":
-      upsertByID(state.task_queue, event.properties.item)
+      // Task queue events carry complete snapshots. JSON omits cleared
+      // optional fields (notably error), so a patch merge would retain
+      // stale state (e.g. a cleared error surviving a retry).
+      upsertByID(state.task_queue, event.properties.item, true)
       return { handled: true, effects }
 
     case "task.queue.deleted":
@@ -424,7 +427,9 @@ function upsertMessage<
   maxSessionMessages = DEFAULT_MAX_SESSION_MESSAGES,
 ) {
   const list = state.message[message.sessionID] ?? []
-  upsertByID(list, message)
+  // Message events carry complete snapshots. JSON omits cleared optional
+  // fields (notably feedback), so a patch merge would retain stale state.
+  upsertByID(list, message, true)
   rememberProjectionMessage(state, list[Binary.search(list, message.id, (entry) => entry.id).index])
   for (const removed of shiftOverflow(list, maxSessionMessages)) {
     forgetProjectionMessage(state, removed.id, message.sessionID)
