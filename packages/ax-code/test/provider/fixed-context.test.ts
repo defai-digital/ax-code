@@ -87,7 +87,9 @@ describe("fresh context file admission", () => {
     await fs.writeFile(path.join(tmp.path, "code"), "safe")
     const input = { directory: tmp.path, files: ["code"], allowRead: () => true }
     await expect(readFixedContextFiles({ ...input, allowRead: () => false })).rejects.toThrow("permission")
-    await expect(readFixedContextFiles({ ...input, files: ["missing"] })).rejects.toThrow()
+    await expect(readFixedContextFiles({ ...input, files: ["missing"] })).rejects.toThrow(
+      "Selected files must exist inside the current directory.",
+    )
     await expect(readFixedContextFiles({ ...input, files: ["code", "code"] })).rejects.toThrow("once")
     await fs.mkdir(path.join(tmp.path, "dir"))
     await expect(readFixedContextFiles({ ...input, files: ["dir"] })).rejects.toThrow()

@@ -50,7 +50,10 @@ export async function readFixedContextFiles(input: {
   for (const name of input.files) {
     input.signal?.throwIfAborted()
     const lexical = path.resolve(root, name)
-    const canonical = await fs.realpath(lexical)
+    const canonical = await fs.realpath(lexical).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") fail("Selected files must exist inside the current directory.")
+      throw error
+    })
     if (!inside(root, lexical) || !inside(root, canonical))
       fail("Selected files must stay inside the current directory.")
     if (!input.allowRead(lexical) || !input.allowRead(canonical))

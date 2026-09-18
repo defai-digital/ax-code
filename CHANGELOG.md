@@ -26,6 +26,7 @@ changes belong to AX Coder.
 
 - Derive Windows signing relative paths from `GetFullPath` instead of `$Root.Length + 1`.
 - Reject non-AX-Trust providers and in-flight cancellation for `ax-code ask` before opening transport.
+- Report a fixed-context error when a selected file does not exist, instead of an unwrapped `ENOENT`.
 
 ## [7.18.9] - 2026-09-18
 
