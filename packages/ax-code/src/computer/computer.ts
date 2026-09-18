@@ -356,7 +356,12 @@ export namespace Computer {
     const cfg = await Config.get()
     let resolved: ResolvedBackend | undefined
     try {
-      resolved = resolveBackend(cfg.computer)
+      // Resolve the command for the backend that actually failed (`name`), not
+      // the top-level `computer.provider` default. `name` can be an app-scoped
+      // override (computer.overrides) that differs from the default provider —
+      // using the default here would name the failing backend correctly but
+      // show the *other* backend's command in the diagnostic.
+      resolved = resolveBackend({ ...cfg.computer, provider: name as BackendName })
     } catch {
       // no server command resolvable at all — the install hint in the detail matters more than the command
       resolved = undefined

@@ -384,4 +384,26 @@ describe("ExecutionController", () => {
       validationStatus: "failed",
     })
   })
+
+  // recoverableFailure is handled unconditionally (like unrecoverableFailure)
+  // before the phase switch in ExecutionController.decide, so it must route to
+  // "recover" from every non-complete phase without AgentControl.transition
+  // throwing "invalid agent phase transition".
+  test.each(["assess", "plan", "await_approval", "summarize", "blocked"] as const)(
+    "routes recoverable failure signal to recover phase from %s without throwing",
+    (phase) => {
+      const state = AgentControl.createState({
+        sessionID: "ses_123",
+        objective: plan.objective,
+        phase,
+        plan,
+        blockedReason: phase === "blocked" ? "prior_block" : undefined,
+      })
+      expect(() => ExecutionController.apply({ state, signal: { recoverableFailure: true } })).not.toThrow()
+      expect(ExecutionController.apply({ state, signal: { recoverableFailure: true } })).toMatchObject({
+        phase: "recover",
+        lastDecisionReason: "recoverable_failure",
+      })
+    },
+  )
 })

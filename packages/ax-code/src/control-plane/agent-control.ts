@@ -131,14 +131,21 @@ export namespace AgentControl {
     blockedReason?: string
   }
 
+  // "recover" must stay reachable from every non-terminal phase: ExecutionController
+  // routes a `recoverableFailure` signal straight to "recover" regardless of the
+  // current phase (symmetric with `unrecoverableFailure` routing to "blocked" from
+  // any phase — see ExecutionController.decide). Without "recover" listed here for
+  // assess/plan/await_approval/summarize, a recoverable failure signaled while in
+  // one of those phases throws "invalid agent phase transition" instead of
+  // transitioning.
   const transitions: Record<Phase, readonly Phase[]> = {
-    assess: ["plan", "execute", "blocked"],
-    plan: ["await_approval", "execute", "blocked"],
-    await_approval: ["plan", "execute", "blocked"],
+    assess: ["plan", "execute", "recover", "blocked"],
+    plan: ["await_approval", "execute", "recover", "blocked"],
+    await_approval: ["plan", "execute", "recover", "blocked"],
     execute: ["validate", "recover", "summarize", "blocked"],
     validate: ["recover", "summarize", "complete", "blocked"],
     recover: ["plan", "execute", "blocked"],
-    summarize: ["complete", "blocked"],
+    summarize: ["complete", "recover", "blocked"],
     complete: [],
     blocked: ["assess", "plan", "execute", "recover"],
   }

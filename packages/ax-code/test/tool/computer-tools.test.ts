@@ -61,12 +61,13 @@ function makeCtx(asks: Ask[], sessionID?: string) {
 async function setup(
   config: Parameters<typeof tmpdir>[0],
   fn: (input: { provider: FakeComputerProvider; asks: Ask[] }) => Promise<void>,
+  providerName = "fake",
 ) {
   await using tmp = await tmpdir(config)
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      const provider = new FakeComputerProvider()
+      const provider = new FakeComputerProvider(providerName)
       await Computer.useProvider(provider)
       const asks: Ask[] = []
       await fn({ provider, asks })
@@ -204,13 +205,47 @@ describe("computer_snapshot tool", () => {
   test("unavailable backend fails with the command tried and the env override", async () => {
     // pin the resolvable server command so the diagnostic names it
     vi.stubEnv("AX_COMPUTER_COMMAND", "/opt/ax/bin/ax-computer")
-    await setup({ config: { computer: { provider: "cua" } } }, async ({ provider }) => {
-      vi.spyOn(provider, "observe").mockRejectedValue(new McpClientError("spawn_failed", "command not found"))
-      const tool = await ComputerSnapshotTool.init()
+    // Name the injected provider to match the configured backend ("cua") so
+    // the diagnostic's command reflects the backend that actually failed.
+    await setup(
+      { config: { computer: { provider: "cua" } } },
+      async ({ provider }) => {
+        vi.spyOn(provider, "observe").mockRejectedValue(new McpClientError("spawn_failed", "command not found"))
+        const tool = await ComputerSnapshotTool.init()
 
-      await expect(tool.execute({ includeScreenshot: true }, makeCtx([]))).rejects.toThrow(
-        /ax-computer mcp --backend cua.*AX_COMPUTER_COMMAND/s,
-      )
+        await expect(tool.execute({ includeScreenshot: true }, makeCtx([]))).rejects.toThrow(
+          /ax-computer mcp --backend cua.*AX_COMPUTER_COMMAND/s,
+        )
+      },
+      "cua",
+    )
+  })
+
+  test("unavailable backend diagnostic names the override backend's command, not the default provider's", async () => {
+    // The default provider is "axnative" but the app override routes TextEdit
+    // to "cua". The diagnostic must name "cua"'s command — using the default
+    // provider's command here would mislabel which backend was actually tried.
+    vi.stubEnv("AX_COMPUTER_COMMAND", "/opt/ax/bin/ax-computer")
+    await using tmp = await tmpdir({
+      config: { computer: { provider: "axnative", overrides: { TextEdit: "cua" } } },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const cuaProvider = new FakeComputerProvider()
+        vi.spyOn(cuaProvider, "observe").mockRejectedValue(new McpClientError("spawn_failed", "command not found"))
+        const axnativeProvider = new FakeComputerProvider()
+        await Computer.useProvider({
+          providers: new Map([
+            ["cua", cuaProvider],
+            ["axnative", axnativeProvider],
+          ]),
+          default: "axnative",
+          overrides: { TextEdit: "cua" },
+        })
+
+        await expect(Computer.observe({ app: "TextEdit" })).rejects.toThrow(/ax-computer mcp --backend cua/)
+      },
     })
   })
 
