@@ -590,7 +590,7 @@ export namespace Config {
         const isConfigDir = dir.endsWith(".ax-code") || dir === Flag.AX_CODE_CONFIG_DIR
 
         // Parallel load of all independent I/O within this directory
-        const configFiles = isConfigDir ? ["ax-code.jsonc", "ax-code.json"] : []
+        const configFiles = isConfigDir ? ["ax-code.json", "ax-code.jsonc"] : []
         const projectCodeTrusted = trusted || ProjectConfigTrust.enabled()
         const [loadedConfigs, command, agent, mode, pluginFiles] = await Promise.all([
           Promise.all(
@@ -735,7 +735,7 @@ export namespace Config {
     // This way it only loads config file and not skills/plugins/commands
     const managedDir = getManagedDir()
     if (existsSync(managedDir)) {
-      for (const file of ["ax-code.jsonc", "ax-code.json"]) {
+      for (const file of ["ax-code.json", "ax-code.jsonc"]) {
         const filepath = path.join(managedDir, file)
         mergeFromSource(trustedMcpSource("managed", { path: filepath }), await loadFile(filepath))
       }
