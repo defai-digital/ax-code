@@ -84,7 +84,7 @@ export const SkillRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(buildSkillDoctorReport(await Skill.all()))
+        return c.json(buildSkillDoctorReport(await Skill.all(), await Skill.duplicateNames()))
       },
     )
     .post(

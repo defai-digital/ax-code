@@ -154,7 +154,14 @@ export function buildSkillValidationReport(skills: Skill.Info[]): SkillValidatio
   }
 }
 
-export function buildSkillDoctorReport(skills: Skill.Info[]): SkillDoctorReport {
+export function buildSkillDoctorReport(skills: Skill.Info[], duplicateNames?: ReadonlySet<string>): SkillDoctorReport {
+  // Duplicate names collapse to one surviving entry per name before this
+  // function ever sees them (`Skill.all()` returns a Record's values, and
+  // discovery keeps only the last-scanned skill for a given name), so
+  // `nameCounts` can never itself exceed 1 for real discovery data — it only
+  // catches literal duplicate objects passed directly by a caller. The
+  // caller-supplied `duplicateNames` (from `Skill.duplicateNames()`) is what
+  // actually reports a same-name collision that discovery silently resolved.
   const nameCounts = new Map<string, number>()
   for (const skill of skills) nameCounts.set(skill.name, (nameCounts.get(skill.name) ?? 0) + 1)
 
@@ -162,7 +169,7 @@ export function buildSkillDoctorReport(skills: Skill.Info[]): SkillDoctorReport 
     .map((skill) => ({
       name: skill.name,
       location: skill.location,
-      issues: skillDoctorIssues(skill, nameCounts),
+      issues: skillDoctorIssues(skill, nameCounts, duplicateNames),
     }))
     .filter((item) => item.issues.length > 0)
 
@@ -221,13 +228,13 @@ export async function createSkill(input: SkillCreateRequest): Promise<SkillCreat
   return { path: filePath }
 }
 
-function skillDoctorIssues(skill: Skill.Info, nameCounts: Map<string, number>) {
+function skillDoctorIssues(skill: Skill.Info, nameCounts: Map<string, number>, duplicateNames?: ReadonlySet<string>) {
   const issues = [...(skill.standardIssues ?? []), ...(skill.invocationIssues ?? [])]
   const descriptionWords = skill.description.trim().split(/\s+/).filter(Boolean)
   if (skill.description.trim().length < 12 || descriptionWords.length < 3) issues.push("description is too vague")
   if (skill.content.length > 200_000) issues.push("SKILL.md exceeds 200KB")
   if ((skill.paths?.length ?? 0) > 20) issues.push("too many path globs")
-  if ((nameCounts.get(skill.name) ?? 0) > 1) issues.push("duplicate skill name")
+  if ((nameCounts.get(skill.name) ?? 0) > 1 || duplicateNames?.has(skill.name)) issues.push("duplicate skill name")
 
   const base = path.dirname(skill.location)
   for (const ref of relativeContentReferences(skill.content)) {

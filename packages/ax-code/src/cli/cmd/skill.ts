@@ -181,7 +181,7 @@ const SkillDoctorCommand = cmd({
     }),
   async handler(args) {
     await bootstrapReadonly(process.cwd(), async () => {
-      const report = buildSkillDoctorReport(await Skill.all())
+      const report = buildSkillDoctorReport(await Skill.all(), await Skill.duplicateNames())
       if (args.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + EOL)
       } else {

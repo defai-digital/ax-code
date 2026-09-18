@@ -1,5 +1,6 @@
 import { afterEach, test, expect, vi } from "vitest"
 import { Skill } from "../../src/skill"
+import { buildSkillDoctorReport } from "../../src/skill/authoring"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 import path from "path"
@@ -266,6 +267,44 @@ description: Second test skill.
       expect(skills.length).toBe(2)
       expect(skills.find((s) => s.name === "skill-one")).toBeDefined()
       expect(skills.find((s) => s.name === "skill-two")).toBeDefined()
+    },
+  })
+})
+
+test("Skill.duplicateNames flags a name collision that discovery silently resolves", async () => {
+  await using tmp = await tmpdir({
+    git: true,
+    init: async (dir) => {
+      const first = path.join(dir, ".ax-code", "skill", "dup-one")
+      const second = path.join(dir, ".ax-code", "skill", "dup-two")
+      await fs.mkdir(first, { recursive: true })
+      await fs.mkdir(second, { recursive: true })
+      await fs.writeFile(
+        path.join(first, "SKILL.md"),
+        `---\nname: shared-name\ndescription: First skill declaring the shared name.\n---\n\n# First\n`,
+      )
+      await fs.writeFile(
+        path.join(second, "SKILL.md"),
+        `---\nname: shared-name\ndescription: Second skill declaring the shared name.\n---\n\n# Second\n`,
+      )
+    },
+  })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      // Skill.all() is keyed by name, so only one of the two files ever
+      // survives discovery — the collision itself would otherwise vanish
+      // before any consumer (like `skill doctor`) could see it.
+      const skills = userSkills(await Skill.all())
+      expect(skills.filter((skill) => skill.name === "shared-name")).toHaveLength(1)
+
+      const duplicates = await Skill.duplicateNames()
+      expect(duplicates.has("shared-name")).toBe(true)
+
+      const report = buildSkillDoctorReport(await Skill.all(), await Skill.duplicateNames())
+      const entry = report.issues.find((issue) => issue.name === "shared-name")
+      expect(entry?.issues).toContain("duplicate skill name")
     },
   })
 })

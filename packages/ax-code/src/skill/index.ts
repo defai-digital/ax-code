@@ -51,6 +51,14 @@ export namespace Skill {
   type State = {
     skills: Record<string, Info>
     dirs: Set<string>
+    /**
+     * Names that collided during discovery: a later scan overwrote an earlier
+     * skill sharing the same `name`. `skills` is a Record keyed by name, so
+     * the losing entry is gone by the time any consumer (e.g. `all()`) reads
+     * it back — this set is the only surviving record that a collision ever
+     * happened, and is what lets `skill doctor` actually flag it.
+     */
+    duplicateNames: Set<string>
   }
 
   async function addSkill(
@@ -80,6 +88,7 @@ export namespace Skill {
         existing: state.skills[parsed.data.name].location,
         duplicate: match,
       })
+      state.duplicateNames.add(parsed.data.name)
     }
 
     const policy = await SkillInvocationPolicy.read(match, data)
@@ -297,6 +306,7 @@ export namespace Skill {
     const s: State = {
       skills: Object.create(null),
       dirs: new Set<string>(),
+      duplicateNames: new Set<string>(),
     }
 
     const builtins = await loadBuiltinSkills()
@@ -412,6 +422,17 @@ export namespace Skill {
   export async function dirs() {
     const s = await state()
     return Array.from(s.dirs)
+  }
+
+  /**
+   * Names of skills that collided during discovery (a later scan overwrote
+   * an earlier skill sharing the same `name`). `all()`/`available()` only
+   * ever surface the survivor, so this is the sole way a caller — e.g. the
+   * `skill doctor` report — can still see that a collision happened.
+   */
+  export async function duplicateNames() {
+    const s = await state()
+    return new Set(s.duplicateNames)
   }
 
   export async function available(agent?: Agent.Info) {
