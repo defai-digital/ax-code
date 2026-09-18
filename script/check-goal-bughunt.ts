@@ -218,10 +218,15 @@ const SCOPE_PREFIX_ALLOWLIST = [
   "packages/ax-code/test/tool/",
 ] as const
 const SCOPE_FILE_ALLOWLIST = new Set(["script/check-goal-bughunt.ts", "script/goal-bughunt.test.ts"])
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 // Derived from the shared local-only list so a newly declared agent-instruction
 // file cannot be forgotten here.
 const FORBIDDEN_PATH = new RegExp(
-  `(^|/)\\.internal(/|$)|(^|/)(?:${LOCAL_ONLY_ROOT_FILES.map((file) => file.replace(/\./g, "\\.")).join("|")})$`,
+  `(^|/)\\.internal(/|$)|(^|/)(?:${LOCAL_ONLY_ROOT_FILES.map(escapeRegExp).join("|")})$`,
   "i",
 )
 
