@@ -31,7 +31,9 @@ function sanitize(input: unknown): DirectoryScopeSettings {
     settings.maxTopLevelEntries = Math.max(1, record.maxTopLevelEntries)
   }
   if (Array.isArray(record.extraDenylist)) {
-    settings.extraDenylist = record.extraDenylist.filter((entry): entry is string => typeof entry === "string")
+    settings.extraDenylist = record.extraDenylist.filter(
+      (entry): entry is string => typeof entry === "string" && entry.trim() !== "",
+    )
   }
   return settings
 }

@@ -203,8 +203,12 @@ export const HeadlessRunCommand = cmd({
         }),
       ]
       if (args.eventLog && args.eventLog !== "-") {
-        const eventLogPath = path.resolve(callerCwd, args.eventLog)
-        eventSinks.push(await createHeadlessJsonlFileEventSink(eventLogPath))
+        const resolvedCwd = Filesystem.resolve(callerCwd)
+        const resolvedPath = Filesystem.resolve(path.resolve(callerCwd, args.eventLog))
+        if (!Filesystem.contains(resolvedCwd, resolvedPath)) {
+          throw new Error(`eventLog path "${args.eventLog}" resolves outside the current directory`)
+        }
+        eventSinks.push(await createHeadlessJsonlFileEventSink(resolvedPath))
       }
       const eventSink = createHeadlessCompositeEventSink(eventSinks)
       let sessionError: string | undefined
