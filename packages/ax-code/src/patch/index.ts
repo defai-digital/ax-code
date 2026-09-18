@@ -7,6 +7,7 @@ import { NativePerf } from "../perf/native"
 import { NativeAddon } from "../native/addon"
 import { Filesystem } from "../util/filesystem"
 import { toError, toErrorMessage } from "../util/error-message"
+import { convertToLineEnding, detectLineEnding, normalizeLineEndings } from "../tool/edit-helpers"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
@@ -196,9 +197,11 @@ export namespace Patch {
     let i = startIdx
 
     while (i < lines.length && !lines[i].startsWith("***")) {
-      if (lines[i].startsWith("+")) {
-        content += lines[i].substring(1) + "\n"
-      }
+      // A line with no "+" prefix is most often a blank line a model emitted
+      // without the leading "+" — keep it as literal content instead of
+      // silently dropping it (mirrors parseUpdateFileChunks's handling of
+      // unprefixed context lines above).
+      content += (lines[i].startsWith("+") ? lines[i].substring(1) : lines[i]) + "\n"
       i++
     }
 
@@ -354,7 +357,14 @@ export namespace Patch {
       throw new Error(`Failed to read file ${filePath}: ${msg}`, { cause: error })
     }
 
-    let originalLines = originalContent.split("\n")
+    // The patch's own old_lines/new_lines are already normalized to LF-only
+    // (parsePatch splits on /\r?\n/), so match against LF-normalized target
+    // content too — otherwise a CRLF file's lines carry a trailing \r that
+    // never exact-matches, forcing a fuzzy fallback that replaces the
+    // matched span with LF-only content while untouched lines keep their
+    // \r, corrupting the file into mixed line endings.
+    const originalEnding = detectLineEnding(originalContent)
+    let originalLines = normalizeLineEndings(originalContent).split("\n")
 
     // Drop trailing empty element for consistent line counting
     if (originalLines.length > 0 && originalLines[originalLines.length - 1] === "") {
@@ -368,7 +378,10 @@ export namespace Patch {
     // decoding, even when the file's last real line is itself blank (2+
     // trailing newlines) — conditioning this on the last line's content
     // silently dropped the trailing blank line in that case.
-    const newContent = newLines.length === 0 ? "" : newLines.join("\n") + "\n"
+    const newContent = convertToLineEnding(
+      newLines.length === 0 ? "" : newLines.join("\n") + "\n",
+      originalEnding,
+    )
 
     // Generate unified diff
     const unifiedDiff = generateUnifiedDiff(originalContent, newContent)
