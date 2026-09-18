@@ -2371,6 +2371,15 @@ function eventSessionID(event: AxCodeGrpcRuntimeEvent) {
     const sessionID = properties.item.sessionID
     return typeof sessionID === "string" ? sessionID : undefined
   }
+  if (
+    "part" in properties &&
+    properties.part &&
+    typeof properties.part === "object" &&
+    "sessionID" in properties.part
+  ) {
+    const sessionID = properties.part.sessionID
+    return typeof sessionID === "string" ? sessionID : undefined
+  }
   return undefined
 }
 
