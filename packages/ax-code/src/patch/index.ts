@@ -715,15 +715,29 @@ export namespace Patch {
         for (const hunk of args.hunks) {
           let resolvedPath: string
           try {
-            resolvedPath = resolvePatchPath(
-              cwd,
-              effectiveCwd,
-              hunk.type === "update" && hunk.move_path ? hunk.move_path : hunk.path,
-            )
+            // Always key changes by the hunk's own path — including "update"
+            // hunks with a move_path. move_path is the destination, recorded
+            // separately on the change value; keying on it here would (a)
+            // make the source path unreachable via changes.get(hunk.path),
+            // since no entry exists under it, and (b) make the "update"
+            // entry's own move_path point at its own key, losing the source
+            // path the move is renaming *from*.
+            resolvedPath = resolvePatchPath(cwd, effectiveCwd, hunk.path)
           } catch (error) {
             return {
               type: MaybeApplyPatchVerified.CorrectnessError,
               error: error as Error,
+            }
+          }
+
+          // Two hunks resolving to the same path would otherwise silently
+          // overwrite each other in `changes`, discarding the earlier
+          // hunk's change with no error (e.g. "Delete File: a" followed by
+          // "Add File: a" collapses to a single "add" entry).
+          if (changes.has(resolvedPath)) {
+            return {
+              type: MaybeApplyPatchVerified.CorrectnessError,
+              error: new Error(`Multiple operations target the same path: ${hunk.path}`),
             }
           }
 
@@ -738,8 +752,7 @@ export namespace Patch {
             case "delete":
               // For delete, we need to read the current content
               try {
-                const deletePath = resolvePatchPath(cwd, effectiveCwd, hunk.path)
-                const content = await fs.readFile(deletePath, "utf-8")
+                const content = await fs.readFile(resolvedPath, "utf-8")
                 changes.set(resolvedPath, {
                   type: "delete",
                   content,
@@ -753,9 +766,8 @@ export namespace Patch {
               break
 
             case "update":
-              const updatePath = resolvePatchPath(cwd, effectiveCwd, hunk.path)
               try {
-                const fileUpdate = deriveNewContentsFromChunks(updatePath, hunk.chunks)
+                const fileUpdate = deriveNewContentsFromChunks(resolvedPath, hunk.chunks)
                 changes.set(resolvedPath, {
                   type: "update",
                   unified_diff: fileUpdate.unified_diff,

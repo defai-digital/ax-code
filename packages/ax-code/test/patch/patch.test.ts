@@ -187,6 +187,49 @@ PATCH`
         expect([...result.action.changes.keys()]).toEqual([path.join(tempDir, "inside.txt")])
       }
     })
+
+    test("keys an update+move change by the source path, not the destination", async () => {
+      await fs.writeFile(path.join(tempDir, "old.txt"), "old content\n")
+      const patchText = `*** Begin Patch
+*** Update File: old.txt
+*** Move to: new.txt
+@@
+-old content
++new content
+*** End Patch`
+
+      const result = await Patch.maybeParseApplyPatchVerified(["apply_patch", patchText], tempDir)
+
+      expect(result.type).toBe(Patch.MaybeApplyPatchVerified.Body)
+      if (result.type !== Patch.MaybeApplyPatchVerified.Body) return
+      // The map must be keyed by the hunk's own (source) path so a caller
+      // can look up "what happens to old.txt" — keying by move_path instead
+      // makes the source path unreachable and the move destination
+      // self-referential.
+      expect([...result.action.changes.keys()]).toEqual([path.join(tempDir, "old.txt")])
+      const change = result.action.changes.get(path.join(tempDir, "old.txt"))
+      expect(change?.type).toBe("update")
+      if (change?.type === "update") {
+        expect(change.move_path).toBe(path.join(tempDir, "new.txt"))
+        expect(change.new_content).toBe("new content\n")
+      }
+    })
+
+    test("rejects a patch where two hunks target the same path instead of silently dropping one", async () => {
+      await fs.writeFile(path.join(tempDir, "a.txt"), "content\n")
+      const patchText = `*** Begin Patch
+*** Delete File: a.txt
+*** Add File: a.txt
++recreated
+*** End Patch`
+
+      const result = await Patch.maybeParseApplyPatchVerified(["apply_patch", patchText], tempDir)
+
+      expect(result.type).toBe(Patch.MaybeApplyPatchVerified.CorrectnessError)
+      if (result.type === Patch.MaybeApplyPatchVerified.CorrectnessError) {
+        expect(result.error.message).toContain("Multiple operations target the same path")
+      }
+    })
   })
 
   describe("applyPatch", () => {
