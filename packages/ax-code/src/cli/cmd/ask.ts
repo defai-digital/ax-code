@@ -1,15 +1,6 @@
-import { Agent } from "@/agent/agent"
-import { Config } from "@/config/config"
-import { Permission } from "@/permission"
 import { Provider } from "@/provider/provider"
-import { isAxTrustProviderID } from "@/mode/provider-category"
-import {
-  buildFixedContextRequest,
-  FixedContextError,
-  generateFixedContext,
-  readFixedContextFiles,
-  validateFixedContextQuestion,
-} from "@/provider/fixed-context"
+import { askFixedContext } from "@/provider/fixed-context-operation"
+import { validateFixedContextQuestion } from "@/provider/fixed-context"
 import { bootstrapReadonly } from "../bootstrap"
 import { cmd } from "./cmd"
 
@@ -55,38 +46,15 @@ export const AskCommand = cmd({
     try {
       await bootstrapReadonly(process.cwd(), async () => {
         const selected = Provider.parseModel(args.model)
-        const config = await Config.get()
-        const configured = config.provider?.[selected.providerID]
-        // The axTrust option controls session affinity, not provider identity.
-        if (configured?.management !== "ax-trust" && !isAxTrustProviderID(selected.providerID))
-          throw new FixedContextError({ message: "Select a connected AX Trust provider for fixed-context questions." })
-        const model = await Provider.getModel(selected.providerID, selected.modelID)
-        if (model.api.npm !== "@ai-sdk/openai-compatible")
-          throw new FixedContextError({
-            message: "This command requires an AX Trust OpenAI-compatible chat connection.",
-          })
-        const agent = await Agent.get(await Agent.defaultAgent())
-        const context = await readFixedContextFiles({
-          directory: process.cwd(),
-          files: args.file,
-          signal: controller.signal,
-          allowRead: (file) => Permission.evaluate("read", file, agent.permission).action === "allow",
-        })
-        const request = buildFixedContextRequest({
-          ...context,
-          model: model.api.id,
-          question,
-          maxTokens: args.maxTokens,
-        })
-        const language = await Provider.getLanguage(model)
-        if (language.specificationVersion !== "v3")
-          throw new FixedContextError({ message: "This command requires the bundled version 3 chat adapter." })
-        const result = await generateFixedContext(language, request, controller.signal)
-        const output = { ...result, providerID: selected.providerID, modelID: selected.modelID }
+        const output = await askFixedContext(
+          { ...selected, files: args.file, question, maxTokens: args.maxTokens },
+          process.cwd(),
+          controller.signal,
+        )
         if (args.format === "json") process.stdout.write(JSON.stringify(output) + "\n")
         else {
-          process.stdout.write(result.answer + "\n")
-          process.stderr.write(`AX Trust cache: ${result.cache.status}\n`)
+          process.stdout.write(output.answer + "\n")
+          process.stderr.write(`AX Trust cache: ${output.cache.status}\n`)
         }
       })
     } finally {

@@ -2599,6 +2599,29 @@ export type FileSource = {
   path: string
 }
 
+/** AX Code API schema `FixedContextInput` (auto-generated from the OpenAPI contract). */
+export type FixedContextInput = {
+  files: Array<string>
+  question: string
+  providerID: string
+  modelID: string
+  maxTokens?: number
+}
+
+/** AX Code API schema `FixedContextOutput` (auto-generated from the OpenAPI contract). */
+export type FixedContextOutput = {
+  answer: string
+  cache: {
+    status: "HIT" | "EXACT_HIT" | "MISS" | "BYPASS" | "UNREPORTED"
+    score?: number
+  }
+  contextDigest: string
+  providerID: string
+  modelID: string
+  requestID?: string
+  usage?: unknown
+}
+
 /** AX Code API schema `FormatterStatus` (auto-generated from the OpenAPI contract). */
 export type FormatterStatus = {
   name: string
@@ -11752,6 +11775,38 @@ export type WorkflowRoutineRunResponses = {
 
 /** Successful response payload for `POST /workflow-routines/run` — Run workflow routine */
 export type WorkflowRoutineRunResponse = WorkflowRoutineRunResponses[keyof WorkflowRoutineRunResponses]
+
+/** Request payload shape for `POST /experimental/fixed-context` — Ask about fixed files */
+export type ExperimentalAskData = {
+  body?: FixedContextInput
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/fixed-context"
+}
+
+/** Error response payloads for `POST /experimental/fixed-context` — Ask about fixed files */
+export type ExperimentalAskErrors = {
+  /**
+   * Bad request
+   */
+  400: AppErrorEnvelope
+}
+
+/** Error response payload for `POST /experimental/fixed-context` — Ask about fixed files */
+export type ExperimentalAskError = ExperimentalAskErrors[keyof ExperimentalAskErrors]
+
+/** Success response payloads for `POST /experimental/fixed-context` — Ask about fixed files */
+export type ExperimentalAskResponses = {
+  /**
+   * Answer and observed cache status
+   */
+  200: FixedContextOutput
+}
+
+/** Successful response payload for `POST /experimental/fixed-context` — Ask about fixed files */
+export type ExperimentalAskResponse = ExperimentalAskResponses[keyof ExperimentalAskResponses]
 
 /** Request payload shape for `GET /experimental/tool/ids` — List tool IDs */
 export type ToolIdsData = {

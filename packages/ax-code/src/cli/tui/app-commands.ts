@@ -108,6 +108,13 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
 
   const commands: CommandOption[] = [
     {
+      title: "Ask about fixed files",
+      value: "question.fixed-context",
+      category: "AX Trust",
+      slash: { name: "ask" },
+      onSelect: () => dialogs.showFixedContextDialog(),
+    },
+    {
       title: t("command.switchSession"),
       value: "session.list",
       keybind: "session_list",

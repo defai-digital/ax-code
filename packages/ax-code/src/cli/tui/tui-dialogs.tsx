@@ -51,6 +51,16 @@ export function createTuiDialogLoaders(input: {
   const host = { dialog: input.dialog, toast: input.toast }
 
   return {
+    showFixedContextDialog: () =>
+      replaceLazyDialog({
+        ...host,
+        warn: "failed to load fixed-context dialog",
+        fail: "Failed to open fixed-file question",
+        load: async () => {
+          const { DialogFixedContext } = await import("@tui/component/dialog-fixed-context")
+          return () => <DialogFixedContext />
+        },
+      }),
     showProviderDialog: () =>
       replaceLazyDialog({
         ...host,

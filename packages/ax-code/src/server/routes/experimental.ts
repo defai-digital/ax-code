@@ -1,4 +1,7 @@
 import { Hono } from "hono"
+import { HTTPException } from "hono/http-exception"
+import { askFixedContext, FixedContextInput, FixedContextOutput } from "../../provider/fixed-context-operation"
+import { FixedContextError } from "../../provider/fixed-context"
 import { describeRoute, resolver } from "hono-openapi"
 import { validator } from "../validation"
 import fs from "fs/promises"
@@ -26,6 +29,31 @@ async function canonicalSandboxDirectory(directory: string) {
 
 export const ExperimentalRoutes = lazy(() =>
   new Hono()
+    .post(
+      "/fixed-context",
+      describeRoute({
+        summary: "Ask about fixed files",
+        description:
+          "Answer a standalone question using explicitly selected permitted files and an AX Trust model. No session history or tools are attached.",
+        operationId: "experimental.ask",
+        responses: {
+          200: {
+            description: "Answer and observed cache status",
+            content: { "application/json": { schema: resolver(FixedContextOutput) } },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", FixedContextInput),
+      async (c) => {
+        try {
+          return c.json(await askFixedContext(c.req.valid("json"), Instance.directory, c.req.raw.signal))
+        } catch (error) {
+          if (FixedContextError.isInstance(error)) throw new HTTPException(400, { message: error.message })
+          throw error
+        }
+      },
+    )
     .get(
       "/tool/ids",
       describeRoute({

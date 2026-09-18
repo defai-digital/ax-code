@@ -384,5 +384,8 @@ jobs:
       - name: Validate TUI locales and native setup dialogs
         run: pnpm --dir packages/ax-code run check:tui-locales
 
+      - name: Fixed-context dialog native interaction
+        run: pnpm --dir packages/ax-code run check:fixed-context-dialog
+
       - name: TUI startup smoke
         run: pnpm --dir packages/ax-code run tui:startup-smoke -- --bin "$GITHUB_WORKSPACE/.tmp/tui-smoke-bin/ax-code"

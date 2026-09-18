@@ -66,3 +66,12 @@ is fixed at zero. Requests are non-streaming, have a 90-second deadline and do
 not fall back to a different model. Incomplete or actionable responses are
 rejected. Similar questions can still have different meanings: opt in only for
 questions whose answer depends on the selected fixed content.
+
+In the TUI, type `/ask` or select **Ask about fixed files** from the command
+palette. It uses the currently selected model. Enter one relative path per line
+(paste multiple lines to select several files), then enter your question. The
+dialog shows the server directory, answer and actual cache status. Press `r` to
+ask another question using the same file selection; the server rereads those
+files. Escape closes the dialog and cancels a pending request. Results remain in
+the dialog and are not inserted into the coding session or executed as tools.
+Attached TUI clients require a server with the fixed-context endpoint.

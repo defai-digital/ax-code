@@ -38,6 +38,8 @@ import type {
   EventTuiPromptAppend,
   EventTuiSessionSelect,
   EventTuiToastShow,
+  ExperimentalAskErrors,
+  ExperimentalAskResponses,
   ExperimentalResourceListResponses,
   ExperimentalSessionListResponses,
   FileListResponses,
@@ -47,6 +49,7 @@ import type {
   FindFilesResponses,
   FindSymbolsResponses,
   FindTextResponses,
+  FixedContextInput,
   FormatterStatusResponses,
   GetDreGraphSessionSessionIdFingerprintResponses,
   GetDreGraphSessionSessionIdResponses,
@@ -3369,6 +3372,121 @@ export class WorkflowRoutine extends HeyApiClient {
   }
 }
 
+/** AX Code API schema `Session` (auto-generated from the OpenAPI contract). */
+export class Session extends HeyApiClient {
+  /**
+   * List sessions
+   *
+   * Get a list of all ax-code sessions across projects, sorted by most recently updated. Archived sessions are excluded by default.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      roots?: boolean
+      start?: number
+      cursor?: number
+      cursorId?: string
+      search?: string
+      limit?: number
+      archived?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "roots" },
+            { in: "query", key: "start" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "cursorId" },
+            { in: "query", key: "search" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "archived" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperimentalSessionListResponses, unknown, ThrowOnError>({
+      url: "/experimental/session",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+/** AX Code API schema `Resource` (auto-generated from the OpenAPI contract). */
+export class Resource extends HeyApiClient {
+  /**
+   * Get MCP resources
+   *
+   * Get all available MCP resources from connected servers. Optionally filter by name.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ExperimentalResourceListResponses, unknown, ThrowOnError>({
+      url: "/experimental/resource",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+/** AX Code API schema `Experimental` (auto-generated from the OpenAPI contract). */
+export class Experimental extends HeyApiClient {
+  /**
+   * Ask about fixed files
+   *
+   * Answer a standalone question using explicitly selected permitted files and an AX Trust model. No session history or tools are attached.
+   */
+  public ask<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      fixedContextInput?: FixedContextInput
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { key: "fixedContextInput", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperimentalAskResponses, ExperimentalAskErrors, ThrowOnError>({
+      url: "/experimental/fixed-context",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  private _session?: Session
+  get session(): Session {
+    return (this._session ??= new Session({ client: this.client }))
+  }
+
+  private _resource?: Resource
+  get resource(): Resource {
+    return (this._resource ??= new Resource({ client: this.client }))
+  }
+}
+
 /** AX Code API schema `Tool` (auto-generated from the OpenAPI contract). */
 export class Tool extends HeyApiClient {
   /**
@@ -3547,86 +3665,6 @@ export class Worktree extends HeyApiClient {
         ...params.headers,
       },
     })
-  }
-}
-
-/** AX Code API schema `Session` (auto-generated from the OpenAPI contract). */
-export class Session extends HeyApiClient {
-  /**
-   * List sessions
-   *
-   * Get a list of all ax-code sessions across projects, sorted by most recently updated. Archived sessions are excluded by default.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      roots?: boolean
-      start?: number
-      cursor?: number
-      cursorId?: string
-      search?: string
-      limit?: number
-      archived?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "roots" },
-            { in: "query", key: "start" },
-            { in: "query", key: "cursor" },
-            { in: "query", key: "cursorId" },
-            { in: "query", key: "search" },
-            { in: "query", key: "limit" },
-            { in: "query", key: "archived" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ExperimentalSessionListResponses, unknown, ThrowOnError>({
-      url: "/experimental/session",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-/** AX Code API schema `Resource` (auto-generated from the OpenAPI contract). */
-export class Resource extends HeyApiClient {
-  /**
-   * Get MCP resources
-   *
-   * Get all available MCP resources from connected servers. Optionally filter by name.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ExperimentalResourceListResponses, unknown, ThrowOnError>({
-      url: "/experimental/resource",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-/** AX Code API schema `Experimental` (auto-generated from the OpenAPI contract). */
-export class Experimental extends HeyApiClient {
-  private _session?: Session
-  get session(): Session {
-    return (this._session ??= new Session({ client: this.client }))
-  }
-
-  private _resource?: Resource
-  get resource(): Resource {
-    return (this._resource ??= new Resource({ client: this.client }))
   }
 }
 
@@ -7842,6 +7880,11 @@ export class AxCodeClient extends HeyApiClient {
     return (this._workflowRoutine ??= new WorkflowRoutine({ client: this.client }))
   }
 
+  private _experimental?: Experimental
+  get experimental(): Experimental {
+    return (this._experimental ??= new Experimental({ client: this.client }))
+  }
+
   private _tool?: Tool
   get tool(): Tool {
     return (this._tool ??= new Tool({ client: this.client }))
@@ -7850,11 +7893,6 @@ export class AxCodeClient extends HeyApiClient {
   private _worktree?: Worktree
   get worktree(): Worktree {
     return (this._worktree ??= new Worktree({ client: this.client }))
-  }
-
-  private _experimental?: Experimental
-  get experimental(): Experimental {
-    return (this._experimental ??= new Experimental({ client: this.client }))
   }
 
   private _session?: Session2

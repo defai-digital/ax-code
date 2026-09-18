@@ -25582,6 +25582,59 @@
         ]
       }
     },
+    "/experimental/fixed-context": {
+      "post": {
+        "operationId": "experimental.ask",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Ask about fixed files",
+        "description": "Answer a standalone question using explicitly selected permitted files and an AX Trust model. No session history or tools are attached.",
+        "responses": {
+          "200": {
+            "description": "Answer and observed cache status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FixedContextOutput"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FixedContextInput"
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createAxCodeClient } from \"@ax-code/sdk/v2\"\n\nconst client = createAxCodeClient()\nawait client.experimental.ask({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/experimental/tool/ids": {
       "get": {
         "operationId": "tool.ids",
@@ -43594,6 +43647,93 @@
           "text",
           "type",
           "path"
+        ]
+      },
+      "FixedContextInput": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "minItems": 1,
+            "maxItems": 14,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          },
+          "providerID": {
+            "type": "string"
+          },
+          "modelID": {
+            "type": "string"
+          },
+          "maxTokens": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4096
+          }
+        },
+        "required": [
+          "files",
+          "question",
+          "providerID",
+          "modelID"
+        ],
+        "additionalProperties": false
+      },
+      "FixedContextOutput": {
+        "type": "object",
+        "properties": {
+          "answer": {
+            "type": "string"
+          },
+          "cache": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "HIT",
+                  "EXACT_HIT",
+                  "MISS",
+                  "BYPASS",
+                  "UNREPORTED"
+                ]
+              },
+              "score": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "contextDigest": {
+            "type": "string"
+          },
+          "providerID": {
+            "type": "string"
+          },
+          "modelID": {
+            "type": "string"
+          },
+          "requestID": {
+            "type": "string"
+          },
+          "usage": {}
+        },
+        "required": [
+          "answer",
+          "cache",
+          "contextDigest",
+          "providerID",
+          "modelID"
         ]
       },
       "FormatterStatus": {
