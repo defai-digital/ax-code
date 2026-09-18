@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Open a draft GitHub release after Release validate so maintainers can see the new tag on the Releases page before
+  signed assets are published. Public Latest still changes only after publish.
+
 ## [7.19.1] - 2026-09-18
 
 ### Changed

@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-16
+Last reviewed: 2026-09-18
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
@@ -21,6 +21,14 @@ Standard's license. See [Standard and Business](editions.md) for details and the
 [website guide](https://ax-code.app/en/download/) for public installation updates.
 Public installers and their signed assets must be reachable and verified before the
 website advertises a one-line installation command.
+
+## Tags versus GitHub Releases
+
+Pushing a `vMAJOR.MINOR.PATCH` git tag starts the Release workflow. The
+[Releases](https://github.com/defai-digital/ax-code/releases) list only shows a
+version after that workflow has signed assets and published. Until then, Latest
+stays on the previous published tag. After validate succeeds, maintainers can
+see a Draft for the new tag; it is not public Latest.
 
 ## Recommended Path (when public release access is available)
 
