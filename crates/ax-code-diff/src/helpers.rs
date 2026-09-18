@@ -1,3 +1,4 @@
+use regex::Regex;
 use similar::TextDiff;
 
 // ── Unicode normalization helpers ────────────────────────────────────────────
@@ -318,8 +319,26 @@ pub(crate) fn strategy_whitespace_normalized(content: &str, find: &str) -> Vec<S
         } else {
             let normalized_line = normalize_ws(line);
             if normalized_line.contains(&normalized_find) {
-                // For substring matches, yield the find string itself (like TS when words > 6)
-                results.push(find.to_string());
+                // Find the actual substring in the original line that matches, by
+                // building a `word\s+word\s+...` regex from the search text. Cap the
+                // word count at 6 to avoid ReDoS-prone regexes on adversarial input;
+                // for longer searches, fall back to yielding the find string itself
+                // (matches WhitespaceNormalizedReplacer in edit-impl.ts).
+                let words: Vec<&str> = find.split_whitespace().collect();
+                if words.len() > 6 {
+                    results.push(find.to_string());
+                } else if !words.is_empty() {
+                    let pattern = words
+                        .iter()
+                        .map(|word| regex::escape(word))
+                        .collect::<Vec<_>>()
+                        .join("\\s+");
+                    if let Ok(re) = Regex::new(&pattern) {
+                        if let Some(m) = re.find(line) {
+                            results.push(m.as_str().to_string());
+                        }
+                    }
+                }
             }
         }
     }

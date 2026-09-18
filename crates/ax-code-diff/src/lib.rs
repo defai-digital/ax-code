@@ -301,7 +301,13 @@ pub fn apply_chunks(
 
         // Handle pure addition (no old lines)
         if chunk.old_lines.is_empty() {
-            let insertion_idx = line_index.min(original_lines.len());
+            let insertion_idx = if chunk.change_context.is_some() {
+                line_index.min(original_lines.len())
+            } else if original_lines.last().map(|s| s.as_str()) == Some("") {
+                original_lines.len() - 1
+            } else {
+                original_lines.len()
+            };
             replacements.push((insertion_idx, 0, chunk.new_lines.clone()));
             continue;
         }
@@ -337,6 +343,18 @@ pub fn apply_chunks(
 
     // Sort replacements by index
     replacements.sort_by_key(|r| r.0);
+
+    // Ensure replacement ranges don't overlap
+    for i in 1..replacements.len() {
+        let (previous_start, previous_len, _) = &replacements[i - 1];
+        let (current_start, _, _) = &replacements[i];
+        if *current_start < previous_start + previous_len {
+            return Err(napi::Error::from_reason(format!(
+                "Overlapping patch chunks in {}",
+                file_path
+            )));
+        }
+    }
 
     // Apply replacements in reverse order to preserve indices
     let mut result_lines = original_lines;

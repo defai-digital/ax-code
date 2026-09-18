@@ -21,6 +21,7 @@ thiserror = { workspace = true }
 similar = { workspace = true }
 strsim = { workspace = true }
 unicode-normalization = { workspace = true }
+regex = "1"
 
 [build-dependencies]
 napi-build = { workspace = true }
