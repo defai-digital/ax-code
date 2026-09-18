@@ -6,6 +6,34 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.18.9] - 2026-09-18
+
+### Added
+
+- Guard against launching ax-code in an overly broad directory (home, Desktop, Downloads, Documents, filesystem root,
+  or a very large top-level listing). Interactive sessions can confirm once; non-interactive runs refuse unless
+  `AX_CODE_ALLOW_BROAD_DIR` is set.
+- Opt-in structured output schema on `task` and `task_parallel`. Invalid schemas fail at the tool boundary before a
+  child session starts; captured values are returned as `structured` and echoed in a `<task_structured_output>` block.
+- Opt-in `tui.mouse` setting to keep terminal mouse capture for selection.
+
+### Changed
+
+- Publish the paired SDK 2.5.33.
+- Deduplicate identical bounded `read` / `grep` / `glob` tool evidence in a single model request, keeping the first
+  full copy and a pointer to it.
+- Strip `reasoning_content` for gpt-oss on any Groq-compatible openai-compatible gateway, not only the first-party
+  Groq provider ID.
+- Unify local-only path guards so every agent-instruction filename is covered.
+
+### Fixed
+
+- Directory-scope trust cache errors no longer crash CLI startup; malformed global `directoryScope` values are
+  sanitized instead of flagging every directory.
+- Empty `extraDenylist` strings no longer treat the current directory as denylisted.
+- Headless `--event-log` paths must stay inside the caller's working directory, using `Filesystem.contains` instead of
+  a prefix `startsWith` check.
+
 ## [7.18.8] - 2026-09-17
 
 ### Changed
