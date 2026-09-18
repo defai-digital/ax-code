@@ -1,10 +1,10 @@
 // Reviewed cognates and technical notation whose spelling matches English.
 // Keep this per-locale list explicit: copied English prose must fail validation.
 export const sharedSpelling: Record<string, readonly string[]> = {
-  "zh-TW": [],
-  "zh-CN": [],
-  ja: [],
-  ko: ["ui.queue"],
+  "zh-TW": ["command.axTrust"],
+  "zh-CN": ["command.axTrust"],
+  ja: ["command.axTrust"],
+  ko: ["ui.queue", "command.axTrust"],
   es: [
     "mode.manual",
     "common.plan",
@@ -21,6 +21,7 @@ export const sharedSpelling: Record<string, readonly string[]> = {
     "ui.lint",
     "ui.queue",
     "ui.error2",
+    "command.axTrust",
   ],
   "pt-BR": [
     "mode.manual",
@@ -39,6 +40,7 @@ export const sharedSpelling: Record<string, readonly string[]> = {
     "ui.lint",
     "ui.cache",
     "ui.queue",
+    "command.axTrust",
   ],
   fr: [
     "common.session",
@@ -67,6 +69,7 @@ export const sharedSpelling: Record<string, readonly string[]> = {
     "ui.cache",
     "ui.queue",
     "ui.actions",
+    "command.axTrust",
   ],
   de: [
     "mode.sandbox",
@@ -85,8 +88,9 @@ export const sharedSpelling: Record<string, readonly string[]> = {
     "ui.grep",
     "ui.queue",
     "ui.in",
+    "command.axTrust",
   ],
-  ru: ["ui.glob", "ui.grep", "ui.lint", "ui.queue"],
+  ru: ["ui.glob", "ui.grep", "ui.lint", "ui.queue", "command.axTrust"],
   id: [
     "mode.manual",
     "mode.sandbox",
@@ -104,9 +108,10 @@ export const sharedSpelling: Record<string, readonly string[]> = {
     "ui.cache",
     "ui.queue",
     "display.header",
+    "command.axTrust",
   ],
-  tr: ["common.plan", "ui.glob", "ui.grep", "ui.risk", "ui.lint", "ui.queue"],
-  vi: ["mode.sandbox", "ensemble.worktreeOne", "ui.worktree", "ui.glob", "ui.grep", "ui.lint", "ui.queue"],
+  tr: ["common.plan", "ui.glob", "ui.grep", "ui.risk", "ui.lint", "ui.queue", "command.axTrust"],
+  vi: ["mode.sandbox", "ensemble.worktreeOne", "ui.worktree", "ui.glob", "ui.grep", "ui.lint", "ui.queue", "command.axTrust"],
   it: [
     "ensemble.worktreeOne",
     "category.provider",
@@ -133,5 +138,6 @@ export const sharedSpelling: Record<string, readonly string[]> = {
     "ui.queue",
     "ui.in",
     "ui.out",
+    "command.axTrust",
   ],
 }

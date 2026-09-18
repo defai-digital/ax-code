@@ -5155,8 +5155,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 524288,
+          "input": 524288,
           "output": 32768
         }
       },
@@ -5272,8 +5272,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 524288,
+          "input": 524288,
           "output": 32768
         }
       },
@@ -5318,8 +5318,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 524288,
+          "input": 524288,
           "output": 32768
         }
       },
@@ -5410,8 +5410,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 524288,
+          "input": 524288,
           "output": 32768
         }
       },
@@ -5458,8 +5458,8 @@
           ]
         },
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 524288,
+          "input": 524288,
           "output": 32768
         }
       },
@@ -11970,8 +11970,8 @@
         "family": "qwen",
         "id": "qwen/qwen3.8-27b-queen",
         "limit": {
-          "context": 262144,
-          "input": 262144,
+          "context": 524288,
+          "input": 524288,
           "output": 32768
         },
         "modalities": {
@@ -13875,8 +13875,8 @@
           "input": [
             "text",
             "image",
-            "video",
-            "audio"
+            "audio",
+            "video"
           ],
           "output": [
             "text"
@@ -65811,7 +65811,7 @@
         "attachment": false,
         "id": "typesafe-ai/jev",
         "limit": {
-          "context": 0,
+          "context": 64000,
           "output": 0
         },
         "modalities": {
@@ -65825,7 +65825,30 @@
         "name": "Jev",
         "reasoning": false,
         "release_date": "2026-09-15",
-        "tool_call": false
+        "tool_call": false,
+        "temperature": false
+      },
+      "alibaba/qwen3.8-omni-flash": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "alibaba/qwen3.8-omni-flash",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen 3.8 Omni Flash",
+        "reasoning": true,
+        "release_date": "2026-09-17",
+        "tool_call": true
       }
     }
   },
@@ -68777,29 +68800,6 @@
         "limit": {
           "context": 128000,
           "output": 16384
-        }
-      },
-      "mistral-small-2603": {
-        "id": "mistral-small-2603",
-        "name": "Mistral Small 4",
-        "family": "mistral-small",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-03-16",
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 256000,
-          "output": 65536
         }
       },
       "grok-4-6": {
@@ -75168,6 +75168,49 @@
         "release_date": "2026-09-04",
         "temperature": false,
         "tool_call": true
+      },
+      "typesafe/jev": {
+        "attachment": false,
+        "id": "typesafe/jev",
+        "limit": {
+          "context": 32000,
+          "output": 0
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Jev",
+        "reasoning": false,
+        "release_date": "2026-09-15",
+        "temperature": false,
+        "tool_call": false
+      },
+      "unbiased/pareto": {
+        "attachment": true,
+        "id": "unbiased/pareto",
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Pareto",
+        "reasoning": false,
+        "release_date": "2026-09-17",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -80092,6 +80135,31 @@
         "release_date": "2026-09-10",
         "temperature": true,
         "tool_call": true
+      },
+      "qwen3-8-omni-flash": {
+        "attachment": true,
+        "family": "qwen",
+        "id": "qwen3-8-omni-flash",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "audio",
+            "video"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Qwen3.8 Omni Flash",
+        "reasoning": true,
+        "release_date": "2026-09-17",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -84890,7 +84958,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 393216
+          "output": 943718
         }
       },
       "dots-studio/dots-3-note-preview:free": {
@@ -85342,30 +85410,6 @@
         "limit": {
           "context": 32768,
           "output": 26214
-        }
-      },
-      "mistralai/mistral-large-2512": {
-        "id": "mistralai/mistral-large-2512",
-        "name": "Mistral Large 3",
-        "family": "mistral-large",
-        "attachment": true,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-12-02",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "pdf"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 209715
         }
       },
       "mistralai/ministral-3b-2512": {
@@ -87266,7 +87310,7 @@
         },
         "limit": {
           "context": 1048576,
-          "output": 393216
+          "output": 384000
         }
       },
       "deepseek/deepseek-v4-flash-0731": {
@@ -89299,7 +89343,7 @@
         },
         "limit": {
           "context": 131072,
-          "output": 117964
+          "output": 65536
         }
       },
       "openai/gpt-5.4-pro": {
@@ -90687,8 +90731,8 @@
         "family": "deepseek-flash",
         "id": "~deepseek/deepseek-flash-latest",
         "limit": {
-          "context": 1000000,
-          "output": 393216
+          "context": 1048576,
+          "output": 943718
         },
         "modalities": {
           "input": [
@@ -90711,7 +90755,7 @@
         "id": "~deepseek/deepseek-pro-latest",
         "limit": {
           "context": 1048576,
-          "output": 393216
+          "output": 384000
         },
         "modalities": {
           "input": [
@@ -90724,29 +90768,6 @@
         "name": "DeepSeek: DeepSeek Pro Latest",
         "reasoning": true,
         "release_date": "2026-09-14",
-        "temperature": true,
-        "tool_call": true
-      },
-      "stealth/union-alpha": {
-        "attachment": true,
-        "family": "alpha",
-        "id": "stealth/union-alpha",
-        "limit": {
-          "context": 262144,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Union Alpha",
-        "reasoning": false,
-        "release_date": "2026-09-16",
         "temperature": true,
         "tool_call": true
       },
@@ -90771,6 +90792,50 @@
         "name": "Qwen: Qwen3.8 27B (free)",
         "reasoning": true,
         "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
+      },
+      "deepseek/deepseek-v4-flash-0731:free": {
+        "attachment": false,
+        "family": "deepseek-flash",
+        "id": "deepseek/deepseek-v4-flash-0731:free",
+        "limit": {
+          "context": 1048576,
+          "output": 393216
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "DeepSeek: DeepSeek V4 Flash 0731 (free)",
+        "reasoning": true,
+        "release_date": "2026-07-31",
+        "temperature": true,
+        "tool_call": true
+      },
+      "unbiased/pareto": {
+        "attachment": true,
+        "id": "unbiased/pareto",
+        "limit": {
+          "context": 262144,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "Pareto",
+        "reasoning": false,
+        "release_date": "2026-09-17",
         "temperature": true,
         "tool_call": true
       }
@@ -95103,23 +95168,22 @@
         "id": "qwen/qwen3.5-35b-a3b",
         "name": "Qwen3.5 35B A3B",
         "family": "qwen",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-23",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 256000,
-          "output": 64000
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen-flash": {
@@ -95237,22 +95301,23 @@
         "id": "qwen/qwen3.5-397b-a17b",
         "name": "Qwen3.5 397B A17B",
         "family": "qwen",
-        "attachment": false,
+        "attachment": true,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-15",
         "modalities": {
           "input": [
-            "text"
+            "text",
+            "image"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 131072,
-          "output": 32768
+          "context": 256000,
+          "output": 64000
         }
       },
       "qwen/qwen3.6-27b": {
@@ -95369,23 +95434,22 @@
         "id": "qwen/qwen3.5-122b-a10b",
         "name": "Qwen3.5 122B A10B",
         "family": "qwen",
-        "attachment": true,
+        "attachment": false,
         "reasoning": true,
         "tool_call": true,
         "temperature": true,
         "release_date": "2026-02-23",
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
           ]
         },
         "limit": {
-          "context": 256000,
-          "output": 64000
+          "context": 131072,
+          "output": 32768
         }
       },
       "qwen/qwen3.6-flash": {
@@ -95894,7 +95958,8 @@
         "modalities": {
           "input": [
             "text",
-            "image"
+            "image",
+            "pdf"
           ],
           "output": [
             "text"
@@ -102026,29 +102091,26 @@
         },
         "status": "deprecated"
       },
-      "union-alpha": {
-        "attachment": true,
-        "id": "union-alpha",
+      "jev-latest": {
+        "attachment": false,
+        "id": "jev-latest",
         "limit": {
-          "context": 262144,
-          "output": 131072
+          "context": 64000,
+          "output": 0
         },
         "modalities": {
           "input": [
-            "text",
-            "image"
+            "text"
           ],
           "output": [
             "text"
           ]
         },
-        "name": "Union Alpha Free",
-        "provider": {
-          "npm": "@ai-sdk/anthropic"
-        },
-        "reasoning": true,
-        "release_date": "2026-09-16",
-        "tool_call": true
+        "name": "Jev",
+        "reasoning": false,
+        "release_date": "2026-09-15",
+        "temperature": false,
+        "tool_call": false
       }
     }
   },
@@ -115520,6 +115582,28 @@
           "context": 128000,
           "output": 128000
         }
+      },
+      "zai-glm-5-3": {
+        "attachment": false,
+        "family": "glm",
+        "id": "zai-glm-5-3",
+        "limit": {
+          "context": 1000000,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -123995,30 +124079,6 @@
         "release_date": "2026-09-10",
         "temperature": true,
         "tool_call": true
-      },
-      "union-alpha": {
-        "attachment": true,
-        "id": "union-alpha",
-        "limit": {
-          "context": 262144,
-          "output": 131072
-        },
-        "modalities": {
-          "input": [
-            "text",
-            "image"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "name": "Union Alpha Free",
-        "provider": {
-          "npm": "@ai-sdk/anthropic"
-        },
-        "reasoning": true,
-        "release_date": "2026-09-16",
-        "tool_call": true
       }
     }
   },
@@ -124920,6 +124980,28 @@
         "status": "beta",
         "temperature": true,
         "tool_call": true
+      },
+      "glm-5-3": {
+        "attachment": false,
+        "family": "glm",
+        "id": "glm-5-3",
+        "limit": {
+          "context": 1048576,
+          "output": 131072
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "name": "GLM-5.3",
+        "reasoning": true,
+        "release_date": "2026-08-14",
+        "temperature": true,
+        "tool_call": true
       }
     }
   },
@@ -125652,28 +125734,6 @@
           "output": 262144
         }
       },
-      "nebius/meta-llama/Llama-3.3-70B-Instruct": {
-        "id": "nebius/meta-llama/Llama-3.3-70B-Instruct",
-        "name": "Llama-3.3-70B-Instruct (Nebius)",
-        "family": "llama",
-        "attachment": false,
-        "reasoning": false,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2024-12-06",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "output": 4096
-        }
-      },
       "nebius/openai/gpt-oss-120b": {
         "id": "nebius/openai/gpt-oss-120b",
         "name": "GPT OSS 120B (Nebius)",
@@ -126390,28 +126450,6 @@
         "limit": {
           "context": 1048576,
           "output": 384000
-        }
-      },
-      "flexai/Nemotron-3-Super-120B-A12B": {
-        "id": "flexai/Nemotron-3-Super-120B-A12B",
-        "name": "Nemotron 3 Super 120B A12B (FlexAI)",
-        "family": "nemotron",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": false,
-        "temperature": true,
-        "release_date": "2026-03-11",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 262144,
-          "output": 262144
         }
       },
       "flexai/Step-3.7-Flash": {
@@ -128431,30 +128469,6 @@
           "output": 131072
         }
       },
-      "together_ai/thinkingmachines/Inkling-Small": {
-        "id": "together_ai/thinkingmachines/Inkling-Small",
-        "name": "Inkling Small (Together AI)",
-        "family": "ling",
-        "attachment": true,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2026-07-30",
-        "modalities": {
-          "input": [
-            "text",
-            "image",
-            "audio"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 524288,
-          "output": 1048576
-        }
-      },
       "together_ai/thinkingmachines/Inkling": {
         "id": "together_ai/thinkingmachines/Inkling",
         "name": "Inkling (Together AI)",
@@ -128477,28 +128491,6 @@
         "limit": {
           "context": 524288,
           "output": 1048576
-        }
-      },
-      "together_ai/openai/gpt-oss-20b": {
-        "id": "together_ai/openai/gpt-oss-20b",
-        "name": "GPT OSS 20B (Together AI)",
-        "family": "gpt-oss",
-        "attachment": false,
-        "reasoning": true,
-        "tool_call": true,
-        "temperature": true,
-        "release_date": "2025-08-05",
-        "modalities": {
-          "input": [
-            "text"
-          ],
-          "output": [
-            "text"
-          ]
-        },
-        "limit": {
-          "context": 131072,
-          "output": 32768
         }
       },
       "together_ai/openai/gpt-oss-120b": {

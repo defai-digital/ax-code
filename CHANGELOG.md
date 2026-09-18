@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Fixed
+
+- Localize the fixed-file question command title and AX Trust category so TUI locale checks pass.
+- Refresh the bundled models snapshot.
+
 ## [7.19.0] - 2026-09-18
 
 ### Added

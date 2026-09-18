@@ -129,6 +129,8 @@ export const messages = {
   "home.newTask": "\u65b0\u4efb\u52d9",
   "home.describe": "\u63cf\u8ff0\u4efb\u52d9\u4ee5\u958b\u59cb\u65b0\u7684\u5c0d\u8a71\u3002",
   "home.sessions": "/sessions - \u7e7c\u7e8c\u65e2\u6709\u5de5\u4f5c\u968e\u6bb5",
+  "command.askFixedFiles": "\u8a62\u554f\u56fa\u5b9a\u6a94\u6848",
+  "command.axTrust": "AX Trust",
   "command.switchSession": "\u5207\u63db\u5de5\u4f5c\u968e\u6bb5",
   "command.pending": "\u958b\u555f\u5f85\u8655\u7406\u8acb\u6c42",
   "command.details": "\u986f\u793a\u76ee\u524d\u5c08\u6848\u8207\u5de5\u4f5c\u968e\u6bb5\u8cc7\u8a0a",

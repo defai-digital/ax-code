@@ -121,6 +121,8 @@ export const messages = {
   "home.newTask": "New task",
   "home.describe": "Describe a task to start a new conversation.",
   "home.sessions": "/sessions - resume an existing session",
+  "command.askFixedFiles": "Ask about fixed files",
+  "command.axTrust": "AX Trust",
   "command.switchSession": "Switch session",
   "command.pending": "Open pending requests",
   "command.details": "Show current project and session details",

@@ -123,6 +123,8 @@ export const messages = {
   "home.newTask": "Tugas baru",
   "home.describe": "Jelaskan tugas untuk memulai percakapan baru.",
   "home.sessions": "/sessions - lanjutkan sesi",
+  "command.askFixedFiles": "Tanyakan tentang file tetap",
+  "command.axTrust": "AX Trust",
   "command.switchSession": "Ganti sesi",
   "command.pending": "Buka permintaan tertunda",
   "command.details": "Tampilkan detail proyek dan sesi",

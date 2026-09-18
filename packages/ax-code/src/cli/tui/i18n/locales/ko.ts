@@ -137,6 +137,8 @@ export const messages = {
   "home.describe":
     "\uc791\uc5c5\uc744 \uc124\uba85\ud558\uc5ec \uc0c8 \ub300\ud654\ub97c \uc2dc\uc791\ud558\uc138\uc694.",
   "home.sessions": "/sessions - \uae30\uc874 \uc138\uc158 \uc7ac\uac1c",
+  "command.askFixedFiles": "\uace0\uc815 \ud30c\uc77c\uc5d0 \ub300\ud574 \uc9c8\ubb38",
+  "command.axTrust": "AX Trust",
   "command.switchSession": "\uc138\uc158 \uc804\ud658",
   "command.pending": "\ub300\uae30 \uc911\uc778 \uc694\uccad \uc5f4\uae30",
   "command.details": "\ud604\uc7ac \ud504\ub85c\uc81d\ud2b8 \ubc0f \uc138\uc158 \uc0c1\uc138 \uc815\ubcf4 \ud45c\uc2dc",

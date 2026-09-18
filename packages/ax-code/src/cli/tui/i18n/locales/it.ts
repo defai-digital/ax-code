@@ -125,6 +125,8 @@ export const messages = {
   "home.newTask": "Nuova attività",
   "home.describe": "Descrivi un'attività per avviare una nuova conversazione.",
   "home.sessions": "/sessions - riprendi una sessione esistente",
+  "command.askFixedFiles": "Chiedi sui file fissi",
+  "command.axTrust": "AX Trust",
   "command.switchSession": "Cambia sessione",
   "command.pending": "Apri richieste in sospeso",
   "command.details": "Mostra dettagli del progetto e della sessione",

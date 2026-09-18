@@ -108,9 +108,9 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
 
   const commands: CommandOption[] = [
     {
-      title: "Ask about fixed files",
+      title: t("command.askFixedFiles"),
       value: "question.fixed-context",
-      category: "AX Trust",
+      category: t("command.axTrust"),
       slash: { name: "ask" },
       onSelect: () => dialogs.showFixedContextDialog(),
     },

@@ -126,6 +126,8 @@ export const messages = {
   "home.newTask": "Nova tarefa",
   "home.describe": "Descreva uma tarefa para iniciar uma conversa.",
   "home.sessions": "/sessions - retomar uma sess\u00e3o",
+  "command.askFixedFiles": "Perguntar sobre arquivos fixos",
+  "command.axTrust": "AX Trust",
   "command.switchSession": "Alternar sess\u00e3o",
   "command.pending": "Abrir solicita\u00e7\u00f5es pendentes",
   "command.details": "Mostrar detalhes do projeto e da sess\u00e3o",

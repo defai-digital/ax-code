@@ -132,6 +132,8 @@ export const messages = {
   "home.newTask": "T\u00e1c v\u1ee5 m\u1edbi",
   "home.describe": "M\u00f4 t\u1ea3 t\u00e1c v\u1ee5 \u0111\u1ec3 b\u1eaft \u0111\u1ea7u h\u1ed9i tho\u1ea1i m\u1edbi.",
   "home.sessions": "/sessions - ti\u1ebfp t\u1ee5c phi\u00ean",
+  "command.askFixedFiles": "H\u1ecfi v\u1ec1 c\u00e1c t\u1ec7p c\u1ed1 \u0111\u1ecbnh",
+  "command.axTrust": "AX Trust",
   "command.switchSession": "Chuy\u1ec3n phi\u00ean",
   "command.pending": "M\u1edf y\u00eau c\u1ea7u \u0111ang ch\u1edd",
   "command.details": "Hi\u1ec7n chi ti\u1ebft d\u1ef1 \u00e1n v\u00e0 phi\u00ean",

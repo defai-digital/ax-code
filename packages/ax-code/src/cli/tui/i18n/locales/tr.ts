@@ -128,6 +128,8 @@ export const messages = {
   "home.newTask": "Yeni g\u00f6rev",
   "home.describe": "Yeni konu\u015fma ba\u015flatmak i\u00e7in bir g\u00f6rev a\u00e7\u0131klay\u0131n.",
   "home.sessions": "/sessions - oturumu s\u00fcrd\u00fcr",
+  "command.askFixedFiles": "Sabit dosyalar hakk\u0131nda sor",
+  "command.axTrust": "AX Trust",
   "command.switchSession": "Oturum de\u011fi\u015ftir",
   "command.pending": "Bekleyen istekleri a\u00e7",
   "command.details": "Proje ve oturum ayr\u0131nt\u0131lar\u0131n\u0131 g\u00f6ster",
