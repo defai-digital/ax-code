@@ -89,7 +89,7 @@ export namespace SessionProcessor {
     if (tool !== "bash") return input
     const raw = typeof input["command"] === "string" ? input["command"] : input["cmd"]
     if (typeof raw !== "string") return input
-    const next = { ...input, command: Env.redactInlineEnvAssignments(raw) }
+    const next: Record<string, unknown> = { ...input, command: Env.redactInlineEnvAssignments(raw) }
     delete next.cmd
     return next
   }
