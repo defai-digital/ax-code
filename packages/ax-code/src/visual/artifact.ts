@@ -158,8 +158,6 @@ export namespace VisualArtifactStore {
       const entries = await fs.promises.readdir(base, { withFileTypes: true })
       const dirs = entries.filter((e) => e.isDirectory()).map((e) => e.name)
 
-      if (dirs.length <= maxRuns) return 0
-
       const cutoff = Date.now() - maxDays * 24 * 60 * 60 * 1000
       let pruned = 0
 
@@ -173,9 +171,12 @@ export namespace VisualArtifactStore {
       )
       sorted.sort((a, b) => a.mtime - b.mtime)
 
-      for (const entry of sorted) {
-        if (pruned >= dirs.length - maxRuns) break
-        if (entry.mtime < cutoff || dirs.length - pruned > maxRuns) {
+      // The oldest `excessCount` runs must go regardless of age, to enforce
+      // maxRuns; independently, any run older than maxDays is pruned
+      // regardless of how many runs remain — the two limits apply separately.
+      const excessCount = Math.max(0, dirs.length - maxRuns)
+      for (const [i, entry] of sorted.entries()) {
+        if (i < excessCount || entry.mtime < cutoff) {
           await fs.promises.rm(entry.dirPath, { recursive: true, force: true })
           pruned++
           log.info("pruned visual run", { name: entry.name })

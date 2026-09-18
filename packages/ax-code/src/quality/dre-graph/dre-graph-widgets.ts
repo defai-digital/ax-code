@@ -75,13 +75,13 @@ export function gauge(input: { score: number; max: number; level: string }) {
   const pct = Math.min(1, Math.max(0, input.score / input.max))
   const r = 44
   const circ = 2 * Math.PI * r
-  const offset = circ * (1 - pct * 0.75)
+  const offset = circ * 0.75 * (1 - pct)
   const color =
     { critical: "#dc2626", high: "#ef4444", medium: "#eab308", low: "#22c55e" }[tone(input.level)] ?? "#22c55e"
   return [
     `<svg class="gauge" viewBox="0 0 100 100" width="128" height="128">`,
     `<circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(39,39,42,0.8)" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ * 0.25}" stroke-dashoffset="0" transform="rotate(135 50 50)" stroke-linecap="round"/>`,
-    `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ * 0.25}" stroke-dashoffset="${offset}" transform="rotate(135 50 50)" stroke-linecap="round" style="filter: drop-shadow(0 0 8px ${color}30)"/>`,
+    `<circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${circ * 0.75} ${circ}" stroke-dashoffset="${offset}" transform="rotate(135 50 50)" stroke-linecap="round" style="filter: drop-shadow(0 0 8px ${color}30)"/>`,
     `<text x="50" y="44" text-anchor="middle" fill="${color}" font-size="24" font-weight="700">${input.score}</text>`,
     `<text x="50" y="58" text-anchor="middle" fill="#a1a1aa" font-size="9">/ ${input.max}</text>`,
     `<text x="50" y="76" text-anchor="middle" fill="${color}" font-size="7.5" font-weight="700" letter-spacing="0.12em">${esc(input.level.toUpperCase())}</text>`,
