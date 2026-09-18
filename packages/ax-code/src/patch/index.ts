@@ -364,12 +364,11 @@ export namespace Patch {
     const replacements = computeReplacements(originalLines, filePath, chunks)
     let newLines = applyReplacements(originalLines, replacements)
 
-    // Ensure trailing newline
-    if (newLines.length === 0 || newLines[newLines.length - 1] !== "") {
-      newLines.push("")
-    }
-
-    const newContent = newLines.join("\n")
+    // Ensure trailing newline: unconditionally undo the leading pop from
+    // decoding, even when the file's last real line is itself blank (2+
+    // trailing newlines) — conditioning this on the last line's content
+    // silently dropped the trailing blank line in that case.
+    const newContent = newLines.length === 0 ? "" : newLines.join("\n") + "\n"
 
     // Generate unified diff
     const unifiedDiff = generateUnifiedDiff(originalContent, newContent)
