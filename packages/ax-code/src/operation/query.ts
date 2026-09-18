@@ -68,7 +68,8 @@ export namespace OperationPlan {
   export function listByProject(projectID: ProjectID, opts?: { status?: Status; limit?: number }): Row[] {
     const conditions = [eq(OperationPlanTable.project_id, projectID)]
     if (opts?.status) conditions.push(eq(OperationPlanTable.status, opts.status))
-    const limit = opts?.limit && Number.isFinite(opts.limit) ? Math.max(1, Math.floor(opts.limit)) : undefined
+    const limit =
+      opts?.limit !== undefined && Number.isFinite(opts.limit) ? Math.max(0, Math.floor(opts.limit)) : undefined
     const query = Database.use((db) =>
       db
         .select()
@@ -77,8 +78,8 @@ export namespace OperationPlan {
         .orderBy(desc(OperationPlanTable.time_created), desc(OperationPlanTable.id))
         .all(),
     )
-    const rows = limit ? query.slice(0, limit) : query
-    if (!limit && query.length > 100) {
+    const rows = limit !== undefined ? query.slice(0, limit) : query
+    if (limit === undefined && query.length > 100) {
       log.warn("unbounded plan listing returned many rows", { projectID, count: query.length })
     }
     return rows
@@ -149,7 +150,8 @@ export namespace OperationJournal {
 
   /** Entries of a plan in sequence order (chronological). */
   export function list(planID: OperationPlanID, opts?: { limit?: number }): Row[] {
-    const limit = opts?.limit && Number.isFinite(opts.limit) ? Math.max(1, Math.floor(opts.limit)) : undefined
+    const limit =
+      opts?.limit !== undefined && Number.isFinite(opts.limit) ? Math.max(0, Math.floor(opts.limit)) : undefined
     return Database.use((db) => {
       const query = db
         .select()
@@ -157,7 +159,7 @@ export namespace OperationJournal {
         .where(eq(OperationJournalTable.plan_id, planID))
         .orderBy(OperationJournalTable.sequence)
         .all()
-      return limit ? query.slice(0, limit) : query
+      return limit !== undefined ? query.slice(0, limit) : query
     })
   }
 
@@ -165,7 +167,8 @@ export namespace OperationJournal {
   export function listByProject(projectID: ProjectID, opts?: { status?: Status; limit?: number }): Row[] {
     const conditions = [eq(OperationJournalTable.project_id, projectID)]
     if (opts?.status) conditions.push(eq(OperationJournalTable.status, opts.status))
-    const limit = opts?.limit && Number.isFinite(opts.limit) ? Math.max(1, Math.floor(opts.limit)) : undefined
+    const limit =
+      opts?.limit !== undefined && Number.isFinite(opts.limit) ? Math.max(0, Math.floor(opts.limit)) : undefined
     const query = Database.use((db) =>
       db
         .select()
@@ -174,8 +177,8 @@ export namespace OperationJournal {
         .orderBy(desc(OperationJournalTable.time_created), desc(OperationJournalTable.id))
         .all(),
     )
-    const rows = limit ? query.slice(0, limit) : query
-    if (!limit && query.length > 500) {
+    const rows = limit !== undefined ? query.slice(0, limit) : query
+    if (limit === undefined && query.length > 500) {
       log.warn("unbounded journal listing returned many rows", { projectID, count: query.length })
     }
     return rows
