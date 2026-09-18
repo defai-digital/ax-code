@@ -270,7 +270,7 @@ export function createSseClient<TData = unknown>({
         }
 
         // exponential backoff: double retry each attempt, cap at 30s
-        const backoffExponent = Math.max(attempt - 2, 0)
+        const backoffExponent = Math.max(attempt - 1, 0)
         const backoff = Math.min(retryDelay * 2 ** backoffExponent, sseMaxRetryDelay ?? 30000)
 
         clearIdleTimer()

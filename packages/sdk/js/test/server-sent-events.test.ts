@@ -42,7 +42,9 @@ describe.each(clients)("generated SSE client %s", (_name, createSseClient) => {
     }
 
     expect(fetchCalls).toBe(3)
-    expect(sleepDelays).toEqual([10, 10])
+    // First failure after the reset gets the base delay (10); the second
+    // consecutive failure (no success in between) doubles it (20).
+    expect(sleepDelays).toEqual([10, 20])
   })
 
   test("cancels the response body when the consumer stops early", async () => {
