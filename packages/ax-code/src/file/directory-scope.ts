@@ -2,6 +2,9 @@ import fs from "fs/promises"
 import path from "path"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "file.directory-scope" })
 
 /**
  * Detects when a directory is unlikely to be a real ax-code workspace —
@@ -34,14 +37,25 @@ export namespace DirectoryScope {
   }
 
   /**
+   * Cheap, synchronous-ish (no directory listing) check for "is this home,
+   * or a well-known home subfolder" — deliberately excludes the filesystem
+   * root, since callers that need that too (or need to treat it
+   * differently, e.g. File.scan's "skip entirely" vs. "shallow scan" split)
+   * check `isFilesystemRoot` separately. `resolvedDir` must already be
+   * realpath'd (e.g. via `Filesystem.resolve` or `Instance.directory`) so a
+   * symlinked home/Desktop doesn't dodge it.
+   */
+  export function isHomeLikePath(resolvedDir: string): boolean {
+    return knownBroadDirs().some((known) => Filesystem.resolve(known.path) === resolvedDir)
+  }
+
+  /**
    * Cheap, synchronous-ish (no directory listing) check for the internal
-   * silent guards in file/index.ts and code-intelligence/auto-index.ts.
-   * `resolvedDir` must already be realpath'd (e.g. via `Filesystem.resolve`
-   * or `Instance.directory`) so a symlinked home/Desktop doesn't dodge it.
+   * silent guards in code-intelligence/auto-index.ts, which treat "home-like"
+   * and "filesystem root" identically (skip entirely either way).
    */
   export function isKnownBroadDirectory(resolvedDir: string): boolean {
-    if (isFilesystemRoot(resolvedDir)) return true
-    return knownBroadDirs().some((known) => Filesystem.resolve(known.path) === resolvedDir)
+    return isFilesystemRoot(resolvedDir) || isHomeLikePath(resolvedDir)
   }
 
   export interface Assessment {
@@ -84,7 +98,10 @@ export namespace DirectoryScope {
   async function topLevelEntryCount(dir: string): Promise<number> {
     try {
       return (await fs.readdir(dir)).length
-    } catch {
+    } catch (error) {
+      if (!Filesystem.isEnoent(error)) {
+        log.warn("failed to list directory for the top-level entry-count check", { dir, error })
+      }
       return 0
     }
   }

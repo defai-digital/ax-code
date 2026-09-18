@@ -790,19 +790,33 @@ export namespace LSP {
       return { files: [], readyCount: 0, freshSpawnCount: 0 }
     }
 
-    // The home directory is not a real workspace. The Ripgrep walk below feeds
-    // off the native file walker, which walks the entire tree eagerly (it is
-    // not lazy), so the bounded maxFiles/maxLanguages break cannot cap it — it
-    // walks all of ~/ before yielding a single entry. During bootstrap this
-    // runs in the background but the synchronous native call still monopolizes
-    // the event loop for tens of seconds, stalling the first HTTP request (the
-    // desktop web UI launches its managed `ax-code serve` with cwd = home). A
-    // home directory has no coherent set of language servers to prime, so skip
-    // it entirely. See the matching guard in File.scan (src/file/index.ts).
+    // The home directory (and well-known home subfolders like Desktop,
+    // Downloads, Documents) are not real workspaces. The Ripgrep walk below
+    // feeds off the native file walker, which walks the entire tree eagerly
+    // (it is not lazy), so the bounded maxFiles/maxLanguages break cannot cap
+    // it — it walks all of ~/ (or ~/Desktop, etc.) before yielding a single
+    // entry. During bootstrap this runs in the background but the
+    // synchronous native call still monopolizes the event loop for tens of
+    // seconds, stalling the first HTTP request (the desktop web UI launches
+    // its managed `ax-code serve` with cwd = home, or a user launches from
+    // Desktop/Downloads by mistake). None of these have a coherent set of
+    // language servers to prime, so skip them entirely. See the matching
+    // guard in File.scan (packages/ax-code/src/file/index.ts) and
+    // DirectoryScope.wellKnownBroadPaths (packages/ax-code/src/file/
+    // directory-scope.ts) — this package cannot import that module (ax-code
+    // depends on ax-code-intel, not the reverse), so the same small set of
+    // well-known paths is kept in sync here by hand.
     // Compare resolved-to-resolved: codeIntelHost().projectRoot() is realpath'd at
     // context creation, while codeIntelHost().homeDir() is the raw $HOME — a
     // symlinked home directory would otherwise dodge the guard.
-    if (codeIntelHost().projectRoot() === Filesystem.resolve(codeIntelHost().homeDir())) {
+    const home = codeIntelHost().homeDir()
+    const wellKnownBroadPaths = [
+      home,
+      path.join(home, "Desktop"),
+      path.join(home, "Downloads"),
+      path.join(home, "Documents"),
+    ]
+    if (wellKnownBroadPaths.some((candidate) => codeIntelHost().projectRoot() === Filesystem.resolve(candidate))) {
       return { files: [], readyCount: 0, freshSpawnCount: 0 }
     }
 

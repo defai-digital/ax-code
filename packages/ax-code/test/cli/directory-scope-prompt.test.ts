@@ -9,6 +9,7 @@ import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 
 const statePath = path.join(Global.Path.state, "directory-scope-trust.json")
+const globalConfigPath = path.join(Global.Path.config, "config.json")
 const stdin = process.stdin as typeof process.stdin & { isTTY?: boolean }
 const stdout = process.stdout as typeof process.stdout & { isTTY?: boolean }
 const originalStdinTTY = stdin.isTTY
@@ -22,6 +23,18 @@ async function withCleanTrustState(fn: () => Promise<void>) {
   } finally {
     if (previous === undefined) await fs.rm(statePath, { force: true })
     else await fs.writeFile(statePath, previous)
+  }
+}
+
+async function withGlobalConfig(content: unknown, fn: () => Promise<void>) {
+  const previous = await fs.readFile(globalConfigPath, "utf-8").catch(() => undefined)
+  await fs.mkdir(Global.Path.config, { recursive: true })
+  await fs.writeFile(globalConfigPath, JSON.stringify(content))
+  try {
+    await fn()
+  } finally {
+    if (previous === undefined) await fs.rm(globalConfigPath, { force: true })
+    else await fs.writeFile(globalConfigPath, previous)
   }
 }
 
@@ -82,6 +95,15 @@ describe("confirmDirectoryScope", () => {
       expect(second.proceed).toBe(true)
       expect(confirmSpy).not.toHaveBeenCalled()
     }))
+
+  test("a malformed global config (non-boolean enabled, negative maxTopLevelEntries) doesn't crash or flag every directory", () =>
+    withCleanTrustState(() =>
+      withGlobalConfig({ directoryScope: { enabled: "yes", maxTopLevelEntries: -50 } }, async () => {
+        await using tmp = await tmpdir()
+        const result = await confirmDirectoryScope(tmp.path)
+        expect(result.proceed).toBe(true)
+      }),
+    ))
 
   test("interactive: declining aborts without caching trust", () =>
     withCleanTrustState(async () => {

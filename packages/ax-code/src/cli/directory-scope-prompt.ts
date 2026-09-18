@@ -16,6 +16,26 @@ interface DirectoryScopeSettings {
   extraDenylist?: string[]
 }
 
+// This reads the raw config file directly rather than going through the
+// full Config.get() schema validation (which requires an Instance context
+// we don't have yet — see confirmDirectoryScope's doc comment), so a
+// malformed value here must not translate into pathological behavior (e.g.
+// a negative maxTopLevelEntries would make DirectoryScope.assess flag every
+// directory as broad).
+function sanitize(input: unknown): DirectoryScopeSettings {
+  if (typeof input !== "object" || input === null) return {}
+  const record = input as Record<string, unknown>
+  const settings: DirectoryScopeSettings = {}
+  if (typeof record.enabled === "boolean") settings.enabled = record.enabled
+  if (typeof record.maxTopLevelEntries === "number" && Number.isInteger(record.maxTopLevelEntries)) {
+    settings.maxTopLevelEntries = Math.max(1, record.maxTopLevelEntries)
+  }
+  if (Array.isArray(record.extraDenylist)) {
+    settings.extraDenylist = record.extraDenylist.filter((entry): entry is string => typeof entry === "string")
+  }
+  return settings
+}
+
 // Runs before any Instance/session exists (see cli/tui/thread.ts and
 // cli/cmd/run.ts), so only global user config is available here — not the
 // project-level ax-code.json inside the (possibly wrong) target directory.
@@ -23,12 +43,12 @@ async function loadGlobalSettings(): Promise<DirectoryScopeSettings> {
   const files = ["config.json", "ax-code.json", "ax-code.jsonc"].map((name) => path.join(Global.Path.config, name))
   let settings: DirectoryScopeSettings = {}
   for (const file of files) {
-    const parsed = await Filesystem.readJson<{ directoryScope?: DirectoryScopeSettings }>(file).catch((error) => {
+    const parsed = await Filesystem.readJson<{ directoryScope?: unknown }>(file).catch((error) => {
       if (Filesystem.isEnoent(error)) return undefined
       log.warn("failed to read global config for directoryScope settings", { file, error })
       return undefined
     })
-    if (parsed?.directoryScope) settings = mergeDeep(settings, parsed.directoryScope)
+    if (parsed?.directoryScope) settings = mergeDeep(settings, sanitize(parsed.directoryScope))
   }
   return settings
 }
@@ -78,7 +98,7 @@ export async function confirmDirectoryScope(dir: string): Promise<DirectoryScope
   if (prompts.isCancel(answer) || !answer) {
     return {
       proceed: false,
-      message: `Aborted: ${resolved} ${reason}. cd into your project directory and try again.`,
+      message: `Aborted: ${resolved} — ${reason}. cd into your project directory and try again.`,
     }
   }
 

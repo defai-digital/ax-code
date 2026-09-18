@@ -1,6 +1,9 @@
 import path from "path"
 import { Global } from "../global"
 import { Filesystem } from "../util/filesystem"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "config.directory-scope-trust" })
 
 /**
  * Remembers a user's "yes, index this broad directory anyway" answer so the
@@ -12,10 +15,17 @@ import { Filesystem } from "../util/filesystem"
 export namespace DirectoryScopeTrust {
   const file = path.join(Global.Path.state, "directory-scope-trust.json")
 
+  // isTrusted() runs on nearly every CLI startup (see
+  // cli/directory-scope-prompt.ts), so a corrupted or unreadable cache file
+  // must never throw — this cache is a convenience, and a bad read here
+  // must not be able to break every ax-code invocation. Worst case on a
+  // swallowed error: the user is asked to confirm again.
   async function load(): Promise<Record<string, true>> {
     return Filesystem.readJson<Record<string, true>>(file).catch((error) => {
-      if (Filesystem.isEnoent(error)) return {}
-      throw error
+      if (!Filesystem.isEnoent(error)) {
+        log.warn("failed to read directory-scope trust state; treating as empty", { file, error })
+      }
+      return {}
     })
   }
 

@@ -264,10 +264,7 @@ export namespace AutoIndex {
     // and LSP prewarmWorkspace (src/lsp/index-impl.ts). Instance.directory
     // is realpath'd at context creation, so DirectoryScope resolves each
     // candidate too — a symlinked home would otherwise dodge the comparison.
-    if (
-      DirectoryScope.isFilesystemRoot(Instance.directory) ||
-      DirectoryScope.wellKnownBroadPaths().some((candidate) => Filesystem.resolve(candidate) === Instance.directory)
-    ) {
+    if (DirectoryScope.isKnownBroadDirectory(Instance.directory)) {
       log.info("skipping: broad directory is not an indexable workspace", { projectID })
       setState(projectID, {
         state: "idle",

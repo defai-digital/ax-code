@@ -49,4 +49,13 @@ describe("DirectoryScopeTrust", () => {
       expect(await DirectoryScopeTrust.isTrusted("/one")).toBe(true)
       expect(await DirectoryScopeTrust.isTrusted("/two")).toBe(true)
     }))
+
+  // Regression: isTrusted() runs on nearly every CLI startup. A corrupted
+  // cache file must degrade to "not trusted", never throw — a thrown error
+  // here would break every ax-code invocation, not just broad-directory ones.
+  test("a corrupted state file is treated as empty instead of throwing", () =>
+    withBackup(async () => {
+      await fs.writeFile(statePath, "{ not valid json")
+      await expect(DirectoryScopeTrust.isTrusted("/some/project")).resolves.toBe(false)
+    }))
 })

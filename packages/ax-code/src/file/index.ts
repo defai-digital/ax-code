@@ -420,15 +420,13 @@ export namespace File {
     // resolved — a plain broad directory without a `.git` gets a
     // directory-hash id rather than the "global" id, so gating on the id let
     // the expensive path through and stalled startup.
-    // Instance.directory is realpath'd at context creation; DirectoryScope's
-    // well-known paths are compared resolved-to-resolved so a symlinked home
-    // directory doesn't dodge the guard.
-    const isKnownBroadDirectory = DirectoryScope.wellKnownBroadPaths().some(
-      (candidate) => Filesystem.resolve(candidate) === Instance.directory,
-    )
+    // Instance.directory is realpath'd at context creation; isHomeLikePath
+    // compares resolved-to-resolved so a symlinked home directory doesn't
+    // dodge the guard.
+    const isHomeLikeDirectory = DirectoryScope.isHomeLikePath(Instance.directory)
     const next: Entry = { files: [], dirs: [] }
 
-    if (isKnownBroadDirectory) {
+    if (isHomeLikeDirectory) {
       const dirs = new Set<string>()
       const protectedNames = Protected.names()
       const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
