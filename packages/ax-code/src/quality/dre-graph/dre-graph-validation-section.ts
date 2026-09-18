@@ -20,10 +20,27 @@ export function validationSection(input: { risk: SessionRisk.Detail }) {
     `<div class="validation-list">`,
     sig.validationCommands.length > 0
       ? sig.validationCommands
-          .map(
-            (cmd) =>
-              `<div class="validation-item"><span class="validation-icon">${sig.validationState === "failed" ? "\u2717" : "\u2713"}</span><span class="validation-cmd">${esc(cmd)}</span><span class="validation-status">${chip({ label: sig.validationState === "failed" ? "failed" : "passed", kind: sig.validationState === "failed" ? "high" : "low" })}</span></div>`,
-          )
+          .map((cmd) => {
+            const icon =
+              sig.validationState === "failed" ? "\u2717" : sig.validationState === "passed" ? "\u2713" : "\u2026"
+            const label =
+              sig.validationState === "failed"
+                ? "failed"
+                : sig.validationState === "passed"
+                  ? "passed"
+                  : sig.validationState === "partial"
+                    ? "partial"
+                    : "not run"
+            const kind =
+              sig.validationState === "failed"
+                ? "high"
+                : sig.validationState === "passed"
+                  ? "low"
+                  : sig.validationState === "partial"
+                    ? "medium"
+                    : "neutral"
+            return `<div class="validation-item"><span class="validation-icon">${icon}</span><span class="validation-cmd">${esc(cmd)}</span><span class="validation-status">${chip({ label, kind })}</span></div>`
+          })
           .join("")
       : `<div class="validation-item"><span class="validation-icon" style="color:var(--muted)">\u2014</span><span class="validation-cmd" style="color:var(--muted)">No validation commands recorded</span></div>`,
     sig.validationState === "not_run" && sig.filesChanged > 0
