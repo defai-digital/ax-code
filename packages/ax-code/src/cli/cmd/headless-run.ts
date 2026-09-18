@@ -204,8 +204,11 @@ export const HeadlessRunCommand = cmd({
       ]
       if (args.eventLog && args.eventLog !== "-") {
         const resolvedCwd = Filesystem.resolve(callerCwd)
-        const resolvedPath = Filesystem.resolve(path.resolve(callerCwd, args.eventLog))
-        if (!Filesystem.contains(resolvedCwd, resolvedPath)) {
+        const resolvedCandidate = path.resolve(callerCwd, args.eventLog)
+        // realpath the parent so a symlink directory cannot smuggle the file out
+        // of callerCwd. A not-yet-created leaf is joined back after that.
+        const resolvedPath = path.join(Filesystem.resolve(path.dirname(resolvedCandidate)), path.basename(resolvedCandidate))
+        if (!Filesystem.contains(resolvedCwd, resolvedPath) && Filesystem.resolve(resolvedPath) !== resolvedCwd) {
           throw new Error(`eventLog path "${args.eventLog}" resolves outside the current directory`)
         }
         eventSinks.push(await createHeadlessJsonlFileEventSink(resolvedPath))

@@ -816,7 +816,11 @@ export namespace LSP {
       path.join(home, "Downloads"),
       path.join(home, "Documents"),
     ]
-    if (wellKnownBroadPaths.some((candidate) => codeIntelHost().projectRoot() === Filesystem.resolve(candidate))) {
+    const projectRoot = codeIntelHost().projectRoot()
+    if (
+      projectRoot === path.parse(projectRoot).root ||
+      wellKnownBroadPaths.some((candidate) => projectRoot === Filesystem.resolve(candidate))
+    ) {
       return { files: [], readyCount: 0, freshSpawnCount: 0 }
     }
 

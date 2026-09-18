@@ -108,8 +108,7 @@ describe("confirmDirectoryScope", () => {
   test("empty extraDenylist entries do not flag the current directory as denylisted", () =>
     withCleanTrustState(() =>
       withGlobalConfig({ directoryScope: { extraDenylist: ["", "  ", 1] } }, async () => {
-        await using tmp = await tmpdir()
-        const result = await confirmDirectoryScope(tmp.path)
+        const result = await confirmDirectoryScope(process.cwd())
         expect(result.proceed).toBe(true)
       }),
     ))
