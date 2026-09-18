@@ -17,8 +17,9 @@ changes belong to AX Coder.
 
 ### Fixed
 
-- Patch and edit: preserve trailing blank lines and CRLF, keep unprefixed Add-File lines, key move+update by source
-  path, append chunks at the correct position, and tighten replace ambiguity, JSX, and brace-depth handling.
+- Patch and edit: preserve trailing blank lines and CRLF on update and Add-File, keep unprefixed Add-File lines, key
+  move+update by source path, append chunks at the correct position, and tighten replace ambiguity, JSX, and
+  brace-depth handling.
 - Config and commands: honor `ax-code.jsonc` vs `.json` precedence, nested `.ax-code` directories, `{env:}`/`{file:}`
   substitution, and stop `.ax-code/commands/*.md` from overriding protected builtins.
 - Shell, glob, and browser tools: keep backslashes inside quotes, fix glob truncation ordering, and treat falsy-zero

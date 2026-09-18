@@ -205,11 +205,9 @@ export namespace Patch {
       i++
     }
 
-    // Remove trailing newline
-    if (content.endsWith("\n")) {
-      content = content.slice(0, -1)
-    }
-
+    // Keep the trailing newline from the last patch line so an explicit
+    // blank + line stays a trailing blank line. apply_patch still guarantees
+    // at least one terminating newline when the hunk is non-empty.
     return { content, nextIdx: i }
   }
 

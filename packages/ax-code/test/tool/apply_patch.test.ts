@@ -271,6 +271,20 @@ describe("tool.apply_patch freeform", () => {
     })
   })
 
+  test("preserves an explicit trailing blank line on add", async () => {
+    await using fixture = await tmpdir()
+    const { ctx } = makeCtx()
+
+    await Instance.provide({
+      directory: fixture.path,
+      fn: async () => {
+        const patchText = "*** Begin Patch\n*** Add File: blank_tail.txt\n+a\n+b\n+\n*** End Patch"
+        await execute({ patchText }, ctx)
+        expect(await fs.readFile(path.join(fixture.path, "blank_tail.txt"), "utf-8")).toBe("a\nb\n\n")
+      },
+    })
+  })
+
   test("appends trailing newline on update", async () => {
     await using fixture = await tmpdir()
     const { ctx } = makeCtx()
