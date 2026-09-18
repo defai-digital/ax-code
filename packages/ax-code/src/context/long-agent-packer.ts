@@ -63,9 +63,12 @@ export namespace LongAgentContextPacker {
     const dropped = new Set<Tier>()
 
     function tryAdd(entry: Entry): boolean {
-      if (used + entry.content.length > budgetChars) return false
+      // Account for the "\n\n" separator render() joins entries with, so
+      // `used` tracks the actual rendered size the budget is meant to cap.
+      const separatorCost = entries.length > 0 ? 2 : 0
+      if (used + separatorCost + entry.content.length > budgetChars) return false
       entries.push(entry)
-      used += entry.content.length
+      used += separatorCost + entry.content.length
       return true
     }
 

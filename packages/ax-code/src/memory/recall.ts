@@ -83,7 +83,7 @@ export async function recall(projectRoot: string, query: RecallQuery = {}): Prom
     return b.entry.savedAt.localeCompare(a.entry.savedAt)
   })
 
-  return query.limit && query.limit > 0 ? results.slice(0, query.limit) : results
+  return query.limit !== undefined ? results.slice(0, Math.max(0, query.limit)) : results
 }
 
 function collectResults(
