@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { fujiRows, fujiBackground } from "../../../src/cli/tui/component/fuji-view-model"
+import { fujiRows, fujiBackground, fujiSkyRgb } from "../../../src/cli/tui/component/fuji-view-model"
 
 describe("Fuji Mountain scenes", () => {
   test.each(["fuji-day", "fuji-night"] as const)("%s clips scenery and train to resized screens", (style) => {
@@ -94,6 +94,14 @@ describe("Fuji Mountain scenes", () => {
     expect(fujiBackground("fuji-day")).not.toBe(fujiBackground("fuji-night"))
     expect(day.flat().some((r) => r.color === "#1b4332")).toBe(true)
     expect(night.flat().some((r) => r.color === "#557a85")).toBe(true)
+    expect(day.flat().some((r) => r.background === "#24533f")).toBe(true)
+    expect(night.flat().some((r) => r.background === "#2d4454")).toBe(true)
+    expect(day.flat().some((r) => r.background === "#f8fafc")).toBe(true)
+    expect(day.flat().some((r) => r.background === "#fecdd3")).toBe(true)
+    expect(fujiSkyRgb("fuji-day", 0)).toEqual([168, 218, 220])
+    expect(fujiSkyRgb("fuji-day", 1)).toEqual([254, 229, 191])
+    expect(fujiSkyRgb("fuji-night", 0)).toEqual([16, 27, 54])
+    expect(fujiSkyRgb("fuji-night", 1)).toEqual([29, 53, 87])
   })
 })
 

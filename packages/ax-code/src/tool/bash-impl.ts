@@ -41,6 +41,7 @@ import { denyDestructiveInOpsStrict } from "./bash-strict"
 import { detectSandboxDenial } from "./bash-sandbox-escalation"
 import { BackgroundShell } from "./bash-background"
 import { signalBashProcessTree } from "./bash-process-cleanup"
+import { withCommandAlias } from "./bash-input"
 import { normalizeToWorkspacePath, resolveToolFilePath } from "./file-path"
 import { estimateAutonomousLineDelta } from "./file-content"
 import {
@@ -354,30 +355,32 @@ export const BashTool = Tool.define("bash", async (initCtx) => {
 
   // Named schema so async Tool.define init keeps z.infer<Parameters> (without
   // this, tsgo widens params to unknown under the initCtx callback form).
-  const parameters = z.object({
-    command: z.string().describe("The command to execute"),
-    timeout: ToolNumber(z.number().min(1).max(600_000))
-      .describe("Optional timeout in milliseconds (max 600000)")
-      .optional(),
-    workdir: z
-      .string()
-      .describe(
-        `The working directory to run the command in. Defaults to ${Instance.directory}. Use this instead of 'cd' commands.`,
-      )
-      .optional(),
-    run_in_background: ToolBoolean.describe(
-      "Set to true to run this command in the background. The call returns immediately with a shell ID; use the bash_output tool to read incremental output and kill_shell to terminate it. Use for long-running processes like dev servers, watchers, or slow builds. The timeout parameter is ignored for background commands.",
-    ).optional(),
-    description: z
-      .string()
-      .max(200)
-      .describe(
-        "Clear, concise description of what this command does in 5-10 words. Examples:\nInput: ls\nOutput: Lists files in current directory\n\nInput: git status\nOutput: Shows working tree status\n\nInput: npm install\nOutput: Installs package dependencies\n\nInput: mkdir foo\nOutput: Creates directory 'foo'",
-      )
-      // Cosmetic only. Fall back to the command when a weaker tool-calling
-      // model omits it.
-      .optional(),
-  })
+  const parameters = withCommandAlias(
+    z.object({
+      command: z.string().describe("The command to execute"),
+      timeout: ToolNumber(z.number().min(1).max(600_000))
+        .describe("Optional timeout in milliseconds (max 600000)")
+        .optional(),
+      workdir: z
+        .string()
+        .describe(
+          `The working directory to run the command in. Defaults to ${Instance.directory}. Use this instead of 'cd' commands.`,
+        )
+        .optional(),
+      run_in_background: ToolBoolean.describe(
+        "Set to true to run this command in the background. The call returns immediately with a shell ID; use the bash_output tool to read incremental output and kill_shell to terminate it. Use for long-running processes like dev servers, watchers, or slow builds. The timeout parameter is ignored for background commands.",
+      ).optional(),
+      description: z
+        .string()
+        .max(200)
+        .describe(
+          "Clear, concise description of what this command does in 5-10 words. Examples:\nInput: ls\nOutput: Lists files in current directory\n\nInput: git status\nOutput: Shows working tree status\n\nInput: npm install\nOutput: Installs package dependencies\n\nInput: mkdir foo\nOutput: Creates directory 'foo'",
+        )
+        // Cosmetic only. Fall back to the command when a weaker tool-calling
+        // model omits it.
+        .optional(),
+    }),
+  )
 
   return {
     description: description

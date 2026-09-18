@@ -19,6 +19,7 @@ describe("animation command palette", () => {
     expect(options).toHaveLength(10)
     expect(new Set(options.map((option) => option.value)).size).toBe(10)
     expect(new Set(options.map((option) => option.slash!.name)).size).toBe(10)
+    expect(options.every((option) => option.slash?.hidden === true)).toBe(true)
     for (const family of ["Digital Code", "Foliage", "Bench", "Fuji Mountain", "Mahjong"]) {
       const found = dialogSelectFilteredOptions(options, family)
       for (const option of options.filter((item) => item.category!.endsWith(family))) expect(found).toContain(option)

@@ -11,6 +11,9 @@ test.each(["fuji-day", "fuji-night"] as const)("%s keeps the sky fixed while the
   expect(first).not.toEqual(moving)
   expect(first).toEqual(renderFujiPixels(780, 440, style, 2400))
   expect([...first.subarray(0, 3)]).toEqual(style === "fuji-day" ? [168, 218, 220] : [16, 27, 54])
+  expect([...first.subarray((439 * 780 + 0) * 3, (439 * 780 + 1) * 3)]).toEqual(
+    style === "fuji-day" ? [254, 229, 191] : [29, 53, 87],
+  )
   // The train background remains the original deep blue, including blank cells.
   expect(moving.includes(Buffer.from([29, 53, 87]))).toBe(true)
 })

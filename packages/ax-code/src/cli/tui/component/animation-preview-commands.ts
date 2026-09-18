@@ -98,7 +98,7 @@ export function animationPreviewCommands(input: {
         : `${input.t(preview.ending ? "command.ending" : "command.opening")} - ${input.t(preview.key)}`,
     value: preview.value,
     category: `${input.t("category.system")} - ${preview.family}`,
-    slash: { name: preview.slash },
+    slash: { name: preview.slash, hidden: true },
     onSelect: (dialog) => {
       dialog.clear()
       if (preview.ending) input.ending(preview.style)

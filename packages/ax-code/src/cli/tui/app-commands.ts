@@ -702,7 +702,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
               : input.animationPair?.opening === "mahjong-match"
                 ? uiText("animation.mahjongMatch")
                 : uiText("animation.classicFoliage"),
-      slash: { name: "ov", aliases: ["op"] },
+      slash: { name: "ov", aliases: ["op"], hidden: true },
       value: "app.digital_code.play",
       category: t("category.system"),
       onSelect: (dialog) => {
@@ -722,7 +722,7 @@ export function appCommands(input: AppCommandsInput): CommandOption[] {
               : input.animationPair?.ending === "mahjong-ending"
                 ? uiText("animation.mahjongEnding")
                 : uiText("animation.goldenFoliage"),
-      slash: { name: "ev" },
+      slash: { name: "ev", hidden: true },
       value: "app.digital_code.play_reverse",
       category: t("category.system"),
       onSelect: (dialog) => {

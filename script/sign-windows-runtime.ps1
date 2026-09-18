@@ -13,7 +13,7 @@ if (-not $VerifyOnly) {
   $vault = [uri]$env:AZURE_KEY_VAULT_URL
   if ($vault.Scheme -ne "https" -or -not $vault.Host.EndsWith(".vault.azure.net")) { throw "Invalid Azure Key Vault URL" }
 }
-$rootPath = (Resolve-Path -LiteralPath $Root).Path
+$rootPath = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Root).Path).TrimEnd('\', '/')
 $pending = [Collections.Generic.Stack[string]]::new()
 $pending.Push($rootPath)
 $files = @()
@@ -33,7 +33,7 @@ foreach ($file in $files) {
   $stream = [IO.File]::OpenRead($file.FullName)
   try { $isPe = $stream.ReadByte() -eq 0x4d -and $stream.ReadByte() -eq 0x5a } finally { $stream.Dispose() }
   if (-not $isPe) { continue }
-  $relative = $file.FullName.Substring($rootPath.Length + 1).Replace('\', '/')
+  $relative = [IO.Path]::GetFullPath($file.FullName).Substring($rootPath.Length).TrimStart('\', '/').Replace('\', '/')
   $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
   $upstreamNode = $relative -eq "node/bin/node.exe"
   # Preserve the upstream runtime identity; never replace an invalid signature
