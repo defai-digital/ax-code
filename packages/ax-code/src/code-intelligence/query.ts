@@ -108,7 +108,7 @@ export namespace CodeGraphQuery {
     if (limit === 0) return []
     const queryOpts = { ...opts, limit }
     if (useNative) return NativeStore.findNodesByNamePrefix(projectID, prefix, queryOpts)
-    const upper = prefix + "\uFFFF"
+    const upper = prefix + "\u{10FFFF}"
     const filters = [
       eq(CodeNodeTable.project_id, projectID),
       gte(CodeNodeTable.name, prefix),

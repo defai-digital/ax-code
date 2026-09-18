@@ -27,7 +27,7 @@ const SYMBOL_RANGE_SCALE = 10000
 const MAX_BOOKMARKS_PER_REFERENCE_QUERY = 50
 
 const IMPORT_REGEX =
-  /(?:import\s+(?:[\s\S]*?\s+from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s*\(\s*['"]([^'"]+)['"]\s*\))/g
+  /(?:import\s+(?:[^'"]*?\s+from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s*\(\s*['"]([^'"]+)['"]\s*\))/g
 
 const BUILTIN_MODULES = new Set([
   "fs",
@@ -1112,7 +1112,7 @@ export namespace CodeGraphBuilder {
         }
       }
 
-      if (edgeInserts.length > 0 && completeness !== "partial") completeness = "full"
+      if (completeness !== "partial" && prepared.referenceFailures === 0) completeness = "full"
       if (prepared.referenceFailures > 0) completeness = "partial"
       prepared.timings.edgeResolve = performance.now() - tResolve
     }
