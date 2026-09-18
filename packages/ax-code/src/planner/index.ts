@@ -325,12 +325,16 @@ export namespace Planner {
     )
     plan.phases.push(...built)
 
+    let recovered = false
     for (const next of built) {
       const r = await executePhase(plan, next, executor, options)
       results.push(r)
       if (r.success) {
         plan.phasesCompleted++
-        plan.phasesFailed = Math.max(0, plan.phasesFailed - 1)
+        if (!recovered) {
+          plan.phasesFailed = Math.max(0, plan.phasesFailed - 1)
+          recovered = true
+        }
         continue
       }
       plan.phasesFailed++
