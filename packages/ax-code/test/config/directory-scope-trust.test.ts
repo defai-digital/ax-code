@@ -12,13 +12,13 @@ async function withBackup(fn: () => Promise<void>) {
   try {
     await fn()
   } finally {
-    if (previous === undefined) await fs.rm(statePath, { force: true })
+    if (previous === undefined) await fs.rm(statePath, { force: true, recursive: true })
     else await fs.writeFile(statePath, previous)
   }
 }
 
 afterEach(async () => {
-  await fs.rm(statePath, { force: true })
+  await fs.rm(statePath, { force: true, recursive: true })
 })
 
 describe("DirectoryScopeTrust", () => {
@@ -57,5 +57,12 @@ describe("DirectoryScopeTrust", () => {
     withBackup(async () => {
       await fs.writeFile(statePath, "{ not valid json")
       await expect(DirectoryScopeTrust.isTrusted("/some/project")).resolves.toBe(false)
+    }))
+
+  test("trust() write failures do not throw", () =>
+    withBackup(async () => {
+      await fs.rm(statePath, { force: true })
+      await fs.mkdir(statePath, { recursive: true })
+      await expect(DirectoryScopeTrust.trust("/blocked")).resolves.toBeUndefined()
     }))
 })

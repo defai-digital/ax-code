@@ -34,6 +34,7 @@ changes belong to AX Coder.
 - Headless `--event-log` paths must stay inside the caller's working directory, using `Filesystem.contains` instead of
   a prefix `startsWith` check, and realpath the parent so a symlink directory cannot smuggle the file out.
 - Skip LSP prewarm on a filesystem root, matching File.scan and auto-index.
+- Directory-scope trust write failures no longer crash CLI startup after the user confirms a broad directory.
 
 ## [7.18.8] - 2026-09-17
 

@@ -37,6 +37,11 @@ export namespace DirectoryScopeTrust {
   export async function trust(resolvedDir: string): Promise<void> {
     const trusted = await load()
     trusted[resolvedDir] = true
-    await Filesystem.writeJson(file, trusted)
+    await Filesystem.writeJson(file, trusted).catch((error) => {
+      log.warn("failed to persist directory-scope trust; continuing without remembering this directory", {
+        file,
+        error,
+      })
+    })
   }
 }
