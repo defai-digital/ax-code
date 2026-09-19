@@ -706,7 +706,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const maxConcurrentRequests = options.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS
   const maxConcurrentRequestsMatches =
     (existing?.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS) === maxConcurrentRequests
-  const speculationProfile = options.speculationProfile ?? axEngineSpeculationProfile(options.modelID)
+  const speculationProfile = options.speculationProfile ?? axEngineSpeculationProfile(options.apiModelID)
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
   const mtpPolicy = axEngineMtpLaunchPolicy(options.mtpPolicy, options.binaryVersion)
   const mtpPolicyMatches = existing?.mtpPolicy === mtpPolicy
@@ -714,7 +714,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const mtpModeMatches = existing?.mtpMode === mtpMode
   const prefixCache = prefixCacheLaunchConfig()
   const prefixCacheConfigMatches = prefixCacheMatches(existing, prefixCache)
-  const qwen38ExactMtpProfile = qwen38ExactMtpProfileFingerprint(options.modelID)
+  const qwen38ExactMtpProfile = qwen38ExactMtpProfileFingerprint(options.apiModelID)
   const qwen38ExactMtpMatches = (existing?.qwen38ExactMtpProfile ?? "") === qwen38ExactMtpProfile
   if (existing) {
     const alive = await serverProcessAlive(existing)

@@ -501,20 +501,26 @@ const WhitespaceNormalizedReplacer: Replacer = function* (content, find) {
             }
           }
           normalized = normalized.trimEnd()
-          const matchStart = normalized.indexOf(normalizedFind)
-          const matchEndIndex = matchStart + normalizedFind.length - 1
-          if (matchStart !== -1 && matchEndIndex < rawIndices.length) {
-            const rawStart = rawIndices[matchStart]!
-            const rawEnd = rawIndices[matchEndIndex]! + 1
-            yield { text: line.slice(rawStart, rawEnd), index: lineStart + rawStart }
+          let from = 0
+          while (from <= normalized.length - normalizedFind.length) {
+            const matchStart = normalized.indexOf(normalizedFind, from)
+            if (matchStart === -1) break
+            const matchEndIndex = matchStart + normalizedFind.length - 1
+            if (matchEndIndex < rawIndices.length) {
+              const rawStart = rawIndices[matchStart]!
+              const rawEnd = rawIndices[matchEndIndex]! + 1
+              yield { text: line.slice(rawStart, rawEnd), index: lineStart + rawStart }
+            }
+            from = matchStart + Math.max(normalizedFind.length, 1)
           }
         } else if (words.length > 0) {
           const pattern = words.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("\\s+")
           try {
-            const regex = new RegExp(pattern)
-            const match = line.match(regex)
-            if (match) {
-              yield { text: match[0], index: lineStart + match.index! }
+            const regex = new RegExp(pattern, "g")
+            let match: RegExpExecArray | null
+            while ((match = regex.exec(line)) !== null) {
+              yield { text: match[0], index: lineStart + match.index }
+              if (match[0].length === 0) regex.lastIndex++
             }
           } catch (e) {
             // Invalid regex pattern, skip

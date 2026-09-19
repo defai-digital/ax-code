@@ -107,7 +107,7 @@ describe.skipIf(process.platform === "win32")("managed engine residency", () => 
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}` as const,
   ] as const)("the Qwen model profile replaces the old agentic pin for %s", async (modelID) => {
     await using f = await fixture()
-    const input = { ...f.input, modelID, binaryVersion: "7.4.0" }
+    const input = { ...f.input, modelID, apiModelID: modelID, binaryVersion: "7.4.0" }
     const previous = await ensureServer({ ...input, speculationProfile: "agentic" })
     expect(previous.speculationProfile).toBe("agentic")
     const current = await ensureServer(input)

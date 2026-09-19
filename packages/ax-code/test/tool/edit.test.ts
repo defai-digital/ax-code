@@ -943,6 +943,10 @@ describe("tool.edit", () => {
         "Found multiple matches",
       )
     })
+
+    test("rejects two exact matches on the same line instead of replacing the first", () => {
+      expect(() => replace("keep foo and foo here", "foo", "bar")).toThrow("Found multiple matches")
+    })
   })
 
   describe("concurrent editing", () => {
