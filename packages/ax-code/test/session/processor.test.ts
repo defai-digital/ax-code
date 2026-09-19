@@ -267,7 +267,7 @@ describe("session.processor", () => {
             model,
             cache: {},
             structuredPrompt: "",
-            systemOverride: [],
+            environmentOverride: [],
           })
           streamSpy = vi
             .spyOn(LLM, "stream")
@@ -383,7 +383,7 @@ describe("session.processor", () => {
           model,
           cache: {},
           structuredPrompt: "",
-          systemOverride: [],
+          environmentOverride: [],
         })
         const requestBytes: number[] = []
         streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input: LLM.StreamInput) => {
@@ -1991,7 +1991,7 @@ test("keeps persisted tool failure signals when tail reminders append a user mes
         model,
         cache: {},
         structuredPrompt: "",
-        systemOverride: [],
+        environmentOverride: [],
       })
       expect(request.requestMessages.at(-1)).toMatchObject({
         role: "user",
@@ -2035,7 +2035,7 @@ test("goal planning deadline reaches the provider request before tools are disab
           model,
           cache: {},
           structuredPrompt: "",
-          systemOverride: [],
+          environmentOverride: [],
         })
         expect(JSON.stringify(request.requestMessages).includes("tool-enabled model turns left in this segment")).toBe(
           expected,

@@ -29,7 +29,7 @@ export async function preparePromptRequest(input: {
   cache: PromptRequestCache
   structuredPrompt: string
   requestMessagesSource?: MessageV2.WithParts[]
-  systemOverride?: string[]
+  environmentOverride?: string[]
   ephemeralSystem?: string[]
   mediaProjection?: MediaProjection.Mode
 }) {
@@ -106,16 +106,18 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
   }
   const mediaProjection = input.mediaProjection ?? "normal"
   const [baseSystem, requestMessages] = await Promise.all([
-    input.systemOverride
-      ? Promise.resolve(input.systemOverride)
-      : getSystemPrompt({
-          agent: input.agent,
-          model: input.model,
-          format,
-          cache: input.cache,
-          messages: requestMessagesSource,
-          structuredPrompt: input.structuredPrompt,
-        }),
+    getSystemPrompt({
+      agent: input.agent,
+      model: input.model,
+      format,
+      cache: input.cache,
+      // Projection changes model-visible history, not the applicability of
+      // user memory or skills selected from the full conversation.
+      messages: input.requestMessagesSource ? messages : requestMessagesSource,
+      structuredPrompt: input.structuredPrompt,
+      // A turn may replace environment scaffolding, never required instructions.
+      environmentOverride: input.environmentOverride,
+    }),
     convertMessages(mediaProjection),
   ])
   const system = [...baseSystem, ...(input.ephemeralSystem ?? [])]

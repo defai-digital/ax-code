@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi, type MockInstance } from "vitest"
 import { APICallError } from "ai"
 import path from "path"
-import { access } from "node:fs/promises"
+import { access, writeFile } from "node:fs/promises"
 import { Instance } from "../../src/project/instance"
 import { Permission } from "../../src/permission"
 import { Provider } from "../../src/provider/provider"
@@ -88,14 +88,24 @@ afterEach(async () => {
 
 describe("session.prompt flow", () => {
   test.each([false, true])("compact AX Engine preflight and coding recovery after cancel=%s", async (cancel) => {
-    await using tmp = await tmpdir({ git: true })
+    const repositoryInstruction = "Preserve the repository's editorial constraints."
+    const configuredInstruction = "Retain all user-specified qualifications."
+    await using tmp = await tmpdir({
+      git: true,
+      config: { instructions: ["project-rules.md"] },
+      init: async (dir) => {
+        await writeFile(path.join(dir, "AGENTS.md"), repositoryInstruction)
+        await writeFile(path.join(dir, "project-rules.md"), configuredInstruction)
+      },
+    })
     let currentModel = {
       ...model,
       id: "qwen3.8-27b-axq-6bit" as any,
       providerID: "ax-engine" as any,
       api: { ...model.api, id: "qwen3.8-27b-axq-6bit" },
-      // The compact system fits here; restoring stock craft would block the first turn.
-      limit: { context: 2048, output: 512 },
+      // Include the restored instructions and skill context in the input budget.
+      // The separate oversized-instruction case verifies admission failure.
+      limit: { context: 4096, output: 512 },
     }
     modelSpy = vi.spyOn(Provider, "getModel").mockImplementation(async () => currentModel)
     summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
@@ -146,13 +156,22 @@ describe("session.prompt flow", () => {
             parts: [{ type: "text", text: "Tell me a story of Tokyo." }],
           })
           if (cancel) {
-            await ready
+            // Fail with the actual preflight diagnostic if no stream starts.
+            await Promise.race([
+              ready,
+              pending.then((result) => {
+                if (result.info.role === "assistant" && result.info.error)
+                  throw new Error(JSON.stringify(result.info.error))
+              }),
+            ])
             await SessionPrompt.cancel(session.id)
           }
           const first = await pending
           expect(first.info.role).toBe("assistant")
           if (first.info.role === "assistant") {
-            expect(first.info.error?.name).toBe(cancel ? "MessageAbortedError" : undefined)
+            expect(first.info.error?.name, JSON.stringify(first.info.error)).toBe(
+              cancel ? "MessageAbortedError" : undefined,
+            )
           }
           expect(inputs).toHaveLength(1)
           expect(inputs[0].systemProfile).toBe("compact")
@@ -163,6 +182,8 @@ describe("session.prompt flow", () => {
           const assembled = preflight.mock.results[compactPreflight].value as string[]
           expect(assembled).not.toContain(PROMPT_CRAFT)
           expect(assembled).toContain("Keep the requested language.")
+          expect(assembled.join("\n")).toContain(repositoryInstruction)
+          expect(assembled.join("\n")).toContain(configuredInstruction)
           expect(assembled).toEqual(
             SystemPrompt.request({
               agent: inputs[0].agent,
@@ -184,6 +205,8 @@ describe("session.prompt flow", () => {
           expect(inputs).toHaveLength(2)
           expect(inputs[1].systemProfile).toBe("default")
           expect(Object.keys(inputs[1].tools)).toContain("read")
+          expect(inputs[1].system.join("\n")).toContain(repositoryInstruction)
+          expect(inputs[1].system.join("\n")).toContain(configuredInstruction)
           expect(
             SystemPrompt.request({
               agent: inputs[1].agent,
@@ -192,6 +215,47 @@ describe("session.prompt flow", () => {
               profile: inputs[1].systemProfile,
             }),
           ).toContain(PROMPT_CRAFT)
+          expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      preflight.mockRestore()
+    }
+  })
+
+  test("blocks oversized compact instructions before dispatch instead of silently dropping them", async () => {
+    const instruction = "Preserve this mandatory project rule.\n".repeat(500)
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await writeFile(path.join(dir, "AGENTS.md"), instruction)
+      },
+    })
+    const localModel = { ...model, providerID: "ax-engine" as any, limit: { context: 2048, output: 512 } }
+    modelSpy = vi.spyOn(Provider, "getModel").mockResolvedValue(localModel)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async () => {
+      throw new Error("Over-budget instructions must be rejected before inference")
+    })
+    const preflight = vi.spyOn(SystemPrompt, "request")
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Compact instruction budget" })
+          const result = await SessionPrompt.prompt({
+            model: { providerID: localModel.providerID, modelID: localModel.id },
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "Tell me a story." }],
+          })
+          const index = preflight.mock.calls.findIndex(([input]) => input.profile === "compact")
+          expect(index).toBeGreaterThanOrEqual(0)
+          expect((preflight.mock.results[index].value as string[]).join("\n")).toContain(instruction)
+          expect(streamSpy).not.toHaveBeenCalled()
+          expect(result.info.role).toBe("assistant")
+          if (result.info.role === "assistant") expect(result.info.error).toBeDefined()
           expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
           await Session.remove(session.id)
         },

@@ -111,13 +111,8 @@ import { permissionRulesetFromLegacyTools } from "./prompt/prompt-permission"
 import { resolvePromptIsolationPolicy } from "./prompt/prompt-runtime-policy"
 import { createPromptRunState } from "./prompt/prompt-run-state"
 import { resolvePromptCache, type PromptCacheEntry } from "./prompt/prompt-cache"
-import {
-  CONVERSATION_SYSTEM_PROMPT,
-  detectTurnExecutionProfile,
-  RESPONSE_ONLY_SYSTEM_PROMPT,
-  textOnlyUsesFastReasoning,
-  type TurnExecutionProfile,
-} from "./prompt/prompt-turn-profile"
+import { detectTurnExecutionProfile, type TurnExecutionProfile } from "./prompt/prompt-turn-profile"
+import { resolveTurnPromptPolicy, supportsCompactTurn } from "./prompt/prompt-turn-policy"
 import { SystemPrompt } from "./system"
 import {
   AX_ENGINE_LARGE_TOOL_OUTPUT_CHARS,
@@ -1127,7 +1122,7 @@ export namespace SessionPrompt {
       }
       if (
         !activeTurnProfile &&
-        model.providerID === AX_ENGINE_PROVIDER_ID &&
+        supportsCompactTurn(model) &&
         step === 1 &&
         continuations === 0 &&
         tasks.length === 0 &&
@@ -1138,7 +1133,6 @@ export namespace SessionPrompt {
         const profile = detectTurnExecutionProfile({ messages: msgs, currentUser: lastUser })
         if (profile.kind !== "default") {
           activeTurnProfile = profile
-          armForceTextOnlyTurn(profile.kind === "response-only" ? "response_only" : "other")
           log.info("turn execution profile selected", {
             command: "session.prompt.profile",
             status: "ok",
@@ -1158,8 +1152,11 @@ export namespace SessionPrompt {
       }
 
       const textOnlyProfile = activeTurnProfile?.kind !== "default" ? activeTurnProfile : undefined
-      const systemProfile: SystemPrompt.Profile = textOnlyProfile ? "compact" : "default"
-      const textOnlyFastReasoning = textOnlyProfile ? textOnlyUsesFastReasoning(lastUser) : false
+      const promptPolicy = resolveTurnPromptPolicy({ model, user: lastUser, profile: textOnlyProfile })
+      if (promptPolicy.omitTools) {
+        armForceTextOnlyTurn(textOnlyProfile?.kind === "response-only" ? "response_only" : "other")
+      }
+      const systemProfile = promptPolicy.systemProfile
       const pendingInstructionForRequest =
         lastUser.format?.type === "json_schema" ? undefined : pendingAxEngineTurnInstruction
 
@@ -1186,13 +1183,8 @@ export namespace SessionPrompt {
         model,
         cache: cachedSystemPrompt,
         structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
-        requestMessagesSource: textOnlyProfile?.requestMessages,
-        systemOverride:
-          textOnlyProfile?.kind === "response-only"
-            ? [RESPONSE_ONLY_SYSTEM_PROMPT]
-            : textOnlyProfile?.kind === "conversation"
-              ? [CONVERSATION_SYSTEM_PROMPT]
-              : undefined,
+        requestMessagesSource: promptPolicy.requestMessagesSource,
+        environmentOverride: promptPolicy.environmentOverride,
         ephemeralSystem: pendingInstructionForRequest ? [pendingInstructionForRequest] : undefined,
         mediaProjection,
       })
@@ -1202,7 +1194,7 @@ export namespace SessionPrompt {
       // budget the same way — `tools: {}` means "no overrides" (all tools
       // still counted), not "zero tools".
       const omitToolSchemas =
-        Boolean(textOnlyProfile) ||
+        promptPolicy.omitTools ||
         model.capabilities.toolcall === false ||
         ((forceTextOnlyTurn || isLastStep) && lastUser.format?.type !== "json_schema")
       const preflightCompaction = await NativePerf.runAsync("session.preflight", undefined, () =>
@@ -1353,7 +1345,7 @@ export namespace SessionPrompt {
           tools,
           model,
           toolChoice,
-          small: textOnlyFastReasoning,
+          small: promptPolicy.fastReasoning,
           config: cfg,
           maxOutputTokens: maxOutputTokensForRequest,
         },

@@ -24,6 +24,7 @@ export async function systemPrompt(input: {
   messages?: MessageV2.WithParts[]
   skills?: typeof SystemPrompt.skills
   environment?: typeof SystemPrompt.environment
+  environmentOverride?: string[]
   instructions?: typeof InstructionPrompt.system
   memory?: typeof SystemPrompt.memory
   structuredPrompt?: string
@@ -82,7 +83,10 @@ export async function systemPrompt(input: {
   // happens to change.
   const modelKey = providerModelKey({ providerID: input.model.providerID, modelID: input.model.api.id })
   const environmentCacheKey = `${modelKey}:${ScopedFlag.autonomous() ? "autonomous" : "manual"}`
-  if (!input.cache.environment || input.cache.environmentModelKey !== environmentCacheKey) {
+  if (
+    input.environmentOverride === undefined &&
+    (!input.cache.environment || input.cache.environmentModelKey !== environmentCacheKey)
+  ) {
     input.cache.environment = await (input.environment ?? SystemPrompt.environment)(input.model as any)
     input.cache.environmentModelKey = environmentCacheKey
   }
@@ -95,7 +99,7 @@ export async function systemPrompt(input: {
   // rendered as a synthetic <turn_context> part on the last user message by
   // prompt-turn-context.ts / prompt-reminders.ts instead.
   const system = [
-    ...input.cache.environment,
+    ...(input.environmentOverride ?? input.cache.environment ?? []),
     ...(assuranceWorkflow ? [assuranceWorkflow] : []),
     ...(memory ? [memory] : []),
     ...(skills ? [skills] : []),

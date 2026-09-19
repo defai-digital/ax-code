@@ -9,6 +9,7 @@ import {
   responseOnlyUsesFastReasoning,
 } from "../../src/session/prompt/prompt-turn-profile"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
+import { resolveTurnPromptPolicy } from "../../src/session/prompt/prompt-turn-policy"
 
 const sessionID = SessionID.make("ses_response_only")
 const providerID = ProviderID.make("ax-engine")
@@ -75,6 +76,47 @@ function detect(text: string) {
   const user = userMessage(text)
   return detectTurnExecutionProfile({ messages: [assistant, user], currentUser: user.info })
 }
+
+describe("turn prompt provider qualification", () => {
+  test.each(["defai-01-ax-trust-com", "custom-private-gpu", "claude-cli", "muse-cli", "local-llm"])(
+    "does not apply compact decisions to %s even with a matching task",
+    (provider) => {
+      const user = userMessage("Tell me a story.")
+      const profile = detectTurnExecutionProfile({ messages: [user], currentUser: user.info })
+      expect(profile.kind).toBe("conversation")
+      expect(
+        resolveTurnPromptPolicy({ model: { providerID: ProviderID.make(provider) }, user: user.info, profile }),
+      ).toEqual({
+        systemProfile: "default",
+        omitTools: false,
+        fastReasoning: false,
+      })
+    },
+  )
+
+  test("preserves explicit reasoning independently of compact guidance and history", () => {
+    const user = userMessage("Tell me a story.")
+    const profile = detectTurnExecutionProfile({ messages: [user], currentUser: user.info })
+    const input = { model: { providerID }, user: user.info, profile }
+    const automatic = resolveTurnPromptPolicy(input)
+    expect(automatic).toEqual({
+      systemProfile: "compact",
+      requestMessagesSource: expect.any(Array),
+      environmentOverride: [CONVERSATION_SYSTEM_PROMPT],
+      omitTools: true,
+      fastReasoning: true,
+    })
+    expect(resolveTurnPromptPolicy({ ...input, user: { ...user.info, variant: "high" } })).toEqual({
+      ...automatic,
+      fastReasoning: false,
+    })
+    expect(resolveTurnPromptPolicy({ ...input, user: { ...user.info, id: MessageID.make("another-user") } })).toEqual({
+      systemProfile: "default",
+      omitTools: false,
+      fastReasoning: false,
+    })
+  })
+})
 
 describe("response-only turn execution profile", () => {
   test("matches the reproduced Traditional Chinese follow-up", () => {

@@ -284,6 +284,45 @@ describe("system prompt cache stability", () => {
     })
   })
 
+  test("compact environment preserves instructions and live memory without poisoning the coding cache", async () => {
+    const cache = {}
+    let environmentCalls = 0
+    let instructionCalls = 0
+    let memory = "User-curated preference."
+    const input = {
+      ...args(cache),
+      environment: async () => {
+        environmentCalls++
+        return ["coding environment"]
+      },
+      instructions: async () => {
+        instructionCalls++
+        return ["repository instruction", "configured instruction"]
+      },
+      memory: async () => memory,
+    }
+    const compact = await systemPrompt({ ...input, environmentOverride: ["direct response"] })
+    expect(compact).toEqual(["direct response", memory, "skills", "repository instruction", "configured instruction"])
+    expect(environmentCalls).toBe(0)
+
+    const coding = await systemPrompt(input)
+    expect(coding).toEqual(["coding environment", memory, "skills", "repository instruction", "configured instruction"])
+    expect(environmentCalls).toBe(1)
+
+    memory = "Updated user preference."
+    const compactAgain = await systemPrompt({ ...input, environmentOverride: [] })
+    expect(compactAgain).toEqual([memory, "skills", "repository instruction", "configured instruction"])
+    expect(await systemPrompt(input)).toEqual([
+      "coding environment",
+      memory,
+      "skills",
+      "repository instruction",
+      "configured instruction",
+    ])
+    expect(environmentCalls).toBe(1)
+    expect(instructionCalls).toBe(1)
+  })
+
   test("environment cache invalidates when the autonomous flag changes mid-session without a model change", async () => {
     // SystemPrompt.environment() reads the live ScopedFlag.autonomous() value
     // (the real <autonomous_workflow> block). The cache key must include it —

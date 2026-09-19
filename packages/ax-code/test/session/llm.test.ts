@@ -13,13 +13,14 @@ import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
 import type { MessageV2 } from "../../src/session/message-v2"
-import { SessionID, MessageID } from "../../src/session/schema"
+import { SessionID, MessageID, PartID } from "../../src/session/schema"
 import { createStructuredOutputTool } from "../../src/session/prompt/prompt-helpers"
 import { SuperLongRuntime } from "../../src/session/super-long-runtime"
 import { LLMRequestEvent } from "../../src/replay/event"
 import { Recorder } from "../../src/replay/recorder"
 import { ScopedFlag } from "../../src/flag/scoped"
 import { RequestProvenance } from "../../src/session/request-provenance"
+import { preparePromptRequest } from "../../src/session/prompt/prompt-request-build"
 import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
 import PROMPT_AX_ENGINE from "../../src/session/prompt/ax-engine.txt"
 
@@ -1103,6 +1104,8 @@ describe("session.llm.stream", () => {
     { systemProfile: "compact" as const, customPrompt: undefined },
     { systemProfile: "compact" as const, customPrompt: "Retain this custom agent instruction verbatim." },
   ])("sends the selected AX Engine system profile without thinking: %j", async ({ systemProfile, customPrompt }) => {
+    const repositoryInstruction = "Keep repository editorial constraints verbatim."
+    const configuredInstruction = "Do not omit user-specified qualifications."
     const providerID = "ax-engine"
     const modelID = "qwen3.8-27b-axq-6bit"
     const modelsResponse = () =>
@@ -1134,11 +1137,14 @@ describe("session.llm.stream", () => {
 
     await using tmp = await tmpdir({
       init: async (dir) => {
+        await fs.writeFile(path.join(dir, "AGENTS.md"), repositoryInstruction)
+        await fs.writeFile(path.join(dir, "project-rules.md"), configuredInstruction)
         await fs.writeFile(
           path.join(dir, "ax-code.json"),
           JSON.stringify({
             $schema: "https://raw.githubusercontent.com/defai-digital/ax-code/main/packages/ax-code/config.schema.json",
             enabled_providers: [providerID],
+            instructions: ["project-rules.md"],
             provider: {
               [providerID]: {
                 options: {
@@ -1177,6 +1183,31 @@ describe("session.llm.stream", () => {
           system: "Retain this user instruction verbatim.",
         } satisfies MessageV2.User
 
+        const prepared = await preparePromptRequest({
+          sessionID,
+          lastUser: user,
+          messages: [
+            {
+              info: user,
+              parts: [
+                {
+                  id: PartID.make("part-story"),
+                  messageID: user.id,
+                  sessionID,
+                  type: "text",
+                  text: "a vietnam ghost story, in t. chinese",
+                },
+              ],
+            },
+          ],
+          step: 1,
+          isLastStep: false,
+          agent,
+          model: resolved,
+          cache: {},
+          structuredPrompt: "",
+          environmentOverride: ["Answer the user's clear creative request directly."],
+        })
         const stream = await LLM.stream({
           user,
           sessionID,
@@ -1184,9 +1215,9 @@ describe("session.llm.stream", () => {
           agent,
           small: true,
           systemProfile,
-          system: ["Answer the user's clear creative request directly."],
+          system: prepared.system,
           abort: new AbortController().signal,
-          messages: [{ role: "user", content: "a vietnam ghost story, in t. chinese" }],
+          messages: prepared.requestMessages,
           tools: {},
         })
         for await (const _ of stream.fullStream) {
@@ -1200,10 +1231,13 @@ describe("session.llm.stream", () => {
           (message) => message.role === "system",
         )
         expect(system).toHaveLength(1)
+        expect(system[0].content).toContain(repositoryInstruction)
+        expect(system[0].content).toContain(configuredInstruction)
+        expect(system[0].content).toContain("Answer the user's clear creative request directly.")
         expect(system[0].content).toBe(
           [
             ...(customPrompt ? [customPrompt] : [PROMPT_AX_ENGINE, ...(systemProfile ? [] : [PROMPT_CRAFT])]),
-            "Answer the user's clear creative request directly.",
+            ...prepared.system,
             user.system,
           ].join("\n"),
         )
