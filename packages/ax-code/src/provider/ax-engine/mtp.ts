@@ -1,6 +1,7 @@
 import z from "zod"
 import semver from "semver"
 import { parseJsonResult } from "../../util/json-value"
+import { assertLoopbackHttpUrl } from "../../runtime/listen-security"
 
 export const AxEngineMtpPolicy = z.enum(["disabled", "auto", "required"])
 export type AxEngineMtpPolicy = z.infer<typeof AxEngineMtpPolicy>
@@ -91,7 +92,8 @@ export async function observeAxEngineMtp(input: {
   }
   if (!input.ready || !input.state) return status
   try {
-    const response = await fetch(new URL("/metrics", input.state.baseURL), {
+    const origin = assertLoopbackHttpUrl(input.state.baseURL, "AX Engine metrics URL")
+    const response = await fetch(new URL("/metrics", origin), {
       headers: { authorization: `Bearer ${input.apiKey}` },
       signal: AbortSignal.timeout(2000),
       redirect: "error",

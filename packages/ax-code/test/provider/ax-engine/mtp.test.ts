@@ -107,6 +107,20 @@ test.each(["NaN", "-1", "+Inf"])("invalid exact-model sample %s cannot fall back
   ).toBe("unknown")
 })
 
+test("metrics observation refuses a non-loopback engine URL", async () => {
+  const fetch = vi.fn()
+  vi.stubGlobal("fetch", fetch)
+  expect(
+    await observeAxEngineMtp({
+      requestedPolicy: "required",
+      state: { mtpPolicy: "required", baseURL: "https://example.test/v1", modelID: "qwen" },
+      ready: true,
+      apiKey: "test-key",
+    }),
+  ).toMatchObject({ launchedPolicy: "required", effective: "unknown" })
+  expect(fetch).not.toHaveBeenCalled()
+})
+
 test("status distinguishes requested, launched, and observed policy without changing the server", async () => {
   const fetch = vi.fn(async () => new Response('ax_engine_mlx_mtp_model_policy_active{model="api-id"} 0\n'))
   vi.stubGlobal("fetch", fetch)

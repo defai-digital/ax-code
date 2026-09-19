@@ -19,7 +19,8 @@ changes belong to AX Coder.
 
 - Reject two exact `edit` matches on the same line instead of replacing the first after native ambiguity.
 - Resolve AX Engine speculation and exact-MTP fingerprints from `apiModelID`, matching spawn args and prefix geometry.
-- Observe managed AX Engine status and capability with the same saved API key used at launch.
+- Observe managed AX Engine status and capability with the same saved API key used at launch, and refuse
+  non-loopback `/metrics` URLs.
 
 ## [7.19.2] - 2026-09-18
 
