@@ -68,7 +68,7 @@ export namespace DirectoryScope {
       await fs.lstat(path.join(dir, ".git"))
       return true
     } catch (error) {
-      if (!Filesystem.isEnoent(error)) {
+      if (!Filesystem.isMissingPathError(error)) {
         log.warn("failed to inspect .git for directory-scope classification", { dir, error })
       }
       return false
@@ -92,13 +92,16 @@ export namespace DirectoryScope {
     const includeDotDirs = opts?.includeDotDirs === true
     const found: string[] = []
     const top = await fs.readdir(resolved, { withFileTypes: true }).catch((error) => {
-      if (!Filesystem.isEnoent(error)) {
+      if (!Filesystem.isMissingPathError(error)) {
         log.warn("failed to list directory for nested-git classification", { dir: resolved, error })
       }
       return []
     })
     for (const entry of top) {
-      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+      // Dirent.isDirectory() does not follow symlinks. git add records a
+      // directory symlink as a link; it does not recurse into it, so counting
+      // or excluding the link would both be wrong.
+      if (!entry.isDirectory()) continue
       if (entry.name === "." || entry.name === ".." || entry.name === ".git") continue
       if (NESTED_GIT_SKIP_NAMES.has(entry.name)) continue
       const abs = path.join(resolved, entry.name)
@@ -108,13 +111,13 @@ export namespace DirectoryScope {
       }
       if (!includeDotDirs && entry.name.startsWith(".")) continue
       const inner = await fs.readdir(abs, { withFileTypes: true }).catch((error) => {
-        if (!Filesystem.isEnoent(error)) {
+        if (!Filesystem.isMissingPathError(error)) {
           log.warn("failed to list nested directory for nested-git classification", { dir: abs, error })
         }
         return []
       })
       for (const child of inner) {
-        if (!child.isDirectory() && !child.isSymbolicLink()) continue
+        if (!child.isDirectory()) continue
         if (child.name === ".git" || NESTED_GIT_SKIP_NAMES.has(child.name)) continue
         if (await hasDotGit(path.join(abs, child.name))) {
           found.push(asGitPathspec(path.join(entry.name, child.name)))

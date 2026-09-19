@@ -198,6 +198,18 @@ describe("DirectoryScope.isMultiRepoParent", () => {
     })
   })
 
+  test("does not count a symlink to a git checkout as a second nested repo", async () => {
+    if (process.platform === "win32") return
+    await using tmp = await tmpdir()
+    await using home = await tmpdir()
+    await withTestHome(home.path, async () => {
+      await initUnbornGit(path.join(tmp.path, "repo"))
+      await fs.symlink(path.join(tmp.path, "repo"), path.join(tmp.path, "current"))
+      expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(false)
+      expect(await DirectoryScope.nestedGitChildren(tmp.path)).toEqual(["repo"])
+    })
+  })
+
   test("ignores nested git under node_modules", async () => {
     await using tmp = await tmpdir()
     await using home = await tmpdir()
