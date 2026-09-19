@@ -57,8 +57,13 @@ See [Local Engine Architecture](../architecture/local-engine.md) for lifecycle a
 Managed AX Engine defaults to `required`, matching the selected MTP artifact.
 An unavailable drafter fails startup instead of silently falling back to direct decoding.
 MTP weights and the pure-stacking setting do not establish active acceleration.
-The selected Tiel packs retain the generic `agentic` speculation profile. The old
-dense Qwen3.8-specific experimental environment is not applied to these MoE packs.
+The default Tiel Coder pack uses the `auto` speculation profile so AX Engine selects
+the model's draft gate instead of the generic `agentic` profile's 0.80 override.
+This is separate from the MTP activation policy: `auto` tuning still uses
+`required` MTP. The old dense Qwen3.8-specific experimental environment is not
+applied to these MoE packs. See the [profile comparison](../guides/tiel-mtp-profile-2026-09-19.md)
+for measured gains. Cyber-Tiel retains `agentic`; managed read-task probes failed
+with both profiles, so its task reliability remains unresolved.
 The activation policy remains `required`; the engine must admit the actual drafter.
 To explicitly select a policy, set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
 

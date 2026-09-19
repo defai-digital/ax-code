@@ -925,23 +925,32 @@ describe("ax-engine server lifecycle", () => {
 })
 
 describe("ax-engine server launch args", () => {
-  test.each([AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`])(
-    "defers to the exact model's MTP gate for %s without weakening required policy",
-    (apiModelID) => {
-      const args = axEngineServerLaunchArgs({ apiModelID, binaryVersion: "7.4.0" })
-      expect(args[args.indexOf("--speculation-profile") + 1]).toBe("auto")
-      expect(args[args.indexOf("--mlx-mtp-policy") + 1]).toBe("required")
-      const explicit = axEngineServerLaunchArgs({ apiModelID, speculationProfile: "agentic" })
-      expect(explicit[explicit.indexOf("--speculation-profile") + 1]).toBe("agentic")
-    },
-  )
+  test.each([
+    AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+    `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
+    AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@5ab39b24bfd7f65203be9b7823b1840486f58b6d",
+  ])("defers to the exact model's MTP gate for %s without weakening required policy", (apiModelID) => {
+    const args = axEngineServerLaunchArgs({ apiModelID, binaryVersion: "7.4.0" })
+    expect(args[args.indexOf("--speculation-profile") + 1]).toBe("auto")
+    expect(args[args.indexOf("--mlx-mtp-policy") + 1]).toBe("required")
+    const explicit = axEngineServerLaunchArgs({ apiModelID, speculationProfile: "agentic" })
+    expect(explicit[explicit.indexOf("--speculation-profile") + 1]).toBe("agentic")
+  })
 
   test.each([
     AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
     AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@fe05e871ec69ad9ae8eac01fd285555514ac7daf",
     "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@main",
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"a".repeat(40)}`,
     `Other/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
+    "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@main",
+    "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@main",
+    `Other/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
+    `Other/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"a".repeat(40)}`,
+    `AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
   ])("preserves the historical profile outside the exact model boundary: %s", (apiModelID) => {
     const args = axEngineServerLaunchArgs({ apiModelID })
     expect(args[args.indexOf("--speculation-profile") + 1]).toBe("agentic")
@@ -1009,6 +1018,8 @@ describe("ax-engine server launch args", () => {
   test.each([
     "ornith-35b-axq-6bit",
     "qwen3-coder-next-axq-6bit",
+    AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
     "Other/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@" + "a".repeat(40),
   ])("does not apply Qwen prefix geometry to another artifact: %s", (apiModelID) => {
     const args = axEngineServerLaunchArgs({ apiModelID, contextTokens: 65_536, binaryVersion: "7.4.0" })
@@ -1209,6 +1220,10 @@ describe("axEngineQwen38ExactMtpEnv", () => {
   })
 
   test.each([
+    AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@5ab39b24bfd7f65203be9b7823b1840486f58b6d",
+    "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@fe05e871ec69ad9ae8eac01fd285555514ac7daf",
     "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@main",
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"a".repeat(40)}`,
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit@${"a".repeat(40)}`,

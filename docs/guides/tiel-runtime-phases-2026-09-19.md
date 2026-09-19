@@ -1,8 +1,14 @@
 # Tiel Coder native prefill and decode measurements
 
 Status: Measured local snapshot
+Last reviewed: 2026-09-19
+Owner: AX Code maintainers
 Date: 2026-09-19
 Scope: AX Code's two selected Tiel packs, AX Engine versus MTPLX
+
+These results retain the original `agentic` profile baseline. The subsequent
+[Tiel MTP profile comparison](tiel-mtp-profile-2026-09-19.md) measures the `auto`
+profile now selected by AX Code, including its workload-dependent tradeoffs.
 
 The new Tiel packs ran with active MTP on both tested runtimes. AX Engine's source build reached 47.36–58.53 decode tokens/s across the four cases; MTPLX reached 92.13–96.26. Prefill was approximately 1,190–1,446 tokens/s. These are native inference phase measurements on an Apple M3 Max with 128 GiB, not AX Code or OpenCode end-to-end coding throughput.
 

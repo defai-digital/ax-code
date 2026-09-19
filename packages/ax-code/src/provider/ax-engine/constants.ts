@@ -140,10 +140,21 @@ export function usesQwen38ExactMtpProfile(modelID: string): boolean {
 }
 
 export function axEngineSpeculationProfile(modelID: string): string {
-  // The exact Qwen contract supplies a zero draft gate. The generic agentic
-  // profile pins it to 0.80, preventing the async draft path enabled above.
-  // Auto defers to the loaded model contract; it does not change MTP policy.
-  return usesQwen38ExactMtpProfile(modelID) ? "auto" : AX_ENGINE_SPECULATION_PROFILE
+  // These model contracts supply their own draft gate. The generic agentic
+  // profile pins it to 0.80 and overrides that decision. Auto defers to the
+  // engine contract without changing required MTP or applying dense Qwen env
+  // overrides to Tiel. Cyber-Tiel keeps its existing profile until managed
+  // tool-use checks pass; native throughput alone does not qualify a change.
+  if (usesQwen38ExactMtpProfile(modelID)) return "auto"
+  if (isAxEngineModelID(modelID)) {
+    const repo = axEngineHubReference(modelID)?.repoID
+    if (
+      repo &&
+      repo === AX_ENGINE_MODEL_DEFINITIONS[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID].quantizations.mlx?.hfRepo
+    )
+      return "auto"
+  }
+  return AX_ENGINE_SPECULATION_PROFILE
 }
 
 export function axEngineQwen38ExactMtpEnv(

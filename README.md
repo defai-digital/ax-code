@@ -237,7 +237,7 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 | AX Trust                 | Managed gateway connections (base URL + client API key)                                                                                     | Models discovered from the connected gateway                      |
 
 MTPLX and oMLX presets are available in the source checkout, ahead of the v7.19.3 packaged binaries.
-The source checkout also selects Tiel Coder by default for AX Engine, with Cyber-Tiel as its only alternative. These packs require an AX Engine build containing the Tiel MTP loader fix; the tested Homebrew 7.4.0 predates it. See the [Tiel prefill/decode benchmark and build requirements](docs/guides/tiel-runtime-phases-2026-09-19.md).
+The source checkout also selects Tiel Coder by default for AX Engine, with Cyber-Tiel as its only alternative. These packs require an AX Engine build containing the Tiel MTP loader fix; the tested Homebrew 7.4.0 predates it. See the [Tiel prefill/decode benchmark and build requirements](docs/guides/tiel-runtime-phases-2026-09-19.md) and the subsequent [MTP profile comparison](docs/guides/tiel-mtp-profile-2026-09-19.md). Tiel uses model-selected `auto` tuning with MTP still required; Cyber-Tiel retains `agentic`; its managed read-task probes failed with both profiles.
 See [local runtime setup](docs/providers/local-mlx-runtimes.md) and the
 [2026-09-19 AX Code/OpenCode retest with MTP](docs/guides/local-client-matrix-2026-09-19.md).
 The report separates decode speed, first-token latency, cache reuse, and model-package differences.

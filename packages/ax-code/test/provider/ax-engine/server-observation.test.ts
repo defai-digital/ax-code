@@ -221,6 +221,38 @@ test("transient health failures do not restart an already running engine", async
   expect(await fs.readFile(AxEnginePaths.serverState, "utf8")).toBe(saved)
 })
 
+test("a healthy Tiel server with the old agentic profile is replaced", async () => {
+  await using tmp = await tmpdir()
+  const state = {
+    ...(await isolate(tmp.path)),
+    maxOutputTokens: 8_192,
+    speculationProfile: "agentic",
+    mtpMode: "pure",
+  }
+  await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(state))
+  vi.spyOn(Process, "text")
+    .mockResolvedValueOnce(processResult("ax-engine serve /models/old"))
+    .mockResolvedValue(processResult("unrelated-process"))
+  const restart = new Error("Replacement startup reached")
+  const spawn = vi.spyOn(Process, "spawn").mockImplementation(() => {
+    throw restart
+  })
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ data: [] })),
+  )
+
+  await expect(
+    ensureServer({
+      binaryPath: state.binaryPath,
+      modelID: state.modelID,
+      apiModelID: state.modelID,
+      modelPath: state.modelPath,
+    }),
+  ).rejects.toBe(restart)
+  expect(spawn).toHaveBeenCalledOnce()
+})
+
 test("persistent health failures exhaust a bounded retry before restarting", async () => {
   await using tmp = await tmpdir()
   const state = await isolate(tmp.path)

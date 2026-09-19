@@ -32482,6 +32482,8 @@
                       {
                         "type": "string",
                         "enum": [
+                          "tiel-coder-35b-axq-mxfp4",
+                          "cyber-tiel-coder-35b-axq-mxfp4",
                           "qwen3.8-27b-axq-6bit",
                           "ornith-35b-axq-6bit",
                           "qwen3-coder-next-axq-6bit"
@@ -32578,6 +32580,8 @@
                       {
                         "type": "string",
                         "enum": [
+                          "tiel-coder-35b-axq-mxfp4",
+                          "cyber-tiel-coder-35b-axq-mxfp4",
                           "qwen3.8-27b-axq-6bit",
                           "ornith-35b-axq-6bit",
                           "qwen3-coder-next-axq-6bit"

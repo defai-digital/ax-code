@@ -6135,7 +6135,13 @@ export class AxEngine extends HeyApiClient {
       modelPath?: string
       binaryPath?: string
       mtpPolicy?: "disabled" | "auto" | "required"
-      modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit" | string
+      modelID?:
+        | "tiel-coder-35b-axq-mxfp4"
+        | "cyber-tiel-coder-35b-axq-mxfp4"
+        | "qwen3.8-27b-axq-6bit"
+        | "ornith-35b-axq-6bit"
+        | "qwen3-coder-next-axq-6bit"
+        | string
       quantization?: "mlx6bit" | "mlx"
       download?: boolean
       start?: boolean
@@ -6186,7 +6192,13 @@ export class AxEngine extends HeyApiClient {
       modelPath?: string
       binaryPath?: string
       mtpPolicy?: "disabled" | "auto" | "required"
-      modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit" | string
+      modelID?:
+        | "tiel-coder-35b-axq-mxfp4"
+        | "cyber-tiel-coder-35b-axq-mxfp4"
+        | "qwen3.8-27b-axq-6bit"
+        | "ornith-35b-axq-6bit"
+        | "qwen3-coder-next-axq-6bit"
+        | string
       quantization?: "mlx6bit" | "mlx"
       download?: boolean
     },
