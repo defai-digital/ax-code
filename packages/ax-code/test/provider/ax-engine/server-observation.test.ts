@@ -300,16 +300,20 @@ test.each(["revision", "api model"])("reloads a changed %s even when the catalog
       return Response.json({ data: [] })
     }),
   )
+  const nextApiModelID =
+    change === "api model"
+      ? (`AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"b".repeat(40)}` as const)
+      : state.modelID
   const next = await ensureServer({
     binaryPath: state.binaryPath,
     modelID: state.modelID,
-    apiModelID: change === "api model" ? "new-api-model" : state.modelID,
+    apiModelID: nextApiModelID,
     modelPath: state.modelPath,
     modelRevision: change === "revision" ? "new-revision" : state.modelRevision,
   })
   expect(loads).toHaveLength(1)
   expect(loads[0].redirect).toBe("error")
   expect(cancel).toHaveBeenCalledOnce()
-  expect(next.apiModelID).toBe(change === "api model" ? "new-api-model" : state.modelID)
+  expect(next.apiModelID).toBe(nextApiModelID)
   expect(next.modelRevision).toBe(change === "revision" ? "new-revision" : state.modelRevision)
 })
