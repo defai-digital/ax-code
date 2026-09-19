@@ -11,6 +11,11 @@ changes belong to AX Coder.
 - Darwin-arm64 releases include a self-contained AX Engine sidecar. Homebrew is no longer required for local inference
   on a clean Mac; `ax-code providers ax-engine install` is the overlay/updater.
 
+### Fixed
+
+- Verify Developer ID signatures when staging the bundled AX Engine runtime, and strip Gatekeeper quarantine from the
+  sidecar so the first local serve is not killed.
+
 ## [7.19.3] - 2026-09-19
 
 ### Changed

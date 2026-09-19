@@ -162,10 +162,9 @@ export async function getManagedBinary(): Promise<{ path: string; version: strin
 
 async function verifyCodesign(binaryPath: string, expectedTeamId?: string): Promise<void> {
   // codesign is always present on macOS. `--verify` validates the binary's
-  // embedded code hashes, catching post-extraction tampering; AX Engine ships
-  // ad-hoc-signed binaries, which pass this. Team-identifier enforcement is
-  // opt-in (expectedTeamId): ad-hoc binaries have no team, so it is skipped
-  // unless a Developer-ID team is explicitly required.
+  // embedded code hashes, catching post-extraction tampering. AX Engine 7.4.0+
+  // ships Developer ID signed (team N5ZUZDUJS6) with hardened runtime; the pin
+  // passes expectedTeamId so a swapped ad-hoc binary cannot be recorded.
   const verify = await Process.run(["codesign", "--verify", "--strict", binaryPath], {
     timeout: 15_000,
     nothrow: true,
@@ -194,11 +193,9 @@ async function verifyCodesign(binaryPath: string, expectedTeamId?: string): Prom
 }
 
 async function clearQuarantine(binaryPath: string): Promise<void> {
-  // A programmatically-downloaded file usually has no com.apple.quarantine
-  // xattr, but strip it if present so Gatekeeper never blocks the first launch.
-  await Process.run(["xattr", "-d", "com.apple.quarantine", binaryPath], { timeout: 5_000, nothrow: true }).catch(
-    () => undefined,
-  )
+  // Strip quarantine from a file or the whole extracted runtime tree so
+  // Gatekeeper never blocks the first `ax-engine serve`.
+  await Process.run(["xattr", "-cr", binaryPath], { timeout: 5_000, nothrow: true }).catch(() => undefined)
 }
 
 // Best-effort GC of older managed versions once a new one is installed.

@@ -793,6 +793,11 @@ install_node_bundle_tree() (
     if [ -d "$bundle_root/engine" ]; then
       cp -R "$bundle_root/engine" "$staging_root/runtime/engine" || exit 1
       find "$staging_root/runtime/engine" -type f \( -name ax-engine -o -name ax-engine-server -o -name ax-engine-bench \) -exec chmod 755 {} \;
+      # Browser or AirDrop copies can quarantine nested Mach-Os; strip so the
+      # bundled sidecar is not killed on first serve. Harmless when absent.
+      if command -v xattr >/dev/null 2>&1; then
+        xattr -cr "$staging_root/runtime/engine" >/dev/null 2>&1 || true
+      fi
     fi
     assert_node_bundle_runtime "$staging_root/runtime" || exit 1
 

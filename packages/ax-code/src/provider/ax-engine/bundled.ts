@@ -1,6 +1,7 @@
 import fs from "fs/promises"
 import { accessSync, constants as fsConstants } from "fs"
 import path from "path"
+import { Process } from "@/util/process"
 import { AX_ENGINE_BINARY_RELEASE, AX_ENGINE_MANAGED_BINARY_NAME } from "./constants"
 import { AX_ENGINE_BUNDLED_DIR_NAME, missingAxEngineRuntimeFiles } from "./payload"
 
@@ -47,5 +48,11 @@ export async function getBundledBinary(
   if (!(await isExecutable(binary))) return undefined
   const missing = missingAxEngineRuntimeFiles(dir, existsSyncPath)
   if (missing.length) return undefined
+  // Browser-unzipped or AirDropped runtimes can carry com.apple.quarantine.
+  // Overlay installs already strip it; the bundled floor must too or the first
+  // `ax-engine serve` is killed by Gatekeeper before the sidecar starts.
+  if (process.platform === "darwin") {
+    await Process.run(["xattr", "-cr", dir], { timeout: 5_000, nothrow: true }).catch(() => undefined)
+  }
   return { path: binary, version: release.version }
 }

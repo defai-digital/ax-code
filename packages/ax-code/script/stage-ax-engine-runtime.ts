@@ -4,7 +4,12 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { spawnSync } from "node:child_process"
 import { AX_ENGINE_BINARY_RELEASE, type AxEngineBinaryRelease } from "../src/provider/ax-engine/constants"
-import { AX_ENGINE_BUNDLED_DIR_NAME, missingAxEngineRuntimeFiles } from "../src/provider/ax-engine/payload"
+import {
+  AX_ENGINE_BUNDLED_DIR_NAME,
+  AX_ENGINE_RUNTIME_SIGNED_FILES,
+  isMachOFile,
+  missingAxEngineRuntimeFiles,
+} from "../src/provider/ax-engine/payload"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -25,7 +30,7 @@ export function defaultLocalEngineArchive(
   if (fromEnv) return fromEnv
   const sibling = path.resolve(
     scriptDir,
-    "../../../ax-engine/target/release-artifacts",
+    "../../../../ax-engine/target/release-artifacts",
     `v${release.version}`,
     release.assetName,
   )
@@ -72,7 +77,31 @@ export function stageAxEngineRuntime(input: {
     throw new Error(`AX Engine archive is missing ${missing.join(", ")}`)
   }
 
+  try {
+    verifyStagedEngineSignatures(dest, release.teamId)
+  } catch (error) {
+    fs.rmSync(dest, { recursive: true, force: true })
+    throw error
+  }
+
   return { version: release.version, dir: dest }
+}
+
+function verifyStagedEngineSignatures(dir: string, teamId?: string) {
+  for (const name of AX_ENGINE_RUNTIME_SIGNED_FILES) {
+    const file = path.join(dir, name)
+    if (!isMachOFile(file)) continue
+    const verify = spawnSync("codesign", ["--verify", "--strict", file], { encoding: "utf8" })
+    if (verify.status !== 0) {
+      throw new Error(`AX Engine ${name} failed codesign verification (${verify.stderr.trim() || verify.status})`)
+    }
+    if (!teamId) continue
+    const info = spawnSync("codesign", ["-dv", "--verbose=4", file], { encoding: "utf8" })
+    const team = `${info.stdout}\n${info.stderr}`.match(/TeamIdentifier=([A-Z0-9]+)/)?.[1]
+    if (team !== teamId) {
+      throw new Error(`AX Engine ${name} is signed by ${team ?? "unknown"}, expected ${teamId}`)
+    }
+  }
 }
 
 export function resolveEngineArchiveForRelease(

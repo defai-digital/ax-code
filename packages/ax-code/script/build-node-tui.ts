@@ -603,6 +603,8 @@ if (process.platform === "darwin") {
       else if (entry.name.endsWith(".node") || entry.name.endsWith(".dylib")) nativeLibs.push(full)
     }
   }
+  // Only sign AX Code native addons. engine/ already carries AX Engine's
+  // Developer ID + notarization; --force here would replace that ticket.
   walk(path.join(outRoot, "node_modules"))
   for (const lib of nativeLibs) {
     const signArgs = appleCodesignIdentity
