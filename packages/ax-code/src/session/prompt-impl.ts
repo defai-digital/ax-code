@@ -1331,36 +1331,47 @@ export namespace SessionPrompt {
       if (needsTools) structuredOutput.attachTool(tools)
 
       const maxOutputTokensForRequest = pendingMaxOutputTokens
-      const result = await processor.process(
-        {
-          user: lastUser,
-          agent,
-          permission: session.permission,
-          abort,
-          sessionID,
-          system: request.system,
-          systemProfile,
-          messages: request.requestMessages,
-          toolFailureCount: request.toolFailureCount,
-          tools,
-          model,
-          toolChoice,
-          small: promptPolicy.fastReasoning,
-          config: cfg,
-          maxOutputTokens: maxOutputTokensForRequest,
-        },
-        {
-          mediaRecovery: {
-            projection: mediaProjection,
-            mediaCount: request.mediaCount,
-            protectedMediaCount: request.protectedMediaCount,
-            project: request.projectMessages,
-            onProjection: (projection) => {
-              mediaProjection = projection
+      let result: Awaited<ReturnType<typeof processor.process>>
+      try {
+        result = await processor.process(
+          {
+            user: lastUser,
+            agent,
+            permission: session.permission,
+            abort,
+            sessionID,
+            system: request.system,
+            systemProfile,
+            messages: request.requestMessages,
+            toolFailureCount: request.toolFailureCount,
+            tools,
+            model,
+            toolChoice,
+            small: promptPolicy.fastReasoning,
+            config: cfg,
+            maxOutputTokens: maxOutputTokensForRequest,
+          },
+          {
+            mediaRecovery: {
+              projection: mediaProjection,
+              mediaCount: request.mediaCount,
+              protectedMediaCount: request.protectedMediaCount,
+              project: request.projectMessages,
+              onProjection: (projection) => {
+                mediaProjection = projection
+              },
             },
           },
-        },
-      )
+        )
+      } catch (error) {
+        await publishPromptFailure({
+          sessionID,
+          assistant: processor.message,
+          message: `Session setup failed before the model ran: ${toErrorMessage(error)}`,
+        })
+        reason = "error"
+        break
+      }
 
       if (
         shouldRestoreForcedTextOnlyTurn({

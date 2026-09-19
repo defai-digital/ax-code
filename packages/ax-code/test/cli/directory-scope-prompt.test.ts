@@ -59,6 +59,17 @@ describe("confirmDirectoryScope", () => {
       expect(confirmSpy).not.toHaveBeenCalled()
     }))
 
+  test("proceeds without prompting for a multi-repo parent directory", () =>
+    withCleanTrustState(async () => {
+      await using tmp = await tmpdir()
+      await fs.mkdir(path.join(tmp.path, "one", ".git"), { recursive: true })
+      await fs.mkdir(path.join(tmp.path, "two", ".git"), { recursive: true })
+      const confirmSpy = vi.spyOn(prompts, "confirm")
+      const result = await confirmDirectoryScope(tmp.path)
+      expect(result.proceed).toBe(true)
+      expect(confirmSpy).not.toHaveBeenCalled()
+    }))
+
   test("non-interactive: refuses a broad directory by default", () =>
     withCleanTrustState(async () => {
       stdin.isTTY = false

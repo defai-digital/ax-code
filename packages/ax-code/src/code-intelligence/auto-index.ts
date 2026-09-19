@@ -260,14 +260,15 @@ export namespace AutoIndex {
       })
     }
 
-    // Home, Desktop, Downloads, Documents, and filesystem roots are not real
-    // workspaces: the desktop web UI launches its managed `ax-code serve`
-    // with cwd = home, and a bulk index there (or a user launching from
-    // Desktop/Downloads by mistake) walks the user's entire disk. Skip it
-    // entirely, like the matching guards in File.scan (src/file/index.ts)
-    // and LSP prewarmWorkspace (src/lsp/index-impl.ts). Instance.directory
-    // is realpath'd at context creation, so DirectoryScope resolves each
-    // candidate too — a symlinked home would otherwise dodge the comparison.
+    // Home, Desktop, Downloads, Documents, filesystem roots, and multi-repo
+    // parents are not real workspaces: the desktop web UI launches its managed
+    // `ax-code serve` with cwd = home, and a bulk index there (or a user
+    // launching from Desktop/Downloads/`~/code` by mistake) walks the user's
+    // entire disk. Skip it entirely, like the matching guards in File.scan
+    // (src/file/index.ts) and LSP prewarmWorkspace (src/lsp/index-impl.ts).
+    // Instance.directory is realpath'd at context creation, so DirectoryScope
+    // resolves each candidate too — a symlinked home would otherwise dodge
+    // the comparison.
     if (DirectoryScope.isKnownBroadDirectory(Instance.directory)) {
       log.info("skipping: broad directory is not an indexable workspace", { projectID })
       setState(projectID, {
@@ -363,6 +364,18 @@ export namespace AutoIndex {
     // Any error inside the Promise is caught and logged — auto-index
     // is best-effort, it never propagates failures to the caller.
     ;(async () => {
+      if (await DirectoryScope.isMultiRepoParent(directory)) {
+        log.info("skipping: broad directory is not an indexable workspace", { projectID })
+        setState(projectID, {
+          state: "idle",
+          completed: 0,
+          total: 0,
+          startedAt: null,
+          finishedAt: Date.now(),
+          error: null,
+        })
+        return
+      }
       const start = Date.now()
       let candidateFileCount = 0
       setState(projectID, {

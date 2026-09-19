@@ -1,9 +1,15 @@
 import { afterEach, describe, test, expect } from "vitest"
+import { execFileSync } from "node:child_process"
 import fs from "fs/promises"
 import path from "path"
 import { DirectoryScope } from "../../src/file/directory-scope"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
+
+async function initUnbornGit(dir: string) {
+  await fs.mkdir(dir, { recursive: true })
+  execFileSync("git", ["init"], { cwd: dir, stdio: "ignore" })
+}
 
 function withTestHome(home: string, fn: () => Promise<void>) {
   const previous = process.env.AX_CODE_TEST_HOME
@@ -118,6 +124,71 @@ describe("DirectoryScope.assess", () => {
       const result = await DirectoryScope.assess(tmp.path)
       expect(result.broad).toBe(false)
       expect(result.reason).toBeUndefined()
+    })
+  })
+
+  test("does not flag a multi-repo parent as broad", async () => {
+    await using tmp = await tmpdir()
+    await using home = await tmpdir()
+    await withTestHome(home.path, async () => {
+      await initUnbornGit(path.join(tmp.path, "one"))
+      await initUnbornGit(path.join(tmp.path, "two"))
+      const result = await DirectoryScope.assess(tmp.path)
+      expect(result.broad).toBe(false)
+    })
+  })
+})
+
+describe("DirectoryScope.isMultiRepoParent", () => {
+  test("true when two nested git children exist and the directory is not a repo", async () => {
+    await using tmp = await tmpdir()
+    await using home = await tmpdir()
+    await withTestHome(home.path, async () => {
+      await initUnbornGit(path.join(tmp.path, "one"))
+      await initUnbornGit(path.join(tmp.path, "two"))
+      expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(true)
+      expect(await DirectoryScope.nestedGitChildren(tmp.path)).toEqual(["one", "two"])
+    })
+  })
+
+  test("counts second-level checkouts such as grouped worktrees", async () => {
+    await using tmp = await tmpdir()
+    await using home = await tmpdir()
+    await withTestHome(home.path, async () => {
+      await initUnbornGit(path.join(tmp.path, "_worktrees", "alpha"))
+      await initUnbornGit(path.join(tmp.path, "_worktrees", "beta"))
+      expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(true)
+      expect(await DirectoryScope.nestedGitChildren(tmp.path)).toEqual(["_worktrees/alpha", "_worktrees/beta"])
+    })
+  })
+
+  test("false for a single nested git child", async () => {
+    await using tmp = await tmpdir()
+    await using home = await tmpdir()
+    await withTestHome(home.path, async () => {
+      await initUnbornGit(path.join(tmp.path, "only"))
+      expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(false)
+    })
+  })
+
+  test("false when the directory itself is a git checkout", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using home = await tmpdir()
+    await withTestHome(home.path, async () => {
+      await initUnbornGit(path.join(tmp.path, "one"))
+      await initUnbornGit(path.join(tmp.path, "two"))
+      expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(false)
+    })
+  })
+
+  test("ignores nested git under node_modules", async () => {
+    await using tmp = await tmpdir()
+    await using home = await tmpdir()
+    await withTestHome(home.path, async () => {
+      await initUnbornGit(path.join(tmp.path, "node_modules", "pkg-a"))
+      await initUnbornGit(path.join(tmp.path, "node_modules", "pkg-b"))
+      expect(await DirectoryScope.isMultiRepoParent(tmp.path)).toBe(false)
+      expect(await DirectoryScope.nestedGitChildren(tmp.path)).toEqual([])
     })
   })
 })

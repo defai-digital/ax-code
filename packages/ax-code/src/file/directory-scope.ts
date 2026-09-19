@@ -16,6 +16,11 @@ const log = Log.create({ service: "file.directory-scope" })
  */
 export namespace DirectoryScope {
   const DEFAULT_MAX_TOP_LEVEL_ENTRIES = 300
+  const MULTI_REPO_PARENT_MIN_NESTED = 2
+  // Bounded two-level nested-git scan skips these names. They routinely
+  // contain vendored checkouts and must not classify a real project as a
+  // multi-repo parent or explode staging excludes.
+  const NESTED_GIT_SKIP_NAMES = new Set(["node_modules", "dist", "build", "target", "vendor"])
 
   function knownBroadDirs(): { path: string; reason: string }[] {
     const home = Global.Path.home
@@ -56,6 +61,78 @@ export namespace DirectoryScope {
    */
   export function isKnownBroadDirectory(resolvedDir: string): boolean {
     return isFilesystemRoot(resolvedDir) || isHomeLikePath(resolvedDir)
+  }
+
+  async function hasDotGit(dir: string): Promise<boolean> {
+    try {
+      await fs.lstat(path.join(dir, ".git"))
+      return true
+    } catch (error) {
+      if (!Filesystem.isEnoent(error)) {
+        log.warn("failed to inspect .git for directory-scope classification", { dir, error })
+      }
+      return false
+    }
+  }
+
+  function asGitPathspec(relative: string): string {
+    return relative.split(path.sep).join("/")
+  }
+
+  /**
+   * Bounded two-level listing of child paths that look like git checkouts
+   * (have a `.git` file or directory). Does not recurse into junk or
+   * dot-directories. Paths are relative to `dir` with `/` separators so they
+   * can be used as git pathspecs.
+   */
+  export async function nestedGitChildren(dir: string): Promise<string[]> {
+    const resolved = Filesystem.resolve(dir)
+    const found: string[] = []
+    const top = await fs.readdir(resolved, { withFileTypes: true }).catch((error) => {
+      if (!Filesystem.isEnoent(error)) {
+        log.warn("failed to list directory for nested-git classification", { dir: resolved, error })
+      }
+      return []
+    })
+    for (const entry of top) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+      if (entry.name === "." || entry.name === ".." || entry.name === ".git") continue
+      if (NESTED_GIT_SKIP_NAMES.has(entry.name)) continue
+      const abs = path.join(resolved, entry.name)
+      if (await hasDotGit(abs)) {
+        found.push(asGitPathspec(entry.name))
+        continue
+      }
+      if (entry.name.startsWith(".")) continue
+      const inner = await fs.readdir(abs, { withFileTypes: true }).catch((error) => {
+        if (!Filesystem.isEnoent(error)) {
+          log.warn("failed to list nested directory for nested-git classification", { dir: abs, error })
+        }
+        return []
+      })
+      for (const child of inner) {
+        if (!child.isDirectory() && !child.isSymbolicLink()) continue
+        if (child.name === ".git" || NESTED_GIT_SKIP_NAMES.has(child.name)) continue
+        if (await hasDotGit(path.join(abs, child.name))) {
+          found.push(asGitPathspec(path.join(entry.name, child.name)))
+        }
+      }
+    }
+    return found
+  }
+
+  /**
+   * A directory that is not itself a git checkout but contains multiple
+   * nested git children (e.g. `~/code`). Coverage and indexing degrade;
+   * startup does not refuse. Home-like and filesystem-root paths keep their
+   * own guards and are not classified here.
+   */
+  export async function isMultiRepoParent(dir: string): Promise<boolean> {
+    const resolved = Filesystem.resolve(dir)
+    if (isFilesystemRoot(resolved) || isHomeLikePath(resolved)) return false
+    if (await hasDotGit(resolved)) return false
+    const nested = await nestedGitChildren(resolved)
+    return nested.length >= MULTI_REPO_PARENT_MIN_NESTED
   }
 
   export interface Assessment {

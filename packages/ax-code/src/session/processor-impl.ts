@@ -87,7 +87,8 @@ export namespace SessionProcessor {
    */
   export function redactPersistedBashInput(tool: string, input: Record<string, unknown>): Record<string, unknown> {
     if (tool === "bash") {
-      const command = typeof input["command"] === "string" && input["command"].trim() !== "" ? input["command"] : undefined
+      const command =
+        typeof input["command"] === "string" && input["command"].trim() !== "" ? input["command"] : undefined
       const cmd = typeof input["cmd"] === "string" && input["cmd"].trim() !== "" ? input["cmd"] : undefined
       const raw = command ?? cmd
       if (raw === undefined) return input
@@ -451,7 +452,12 @@ export namespace SessionProcessor {
         // this, computeDiff never finds a `from` snapshot and always
         // returns [], causing /diff to show "No file changes" even when
         // files were modified.  See GitHub issue #301.
-        snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
+        try {
+          snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
+        } catch (error) {
+          log.warn("snapshot track failed; continuing without undo coverage", { error })
+          snapshot = undefined
+        }
         while (true) {
           blocked = false
           let currentText: MessageV2.TextPart | undefined
@@ -1228,8 +1234,13 @@ export namespace SessionProcessor {
                   // successful tool turn look unchanged, so revert has no
                   // file ledger to restore.
                   const stepBaseline = snapshot
-                  if (usedTools)
-                    snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
+                  if (usedTools) {
+                    try {
+                      snapshot = await NativePerf.runAsync("session.snapshot.track", undefined, () => Snapshot.track())
+                    } catch (error) {
+                      log.warn("snapshot track failed after tools; continuing without undo coverage", { error })
+                    }
+                  }
                   // Save the post-tool snapshot for step-finish and carry it
                   // forward as the next step-start baseline. This preserves
                   // computeDiff's from/to pair while patchData retains the

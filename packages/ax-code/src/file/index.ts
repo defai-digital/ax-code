@@ -408,25 +408,27 @@ export namespace File {
   async function scan() {
     if (DirectoryScope.isFilesystemRoot(Instance.directory)) return
     // The home directory (and well-known home subfolders like Desktop,
-    // Downloads, Documents) are never a sensible target for a full recursive
-    // file index: they span countless unrelated files, caches, and nested
-    // node_modules. The full-scan branch below walks the whole tree
-    // synchronously via the native Ripgrep walker, which can block the event
-    // loop for tens of seconds (e.g. when the desktop web UI launches a
-    // managed `ax-code serve` with cwd set to the user's home, or a user
-    // launches from Desktop/Downloads by mistake). Trigger the shallow
-    // two-level listing whenever the instance directory IS one of those
-    // well-known broad directories, regardless of how the project id
-    // resolved — a plain broad directory without a `.git` gets a
-    // directory-hash id rather than the "global" id, so gating on the id let
-    // the expensive path through and stalled startup.
+    // Downloads, Documents) and multi-repo parents (a folder of sibling git
+    // checkouts) are never a sensible target for a full recursive file index:
+    // they span countless unrelated files, caches, and nested node_modules.
+    // The full-scan branch below walks the whole tree synchronously via the
+    // native Ripgrep walker, which can block the event loop for tens of
+    // seconds (e.g. when the desktop web UI launches a managed `ax-code serve`
+    // with cwd set to the user's home, or a user launches from Desktop/
+    // Downloads by mistake). Trigger the shallow two-level listing whenever
+    // the instance directory IS one of those well-known broad directories or
+    // a multi-repo parent, regardless of how the project id resolved — a
+    // plain broad directory without a `.git` gets a directory-hash id rather
+    // than the "global" id, so gating on the id let the expensive path
+    // through and stalled startup.
     // Instance.directory is realpath'd at context creation; isHomeLikePath
     // compares resolved-to-resolved so a symlinked home directory doesn't
     // dodge the guard.
     const isHomeLikeDirectory = DirectoryScope.isHomeLikePath(Instance.directory)
+    const isMultiRepoParent = await DirectoryScope.isMultiRepoParent(Instance.directory)
     const next: Entry = { files: [], dirs: [] }
 
-    if (isHomeLikeDirectory) {
+    if (isHomeLikeDirectory || isMultiRepoParent) {
       const dirs = new Set<string>()
       const protectedNames = Protected.names()
       const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])

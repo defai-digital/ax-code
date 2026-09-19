@@ -2,6 +2,7 @@ import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import { Config } from "../config/config"
+import { DirectoryScope } from "../file/directory-scope"
 import { Global } from "../global"
 import type { Shape } from "../project/instance"
 import { Instance } from "../project/instance"
@@ -66,6 +67,20 @@ export namespace Snapshot {
   // Directory instances in one project share a Git index. Serialize the entire
   // transaction by repository, not just individual Git commands or instances.
   const operations = new KeyedSerialQueue()
+  const coverageNotice = new Set<string>()
+
+  function warnCoverageOff(directory: string, kind: string, message: string) {
+    const key = `${directory}\0${kind}`
+    if (coverageNotice.has(key)) return
+    coverageNotice.add(key)
+    log.warn("snapshot coverage off", { directory, kind })
+    Bus.publishDetached(NotificationEvent.ToastShow, {
+      title: "Undo coverage off",
+      message,
+      variant: "warning",
+      duration: 12_000,
+    })
+  }
 
   interface State {
     directory: string
@@ -270,6 +285,17 @@ export namespace Snapshot {
     // entirely, like the matching guards in auto-index
     // (src/code-intelligence/auto-index.ts) and File.scan (src/file/index.ts).
     if (Instance.directory === Filesystem.resolve(Global.Path.home)) return false
+    // A parent of many sibling git repos (e.g. ~/code) is not a workspace:
+    // `git add .` walks nested checkouts, including unborn HEADs, and aborts
+    // the prompt. Skip it like $HOME. Ordinary non-git folders still snapshot.
+    if (await DirectoryScope.isMultiRepoParent(Instance.directory)) {
+      warnCoverageOff(
+        Instance.directory,
+        "multi-repo-parent",
+        "Undo coverage is off: this directory is a parent of multiple git repositories, not a repository itself. Open a specific repository for full undo coverage.",
+      )
+      return false
+    }
     // Snapshots use their own Git store outside the worktree, so an ordinary
     // project directory does not need a .git directory to support undo/redo.
     return (await Config.get()).snapshot !== false
@@ -356,7 +382,10 @@ export namespace Snapshot {
 
   async function add(current: State, options?: { excludesSynced: boolean }) {
     if (!options?.excludesSynced) await syncExclude(current)
-    const excluded = await windowsExclusions(current)
+    const excluded = [
+      ...(await windowsExclusions(current)),
+      ...(await DirectoryScope.nestedGitChildren(current.worktree)),
+    ]
     // Stage the whole worktree, not just `current.directory` — a session's
     // working directory can be a subdirectory of the git worktree (e.g. a
     // monorepo package), and edits outside it are explicitly permitted (see
@@ -575,7 +604,22 @@ export namespace Snapshot {
         }
       }
 
-      await add(current, { excludesSynced: Boolean(current.prevHash) })
+      try {
+        await add(current, { excludesSynced: Boolean(current.prevHash) })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (!message.startsWith("Snapshot staging failed")) throw error
+        warnCoverageOff(
+          current.worktree,
+          "staging-failed",
+          "Undo coverage is off this turn: snapshot staging failed. The session continues without a new rollback baseline.",
+        )
+        log.warn("snapshot staging failed; continuing without a new baseline", {
+          cwd: current.worktree,
+          error,
+        })
+        return current.prevHash
+      }
       const result = await runGit(args(current, ["write-tree"]), { cwd: current.directory })
       if (result.code !== 0) {
         log.error("failed to write snapshot tree", {
