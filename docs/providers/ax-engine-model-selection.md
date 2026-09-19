@@ -42,7 +42,7 @@ Excluded models fail new prepare, download, and managed activation requests befo
 
 ## Memory and runtime verification
 
-Both selected aliases use a conservative 32,768-token context, 8,192-token output limit, estimated 64 GiB memory requirement and 32 GiB download disk budget. These are AX Code serving limits, not the upstream maximum context.
+Both selected aliases use a 65,536-token context, 8,192-token output limit, estimated 64 GiB memory requirement and 32 GiB download disk budget. These are AX Code serving limits, not the upstream maximum context. (Raised from an initial 32,768-token context: that left only 24,576 usable input tokens after the output reserve, less than the fixed AX Code agent system prompt and tool schemas require, so a brand-new session could never send a first turn.)
 
 Each memory estimate includes weights, sidecars, KV cache, buffers, and host reserve. Use the live catalog's fit result for the current machine. These estimates are not hardware or model-quality certification.
 

@@ -169,10 +169,15 @@ export function hubArtifactMetadata(model: HubModel, decision: HubModelDecision)
   const totalBytes = model.siblings.reduce((sum, file) => sum + (file.size ?? 0), 0)
   const weights = model.siblings.filter((file) => file.rfilename.endsWith(".safetensors"))
   if (!weights.length || weights.some((file) => !file.size) || !Number.isSafeInteger(totalBytes)) return undefined
-  // Reserve enough input for the build-agent prompt and tool schemas (~10K).
-  // Cap at 32K independently of cloud endpoint limits. The
-  // engine's live card supplies actual capabilities after preparation/loading.
-  const contextTokens = Math.min(32_768, model.textConfig?.max_position_embeddings ?? 32_768)
+  // Reserve enough input for the fixed AX Code agent system prompt and tool
+  // schemas. That fixed cost runs ~28K-40K tokens depending on tool profile
+  // (see DEFAULT_FULL_AGENT_FIXED_TOKENS_ESTIMATE in session/model-agent-fit.ts)
+  // — a stale ~10K assumption here once capped newly-discovered packs at 32K,
+  // leaving as little as 24K usable input and making every new session on
+  // that model fail before any turn could be sent. Cap at 64K independently
+  // of cloud endpoint limits. The engine's live card supplies actual
+  // capabilities after preparation/loading.
+  const contextTokens = Math.min(65_536, model.textConfig?.max_position_embeddings ?? 65_536)
   const outputTokens = Math.min(8_192, Math.floor(contextTokens / 4))
   if (outputTokens < 1) return undefined
   const cfg = model.textConfig

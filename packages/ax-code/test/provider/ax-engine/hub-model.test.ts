@@ -33,7 +33,7 @@ describe("AutomatosX product admission", () => {
     expect(hubModelDefinition(model, decision)).toMatchObject({
       id: hubModelID(model),
       revision: model.sha,
-      contextTokens: 32768,
+      contextTokens: 65536,
       outputTokens: 8192,
       toolcall: false,
       reasoning: false,

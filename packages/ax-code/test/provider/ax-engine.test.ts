@@ -1029,8 +1029,12 @@ describe("ax-engine server launch args", () => {
 
   test("preserves the managed 64K/256K/32K context policy through server allocation", () => {
     expect(AX_ENGINE_MODEL_CONTEXT_TOKENS).toEqual({
-      [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 32_768,
-      [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 32_768,
+      // Raised from 32K: that left only 24,576 usable input tokens after the
+      // 8,192-token output reserve, below the fixed AX Code agent system
+      // prompt + tool schema budget, so a brand-new session on the default
+      // local model failed before any turn could be sent (#379 follow-up).
+      [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
+      [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
       [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
       [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
       [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,
@@ -1538,11 +1542,11 @@ describe("ax-engine provider integration", () => {
       AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
       AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
     ])
-    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([32_768, 32_768])
+    expect(Object.values(provider.models).map((model) => model.limit.context)).toEqual([65_536, 65_536])
     expect(provider.models[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]).toMatchObject({
       name: "Tiel Coder 35B A3B AXQ MXFP4 MTP (Local MLX)",
       tool_call: false,
-      limit: { context: 32_768, input: 24_576, output: 8_192 },
+      limit: { context: 65_536, input: 57_344, output: 8_192 },
       options: {
         modelID: AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
         quantization: "mlx",

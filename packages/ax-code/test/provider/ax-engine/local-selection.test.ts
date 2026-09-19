@@ -47,7 +47,7 @@ test("the managed model catalog offers only Tiel Coder and Cyber-Tiel Coder MXFP
     id: selectedID,
     quantization: "mlx",
     recommended: false,
-    contextTokens: 32_768,
+    contextTokens: 65_536,
     outputTokens: 8_192,
     verification: "unverified",
   })

@@ -262,12 +262,19 @@ export const AxEngineModelIDSchema = z.union([
 // Managed serving policy, intentionally model-specific rather than normalized
 // to a cloud-provider context tier. These values drive both the provider's
 // advertised limit and the AX Engine KV-cache block capacity:
+// - Tiel Coder / Cyber-Tiel Coder: 64K daily-driver window (raised from the
+//   initial 32K pack default, which left only 24 576 usable input tokens
+//   after the 8 192-token output reserve — below the ~27.8k-40k the fixed
+//   AX Code agent system prompt + tool schemas need, so every new session on
+//   the default local model failed before any turn could be sent; see #379
+//   follow-up. Same tier as Qwen3.8-27B, unaffected by minMemoryBytes since
+//   Ornith already reuses the same memory floor at 4x this window.)
 // - Qwen3.8-27B: 64K daily-driver window
 // - Ornith-1.0-35B: full 256K long-context window
 // - Qwen3-Coder-Next: 32K memory-safe coding window
 export const AX_ENGINE_MODEL_CONTEXT_TOKENS = {
-  [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 32_768,
-  [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 32_768,
+  [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
+  [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 65_536,
   [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
   [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
   [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,

@@ -209,8 +209,8 @@ For Qoder, install the local `qodercli` binary, run `qodercli login`, then `ax-c
 
 | Provider id | Model id                         | Selection                              | Context | Output |
 | ----------- | -------------------------------- | -------------------------------------- | ------: | -----: |
-| `ax-engine` | `tiel-coder-35b-axq-mxfp4`       | Tiel Coder 35B A3B MXFP4 MTP (default) |  32,768 |  8,192 |
-| `ax-engine` | `cyber-tiel-coder-35b-axq-mxfp4` | Cyber-Tiel Coder 35B A3B MXFP4 MTP     |  32,768 |  8,192 |
+| `ax-engine` | `tiel-coder-35b-axq-mxfp4`       | Tiel Coder 35B A3B MXFP4 MTP (default) |  65,536 |  8,192 |
+| `ax-engine` | `cyber-tiel-coder-35b-axq-mxfp4` | Cyber-Tiel Coder 35B A3B MXFP4 MTP     |  65,536 |  8,192 |
 
 Qwen3.8 27B, Ornith, Qwen3-Coder-Next and all other repositories are excluded from managed selection. Historical records remain readable for status and cleanup.
 

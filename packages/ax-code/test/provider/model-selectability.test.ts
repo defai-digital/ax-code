@@ -1,11 +1,17 @@
 import { describe, expect, test } from "vitest"
 import {
   isNonChatModelID,
+  modelContextFitBlockReason,
   modelSelectableForProvider,
   providerModelSelectable,
   sameSkuOnConnectedProvider,
 } from "@/provider/model-selectability"
-import { AX_ENGINE_MODEL_DEFINITIONS, AX_ENGINE_MODEL_IDS } from "@/provider/ax-engine/constants"
+import {
+  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_MODEL_DEFINITIONS,
+  AX_ENGINE_MODEL_IDS,
+  AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+} from "@/provider/ax-engine/constants"
 
 describe("providerModelSelectable", () => {
   test("tool-call models are selectable for any provider", () => {
@@ -60,6 +66,28 @@ describe("ax-engine local MLX model list", () => {
     ).toBe(true)
   })
 
+  // Every model AX Code offers for NEW local selection today must clear the
+  // fixed agent/tool-schema budget on its own declared limit (#379): this is
+  // the exact gate that would have caught the Tiel Coder regression before
+  // it shipped as the default. Scoped to the two currently-selectable
+  // aliases, not the full historical catalog — older excluded IDs (e.g.
+  // Qwen3-Coder-Next) remain listed only for existing-install status and
+  // cleanup and are a separate concern from new selection.
+  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID] as const)(
+    "%s clears the fixed agent/tool-schema budget",
+    (modelID) => {
+      const def = AX_ENGINE_MODEL_DEFINITIONS[modelID]
+      expect(
+        modelSelectableForProvider("ax-engine", {
+          capabilities: { toolcall: def.toolcall },
+          options: { axEngineCandidate: Boolean(def.revision) },
+          limit: { context: def.contextTokens, output: def.outputTokens },
+        }),
+        `${modelID} (context=${def.contextTokens}, output=${def.outputTokens}) should clear the fixed budget`,
+      ).toBe(true)
+    },
+  )
+
   test("unverified candidates must have pinned artifact identity", () => {
     for (const id of AX_ENGINE_MODEL_IDS) {
       const definition = AX_ENGINE_MODEL_DEFINITIONS[id]
@@ -67,6 +95,34 @@ describe("ax-engine local MLX model list", () => {
       expect(definition.revision).toMatch(/^[a-f0-9]{40}$/)
       expect(modelSelectableForProvider("ax-engine", { capabilities: { toolcall: false } })).toBe(false)
     }
+  })
+})
+
+describe("modelContextFitBlockReason", () => {
+  test("blocks a local model whose usable input can't fit the fixed agent/tool budget", () => {
+    // The Tiel Coder pack's original 32,768-context/8,192-output budget: only
+    // 24,576 usable input tokens, below the fixed full-agent estimate — every
+    // brand-new session on it failed before any turn could be sent (#379).
+    expect(
+      modelContextFitBlockReason("ax-engine", { limit: { context: 32_768, output: 8_192 } }),
+    ).toMatch(/cannot fit/)
+    expect(
+      modelSelectableForProvider("ax-engine", {
+        capabilities: { toolcall: false },
+        options: { axEngineCandidate: true },
+        limit: { context: 32_768, output: 8_192 },
+      }),
+    ).toBe(false)
+  })
+
+  test("allows a local model whose usable input clears the fixed agent/tool budget", () => {
+    expect(modelContextFitBlockReason("ax-engine", { limit: { context: 65_536, output: 8_192 } })).toBeUndefined()
+  })
+
+  test("ignores non-ax-engine providers and models with no declared limit", () => {
+    expect(modelContextFitBlockReason("anthropic", { limit: { context: 32_768, output: 8_192 } })).toBeUndefined()
+    expect(modelContextFitBlockReason("ax-engine", {})).toBeUndefined()
+    expect(modelContextFitBlockReason("ax-engine", undefined)).toBeUndefined()
   })
 })
 

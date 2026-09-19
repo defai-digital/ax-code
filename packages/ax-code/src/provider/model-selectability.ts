@@ -1,6 +1,7 @@
 import os from "os"
 import { CLI_PROVIDER_IDS } from "./cli/ids"
 import { modelIdFinalSegment, normalizeProviderModelId } from "./model-id"
+import { fixedTokensEstimateForProvider, usableInputTokens } from "../session/model-agent-fit"
 
 // Providers allowed to surface models that don't advertise tool calling. For
 // most providers a non-toolcall model is hidden from the picker because the
@@ -15,6 +16,7 @@ type SelectableModel = {
     output?: { text?: boolean }
   }
   options?: { minMemoryBytes?: unknown; axEngineCandidate?: unknown }
+  limit?: { context?: number; input?: number; output?: number }
 }
 
 export function modelMemoryBlockReason(
@@ -27,6 +29,29 @@ export function modelMemoryBlockReason(
   if (typeof minMemoryBytes !== "number" || minMemoryBytes <= 0) return undefined
   if (memoryBytes >= minMemoryBytes) return undefined
   return `requires ${Math.ceil(minMemoryBytes / 1024 ** 3)}GB unified memory`
+}
+
+/**
+ * Reject a local model whose declared context/output budget cannot fit the
+ * fixed AX Code agent system prompt and tool schemas even before any turn is
+ * sent (#379). Scoped to ax-engine: cloud providers' declared windows are
+ * large enough that this never fires, and CLI-plan providers intentionally
+ * allow non-agentic models through other selectability rules.
+ */
+export function modelContextFitBlockReason(
+  providerID: string,
+  model: { limit?: { context?: number; input?: number; output?: number } } | undefined,
+) {
+  if (providerID !== "ax-engine") return undefined
+  const usable = usableInputTokens({
+    context: model?.limit?.context,
+    input: model?.limit?.input,
+    output: model?.limit?.output,
+  })
+  if (usable <= 0) return undefined
+  const fixed = fixedTokensEstimateForProvider(providerID)
+  if (usable > fixed) return undefined
+  return `cannot fit the fixed agent/tool setup (~${fixed} tokens needed, ${usable} usable)`
 }
 
 export function providerModelSelectable(input: { providerID: string; toolcall?: boolean }) {
@@ -90,6 +115,7 @@ export function sameSkuOnConnectedProvider(
 export function modelSelectableForProvider(providerID: string, model: SelectableModel | undefined) {
   if (!model) return false
   if (modelMemoryBlockReason(providerID, model)) return false
+  if (modelContextFitBlockReason(providerID, model)) return false
   // AX Code's agent loop requires a textual assistant response. Models that
   // explicitly advertise image-only (or other non-text) output cannot produce
   // a usable coding turn, even when they accept tool schemas.
