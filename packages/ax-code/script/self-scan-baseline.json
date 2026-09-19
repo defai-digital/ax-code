@@ -5869,7 +5869,7 @@
       ]
     },
     "hardcode_scan": {
-      "count": 73,
+      "count": 75,
       "findings": [
         {
           "fingerprint": "a6bd914a7535ff247af90bb657c68be41d273fa7f12420175006d8274a4b83d3",
@@ -6451,6 +6451,22 @@
           "fingerprint": "4d5eae04863a3e26db28347fe07ff5c475164daed4d0cad838ad1dd081e58778",
           "file": "src/tool/visual/snapshot.ts",
           "line": 15,
+          "severity": "low",
+          "kind": "inline_url",
+          "summary": "inline_url"
+        },
+        {
+          "fingerprint": "0e712ab5752ee3c0e930b3715e75ed70f6fd4b3b35afd7636de445f748f1f699",
+          "file": "src/provider/local-runtime.ts",
+          "line": 24,
+          "severity": "low",
+          "kind": "inline_url",
+          "summary": "inline_url"
+        },
+        {
+          "fingerprint": "0e712ab5752ee3c0e930b3715e75ed70f6fd4b3b35afd7636de445f748f1f699",
+          "file": "src/provider/local-runtime.ts",
+          "line": 31,
           "severity": "low",
           "kind": "inline_url",
           "summary": "inline_url"
