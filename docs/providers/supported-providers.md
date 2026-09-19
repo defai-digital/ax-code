@@ -61,8 +61,14 @@ Local LLM runtime lists these choices in order:
 | ----------- | ----------- | ------------------------------------- | ------------------------- |
 | Ollama      | `ollama`    | `http://localhost:11434/v1`           | `OLLAMA_HOST`             |
 | LMStudio    | `lmstudio`  | `http://localhost:1234/v1`            | `LMSTUDIO_HOST`           |
+| MTPLX       | `mtplx`     | `http://localhost:8000/v1`            | `MTPLX_HOST`              |
+| oMLX        | `omlx`      | `http://localhost:8000/v1`            | `OMLX_HOST`               |
 | AX-Studio   | `ax-studio` | `http://localhost:18080/v1`           | `AX_STUDIO_HOST`          |
 | Others      | `local-llm` | Enter your OpenAI-compatible endpoint | `LOCAL_LLM_HOST`          |
+
+MTPLX and oMLX presets are available in the source checkout; v7.19.3 packaged binaries do not include them.
+See [MTPLX and oMLX setup](local-mlx-runtimes.md) for tool-capability configuration, optional authentication,
+and the shared default-port caveat.
 
 Start your local server, select its menu entry, and confirm or edit the endpoint.
 AX Code adds `/v1` if omitted. Others saves one configurable endpoint under

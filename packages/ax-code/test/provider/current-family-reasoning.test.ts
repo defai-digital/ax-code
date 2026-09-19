@@ -103,6 +103,12 @@ describe("current-family effort contracts", () => {
     ).toEqual({ enable_thinking: false })
   })
 
+  test.each(["mtplx", "omlx"])("%s does not inherit cloud GLM reasoning defaults", (providerID) => {
+    const m = model("glm-5.3", providerID)
+    expect(T.variants(m)).toEqual({})
+    expect(T.options({ model: m, sessionID: "test", longAgent: true })).toEqual({})
+  })
+
   test("custom deployments can opt out without leaking the local knob", async () => {
     const m = model("glm-5.3")
     m.options = { nativeReasoning: false }

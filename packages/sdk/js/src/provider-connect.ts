@@ -30,7 +30,7 @@ export const CLI_PROVIDER_IDS = [
 export type CliProviderID = (typeof CLI_PROVIDER_IDS)[number]
 
 /** External local LLM runtime provider ids, in connection-picker order. */
-export const LOCAL_LLM_PROVIDER_IDS = ["ollama", "lmstudio", "ax-studio", "local-llm"] as const
+export const LOCAL_LLM_PROVIDER_IDS = ["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"] as const
 /** One of the external local LLM runtime presets; local-llm is the Others entry. */
 export type LocalLlmProviderID = (typeof LOCAL_LLM_PROVIDER_IDS)[number]
 /** All local runtime providers, including the separately listed AX Engine runtime. */
@@ -76,7 +76,7 @@ export const PROVIDER_CONNECT_CATEGORIES = [
   { id: "api", label: "API Cloud Provider", hint: "Hosted API key" },
   { id: "cli", label: "CLI Provider", hint: "Installed CLI subscription" },
   { id: "ax-engine", label: "AX-Engine runtime", hint: "Run models on this machine" },
-  { id: "local", label: "Local LLM runtime", hint: "Ollama, LMStudio, AX-Studio, Others" },
+  { id: "local", label: "Local LLM runtime", hint: "Ollama, LMStudio, MTPLX, oMLX, AX-Studio, Others" },
   { id: "private-gpu", label: "Private GPU cloud", hint: "Dedicated GPU or hosted catalog" },
   { id: "ax-trust", label: "AX Trust", hint: "Connect an AX Trust gateway" },
 ] as const satisfies readonly {

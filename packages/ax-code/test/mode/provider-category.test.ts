@@ -77,7 +77,7 @@ describe("provider connect category", () => {
       PRESET_CATALOG_IDS.filter((id) => id !== "huggingface").sort(),
     )
     expect(PRIVATE_GPU_CLOUD_PROVIDER_IDS).not.toContain("huggingface")
-    expect([...LOCAL_LLM_PROVIDER_IDS]).toEqual(["ollama", "lmstudio", "ax-studio", "local-llm"])
+    expect([...LOCAL_LLM_PROVIDER_IDS]).toEqual(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"])
     expect([...LOCAL_RUNTIME_PROVIDER_IDS]).toEqual(["ax-engine", ...LOCAL_LLM_PROVIDER_IDS])
   })
 })

@@ -31,6 +31,8 @@ describe("application contracts", () => {
     expect(providerConnectCategory("qoder-cli")).toBe("cli")
     expect(providerConnectCategory("ax-engine")).toBe("ax-engine")
     expect(providerConnectCategory("lmstudio")).toBe("local")
+    expect(providerConnectCategory("mtplx")).toBe("local")
+    expect(providerConnectCategory("omlx")).toBe("local")
     expect(providerConnectCategory("local-llm")).toBe("local")
     expect(providerConnectCategory("nebius")).toBe("private-gpu")
     expect(providerConnectCategory("custom-private-gpu")).toBe("private-gpu")

@@ -1,0 +1,427 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-19",
+  "host": {
+    "soc": "Apple M3 Max",
+    "memory_gib": 128,
+    "storage": "SMB model weights; identical MTPLX MTP sidecar staged on SSD"
+  },
+  "runtime_versions": {
+    "ax_engine": "7.4.0",
+    "mtplx": "2.11.3",
+    "mtplx_mlx": "0.32.2",
+    "omlx": "0.6.4",
+    "omlx_mlx": "0.32.0",
+    "opencode": "1.18.31",
+    "ax_code": "v7.19.3 source; prefix fix 42908b46a"
+  },
+  "artifact": {
+    "repo": "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
+    "revision": "4d36d652c21590f6813495351c3baf5fca5b3831",
+    "mtp_sha256": "914bef4ec6fcfde83925f9c138559253db030d9138b0a375623d6fdc06ebe898"
+  },
+  "token_hash_format": "SHA-256 of UTF-8 compact JSON integer token array",
+  "same_weight_replay": [
+    {
+      "case": "short",
+      "same_input_token_ids": true,
+      "input_tokens": 62,
+      "ax_native_decode_tps": 39.11829510504336,
+      "ax_output_tokens": 256,
+      "ax_prefill_s": 0.340719,
+      "ax_cached_tokens": null,
+      "mtplx_native_decode_tps": 39.478566276383205,
+      "mtplx_delivered_tps": 39.34091016123335,
+      "mtplx_output_tokens": 256,
+      "mtplx_finish_reason": "length",
+      "mtplx_prefill_s": 0.38852037498145364,
+      "mtplx_cached_tokens": 0,
+      "mtplx_depth": 3,
+      "input_sha256": "bf7410f59594464ffacaa66c398df966d12accce8c0d95b19ee4fa60292fde08"
+    },
+    {
+      "case": "full",
+      "same_input_token_ids": true,
+      "input_tokens": 30019,
+      "ax_native_decode_tps": 16.05515013328293,
+      "ax_output_tokens": 256,
+      "ax_prefill_s": 2.943459,
+      "ax_cached_tokens": 29696,
+      "mtplx_native_decode_tps": 13.99234483941834,
+      "mtplx_delivered_tps": 13.932438921660061,
+      "mtplx_output_tokens": 256,
+      "mtplx_finish_reason": "length",
+      "mtplx_prefill_s": 208.65626849993714,
+      "mtplx_cached_tokens": 0,
+      "mtplx_depth": 3,
+      "input_sha256": "cab93fa89ec662e63bb334f7b8da3f737739f08fcf66eb5cf4e157156e9716c9"
+    },
+    {
+      "case": "opencode-mtplx",
+      "same_input_token_ids": true,
+      "input_tokens": 18643,
+      "ax_native_decode_tps": 17.494023046968984,
+      "ax_output_tokens": 256,
+      "ax_prefill_s": 123.287403,
+      "ax_cached_tokens": 0,
+      "mtplx_native_decode_tps": 20.93417787476696,
+      "mtplx_delivered_tps": 21.019876147597344,
+      "mtplx_output_tokens": 256,
+      "mtplx_finish_reason": "stop",
+      "mtplx_prefill_s": 135.17397033210727,
+      "mtplx_cached_tokens": 0,
+      "mtplx_depth": 3,
+      "input_sha256": "e91b416d1ca025b172cdcf1647cd366cdc93f27e2bd84abcde6f5f5a39945cd3"
+    }
+  ],
+  "different_weight_client_comparison": [
+    {
+      "label": "1-opencode-request-1",
+      "backend": "mtplx-optimized-speed",
+      "first_s": 122.53611266700318,
+      "last_s": 130.9996560419968,
+      "http_wall_s": 131.22286833298858,
+      "usage": {
+        "prompt_tokens": 18703,
+        "completion_tokens": 228,
+        "total_tokens": 18931,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "delivered_tps_estimate": 26.820917663244266
+    },
+    {
+      "label": "2-opencode-request-1",
+      "backend": "mtplx-optimized-speed",
+      "first_s": 0.017912042007083073,
+      "last_s": 7.581022084021242,
+      "http_wall_s": 7.790964334009914,
+      "usage": {
+        "prompt_tokens": 18703,
+        "completion_tokens": 228,
+        "total_tokens": 18931,
+        "prompt_tokens_details": {
+          "cached_tokens": 18703
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "delivered_tps_estimate": 30.014107786212616
+    },
+    {
+      "label": "3-ax-code-request-1",
+      "backend": "mtplx-optimized-speed",
+      "first_s": 280.0518141670036,
+      "last_s": 291.59172062500147,
+      "http_wall_s": 291.7693626249966,
+      "usage": {
+        "prompt_tokens": 36808,
+        "completion_tokens": 277,
+        "total_tokens": 37085,
+        "prompt_tokens_details": {
+          "cached_tokens": 2048
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 0
+        }
+      },
+      "delivered_tps_estimate": 23.91700496053113
+    }
+  ],
+  "preset_tool_acceptance": [
+    {
+      "provider": "omlx",
+      "artifact": "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP; upstream sidecar import",
+      "result": "passed",
+      "exit_code": 0,
+      "successful_read_calls": 2,
+      "fixture_files_unchanged": true,
+      "requests": [
+        {
+          "input_tokens": 11756,
+          "output_tokens": 70,
+          "cached_tokens": 0,
+          "transient_context_pack_present": false
+        },
+        {
+          "input_tokens": 11973,
+          "output_tokens": 70,
+          "cached_tokens": 8192,
+          "transient_context_pack_present": false
+        },
+        {
+          "input_tokens": 12168,
+          "output_tokens": 108,
+          "cached_tokens": 8192,
+          "transient_context_pack_present": false
+        }
+      ]
+    },
+    {
+      "provider": "mtplx",
+      "artifact": "Youssofal/Qwen3.8-27B-MTPLX-Optimized-Speed",
+      "result": "passed",
+      "exit_code": 0,
+      "successful_read_calls": 2,
+      "fixture_files_unchanged": true,
+      "requests": [
+        {
+          "input_tokens": 11758,
+          "output_tokens": 71,
+          "cached_tokens": 0,
+          "transient_context_pack_present": false
+        },
+        {
+          "input_tokens": 11976,
+          "output_tokens": 71,
+          "cached_tokens": 11829,
+          "transient_context_pack_present": false
+        },
+        {
+          "input_tokens": 12172,
+          "output_tokens": 94,
+          "cached_tokens": 12047,
+          "transient_context_pack_present": false
+        }
+      ]
+    }
+  ],
+  "omlx_ar_replay": [
+    {
+      "mode": "ar",
+      "case": "short",
+      "input_tokens": 62,
+      "token_roundtrip_equal": true,
+      "first_s": 0.7242736250045709,
+      "last_s": 14.218918540980667,
+      "wall_s": 14.21951787499711,
+      "usage": {
+        "prompt_tokens": 62,
+        "completion_tokens": 256,
+        "total_tokens": 318,
+        "input_tokens": 62,
+        "output_tokens": 256,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "time_to_first_token": 0.72,
+        "total_time": 14.22,
+        "prompt_eval_duration": 0.72,
+        "generation_duration": 13.5,
+        "prompt_tokens_per_second": 86.24,
+        "generation_tokens_per_second": 18.97
+      },
+      "delivered_tps_estimate": 18.896384572380228,
+      "finish_reason": "length"
+    },
+    {
+      "mode": "ar",
+      "case": "full",
+      "input_tokens": 30019,
+      "token_roundtrip_equal": true,
+      "first_s": 202.01693904199055,
+      "last_s": 223.09195266698953,
+      "wall_s": 223.0935817080026,
+      "usage": {
+        "prompt_tokens": 30019,
+        "completion_tokens": 256,
+        "total_tokens": 30275,
+        "input_tokens": 30019,
+        "output_tokens": 256,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "time_to_first_token": 201.95,
+        "total_time": 223.03,
+        "prompt_eval_duration": 201.95,
+        "generation_duration": 21.08,
+        "prompt_tokens_per_second": 148.64,
+        "generation_tokens_per_second": 12.15
+      },
+      "delivered_tps_estimate": 12.09963630569242,
+      "finish_reason": "length"
+    },
+    {
+      "mode": "ar",
+      "case": "opencode-mtplx",
+      "input_tokens": 18643,
+      "token_roundtrip_equal": true,
+      "first_s": 130.32791516600992,
+      "last_s": 149.98448708301294,
+      "wall_s": 149.98548225002014,
+      "usage": {
+        "prompt_tokens": 18643,
+        "completion_tokens": 256,
+        "total_tokens": 18899,
+        "input_tokens": 18643,
+        "output_tokens": 256,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "time_to_first_token": 130.27,
+        "total_time": 149.93,
+        "prompt_eval_duration": 130.27,
+        "generation_duration": 19.66,
+        "prompt_tokens_per_second": 143.11,
+        "generation_tokens_per_second": 13.02
+      },
+      "delivered_tps_estimate": 12.972760513720294,
+      "finish_reason": "length"
+    }
+  ],
+  "omlx_mtp_replay": [
+    {
+      "mode": "mtp-imported",
+      "case": "short",
+      "input_tokens": 62,
+      "token_roundtrip_equal": true,
+      "first_s": 0.8236810000089463,
+      "last_s": 9.044827792007709,
+      "wall_s": 9.045558500016341,
+      "usage": {
+        "prompt_tokens": 62,
+        "completion_tokens": 256,
+        "total_tokens": 318,
+        "input_tokens": 62,
+        "output_tokens": 256,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "time_to_first_token": 0.82,
+        "total_time": 9.04,
+        "prompt_eval_duration": 0.82,
+        "generation_duration": 8.23,
+        "prompt_tokens_per_second": 75.96,
+        "generation_tokens_per_second": 31.12
+      },
+      "delivered_tps_estimate": 31.017570474252928,
+      "finish_reason": "length"
+    },
+    {
+      "mode": "mtp-imported",
+      "case": "full",
+      "input_tokens": 30019,
+      "token_roundtrip_equal": true,
+      "first_s": 189.54607633300475,
+      "last_s": 206.38298574998043,
+      "wall_s": 206.38386704199365,
+      "usage": {
+        "prompt_tokens": 30019,
+        "completion_tokens": 256,
+        "total_tokens": 30275,
+        "input_tokens": 30019,
+        "output_tokens": 256,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "time_to_first_token": 189.47,
+        "total_time": 206.32,
+        "prompt_eval_duration": 189.47,
+        "generation_duration": 16.85,
+        "prompt_tokens_per_second": 158.44,
+        "generation_tokens_per_second": 15.19
+      },
+      "delivered_tps_estimate": 15.145297375235515,
+      "finish_reason": "length"
+    },
+    {
+      "mode": "mtp-imported",
+      "case": "opencode-mtplx",
+      "input_tokens": 18643,
+      "token_roundtrip_equal": true,
+      "first_s": 139.96294595798827,
+      "last_s": 154.8531130409974,
+      "wall_s": 154.8541444579896,
+      "usage": {
+        "prompt_tokens": 18643,
+        "completion_tokens": 256,
+        "total_tokens": 18899,
+        "input_tokens": 18643,
+        "output_tokens": 256,
+        "prompt_tokens_details": {
+          "cached_tokens": 0
+        },
+        "time_to_first_token": 139.91,
+        "total_time": 154.81,
+        "prompt_eval_duration": 139.91,
+        "generation_duration": 14.9,
+        "prompt_tokens_per_second": 133.25,
+        "generation_tokens_per_second": 17.18
+      },
+      "delivered_tps_estimate": 17.125395475983282,
+      "finish_reason": "length"
+    }
+  ],
+  "omlx_mtp_telemetry": [
+    {
+      "case": "warmup",
+      "finish": "length",
+      "tokens": 64,
+      "cycles": 21,
+      "tokens_per_cycle": 3.05,
+      "accepted": 41,
+      "drafted": 47,
+      "acceptance_percent": 87.2,
+      "depth": "d1=17/18,d2=14/16,d3=10/13"
+    },
+    {
+      "case": "short",
+      "finish": "length",
+      "tokens": 256,
+      "cycles": 77,
+      "tokens_per_cycle": 3.32,
+      "accepted": 179,
+      "drafted": 195,
+      "acceptance_percent": 91.8,
+      "depth": "d1=73/74,d2=61/68,d3=45/53"
+    },
+    {
+      "case": "full",
+      "finish": "length",
+      "tokens": 256,
+      "cycles": 86,
+      "tokens_per_cycle": 2.98,
+      "accepted": 170,
+      "drafted": 199,
+      "acceptance_percent": 85.4,
+      "depth": "d1=69/83,d2=57/64,d3=44/52"
+    },
+    {
+      "case": "opencode-mtplx",
+      "finish": "length",
+      "tokens": 256,
+      "cycles": 78,
+      "tokens_per_cycle": 3.28,
+      "accepted": 177,
+      "drafted": 192,
+      "acceptance_percent": 92.2,
+      "depth": "d1=71/74,d2=59/66,d3=47/52"
+    }
+  ],
+  "omlx_mtp_import": {
+    "merge_mode": "remap",
+    "mtp_tensors": 15,
+    "original_metadata_unchanged": true,
+    "tensor_payloads_byte_identical": true,
+    "tensor_key_change": "language_model. prefix added by upstream importer",
+    "imported_mtp_sha256": "66e418afbde3bf1c17a0bdf1963d853e126b9ad326fcd602214822402eb7886e"
+  },
+  "omlx_annotation_revision": "b0784088d4026ca569c5653e6e6243c501ef5fa9",
+  "omlx_initial_setup_error": {
+    "http_status": 409,
+    "reason": "Test initially skipped the required upstream sidecar import. Corrected using a writable local copy; AXQuant already provided the import contract."
+  },
+  "limits": [
+    "Single-host observations, not statistical qualification",
+    "Different generated text and stop behavior",
+    "Different native versus delivered timing boundaries",
+    "Full replay prefill compares warm AX Engine with cold MTPLX",
+    "Private-context prompts are not published",
+    "oMLX AR and imported MTP runs are reported separately; native kernels and speculative samplers differ"
+  ]
+}

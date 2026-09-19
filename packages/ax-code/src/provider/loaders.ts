@@ -53,6 +53,10 @@ export type CustomLoader = (provider: Provider.Info) => Promise<{
 
 type OpenAICompatibleModelItem = {
   id?: string
+  owned_by?: string
+  capability?: string
+  supports_vision?: boolean
+  max_model_len?: number
   capabilities?: Partial<Provider.Model["capabilities"]>
   limit?: Partial<Provider.Model["limit"]>
   context_length?: number
@@ -60,7 +64,10 @@ type OpenAICompatibleModelItem = {
   max_output_tokens?: number
 }
 
-type ModelListFetcher = (input: string, init?: { signal?: AbortSignal }) => Promise<Response>
+type ModelListFetcher = (
+  input: string,
+  init?: { signal?: AbortSignal; headers?: Record<string, string> },
+) => Promise<Response>
 
 function asOpenAICompatibleModelList(input: unknown): { data: OpenAICompatibleModelItem[] } | null {
   if (!input || typeof input !== "object") return null
@@ -135,8 +142,15 @@ function openAICompatibleLimit(item: OpenAICompatibleModelItem): Provider.Model[
   }
 }
 
-async function fetchOpenAICompatibleModels(fetcher: ModelListFetcher, endpoint: LocalProviderEndpoint) {
-  return fetcher(`${endpoint.inferenceBaseURL}/models`, { signal: AbortSignal.timeout(5000) })
+async function fetchOpenAICompatibleModels(
+  fetcher: ModelListFetcher,
+  endpoint: LocalProviderEndpoint,
+  headers?: Record<string, string>,
+) {
+  return fetcher(`${endpoint.inferenceBaseURL}/models`, {
+    signal: AbortSignal.timeout(5000),
+    ...(headers ? { headers } : {}),
+  })
     .then(async (r) => {
       if (!r.ok) {
         // Drain the body so the underlying connection can be reused/closed
@@ -299,11 +313,16 @@ function ollamaCompatibleLoader(providerID: string, envKey: string, defaultHost:
 }
 
 function openAICompatibleLoader(providerID: string, envKey: string, defaultHost: string): CustomLoader {
+  const nativeMlx = providerID === "mtplx" || providerID === "omlx"
+  const discoveryHeaders = (provider: Provider.Info) => {
+    const key = provider.options?.apiKey
+    return nativeMlx && typeof key === "string" && key ? { Authorization: `Bearer ${key}` } : undefined
+  }
   return async (provider) => {
     if (!provider.options?.baseURL && !process.env[envKey] && !defaultHost) return { autoload: false }
     const initialEndpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
     const initialFetcher = initialEndpoint.local ? fetch : Ssrf.pinnedFetch
-    const initial = await fetchOpenAICompatibleModels(initialFetcher, initialEndpoint)
+    const initial = await fetchOpenAICompatibleModels(initialFetcher, initialEndpoint, discoveryHeaders(provider))
     const reachable = !!initial
 
     return {
@@ -312,7 +331,7 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
       async discoverModels(provider) {
         const endpoint = resolveLocalProviderEndpoint({ provider, envKey, defaultHost })
         const fetcher = endpoint.local ? fetch : Ssrf.pinnedFetch
-        const discovered = await fetchOpenAICompatibleModels(fetcher, endpoint)
+        const discovered = await fetchOpenAICompatibleModels(fetcher, endpoint, discoveryHeaders(provider))
         if (!discovered) return {}
         const models: Record<string, Provider.Model> = {}
         for (const item of discovered.data ?? []) {
@@ -323,13 +342,28 @@ function openAICompatibleLoader(providerID: string, envKey: string, defaultHost:
           // tool-calling support. Override to false so discovered models don't
           // silently get selected for agent workflows that need tools.
           caps.toolcall = false
+          // MTPLX's native chat listing is separate from its retrieval models
+          // and its chat transport supports tools. Generic listings and oMLX
+          // do not establish model tool support; keep explicit opt-in there.
+          if (providerID === "mtplx" && item.owned_by === "mtplx" && item.capability === "chat") {
+            caps.toolcall = booleanValue(item.capabilities?.toolcall, true)
+            caps.input.image = booleanValue(item.supports_vision, caps.input.image)
+          }
+          if (nativeMlx && provider.models[id]) {
+            // Discovery must not erase the user's coding-model tool choice.
+            caps.toolcall = provider.models[id].capabilities.toolcall
+          }
+          const limit = openAICompatibleLimit(item)
+          if (providerID === "omlx" && item.owned_by === "omlx") {
+            limit.context = numberValue(item.max_model_len, limit.context)
+          }
           models[id] = {
             id,
             providerID: ProviderID.make(providerID),
             name: item.id,
             api: { id: item.id, url: endpoint.inferenceBaseURL, npm: "@ai-sdk/openai-compatible" },
             capabilities: caps,
-            limit: openAICompatibleLimit(item),
+            limit,
             status: "active",
             options: {},
             headers: {},

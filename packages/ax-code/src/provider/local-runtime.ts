@@ -17,6 +17,20 @@ export const LOCAL_LLM_RUNTIMES = {
     defaultHost: "http://localhost:1234",
     discovery: "openai",
   },
+  mtplx: {
+    name: "MTPLX",
+    label: "MTPLX",
+    envVar: "MTPLX_HOST",
+    defaultHost: "http://localhost:8000",
+    discovery: "openai",
+  },
+  omlx: {
+    name: "oMLX",
+    label: "oMLX",
+    envVar: "OMLX_HOST",
+    defaultHost: "http://localhost:8000",
+    discovery: "openai",
+  },
   "ax-studio": {
     name: "AX Studio",
     label: "AX-Studio",

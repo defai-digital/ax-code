@@ -276,6 +276,8 @@ describe("session.llm.stream", () => {
   test.each([
     { providerID: "local-llm", local: true },
     { providerID: "lmstudio", local: true },
+    { providerID: "mtplx", local: true },
+    { providerID: "omlx", local: true },
     { providerID: "cloud-qwen", local: false },
     { providerID: "ax-trust-gateway", local: false },
     { providerID: "local-llm", management: "ax-trust" as const, local: false },

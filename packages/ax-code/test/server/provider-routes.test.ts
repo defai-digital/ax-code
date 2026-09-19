@@ -127,14 +127,14 @@ describe("provider routes", () => {
     expect(ids).toContain("sagemaker")
     expect(ids).toContain("custom-private-gpu")
     expect(ids).toContain("grok-build-cli")
-    expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "ax-studio", "local-llm"]))
+    expect(ids).toEqual(expect.arrayContaining(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"]))
     expect(ids).toContain("qoder-cli")
     expect(ids).not.toContain("gemini-cli")
     expect(ids).not.toContain("antigravity-cli")
     expect(ids).toContain("kimi-cli")
   })
 
-  test.each(["ollama", "lmstudio", "ax-studio", "local-llm", "custom-private-gpu"])(
+  test.each(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm", "custom-private-gpu"])(
     "keeps %s setup choices subject to explicit enablement and disablement",
     (key) => {
       expect(shouldShowProviderInList({ key, disabled: new Set() })).toBe(true)

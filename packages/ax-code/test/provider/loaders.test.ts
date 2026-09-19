@@ -8,7 +8,7 @@ import { ModelID, ProviderID } from "../../src/provider/schema"
 import { Env } from "../../src/env"
 import { which } from "../../src/util/which"
 import { selectPreferredCodexBinary } from "../../src/provider/cli/binary"
-import { resolveCliBinary } from "../../src/provider/loaders"
+import { CUSTOM_LOADERS, resolveCliBinary } from "../../src/provider/loaders"
 import { Config } from "../../src/config/config"
 import { Global } from "../../src/global"
 
@@ -295,6 +295,8 @@ describe("offline provider loaders", () => {
   test.each([
     { providerID: "ax-studio", baseURL: "http://localhost:18080" },
     { providerID: "lmstudio", baseURL: "http://localhost:1234" },
+    { providerID: "mtplx", baseURL: "http://localhost:18082/v1" },
+    { providerID: "omlx", baseURL: "http://localhost:18083" },
     { providerID: "local-llm", baseURL: "http://localhost:18081/v1/" },
   ])("$providerID uses the configured OpenAI-compatible endpoint for discovery", async ({ providerID, baseURL }) => {
     const inferenceBaseURL = `${baseURL.replace(/\/+$/, "").replace(/\/v1$/, "")}/v1`
@@ -366,7 +368,7 @@ describe("offline provider loaders", () => {
     const localRequests: string[] = []
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = String(input)
-      if (/localhost:(11434|1234|18080)/.test(url)) localRequests.push(url)
+      if (/localhost:(11434|1234|8000|18080)/.test(url)) localRequests.push(url)
       throw new Error(`unexpected fetch: ${url}`)
     }) as typeof fetch
     await using tmp = await tmpdir({ config: { provider: {} } })
@@ -376,7 +378,7 @@ describe("offline provider loaders", () => {
         await Provider.ready()
         const providers = await Provider.list()
         expect(localRequests).toEqual([])
-        for (const id of ["ollama", "lmstudio", "ax-studio", "local-llm"]) {
+        for (const id of ["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"]) {
           expect(providers[ProviderID.make(id)]).toBeUndefined()
         }
       },
@@ -792,6 +794,107 @@ describe("provider config integration", () => {
       fn: async () => {
         const providers = await Provider.list()
         expect(providers[ProviderID.make("claude-code")]).toBeUndefined()
+      },
+    })
+  })
+})
+
+describe("native MLX runtime metadata", () => {
+  test.each(["mtplx", "omlx"])(
+    "%s authenticates both discovery requests and preserves runtime limits",
+    async (providerID) => {
+      const requests: Array<{ url: string; authorization: string | null }> = []
+      globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        requests.push({ url: String(input), authorization: new Headers(init?.headers).get("Authorization") })
+        return Response.json({
+          data: [
+            {
+              id: "native-chat",
+              owned_by: providerID,
+              capability: "chat",
+              supports_vision: true,
+              max_model_len: 32768,
+              context_length: 8192,
+            },
+            { id: "unknown", owned_by: "generic", capability: "chat", max_model_len: 512 },
+            { id: "retrieval", owned_by: providerID, capability: "embedding" },
+            { id: "explicit-no-tools", owned_by: providerID, capability: "chat", capabilities: { toolcall: false } },
+          ],
+        })
+      }) as typeof fetch
+      const provider = {
+        id: ProviderID.make(providerID),
+        name: providerID,
+        source: "config" as const,
+        env: [],
+        models: {},
+        options: { baseURL: "http://localhost:18082/v1", apiKey: "test-runtime-key" },
+      }
+      const loader = await CUSTOM_LOADERS[providerID](provider)
+      expect(loader.autoload).toBe(true)
+      const models = await loader.discoverModels!(provider)
+      expect(requests).toEqual(
+        Array(2).fill({ url: "http://localhost:18082/v1/models", authorization: "Bearer test-runtime-key" }),
+      )
+      expect(models[ModelID.make("native-chat")].limit.context).toBe(providerID === "omlx" ? 32768 : 8192)
+      expect(models[ModelID.make("native-chat")].capabilities.toolcall).toBe(providerID === "mtplx")
+      expect(models[ModelID.make("native-chat")].capabilities.input.image).toBe(providerID === "mtplx")
+      for (const id of ["unknown", "retrieval", "explicit-no-tools"])
+        expect(models[ModelID.make(id)].capabilities.toolcall).toBe(false)
+      expect(models[ModelID.make("unknown")].limit.context).toBe(128000)
+    },
+  )
+
+  test.each(["mtplx", "omlx"])("%s preserves an explicit tool opt-out during discovery", async (providerID) => {
+    globalThis.fetch = (async () =>
+      Response.json({
+        data: [{ id: "chat-model", owned_by: providerID, capability: "chat" }],
+      })) as typeof fetch
+    await using tmp = await tmpdir({
+      config: {
+        enabled_providers: [providerID],
+        provider: {
+          [providerID]: {
+            options: { baseURL: "http://localhost:18083/v1" },
+            models: { "chat-model": { tool_call: false } },
+          },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const runtime = (await Provider.list())[ProviderID.make(providerID)]
+        expect(runtime.models[ModelID.make("chat-model")].capabilities.toolcall).toBe(false)
+      },
+    })
+  })
+
+  test("an oMLX coding model can explicitly opt into tools without changing other discovered models", async () => {
+    globalThis.fetch = (async () =>
+      Response.json({
+        data: [
+          { id: "coding-model", owned_by: "omlx", max_model_len: 32768 },
+          { id: "embedding-model", owned_by: "omlx", max_model_len: 8192 },
+        ],
+      })) as typeof fetch
+    await using tmp = await tmpdir({
+      config: {
+        enabled_providers: ["omlx"],
+        provider: {
+          omlx: { options: { baseURL: "http://localhost:18083/v1" }, models: { "coding-model": { tool_call: true } } },
+        },
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await Provider.ready()
+        const runtime = (await Provider.list())[ProviderID.make("omlx")]
+        expect(runtime.models[ModelID.make("coding-model")].capabilities.toolcall).toBe(true)
+        expect(runtime.models[ModelID.make("coding-model")].limit.context).toBe(32768)
+        expect(runtime.models[ModelID.make("embedding-model")]).toBeUndefined()
       },
     })
   })

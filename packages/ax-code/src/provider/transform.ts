@@ -882,6 +882,8 @@ export namespace ProviderTransform {
         "lilac",
         "ollama",
         "lmstudio",
+        "mtplx",
+        "omlx",
         "ax-studio",
         "local-llm",
       ].includes(model.providerID)

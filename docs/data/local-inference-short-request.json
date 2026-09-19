@@ -1,0 +1,17 @@
+{
+  "model": "qwen3.8-27b-axq-6bit",
+  "prompt": "<|im_start|>system\nYou are a coding assistant. Return only working TypeScript code.<|im_end|>\n<|im_start|>user\nImplement a bounded LRU cache with get, set, delete, clear and iteration. Include tests covering eviction and updating existing keys. Use generics and explain no prose.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+  "max_tokens": 256,
+  "temperature": 0.55,
+  "top_p": 1.0,
+  "top_k": 0,
+  "min_p": 0,
+  "presence_penalty": 0,
+  "frequency_penalty": 0,
+  "repetition_penalty": 1,
+  "seed": 0,
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

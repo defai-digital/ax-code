@@ -357,25 +357,35 @@ describe("provider dialog options", () => {
         { value: "api", description: "2 providers" },
         { value: "cli", description: "7 providers" },
         { value: "ax-engine", description: "1 provider" },
-        { value: "local", description: "4 providers" },
+        { value: "local", description: "6 providers" },
         { value: "private-gpu", description: "14 providers" },
         { value: "ax-trust", description: "2 providers" },
       ])
     },
   )
 
-  test("separates AX Engine and orders all four external local runtime choices", () => {
+  test("separates AX Engine and orders all six external local runtime choices", () => {
     const choices = providerDialogProviders({
       available: [
         provider("local-llm", "Other local LLM"),
         provider("ax-studio", "AX Studio"),
         provider("lmstudio", "LM Studio"),
+        provider("mtplx", "MTPLX"),
+        provider("omlx", "oMLX"),
         provider("ollama", "Ollama"),
         provider("ax-engine", "AX Engine (Local)"),
       ],
       configured: [],
     })
-    expect(choices.map((item) => item.id)).toEqual(["ax-engine", "ollama", "lmstudio", "ax-studio", "local-llm"])
+    expect(choices.map((item) => item.id)).toEqual([
+      "ax-engine",
+      "ollama",
+      "lmstudio",
+      "mtplx",
+      "omlx",
+      "ax-studio",
+      "local-llm",
+    ])
     expect(providerDialogTypeOptions(choices.map((item) => item.id))).toEqual([
       {
         title: "AX-Engine runtime",
@@ -386,8 +396,8 @@ describe("provider dialog options", () => {
       {
         title: "Local LLM runtime",
         value: "local",
-        description: "4 providers",
-        hint: "Ollama, LMStudio, AX-Studio, Others",
+        description: "6 providers",
+        hint: "Ollama, LMStudio, MTPLX, oMLX, AX-Studio, Others",
       },
     ])
     expect(
@@ -395,7 +405,7 @@ describe("provider dialog options", () => {
         choices.map((item) => ({ title: item.name, value: item.id })),
         "local",
       ).map((item) => item.value),
-    ).toEqual(["ollama", "lmstudio", "ax-studio", "local-llm", PROVIDER_DIALOG_CHANGE_TYPE_VALUE])
+    ).toEqual(["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm", PROVIDER_DIALOG_CHANGE_TYPE_VALUE])
   })
 
   test("sorts API, CLI, AX Engine, local LLM, and private GPU providers in menu order", () => {

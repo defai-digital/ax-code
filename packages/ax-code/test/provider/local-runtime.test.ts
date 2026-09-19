@@ -9,7 +9,7 @@ import {
 afterEach(() => vi.unstubAllEnvs())
 
 describe("local inference optimization boundary", () => {
-  test.each(["ax-engine", "ollama", "lmstudio", "ax-studio", "local-llm"])(
+  test.each(["ax-engine", "ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"])(
     "admits the local %s connection",
     (providerID) => {
       expect(isLocalInferenceConnection({ providerID, baseURL: "http://127.0.0.1:1234/v1" })).toBe(true)
@@ -43,14 +43,15 @@ describe("local runtime endpoints", () => {
   test("provides the requested local picker labels and endpoint defaults", () => {
     vi.stubEnv("LMSTUDIO_HOST", undefined)
     vi.stubEnv("LOCAL_LLM_HOST", undefined)
-    expect(["ollama", "lmstudio", "ax-studio", "local-llm"].map((id) => localLlmRuntimePreset(id)?.label)).toEqual([
-      "Ollama",
-      "LMStudio",
-      "AX-Studio",
-      "Others",
-    ])
+    vi.stubEnv("MTPLX_HOST", undefined)
+    vi.stubEnv("OMLX_HOST", undefined)
+    expect(
+      ["ollama", "lmstudio", "mtplx", "omlx", "ax-studio", "local-llm"].map((id) => localLlmRuntimePreset(id)?.label),
+    ).toEqual(["Ollama", "LMStudio", "MTPLX", "oMLX", "AX-Studio", "Others"])
     expect(localRuntimeEndpointPreset("lmstudio", {})).toBe("http://localhost:1234")
     expect(localRuntimeEndpointPreset("local-llm", {})).toBe("")
+    expect(localRuntimeEndpointPreset("mtplx", {})).toBe("http://localhost:8000")
+    expect(localRuntimeEndpointPreset("omlx", {})).toBe("http://localhost:8000")
   })
 
   test("uses saved endpoints before environment overrides and presets", () => {
@@ -81,4 +82,19 @@ describe("local runtime endpoints", () => {
   ])("rejects an invalid endpoint before saving: %s", (input) => {
     expect(() => normalizeLocalRuntimeBaseURL(input)).toThrow()
   })
+})
+
+test.each([
+  ["mtplx", "MTPLX_HOST"],
+  ["omlx", "OMLX_HOST"],
+])("%s uses its own host override and saved endpoint", (id, env) => {
+  vi.stubEnv(env, "http://localhost:18088")
+  expect(localRuntimeEndpointPreset(id, {})).toBe("http://localhost:18088")
+  expect(
+    localRuntimeEndpointPreset(id, { provider: { [id]: { options: { baseURL: "http://localhost:18089/v1" } } } }),
+  ).toBe("http://localhost:18089/v1")
+  expect(
+    isLocalInferenceConnection({ providerID: id, baseURL: "http://localhost:8000/v1", management: "ax-trust" }),
+  ).toBe(false)
+  expect(isLocalInferenceConnection({ providerID: id, baseURL: "https://remote.example.test/v1" })).toBe(false)
 })

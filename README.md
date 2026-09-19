@@ -232,9 +232,14 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 | Cloud API providers      | Google, DeepSeek, Meta (Muse Spark), GroqCloud, OpenRouter, Hugging Face, UnoRouter, Alibaba plans, MiniMax plans, GitHub Copilot, Z.AI     | Hosted provider model catalogs bundled with AX Code                    |
 | CLI providers            | Claude Code, Codex CLI, Grok Build CLI, Kimi Code, Muse Code, MiniMax Code, Qoder                                                           | One model ID per CLI bridge, reusing the local vendor CLI session      |
 | AX Engine local provider | `ax-engine` on eligible Apple Silicon Macs                                                                                                  | The managed AXQ 6-bit MLX model selection served from the live catalog |
-| Local LLM runtimes       | Ollama, LM Studio, AX Studio, or any OpenAI-compatible endpoint                                                                             | Models discovered from the local runtime's endpoint                    |
+| Local LLM runtimes       | Ollama, LM Studio, MTPLX, oMLX, AX Studio, or any OpenAI-compatible endpoint                                                                | Models discovered from the local runtime's endpoint                    |
 | Private GPU cloud        | Catalog: Nebius, Fireworks AI, Together AI, Baseten, NVIDIA NIM, Deep Infra; dedicated: RunPod, SageMaker, Volcengine Ark, custom, and more | API-key catalogs or URL+token endpoints that expose `/v1/models`       |
 | AX Trust                 | Managed gateway connections (base URL + client API key)                                                                                     | Models discovered from the connected gateway                           |
+
+MTPLX and oMLX presets are available in the source checkout, ahead of the v7.19.3 packaged binaries.
+See [local runtime setup](docs/providers/local-mlx-runtimes.md) and the
+[2026-09-19 local inference test results](docs/guides/local-inference-results-2026-09-19.md).
+The report separates decode speed, first-token latency, cache reuse, and model-package differences.
 
 CLI bridges reuse a local vendor CLI and its login session. AX Code records its own tool execution in full; activity that happens inside a vendor CLI process is visible only through that bridge's output.
 
