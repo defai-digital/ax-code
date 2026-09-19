@@ -35,6 +35,7 @@ import { AxEngineStartupError } from "./errors"
 import {
   AxEngineMtpPolicy,
   AxEngineMtpStatus,
+  assertAxEngineMtpPackCompatibility,
   axEngineMtpLaunchArgs,
   axEngineMtpLaunchPolicy,
   observeAxEngineMtp,
@@ -641,6 +642,14 @@ export async function ensureServer(options: AxEngineServerOptions): Promise<AxEn
   options.signal?.throwIfAborted()
   // Reject unsupported policy before locking, replacing a resident server, or spawning.
   axEngineMtpLaunchArgs(options.mtpPolicy, options.binaryVersion)
+  // A Tiel-class pack on an engine without sidecar namespace normalization can
+  // never attach its drafter; fail before the lock and the multi-minute load.
+  await assertAxEngineMtpPackCompatibility({
+    modelPath: options.modelPath,
+    binaryPath: options.binaryPath,
+    policy: options.mtpPolicy,
+    binaryVersion: options.binaryVersion,
+  })
   // Explicit cancellation belongs to one caller. Sharing its startup promise
   // would let that caller abort another request, or ignore a joining caller's
   // cancellation. Such calls serialize on the cancellable lifecycle lock;
