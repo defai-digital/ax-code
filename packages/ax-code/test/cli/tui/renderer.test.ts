@@ -23,6 +23,12 @@ import {
   TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
   TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
 } from "../../../src/cli/tui/terminal-cleanup"
+import {
+  registerTuiSequenceTarget,
+  unregisterTuiSequenceTarget,
+  type TuiSequenceTarget,
+} from "../../../src/cli/tui/util/sequence-writer"
+import { axCodeTerminalTitleSequence } from "../../../src/util/terminal-title"
 
 const TITLE_CLEAR_SEQUENCE = "\x1b]2;\x07\x1b]1;\x07"
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY")
@@ -617,5 +623,110 @@ describe("tui renderer profile", () => {
     }
 
     expect(calls).toEqual(["title-clear", "destroy", "mouse-disable", "clear", "flush"])
+  })
+})
+
+describe("out-of-band terminal sequence routing", () => {
+  // A threaded renderer writes frames to stdout from a native thread. OSC
+  // sequences written straight to process.stdout can splice into an in-flight
+  // frame, so while a threaded target is registered they must go through the
+  // native write queue instead.
+  const profile = resolveTuiRenderProfile({ advancedTerminal: true, terminalTitleDisabled: false })
+
+  function captureStdout() {
+    const writes: string[] = []
+    const originalWrite = process.stdout.write
+    process.stdout.write = ((chunk: string) => {
+      writes.push(chunk)
+      return true
+    }) as typeof process.stdout.write
+    return {
+      writes,
+      restore() {
+        process.stdout.write = originalWrite
+      },
+    }
+  }
+
+  test("routes title writes through a registered threaded target", () => {
+    const native: string[] = []
+    const target: TuiSequenceTarget = {
+      threaded: true,
+      write: (sequence) => void native.push(sequence),
+    }
+    registerTuiSequenceTarget(target)
+    const out = captureStdout()
+    try {
+      expect(setTuiTerminalTitle("AX-Code", profile)).toBe(true)
+      expect(native).toEqual([axCodeTerminalTitleSequence("AX-Code")])
+      expect(out.writes).toEqual([])
+    } finally {
+      unregisterTuiSequenceTarget(target)
+      out.restore()
+    }
+  })
+
+  test("keeps direct stdout writes when the target is not threaded", () => {
+    const native: string[] = []
+    const target: TuiSequenceTarget = {
+      threaded: false,
+      write: (sequence) => void native.push(sequence),
+    }
+    registerTuiSequenceTarget(target)
+    const out = captureStdout()
+    try {
+      expect(setTuiTerminalTitle("AX-Code", profile)).toBe(true)
+      expect(native).toEqual([])
+      expect(out.writes).toEqual([axCodeTerminalTitleSequence("AX-Code")])
+    } finally {
+      unregisterTuiSequenceTarget(target)
+      out.restore()
+    }
+  })
+
+  test("falls back to a direct write when the native write throws", () => {
+    const target: TuiSequenceTarget = {
+      threaded: true,
+      write: () => {
+        throw new Error("native queue down")
+      },
+    }
+    registerTuiSequenceTarget(target)
+    const out = captureStdout()
+    try {
+      expect(setTuiTerminalTitle("AX-Code", profile)).toBe(true)
+      expect(out.writes).toEqual([axCodeTerminalTitleSequence("AX-Code")])
+    } finally {
+      unregisterTuiSequenceTarget(target)
+      out.restore()
+    }
+  })
+
+  test("routes the progress keepalive through the native queue", () => {
+    vi.useFakeTimers()
+    const native: string[] = []
+    const target: TuiSequenceTarget = {
+      threaded: true,
+      write: (sequence) => void native.push(sequence),
+    }
+    registerTuiSequenceTarget(target)
+    const out = captureStdout()
+    try {
+      expect(setTuiTerminalProgress(true, profile, process.stdout, true)).toBe(true)
+      vi.advanceTimersByTime(TUI_TERMINAL_PROGRESS_KEEPALIVE_MS * 2)
+      expect(setTuiTerminalProgress(false, profile)).toBe(true)
+      expect(out.writes).toEqual([])
+      expect(native).toEqual([
+        TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
+        TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
+        TUI_TERMINAL_PROGRESS_ACTIVE_SEQUENCE,
+        TUI_TERMINAL_PROGRESS_CLEAR_SEQUENCE,
+      ])
+    } finally {
+      setTuiTerminalProgress(false, profile)
+      unregisterTuiSequenceTarget(target)
+      out.restore()
+      vi.useRealTimers()
+    }
   })
 })

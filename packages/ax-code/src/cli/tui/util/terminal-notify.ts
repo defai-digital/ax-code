@@ -3,6 +3,7 @@
 // a fire-once key so reactive re-renders cannot spam the terminal.
 
 import { oscMuxFromEnv, wrapOscForMux } from "./osc-passthrough"
+import { writeTuiSequenceThroughRenderer } from "./sequence-writer"
 
 type NotifyStream = {
   write: (chunk: string) => boolean
@@ -72,6 +73,10 @@ export function notifyTerminal(
     sequence = OSC_SUFFIX
   }
 
+  // Serialize through the renderer's native write queue when one is mounted:
+  // a direct stdout write can splice into a frame from the render thread and
+  // paint the aborted frame tail as literal text.
+  if (stream === process.stdout && writeTuiSequenceThroughRenderer(sequence)) return true
   try {
     stream.write(sequence)
     return true

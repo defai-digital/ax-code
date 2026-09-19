@@ -1,6 +1,7 @@
 import { render, type JSX } from "ax-tui/solid"
 import type { CliRendererConfig } from "ax-tui"
 import { Clipboard } from "@tui/util/clipboard"
+import { writeTuiSequenceThroughRenderer } from "@tui/util/sequence-writer"
 import { Log } from "@/util/log"
 import { Flag } from "@/flag/flag"
 import { toErrorMessage } from "@/util/error-message"
@@ -146,6 +147,11 @@ function writeTuiSequence(stream: TuiSequenceStream, sequence: string) {
   // confirmed terminal may receive title or repeated progress sequences.
   if (stream.isTTY !== true) return false
   if (stream.writable === false || stream.destroyed) return false
+  // A threaded renderer owns stdout frames; serialize through its native
+  // write queue so this sequence cannot splice into an in-flight frame and
+  // paint the frame tail as literal text. Teardown writes after
+  // renderer.destroy() skip this (no target registered) and stay direct.
+  if (stream === process.stdout && writeTuiSequenceThroughRenderer(sequence)) return true
   try {
     stream.write(sequence)
     return true

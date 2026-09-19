@@ -6,7 +6,7 @@ import { DialogSetup, shouldOfferSetup } from "./component/dialog-setup"
 import { useKeyboard, useRenderer, useTerminalDimensions } from "ax-tui/solid"
 import { Clipboard } from "@tui/util/clipboard"
 import { Selection } from "@tui/util/selection"
-import { MouseButton, TextAttributes, type MouseEvent } from "ax-tui"
+import { MouseButton, TextAttributes, resolveRenderLib, type MouseEvent } from "ax-tui"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import {
   type Component,
@@ -58,6 +58,11 @@ import { VisualCapabilityProvider } from "./ui/primitives/capability-context"
 import { runMode, runModeFlags, runModeTransition, type RunMode } from "./component/prompt/run-mode-view-model"
 import { TuiConfigProvider, useTuiConfig } from "./context/tui-config"
 import { notifyTerminal } from "./util/terminal-notify"
+import {
+  registerTuiSequenceTarget,
+  unregisterTuiSequenceTarget,
+  type TuiSequenceTarget,
+} from "@tui/util/sequence-writer"
 import { notifyAudioEvent, type AudioNotifySettings } from "./util/audio-notify"
 import { createTurnCompleteTracker } from "./util/turn-complete-tracker"
 import { createPendingRequestTracker, familySessionIDs, outsideFamilyRequests } from "./util/pending-request-notices"
@@ -258,6 +263,19 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
   const renderer = useRenderer()
   const renderProfile = getTuiRenderProfile()
   renderer.externalOutputMode = "passthrough"
+  // Route out-of-band terminal sequences (title, progress keepalive,
+  // notifications, OSC52 clipboard) through the renderer's native write queue
+  // while a threaded renderer is mounted, so a JS-side stdout write cannot
+  // splice into an in-flight frame and paint the aborted tail as text.
+  const sequenceTarget: TuiSequenceTarget = {
+    threaded: renderProfile.useThread,
+    write: (sequence) => {
+      if (renderer.isDestroyed) throw new Error("TUI renderer is destroyed")
+      resolveRenderLib().writeOut(renderer.rendererPtr, sequence)
+    },
+  }
+  registerTuiSequenceTarget(sequenceTarget)
+  onCleanup(() => unregisterTuiSequenceTarget(sequenceTarget))
   const dialog = useDialog()
   const local = useLocal()
   const kv = useKV()

@@ -11,6 +11,7 @@ import { which } from "../../../util/which"
 import { Log } from "../../../util/log"
 import { toErrorMessage } from "../../../util/error-message"
 import { oscMuxFromEnv, wrapOscForMux, type OscMux } from "./osc-passthrough"
+import { writeTuiSequenceThroughRenderer } from "./sequence-writer"
 
 const log = Log.create({ service: "tui.clipboard" })
 
@@ -68,6 +69,9 @@ function writeOsc52(text: string): boolean {
   if (!process.stdout.isTTY) return false
   const sequence = osc52ClipboardSequence(text, oscMuxFromEnv())
   if (!sequence) return false
+  // Serialize through the renderer's native write queue when one is mounted:
+  // a direct stdout write can splice into a frame from the render thread.
+  if (writeTuiSequenceThroughRenderer(sequence)) return true
   process.stdout.write(sequence)
   return true
 }

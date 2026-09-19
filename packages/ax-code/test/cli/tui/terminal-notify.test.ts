@@ -5,6 +5,10 @@ import {
   resetTerminalNotificationKeys,
   supportsTerminalNotification,
 } from "../../../src/cli/tui/util/terminal-notify"
+import {
+  registerTuiSequenceTarget,
+  unregisterTuiSequenceTarget,
+} from "../../../src/cli/tui/util/sequence-writer"
 
 function fakeStdout() {
   const writes: string[] = []
@@ -168,5 +172,30 @@ describe("notifyTerminal", () => {
       },
     }
     expect(notifyTerminal({ title: "ax-code", body: "Task complete", key: "k10" }, stream, supportedEnv)).toBe(false)
+  })
+
+  test("routes through a registered threaded render target instead of writing stdout directly", () => {
+    const native: string[] = []
+    const target = { threaded: true, write: (sequence: string) => void native.push(sequence) }
+    registerTuiSequenceTarget(target)
+    const direct: string[] = []
+    const originalWrite = process.stdout.write
+    process.stdout.write = ((chunk: string) => {
+      direct.push(chunk)
+      return true
+    }) as typeof process.stdout.write
+    try {
+      const result = notifyTerminal(
+        { title: "ax-code", body: "Task complete", key: "k11-native" },
+        process.stdout,
+        supportedEnv,
+      )
+      expect(result).toBe(true)
+      expect(native).toEqual(["\x1b]9;ax-code: Task complete\x07"])
+      expect(direct).toEqual([])
+    } finally {
+      unregisterTuiSequenceTarget(target)
+      process.stdout.write = originalWrite
+    }
   })
 })
