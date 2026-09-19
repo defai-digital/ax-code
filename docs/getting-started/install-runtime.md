@@ -288,7 +288,7 @@ The source launcher should report `Runtime: Node vX.Y.Z (source)`.
 
 ## Toolchain Requirements
 
-The repository enforces `pnpm@10.33.4` through the root `packageManager` field and `only-allow pnpm`. Node.js must match the root `package.json` engine (`>=26`), which also provides `--experimental-ffi` for source-mode TUI commands.
+The repository enforces `pnpm@10.33.4` through the root `packageManager` field and `only-allow pnpm`: the `preinstall` hook blocks non-pnpm installs, and root `pre<script>` hooks block `npm run <script>` with the same requirement. Node.js must match the root `package.json` engine (`>=26`), which also provides `--experimental-ffi` for source-mode TUI commands.
 
 Do not use root `pnpm test`; the root script intentionally exits with `do not run tests from root`. For `packages/ax-code`, run tests from `packages/ax-code/`.
 

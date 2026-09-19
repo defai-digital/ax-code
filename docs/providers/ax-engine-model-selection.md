@@ -98,7 +98,7 @@ an existing process with a different policy. It does not change model selection 
 that start only. Set the persistent provider option if subsequent coding requests
 should use the same override. The prepare/start HTTP bodies also accept `mtpPolicy`.
 These managed settings do not reconfigure separately attached endpoints.
-After updating source, restart `npm run dev` to load the new default; an already
+After updating source, restart `pnpm run dev` to load the new default; an already
 running development backend retains its loaded code until restarted.
 
 `ax-code providers ax-engine status` (or `--json`) separates the requested policy,
