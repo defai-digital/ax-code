@@ -12,6 +12,8 @@ import { SessionPrompt } from "../../src/session/prompt"
 import { MAX_TRUNCATED_MODEL_TURN_RETRIES } from "../../src/session/prompt/prompt-loop-config"
 import { SessionStatus } from "../../src/session/status"
 import { SessionSummary } from "../../src/session/summary"
+import { SystemPrompt } from "../../src/session/system"
+import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
 import { Todo } from "../../src/session/todo"
 import { Snapshot } from "../../src/snapshot"
 import { Database } from "../../src/storage/db"
@@ -85,6 +87,120 @@ afterEach(async () => {
 })
 
 describe("session.prompt flow", () => {
+  test.each([false, true])("compact AX Engine preflight and coding recovery after cancel=%s", async (cancel) => {
+    await using tmp = await tmpdir({ git: true })
+    let currentModel = {
+      ...model,
+      id: "qwen3.8-27b-axq-6bit" as any,
+      providerID: "ax-engine" as any,
+      api: { ...model.api, id: "qwen3.8-27b-axq-6bit" },
+      // The compact system fits here; restoring stock craft would block the first turn.
+      limit: { context: 2048, output: 512 },
+    }
+    modelSpy = vi.spyOn(Provider, "getModel").mockImplementation(async () => currentModel)
+    summarySpy = vi.spyOn(SessionSummary, "summarize").mockResolvedValue()
+    const preflight = vi.spyOn(SystemPrompt, "request")
+    let readyResolve!: () => void
+    const ready = new Promise<void>((resolve) => {
+      readyResolve = resolve
+    })
+    const inputs: LLM.StreamInput[] = []
+    streamSpy = vi.spyOn(LLM, "stream").mockImplementation(async (input) => {
+      inputs.push(input)
+      const first = inputs.length === 1
+      return {
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield { type: "start-step" }
+          yield { type: "text-start", id: "text_1" }
+          yield { type: "text-delta", id: "text_1", text: first ? "A quiet Tokyo evening." : "Coding reply." }
+          readyResolve()
+          if (first && cancel) {
+            await new Promise((_, reject) => {
+              input.abort.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {
+                once: true,
+              })
+            })
+          }
+          yield { type: "text-end", id: "text_1" }
+          yield {
+            type: "finish-step",
+            finishReason: "stop",
+            usage: { inputTokens: 600, outputTokens: 10, totalTokens: 610 },
+          }
+          yield { type: "finish" }
+        })(),
+      } as any
+    })
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const session = await Session.create({ title: "Compact profile recovery" })
+          const selection = { providerID: currentModel.providerID, modelID: currentModel.id }
+          const pending = SessionPrompt.prompt({
+            model: selection,
+            sessionID: session.id,
+            agent: "build",
+            system: "Keep the requested language.",
+            parts: [{ type: "text", text: "Tell me a story of Tokyo." }],
+          })
+          if (cancel) {
+            await ready
+            await SessionPrompt.cancel(session.id)
+          }
+          const first = await pending
+          expect(first.info.role).toBe("assistant")
+          if (first.info.role === "assistant") {
+            expect(first.info.error?.name).toBe(cancel ? "MessageAbortedError" : undefined)
+          }
+          expect(inputs).toHaveLength(1)
+          expect(inputs[0].systemProfile).toBe("compact")
+          expect(inputs[0].tools).toEqual({})
+          expect(inputs[0].user.system).toBe("Keep the requested language.")
+          const compactPreflight = preflight.mock.calls.findIndex(([input]) => input.profile === "compact")
+          expect(compactPreflight).toBeGreaterThanOrEqual(0)
+          const assembled = preflight.mock.results[compactPreflight].value as string[]
+          expect(assembled).not.toContain(PROMPT_CRAFT)
+          expect(assembled).toContain("Keep the requested language.")
+          expect(assembled).toEqual(
+            SystemPrompt.request({
+              agent: inputs[0].agent,
+              model: inputs[0].model,
+              system: inputs[0].system,
+              userSystem: inputs[0].user.system,
+              profile: inputs[0].systemProfile,
+            }),
+          )
+
+          currentModel = { ...currentModel, limit: model.limit }
+          const recovered = await SessionPrompt.prompt({
+            model: selection,
+            sessionID: session.id,
+            agent: "build",
+            parts: [{ type: "text", text: "Read src/main.ts and explain the exported functions." }],
+          })
+          expect(recovered.info.role).toBe("assistant")
+          expect(inputs).toHaveLength(2)
+          expect(inputs[1].systemProfile).toBe("default")
+          expect(Object.keys(inputs[1].tools)).toContain("read")
+          expect(
+            SystemPrompt.request({
+              agent: inputs[1].agent,
+              model: inputs[1].model,
+              system: inputs[1].system,
+              profile: inputs[1].systemProfile,
+            }),
+          ).toContain(PROMPT_CRAFT)
+          expect(await SessionStatus.get(session.id)).toEqual({ type: "idle" })
+          await Session.remove(session.id)
+        },
+      })
+    } finally {
+      preflight.mockRestore()
+    }
+  })
+
   test("persists text reply and survives instance reload", async () => {
     await using tmp = await tmpdir({ git: true })
 

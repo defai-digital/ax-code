@@ -1,5 +1,6 @@
 import type { Provider } from "../provider"
 import type { CustomLoader } from "../loaders"
+import { NativePerf } from "../../perf/native"
 import { ProviderID, ModelID } from "../schema"
 import {
   AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS,
@@ -120,10 +121,12 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
   const modelID = normalizeModelID(options.modelID)
   requireAxEngineLocalModel(modelID)
   const quantization = normalizeQuantization(options.quantization, modelID)
-  const definition = await resolveAxEngineModelDefinition(modelID, { signal })
+  const definition = await NativePerf.runAsync("ax-engine.setup.definition", undefined, () =>
+    resolveAxEngineModelDefinition(modelID, { signal }),
+  )
   const apiModelID = definition.apiModelID
 
-  const eligibility = await requirePlatformEligibility()
+  const eligibility = await NativePerf.runAsync("ax-engine.setup.platform", undefined, requirePlatformEligibility)
   if (
     definition.estimatedResources &&
     (eligibility.memoryBytes === undefined || eligibility.memoryBytes < definition.minMemoryBytes)
@@ -133,12 +136,16 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
     )
   }
 
-  const dependency = await getDependencyStatus(provider.options)
+  const dependency = await NativePerf.runAsync("ax-engine.setup.dependency", undefined, () =>
+    getDependencyStatus(provider.options),
+  )
   if (!dependency.available || !dependency.binaryPath) {
     throw new Error(dependency.blockers[0] ?? "ax-engine binary is not available")
   }
 
-  const model = await getModelStatus({ ...provider.options, ...options, modelID, quantization })
+  const model = await NativePerf.runAsync("ax-engine.setup.model", undefined, () =>
+    getModelStatus({ ...provider.options, ...options, modelID, quantization }),
+  )
   if (!model.present || !model.path) {
     const requiredBytes = await requiredDiskBytes(modelID, quantization)
     const requiredGiB = Math.ceil(requiredBytes / 1024 ** 3)
@@ -150,27 +157,33 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
       ].join("\n"),
     )
   }
-  const state = await ensureServer({
-    binaryPath: dependency.binaryPath,
-    modelID,
-    apiModelID,
-    modelPath: model.path,
-    modelRevision: model.revision,
-    preferredPort: AX_ENGINE_DEFAULT_PORT,
-    contextTokens: definition.contextTokens,
-    maxOutputTokens: definition.outputTokens,
-    binaryVersion: dependency.version,
-    maxConcurrentRequests: resolveAxEngineMaxConcurrentRequests(provider.options),
-    mtpPolicy: resolveAxEngineMtpPolicy(provider.options),
-    apiKey: resolveAxEngineApiKey(provider.options, provider.key),
-    signal,
-  })
+  const binaryPath = dependency.binaryPath
+  const modelPath = model.path
+  const state = await NativePerf.runAsync("ax-engine.setup.server", undefined, () =>
+    ensureServer({
+      binaryPath,
+      modelID,
+      apiModelID,
+      modelPath,
+      modelRevision: model.revision,
+      preferredPort: AX_ENGINE_DEFAULT_PORT,
+      contextTokens: definition.contextTokens,
+      maxOutputTokens: definition.outputTokens,
+      binaryVersion: dependency.version,
+      maxConcurrentRequests: resolveAxEngineMaxConcurrentRequests(provider.options),
+      mtpPolicy: resolveAxEngineMtpPolicy(provider.options),
+      apiKey: resolveAxEngineApiKey(provider.options, provider.key),
+      signal,
+    }),
+  )
   noteActiveAxEngineServer(state.baseURL)
-  const contracts = await fetchAxEngineModelContracts({
-    baseURL: state.baseURL,
-    apiKey: resolveAxEngineApiKey(provider.options, provider.key),
-    signal,
-  })
+  const contracts = await NativePerf.runAsync("ax-engine.setup.contract", undefined, () =>
+    fetchAxEngineModelContracts({
+      baseURL: state.baseURL,
+      apiKey: resolveAxEngineApiKey(provider.options, provider.key),
+      signal,
+    }),
+  )
   return requireAxEngineCodingContract(contracts, apiModelID, { requireText: Boolean(definition.revision) })
 }
 

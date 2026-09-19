@@ -1158,6 +1158,7 @@ export namespace SessionPrompt {
       }
 
       const textOnlyProfile = activeTurnProfile?.kind !== "default" ? activeTurnProfile : undefined
+      const systemProfile: SystemPrompt.Profile = textOnlyProfile ? "compact" : "default"
       const textOnlyFastReasoning = textOnlyProfile ? textOnlyUsesFastReasoning(lastUser) : false
       const pendingInstructionForRequest =
         lastUser.format?.type === "json_schema" ? undefined : pendingAxEngineTurnInstruction
@@ -1217,6 +1218,7 @@ export namespace SessionPrompt {
             model,
             system: request.system,
             userSystem: lastUser.system,
+            profile: systemProfile,
           }),
           requestMessages: request.requestMessages,
           tools: lastUser.tools,
@@ -1345,6 +1347,7 @@ export namespace SessionPrompt {
           abort,
           sessionID,
           system: request.system,
+          systemProfile,
           messages: request.requestMessages,
           toolFailureCount: request.toolFailureCount,
           tools,

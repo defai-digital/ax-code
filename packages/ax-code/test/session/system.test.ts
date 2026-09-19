@@ -22,6 +22,39 @@ import PROMPT_META from "../../src/session/prompt/meta.txt"
 import { git } from "../../src/util/git"
 
 describe("session.system", () => {
+  test("compact AX Engine turns omit stock craft while retaining user instructions", () => {
+    const model = { id: "qwen3.8-27b-axq-6bit", providerID: "ax-engine", api: { id: "qwen3.8-27b-axq-6bit" } } as any
+    const input = { agent: {}, model, system: ["Direct response only."], userSystem: "Preserve the requested format." }
+    expect(SystemPrompt.request({ ...input, profile: "compact" })).toEqual([
+      PROMPT_AX_ENGINE,
+      ...input.system,
+      input.userSystem,
+    ])
+    expect(SystemPrompt.request(input)).toEqual([PROMPT_AX_ENGINE, PROMPT_CRAFT, ...input.system, input.userSystem])
+  })
+
+  test("compact assembly preserves custom-agent instructions verbatim", () => {
+    const prompt = "Custom instructions: retain every qualification."
+    expect(
+      SystemPrompt.request({
+        agent: { prompt },
+        model: { id: "qwen", providerID: "ax-engine", api: { id: "qwen" } } as any,
+        profile: "compact",
+        system: ["Transform only the preceding answer."],
+        userSystem: "Use the requested language.",
+      }),
+    ).toEqual([prompt, "Transform only the preceding answer.", "Use the requested language."])
+  })
+
+  test("compact assembly does not change other providers", () => {
+    const input = {
+      agent: {},
+      model: { id: "test", providerID: "test", api: { id: "test" } } as any,
+      system: ["Direct response only."],
+    }
+    expect(SystemPrompt.request({ ...input, profile: "compact" })).toEqual(SystemPrompt.request(input))
+  })
+
   test("nested sessions explain the Git path base that otherwise yields empty diffs", async () => {
     await using tmp = await tmpdir({ git: true })
     const nested = path.join(tmp.path, "packages", "app")

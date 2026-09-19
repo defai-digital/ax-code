@@ -79,15 +79,19 @@ export namespace SystemPrompt {
     }
   }
 
+  export type Profile = "default" | "compact"
+
   function withCraft(prompt: string) {
     return [prompt, PROMPT_CRAFT]
   }
 
-  export function provider(model: Provider.Model) {
+  export function provider(model: Provider.Model, profile: Profile = "default") {
     // Ornith 35B (local / ax-engine) and 397B (cloud / Alibaba PAI) share one
     // family prompt. Match the model id before the ax-engine provider blanket.
     if (ProviderTransform.isOrnithFamily(model)) return withCraft(PROMPT_ORNITH)
-    if (model.providerID === "ax-engine") return withCraft(PROMPT_AX_ENGINE)
+    if (model.providerID === "ax-engine") {
+      return profile === "compact" ? [PROMPT_AX_ENGINE] : withCraft(PROMPT_AX_ENGINE)
+    }
     // OpenCode routes Muse Spark / Glimmer to a Meta-family prompt. Match
     // before the gpt* blanket so a future "muse-gpt" alias cannot steal it.
     if (ProviderTransform.isMuseFamily(model)) {
@@ -113,9 +117,10 @@ export namespace SystemPrompt {
     model: Provider.Model
     system: string[]
     userSystem?: string
+    profile?: Profile
   }) {
     return [
-      ...(input.agent.prompt ? [input.agent.prompt] : provider(input.model)),
+      ...(input.agent.prompt ? [input.agent.prompt] : provider(input.model, input.profile)),
       ...input.system,
       ...(input.userSystem ? [input.userSystem] : []),
     ].filter((item) => item.length > 0)

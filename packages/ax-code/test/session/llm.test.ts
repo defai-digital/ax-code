@@ -20,6 +20,8 @@ import { LLMRequestEvent } from "../../src/replay/event"
 import { Recorder } from "../../src/replay/recorder"
 import { ScopedFlag } from "../../src/flag/scoped"
 import { RequestProvenance } from "../../src/session/request-provenance"
+import PROMPT_CRAFT from "../../src/session/prompt/craft.txt"
+import PROMPT_AX_ENGINE from "../../src/session/prompt/ax-engine.txt"
 
 describe("session.llm.hasToolCalls", () => {
   test("repairs common directory listing tool aliases", () => {
@@ -1096,7 +1098,11 @@ describe("session.llm.stream", () => {
     })
   })
 
-  test("disables AX Engine thinking on small compact-conversation requests", async () => {
+  test.each([
+    { systemProfile: undefined, customPrompt: undefined },
+    { systemProfile: "compact" as const, customPrompt: undefined },
+    { systemProfile: "compact" as const, customPrompt: "Retain this custom agent instruction verbatim." },
+  ])("sends the selected AX Engine system profile without thinking: %j", async ({ systemProfile, customPrompt }) => {
     const providerID = "ax-engine"
     const modelID = "qwen3.8-27b-axq-6bit"
     const modelsResponse = () =>
@@ -1155,6 +1161,7 @@ describe("session.llm.stream", () => {
         const agent = {
           name: "build",
           mode: "primary",
+          prompt: customPrompt,
           options: {
             chat_template_kwargs: { enable_thinking: true, preserve_thinking: true },
           },
@@ -1167,6 +1174,7 @@ describe("session.llm.stream", () => {
           time: { created: Date.now() },
           agent: agent.name,
           model: { providerID: ProviderID.make(providerID), modelID: resolved.id },
+          system: "Retain this user instruction verbatim.",
         } satisfies MessageV2.User
 
         const stream = await LLM.stream({
@@ -1175,6 +1183,7 @@ describe("session.llm.stream", () => {
           model: resolved,
           agent,
           small: true,
+          systemProfile,
           system: ["Answer the user's clear creative request directly."],
           abort: new AbortController().signal,
           messages: [{ role: "user", content: "a vietnam ghost story, in t. chinese" }],
@@ -1187,6 +1196,17 @@ describe("session.llm.stream", () => {
         expect(body.model).toBe(modelID)
         expect(body.chat_template_kwargs).toEqual({ enable_thinking: false })
         expect(body.enable_thinking).toBeUndefined()
+        const system = (body.messages as { role: string; content: string }[]).filter(
+          (message) => message.role === "system",
+        )
+        expect(system).toHaveLength(1)
+        expect(system[0].content).toBe(
+          [
+            ...(customPrompt ? [customPrompt] : [PROMPT_AX_ENGINE, ...(systemProfile ? [] : [PROMPT_CRAFT])]),
+            "Answer the user's clear creative request directly.",
+            user.system,
+          ].join("\n"),
+        )
       },
     })
   })

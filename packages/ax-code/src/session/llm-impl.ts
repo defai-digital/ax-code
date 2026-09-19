@@ -78,6 +78,8 @@ export namespace LLM {
     agent: Agent.Info
     permission?: Permission.Ruleset
     system: string[]
+    /** Explicit turn policy; small auxiliary requests retain the default prompt. */
+    systemProfile?: SystemPrompt.Profile
     abort: AbortSignal
     messages: ModelMessage[]
     small?: boolean
@@ -227,6 +229,7 @@ export namespace LLM {
       model: input.model,
       system: input.system,
       userSystem: input.user.system,
+      profile: input.systemProfile,
     }).join("\n")
     if (joined) {
       system.push(joined)
