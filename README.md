@@ -238,7 +238,7 @@ See [Sandbox Mode](docs/guides/sandbox.md), [Autonomous Mode](docs/guides/autono
 
 MTPLX and oMLX presets are available in the source checkout, ahead of the v7.19.3 packaged binaries.
 See [local runtime setup](docs/providers/local-mlx-runtimes.md) and the
-[2026-09-19 local inference test results](docs/guides/local-inference-results-2026-09-19.md).
+[2026-09-19 AX Code/OpenCode retest with MTP](docs/guides/local-client-matrix-2026-09-19.md).
 The report separates decode speed, first-token latency, cache reuse, and model-package differences.
 
 CLI bridges reuse a local vendor CLI and its login session. AX Code records its own tool execution in full; activity that happens inside a vendor CLI process is visible only through that bridge's output.

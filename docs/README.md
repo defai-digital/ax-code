@@ -85,6 +85,7 @@ For standalone questions about selected files through AX Trust caching, see
 - [Free-Tier API Quickstart](providers/free-tier-apis.md) — compatible no-cost paths, constraints, and safe evaluation.
 - [Custom and Gateway Providers](providers/custom-provider.md) — OpenAI- and Anthropic-compatible endpoints.
 - [MTPLX and oMLX Setup](providers/local-mlx-runtimes.md) — source-checkout local presets, discovery, tools, and authentication.
+- [AX Code/OpenCode Client Retest](guides/local-client-matrix-2026-09-19.md) — six client/runtime combinations, active MTP, first/repeat timing, and code checks.
 - [Local Inference Measurements](guides/local-inference-results-2026-09-19.md) — dated AX Code/OpenCode and runtime testing with timing and comparability limits.
 - [AX Engine Model Selection](providers/ax-engine-model-selection.md) — local model ranking and memory guidance.
 

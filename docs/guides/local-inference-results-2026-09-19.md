@@ -8,6 +8,10 @@ Last reviewed: 2026-09-19
 
 Owner: ax-code runtime
 
+For the complete six-combination client matrix after the local prefix fix, see the
+[new AX Code/OpenCode retest](local-client-matrix-2026-09-19.md). The client speeds below remain
+historical observations under their original conditions.
+
 These measurements investigate local response latency and decode speed on one **Apple M3 Max with
 128 GiB unified memory**. They are not a hardware qualification, model-quality evaluation, or a promise
 of 30–40 tokens/s at arbitrary context lengths. MTPLX and oMLX connection instructions are in the

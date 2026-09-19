@@ -1,0 +1,648 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-19",
+  "host": {
+    "soc": "Apple M3 Max",
+    "memory_gib": 128,
+    "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
+    "storage": "SMB backbone weights; byte-identical MTP sidecar staged on SSD for MTPLX and oMLX import"
+  },
+  "runtime_versions": {
+    "ax_code_source": "62895cf40a39e0ebd4afec0afa21044e9871aa0b",
+    "opencode": "1.18.31",
+    "ax_engine": "7.4.0",
+    "mtplx": "2.11.3",
+    "mtplx_mlx": "0.32.2",
+    "omlx": "0.6.4",
+    "omlx_mlx": "0.32.0"
+  },
+  "artifact": {
+    "repo": "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
+    "revision": "4d36d652c21590f6813495351c3baf5fca5b3831",
+    "mtp_sha256": "914bef4ec6fcfde83925f9c138559253db030d9138b0a375623d6fdc06ebe898",
+    "omlx_import": {
+      "merge_mode": "remap",
+      "mtp_tensors": 15,
+      "tensor_payloads_byte_identical": true,
+      "imported_sha256": "66e418afbde3bf1c17a0bdf1963d853e126b9ad326fcd602214822402eb7886e"
+    }
+  },
+  "method": "Serial backend and client pairs; empty isolated backend cache before each client; unrelated load warmup capped at 64 output tokens; one cold task and one repeated task per client. Known local provider IDs; AX Engine uses verified loopback attachment to a server launched with managed flags. Common rendered instructions, user prompt and permitted tool names; client-generated prompts and schemas retained. Common T=0.55, top_p=1, top_k=0, seed=0, thinking off, 1024 output ceiling, MTP depth 3 experiment. Delivered estimate uses output tokens minus one over first-to-last payload interval. No speedup or median claim from one observation per cache condition.",
+  "instructions_sha256": "2b69d7c555de307caa11e21c6963c62bfe38b1e601ba710bd36314e87bf5145f",
+  "sample_count_per_condition": 1,
+  "delivered_rate_formula": "(completion_tokens - 1) / (last_nonempty_output_payload_s - first_nonempty_output_payload_s)",
+  "mtp_evidence": [
+    {
+      "backend": "ax-engine",
+      "client": "ax-code",
+      "repeated_messages_equal": true,
+      "repeated_tool_schemas_equal": true,
+      "changed_body_fields": [
+        "apiModelID",
+        "liveChatDefault",
+        "liveCodingOnly",
+        "liveCodingSupported",
+        "livePrimaryUse"
+      ],
+      "observed_metrics": {
+        "ax_engine_mlx_mtp_model_policy_active": 1,
+        "ax_engine_mtp_draft_tokens_total": 39,
+        "ax_engine_mtp_accepted_tokens_total": 38
+      },
+      "policy": "required",
+      "scope": "After warmup, before first timed completion; active model policy, not per-task draft totals",
+      "load_warmup_output_tokens": 64
+    },
+    {
+      "backend": "ax-engine",
+      "client": "opencode",
+      "repeated_messages_equal": true,
+      "repeated_tool_schemas_equal": true,
+      "changed_body_fields": [],
+      "observed_metrics": {
+        "ax_engine_mlx_mtp_model_policy_active": 1,
+        "ax_engine_mtp_draft_tokens_total": 212,
+        "ax_engine_mtp_accepted_tokens_total": 197
+      },
+      "policy": "required",
+      "scope": "After first timed completion; cumulative warmup plus first task, not repeat totals",
+      "load_warmup_output_tokens": 64
+    },
+    {
+      "backend": "mtplx",
+      "client": "ax-code",
+      "repeated_messages_equal": true,
+      "repeated_tool_schemas_equal": true,
+      "changed_body_fields": [],
+      "generation_mode": "mtp",
+      "runtime_mode": "Sustained MTP",
+      "draft_depth": 3,
+      "mtp_enabled": true,
+      "load_mtp": true,
+      "background_warmup": {
+        "mode": "background",
+        "state": "done",
+        "steps": [
+          {
+            "kind": "gqa_packed_pipelines",
+            "state": "skipped",
+            "elapsed_s": 0.0,
+            "yields": 0
+          },
+          {
+            "kind": "ladder",
+            "context": 512,
+            "state": "ok",
+            "elapsed_s": 4.182,
+            "yields": 1,
+            "tok_s": 38.82
+          },
+          {
+            "kind": "ladder",
+            "context": 2560,
+            "state": "ok",
+            "elapsed_s": 12.542,
+            "yields": 0,
+            "tok_s": 39.09
+          }
+        ],
+        "started_at_s": 1789806617.37038,
+        "finished_at_s": 1789806727.643421,
+        "elapsed_s": 110.273,
+        "resubmits": 1
+      },
+      "active_request_route": {
+        "active_lane": "solo_mtp",
+        "mtp_available": true,
+        "mtp_disabled_reason": null
+      },
+      "load_warmup_output_tokens": 64
+    },
+    {
+      "backend": "mtplx",
+      "client": "opencode",
+      "repeated_messages_equal": true,
+      "repeated_tool_schemas_equal": true,
+      "changed_body_fields": [],
+      "generation_mode": "mtp",
+      "runtime_mode": "Sustained MTP",
+      "draft_depth": 3,
+      "mtp_enabled": true,
+      "load_mtp": true,
+      "background_warmup": {
+        "mode": "background",
+        "state": "done",
+        "steps": [
+          {
+            "kind": "gqa_packed_pipelines",
+            "state": "skipped",
+            "elapsed_s": 0.0,
+            "yields": 0
+          },
+          {
+            "kind": "ladder",
+            "context": 512,
+            "state": "ok",
+            "elapsed_s": 4.21,
+            "yields": 1,
+            "tok_s": 48.69
+          },
+          {
+            "kind": "ladder",
+            "context": 2560,
+            "state": "ok",
+            "elapsed_s": 12.176,
+            "yields": 0,
+            "tok_s": 44.39
+          }
+        ],
+        "started_at_s": 1789807027.824136,
+        "finished_at_s": 1789807137.983886,
+        "elapsed_s": 110.16,
+        "resubmits": 1
+      },
+      "active_request_route": {
+        "active_lane": "solo_mtp",
+        "mtp_available": true,
+        "mtp_disabled_reason": null
+      },
+      "load_warmup_output_tokens": 64
+    },
+    {
+      "backend": "omlx",
+      "client": "ax-code",
+      "repeated_messages_equal": true,
+      "repeated_tool_schemas_equal": true,
+      "changed_body_fields": [],
+      "mode": "Lightning MTP",
+      "draft_depth": 3,
+      "generation_telemetry": [
+        "MTP[0] finish=stop tokens=41 cycles=14 tok/cycle=2.93 accept=27/29 (93.1%) depth[d1=11/11,d2=9/10,d3=7/8] d0=3 emits[init=2,draft=26,bonus=11,verify=2] timing[backbone=1099.4ms mtp=131.8ms sample=0.5ms cache=4.3ms]",
+        "MTP[1] finish=stop tokens=276 cycles=79 tok/cycle=3.49 accept=197/212 (92.9%) depth[d1=74/76,d2=68/73,d3=55/63] d0=3 emits[init=2,draft=196,bonus=64,verify=14] timing[backbone=13455.3ms mtp=2225.9ms sample=3.4ms cache=36.7ms]",
+        "MTP[2] finish=stop tokens=233 cycles=78 tok/cycle=2.99 accept=155/168 (92.3%) depth[d1=65/68,d2=58/60,d3=32/40] d0=10 emits[init=2,draft=154,bonus=64,verify=13] timing[backbone=12280.0ms mtp=1671.0ms sample=3.3ms cache=39.2ms]"
+      ],
+      "load_warmup_output_tokens": 40
+    },
+    {
+      "backend": "omlx",
+      "client": "opencode",
+      "repeated_messages_equal": true,
+      "repeated_tool_schemas_equal": true,
+      "changed_body_fields": [],
+      "mode": "Lightning MTP",
+      "draft_depth": 3,
+      "generation_telemetry": [
+        "MTP[0] finish=stop tokens=41 cycles=15 tok/cycle=2.73 accept=25/27 (92.6%) depth[d1=12/12,d2=10/11,d3=3/4] d0=3 emits[init=2,draft=25,bonus=12,verify=2] timing[backbone=2067.1ms mtp=138.6ms sample=0.8ms cache=5.6ms]",
+        "MTP[1] finish=stop tokens=214 cycles=66 tok/cycle=3.24 accept=147/156 (94.2%) depth[d1=60/63,d2=55/56,d3=32/37] d0=3 emits[init=2,draft=147,bonus=56,verify=9] timing[backbone=9031.3ms mtp=1422.4ms sample=2.6ms cache=23.3ms]",
+        "MTP[2] finish=stop tokens=262 cycles=77 tok/cycle=3.40 accept=185/193 (95.9%) depth[d1=72/74,d2=65/67,d3=48/52] d0=3 emits[init=2,draft=184,bonus=69,verify=7] timing[backbone=10816.8ms mtp=1785.8ms sample=2.9ms cache=28.4ms]"
+      ],
+      "load_warmup_output_tokens": 40
+    }
+  ],
+  "observations": [
+    {
+      "backend": "ax-engine",
+      "client": "ax-code",
+      "phase": "first",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 29896,
+      "output_tokens": 268,
+      "cached_tokens": null,
+      "first_payload_s": 197.7820241659938,
+      "request_wall_s": 220.75719554099487,
+      "cli_wall_s": 231.58116370800417,
+      "delivered_tps": 11.728244388063402,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 1024,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "first_task_after_unrelated_warmup",
+      "wire_sha256": "119b2f54341dcc90105bbbeec024a65931532a60b7727c63d4b0f4611b2ed914",
+      "response_sha256": "a0737d66ba4fe23a857b3b323af56e221ea31ec9d6c857cba4f50d90b407f2d5",
+      "output_source_sha256": "c6418c69af988e38d87e808662e4be60c4b0e351bcdb81bd3a98c23651b4d675",
+      "observed_at_utc": "2026-09-19T08:19:27.634614+00:00"
+    },
+    {
+      "backend": "ax-engine",
+      "client": "ax-code",
+      "phase": "repeat",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 29896,
+      "output_tokens": 268,
+      "cached_tokens": 29696,
+      "first_payload_s": 7.219215958000859,
+      "request_wall_s": 26.86908224999206,
+      "cli_wall_s": 33.339834916987456,
+      "delivered_tps": 13.602620586686315,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 1024,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "same_task_new_client_session",
+      "wire_sha256": "0ae0faed076a30692f0be72a86b1a66fa847febed7eadfca33e1774004a49399",
+      "response_sha256": "b4ffb6e768a9f59623967621ca7dd03732c04ed9c0f7f6ee10b670d3bac9d68e",
+      "output_source_sha256": "c6418c69af988e38d87e808662e4be60c4b0e351bcdb81bd3a98c23651b4d675",
+      "observed_at_utc": "2026-09-19T08:20:00.975155+00:00"
+    },
+    {
+      "backend": "ax-engine",
+      "client": "opencode",
+      "phase": "first",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 17316,
+      "output_tokens": 216,
+      "cached_tokens": null,
+      "first_payload_s": 100.85870170799899,
+      "request_wall_s": 110.42588270799024,
+      "cli_wall_s": 112.82884216698585,
+      "delivered_tps": 22.48617760205165,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 1024,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "first_task_after_unrelated_warmup",
+      "wire_sha256": "b4f2e14c703f76c5fc6edfa973b5ad262ec7a5596193e077004588a803508c60",
+      "response_sha256": "878b6e577eafe8d04c6ac0691a739ca0786f55a72f2b0d2e98c906ac36d1afe2",
+      "output_source_sha256": "b016d2ab7208c4750bb77c3c6314cf59066cb9ed994dd25b99829fe39725f056",
+      "observed_at_utc": "2026-09-19T08:27:26.952615+00:00"
+    },
+    {
+      "backend": "ax-engine",
+      "client": "opencode",
+      "phase": "repeat",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 17316,
+      "output_tokens": 228,
+      "cached_tokens": null,
+      "first_payload_s": 116.02747566701146,
+      "request_wall_s": 127.99578600001405,
+      "cli_wall_s": 129.8959189169982,
+      "delivered_tps": 18.979053583587014,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 1024,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "same_task_new_client_session",
+      "wire_sha256": "b4f2e14c703f76c5fc6edfa973b5ad262ec7a5596193e077004588a803508c60",
+      "response_sha256": "7db781c8db9fcf06b674dbf90732d5665124c7ccbc054976952b3aa7df3393aa",
+      "output_source_sha256": "be0259fc01f29bab1d920ae9697feea1cd79151f858f2786f967ce20b4edd74a",
+      "observed_at_utc": "2026-09-19T08:29:36.849473+00:00"
+    },
+    {
+      "backend": "mtplx",
+      "client": "ax-code",
+      "phase": "first",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 36708,
+      "output_tokens": 285,
+      "cached_tokens": 0,
+      "first_payload_s": 246.67400020800414,
+      "request_wall_s": 262.1485530830105,
+      "cli_wall_s": 269.4330760000157,
+      "delivered_tps": 18.7348048219721,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 4096,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "first_task_after_unrelated_warmup",
+      "wire_sha256": "f25743d2cdc3793b81b54c0bcb5d7911b7d7290192cf3494dcb29b58182e5f13",
+      "response_sha256": "583d02a153d3ad6e677443035c93117e847fc1c7de9de6bc628568f5339ab8ad",
+      "output_source_sha256": "5553909b8b31eaf2003cf34e54a5427c83793fdc4a0e8ba5045f56d4a8ab172a",
+      "observed_at_utc": "2026-09-19T08:36:37.554451+00:00"
+    },
+    {
+      "backend": "mtplx",
+      "client": "ax-code",
+      "phase": "repeat",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 36708,
+      "output_tokens": 285,
+      "cached_tokens": 36708,
+      "first_payload_s": 0.04409004098852165,
+      "request_wall_s": 14.613200874999166,
+      "cli_wall_s": 20.48242504199152,
+      "delivered_tps": 19.693929919761352,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 4096,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "same_task_new_client_session",
+      "wire_sha256": "f25743d2cdc3793b81b54c0bcb5d7911b7d7290192cf3494dcb29b58182e5f13",
+      "response_sha256": "9564cad85e8e45ef6518a48ac1522fdf37f4ff7c1902ddf3ec480cd6ce3ffcda",
+      "output_source_sha256": "5553909b8b31eaf2003cf34e54a5427c83793fdc4a0e8ba5045f56d4a8ab172a",
+      "observed_at_utc": "2026-09-19T08:36:58.041897+00:00"
+    },
+    {
+      "backend": "mtplx",
+      "client": "opencode",
+      "phase": "first",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 18729,
+      "output_tokens": 276,
+      "cached_tokens": 0,
+      "first_payload_s": 108.67425974999787,
+      "request_wall_s": 118.588806499989,
+      "cli_wall_s": 121.00476366601652,
+      "delivered_tps": 27.90772051928814,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 1024,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "first_task_after_unrelated_warmup",
+      "wire_sha256": "6b3a0fa365e8c3301bd353c05c75fc478de9c77c122f632d64eaa9e9e30b4d41",
+      "response_sha256": "2fea72f5cf1362054f11ba4bf67cec1f034c854342b45e36f47daca2a1b16f9d",
+      "output_source_sha256": "4d73c75cfd4d271927c440da46c7185e5618a1efb1ecf93cbff9c0c0e4ac5d7d",
+      "observed_at_utc": "2026-09-19T08:40:59.941395+00:00"
+    },
+    {
+      "backend": "mtplx",
+      "client": "opencode",
+      "phase": "repeat",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 18729,
+      "output_tokens": 276,
+      "cached_tokens": 18729,
+      "first_payload_s": 0.08340895900619216,
+      "request_wall_s": 10.587045791995479,
+      "cli_wall_s": 12.767071792011848,
+      "delivered_tps": 26.348608725831326,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 1024,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "same_task_new_client_session",
+      "wire_sha256": "6b3a0fa365e8c3301bd353c05c75fc478de9c77c122f632d64eaa9e9e30b4d41",
+      "response_sha256": "e43586f77a6235c731eb87c61699ae674ad7e389c9b055e968392973d298cdfc",
+      "output_source_sha256": "4d73c75cfd4d271927c440da46c7185e5618a1efb1ecf93cbff9c0c0e4ac5d7d",
+      "observed_at_utc": "2026-09-19T08:41:12.714423+00:00"
+    },
+    {
+      "backend": "omlx",
+      "client": "ax-code",
+      "phase": "first",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 33124,
+      "output_tokens": 275,
+      "cached_tokens": 0,
+      "first_payload_s": 212.2499625409837,
+      "request_wall_s": 227.92553637499805,
+      "cli_wall_s": 235.6184030410077,
+      "delivered_tps": 17.48130500530183,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 4096,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "first_task_after_unrelated_warmup",
+      "wire_sha256": "857b582014ffa214ea33928214285862494101eb373de9f9ac9b82cbd87b8abb",
+      "response_sha256": "88282aea66bf7eb3f5956d85a4b9e2df84a9b38d064c2645f4da68794848c5ee",
+      "output_source_sha256": "2ab672aab68befd4b375aa9f73be5abd9240fa5965aaf0acc4af725722b41986",
+      "observed_at_utc": "2026-09-19T08:48:31.232054+00:00"
+    },
+    {
+      "backend": "omlx",
+      "client": "ax-code",
+      "phase": "repeat",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 33124,
+      "output_tokens": 232,
+      "cached_tokens": 32768,
+      "first_payload_s": 4.4107721660111565,
+      "request_wall_s": 18.349546832992928,
+      "cli_wall_s": 23.343059457984054,
+      "delivered_tps": 16.598448708319452,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 4096,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "same_task_new_client_session",
+      "wire_sha256": "857b582014ffa214ea33928214285862494101eb373de9f9ac9b82cbd87b8abb",
+      "response_sha256": "c6dc587aafba83ff14e57064c2d1c6eb5711ecba2dac1fa7429da1e0cf713dd4",
+      "output_source_sha256": "466b73bcf4b433aba7de9c1b666924a447117c9b0462484ca59489fedb98b285",
+      "observed_at_utc": "2026-09-19T08:48:54.575809+00:00"
+    },
+    {
+      "backend": "omlx",
+      "client": "opencode",
+      "phase": "first",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 17316,
+      "output_tokens": 213,
+      "cached_tokens": 0,
+      "first_payload_s": 118.02712854201673,
+      "request_wall_s": 128.45606929200585,
+      "cli_wall_s": 130.87675166601548,
+      "delivered_tps": 20.329475835278107,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 1024,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "first_task_after_unrelated_warmup",
+      "wire_sha256": "bb0a3c624f584586fd8c3019e2e1312e64f2e331c3f66d9ba50a02134a348eea",
+      "response_sha256": "93a1344fe0e162e9d1adb7c0fc4ec428796cec584befa262a558d8cd17273f70",
+      "output_source_sha256": "71b05e741231c6a347648c91ef58076867287913aed07f7dee436b16f5840b17",
+      "observed_at_utc": "2026-09-19T08:51:14.710252+00:00"
+    },
+    {
+      "backend": "omlx",
+      "client": "opencode",
+      "phase": "repeat",
+      "contract": {
+        "single_request": true,
+        "exit_zero": true,
+        "natural_stop": true,
+        "instructions_preserved": true,
+        "permitted_tools_equal": true,
+        "no_tool_execution": true,
+        "sampler_aligned": true
+      },
+      "acceptance": {
+        "passed": true,
+        "checks": 10
+      },
+      "input_tokens": 17316,
+      "output_tokens": 261,
+      "cached_tokens": 16384,
+      "first_payload_s": 7.7344191660231445,
+      "request_wall_s": 20.33172458302579,
+      "cli_wall_s": 22.914709709002636,
+      "delivered_tps": 20.64051090929345,
+      "finish_reason": "stop",
+      "tool_names": ["glob", "grep", "read", "skill"],
+      "original_max_tokens": 1024,
+      "strict_typecheck": {
+        "passed": true,
+        "errors": []
+      },
+      "cache_condition": "same_task_new_client_session",
+      "wire_sha256": "bb0a3c624f584586fd8c3019e2e1312e64f2e331c3f66d9ba50a02134a348eea",
+      "response_sha256": "68b8d9c0b7c7f5907523129b077e24c085337539eda40d1e62efad82c1006291",
+      "output_source_sha256": "6bb90352f570cd5ad36a092059859881efe2c2af4a1ec5254f04ee60cbae10af",
+      "observed_at_utc": "2026-09-19T08:51:37.625708+00:00"
+    }
+  ]
+}

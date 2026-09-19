@@ -92,6 +92,8 @@ Loopback MTPLX and oMLX connections receive the local prefix-stability behavior:
 ordering and transient context after conversation history. Remote endpoints and AX Trust-managed
 connections retain their existing behavior; cloud and AX Trust settings are not changed by these presets.
 
-See the [local inference measurements](../guides/local-inference-results-2026-09-19.md) for tested
-hardware, versions, model identity, cache state, and timing definitions. A working OpenAI-compatible
+See the [AX Code/OpenCode client retest](../guides/local-client-matrix-2026-09-19.md) for the complete
+MTP-enabled matrix after the local prefix fix, including hardware, versions, model identity, cache
+state, timing definitions, and code checks. The [earlier runtime measurements](../guides/local-inference-results-2026-09-19.md)
+retain native decode replays and historical client results. A working OpenAI-compatible
 connection does not establish a model's coding quality or guarantee a decode rate.
