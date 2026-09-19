@@ -44,6 +44,7 @@ import { attachThinkTagStream } from "@/provider/think-tags"
 import { isKnownCliProviderID } from "@/provider/cli/ids"
 import { isRetiredProviderID } from "@/provider/retired-providers"
 import { applyAxTrustPromptCacheHeader, shouldSendAxTrustPromptCacheKey } from "@/provider/ax-trust-cache"
+import { isLocalInferenceConnection } from "@/provider/local-runtime"
 
 import { ReasoningPolicy } from "@/control-plane/reasoning-policy"
 import { RequestProvenance } from "./request-provenance"
@@ -171,6 +172,12 @@ export namespace LLM {
             `LLM setup timed out for ${input.model.providerID}/${input.model.id} — provider may be unreachable`,
           )
 
+    const localInference = isLocalInferenceConnection({
+      providerID: input.model.providerID,
+      baseURL: provider.options?.["baseURL"] ?? input.model.api.url,
+      management: cfg.provider?.[input.model.providerID]?.management,
+      axTrust: provider.options?.["axTrust"] ?? cfg.provider?.[input.model.providerID]?.options?.["axTrust"],
+    })
     const toolFailureCount = input.toolFailureCount ?? ReasoningPolicy.failureCount(input.messages)
     const reasoningPolicyDecision = ReasoningPolicy.decide({
       small: input.small,
@@ -353,9 +360,10 @@ export namespace LLM {
     //
     // For providers whose chat template collapses all system turns into a single
     // leading system message (Qwen 3.x / Ornith / Holo3 / MiniMax / DeepSeek),
-    // keep only the stable blocks in system. Append dynamic blocks to the last
-    // user message so they are not merged into the cached system prefix and
-    // re-written every turn.
+    // keep only the stable blocks in system. Place dynamic blocks in user
+    // context so they are not merged into the cached system prefix. Local
+    // connections append them after history; other providers retain their
+    // historical last-user-message placement.
     const cacheCaps = getModelCapabilities(input.model.id, input.model.providerID)
     // An explicit `promptCacheMode: "alibaba-explicit"` override marks the
     // model as verified for DashScope-style cache_control even when the
@@ -375,7 +383,12 @@ export namespace LLM {
         .filter(Boolean)
         .join("\n\n")
       if (dynamicText) {
-        requestMessages = appendDynamicTextToLastUserMessage(input.messages, dynamicText)
+        // Local prefix snapshots must also retain assistant/tool history after
+        // the last user turn. Rewriting that earlier turn discards its suffix.
+        // Preserve existing cloud and AX Trust request shaping.
+        requestMessages = localInference
+          ? [...input.messages, { role: "user", content: dynamicText }]
+          : appendDynamicTextToLastUserMessage(input.messages, dynamicText)
       }
       blocksForRender = cacheBlocks.filter((b) => b.kind === "stable")
     }
@@ -451,7 +464,7 @@ export namespace LLM {
     // schema. This matters especially for local models, where the schemas can add
     // thousands of tokens to a turn whose sole purpose is to synthesize an answer.
     const toolsEnabled = supportsToolCalls && input.toolChoice !== "none"
-    const tools = toolsEnabled ? await resolveTools(input, cfg) : {}
+    const tools = toolsEnabled ? await resolveTools(input, cfg, localInference) : {}
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
@@ -1174,6 +1187,7 @@ export namespace LLM {
   async function resolveTools(
     input: Pick<StreamInput, "tools" | "agent" | "permission" | "user">,
     cfg: Awaited<ReturnType<typeof Config.get>>,
+    stableOrder: boolean,
   ) {
     const tools = { ...input.tools }
     // Empty tool set: every downstream delete/filter (permission disable,
@@ -1206,7 +1220,15 @@ export namespace LLM {
       for (const t of ["webfetch", "websearch", "codesearch"]) delete tools[t]
     }
 
-    return tools
+    // Concurrent MCP conversion can change insertion order without changing
+    // any tool. Local templates serialize this map into the cached prefix.
+    return stableOrder
+      ? Object.fromEntries(
+          Object.keys(tools)
+            .sort()
+            .map((name) => [name, tools[name]]),
+        )
+      : tools
   }
 
   // Reset pacing state between tests; not called in production paths.

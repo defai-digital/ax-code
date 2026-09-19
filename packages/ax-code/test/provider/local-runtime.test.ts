@@ -1,11 +1,43 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import {
+  isLocalInferenceConnection,
   localLlmRuntimePreset,
   localRuntimeEndpointPreset,
   normalizeLocalRuntimeBaseURL,
 } from "../../src/provider/local-runtime"
 
 afterEach(() => vi.unstubAllEnvs())
+
+describe("local inference optimization boundary", () => {
+  test.each(["ax-engine", "ollama", "lmstudio", "ax-studio", "local-llm"])(
+    "admits the local %s connection",
+    (providerID) => {
+      expect(isLocalInferenceConnection({ providerID, baseURL: "http://127.0.0.1:1234/v1" })).toBe(true)
+    },
+  )
+
+  test.each([
+    { providerID: "openai", baseURL: "http://localhost:1234/v1" },
+    { providerID: "defai-01-ax-trust-com", baseURL: "http://localhost:1234/v1" },
+    { providerID: "ax-trust-local", baseURL: "http://localhost:1234/v1" },
+    { providerID: "local-llm", baseURL: "http://localhost:1234/v1", management: "ax-trust" },
+    { providerID: "ax-engine", axTrust: true },
+    { providerID: "claude-cli", baseURL: "http://localhost:1234/v1" },
+    { providerID: "custom-private-gpu", baseURL: "http://localhost:1234/v1" },
+    { providerID: "ollama", baseURL: "https://cloud.example.test/v1" },
+    { providerID: "lmstudio", baseURL: "http://192.168.1.10:1234/v1" },
+    { providerID: "local-llm", baseURL: "invalid" },
+    { providerID: "local-llm", baseURL: "file://localhost/model" },
+    { providerID: "local-llm" },
+  ])("preserves existing behavior for $providerID at $baseURL", (input) => {
+    expect(isLocalInferenceConnection(input)).toBe(false)
+  })
+
+  test("recognizes IPv6 loopback without requiring an AX Engine URL", () => {
+    expect(isLocalInferenceConnection({ providerID: "lmstudio", baseURL: "http://[::1]:1234/v1" })).toBe(true)
+    expect(isLocalInferenceConnection({ providerID: "ax-engine" })).toBe(true)
+  })
+})
 
 describe("local runtime endpoints", () => {
   test("provides the requested local picker labels and endpoint defaults", () => {

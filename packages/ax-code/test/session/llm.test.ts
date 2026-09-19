@@ -274,6 +274,122 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
 
 describe("session.llm.stream", () => {
   test.each([
+    { providerID: "local-llm", local: true },
+    { providerID: "lmstudio", local: true },
+    { providerID: "cloud-qwen", local: false },
+    { providerID: "ax-trust-gateway", local: false },
+    { providerID: "local-llm", management: "ax-trust" as const, local: false },
+    { providerID: "local-llm", axTrust: true, local: false },
+  ])(
+    "preserves local request prefixes without changing $providerID management=$management axTrust=$axTrust",
+    async (row) => {
+      const providerID = ProviderID.make(row.providerID)
+      const modelID = ModelID.make("qwen3.8-max")
+      await using tmp = await tmpdir({
+        config: {
+          enabled_providers: [providerID],
+          provider: {
+            [providerID]: {
+              npm: "@ai-sdk/openai-compatible",
+              ...(row.management ? { management: row.management } : {}),
+              options: { apiKey: "test", baseURL: `${state.server.url.origin}/v1`, axTrust: row.axTrust },
+              models: {
+                [modelID]: {
+                  name: "Local prefix regression",
+                  reasoning: true,
+                  tool_call: true,
+                  limit: { context: 1_000_000, output: 131_072 },
+                },
+              },
+            },
+          },
+        },
+      })
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const model = await Provider.getModel(providerID, modelID)
+          vi.spyOn(ScopedFlag, "autonomous").mockReturnValue(true)
+          const sessionID = SessionID.make("session-local-prefix")
+          const messages: ModelMessage[] = [
+            { role: "user", content: "Fix the issue in src/cache.ts." },
+            {
+              role: "assistant",
+              content: [{ type: "tool-call", toolCallId: "read-cache", toolName: "read", input: {} }],
+            },
+            {
+              role: "tool",
+              content: [
+                {
+                  type: "tool-result",
+                  toolCallId: "read-cache",
+                  toolName: "read",
+                  output: { type: "text", value: "File evidence" },
+                },
+              ],
+            },
+          ]
+          const before = structuredClone(messages)
+          const captures: Capture[] = []
+          for (const names of [
+            ["zeta", "read", "alpha"],
+            ["alpha", "read", "zeta"],
+          ]) {
+            const request = waitRequest(
+              "/chat/completions",
+              new Response(createChatStream("ok"), {
+                headers: { "Content-Type": "text/event-stream" },
+              }),
+            )
+            const stream = await LLM.stream({
+              sessionID,
+              model,
+              user: {
+                id: MessageID.make("user-local-prefix"),
+                sessionID,
+                role: "user",
+                time: { created: 1 },
+                agent: "test",
+                model: { providerID, modelID },
+              },
+              agent: { name: "test", mode: "primary", options: {}, permission: [] },
+              messages,
+              system: ["Preserve these custom instructions."],
+              abort: new AbortController().signal,
+              tools: Object.fromEntries(
+                names.map((name) => [name, tool({ description: name, inputSchema: z.object({}) })]),
+              ),
+            })
+            for await (const _ of stream.fullStream) {
+              /* consume the adapter response */
+            }
+            const capture = await request
+            captures.push(capture)
+            const wire = capture.body.messages as Array<{ role: string; content: string }>
+            const firstUser = wire.find((message) => message.role === "user")!
+            const lastUser = wire.findLast((message) => message.role === "user")!
+            expect(wire[0].content).toContain("Preserve these custom instructions.")
+            if (row.local) {
+              expect(firstUser.content).toBe("Fix the issue in src/cache.ts.")
+              expect(wire.at(-1)).toBe(lastUser)
+              expect(lastUser.content).toContain("## Long-Agent Context Pack")
+            } else {
+              expect(firstUser).toBe(lastUser)
+              expect(firstUser.content).toContain("## Long-Agent Context Pack")
+              expect(wire.at(-1)?.role).toBe("tool")
+            }
+            expect(
+              (capture.body.tools as Array<{ function: { name: string } }>).map((item) => item.function.name),
+            ).toEqual(row.local ? ["alpha", "read", "zeta"] : names)
+          }
+          expect(messages).toEqual(before)
+          if (row.local) expect(captures[0].body).toEqual(captures[1].body)
+        },
+      })
+    },
+  )
+
+  test.each([
     { id: "qwen3.8-max", effort: "xhigh" },
     { id: "qwen3.8-flash", effort: "xhigh" },
     { id: "glm-5.3", effort: "max" },

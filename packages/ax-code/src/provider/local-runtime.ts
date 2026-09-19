@@ -1,5 +1,6 @@
-import { LOCAL_LLM_PROVIDER_IDS, type LocalLlmProviderID } from "@/mode/provider-category"
+import { isAxTrustProviderID, LOCAL_LLM_PROVIDER_IDS, type LocalLlmProviderID } from "@/mode/provider-category"
 import { isRecord } from "@/util/record"
+import { isLocalHostname } from "@/util/local-host"
 
 export const LOCAL_LLM_RUNTIMES = {
   ollama: {
@@ -44,6 +45,24 @@ export const LOCAL_LLM_RUNTIMES = {
 export function localLlmRuntimePreset(providerID: string) {
   const id = LOCAL_LLM_PROVIDER_IDS.find((id) => id === providerID)
   return id ? LOCAL_LLM_RUNTIMES[id] : undefined
+}
+
+/** Keep local prompt optimizations out of cloud gateways and loopback cloud proxies. */
+export function isLocalInferenceConnection(input: {
+  providerID: string
+  baseURL?: unknown
+  management?: unknown
+  axTrust?: unknown
+}): boolean {
+  if (isAxTrustProviderID(input.providerID) || input.management === "ax-trust" || input.axTrust === true) return false
+  if (input.providerID === "ax-engine") return true
+  if (!localLlmRuntimePreset(input.providerID) || typeof input.baseURL !== "string") return false
+  try {
+    const url = new URL(input.baseURL)
+    return (url.protocol === "http:" || url.protocol === "https:") && isLocalHostname(url.hostname)
+  } catch {
+    return false
+  }
 }
 
 export function localRuntimeEndpointPreset(providerID: string, config: unknown): string {
