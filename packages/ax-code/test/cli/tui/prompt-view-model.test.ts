@@ -144,6 +144,29 @@ describe("prompt view model", () => {
     expect(sanitizePromptInput("versions 1;2;3 and keep 4;5;6x")).toBe("versions 1;2;3 and keep 4;5;6x")
   })
 
+  test("strips terminal reply tails typed as trailing keystrokes", () => {
+    // A reply that outlives the stdin parser's assembly timeout is re-typed
+    // into the prompt as bare tail bytes (no ESC[ prefix).
+    expect(sanitizePromptInput("hello 4;87R")).toBe("hello ")
+    expect(sanitizePromptInput("hello 4;1152;846t")).toBe("hello ")
+    expect(sanitizePromptInput("hello?2026;1$y")).toBe("hello")
+    expect(sanitizePromptInput("hello?7u")).toBe("hello")
+    expect(sanitizePromptInput("hello?1;2c")).toBe("hello")
+  })
+
+  test("strips adjacent leaked reply tails to a fixpoint", () => {
+    // Two replies leaking back to back: "?1;2c" is stripped first, which makes
+    // "4;87R" the new trailing tail.
+    expect(sanitizePromptInput("prompt 4;87R?1;2c")).toBe("prompt ")
+  })
+
+  test("preserves reply-shaped text the user typed or pasted mid-content", () => {
+    // The patterns are end-anchored: only trailing tails are treated as leaks.
+    expect(sanitizePromptInput("is 1920;1080R a resolution?")).toBe("is 1920;1080R a resolution?")
+    expect(sanitizePromptInput("what does ?1;2c mean")).toBe("what does ?1;2c mean")
+    expect(sanitizePromptInput("4;5;6x stays")).toBe("4;5;6x stays")
+  })
+
   test("treats raw CRLF as prompt submit when terminals send Enter as one chunk", () => {
     expect(isUnmodifiedPromptSubmitKey({ name: "", raw: "\r\n", sequence: "\r\n" })).toBe(true)
   })

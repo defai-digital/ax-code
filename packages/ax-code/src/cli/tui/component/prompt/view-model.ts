@@ -37,13 +37,37 @@ export function isUnmodifiedPromptSubmitKey(input: {
   return PROMPT_SUBMIT_KEY_SEQUENCES.has(input.raw ?? "") || PROMPT_SUBMIT_KEY_SEQUENCES.has(input.sequence ?? "")
 }
 
+// Terminal reply tails: a reply that outlives the stdin parser's
+// escape-assembly timeout is dropped mid-sequence and its tail is re-typed as
+// keystrokes into the prompt — cursor position report ("4;87R"),
+// pixel-resolution ("4;H;Wt"), DECRPM ("?…;$y"), Kitty keyboard ("?…u"),
+// device attributes ("?…c"). Each pattern is anchored to the end of the
+// input: tails arrive as trailing keystrokes, and the anchor avoids eating
+// legitimately typed or pasted content such as "1920;1080R" mid-text.
+const TERMINAL_REPLY_TAIL_PATTERNS = [
+  /\d{1,4};\d{1,4}R$/, // cursor position report
+  /4;\d+;\d+t$/, // pixel-resolution reply
+  /\?\d+;\d+\$y$/, // DECRPM mode report
+  /\?\d+u$/, // Kitty keyboard flags reply
+  /\?[\d;]+c$/, // primary/secondary device attributes
+]
+
 export function sanitizePromptInput(input: string) {
   // SGR mouse residue: \x1b[<Cb;Cx;CyM/m can arrive as <digits;digits;digitsM
   // if the escape parser partially processes mouse input during focus changes.
   // The leading "<" is required: SGR mouse encoding always carries it, so anchoring
   // to it avoids eating legitimate content the user typed/pasted such as ANSI color
   // codes ("1;31;40m") or plain semicolon triples.
-  return input.replace(/<\d+;\d+;\d+[Mm]/g, "")
+  const mouseStripped = input.replace(/<\d+;\d+;\d+[Mm]/g, "")
+  // Adjacent leaked tails ("4;87R?1;2c") each become trailing only after the
+  // later one is stripped, so re-run to a fixpoint. Every pattern consumes at
+  // least one character, so the loop always terminates.
+  let result = mouseStripped
+  for (;;) {
+    const next = TERMINAL_REPLY_TAIL_PATTERNS.reduce((value, pattern) => value.replace(pattern, ""), result)
+    if (next === result) return result
+    result = next
+  }
 }
 
 // A prompt has a draft when it carries any text OR any non-text part (pasted
