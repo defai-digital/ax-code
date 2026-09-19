@@ -4,6 +4,7 @@ import { AxEngineDependencyStatus, getDependencyStatus } from "./dependency"
 import { AxEngineDiskStatus, AxEngineModelStatus, getDiskStatus, getModelStatus } from "./model-cache"
 import { AxEngineServerRuntimeStatus, getServerStatus } from "./server"
 import { AX_ENGINE_ERROR, resolveAxEngineApiKey } from "./constants"
+import { resolveAxEngineMtpPolicy } from "./mtp"
 import { toErrorMessage } from "../../util/error-message"
 import { parseAxEngineModelContracts } from "./model-card"
 import {
@@ -123,7 +124,7 @@ export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): P
     getDependencyStatus(options),
     getDiskStatus(options),
     getModelStatus(options),
-    getServerStatus(resolveAxEngineApiKey(options)),
+    getServerStatus(resolveAxEngineApiKey(options), resolveAxEngineMtpPolicy(options)),
   ])
   const capability = await getCapabilityStatus(server, options)
 

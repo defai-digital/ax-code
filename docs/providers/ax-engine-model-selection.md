@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-15
+Last reviewed: 2026-09-18
 Owner: ax-code runtime
 
 AX Code offers only AutomatosX Qwen3.8 27B MLX AXQ 6-bit MTP through **AX Engine (Local)** on eligible Apple Silicon Macs:
@@ -46,3 +46,49 @@ Before managed activation, AX Code checks the active AX Engine model's text and 
 Session compaction uses the active model's context/output budgets and reserves input headroom. The selected variant keeps its own catalog budget; the source model's maximum context is not a managed memory guarantee.
 
 See [Local Engine Architecture](../architecture/local-engine.md) for lifecycle and transport details.
+
+## Managed MTP policy
+
+MTP weights and the pure-stacking setting do not establish active acceleration.
+Set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
+
+```json
+{
+  "provider": {
+    "ax-engine": {
+      "options": {
+        "mtpPolicy": "required"
+      }
+    }
+  }
+}
+```
+
+| Policy               | Behavior                                                                                                    |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `disabled` (default) | Preserve direct decoding; do not request a model drafter.                                                   |
+| `auto`               | Let AX Engine decide whether the model and route admit MTP. This does not guarantee activation.             |
+| `required`           | Require an admitted MTP drafter; AX Engine rejects an unavailable drafter instead of silently falling back. |
+
+`AX_ENGINE_MTP_POLICY` provides the same three values when no provider option is set.
+Managed starts require AX Engine 7.4.0 or newer to enforce these policies, including
+the default `disabled` policy. Older/unknown binaries reject policy selection
+before replacing a running engine; upgrade before using the managed policy controls. Historical state files without a recorded policy
+report their launched policy as unknown and are replaced on the next managed start.
+Changing policy takes effect on the next managed start or model request and replaces
+an existing process with a different policy. It does not change model selection or storage.
+
+`ax-code providers ax-engine start --mtp-policy required` selects the policy for
+that start only. Set the persistent provider option if subsequent coding requests
+should continue requiring MTP. The prepare/start HTTP bodies also accept `mtpPolicy`.
+These managed settings do not reconfigure separately attached endpoints.
+
+`ax-code providers ax-engine status` (or `--json`) separates the requested policy,
+launched policy, and observed `active`/`inactive`/`unknown` state. Observation uses
+the engine's latest model-route metric, not model metadata or historical draft
+counts. Missing exact-model samples remain unknown, including before the first
+observed engine step; server-wide aggregates do not establish activation.
+Configured `required` is not displayed
+as proof of activity. Draft/accepted counts, when available, are cumulative for the
+resident engine. A pending policy change is reported without restarting it during
+status inspection. MTP activation is not a promise of a particular token rate.

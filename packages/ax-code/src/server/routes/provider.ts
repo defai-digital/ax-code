@@ -24,6 +24,8 @@ import {
   deleteAxEngineModel,
   getAxEngineModelsCatalog,
   getAxEngineStatus,
+  AxEngineMtpPolicy,
+  resolveAxEngineMtpPolicy,
   getServerStatus,
   installAxEngineBinary,
   isAxEngineModelID,
@@ -76,6 +78,7 @@ export const AxEnginePrepareBody = z
   .object({
     modelPath: z.string().optional(),
     binaryPath: z.string().optional(),
+    mtpPolicy: AxEngineMtpPolicy.optional(),
     modelID: AxEngineModelIDSchema.optional(),
     quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
     download: JsonBoolean.optional(),
@@ -88,6 +91,7 @@ export const AxEngineStartBody = z
   .object({
     modelPath: z.string().optional(),
     binaryPath: z.string().optional(),
+    mtpPolicy: AxEngineMtpPolicy.optional(),
     modelID: AxEngineModelIDSchema.optional(),
     quantization: z.enum(AX_ENGINE_QUANTIZATION_IDS).optional(),
     download: JsonBoolean.optional(),
@@ -749,6 +753,10 @@ export const ProviderRoutes = lazy(() =>
             modelPath: body.modelPath,
             quantization,
             download: body.download,
+            mtpPolicy: resolveAxEngineMtpPolicy({
+              ...(await Config.get()).provider?.["ax-engine"]?.options,
+              ...(body.mtpPolicy !== undefined ? { mtpPolicy: body.mtpPolicy } : {}),
+            }),
             start: body.start,
             signal: c.req.raw.signal,
           })
@@ -791,6 +799,10 @@ export const ProviderRoutes = lazy(() =>
             modelPath: body.modelPath,
             quantization,
             download: body.download,
+            mtpPolicy: resolveAxEngineMtpPolicy({
+              ...(await Config.get()).provider?.["ax-engine"]?.options,
+              ...(body.mtpPolicy !== undefined ? { mtpPolicy: body.mtpPolicy } : {}),
+            }),
             start: true,
             signal: c.req.raw.signal,
           })

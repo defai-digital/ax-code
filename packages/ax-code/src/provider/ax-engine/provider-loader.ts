@@ -23,6 +23,7 @@ import {
   type AxEngineModelOptions,
 } from "./model-cache"
 import { ensureServer } from "./server"
+import { resolveAxEngineMtpPolicy } from "./mtp"
 import { resolveAxEngineAttachBaseURL, resolveAxEngineConnectMode } from "./connection"
 import {
   fetchAxEngineModelContracts,
@@ -160,6 +161,7 @@ async function ensureManagedReady(provider: Provider.Info, options: AxEngineMode
     maxOutputTokens: definition.outputTokens,
     binaryVersion: dependency.version,
     maxConcurrentRequests: resolveAxEngineMaxConcurrentRequests(provider.options),
+    mtpPolicy: resolveAxEngineMtpPolicy(provider.options),
     apiKey: resolveAxEngineApiKey(provider.options, provider.key),
     signal,
   })

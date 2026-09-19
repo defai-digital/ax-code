@@ -283,6 +283,13 @@ async function printAxEngineStatus(status: any) {
     `Server: ${status.server.ready ? status.server.state?.baseURL : status.server.running ? "running but not ready" : "stopped"}`,
   )
   for (const blocker of status.server.blockers ?? []) prompts.log.warn(blocker)
+  if (status.server.mtp) {
+    const mtp = status.server.mtp
+    prompts.log.info(
+      `MTP: requested=${mtp.requestedPolicy}, launched=${mtp.launchedPolicy ?? "unknown"}, observed=${mtp.effective}`,
+    )
+    if (mtp.pendingRestart) prompts.log.warn("MTP policy change takes effect on the next managed engine request.")
+  }
 
   if (!status.capability.toolcall && status.capability.reason) prompts.log.warn(status.capability.reason)
   prompts.outro("Done")
@@ -325,6 +332,10 @@ export const ProvidersAxEngineCommand = cmd({
         describe: "download the model through `ax-engine download`",
         type: "boolean",
       })
+      .option("mtp-policy", {
+        describe: "MTP policy for this managed start (persistent selection: provider.ax-engine.options.mtpPolicy)",
+        choices: ["disabled", "auto", "required"] as const,
+      })
       .option("start", {
         describe: "start ax-engine and wait for readiness after preparation",
         type: "boolean",
@@ -336,16 +347,25 @@ export const ProvidersAxEngineCommand = cmd({
       installAxEngineBinary,
       normalizeModelID,
       normalizeQuantization,
+      resolveAxEngineMtpPolicy,
       prepareAxEngine,
       stopServer,
     } = await import("@/provider/ax-engine")
     const { Provider } = await import("../../provider/provider")
     const action = args.action
+    const configuredOptions = ["status", "prepare", "start"].includes(action ?? "")
+      ? await Instance.provide({
+          directory: process.cwd(),
+          fn: async () => (await Config.get()).provider?.["ax-engine"]?.options ?? {},
+        })
+      : {}
     const options = {
-      binaryPath: args.binaryPath,
-      modelID: args.model,
-      modelPath: args.modelPath,
-      quantization: args.quantization,
+      ...configuredOptions,
+      mtpPolicy: args.mtpPolicy ?? configuredOptions.mtpPolicy,
+      binaryPath: args.binaryPath ?? configuredOptions.binaryPath,
+      modelID: args.model ?? configuredOptions.modelID,
+      modelPath: args.modelPath ?? configuredOptions.modelPath,
+      quantization: args.quantization ?? configuredOptions.quantization,
     }
 
     if (action === "models") {
@@ -400,14 +420,15 @@ export const ProvidersAxEngineCommand = cmd({
     }
 
     if (action === "prepare") {
-      const modelID = normalizeModelID(args.model)
-      const quantization = normalizeQuantization(args.quantization, modelID)
+      const modelID = normalizeModelID(options.modelID)
+      const quantization = normalizeQuantization(options.quantization, modelID)
       const result = await prepareAxEngine({
         modelID,
-        binaryPath: args.binaryPath,
-        modelPath: args.modelPath,
+        binaryPath: typeof options.binaryPath === "string" ? options.binaryPath : undefined,
+        modelPath: typeof options.modelPath === "string" ? options.modelPath : undefined,
         quantization,
         download: args.download,
+        mtpPolicy: resolveAxEngineMtpPolicy(options),
         start: args.start,
       })
       await Provider.invalidate().catch(() => {})
@@ -423,14 +444,15 @@ export const ProvidersAxEngineCommand = cmd({
     }
 
     if (action === "start") {
-      const modelID = normalizeModelID(args.model)
-      const quantization = normalizeQuantization(args.quantization, modelID)
+      const modelID = normalizeModelID(options.modelID)
+      const quantization = normalizeQuantization(options.quantization, modelID)
       const result = await prepareAxEngine({
         modelID,
-        binaryPath: args.binaryPath,
-        modelPath: args.modelPath,
+        binaryPath: typeof options.binaryPath === "string" ? options.binaryPath : undefined,
+        modelPath: typeof options.modelPath === "string" ? options.modelPath : undefined,
         quantization,
         download: args.download,
+        mtpPolicy: resolveAxEngineMtpPolicy(options),
         start: true,
       })
       await Provider.invalidate().catch(() => {})

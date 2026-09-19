@@ -7,6 +7,7 @@ import { resolveAxEngineModelDefinition } from "./hub-catalog"
 import { fetchAxEngineModelContracts, requireAxEngineCodingContract } from "./model-card"
 import { AxEnginePlatformEligibility, requirePlatformEligibility } from "./platform"
 import { AxEngineServerState, ensureServer } from "./server"
+import { axEngineMtpLaunchPolicy, resolveAxEngineMtpPolicy, type AxEngineMtpPolicy } from "./mtp"
 import { requireAxEngineLocalModel } from "./local-models"
 
 export const AxEnginePrepareResult = z.object({
@@ -24,6 +25,7 @@ export type AxEnginePrepareInput = {
   quantization?: AxEngineQuantization
   download?: boolean
   start?: boolean
+  mtpPolicy?: AxEngineMtpPolicy
   signal?: AbortSignal
 }
 
@@ -76,6 +78,17 @@ export async function prepareAxEngine(
   let dependency: Awaited<ReturnType<typeof getDependencyStatus>> | undefined
   let prepared: AxEnginePrepareState | undefined
   let model: AxEngineModelStatus
+  const mtpPolicy = input.start ? resolveAxEngineMtpPolicy({ mtpPolicy: input.mtpPolicy }) : undefined
+
+  // Reject an impossible start before downloading weights or changing prepared state.
+  if (input.start) {
+    dependency = await dependencyStatus({ binaryPath: input.binaryPath })
+    input.signal?.throwIfAborted()
+    if (!dependency.available || !dependency.binaryPath) {
+      throw new Error(dependency.blockers[0] ?? "ax-engine binary is not available")
+    }
+    axEngineMtpLaunchPolicy(mtpPolicy, dependency.version)
+  }
 
   if (input.modelPath) {
     prepared = await mark({
@@ -85,7 +98,7 @@ export async function prepareAxEngine(
     })
     model = modelFromPrepared(prepared)
   } else if (input.download) {
-    dependency = await dependencyStatus({ binaryPath: input.binaryPath })
+    dependency ??= await dependencyStatus({ binaryPath: input.binaryPath })
     if (!dependency.available || !dependency.binaryPath) {
       throw new Error(dependency.blockers[0] ?? "ax-engine binary is not available")
     }
@@ -126,6 +139,7 @@ export async function prepareAxEngine(
     contextTokens: definition.contextTokens,
     maxOutputTokens: definition.outputTokens,
     binaryVersion: dependency.version,
+    mtpPolicy,
     signal: input.signal,
   })
 

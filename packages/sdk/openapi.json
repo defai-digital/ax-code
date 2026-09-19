@@ -32469,6 +32469,14 @@
                   "binaryPath": {
                     "type": "string"
                   },
+                  "mtpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "disabled",
+                      "auto",
+                      "required"
+                    ]
+                  },
                   "modelID": {
                     "anyOf": [
                       {
@@ -32556,6 +32564,14 @@
                   },
                   "binaryPath": {
                     "type": "string"
+                  },
+                  "mtpPolicy": {
+                    "type": "string",
+                    "enum": [
+                      "disabled",
+                      "auto",
+                      "required"
+                    ]
                   },
                   "modelID": {
                     "anyOf": [

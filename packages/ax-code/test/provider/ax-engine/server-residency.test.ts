@@ -81,6 +81,34 @@ http.createServer((req, res) => {
 // Managed process identity currently uses Unix ps; these fixtures exercise
 // real subprocesses and HTTP without loading weights or touching host state.
 describe.skipIf(process.platform === "win32")("managed engine residency", () => {
+  test("required MTP startup failure is not retried with a weaker policy", async () => {
+    await using f = await fixture("exit")
+    await expect(ensureServer({ ...f.input, binaryVersion: "7.4.0", mtpPolicy: "required" })).rejects.toMatchObject({
+      name: "AxEngineStartupError",
+      data: { reason: "process-exited" },
+    })
+    expect(f.spawned).toHaveLength(1)
+    expect(f.spawned[0].cmd).toContain("required")
+    await expect(fs.access(AxEnginePaths.serverState)).rejects.toThrow()
+  })
+
+  test("MTP policy changes replace the resident process and unchanged policy reuses it", async () => {
+    await using f = await fixture()
+    const input = { ...f.input, binaryVersion: "7.4.0" }
+    const disabled = await ensureServer({ ...input, mtpPolicy: "disabled" })
+    const automatic = await ensureServer({ ...input, mtpPolicy: "auto" })
+    expect(automatic.pid).not.toBe(disabled.pid)
+    expect(automatic.mtpPolicy).toBe("auto")
+    expect(f.spawned[1].cmd).not.toContain("--disable-ngram-acceleration")
+    const required = await ensureServer({ ...input, mtpPolicy: "required" })
+    expect(required.pid).not.toBe(automatic.pid)
+    expect(required.mtpPolicy).toBe("required")
+    expect(f.spawned[2].cmd).toContain("--mlx-mtp-policy")
+    expect(f.spawned[2].cmd).toContain("required")
+    expect((await ensureServer({ ...input, mtpPolicy: "required" })).pid).toBe(required.pid)
+    expect(f.children).toHaveLength(3)
+  })
+
   test("the outer setup timeout cleans up a still-starting engine", async () => {
     await using f = await fixture("unready")
     const caller = new AbortController()

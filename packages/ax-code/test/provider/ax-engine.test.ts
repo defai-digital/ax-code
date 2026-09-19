@@ -1276,10 +1276,44 @@ describe("ax-engine prepare lifecycle", () => {
     expect(result.server).toBeUndefined()
   })
 
+  test.each(["download", "mark"])(
+    "unsupported MTP start rejects before %s changes model preparation",
+    async (operation) => {
+      const mutate = vi.fn(async () => {
+        throw new Error("model preparation was mutated")
+      })
+      await expect(
+        prepareAxEngine(
+          {
+            modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+            quantization: "mlx6bit",
+            start: true,
+            mtpPolicy: "required",
+            ...(operation === "download" ? { download: true } : { modelPath: "/models/qwen" }),
+          },
+          {
+            requireEligibility: async () => eligibility,
+            getDependencyStatus: async () => ({
+              available: true,
+              mode: "configured",
+              binaryPath: "/bin/ax-engine",
+              version: "7.3.0",
+              installable: false,
+              blockers: [],
+            }),
+            downloadModel: mutate,
+            markPrepared: mutate,
+          },
+        ),
+      ).rejects.toThrow("7.4.0")
+      expect(mutate).not.toHaveBeenCalled()
+    },
+  )
+
   test("can start an already prepared model through the shared lifecycle helper", async () => {
     const calls: string[] = []
     const result = await prepareAxEngine(
-      { modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, quantization: "mlx6bit", start: true },
+      { modelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, quantization: "mlx6bit", start: true, mtpPolicy: "required" },
       {
         requireEligibility: async () => eligibility,
         getModelStatus: async () => {
@@ -1300,12 +1334,14 @@ describe("ax-engine prepare lifecycle", () => {
             available: true,
             mode: "configured",
             binaryPath: "/bin/ax-engine",
+            version: "7.4.0",
             installable: false,
             blockers: [],
           }
         },
         ensureServer: async (input) => {
           calls.push("server")
+          expect(input.mtpPolicy).toBe("required")
           expect(input.modelPath).toBe("/models/qwen")
           expect(input.modelRevision).toBe("abc123")
           return {
@@ -1324,7 +1360,7 @@ describe("ax-engine prepare lifecycle", () => {
       },
     )
 
-    expect(calls).toEqual(["model", "dependency", "server"])
+    expect(calls).toEqual(["dependency", "model", "server"])
     expect(result.server?.baseURL).toBe("http://127.0.0.1:31418/v1")
   })
 
@@ -1340,6 +1376,7 @@ describe("ax-engine prepare lifecycle", () => {
             available: true,
             mode: "configured",
             binaryPath: "/bin/ax-engine",
+            version: "7.4.0",
             installable: false,
             blockers: [],
           }

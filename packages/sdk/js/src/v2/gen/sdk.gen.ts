@@ -6134,6 +6134,7 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
+      mtpPolicy?: "disabled" | "auto" | "required"
       modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit" | string
       quantization?: "mlx6bit" | "mlx"
       download?: boolean
@@ -6149,6 +6150,7 @@ export class AxEngine extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "modelPath" },
             { in: "body", key: "binaryPath" },
+            { in: "body", key: "mtpPolicy" },
             { in: "body", key: "modelID" },
             { in: "body", key: "quantization" },
             { in: "body", key: "download" },
@@ -6183,6 +6185,7 @@ export class AxEngine extends HeyApiClient {
       directory?: string
       modelPath?: string
       binaryPath?: string
+      mtpPolicy?: "disabled" | "auto" | "required"
       modelID?: "qwen3.8-27b-axq-6bit" | "ornith-35b-axq-6bit" | "qwen3-coder-next-axq-6bit" | string
       quantization?: "mlx6bit" | "mlx"
       download?: boolean
@@ -6197,6 +6200,7 @@ export class AxEngine extends HeyApiClient {
             { in: "query", key: "directory" },
             { in: "body", key: "modelPath" },
             { in: "body", key: "binaryPath" },
+            { in: "body", key: "mtpPolicy" },
             { in: "body", key: "modelID" },
             { in: "body", key: "quantization" },
             { in: "body", key: "download" },

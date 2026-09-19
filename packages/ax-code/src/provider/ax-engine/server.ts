@@ -31,6 +31,14 @@ import {
 import type { AxEngineModelID } from "./constants"
 import { AxEnginePaths } from "./paths"
 import { AxEngineStartupError } from "./errors"
+import {
+  AxEngineMtpPolicy,
+  AxEngineMtpStatus,
+  axEngineMtpLaunchArgs,
+  axEngineMtpLaunchPolicy,
+  observeAxEngineMtp,
+  resolveAxEngineMtpPolicy,
+} from "./mtp"
 
 export const AxEngineServerState = z.object({
   pid: z.number().int().positive(),
@@ -47,6 +55,7 @@ export const AxEngineServerState = z.object({
   maxConcurrentRequests: z.number().int().positive().optional(),
   speculationProfile: z.string().optional(),
   mtpMode: z.string().optional(),
+  mtpPolicy: AxEngineMtpPolicy.optional(),
   prefixCacheDir: z.string().optional(),
   prefixCacheMaxBytes: z.number().int().nonnegative().optional(),
   prefixCacheDiskMaxBytes: z.number().int().nonnegative().optional(),
@@ -61,6 +70,7 @@ export const AxEngineServerRuntimeStatus = z.object({
   running: z.boolean(),
   ready: z.boolean(),
   state: AxEngineServerState.optional(),
+  mtp: AxEngineMtpStatus.optional(),
   blockers: z.array(z.string()).default([]),
 })
 export type AxEngineServerRuntimeStatus = z.infer<typeof AxEngineServerRuntimeStatus>
@@ -105,6 +115,7 @@ export type AxEngineServerOptions = {
   maxConcurrentRequests?: number
   speculationProfile?: string
   mtpMode?: string
+  mtpPolicy?: AxEngineMtpPolicy
   apiKey?: string
   signal?: AbortSignal
   /** Override for the readiness wait (default AX_ENGINE_READY_TIMEOUT_MS); primarily a test seam. */
@@ -141,6 +152,7 @@ export function axEngineServerLaunchArgs(input: {
   maxConcurrentRequests?: number
   speculationProfile?: string
   mtpMode?: string
+  mtpPolicy?: AxEngineMtpPolicy
 }): string[] {
   const args = ["--model-id", input.apiModelID]
   args.push("--speculation-profile", input.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE)
@@ -155,9 +167,7 @@ export function axEngineServerLaunchArgs(input: {
     // as the advertised output budget, so it must carry the per-model value.
     args.push("--max-batch-tokens", String(maxOutputTokens))
   }
-  // Match AX Studio's validated posture: packaged MTP remains available, while
-  // the independent n-gram draft path is disabled for stable direct fallback.
-  args.push("--disable-ngram-acceleration")
+  args.push(...axEngineMtpLaunchArgs(input.mtpPolicy, input.binaryVersion))
   // AX Code defaults to one foreground agent stream at a time. Serializing
   // engine jobs prevents a cancelled stream from racing a retry against shared
   // prefix/speculation state; higher values are an explicit opt-in.
@@ -523,28 +533,34 @@ async function loadServerModel(input: {
   await response.body?.cancel()
 }
 
-export async function getServerStatus(apiKey = resolveAxEngineApiKey()): Promise<AxEngineServerRuntimeStatus> {
+export async function getServerStatus(
+  apiKey = resolveAxEngineApiKey(),
+  mtpPolicy = resolveAxEngineMtpPolicy(),
+): Promise<AxEngineServerRuntimeStatus> {
+  const unobservedMtp = await observeAxEngineMtp({ requestedPolicy: mtpPolicy, ready: false, apiKey })
   const stateResult = await readServerState()
   if (stateResult.error) {
     return {
       running: false,
       ready: false,
       blockers: [`${AX_ENGINE_ERROR.ServerHealthFailed}: failed to read server state`],
+      mtp: unobservedMtp,
     }
   }
   const state = stateResult.state
-  if (!state) return { running: false, ready: false, blockers: [] }
+  if (!state) return { running: false, ready: false, blockers: [], mtp: unobservedMtp }
   const running = await serverProcessAlive(state)
   // Status queries do not hold the lifecycle lock. A probe may finish after
   // a start, reload, or stop has replaced this record; only locked lifecycle
   // operations may persist or remove it.
-  if (!running) return { running: false, ready: false, blockers: [] }
+  if (!running) return { running: false, ready: false, blockers: [], mtp: unobservedMtp }
   const ready = running && (await isServerReady(state.baseURL, undefined, apiKey))
   const nextState = ready ? { ...state, lastHealthAt: Date.now() } : state
   return {
     running,
     ready,
     state: nextState,
+    mtp: await observeAxEngineMtp({ requestedPolicy: mtpPolicy, state, ready, apiKey }),
     blockers: ready ? [] : [`${AX_ENGINE_ERROR.ServerHealthFailed}: ax-engine server is not ready`],
   }
 }
@@ -586,6 +602,7 @@ function ensureServerKey(options: AxEngineServerOptions): string {
     options.binaryVersion ?? "",
     options.speculationProfile ?? "",
     options.mtpMode ?? "",
+    options.mtpPolicy ?? "",
     qwen38ExactMtpProfileFingerprint(options.modelID),
     prefixCache.dir,
     prefixCache.maxBytes,
@@ -600,6 +617,8 @@ function ensureServerKey(options: AxEngineServerOptions): string {
 
 export async function ensureServer(options: AxEngineServerOptions): Promise<AxEngineServerState> {
   options.signal?.throwIfAborted()
+  // Reject unsupported policy before locking, replacing a resident server, or spawning.
+  axEngineMtpLaunchArgs(options.mtpPolicy, options.binaryVersion)
   // Explicit cancellation belongs to one caller. Sharing its startup promise
   // would let that caller abort another request, or ignore a joining caller's
   // cancellation. Such calls serialize on the cancellable lifecycle lock;
@@ -663,6 +682,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     (existing?.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS) === maxConcurrentRequests
   const speculationProfile = options.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
+  const mtpPolicy = axEngineMtpLaunchPolicy(options.mtpPolicy, options.binaryVersion)
+  const mtpPolicyMatches = existing?.mtpPolicy === mtpPolicy
   const speculationMatches = existing?.speculationProfile === speculationProfile
   const mtpModeMatches = existing?.mtpMode === mtpMode
   const prefixCache = prefixCacheLaunchConfig()
@@ -682,6 +703,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
         maxConcurrentRequestsMatches &&
         speculationMatches &&
         mtpModeMatches &&
+        mtpPolicyMatches &&
         prefixCacheConfigMatches &&
         qwen38ExactMtpMatches
       ) {
@@ -711,6 +733,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             maxConcurrentRequests,
             speculationProfile,
             mtpMode,
+            mtpPolicy,
             prefixCacheDir: prefixCache.dir,
             prefixCacheMaxBytes: prefixCache.maxBytes,
             prefixCacheDiskMaxBytes: prefixCache.diskMaxBytes,
@@ -746,6 +769,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             !prefixCacheConfigMatches
               ? `prefixCache: ${existing.prefixCacheDir}@${existing.prefixCacheMaxBytes}/${existing.prefixCacheDiskMaxBytes}/${existing.prefixCacheDiskMaxEntryBytes} -> ${prefixCache.dir}@${prefixCache.maxBytes}/${prefixCache.diskMaxBytes}/${prefixCache.diskMaxEntryBytes}`
               : undefined,
+            !mtpPolicyMatches ? `mtpPolicy: ${existing.mtpPolicy ?? "unknown"} -> ${mtpPolicy}` : undefined,
             !mtpModeMatches ? `mtpMode: ${existing.mtpMode} -> ${mtpMode}` : undefined,
             !qwen38ExactMtpMatches ? "qwen38ExactMtpProfile changed" : undefined,
           ].filter(Boolean),
@@ -786,6 +810,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     maxConcurrentRequests,
     speculationProfile,
     mtpMode,
+    mtpPolicy,
   })
   log.info("starting ax-engine server", {
     port,
@@ -795,6 +820,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     maxConcurrentRequests,
     speculationProfile,
     mtpMode,
+    mtpPolicy,
     prefixCacheDir: prefixCache.dir,
     prefixCacheMaxBytes: prefixCache.maxBytes,
   })
@@ -851,6 +877,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     maxConcurrentRequests,
     speculationProfile,
     mtpMode,
+    mtpPolicy,
     prefixCacheDir: prefixCache.dir,
     prefixCacheMaxBytes: prefixCache.maxBytes,
     prefixCacheDiskMaxBytes: prefixCache.diskMaxBytes,

@@ -68,7 +68,17 @@ type AxEngineTuiStatus = {
   dependency?: { available?: boolean; binaryPath?: string; blockers?: string[] }
   disk?: { ok?: boolean; blockers?: string[]; freeBytes?: number }
   model?: { present?: boolean; modelID?: string; path?: string; blockers?: string[] }
-  server?: { running?: boolean; ready?: boolean; blockers?: string[] }
+  server?: {
+    running?: boolean
+    ready?: boolean
+    blockers?: string[]
+    mtp?: {
+      requestedPolicy: string
+      launchedPolicy?: string
+      effective: string
+      pendingRestart: boolean
+    }
+  }
   capability?: { toolcall?: boolean; reason?: string }
 }
 
@@ -196,6 +206,10 @@ function renderAxEngineStatusText(status: AxEngineTuiStatus) {
     ...(status.model?.blockers ?? []),
     `Local runtime: ${status.server?.ready ? "ready" : status.server?.running ? "running but not ready" : "stopped"}`,
     ...(status.server?.blockers ?? []),
+    status.server?.mtp
+      ? `MTP: requested=${status.server.mtp.requestedPolicy}, launched=${status.server.mtp.launchedPolicy ?? "unknown"}, observed=${status.server.mtp.effective}`
+      : undefined,
+    status.server?.mtp?.pendingRestart ? "MTP policy change applies on the next managed engine request." : undefined,
     status.capability?.toolcall === false ? status.capability.reason : undefined,
   ]
   return lines.filter((line): line is string => !!line)
