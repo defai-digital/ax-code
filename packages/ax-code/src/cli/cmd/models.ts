@@ -10,7 +10,7 @@ import { EOL } from "os"
 
 export const ModelsCommand = cmd({
   command: "models [provider]",
-  describe: "list models usable by AX Code",
+  describe: "list provider/model IDs for ax-code run --model",
   builder: (yargs: Argv) => {
     return yargs
       .positional("provider", {
@@ -26,6 +26,10 @@ export const ModelsCommand = cmd({
         describe: "refresh the models cache from models.dev",
         type: "boolean",
       })
+      .epilog(
+        "Each line is a provider/model ID for --model. Family aliases: deepseek, glm, qwen. " +
+          'Bare SKUs such as qwen3.8-max are invalid. Example: ax-code run --model qwen -- "Review this change"',
+      )
   },
   handler: async (args) => {
     if (args.refresh) {

@@ -230,7 +230,11 @@ export function cli(argv = hideBin(process.argv)) {
         rawArgv[0] === "completion"
       if (!skipMigration) await migrate()
     })
-    .usage("\n" + UI.logo())
+    .usage(
+      "\n" +
+        UI.logo() +
+        '\n\n  Interactive TUI:  ax-code\n  Headless task:   ax-code run --model <provider/model> -- "prompt"',
+    )
     .completion("completion", "generate shell completion script")
 
   for (const cmd of cmds) cli = cli.command(cmd as never)

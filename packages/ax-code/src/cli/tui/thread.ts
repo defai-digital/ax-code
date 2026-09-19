@@ -645,7 +645,8 @@ export const TuiThreadCommand = cmd({
       .option("model", {
         type: "string",
         alias: ["m"],
-        describe: "model to use: provider/model, or deepseek, glm, qwen (Flash defaults)",
+        describe:
+          "model to use: provider/model from `ax-code models`, or family name deepseek, glm, qwen (Flash defaults)",
       })
       .option("continue", {
         alias: ["c"],
@@ -663,7 +664,7 @@ export const TuiThreadCommand = cmd({
       })
       .option("prompt", {
         type: "string",
-        describe: "prompt to use",
+        describe: "initial TUI prompt (interactive; for scripts use ax-code run --prompt)",
       })
       .option("agent", {
         type: "string",

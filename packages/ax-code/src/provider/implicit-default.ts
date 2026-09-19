@@ -14,6 +14,8 @@ export function modelFamilyDefault(name: string) {
   return undefined
 }
 
+export const MODEL_FORMAT_HELP = 'expected "provider/model" from `ax-code models`, or family name deepseek, glm, qwen'
+
 /** Session default when the user does not pass --model / config.model. */
 export const IMPLICIT_DEFAULT_MODEL_SKUS = [
   FAMILY_DEFAULTS.deepseek.modelID,

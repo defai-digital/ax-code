@@ -109,6 +109,47 @@ describe("cli smoke", () => {
     expect(text).toContain("Commands:")
     expect(text).toContain("ax-code db")
     expect(text).toContain("--sandbox")
+    expect(text).toContain("Headless task:")
+    expect(text).toContain("ax-code run --model")
+  }, 20000)
+
+  test("run help documents prompt flags and examples", async () => {
+    const out = await Process.run(cmd("run", "--help"), {
+      cwd: ROOT,
+    })
+
+    const text = stripAnsi(out.stdout.toString())
+    expect(out.code).toBe(0)
+    expect(text).toContain("--prompt")
+    expect(text).toContain("--prompt-file")
+    expect(text).toContain("Examples:")
+    expect(text).toContain("put the prompt after --")
+    expect(text).toContain("not a prompt")
+  }, 20000)
+
+  test("run rejects a model SKU without a provider before starting a session", async () => {
+    const out = await Process.run(cmd("run", "--model", "qwen3.8-max", "--prompt", "hello"), {
+      cwd: ROOT,
+      nothrow: true,
+    })
+
+    const text = stripAnsi(out.stdout.toString() + out.stderr.toString())
+    expect(out.code).toBe(1)
+    expect(text).toContain("Invalid model format")
+    expect(text).toContain("ax-code models")
+    expect(text).toContain("deepseek, glm, qwen")
+  }, 20000)
+
+  test("run --prompt-file reports a missing prompt file without treating it as unknown", async () => {
+    const out = await Process.run(cmd("run", "--prompt-file", "no-such-ax-code-prompt.txt", "--model", "qwen"), {
+      cwd: ROOT,
+      nothrow: true,
+    })
+
+    const text = stripAnsi(out.stdout.toString() + out.stderr.toString())
+    expect(out.code).toBe(1)
+    expect(text).toContain("Prompt file not found")
+    expect(text).not.toContain("Unknown argument")
   }, 20000)
 
   test("returns non-zero for unknown top-level flags", async () => {

@@ -207,7 +207,7 @@ The same runtime, session store, and evidence model back every surface.
 | Surface             | Entry point                                                                                            |
 | ------------------- | ------------------------------------------------------------------------------------------------------ |
 | Terminal UI         | `ax-code` — provider, model, agent, session, MCP, and skill flows                                      |
-| One-shot / headless | `ax-code run "review the auth flow"` for scripts, CI, and bots                                         |
+| One-shot / headless | `ax-code run --model qwen -- "review the auth flow"` for scripts, CI, bots, and other coding agents    |
 | Local service       | `ax-code serve` exposes the runtime over a local HTTP API and OpenAPI contract                         |
 | TypeScript SDK      | `@defai-digital/ax-code-sdk` provides typed headless, gRPC, event, session, and testing APIs           |
 | VS Code             | The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=AutomatosX.ax-code-vscode) |
@@ -266,21 +266,21 @@ Evidence and review:
 
 Everyday use:
 
-| Command                   | Purpose                                                             |
-| ------------------------- | ------------------------------------------------------------------- |
-| `ax-code`                 | Open the interactive terminal UI                                    |
-| `ax-code run "<task>"`    | Run a one-shot headless task                                        |
-| `ax-code init`            | Create or update repository `AGENTS.md` (`--wiki` adds AX Wiki)     |
-| `ax-code index`           | Build the code-intelligence graph                                   |
-| `ax-code wiki`            | Plan, generate, update, or lint the AX Wiki                         |
-| `ax-code providers login` | Configure provider credentials                                      |
-| `ax-code models`          | List available provider/model IDs                                   |
-| `ax-code mcp add`         | Add a local or remote MCP server                                    |
-| `ax-code mcp remove`      | Remove a configured MCP server                                      |
-| `ax-code agent create`    | Generate a custom project or global agent                           |
-| `ax-code serve`           | Start the local HTTP/OpenAPI server                                 |
-| `ax-code runtime start`   | Run a persistent project server; `status`/`attach`/`stop` manage it |
-| `ax-code doctor`          | Diagnose install, runtime, storage, and auth                        |
+| Command                                | Purpose                                                                 |
+| -------------------------------------- | ----------------------------------------------------------------------- |
+| `ax-code`                              | Open the interactive terminal UI                                        |
+| `ax-code run --model qwen -- "<task>"` | Run a one-shot headless task (`--prompt` and `--prompt-file` also work) |
+| `ax-code init`                         | Create or update repository `AGENTS.md` (`--wiki` adds AX Wiki)         |
+| `ax-code index`                        | Build the code-intelligence graph                                       |
+| `ax-code wiki`                         | Plan, generate, update, or lint the AX Wiki                             |
+| `ax-code providers login`              | Configure provider credentials                                          |
+| `ax-code models`                       | List available provider/model IDs                                       |
+| `ax-code mcp add`                      | Add a local or remote MCP server                                        |
+| `ax-code mcp remove`                   | Remove a configured MCP server                                          |
+| `ax-code agent create`                 | Generate a custom project or global agent                               |
+| `ax-code serve`                        | Start the local HTTP/OpenAPI server                                     |
+| `ax-code runtime start`                | Run a persistent project server; `status`/`attach`/`stop` manage it     |
+| `ax-code doctor`                       | Diagnose install, runtime, storage, and auth                            |
 
 `ax-code --help` lists the full command set.
 

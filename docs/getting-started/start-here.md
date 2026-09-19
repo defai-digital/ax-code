@@ -115,6 +115,8 @@ In those cases, a lighter editor assistant may be simpler. AX Code is strongest 
 ```bash
 ax-code
 ax-code providers login
+ax-code models
+ax-code run --model qwen -- "Review this change"
 ax-code init
 ax-code index
 ax-code mcp add

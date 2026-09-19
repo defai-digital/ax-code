@@ -1094,6 +1094,11 @@ test("parseModel rejects a bare provider without a model id", () => {
   expect(() => Provider.parseModel("openai")).toThrow('expected "provider/model"')
 })
 
+test("parseModel rejects a versioned SKU without a provider", () => {
+  expect(() => Provider.parseModel("qwen3.8-max")).toThrow(/ax-code models/)
+  expect(() => Provider.parseModel("qwen3.8-max")).toThrow(/deepseek, glm, qwen/)
+})
+
 test("parseModel rejects a trailing slash without a model id", () => {
   expect(() => Provider.parseModel("openai/")).toThrow('expected "provider/model"')
 })

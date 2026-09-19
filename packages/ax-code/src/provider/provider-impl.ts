@@ -43,6 +43,7 @@ import { isNonChatModelID, modelSelectableForProvider, sameSkuOnConnectedProvide
 import {
   defaultModelIDForProvider,
   IMPLICIT_DEFAULT_UNAVAILABLE_MESSAGE,
+  MODEL_FORMAT_HELP,
   modelFamilyDefault,
   pickImplicitDefaultModel,
 } from "./implicit-default"
@@ -1690,7 +1691,7 @@ export namespace Provider {
       const provider = providerID?.trim() ?? ""
       const id = modelID?.trim() ?? ""
       if (!provider || !id) {
-        throw new Error(`Invalid model format "${source}"; expected "provider/model"`)
+        throw new Error(`Invalid model format "${source}"; ${MODEL_FORMAT_HELP}`)
       }
       return {
         providerID: ProviderID.make(provider),

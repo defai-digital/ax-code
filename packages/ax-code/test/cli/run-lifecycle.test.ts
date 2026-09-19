@@ -1,11 +1,14 @@
 import { expect, test } from "vitest"
 import path from "path"
 import { readFile } from "node:fs/promises"
+import yargs from "yargs"
 import {
+  composeRunMessage,
   findRunModelError,
   formatRunToolFallbackInput,
   isRunEventStreamFormat,
   joinRunMessageArguments,
+  missingRunPromptMessage,
   refreshRunProvidersOnModelMiss,
   resolveRunAgentDisplayName,
   resolveRunModel,
@@ -13,6 +16,23 @@ import {
 } from "../../src/cli/cmd/run"
 import { tmpdir } from "../fixture/fixture"
 import { Provider } from "../../src/provider/provider"
+
+async function parseRunArgv(argv: string[]) {
+  let parsed: Record<string, unknown> | undefined
+  await yargs(["run", ...argv])
+    .scriptName("ax-code")
+    .parserConfiguration({ "populate--": true })
+    .command({
+      command: RunCommand.command,
+      describe: RunCommand.describe,
+      builder: RunCommand.builder,
+      handler: (args) => {
+        parsed = args as Record<string, unknown>
+      },
+    })
+    .parse()
+  return parsed ?? {}
+}
 
 test("run command fallback tool formatter handles non-json-safe input", () => {
   const input: Record<string, unknown> = { count: 1n }
@@ -32,6 +52,47 @@ test("run command preserves parsed message text without adding shell quotes", ()
   expect(joinRunMessageArguments(["tell me a short story about Japan"])).toBe("tell me a short story about Japan")
   expect(joinRunMessageArguments(["tell", "me", "a story"])).toBe("tell me a story")
   expect(joinRunMessageArguments(['say "hello"', "now"])).toBe('say "hello" now')
+})
+
+test("composeRunMessage joins prompt-file, --prompt, and positional text", () => {
+  expect(
+    composeRunMessage({
+      promptFileText: "from file\n",
+      prompt: "from flag",
+      message: ["Please", "review"],
+      rest: ["this"],
+    }),
+  ).toBe("from file\nfrom flag\nPlease review this")
+  expect(composeRunMessage({ prompt: "hello" })).toBe("hello")
+  expect(composeRunMessage({ message: [], rest: [] })).toBe("")
+})
+
+test("missingRunPromptMessage keeps the original first line and explains common traps", () => {
+  const text = missingRunPromptMessage({ passwordSet: true })
+  expect(text).toContain("You must provide a message or a command.")
+  expect(text).toContain("--prompt")
+  expect(text).toContain("--prompt-file")
+  expect(text).toContain("-p/--password")
+})
+
+test("run --file does not consume following prompt words", async () => {
+  const parsed = await parseRunArgv(["--file", "README.md", "Please", "review"])
+  expect(parsed.file).toEqual(["README.md"])
+  expect(parsed.message).toEqual(["Please", "review"])
+})
+
+test("run accepts --prompt and --prompt-file", async () => {
+  const parsed = await parseRunArgv([
+    "--prompt",
+    "hello from agent",
+    "--prompt-file",
+    "./prompt.txt",
+    "--model",
+    "qwen",
+  ])
+  expect(parsed.prompt).toBe("hello from agent")
+  expect(parsed["prompt-file"]).toBe("./prompt.txt")
+  expect(parsed.model).toBe("qwen")
 })
 
 test("run command model validation flags unknown provider or model (#405)", () => {
@@ -440,10 +501,7 @@ test("TUI worker always forces exit after uncaught exceptions", async () => {
   expect(end).toBeGreaterThan(start)
   expect(block).not.toContain("if (!shutdownPromise) setTimeout")
 
-  const lifecycleSrc = await readFile(
-    path.join(import.meta.dirname, "../../src/cli/tui/util/lifecycle.ts"),
-    "utf-8",
-  )
+  const lifecycleSrc = await readFile(path.join(import.meta.dirname, "../../src/cli/tui/util/lifecycle.ts"), "utf-8")
   const handlerStart = lifecycleSrc.indexOf("export function registerTuiProcessHandler")
   expect(handlerStart).toBeGreaterThan(-1)
   const handlerBlock = lifecycleSrc.slice(handlerStart)

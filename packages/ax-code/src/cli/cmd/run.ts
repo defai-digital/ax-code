@@ -1,6 +1,7 @@
 import { defer } from "@/util/defer"
 import type { Argv } from "yargs"
 import { AsyncLocalStorage } from "node:async_hooks"
+import { readFile } from "fs/promises"
 import path from "path"
 import { pathToFileURL } from "url"
 import { UI } from "../ui"
@@ -131,6 +132,36 @@ export function joinRunMessageArguments(args: readonly string[]): string {
   return args.join(" ")
 }
 
+export function composeRunMessage(input: {
+  message?: readonly string[]
+  rest?: readonly string[]
+  prompt?: string
+  promptFileText?: string
+}): string {
+  const parts: string[] = []
+  if (input.promptFileText) {
+    const fileText = input.promptFileText.replace(/\n+$/, "")
+    if (fileText.length > 0) parts.push(fileText)
+  }
+  if (input.prompt) parts.push(input.prompt)
+  const positional = joinRunMessageArguments([...(input.message ?? []), ...(input.rest ?? [])])
+  if (positional.length > 0) parts.push(positional)
+  return parts.join("\n")
+}
+
+export function missingRunPromptMessage(input?: { passwordSet?: boolean }): string {
+  const lines = [
+    "You must provide a message or a command.",
+    "Pass the prompt after --, or use --prompt / --prompt-file.",
+    'Example: ax-code run --model qwen -- "Review this change"',
+    "--file attaches files; it is not a prompt file. -p is --password, not a prompt flag.",
+  ]
+  if (input?.passwordSet) {
+    lines.push("A value was set with -p/--password; that is server basic-auth, not the prompt.")
+  }
+  return lines.join("\n")
+}
+
 export function formatRunToolFallbackInput(input: unknown): string {
   if (!isNonEmptyRecord(input)) return "Unknown"
   const seen = new WeakSet<object>()
@@ -158,9 +189,16 @@ export function findRunModelError(input: {
   modelID: string
 }): string | undefined {
   const provider = input.providers.find((item) => item.id === input.providerID)
-  if (!provider) return `Unknown provider "${input.providerID}" for model "${input.providerID}/${input.modelID}"`
+  if (!provider) {
+    return (
+      `Unknown provider "${input.providerID}" for model "${input.providerID}/${input.modelID}". ` +
+      "Run `ax-code models` for usable IDs."
+    )
+  }
   if (!provider.models[input.modelID]) {
-    return `Model "${input.modelID}" not found for provider "${input.providerID}"`
+    return (
+      `Model "${input.modelID}" not found for provider "${input.providerID}". ` + "Run `ax-code models` for usable IDs."
+    )
   }
   return undefined
 }
@@ -395,11 +433,12 @@ function normalizePath(input?: string) {
 
 export const RunCommand = cmd({
   command: "run [message..]",
-  describe: "run ax-code with a message",
+  describe: "run a one-shot headless task and print the assistant reply",
   builder: (yargs: Argv) => {
     return yargs
+      .wrap(null)
       .positional("message", {
-        describe: "message to send",
+        describe: "prompt text (put it after -- so flags such as --file do not consume it)",
         type: "string",
         array: true,
         default: [],
@@ -425,7 +464,8 @@ export const RunCommand = cmd({
       .option("model", {
         type: "string",
         alias: ["m"],
-        describe: "model to use: provider/model, or deepseek, glm, qwen (Flash defaults)",
+        describe:
+          "model to use: provider/model from `ax-code models`, or family name deepseek, glm, qwen (Flash defaults)",
       })
       .option("agent", {
         type: "string",
@@ -436,7 +476,7 @@ export const RunCommand = cmd({
         choices: ["default", "json", "jsonl", "ndjson"],
         default: "default",
         describe:
-          "output format: default (formatted) or json/jsonl/ndjson " +
+          "output format: default (final assistant text) or json/jsonl/ndjson " +
           "(newline-delimited JSON event stream — one JSON object per line, not a single JSON document)",
       })
       .option("output-file", {
@@ -452,11 +492,20 @@ export const RunCommand = cmd({
         type: "string",
         describe: "validate the final assistant message as JSON against a JSON Schema file",
       })
+      .option("prompt", {
+        type: "string",
+        describe: "prompt text (same as the message positional; preferred by other CLIs)",
+      })
+      .option("prompt-file", {
+        type: "string",
+        describe: "read prompt text from a file (not an attachment; use --file to attach)",
+      })
       .option("file", {
         alias: ["f"],
         type: "string",
         array: true,
-        describe: "file(s) to attach to message",
+        nargs: 1,
+        describe: "attach a file to the message (repeatable; does not replace the prompt)",
       })
       .option("title", {
         type: "string",
@@ -469,7 +518,7 @@ export const RunCommand = cmd({
       .option("password", {
         alias: ["p"],
         type: "string",
-        describe: "basic auth password (defaults to AX_CODE_SERVER_PASSWORD)",
+        describe: "basic auth password for --attach (not a prompt; defaults to AX_CODE_SERVER_PASSWORD)",
       })
       .option("dir", {
         type: "string",
@@ -485,7 +534,7 @@ export const RunCommand = cmd({
       })
       .option("thinking", {
         type: "boolean",
-        describe: "show thinking blocks",
+        describe: "include reasoning/thinking in the output (hidden by default)",
         default: false,
       })
       .option("full", {
@@ -502,6 +551,10 @@ export const RunCommand = cmd({
         type: "number",
         describe: "cap replay to the newest N messages (requires --replay)",
       })
+      .example('ax-code run --model qwen -- "Review this"', "put the prompt after --")
+      .example('ax-code run --prompt "Review this" --model qwen', "same prompt via --prompt")
+      .example("ax-code run --prompt-file ./prompt.txt --model qwen", "read the prompt from a file")
+      .example("ax-code run --file README.md --prompt Summarize --model qwen", "attach a file; --file is not the prompt")
   },
   handler: async (args) => {
     const { Server } = await import("../../server/server")
@@ -516,7 +569,32 @@ export const RunCommand = cmd({
     const callerCwd = Filesystem.callerCwd()
     const previousCwd = process.cwd()
 
-    let message = joinRunMessageArguments([...args.message, ...(args["--"] || [])])
+    let promptFileText: string | undefined
+    if (args["prompt-file"]) {
+      const resolvedPromptFile = path.resolve(callerCwd, args["prompt-file"])
+      if (!(await Filesystem.exists(resolvedPromptFile))) {
+        exitEarly(`Prompt file not found: ${args["prompt-file"]}`)
+      }
+      if (await Filesystem.isDir(resolvedPromptFile)) {
+        exitEarly(`Prompt file is a directory: ${args["prompt-file"]}`)
+      }
+      promptFileText = await readFile(resolvedPromptFile, "utf8")
+    }
+
+    let message = composeRunMessage({
+      message: args.message,
+      rest: args["--"],
+      prompt: args.prompt,
+      promptFileText,
+    })
+
+    if (args.model) {
+      try {
+        Provider.parseModel(args.model)
+      } catch (error) {
+        exitEarly(toErrorMessage(error))
+      }
+    }
 
     const directory = (() => {
       if (!args.dir) return undefined
@@ -568,7 +646,7 @@ export const RunCommand = cmd({
     }
 
     if (message.trim().length === 0 && !args.command) {
-      exitEarly("You must provide a message or a command")
+      exitEarly(missingRunPromptMessage({ passwordSet: Boolean(args.password) && !args.attach }))
     }
 
     if (args.fork && !args.continue && !args.session) {
@@ -959,7 +1037,10 @@ export const RunCommand = cmd({
             const modelError = findRunModelError({ providers, providerID: providerID!, modelID: modelID! })
             if (modelError) exitEarly(modelError)
             if (connected && !connected.includes(providerID!)) {
-              exitEarly(`Provider "${providerID!}" is not connected`)
+              exitEarly(
+                `Provider "${providerID!}" is not connected. ` +
+                  "Connect it with `ax-code providers login`, or pick an ID from `ax-code models`.",
+              )
             }
           } else if (resolved.providerID !== providerID!) {
             warnPrefix(`model "${args.model}" is served as "${resolved.providerID}/${resolved.modelID}"`)

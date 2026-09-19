@@ -39,7 +39,9 @@ Both the TUI and `ax-code run` accept these case-insensitive `--model` family na
 | `qwen`     | `qwen3.8-flash`  |
 
 For example, `ax-code --model glm` opens the TUI with GLM Flash, and
-`ax-code run --model qwen "Review this change"` requests Qwen Flash.
+`ax-code run --model qwen -- "Review this change"` requests Qwen Flash.
+Put the prompt after `--` (or pass `--prompt` / `--prompt-file`); `--file` attaches
+files and is not a prompt file. `ax-code models` lists usable `provider/model` IDs.
 Family names resolve through the native provider or a connected gateway serving
 the same model. You can also name the provider: `--model my-gateway/glm`.
 Use a full ID such as `my-gateway/glm-5.3` to request a specific version or tier.
