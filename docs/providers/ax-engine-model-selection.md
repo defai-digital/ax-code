@@ -49,8 +49,10 @@ See [Local Engine Architecture](../architecture/local-engine.md) for lifecycle a
 
 ## Managed MTP policy
 
+Managed AX Engine defaults to `required`, matching the selected MTP artifact.
+An unavailable drafter fails startup instead of silently falling back to direct decoding.
 MTP weights and the pure-stacking setting do not establish active acceleration.
-Set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
+To explicitly select a policy, set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
 
 ```json
 {
@@ -66,22 +68,25 @@ Set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
 
 | Policy               | Behavior                                                                                                    |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `disabled` (default) | Preserve direct decoding; do not request a model drafter.                                                   |
+| `disabled`           | Use direct decoding; do not request a model drafter.                                                        |
 | `auto`               | Let AX Engine decide whether the model and route admit MTP. This does not guarantee activation.             |
-| `required`           | Require an admitted MTP drafter; AX Engine rejects an unavailable drafter instead of silently falling back. |
+| `required` (default) | Require an admitted MTP drafter; AX Engine rejects an unavailable drafter instead of silently falling back. |
 
 `AX_ENGINE_MTP_POLICY` provides the same three values when no provider option is set.
 Managed starts require AX Engine 7.4.0 or newer to enforce these policies, including
-the default `disabled` policy. Older/unknown binaries reject policy selection
+the default `required` policy. Explicit `disabled` and `auto` settings still override
+the default. Older/unknown binaries reject policy selection
 before replacing a running engine; upgrade before using the managed policy controls. Historical state files without a recorded policy
 report their launched policy as unknown and are replaced on the next managed start.
 Changing policy takes effect on the next managed start or model request and replaces
 an existing process with a different policy. It does not change model selection or storage.
 
-`ax-code providers ax-engine start --mtp-policy required` selects the policy for
+`ax-code providers ax-engine start --mtp-policy disabled` overrides the policy for
 that start only. Set the persistent provider option if subsequent coding requests
-should continue requiring MTP. The prepare/start HTTP bodies also accept `mtpPolicy`.
+should use the same override. The prepare/start HTTP bodies also accept `mtpPolicy`.
 These managed settings do not reconfigure separately attached endpoints.
+After updating source, restart `npm run dev` to load the new default; an already
+running development backend retains its loaded code until restarted.
 
 `ax-code providers ax-engine status` (or `--json`) separates the requested policy,
 launched policy, and observed `active`/`inactive`/`unknown` state. Observation uses

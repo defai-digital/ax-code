@@ -15,15 +15,24 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-test("MTP defaults to disabled; provider policy wins over environment without accepting stacking modes", () => {
+test("MTP defaults to required; explicit policies still override the default", () => {
   vi.stubEnv("AX_ENGINE_MTP_POLICY", undefined)
+  expect(resolveAxEngineMtpPolicy()).toBe("required")
+  vi.stubEnv("AX_ENGINE_MTP_POLICY", "disabled")
   expect(resolveAxEngineMtpPolicy()).toBe("disabled")
+  expect(resolveAxEngineMtpPolicy({ mtpPolicy: "required" })).toBe("required")
   vi.stubEnv("AX_ENGINE_MTP_POLICY", "required")
   expect(resolveAxEngineMtpPolicy()).toBe("required")
+  expect(resolveAxEngineMtpPolicy({ mtpPolicy: "disabled" })).toBe("disabled")
   expect(resolveAxEngineMtpPolicy({ mtpPolicy: "auto" })).toBe("auto")
   for (const mtpPolicy of ["pure", "on", "", false, 1]) {
     expect(() => resolveAxEngineMtpPolicy({ mtpPolicy })).toThrow("disabled, auto, or required")
   }
+})
+
+test("qualified launches without an explicit policy require MTP", () => {
+  const args = axEngineServerLaunchArgs({ apiModelID: "qwen3.8-27b-axq-6bit", binaryVersion: "7.4.0" })
+  expect(args[args.indexOf("--mlx-mtp-policy") + 1]).toBe("required")
 })
 
 test.each(["disabled", "auto", "required"] as const)(

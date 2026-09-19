@@ -5,10 +5,12 @@ import { parseJsonResult } from "../../util/json-value"
 export const AxEngineMtpPolicy = z.enum(["disabled", "auto", "required"])
 export type AxEngineMtpPolicy = z.infer<typeof AxEngineMtpPolicy>
 
-// Preserve the managed launcher's historical direct-decode default. Pure MTP
-// describes n-gram stacking, not whether a model drafter is enabled.
+// Managed selection uses the MTP artifact; fail if its drafter is unavailable.
+// Pure MTP describes n-gram stacking, not whether a model drafter is enabled.
+const DEFAULT_MTP_POLICY: AxEngineMtpPolicy = "required"
+
 export function resolveAxEngineMtpPolicy(options: Record<string, unknown> = {}): AxEngineMtpPolicy {
-  const value = options.mtpPolicy ?? process.env.AX_ENGINE_MTP_POLICY ?? "disabled"
+  const value = options.mtpPolicy ?? process.env.AX_ENGINE_MTP_POLICY ?? DEFAULT_MTP_POLICY
   const parsed = AxEngineMtpPolicy.safeParse(value)
   if (!parsed.success) {
     throw new Error("AX Engine mtpPolicy must be disabled, auto, or required")
@@ -25,7 +27,7 @@ export function axEngineMtpLaunchPolicy(policy: AxEngineMtpPolicy | undefined, v
     if (policy !== undefined) throw new Error("Explicit AX Engine MTP policy requires AX Engine 7.4.0 or newer")
     return undefined
   }
-  return policy ?? "disabled"
+  return policy ?? DEFAULT_MTP_POLICY
 }
 
 export function axEngineMtpLaunchArgs(policy: AxEngineMtpPolicy | undefined, version?: string): string[] {

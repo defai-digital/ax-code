@@ -14,6 +14,18 @@ afterEach(async () => {
   await Instance.disposeAll()
   vi.restoreAllMocks()
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
+})
+
+test.each(["prepare", "start"])("%s defaults to required and permits explicitly disabling MTP", async (action) => {
+  vi.stubEnv("AX_ENGINE_MTP_POLICY", undefined)
+  vi.spyOn(Config, "get").mockResolvedValue({})
+  vi.spyOn(Provider, "invalidate").mockResolvedValue()
+  vi.spyOn(console, "log").mockImplementation(() => {})
+  await ProvidersAxEngineCommand.handler({ action, json: true } as any)
+  expect(prepareAxEngine).toHaveBeenLastCalledWith(expect.objectContaining({ mtpPolicy: "required" }))
+  await ProvidersAxEngineCommand.handler({ action, json: true, mtpPolicy: "disabled" } as any)
+  expect(prepareAxEngine).toHaveBeenLastCalledWith(expect.objectContaining({ mtpPolicy: "disabled" }))
 })
 
 test.each(["status", "prepare", "start"])(

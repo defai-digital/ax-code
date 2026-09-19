@@ -13,6 +13,21 @@ vi.mock("../../src/provider/ax-engine", async (importOriginal) => {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
+  vi.unstubAllEnvs()
+})
+
+test.each(["start", "prepare"])("%s requires MTP when no policy is configured", async (action) => {
+  vi.stubEnv("AX_ENGINE_MTP_POLICY", undefined)
+  vi.spyOn(Config, "get").mockResolvedValue({})
+  vi.spyOn(Provider, "invalidate").mockResolvedValue()
+  const app = new Hono().route("/provider", ProviderRoutes())
+  const result = await app.request(`/provider/ax-engine/${action}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  })
+  expect(result.status).toBe(200)
+  expect(prepareAxEngine).toHaveBeenLastCalledWith(expect.objectContaining({ mtpPolicy: "required" }))
 })
 
 test.each(["start", "prepare"])("%s forwards configured and explicitly overridden MTP policy", async (action) => {
