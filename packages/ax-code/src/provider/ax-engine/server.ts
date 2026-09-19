@@ -20,7 +20,7 @@ import {
   AX_ENGINE_SERVER_LOCK_STALE_MS,
   AX_ENGINE_SERVER_LOCK_TIMEOUT_MS,
   AxEngineModelIDSchema,
-  AX_ENGINE_SPECULATION_PROFILE,
+  axEngineSpeculationProfile,
   axEnginePrefixCacheEnv,
   axEngineQwen38ExactMtpEnv,
   qwen38ExactMtpProfileFingerprint,
@@ -155,7 +155,7 @@ export function axEngineServerLaunchArgs(input: {
   mtpPolicy?: AxEngineMtpPolicy
 }): string[] {
   const args = ["--model-id", input.apiModelID]
-  args.push("--speculation-profile", input.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE)
+  args.push("--speculation-profile", input.speculationProfile ?? axEngineSpeculationProfile(input.apiModelID))
   const maxOutputTokens = input.maxOutputTokens ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS
   if (supportsMaxOutputTokensFlag(input.binaryVersion)) {
     // Split-knob servers: scheduler width stays at the benchmark-tuned default
@@ -680,7 +680,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   const maxConcurrentRequests = options.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS
   const maxConcurrentRequestsMatches =
     (existing?.maxConcurrentRequests ?? AX_ENGINE_DEFAULT_MAX_CONCURRENT_REQUESTS) === maxConcurrentRequests
-  const speculationProfile = options.speculationProfile ?? AX_ENGINE_SPECULATION_PROFILE
+  const speculationProfile = options.speculationProfile ?? axEngineSpeculationProfile(options.modelID)
   const mtpMode = options.mtpMode ?? AX_ENGINE_MTP_MODE
   const mtpPolicy = axEngineMtpLaunchPolicy(options.mtpPolicy, options.binaryVersion)
   const mtpPolicyMatches = existing?.mtpPolicy === mtpPolicy

@@ -52,6 +52,10 @@ See [Local Engine Architecture](../architecture/local-engine.md) for lifecycle a
 Managed AX Engine defaults to `required`, matching the selected MTP artifact.
 An unavailable drafter fails startup instead of silently falling back to direct decoding.
 MTP weights and the pure-stacking setting do not establish active acceleration.
+The selected Qwen artifact uses the `auto` speculation profile so AX Engine can
+apply its model-specific draft gate and asynchronous draft path. This is separate
+from the MTP activation policy: the default remains `required`. A managed start
+replaces an older process using the `agentic` profile.
 To explicitly select a policy, set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
 
 ```json

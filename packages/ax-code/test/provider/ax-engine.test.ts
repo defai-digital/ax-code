@@ -919,12 +919,34 @@ describe("ax-engine server lifecycle", () => {
 })
 
 describe("ax-engine server launch args", () => {
+  test.each([AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID, `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`])(
+    "defers to the exact model's MTP gate for %s without weakening required policy",
+    (apiModelID) => {
+      const args = axEngineServerLaunchArgs({ apiModelID, binaryVersion: "7.4.0" })
+      expect(args[args.indexOf("--speculation-profile") + 1]).toBe("auto")
+      expect(args[args.indexOf("--mlx-mtp-policy") + 1]).toBe("required")
+      const explicit = axEngineServerLaunchArgs({ apiModelID, speculationProfile: "agentic" })
+      expect(explicit[explicit.indexOf("--speculation-profile") + 1]).toBe("agentic")
+    },
+  )
+
+  test.each([
+    AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
+    AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
+    "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@main",
+    `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-4bit-MTP@${"a".repeat(40)}`,
+    `Other/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}`,
+  ])("preserves the historical profile outside the exact model boundary: %s", (apiModelID) => {
+    const args = axEngineServerLaunchArgs({ apiModelID })
+    expect(args[args.indexOf("--speculation-profile") + 1]).toBe("agentic")
+  })
+
   test("omits block-pool flags when no context window is requested", () => {
     expect(axEngineServerLaunchArgs({ apiModelID: AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID })).toEqual([
       "--model-id",
       AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
       "--speculation-profile",
-      "agentic",
+      "auto",
       "--max-batch-tokens",
       "8192",
       "--disable-ngram-acceleration",

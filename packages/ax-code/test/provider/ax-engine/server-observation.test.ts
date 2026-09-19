@@ -127,7 +127,7 @@ test("cancelling one startup does not cancel another caller waiting for the same
   const state = {
     ...(await isolate(tmp.path)),
     maxOutputTokens: 8_192,
-    speculationProfile: "agentic",
+    speculationProfile: "auto",
     mtpMode: "pure",
   }
   await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(state))
@@ -186,7 +186,7 @@ test("transient health failures do not restart an already running engine", async
   const state = {
     ...(await isolate(tmp.path)),
     maxOutputTokens: 8_192,
-    speculationProfile: "agentic",
+    speculationProfile: "auto",
     mtpMode: "pure",
     lastHealthAt: Date.now(),
   }
@@ -283,7 +283,7 @@ test.each(["revision", "api model"])("reloads a changed %s even when the catalog
     ...(await isolate(tmp.path)),
     modelRevision: "old-revision",
     maxOutputTokens: 8_192,
-    speculationProfile: "agentic",
+    speculationProfile: "auto",
     mtpMode: "pure",
   }
   await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(state))

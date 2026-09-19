@@ -81,6 +81,24 @@ http.createServer((req, res) => {
 // Managed process identity currently uses Unix ps; these fixtures exercise
 // real subprocesses and HTTP without loading weights or touching host state.
 describe.skipIf(process.platform === "win32")("managed engine residency", () => {
+  test.each([
+    AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
+    `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}` as const,
+  ] as const)("the Qwen model profile replaces the old agentic pin for %s", async (modelID) => {
+    await using f = await fixture()
+    const input = { ...f.input, modelID, binaryVersion: "7.4.0" }
+    const previous = await ensureServer({ ...input, speculationProfile: "agentic" })
+    expect(previous.speculationProfile).toBe("agentic")
+    const current = await ensureServer(input)
+    expect(current.pid).not.toBe(previous.pid)
+    expect(current.speculationProfile).toBe("auto")
+    expect(current.mtpPolicy).toBe("required")
+    expect(f.spawned[1].cmd[f.spawned[1].cmd.indexOf("--speculation-profile") + 1]).toBe("auto")
+    expect((await ensureServer(input)).pid).toBe(current.pid)
+    expect(f.children).toHaveLength(2)
+    await expect(f.children[0].exited).resolves.toBeTypeOf("number")
+  })
+
   test("default required MTP startup failure is not retried with a weaker policy", async () => {
     await using f = await fixture("exit")
     await expect(ensureServer({ ...f.input, binaryVersion: "7.4.0" })).rejects.toMatchObject({

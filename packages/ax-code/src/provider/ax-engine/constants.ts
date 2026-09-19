@@ -130,14 +130,25 @@ export const AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV: Record<string, string> = {
   AX_MLX_MTP_MIN_REMAINING_TOKENS: "0",
 }
 
+function usesQwen38ExactMtpProfile(modelID: string): boolean {
+  if (!isAxEngineModelID(modelID)) return false
+  const repo = axEngineHubReference(modelID)?.repoID
+  const expectedRepo = AX_ENGINE_MODEL_DEFINITIONS[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID].quantizations.mlx6bit?.hfRepo
+  return modelID === AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID || repo === expectedRepo
+}
+
+export function axEngineSpeculationProfile(modelID: string): string {
+  // The exact Qwen contract supplies a zero draft gate. The generic agentic
+  // profile pins it to 0.80, preventing the async draft path enabled above.
+  // Auto defers to the loaded model contract; it does not change MTP policy.
+  return usesQwen38ExactMtpProfile(modelID) ? "auto" : AX_ENGINE_SPECULATION_PROFILE
+}
+
 export function axEngineQwen38ExactMtpEnv(
   modelID: string,
   env: NodeJS.Dict<string> = process.env,
 ): Record<string, string> {
-  if (!isAxEngineModelID(modelID)) return {}
-  const repo = axEngineHubReference(modelID)?.repoID
-  const expectedRepo = AX_ENGINE_MODEL_DEFINITIONS[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID].quantizations.mlx6bit?.hfRepo
-  if (modelID !== AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID && repo !== expectedRepo) return {}
+  if (!usesQwen38ExactMtpProfile(modelID)) return {}
   const resolved: Record<string, string> = {}
   for (const [key, fallback] of Object.entries(AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV)) {
     const override = env[key]?.trim()
