@@ -6,6 +6,8 @@ export const AX_ENGINE_PROVIDER_ID = "ax-engine"
 export const AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID = "qwen3.8-27b-axq-6bit"
 export const AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID = "ornith-35b-axq-6bit"
 export const AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID = "qwen3-coder-next-axq-6bit"
+export const AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID = "tiel-coder-35b-axq-mxfp4"
+export const AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID = "cyber-tiel-coder-35b-axq-mxfp4"
 export const AX_ENGINE_DISPLAY_NAME = "AX Engine (Local)"
 // Keep the client default aligned with ax-engine-server. Managed lifecycle may
 // still select 31419+ when another process owns the preferred port.
@@ -230,6 +232,8 @@ export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undef
 // session only when it is configured to spawn this source runtime rather than a
 // signed or PATH-installed runtime.
 export const AX_ENGINE_MODEL_IDS = [
+  AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
   AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID,
   AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID,
@@ -251,6 +255,8 @@ export const AxEngineModelIDSchema = z.union([
 // - Ornith-1.0-35B: full 256K long-context window
 // - Qwen3-Coder-Next: 32K memory-safe coding window
 export const AX_ENGINE_MODEL_CONTEXT_TOKENS = {
+  [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 32_768,
+  [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: 32_768,
   [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: 65_536,
   [AX_ENGINE_ORNITH_35B_AXQ_6BIT_MODEL_ID]: 262_144,
   [AX_ENGINE_QWEN3_CODER_NEXT_AXQ_6BIT_MODEL_ID]: 32_768,
@@ -294,6 +300,86 @@ export type AxEngineModelDefinition = {
 }
 
 export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngineModelDefinition> = {
+  // Explicitly selected development packs. Pin identity; do not claim native capabilities before startup.
+  [AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: {
+    id: AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    apiModelID: AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    name: "Tiel Coder 35B A3B AXQ MXFP4 MTP (Local MLX)",
+    sourceModel: "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e-MTP",
+    revision: "5ab39b24bfd7f65203be9b7823b1840486f58b6d",
+    defaultQuantization: "mlx",
+    releaseDate: "2026-09-19",
+    reasoning: false,
+    toolcall: false,
+    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID],
+    outputTokens: 8_192,
+    estimatedResources: true,
+    artifactFiles: [
+      "axquant_mtp_sidecar_manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "model-00001-of-00004.safetensors",
+      "model-00002-of-00004.safetensors",
+      "model-00003-of-00004.safetensors",
+      "model-00004-of-00004.safetensors",
+      "mtp.safetensors",
+      "mtplx_runtime.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "vision.safetensors",
+    ],
+    quantizations: {
+      mlx: {
+        hfRepo: "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+        downloadMode: "direct",
+        packageMarker: "axquant_mtp_sidecar_manifest.json",
+        directFallback: false,
+        mtpSource: "Publisher-preserved MTP sidecar; native capabilities require runtime verification",
+        minDiskBytes: 32 * 1024 ** 3,
+      },
+    },
+  },
+  [AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID]: {
+    id: AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    apiModelID: AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    name: "Cyber-Tiel Coder 35B A3B AXQ MXFP4 MTP (Local MLX)",
+    sourceModel: "peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-MLX-oQ6e-MTP",
+    revision: "fe05e871ec69ad9ae8eac01fd285555514ac7daf",
+    defaultQuantization: "mlx",
+    releaseDate: "2026-09-19",
+    reasoning: false,
+    toolcall: false,
+    minMemoryBytes: AX_ENGINE_LARGE_MODEL_MIN_MEMORY_BYTES,
+    contextTokens: AX_ENGINE_MODEL_CONTEXT_TOKENS[AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID],
+    outputTokens: 8_192,
+    estimatedResources: true,
+    artifactFiles: [
+      "axquant_mtp_sidecar_manifest.json",
+      "chat_template.jinja",
+      "config.json",
+      "model-00001-of-00004.safetensors",
+      "model-00002-of-00004.safetensors",
+      "model-00003-of-00004.safetensors",
+      "model-00004-of-00004.safetensors",
+      "mtp.safetensors",
+      "mtplx_runtime.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "vision.safetensors",
+    ],
+    quantizations: {
+      mlx: {
+        hfRepo: "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+        downloadMode: "direct",
+        packageMarker: "axquant_mtp_sidecar_manifest.json",
+        directFallback: false,
+        mtpSource: "Publisher-preserved MTP sidecar; native capabilities require runtime verification",
+        minDiskBytes: 32 * 1024 ** 3,
+      },
+    },
+  },
+
   // Qwen3.8-27B AXQuant + MTP snapshots. Direct HF download: the hub packages
   // ship model-manifest.json and the AXQuant MTP sidecar contract.
   [AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID]: {
@@ -388,9 +474,9 @@ export const AX_ENGINE_MODEL_DEFINITIONS: Record<AxEngineBuiltinModelID, AxEngin
   },
 }
 
-export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineBuiltinModelID = AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID
+export const AX_ENGINE_DEFAULT_MODEL_ID: AxEngineBuiltinModelID = AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID
 
-export const AX_ENGINE_DEFAULT_QUANTIZATION: AxEngineQuantization = "mlx6bit"
+export const AX_ENGINE_DEFAULT_QUANTIZATION: AxEngineQuantization = "mlx"
 
 export const AX_ENGINE_ERROR = {
   UnsupportedPlatform: "AX_ENGINE_UNSUPPORTED_PLATFORM",
@@ -424,7 +510,11 @@ export function isAxEngineBuiltinModelID(value: unknown): value is AxEngineBuilt
 }
 
 export function axEngineHubReference(value: AxEngineModelID) {
-  if (isAxEngineBuiltinModelID(value)) return undefined
+  if (isAxEngineBuiltinModelID(value)) {
+    const definition = AX_ENGINE_MODEL_DEFINITIONS[value]
+    const repoID = definition.quantizations[definition.defaultQuantization]?.hfRepo
+    return definition.revision && repoID ? { repoID, revision: definition.revision } : undefined
+  }
   if (!AX_ENGINE_HUB_MODEL_PATTERN.test(value)) throw new TypeError("Invalid pinned AutomatosX model reference")
   const [repoID, revision] = value.split("@")
   return { repoID, revision }

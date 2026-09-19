@@ -9,6 +9,23 @@ import { pinnedDownloadVersionBlocker } from "../../../src/provider/ax-engine/de
 import { hubFixture, productCatalog } from "./hub-fixture"
 
 describe("AutomatosX product admission", () => {
+  test.each(["Tiel", "Cyber-Tiel"])("curates only the exact %s repository and declared source", (name) => {
+    const source = `peculiar-ragdoll/${name}-Coder-35B-A3B-MLX-oQ6e-MTP`
+    const model = hubFixture({
+      id: `AutomatosX/AX-${name}-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP`,
+      cardData: { base_model: source },
+    })
+    expect(evaluateHubModel(model, {}).policy).toBe("eligible")
+    expect(hubModelDefinition(model, evaluateHubModel(model, {}))?.toolcall).toBe(false)
+    for (const invalid of [
+      { ...model, id: `${model.id}-Copy` },
+      { ...model, cardData: { base_model: "Qwen/Qwen3.8-27B", base_model_relation: "quantized" } },
+      { ...model, cardData: { base_model: source, base_model_relation: "finetune" } },
+      { ...model, provenanceBase: "other-owner/model" },
+    ])
+      expect(evaluateHubModel(invalid, productCatalog()).policy).not.toBe("eligible")
+  })
+
   test("joins a quantized artifact to its exact supported source independently of architecture", () => {
     const model = hubFixture({ config: { model_type: "qwen3_5" } })
     const decision = evaluateHubModel(model, productCatalog())

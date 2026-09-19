@@ -8,12 +8,17 @@ import { downloadModel, getModelStatus, markPrepared } from "../../../src/provid
 import { deleteAxEngineModel } from "../../../src/provider/ax-engine/delete"
 import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
+import {
+  AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+  AX_ENGINE_MODEL_DEFINITIONS,
+} from "../../../src/provider/ax-engine/constants"
 import { AX_ENGINE_LOCAL_REPOSITORIES } from "../../../src/provider/ax-engine/local-models"
 import { HubCatalog, hubModelID } from "../../../src/provider/ax-engine/hub-model"
 import snapshot from "../../../src/provider/ax-engine/hub-catalog-snapshot.json"
 
 const model = HubCatalog.parse(snapshot).models.find(
-  (entry) => entry.id === "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP",
+  (entry) => entry.id === "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
 )!
 const id = hubModelID(model)
 const other = "f".repeat(40)
@@ -27,7 +32,14 @@ async function makeSnapshot(revision: string, artifact = model) {
   for (const file of artifact.siblings.filter(
     (entry) =>
       entry.rfilename.endsWith(".safetensors") ||
-      ["config.json", "tokenizer.json", "tokenizer_config.json"].includes(entry.rfilename),
+      [
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja",
+        "mtplx_runtime.json",
+        "axquant_mtp_sidecar_manifest.json",
+      ].includes(entry.rfilename),
   )) {
     await fs.writeFile(path.join(dir, file.rfilename), "fixture artifact")
   }
@@ -48,6 +60,31 @@ describe("pinned Hub artifact lifecycle", () => {
     vi.restoreAllMocks()
     await fs.rm(AxEnginePaths.prepareState, { force: true })
   })
+
+  test.each([AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID, AX_ENGINE_CYBER_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID] as const)(
+    "pinned alias %s rejects wrong revisions and missing sidecars",
+    async (alias) => {
+      await using tmp = await tmpdir()
+      process.env.HF_HUB_CACHE = tmp.path
+      const definition = AX_ENGINE_MODEL_DEFINITIONS[alias]
+      const artifact = HubCatalog.parse(snapshot).models.find(
+        (entry) => entry.id === definition.quantizations.mlx!.hfRepo && entry.sha === definition.revision,
+      )!
+      const requested = await makeSnapshot(artifact.sha, artifact)
+      const wrong = await makeSnapshot(other, artifact)
+      expect(await getModelStatus({ modelID: alias })).toMatchObject({
+        present: true,
+        path: requested,
+        revision: artifact.sha,
+      })
+      await expect(markPrepared({ modelID: alias, modelPath: wrong })).rejects.toThrow("does not match the pinned")
+      await fs.rm(path.join(requested, "mtp.safetensors"))
+      expect((await getModelStatus({ modelID: alias })).present).toBe(false)
+      await expect(markPrepared({ modelID: alias, modelPath: requested })).rejects.toThrow(
+        "missing required file mtp.safetensors",
+      )
+    },
+  )
 
   test("finds the requested revision even when refs/main points to a newer snapshot", async () => {
     await using tmp = await tmpdir()
@@ -145,7 +182,14 @@ describe("pinned Hub artifact lifecycle", () => {
     for (const file of model.siblings.filter(
       (entry) =>
         entry.rfilename.endsWith(".safetensors") ||
-        ["config.json", "tokenizer.json", "tokenizer_config.json"].includes(entry.rfilename),
+        [
+          "config.json",
+          "tokenizer.json",
+          "tokenizer_config.json",
+          "chat_template.jinja",
+          "mtplx_runtime.json",
+          "axquant_mtp_sidecar_manifest.json",
+        ].includes(entry.rfilename),
     )) {
       await fs.writeFile(path.join(destination, file.rfilename), "fixture artifact")
     }

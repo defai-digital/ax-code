@@ -14,7 +14,6 @@ import {
   axEngineHubReference,
   isAxEngineBuiltinModelID,
   AX_ENGINE_QUANTIZATION_IDS,
-  AX_ENGINE_DEFAULT_QUANTIZATION,
   isAxEngineModelID,
 } from "./constants"
 import type { AxEngineModelID, AxEngineQuantization } from "./constants"
@@ -189,7 +188,7 @@ export function evaluateDiskStatus(input: {
   requiredBytes?: number
 }): AxEngineDiskStatus {
   const modelID = input.modelID ?? AX_ENGINE_DEFAULT_MODEL_ID
-  const quantization = input.quantization ?? AX_ENGINE_DEFAULT_QUANTIZATION
+  const quantization = normalizeQuantization(input.quantization, modelID)
   const requiredBytes =
     input.requiredBytes ??
     (isAxEngineBuiltinModelID(modelID)
@@ -335,7 +334,7 @@ async function matchesPinnedArtifact(dir: string, modelID: AxEngineModelID, mark
 }
 
 async function assertArtifactFiles(dir: string, modelID: AxEngineModelID) {
-  if (isAxEngineBuiltinModelID(modelID)) return
+  if (isAxEngineBuiltinModelID(modelID) && !AX_ENGINE_MODEL_DEFINITIONS[modelID].revision) return
   const definition = await resolveAxEngineModelDefinition(modelID, { offline: true })
   for (const file of definition.artifactFiles ?? []) {
     const target = path.resolve(dir, file)

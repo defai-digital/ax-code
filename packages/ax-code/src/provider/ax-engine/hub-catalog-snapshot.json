@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "fetchedAt": 1788671774486,
+  "fetchedAt": 1789813411971,
   "models": [
     {
       "id": "AutomatosX/AX-Gemma-4-12B-IT-MLX-QAT-OptiQ-4bit-Assistant-MTP",
@@ -34,7 +34,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["mlx-community/gemma-4-12B-it-qat-OptiQ-4bit", "google/gemma-4-12B-it-qat-q4_0-unquantized"],
+        "base_model": [
+          "mlx-community/gemma-4-12B-it-qat-OptiQ-4bit",
+          "google/gemma-4-12B-it-qat-q4_0-unquantized"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2429,7 +2432,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["mlx-community/Qwen3.6-27B-OptiQ-4bit", "Qwen/Qwen3.6-27B"],
+        "base_model": [
+          "mlx-community/Qwen3.6-27B-OptiQ-4bit",
+          "Qwen/Qwen3.6-27B"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2534,7 +2540,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["mlx-community/Qwen3.5-9B-OptiQ-4bit", "Qwen/Qwen3.5-9B"],
+        "base_model": [
+          "mlx-community/Qwen3.5-9B-OptiQ-4bit",
+          "Qwen/Qwen3.5-9B"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2634,7 +2643,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit", "Qwen/Qwen3.6-35B-A3B"],
+        "base_model": [
+          "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit",
+          "Qwen/Qwen3.6-35B-A3B"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2742,7 +2754,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["mlx-community/gemma-4-31B-it-OptiQ-4bit", "google/gemma-4-31B-it"],
+        "base_model": [
+          "mlx-community/gemma-4-31B-it-OptiQ-4bit",
+          "google/gemma-4-31B-it"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -2866,7 +2881,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["mlx-community/gemma-4-26B-A4B-it-OptiQ-4bit", "google/gemma-4-26B-A4B-it"],
+        "base_model": [
+          "mlx-community/gemma-4-26B-A4B-it-OptiQ-4bit",
+          "google/gemma-4-26B-A4B-it"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -3219,7 +3237,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["mlx-community/Ministral-3-8B-Instruct-2512-bf16", "mistralai/Ministral-3-8B-Instruct-2512"],
+        "base_model": [
+          "mlx-community/Ministral-3-8B-Instruct-2512-bf16",
+          "mistralai/Ministral-3-8B-Instruct-2512"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -3322,7 +3343,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["mlx-community/Ministral-3-14B-Instruct-2512-bf16", "mistralai/Ministral-3-14B-Instruct-2512"],
+        "base_model": [
+          "mlx-community/Ministral-3-14B-Instruct-2512-bf16",
+          "mistralai/Ministral-3-14B-Instruct-2512"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -3546,7 +3570,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["google/diffusiongemma-26B-A4B-it", "mlx-community/diffusiongemma-26B-A4B-it-OptiQ-4bit"],
+        "base_model": [
+          "google/diffusiongemma-26B-A4B-it",
+          "mlx-community/diffusiongemma-26B-A4B-it-OptiQ-4bit"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -3637,7 +3664,10 @@
         "region:us"
       ],
       "cardData": {
-        "base_model": ["Qwen/Qwen3-Coder-Next", "mlx-community/Qwen3-Coder-Next-bf16"],
+        "base_model": [
+          "Qwen/Qwen3-Coder-Next",
+          "mlx-community/Qwen3-Coder-Next-bf16"
+        ],
         "library_name": "mlx"
       },
       "siblings": [
@@ -11012,7 +11042,16 @@
       "sha": "7af86ffac3bdd903c2aaaf514614d6eafef7e704",
       "pipeline_tag": "text-generation",
       "library_name": "mlx",
-      "tags": ["mlx", "safetensors", "qwen3_5_moe", "text-generation", "conversational", "en", "4-bit", "region:us"],
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5_moe",
+        "text-generation",
+        "conversational",
+        "en",
+        "4-bit",
+        "region:us"
+      ],
       "cardData": {
         "library_name": "mlx"
       },
@@ -11084,7 +11123,16 @@
       "sha": "b499824a745f43be6007bffabccbd9d0e4012cca",
       "pipeline_tag": "text-generation",
       "library_name": "mlx",
-      "tags": ["mlx", "safetensors", "qwen3_5_moe", "text-generation", "conversational", "en", "4-bit", "region:us"],
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5_moe",
+        "text-generation",
+        "conversational",
+        "en",
+        "4-bit",
+        "region:us"
+      ],
       "cardData": {
         "library_name": "mlx"
       },
@@ -18005,6 +18053,855 @@
         "hidden_size": 2048
       },
       "provenanceBase": "ornith-ai/Ornith-1.5-35B-A3B"
+    },
+    {
+      "id": "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-MXFP4-MTP",
+      "sha": "d172f31edc3aad9f75e9397c7a85231aea330ca6",
+      "pipeline_tag": "text-generation",
+      "library_name": "mlx",
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5",
+        "apple-silicon",
+        "quantized",
+        "mixed-precision",
+        "axquant",
+        "axq",
+        "development",
+        "qwen3.8",
+        "MXFP4",
+        "mtp",
+        "vision",
+        "text-generation",
+        "conversational",
+        "base_model:Qwen/Qwen3.8-27B",
+        "base_model:quantized:Qwen/Qwen3.8-27B",
+        "license:apache-2.0",
+        "4-bit",
+        "region:us"
+      ],
+      "cardData": {
+        "base_model": "Qwen/Qwen3.8-27B",
+        "base_model_relation": "quantized",
+        "library_name": "mlx"
+      },
+      "siblings": [
+        {
+          "rfilename": ".gitattributes",
+          "size": 1570
+        },
+        {
+          "rfilename": "README.md",
+          "size": 10490
+        },
+        {
+          "rfilename": "axquant_manifest.json",
+          "size": 6826
+        },
+        {
+          "rfilename": "axquant_mtp_sidecar_manifest.json",
+          "size": 880
+        },
+        {
+          "rfilename": "axquant_omlx_compat.json",
+          "size": 1034
+        },
+        {
+          "rfilename": "axquant_plan.json",
+          "size": 1091360
+        },
+        {
+          "rfilename": "axquant_quantizer_execution.json",
+          "size": 130100
+        },
+        {
+          "rfilename": "axquant_runtime.json",
+          "size": 1676
+        },
+        {
+          "rfilename": "axquant_vision_sidecar_manifest.json",
+          "size": 887
+        },
+        {
+          "rfilename": "chat_template.jinja",
+          "size": 8952
+        },
+        {
+          "rfilename": "config.json",
+          "size": 131203
+        },
+        {
+          "rfilename": "generation_config.json",
+          "size": 202
+        },
+        {
+          "rfilename": "model-00001-of-00003.safetensors",
+          "size": 5347788696
+        },
+        {
+          "rfilename": "model-00002-of-00003.safetensors",
+          "size": 5368506182
+        },
+        {
+          "rfilename": "model-00003-of-00003.safetensors",
+          "size": 4927126499
+        },
+        {
+          "rfilename": "model-manifest.json",
+          "size": 433842
+        },
+        {
+          "rfilename": "model.safetensors.index.json",
+          "size": 138731
+        },
+        {
+          "rfilename": "mtp.safetensors",
+          "size": 849400520
+        },
+        {
+          "rfilename": "mtplx_runtime.json",
+          "size": 919
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "size": 19989325
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "size": 1161
+        },
+        {
+          "rfilename": "vision.safetensors",
+          "size": 921497320
+        }
+      ],
+      "config": {
+        "model_type": "qwen3_5"
+      },
+      "textConfig": {
+        "max_position_embeddings": 262144,
+        "num_hidden_layers": 64,
+        "num_key_value_heads": 4,
+        "num_attention_heads": 24,
+        "head_dim": 256,
+        "hidden_size": 5120
+      },
+      "provenanceBase": "Qwen/Qwen3.8-27B"
+    },
+    {
+      "id": "AutomatosX/AX-Ornith-1.5-9B-MLX-AXQ-MXFP4-MTP",
+      "sha": "c9b3bb73343764b9c8d48577f376396121b12b39",
+      "pipeline_tag": "text-generation",
+      "library_name": "mlx",
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5",
+        "apple-silicon",
+        "quantized",
+        "mixed-precision",
+        "axquant",
+        "axq",
+        "development",
+        "qwen3.5",
+        "MXFP4",
+        "mtp",
+        "vision",
+        "text-generation",
+        "conversational",
+        "base_model:ornith-ai/Ornith-1.5-9B",
+        "base_model:quantized:ornith-ai/Ornith-1.5-9B",
+        "license:apache-2.0",
+        "4-bit",
+        "region:us"
+      ],
+      "cardData": {
+        "base_model": "ornith-ai/Ornith-1.5-9B",
+        "base_model_relation": "quantized",
+        "library_name": "mlx"
+      },
+      "siblings": [
+        {
+          "rfilename": ".gitattributes"
+        },
+        {
+          "rfilename": "README.md"
+        },
+        {
+          "rfilename": "axquant_manifest.json"
+        },
+        {
+          "rfilename": "axquant_mtp_sidecar_manifest.json"
+        },
+        {
+          "rfilename": "axquant_omlx_compat.json"
+        },
+        {
+          "rfilename": "axquant_plan.json"
+        },
+        {
+          "rfilename": "axquant_quantizer_execution.json"
+        },
+        {
+          "rfilename": "axquant_runtime.json"
+        },
+        {
+          "rfilename": "axquant_vision_sidecar_manifest.json"
+        },
+        {
+          "rfilename": "chat_template.jinja"
+        },
+        {
+          "rfilename": "config.json"
+        },
+        {
+          "rfilename": "model-00001-of-00002.safetensors"
+        },
+        {
+          "rfilename": "model-00002-of-00002.safetensors"
+        },
+        {
+          "rfilename": "model.safetensors.index.json"
+        },
+        {
+          "rfilename": "mtp.safetensors"
+        },
+        {
+          "rfilename": "mtplx_runtime.json"
+        },
+        {
+          "rfilename": "tokenizer.json"
+        },
+        {
+          "rfilename": "tokenizer_config.json"
+        },
+        {
+          "rfilename": "vision.safetensors"
+        }
+      ]
+    },
+    {
+      "id": "AutomatosX/AX-Ornith-1.5-35B-A3B-MLX-AXQ-MXFP4-MTP",
+      "sha": "5e78e7c430dc5b3003dcfee57be5d1284ab43d95",
+      "pipeline_tag": "text-generation",
+      "library_name": "mlx",
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5_moe",
+        "apple-silicon",
+        "quantized",
+        "mixed-precision",
+        "axquant",
+        "axq",
+        "development",
+        "qwen3.5-moe",
+        "MXFP4",
+        "mtp",
+        "vision",
+        "text-generation",
+        "conversational",
+        "base_model:ornith-ai/Ornith-1.5-35B-A3B",
+        "base_model:quantized:ornith-ai/Ornith-1.5-35B-A3B",
+        "license:apache-2.0",
+        "4-bit",
+        "region:us"
+      ],
+      "cardData": {
+        "base_model": "ornith-ai/Ornith-1.5-35B-A3B",
+        "base_model_relation": "quantized",
+        "library_name": "mlx"
+      },
+      "siblings": [
+        {
+          "rfilename": ".gitattributes",
+          "size": 1570
+        },
+        {
+          "rfilename": "README.md",
+          "size": 8437
+        },
+        {
+          "rfilename": "ax_expert_stream.json",
+          "size": 65823
+        },
+        {
+          "rfilename": "axquant_manifest.json",
+          "size": 7115
+        },
+        {
+          "rfilename": "axquant_mtp_sidecar_manifest.json",
+          "size": 897
+        },
+        {
+          "rfilename": "axquant_plan.json",
+          "size": 1642329
+        },
+        {
+          "rfilename": "axquant_quantizer_execution.json",
+          "size": 124996
+        },
+        {
+          "rfilename": "axquant_runtime.json",
+          "size": 1764
+        },
+        {
+          "rfilename": "axquant_vision_sidecar_manifest.json",
+          "size": 902
+        },
+        {
+          "rfilename": "chat_template.jinja",
+          "size": 7536
+        },
+        {
+          "rfilename": "config.json",
+          "size": 138797
+        },
+        {
+          "rfilename": "generation_config.json",
+          "size": 202
+        },
+        {
+          "rfilename": "model-00001-of-00004.safetensors",
+          "size": 5317366626
+        },
+        {
+          "rfilename": "model-00002-of-00004.safetensors",
+          "size": 5365849631
+        },
+        {
+          "rfilename": "model-00003-of-00004.safetensors",
+          "size": 5365849651
+        },
+        {
+          "rfilename": "model-00004-of-00004.safetensors",
+          "size": 3394566751
+        },
+        {
+          "rfilename": "model.safetensors.index.json",
+          "size": 140457
+        },
+        {
+          "rfilename": "mtp.safetensors",
+          "size": 1689376152
+        },
+        {
+          "rfilename": "mtplx_runtime.json",
+          "size": 108
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "size": 19989325
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "size": 1161
+        },
+        {
+          "rfilename": "vision.safetensors",
+          "size": 893179624
+        }
+      ],
+      "config": {
+        "model_type": "qwen3_5_moe"
+      },
+      "textConfig": {
+        "max_position_embeddings": 262144,
+        "num_hidden_layers": 40,
+        "num_key_value_heads": 2,
+        "num_attention_heads": 16,
+        "head_dim": 256,
+        "hidden_size": 2048
+      },
+      "provenanceBase": "ornith-ai/Ornith-1.5-35B-A3B"
+    },
+    {
+      "id": "AutomatosX/AX-Ornith-1.5-397B-MLX-AXQ-MXFP4-MTP",
+      "sha": "07415be2d224371246c2016413b21977b8041e6c",
+      "pipeline_tag": "text-generation",
+      "library_name": "mlx",
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5_moe",
+        "apple-silicon",
+        "quantized",
+        "mixed-precision",
+        "axquant",
+        "axq",
+        "development",
+        "qwen3.5-moe",
+        "MXFP4",
+        "mtp",
+        "vision",
+        "text-generation",
+        "conversational",
+        "base_model:ornith-ai/Ornith-1.5-397B",
+        "base_model:quantized:ornith-ai/Ornith-1.5-397B",
+        "license:apache-2.0",
+        "4-bit",
+        "region:us"
+      ],
+      "cardData": {
+        "base_model": "ornith-ai/Ornith-1.5-397B",
+        "base_model_relation": "quantized",
+        "library_name": "mlx"
+      },
+      "siblings": [
+        {
+          "rfilename": ".gitattributes"
+        },
+        {
+          "rfilename": "README.md"
+        },
+        {
+          "rfilename": "ax_expert_stream.json"
+        },
+        {
+          "rfilename": "axquant_manifest.json"
+        },
+        {
+          "rfilename": "axquant_mtp_sidecar_manifest.json"
+        },
+        {
+          "rfilename": "axquant_plan.json"
+        },
+        {
+          "rfilename": "axquant_quantizer_execution.json"
+        },
+        {
+          "rfilename": "axquant_runtime.json"
+        },
+        {
+          "rfilename": "axquant_vision_sidecar_manifest.json"
+        },
+        {
+          "rfilename": "chat_template.jinja"
+        },
+        {
+          "rfilename": "config.json"
+        },
+        {
+          "rfilename": "generation_config.json"
+        },
+        {
+          "rfilename": "model-00001-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00002-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00003-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00004-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00005-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00006-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00007-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00008-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00009-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00010-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00011-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00012-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00013-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00014-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00015-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00016-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00017-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00018-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00019-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00020-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00021-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00022-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00023-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00024-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00025-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00026-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00027-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00028-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00029-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00030-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00031-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00032-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00033-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00034-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00035-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00036-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00037-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00038-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00039-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00040-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00041-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00042-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00043-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00044-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00045-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model-00046-of-00046.safetensors"
+        },
+        {
+          "rfilename": "model.safetensors.index.json"
+        },
+        {
+          "rfilename": "mtp.safetensors"
+        },
+        {
+          "rfilename": "mtplx_runtime.json"
+        },
+        {
+          "rfilename": "tokenizer.json"
+        },
+        {
+          "rfilename": "tokenizer_config.json"
+        },
+        {
+          "rfilename": "vision.safetensors"
+        }
+      ]
+    },
+    {
+      "id": "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+      "sha": "5ab39b24bfd7f65203be9b7823b1840486f58b6d",
+      "pipeline_tag": "text-generation",
+      "library_name": "mlx",
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5_moe",
+        "axquant",
+        "mxfp4",
+        "mtp",
+        "development",
+        "text-generation",
+        "conversational",
+        "base_model:peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e-MTP",
+        "base_model:quantized:peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e-MTP",
+        "license:mit",
+        "4-bit",
+        "region:us"
+      ],
+      "cardData": {
+        "base_model": [
+          "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e-MTP"
+        ],
+        "library_name": "mlx"
+      },
+      "siblings": [
+        {
+          "rfilename": ".gitattributes",
+          "size": 1570
+        },
+        {
+          "rfilename": "README.md",
+          "size": 3659
+        },
+        {
+          "rfilename": "ax_expert_stream.json",
+          "size": 65823
+        },
+        {
+          "rfilename": "axquant_manifest.json",
+          "size": 7140
+        },
+        {
+          "rfilename": "axquant_mtp_sidecar_manifest.json",
+          "size": 906
+        },
+        {
+          "rfilename": "axquant_plan.json",
+          "size": 2562304
+        },
+        {
+          "rfilename": "axquant_quantizer_execution.json",
+          "size": 135746
+        },
+        {
+          "rfilename": "axquant_runtime.json",
+          "size": 1764
+        },
+        {
+          "rfilename": "axquant_vision_sidecar_manifest.json",
+          "size": 922
+        },
+        {
+          "rfilename": "chat_template.jinja",
+          "size": 30411
+        },
+        {
+          "rfilename": "config.json",
+          "size": 138797
+        },
+        {
+          "rfilename": "generation_config.json",
+          "size": 202
+        },
+        {
+          "rfilename": "model-00001-of-00004.safetensors",
+          "size": 5317366626
+        },
+        {
+          "rfilename": "model-00002-of-00004.safetensors",
+          "size": 5365849631
+        },
+        {
+          "rfilename": "model-00003-of-00004.safetensors",
+          "size": 5365849651
+        },
+        {
+          "rfilename": "model-00004-of-00004.safetensors",
+          "size": 3394566751
+        },
+        {
+          "rfilename": "model.safetensors.index.json",
+          "size": 140457
+        },
+        {
+          "rfilename": "mtp.safetensors",
+          "size": 1689387928
+        },
+        {
+          "rfilename": "mtplx_runtime.json",
+          "size": 108
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "size": 12807982
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "size": 38229
+        },
+        {
+          "rfilename": "vision.safetensors",
+          "size": 893179624
+        }
+      ],
+      "config": {
+        "model_type": "qwen3_5_moe"
+      },
+      "textConfig": {
+        "max_position_embeddings": 262144,
+        "num_hidden_layers": 40,
+        "num_key_value_heads": 2,
+        "num_attention_heads": 16,
+        "head_dim": 256,
+        "hidden_size": 2048
+      },
+      "provenanceBase": "peculiar-ragdoll/Tiel-Coder-35B-A3B-MLX-oQ6e-MTP"
+    },
+    {
+      "id": "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+      "sha": "fe05e871ec69ad9ae8eac01fd285555514ac7daf",
+      "pipeline_tag": "text-generation",
+      "library_name": "mlx",
+      "tags": [
+        "mlx",
+        "safetensors",
+        "qwen3_5_moe",
+        "axquant",
+        "mxfp4",
+        "mtp",
+        "development",
+        "text-generation",
+        "conversational",
+        "base_model:peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-MLX-oQ6e-MTP",
+        "base_model:quantized:peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-MLX-oQ6e-MTP",
+        "license:mit",
+        "4-bit",
+        "region:us"
+      ],
+      "cardData": {
+        "base_model": [
+          "peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-MLX-oQ6e-MTP"
+        ],
+        "library_name": "mlx"
+      },
+      "siblings": [
+        {
+          "rfilename": ".gitattributes",
+          "size": 1570
+        },
+        {
+          "rfilename": "README.md",
+          "size": 3701
+        },
+        {
+          "rfilename": "ax_expert_stream.json",
+          "size": 65823
+        },
+        {
+          "rfilename": "axquant_manifest.json",
+          "size": 7146
+        },
+        {
+          "rfilename": "axquant_mtp_sidecar_manifest.json",
+          "size": 912
+        },
+        {
+          "rfilename": "axquant_plan.json",
+          "size": 2562310
+        },
+        {
+          "rfilename": "axquant_quantizer_execution.json",
+          "size": 135746
+        },
+        {
+          "rfilename": "axquant_runtime.json",
+          "size": 1764
+        },
+        {
+          "rfilename": "axquant_vision_sidecar_manifest.json",
+          "size": 928
+        },
+        {
+          "rfilename": "chat_template.jinja",
+          "size": 30529
+        },
+        {
+          "rfilename": "config.json",
+          "size": 138797
+        },
+        {
+          "rfilename": "generation_config.json",
+          "size": 178
+        },
+        {
+          "rfilename": "model-00001-of-00004.safetensors",
+          "size": 5317366626
+        },
+        {
+          "rfilename": "model-00002-of-00004.safetensors",
+          "size": 5365849631
+        },
+        {
+          "rfilename": "model-00003-of-00004.safetensors",
+          "size": 5365849651
+        },
+        {
+          "rfilename": "model-00004-of-00004.safetensors",
+          "size": 3394566751
+        },
+        {
+          "rfilename": "model.safetensors.index.json",
+          "size": 140457
+        },
+        {
+          "rfilename": "mtp.safetensors",
+          "size": 1689387928
+        },
+        {
+          "rfilename": "mtplx_runtime.json",
+          "size": 108
+        },
+        {
+          "rfilename": "tokenizer.json",
+          "size": 12807982
+        },
+        {
+          "rfilename": "tokenizer_config.json",
+          "size": 38347
+        },
+        {
+          "rfilename": "vision.safetensors",
+          "size": 893179624
+        }
+      ],
+      "config": {
+        "model_type": "qwen3_5_moe"
+      },
+      "textConfig": {
+        "max_position_embeddings": 262144,
+        "num_hidden_layers": 40,
+        "num_key_value_heads": 2,
+        "num_attention_heads": 16,
+        "head_dim": 256,
+        "hidden_size": 2048
+      },
+      "provenanceBase": "peculiar-ragdoll/Cyber-Tiel-Coder-35B-A3B-MLX-oQ6e-MTP"
     }
   ]
 }

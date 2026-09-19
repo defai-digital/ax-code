@@ -258,7 +258,7 @@ type SelectableProviderModel = {
   id: string
   tool_call?: boolean
   capabilities?: { toolcall?: boolean }
-  options?: { minMemoryBytes?: unknown }
+  options?: { minMemoryBytes?: unknown; axEngineCandidate?: unknown }
 }
 
 export function selectableProviderDefaultModelID(input: {
@@ -269,7 +269,7 @@ export function selectableProviderDefaultModelID(input: {
   if (input.providerID === AX_ENGINE_PROVIDER_ID) {
     const defaultInfo = input.defaultModel ? input.models[input.defaultModel] : undefined
     if (input.defaultModel && modelSelectableForProvider(input.providerID, defaultInfo)) return input.defaultModel
-    return undefined
+    return defaultModelIDForProvider(input.providerID, input.models)
   }
   const preferred = defaultModelIDForProvider(input.providerID, input.models)
   if (preferred) return preferred

@@ -291,6 +291,15 @@ export function createHubCatalogStore(input: {
       const signal = AbortSignal.any([AbortSignal.timeout(15_000), ...(options.signal ? [options.signal] : [])])
       model = await fetchModel(id, signal)
     }
+    if (
+      options.offline &&
+      !axEngineLocalRepository(id) &&
+      !hubArtifactMetadata(model, evaluateHubModel(model, catalog))
+    ) {
+      // A metadata-only refresh must not erase complete bundled historical
+      // records. Match the exact revision; never substitute a different pack.
+      model = HubCatalog.parse(input.bundled).models.find((entry) => hubModelID(entry) === id) ?? model
+    }
     const decision = evaluateHubModel(model, catalog)
     // Historical artifacts must remain inspectable offline after provider
     // metadata stops advertising their source. They remain absent from

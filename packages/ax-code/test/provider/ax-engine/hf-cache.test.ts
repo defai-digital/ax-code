@@ -16,6 +16,11 @@ import { Filesystem } from "../../../src/util/filesystem"
 import { Process } from "../../../src/util/process"
 import { resolveAxEngineModelDefinition } from "../../../src/provider/ax-engine/hub-catalog"
 
+import {
+  AX_ENGINE_MODEL_DEFINITIONS,
+  AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+} from "../../../src/provider/ax-engine/constants"
+
 const AXQ27 = {
   modelID: "qwen3.8-27b-axq-6bit",
   quant: "mlx6bit",
@@ -251,13 +256,20 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     expect(status.present).toBe(false)
   })
 
+  const selected = {
+    modelID: AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID,
+    quant: "mlx",
+    repo: "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+  } as const
+  const selectedRevision = AX_ENGINE_MODEL_DEFINITIONS[selected.modelID].revision!
+
   test("downloadModel rejects incomplete HF snapshots returned by ax-engine", async () => {
     if (process.platform === "win32") return
 
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
+    const snapshot = await makeHfSnapshot(hfRoot, selected.repo, selectedRevision)
     await fs.rm(path.join(snapshot, "model-00001-of-00001.safetensors"))
     const originalText = Process.text
     vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
@@ -272,12 +284,17 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     const binary = path.join(dir.path, "fake-ax-engine")
     await fs.writeFile(
       binary,
-      `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: COMMIT }))})\n`,
+      `#!/usr/bin/env node\nconsole.log(${JSON.stringify(JSON.stringify({ dest: snapshot, revision: selectedRevision }))})\n`,
     )
     await fs.chmod(binary, 0o755)
 
     await expect(
-      downloadModel({ binaryPath: binary, modelID: AXQ27.modelID, quantization: AXQ27.quant }),
+      downloadModel({
+        binaryPath: binary,
+        binaryVersion: "7.4.0",
+        modelID: selected.modelID,
+        quantization: selected.quant,
+      }),
     ).rejects.toThrow("downloaded model path is incomplete")
     expect(await Filesystem.exists(AxEnginePaths.prepareState)).toBe(false)
   })
@@ -288,8 +305,8 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const definition = await resolveAxEngineModelDefinition(AXQ27.modelID)
-    const requiredBytes = definition.quantizations.mlx6bit!.minDiskBytes
+    const definition = await resolveAxEngineModelDefinition(selected.modelID)
+    const requiredBytes = definition.quantizations.mlx!.minDiskBytes
     expect(requiredBytes).toBeGreaterThan(0)
     const originalText = Process.text
     const availableBlocks = Math.floor(requiredBytes / 2 / 1024)
@@ -307,7 +324,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
       await fs.writeFile(
         binary,
         `#!/usr/bin/env node\nconsole.log(${JSON.stringify(
-          JSON.stringify({ output_dir: "/unused", download: { revision: COMMIT } }),
+          JSON.stringify({ output_dir: "/unused", download: { revision: selectedRevision } }),
         )})\n`,
       )
       await fs.chmod(binary, 0o755)
@@ -315,9 +332,9 @@ describe("ax-engine model storage uses the HF snapshot", () => {
       await expect(
         downloadModel({
           binaryPath: binary,
-          modelID: AXQ27.modelID,
-          quantization: AXQ27.quant,
-          binaryVersion: "7.2.1",
+          binaryVersion: "7.4.0",
+          modelID: selected.modelID,
+          quantization: selected.quant,
         }),
       ).rejects.toThrow("AX_ENGINE_INSUFFICIENT_DISK")
       expect(
@@ -326,7 +343,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
             Array.isArray(cmd) &&
             cmd[0] === binary &&
             cmd[1] === "download" &&
-            cmd[2] === AXQ27.modelID &&
+            cmd[2] === selected.modelID &&
             cmd[3] === "--json",
         ),
       ).toBe(false)
@@ -341,8 +358,10 @@ describe("ax-engine model storage uses the HF snapshot", () => {
     await using dir = await tmpdir()
     hfRoot = path.join(dir.path, "hub")
     process.env.HF_HUB_CACHE = hfRoot
-    const snapshot = await makeHfSnapshot(hfRoot, AXQ27.repo, COMMIT)
-    await fs.writeFile(path.join(snapshot, "axquant_mtp_sidecar_manifest.json"), "{}")
+    const snapshot = await makeHfSnapshot(hfRoot, selected.repo, selectedRevision)
+    for (const file of AX_ENGINE_MODEL_DEFINITIONS[selected.modelID].artifactFiles!) {
+      await fs.writeFile(path.join(snapshot, file), "fixture artifact")
+    }
     const availableBlocks = (120 * 1024 ** 3) / 1024
     const originalText = Process.text
     const textSpy = vi.spyOn(Process, "text").mockImplementation((cmd, opts) => {
@@ -361,7 +380,7 @@ describe("ax-engine model storage uses the HF snapshot", () => {
         binary,
         `#!/usr/bin/env node
 console.log(JSON.stringify({ event: "progress", done: 5, total: 100, file: "Downloading weights" }))
-console.log(JSON.stringify({ dest: ${JSON.stringify(snapshot)}, revision: ${JSON.stringify(COMMIT)} }, null, 2))
+console.log(JSON.stringify({ dest: ${JSON.stringify(snapshot)}, revision: ${JSON.stringify(selectedRevision)} }, null, 2))
 `,
       )
       await fs.chmod(binary, 0o755)
@@ -369,8 +388,9 @@ console.log(JSON.stringify({ dest: ${JSON.stringify(snapshot)}, revision: ${JSON
       const progressEvents: Array<{ percent: number; message?: string }> = []
       await downloadModel({
         binaryPath: binary,
-        modelID: AXQ27.modelID,
-        quantization: AXQ27.quant,
+        binaryVersion: "7.4.0",
+        modelID: selected.modelID,
+        quantization: selected.quant,
         onProgress: (p) => progressEvents.push({ percent: p.percent, message: p.message }),
       })
       const downloadCall = spawnSpy.mock.calls.find(
@@ -378,7 +398,7 @@ console.log(JSON.stringify({ dest: ${JSON.stringify(snapshot)}, revision: ${JSON
           Array.isArray(cmd) &&
           cmd[0] === binary &&
           cmd[1] === "download" &&
-          cmd[2] === AXQ27.repo &&
+          cmd[2] === `${selected.repo}@${selectedRevision}` &&
           cmd.includes("--json") &&
           cmd.includes("--progress-json"),
       )

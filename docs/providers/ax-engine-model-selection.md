@@ -2,16 +2,19 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-18
+Last reviewed: 2026-09-19
 Owner: ax-code runtime
 
-AX Code offers only AutomatosX Qwen3.8 27B MLX AXQ 6-bit MTP through **AX Engine (Local)** on eligible Apple Silicon Macs:
+AX Code offers only these two development packs through **AX Engine (Local)** on eligible Apple Silicon Macs. Tiel Coder is the default; Cyber-Tiel Coder is the alternative.
 
-| AXQ variant | Hugging Face repository                                                                                         | AX Code selection                |
-| ----------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| 6-bit MTP   | [AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP](https://huggingface.co/AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP) | `qwen3.8-27b-axq-6bit` (default) |
+| Model                              | Hugging Face repository                                                                                                                     | AX Code selection                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| Tiel Coder 35B A3B MXFP4 MTP       | [AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP](https://huggingface.co/AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP)             | `tiel-coder-35b-axq-mxfp4` (default) |
+| Cyber-Tiel Coder 35B A3B MXFP4 MTP | [AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP](https://huggingface.co/AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP) | `cyber-tiel-coder-35b-axq-mxfp4`     |
 
-Other Qwen3.8 27B AXQ variants, Ornith, Qwen3-Coder-Next, other model sizes, non-AXQ packs, and other publishers are excluded from managed local selection. The selected repository appears once. Configured aliases and older cached revisions do not add choices after discovery. Other providers and the existing separately configured loopback attach interface retain their behavior.
+The aliases pin revisions `5ab39b24bfd7f65203be9b7823b1840486f58b6d` and `fe05e871ec69ad9ae8eac01fd285555514ac7daf`, respectively. Both use the `mlx` selector, preserving the publisher's MXFP4 package. The model cards describe development requantizations with no certified quality-parity or MTP-speed claim; selecting them does not establish native execution or a speed improvement.
+
+Qwen3.8 27B, Ornith, Qwen3-Coder-Next and all other repositories are excluded from new managed selection and downloads. Each selected repository appears once. Configured aliases and older cached revisions do not add choices after discovery. Other providers and the separately configured loopback attach interface retain their behavior.
 
 ## Inspect the available models
 
@@ -26,18 +29,18 @@ Refreshing reads Hugging Face metadata without downloading weights or starting a
 
 ## Prepare the selected model
 
-Copy the exact model ID from the catalog. The default 6-bit MTP alias retains `mlx6bit`:
+Copy the exact model ID from the catalog. The default Tiel alias uses `mlx`:
 
 ```bash
 ax-code providers ax-engine prepare \
-  --model qwen3.8-27b-axq-6bit --quantization mlx6bit --download --start
+  --model tiel-coder-35b-axq-mxfp4 --quantization mlx --download --start
 ```
 
-Excluded models fail new prepare, download, and managed activation requests before starting work. Existing model records remain available for status and cleanup; removed Ornith, Qwen3-Coder-Next, and other Qwen3.8 27B AXQ IDs are never redirected to the remaining artifact. Removing an option does not delete its weights or stop an existing server.
+Excluded models fail new prepare, download, and managed activation requests before starting work. Existing model records remain available for status and cleanup; removed Qwen3.8, Ornith and Qwen3-Coder-Next IDs are never redirected to either Tiel artifact. Removing an option does not delete its weights or stop an existing server.
 
 ## Memory and runtime verification
 
-The Qwen3.8 27B 6-bit MTP alias budget remains 65,536 context tokens and 16,384 output tokens, with a 64 GiB memory requirement.
+Both selected aliases use a conservative 32,768-token context, 8,192-token output limit, estimated 64 GiB memory requirement and 32 GiB download disk budget. These are AX Code serving limits, not the upstream maximum context.
 
 Each memory estimate includes weights, sidecars, KV cache, buffers, and host reserve. Use the live catalog's fit result for the current machine. These estimates are not hardware or model-quality certification.
 
@@ -52,10 +55,9 @@ See [Local Engine Architecture](../architecture/local-engine.md) for lifecycle a
 Managed AX Engine defaults to `required`, matching the selected MTP artifact.
 An unavailable drafter fails startup instead of silently falling back to direct decoding.
 MTP weights and the pure-stacking setting do not establish active acceleration.
-The selected Qwen artifact uses the `auto` speculation profile so AX Engine can
-apply its model-specific draft gate and asynchronous draft path. This is separate
-from the MTP activation policy: the default remains `required`. A managed start
-replaces an older process using the `agentic` profile.
+The selected Tiel packs retain the generic `agentic` speculation profile. The old
+dense Qwen3.8-specific experimental environment is not applied to these MoE packs.
+The activation policy remains `required`; the engine must admit the actual drafter.
 To explicitly select a policy, set `provider.ax-engine.options.mtpPolicy` in `ax-code.json`:
 
 ```json

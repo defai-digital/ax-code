@@ -48,19 +48,25 @@ describe("modelSelectableForProvider", () => {
 })
 
 describe("ax-engine local MLX model list", () => {
-  // All AX Engine local models are expected to advertise tool calling. This
-  // keeps every catalog model selectable through the normal model picker path.
+  // Pinned candidates can be prepared before their live tool contract is known.
   test.each(AX_ENGINE_MODEL_IDS)("%s is selectable", (modelID) => {
     const def = AX_ENGINE_MODEL_DEFINITIONS[modelID]
     expect(
-      modelSelectableForProvider("ax-engine", { capabilities: { toolcall: def.toolcall } }),
+      modelSelectableForProvider("ax-engine", {
+        capabilities: { toolcall: def.toolcall },
+        options: { axEngineCandidate: Boolean(def.revision) },
+      }),
       `${modelID} (toolcall=${def.toolcall}) should be selectable`,
     ).toBe(true)
   })
 
-  test("all catalog models declare tool-call support", () => {
-    const definitions: Record<string, { toolcall?: boolean }> = AX_ENGINE_MODEL_DEFINITIONS
-    expect(AX_ENGINE_MODEL_IDS.filter((id) => definitions[id]?.toolcall === false)).toEqual([])
+  test("unverified candidates must have pinned artifact identity", () => {
+    for (const id of AX_ENGINE_MODEL_IDS) {
+      const definition = AX_ENGINE_MODEL_DEFINITIONS[id]
+      if (definition.toolcall) continue
+      expect(definition.revision).toMatch(/^[a-f0-9]{40}$/)
+      expect(modelSelectableForProvider("ax-engine", { capabilities: { toolcall: false } })).toBe(false)
+    }
   })
 })
 

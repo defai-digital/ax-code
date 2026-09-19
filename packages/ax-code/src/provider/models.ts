@@ -124,6 +124,7 @@ export namespace ModelsDev {
         modelID,
         quantization: definition.defaultQuantization,
         minMemoryBytes,
+        ...(definition.revision ? { axEngineCandidate: true, revision: definition.revision } : {}),
         ...(memoryBlockReason ? { memoryBlockReason } : {}),
       },
       experimental: { localRuntime: AX_ENGINE_PROVIDER_ID },

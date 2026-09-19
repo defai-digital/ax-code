@@ -82,10 +82,34 @@ describe("implicit default model selection", () => {
     ).toBe("qwen3.8-flash")
   })
 
-  test("does not default AX Engine models", () => {
+  test("does not remap historical AX Engine models to the managed default", () => {
     expect(
       defaultModelIDForProvider("ax-engine", {
         "qwen3.8-27b-axq-6bit": tool,
+      }),
+    ).toBeUndefined()
+  })
+
+  test("defaults an explicitly selected AX Engine provider to Tiel regardless of catalog order", () => {
+    const candidate = { tool_call: false, options: { axEngineCandidate: true } }
+    const models = {
+      "cyber-tiel-coder-35b-axq-mxfp4": candidate,
+      "tiel-coder-35b-axq-mxfp4": candidate,
+    }
+    expect(defaultModelIDForProvider("ax-engine", models)).toBe("tiel-coder-35b-axq-mxfp4")
+    expect(pickImplicitDefaultModel([{ id: "ax-engine", models }])).toBeUndefined()
+    expect(defaultModelIDForProvider("ax-engine", { "cyber-tiel-coder-35b-axq-mxfp4": candidate })).toBeUndefined()
+    expect(
+      defaultModelIDForProvider("ax-engine", {
+        "tiel-coder-35b-axq-mxfp4": {
+          ...candidate,
+          options: { ...candidate.options, minMemoryBytes: Number.MAX_SAFE_INTEGER },
+        },
+      }),
+    ).toBeUndefined()
+    expect(
+      defaultModelIDForProvider("ax-engine", {
+        "tiel-coder-35b-axq-mxfp4": { tool_call: false },
       }),
     ).toBeUndefined()
   })

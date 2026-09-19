@@ -1,4 +1,4 @@
-import { AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
+import { AX_ENGINE_DEFAULT_MODEL_ID, AX_ENGINE_PROVIDER_ID } from "./ax-engine/constants"
 import { modelSelectableForProvider, skuKey } from "./model-selectability"
 
 const FAMILY_DEFAULTS = {
@@ -78,7 +78,12 @@ export function defaultModelIDForProvider(
   providerID: string,
   models: Record<string, Parameters<typeof modelSelectableForProvider>[1]>,
 ): string | undefined {
-  if (providerID === AX_ENGINE_PROVIDER_ID) return undefined
+  // An explicitly chosen managed provider has a default; the global implicit
+  // chain still excludes AX Engine so it cannot start a local download.
+  if (providerID === AX_ENGINE_PROVIDER_ID)
+    return modelSelectableForProvider(providerID, models[AX_ENGINE_DEFAULT_MODEL_ID])
+      ? AX_ENGINE_DEFAULT_MODEL_ID
+      : undefined
   const preferred = preferredDefaultSkuForProvider(providerID)
   if (preferred) {
     const hit = findSelectableSku([{ id: providerID, models }], preferred)

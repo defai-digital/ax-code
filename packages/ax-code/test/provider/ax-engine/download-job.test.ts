@@ -5,10 +5,10 @@ import {
   startDownloadJob,
   type AxEngineDownloadJobRuntime,
 } from "../../../src/provider/ax-engine/download-job"
-import { AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID } from "../../../src/provider/ax-engine/constants"
+import { AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID } from "../../../src/provider/ax-engine/constants"
 import type { downloadModel } from "../../../src/provider/ax-engine/model-cache"
 
-const MODEL_ID = AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID
+const MODEL_ID = AX_ENGINE_TIEL_CODER_35B_AXQ_MXFP4_MODEL_ID
 
 const eligibility = {
   supported: true,
@@ -30,13 +30,14 @@ function runtimeWith(download: typeof downloadModel): AxEngineDownloadJobRuntime
       available: true,
       mode: "configured" as const,
       binaryPath: "/bin/ax-engine",
+      version: "7.4.0",
       installable: false,
       blockers: [],
     }),
     getDiskStatus: async () => ({
       path: "/tmp",
       modelID: MODEL_ID,
-      quantization: "mlx6bit" as const,
+      quantization: "mlx" as const,
       freeBytes: 1024 ** 4,
       requiredBytes: 48 * 1024 ** 3,
       ok: true,
@@ -48,7 +49,7 @@ function runtimeWith(download: typeof downloadModel): AxEngineDownloadJobRuntime
 
 const preparedState: Awaited<ReturnType<typeof downloadModel>> = {
   modelID: MODEL_ID,
-  quantization: "mlx6bit" as const,
+  quantization: "mlx" as const,
   path: "/models/glm",
   revision: "abc123",
   preparedAt: 1,

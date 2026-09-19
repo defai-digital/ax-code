@@ -108,8 +108,21 @@ export function evaluateHubModel(model: HubModel, catalog: Record<string, Models
   if (model.provenanceBase && model.provenanceBase.toLowerCase() !== base.toLowerCase()) {
     return result("unknown", "Package provenance conflicts with its declared source model", base)
   }
+  // Explicitly curated publisher artifacts can omit the Hub relation tag. This
+  // exception binds both repository and exact declared source, never a family.
+  const curatedDefinition = Object.values(AX_ENGINE_MODEL_DEFINITIONS).find(
+    (entry) => entry.revision && Object.values(entry.quantizations).some((quant) => quant.hfRepo === model.id),
+  )
+  if (curatedDefinition && curatedDefinition.sourceModel !== base) {
+    return result("unknown", "The selected artifact declares an unexpected source model", base)
+  }
+  const curatedArtifact = curatedDefinition !== undefined
   const relation = model.cardData?.base_model_relation
-  if (relation !== "quantized" && (relation !== undefined || !model.tags.includes(`base_model:quantized:${base}`))) {
+  if (
+    relation !== "quantized" &&
+    !(curatedArtifact && relation === undefined) &&
+    (relation !== undefined || !model.tags.includes(`base_model:quantized:${base}`))
+  ) {
     return result("unknown", "Only an identified quantized source inherits product eligibility", base)
   }
   if (!isModelSupportedForProvider("ax-engine", base))
@@ -135,7 +148,7 @@ export function evaluateHubModel(model: HubModel, catalog: Record<string, Models
     (entry) =>
       entry.sourceModel?.toLowerCase() === source && catalog["ax-engine"]?.models[entry.id]?.tool_call === true,
   )
-  if (!recognized && !curated)
+  if (!recognized && !curated && !curatedArtifact)
     return result("unknown", "The source is not recognized as a supported AX Code coding model", base)
   if (!model.siblings.some((file) => file.rfilename.endsWith(".safetensors"))) {
     return result("excluded", "This package has no MLX weight artifacts", base)

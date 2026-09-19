@@ -164,7 +164,7 @@ test("historical offline metadata survives provider catalog removal without gran
 
 test("selected AXQ metadata cannot bypass source admission through offline resolution", async () => {
   await using tmp = await tmpdir()
-  const model = hubFixture({ id: "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP" })
+  const model = hubFixture({ id: "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP" })
   const fetcher = vi.fn<typeof fetch>()
   const store = createHubCatalogStore({
     ...storeInput(tmp.path, [model]),
@@ -196,4 +196,26 @@ test.skipIf(process.platform === "win32")("FIFO metadata cache falls back withou
     await pending
     await writer.close()
   }
+})
+
+test("metadata-only refresh retains exact bundled historical status without re-enabling selection", async () => {
+  await using tmp = await tmpdir()
+  const model = hubFixture({ id: "AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP" })
+  const input = storeInput(tmp.path, [model])
+  await fs.writeFile(
+    input.cachePath,
+    JSON.stringify({
+      version: 1,
+      fetchedAt: 2,
+      models: [{ ...model, siblings: [{ rfilename: "model.safetensors" }] }],
+    }),
+  )
+  const fetcher = vi.fn<typeof fetch>()
+  const store = createHubCatalogStore({ ...input, productCatalog: async () => ({}), fetch: fetcher })
+  expect((await store.inspect()).definitions).toEqual([])
+  expect(await store.resolve(hubModelID(model), { offline: true })).toMatchObject({
+    revision: model.sha,
+    artifactFiles: ["config.json", "model.safetensors"],
+  })
+  expect(fetcher).not.toHaveBeenCalled()
 })

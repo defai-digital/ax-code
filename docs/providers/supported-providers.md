@@ -205,15 +205,16 @@ For Qoder, install the local `qodercli` binary, run `qodercli login`, then `ax-c
 
 ## AX Engine Local Provider
 
-`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and offers AutomatosX Qwen3.8 27B MLX AXQ 6-bit MTP. Native capabilities are checked when the model starts.
+`ax-engine` is the built-in local inference provider. It is available only on eligible Apple Silicon Macs and offers only AutomatosX Tiel Coder and Cyber-Tiel Coder 35B A3B MXFP4 MTP development packs. Native capabilities are checked when the model starts.
 
-| Provider id | Model id               | Selection                           | Context | Output |
-| ----------- | ---------------------- | ----------------------------------- | ------: | -----: |
-| `ax-engine` | `qwen3.8-27b-axq-6bit` | Qwen3.8 27B AXQ 6-bit MTP (default) |  65,536 | 16,384 |
+| Provider id | Model id                         | Selection                              | Context | Output |
+| ----------- | -------------------------------- | -------------------------------------- | ------: | -----: |
+| `ax-engine` | `tiel-coder-35b-axq-mxfp4`       | Tiel Coder 35B A3B MXFP4 MTP (default) |  32,768 |  8,192 |
+| `ax-engine` | `cyber-tiel-coder-35b-axq-mxfp4` | Cyber-Tiel Coder 35B A3B MXFP4 MTP     |  32,768 |  8,192 |
 
-Other Qwen3.8 27B AXQ variants, Ornith, Qwen3-Coder-Next, non-AXQ packs, other model sizes, and other publishers are excluded from managed selection. Historical records remain readable for status and cleanup.
+Qwen3.8 27B, Ornith, Qwen3-Coder-Next and all other repositories are excluded from managed selection. Historical records remain readable for status and cleanup.
 
-The default local model is `qwen3.8-27b-axq-6bit`. See [AX Engine Model Selection](ax-engine-model-selection.md) for the exact selected repositories, memory, and disk guidance.
+The default local model is `tiel-coder-35b-axq-mxfp4`. See [AX Engine Model Selection](ax-engine-model-selection.md) for the exact selected repositories, memory, and disk guidance.
 
 For the existing separately configured loopback attach interface, `/v1/models` is authoritative: AX Code discovers the live model IDs, context/output limits, modalities, and structured tool-call support. A model that does not advertise structured tool calling is not used for coding-agent requests.
 

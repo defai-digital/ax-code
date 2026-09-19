@@ -6,8 +6,11 @@ import {
   isAxEngineBuiltinModelID,
 } from "./constants"
 
-/** Exact Qwen3.8 27B AXQ 6-bit MTP choice. Historical IDs remain valid storage identities. */
-export const AX_ENGINE_LOCAL_REPOSITORIES = ["AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP"] as const
+/** Exact Tiel Coder MXFP4 MTP choices. Historical IDs remain valid storage identities. */
+export const AX_ENGINE_LOCAL_REPOSITORIES = [
+  "AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+  "AutomatosX/AX-Cyber-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP",
+] as const
 
 export function axEngineLocalRepository(modelID: unknown): string | undefined {
   if (!isAxEngineModelID(modelID)) return
@@ -20,7 +23,7 @@ export function axEngineLocalRepository(modelID: unknown): string | undefined {
 
 export function requireAxEngineLocalModel(modelID: unknown) {
   if (axEngineLocalRepository(modelID)) return
-  throw new Error(`${AX_ENGINE_ERROR.ModelUnsupported}: select AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP`)
+  throw new Error(`${AX_ENGINE_ERROR.ModelUnsupported}: select ${AX_ENGINE_LOCAL_REPOSITORIES.join(" or ")}`)
 }
 
 /** Prefer stable aliases; otherwise retain the inventory's first pinned revision. */

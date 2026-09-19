@@ -464,7 +464,7 @@ describe("provider dialog options", () => {
     ).toBeUndefined()
   })
 
-  test("does not auto-select an AX Engine model", () => {
+  test("does not auto-select a historical AX Engine model", () => {
     expect(
       selectableProviderDefaultModelID({
         providerID: "ax-engine",
@@ -473,6 +473,23 @@ describe("provider dialog options", () => {
         },
       }),
     ).toBeUndefined()
+  })
+
+  test("selects Tiel for managed AX Engine and preserves an explicit Cyber-Tiel selection", () => {
+    const tiel = "tiel-coder-35b-axq-mxfp4"
+    const cyber = "cyber-tiel-coder-35b-axq-mxfp4"
+    const models = Object.fromEntries(
+      [cyber, tiel].map((id) => [
+        id,
+        {
+          id,
+          capabilities: { toolcall: false },
+          options: { axEngineCandidate: true },
+        },
+      ]),
+    )
+    expect(selectableProviderDefaultModelID({ providerID: "ax-engine", models })).toBe(tiel)
+    expect(selectableProviderDefaultModelID({ providerID: "ax-engine", models, defaultModel: cyber })).toBe(cyber)
   })
 
   test("defaults Z.AI to glm-5.3-flash", () => {

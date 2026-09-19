@@ -6,6 +6,7 @@ import { Process } from "../../../src/util/process"
 import { FileLock } from "../../../src/util/filelock"
 import {
   AX_ENGINE_DEFAULT_MODEL_ID,
+  axEngineSpeculationProfile,
   qwen38ExactMtpProfileFingerprint,
   resolveAxEnginePrefixCacheLaunchConfig,
 } from "../../../src/provider/ax-engine/constants"
@@ -127,7 +128,7 @@ test("cancelling one startup does not cancel another caller waiting for the same
   const state = {
     ...(await isolate(tmp.path)),
     maxOutputTokens: 8_192,
-    speculationProfile: "auto",
+    speculationProfile: axEngineSpeculationProfile(AX_ENGINE_DEFAULT_MODEL_ID),
     mtpMode: "pure",
   }
   await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(state))
@@ -186,7 +187,7 @@ test("transient health failures do not restart an already running engine", async
   const state = {
     ...(await isolate(tmp.path)),
     maxOutputTokens: 8_192,
-    speculationProfile: "auto",
+    speculationProfile: axEngineSpeculationProfile(AX_ENGINE_DEFAULT_MODEL_ID),
     mtpMode: "pure",
     lastHealthAt: Date.now(),
   }
@@ -283,7 +284,7 @@ test.each(["revision", "api model"])("reloads a changed %s even when the catalog
     ...(await isolate(tmp.path)),
     modelRevision: "old-revision",
     maxOutputTokens: 8_192,
-    speculationProfile: "auto",
+    speculationProfile: axEngineSpeculationProfile(AX_ENGINE_DEFAULT_MODEL_ID),
     mtpMode: "pure",
   }
   await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(state))
@@ -302,7 +303,7 @@ test.each(["revision", "api model"])("reloads a changed %s even when the catalog
   )
   const nextApiModelID =
     change === "api model"
-      ? (`AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"b".repeat(40)}` as const)
+      ? (`AutomatosX/AX-Tiel-Coder-35B-A3B-MLX-AXQ-MXFP4-MTP@${"b".repeat(40)}` as const)
       : state.modelID
   const next = await ensureServer({
     binaryPath: state.binaryPath,
