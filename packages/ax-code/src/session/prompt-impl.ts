@@ -1185,7 +1185,7 @@ export namespace SessionPrompt {
         structuredPrompt: STRUCTURED_OUTPUT_SYSTEM_PROMPT,
         requestMessagesSource: promptPolicy.requestMessagesSource,
         environmentOverride: promptPolicy.environmentOverride,
-        ephemeralSystem: pendingInstructionForRequest ? [pendingInstructionForRequest] : undefined,
+        turnInstruction: pendingInstructionForRequest,
         mediaProjection,
       })
       msgs = request.messages
@@ -2003,6 +2003,9 @@ export namespace SessionPrompt {
             hasUsableEvidence: axEngineReadOnlyHasEvidence,
             freshLargeEvidence,
             largeEvidenceGraceUsed: axEngineLargeEvidenceGraceUsed,
+            repeatedEvidence:
+              hasUsableReadOnlyEvidence(currentParts) &&
+              isNoProgressToolTurn(currentParts, priorToolSignatures, sessionToolCycleSignatures(sessionID)),
           })
           if (readOnlyTransition.action !== "ignore") {
             const forced = readOnlyTransition.action === "force_text"

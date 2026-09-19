@@ -130,7 +130,7 @@ export const AX_ENGINE_QWEN38_EXACT_MTP_PROFILE_ENV: Record<string, string> = {
   AX_MLX_MTP_MIN_REMAINING_TOKENS: "0",
 }
 
-function usesQwen38ExactMtpProfile(modelID: string): boolean {
+export function usesQwen38ExactMtpProfile(modelID: string): boolean {
   if (!isAxEngineModelID(modelID)) return false
   const repo = axEngineHubReference(modelID)?.repoID
   const expectedRepo = AX_ENGINE_MODEL_DEFINITIONS[AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID].quantizations.mlx6bit?.hfRepo

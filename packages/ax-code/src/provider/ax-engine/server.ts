@@ -26,6 +26,7 @@ import {
   qwen38ExactMtpProfileFingerprint,
   resolveAxEngineApiKey,
   resolveAxEnginePrefixCacheLaunchConfig,
+  usesQwen38ExactMtpProfile,
   type AxEnginePrefixCacheLaunchConfig,
 } from "./constants"
 import type { AxEngineModelID } from "./constants"
@@ -50,6 +51,8 @@ export const AxEngineServerState = z.object({
   modelRevision: z.string().optional(),
   binaryPath: z.string(),
   contextTokens: z.number().int().positive().optional(),
+  blockSizeTokens: z.number().int().positive().optional(),
+  prefillChunk: z.number().int().positive().optional(),
   maxOutputTokens: z.number().int().positive().optional(),
   maxOutputTokensFlag: z.boolean().optional(),
   maxConcurrentRequests: z.number().int().positive().optional(),
@@ -128,6 +131,23 @@ export type AxEngineServerOptions = {
 // prompt budgeter assumes.
 const AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS = 16
 
+function prefixGeometry(input: { apiModelID: string; contextTokens?: number; binaryVersion?: string }) {
+  const version = input.binaryVersion ? semver.coerce(input.binaryVersion) : undefined
+  // Qwen's recurrent snapshots cannot be trimmed. Engine 7.4 restores only
+  // on the prefill grid; 16-token scheduler claims otherwise skip real reuse.
+  // Pin both boundaries together without changing the requested context size.
+  const aligned =
+    input.contextTokens &&
+    input.contextTokens % 1024 === 0 &&
+    usesQwen38ExactMtpProfile(input.apiModelID) &&
+    version &&
+    semver.gte(version, "7.4.0")
+  return {
+    blockSizeTokens: aligned ? 1024 : AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS,
+    prefillChunk: aligned ? 1024 : undefined,
+  }
+}
+
 /**
  * Whether the resolved ax-engine binary accepts --max-output-tokens (the
  * advertised per-request output budget, split from --max-batch-tokens
@@ -177,8 +197,10 @@ export function axEngineServerLaunchArgs(input: {
     args.push("--mlx-mtp-disable-ngram-stacking")
   }
   if (input.contextTokens && input.contextTokens > 0) {
-    const totalBlocks = Math.ceil(input.contextTokens / AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS)
-    args.push("--block-size-tokens", String(AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS), "--total-blocks", String(totalBlocks))
+    const { blockSizeTokens, prefillChunk } = prefixGeometry(input)
+    const totalBlocks = Math.ceil(input.contextTokens / blockSizeTokens)
+    args.push("--block-size-tokens", String(blockSizeTokens), "--total-blocks", String(totalBlocks))
+    if (prefillChunk) args.push("--prefill-chunk", String(prefillChunk))
   }
   return args
 }
@@ -662,6 +684,10 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
   // server whose contextTokens differ from the request — e.g. an older build
   // that started it at the default 16384 — must be relaunched, not reused.
   const contextMatches = (existing?.contextTokens ?? undefined) === (options.contextTokens ?? undefined)
+  const { blockSizeTokens, prefillChunk } = prefixGeometry(options)
+  const prefixGeometryMatches =
+    (existing?.blockSizeTokens ?? AX_ENGINE_SERVER_BLOCK_SIZE_TOKENS) === blockSizeTokens &&
+    existing?.prefillChunk === prefillChunk
   const maxOutputTokens = options.maxOutputTokens ?? AX_ENGINE_DEFAULT_MAX_OUTPUT_TOKENS
   // State files written before maxOutputTokens was recorded predate per-model
   // output budgets; treat them as mismatched so the server is relaunched once
@@ -698,6 +724,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
       if (
         binaryMatches &&
         contextMatches &&
+        prefixGeometryMatches &&
         maxOutputTokensMatches &&
         maxOutputTokensFlagMatches &&
         maxConcurrentRequestsMatches &&
@@ -728,6 +755,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
             apiModelID: options.apiModelID,
             modelPath: options.modelPath,
             modelRevision: options.modelRevision,
+            blockSizeTokens,
+            prefillChunk,
             maxOutputTokens,
             maxOutputTokensFlag,
             maxConcurrentRequests,
@@ -758,6 +787,7 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
           mismatches: [
             !binaryMatches ? "binaryPath changed" : undefined,
             !contextMatches ? `contextTokens: ${existing.contextTokens} -> ${options.contextTokens}` : undefined,
+            !prefixGeometryMatches ? "prefix block size or prefill chunk changed" : undefined,
             !maxOutputTokensMatches ? `maxOutputTokens: ${existing.maxOutputTokens} -> ${maxOutputTokens}` : undefined,
             !maxOutputTokensFlagMatches ? "maxOutputTokensFlag changed" : undefined,
             !maxConcurrentRequestsMatches
@@ -816,6 +846,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     port,
     modelID: options.modelID,
     contextTokens: options.contextTokens,
+    blockSizeTokens,
+    prefillChunk,
     maxOutputTokens,
     maxConcurrentRequests,
     speculationProfile,
@@ -872,6 +904,8 @@ async function ensureServerLocked(options: AxEngineServerOptions): Promise<AxEng
     modelRevision: options.modelRevision,
     binaryPath: options.binaryPath,
     contextTokens: options.contextTokens,
+    blockSizeTokens,
+    prefillChunk,
     maxOutputTokens,
     maxOutputTokensFlag,
     maxConcurrentRequests,

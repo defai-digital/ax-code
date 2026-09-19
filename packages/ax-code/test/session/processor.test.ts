@@ -2051,3 +2051,36 @@ test("goal planning deadline reaches the provider request before tools are disab
     },
   })
 })
+
+test("local checkpoints preserve the system prefix and follow tool evidence in every media projection", async () => {
+  await using tmp = await tmpdir({ git: true })
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const { streamInput } = await createProcessorFixture(tmp.path)
+      const messages = await Session.messages({ sessionID: streamInput.sessionID })
+      const before = structuredClone(messages)
+      const input = {
+        sessionID: streamInput.sessionID,
+        messages,
+        lastUser: streamInput.user,
+        step: 2,
+        isLastStep: false,
+        agent: streamInput.agent,
+        model,
+        cache: {},
+        structuredPrompt: "",
+        environmentOverride: [],
+      }
+      const baseline = await preparePromptRequest(input)
+      const reminder = "Answer from the successful inspection; do not repeat the query."
+      const checkpoint = await preparePromptRequest({ ...input, turnInstruction: reminder })
+      expect(checkpoint.system).toEqual(baseline.system)
+      expect(checkpoint.requestMessages.slice(0, -1)).toEqual(baseline.requestMessages)
+      expect(checkpoint.requestMessages.at(-1)).toEqual({ role: "user", content: reminder })
+      expect((await checkpoint.projectMessages("stripped")).at(-1)).toEqual({ role: "user", content: reminder })
+      expect(messages).toEqual(before)
+      expect(await Session.messages({ sessionID: streamInput.sessionID })).toEqual(before)
+    },
+  })
+})

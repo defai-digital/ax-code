@@ -81,6 +81,27 @@ http.createServer((req, res) => {
 // Managed process identity currently uses Unix ps; these fixtures exercise
 // real subprocesses and HTTP without loading weights or touching host state.
 describe.skipIf(process.platform === "win32")("managed engine residency", () => {
+  test("replaces legacy prefix geometry once and then keeps the aligned server resident", async () => {
+    await using f = await fixture()
+    const input = { ...f.input, binaryVersion: "7.4.0", contextTokens: 65_536 }
+    const previous = await ensureServer(input)
+    const legacy = JSON.parse(await fs.readFile(AxEnginePaths.serverState, "utf8"))
+    delete legacy.blockSizeTokens
+    delete legacy.prefillChunk
+    await fs.writeFile(AxEnginePaths.serverState, JSON.stringify(legacy))
+    const current = await ensureServer(input)
+    expect(current.pid).not.toBe(previous.pid)
+    expect(current.blockSizeTokens).toBe(1024)
+    expect(current.prefillChunk).toBe(1024)
+    expect(current.contextTokens).toBe(65_536)
+    const args = f.spawned[1].cmd
+    expect(args[args.indexOf("--block-size-tokens") + 1]).toBe("1024")
+    expect(args[args.indexOf("--prefill-chunk") + 1]).toBe("1024")
+    expect((await ensureServer(input)).pid).toBe(current.pid)
+    expect(f.children).toHaveLength(2)
+    await expect(f.children[0].exited).resolves.toBeTypeOf("number")
+  })
+
   test.each([
     AX_ENGINE_QWEN38_27B_AXQ_6BIT_MODEL_ID,
     `AutomatosX/AX-Qwen3.8-27B-MLX-AXQ-6bit-MTP@${"a".repeat(40)}` as const,

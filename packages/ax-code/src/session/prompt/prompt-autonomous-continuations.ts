@@ -328,6 +328,9 @@ export namespace AutonomousContinuationPrompt {
     return (
       `Local-engine latency checkpoint: the last ${turns} only inspected the workspace. ` +
       `If the latest result answers the request, respond now. Otherwise make only the smallest focused follow-up; ` +
+      `Do not rerun a measurement to extract another part of its table or change formatting. ` +
+      `Do not load an unrelated skill or connector to summarize an already complete tool result. ` +
+      `A command error or empty output is not a verified answer; correct the command if needed. ` +
       `for a broad review, inspect at most 6 representative files with bounded reads (up to 400 lines each), or run ` +
       `one focused test/lint command, then synthesize. Do not repeat or slightly vary a successful repository-wide ` +
       `query. Keep any follow-up shell command under 500 characters; never assume /testbed, /home/user, or other ` +

@@ -1323,6 +1323,67 @@ describe("progress-aware stall helpers", () => {
 })
 
 describe("local read-only exploration convergence", () => {
+  test("skill loading preserves the inspection streak without pretending it is task evidence", () => {
+    const parts = [{ type: "tool", tool: "skill", state: { status: "completed", output: "Skill instructions" } }]
+    expect(isReadOnlyExplorationTurn(parts)).toBe(true)
+    expect(hasUsableReadOnlyEvidence(parts)).toBe(false)
+    expect(hasLargeSuccessfulReadOnlyOutput(parts, 1)).toBe(false)
+  })
+
+  test("a repeated successful inspection converges without waiting through another full ladder", () => {
+    const base = { consecutiveTurns: 2, nudged: true, nudgeThreshold: 1, forceThreshold: 4, repeatedEvidence: true }
+    expect(readOnlyExplorationDecision({ ...base, hasUsableEvidence: true })).toEqual({ action: "force_text" })
+    expect(readOnlyExplorationDecision({ ...base, hasUsableEvidence: false })).toEqual({ action: "ignore" })
+    expect(readOnlyExplorationDecision({ ...base, repeatedEvidence: false, hasUsableEvidence: true })).toEqual({
+      action: "ignore",
+    })
+  })
+
+  test("requires actual successful inspection output before forcing an evidence-based answer", () => {
+    for (const metadata of [{}, { shell: { exitCode: null } }, { shell: { exitCode: 1 } }]) {
+      expect(
+        hasUsableReadOnlyEvidence([
+          {
+            type: "tool",
+            tool: "bash_output",
+            state: { status: "completed", output: "<status>running</status>", metadata },
+          },
+        ]),
+      ).toBe(false)
+    }
+    expect(
+      hasUsableReadOnlyEvidence([
+        {
+          type: "tool",
+          tool: "bash_output",
+          state: { status: "completed", output: "test output", metadata: { shell: { exitCode: 0 } } },
+        },
+      ]),
+    ).toBe(true)
+    for (const state of [
+      { status: "completed", output: "command not found", metadata: { exit: 127 } },
+      { status: "completed", output: "  ", metadata: { exit: 0 } },
+      { status: "completed", output: "Process running", metadata: { exit: null } },
+    ]) {
+      expect(hasUsableReadOnlyEvidence([{ type: "tool", tool: "bash", state }])).toBe(false)
+      expect(hasLargeSuccessfulReadOnlyOutput([{ type: "tool", tool: "bash", state }], 1)).toBe(false)
+    }
+    expect(
+      hasUsableReadOnlyEvidence([
+        { type: "tool", tool: "kill_shell", state: { status: "completed", output: "Killed" } },
+      ]),
+    ).toBe(false)
+    expect(
+      hasUsableReadOnlyEvidence([
+        {
+          type: "tool",
+          tool: "bash",
+          state: { status: "completed", output: "SUM: 3541 60596 45989 876655", metadata: { exit: 0 } },
+        },
+      ]),
+    ).toBe(true)
+  })
+
   test("classifies inspection tools without a patch as read-only", () => {
     expect(isReadOnlyExplorationTurn([{ type: "tool", tool: "bash" }, { type: "step-finish" }])).toBe(true)
     expect(isReadOnlyExplorationTurn([{ type: "tool", tool: "grep" }])).toBe(true)
@@ -1340,12 +1401,12 @@ describe("local read-only exploration convergence", () => {
       nudgeThreshold: AX_ENGINE_READ_ONLY_TURN_NUDGE,
       forceThreshold: AX_ENGINE_READ_ONLY_TURN_FORCE,
     }
-    expect(AX_ENGINE_READ_ONLY_TURN_NUDGE).toBe(2)
+    expect(AX_ENGINE_READ_ONLY_TURN_NUDGE).toBe(1)
     expect(AX_ENGINE_READ_ONLY_TURN_FORCE).toBe(4)
     expect(
       readOnlyExplorationDecision({ consecutiveTurns: 1, nudged: false, hasUsableEvidence: true, ...config }),
     ).toEqual({
-      action: "ignore",
+      action: "nudge",
     })
     expect(
       readOnlyExplorationDecision({ consecutiveTurns: 2, nudged: false, hasUsableEvidence: true, ...config }),
@@ -1420,7 +1481,7 @@ describe("local read-only exploration convergence", () => {
     expect(
       hasUsableReadOnlyEvidence([
         { type: "tool", tool: "glob", state: { status: "error" } },
-        { type: "tool", tool: "bash", state: { status: "completed" } },
+        { type: "tool", tool: "bash", state: { status: "completed", output: "SUM: 12 3 4 56" } },
       ]),
     ).toBe(true)
   })

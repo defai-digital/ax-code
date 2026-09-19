@@ -49,7 +49,7 @@ export const MAX_FAILED_MUTATION_ATTEMPTS = 30
 // be force-texted after two failed path probes. Mutating/editing turns use
 // the normal tool-only limits above. When the streak has no successful tool
 // results, force is delayed further (see readOnlyExplorationDecision).
-export const AX_ENGINE_READ_ONLY_TURN_NUDGE = 2
+export const AX_ENGINE_READ_ONLY_TURN_NUDGE = 1
 export const AX_ENGINE_READ_ONLY_TURN_FORCE = 4
 // When force would fire on the same turn that just produced a large successful
 // tool payload (e.g. multi-file git diff), defer force once so the model can

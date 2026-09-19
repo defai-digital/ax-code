@@ -30,7 +30,7 @@ export async function preparePromptRequest(input: {
   structuredPrompt: string
   requestMessagesSource?: MessageV2.WithParts[]
   environmentOverride?: string[]
-  ephemeralSystem?: string[]
+  turnInstruction?: string
   mediaProjection?: MediaProjection.Mode
 }) {
   return NativePerf.runAsync(
@@ -72,7 +72,9 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
       step: input.step,
       maxSteps: input.agent.steps ?? Infinity,
     })
-  const requestReminder = [projection.reminder, goalPlanReminder].filter(Boolean).join("\n\n")
+  // Loop checkpoints belong after the evidence. Changing the leading system
+  // block invalidates local prefix snapshots on every reminder/recovery turn.
+  const requestReminder = [projection.reminder, goalPlanReminder, input.turnInstruction].filter(Boolean).join("\n\n")
   const convertMessages = async (mediaProjection: MediaProjection.Mode) => {
     const source =
       mediaProjection === "normal"
@@ -120,13 +122,12 @@ async function buildPromptRequest(input: Parameters<typeof preparePromptRequest>
     }),
     convertMessages(mediaProjection),
   ])
-  const system = [...baseSystem, ...(input.ephemeralSystem ?? [])]
 
   return {
     messages,
     requestMessagesSource,
     format,
-    system,
+    system: baseSystem,
     requestMessages: requestMessages.messages,
     toolFailureCount: requestMessages.toolFailureCount,
     mediaCount: MessageV2.requestMediaCount(requestMessagesSource),

@@ -267,6 +267,7 @@ type ToolActivityPart = {
     status?: string
     output?: string
     input?: unknown
+    metadata?: { exit?: number | null; shell?: { exitCode?: number | null; status?: string }; [key: string]: unknown }
   }
 }
 
@@ -274,7 +275,16 @@ type ToolActivityPart = {
 // creating a source patch. Bash is treated as read-only only when the same
 // turn has no persisted patch part, so shell-based edits do not trip the
 // local-model convergence guard.
-const READ_ONLY_EXPLORATION_TOOLS = new Set(["bash", "bash_output", "kill_shell", "list", "read", "glob", "grep"])
+const READ_ONLY_EXPLORATION_TOOLS = new Set([
+  "bash",
+  "bash_output",
+  "kill_shell",
+  "list",
+  "read",
+  "glob",
+  "grep",
+  "skill",
+])
 const MUTATING_PROGRESS_TOOLS = new Set(["edit", "write", "multiedit", "apply_patch", "todowrite"])
 
 /** True when this turn persisted a source change or completed a mutating tool. */
@@ -369,13 +379,26 @@ export function isReadOnlyExplorationTurn(parts: readonly ToolActivityPart[] | u
   return tools.length > 0 && tools.every((part) => READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? ""))
 }
 
-/** True when at least one read-only tool finished successfully this turn. */
-export function hasUsableReadOnlyEvidence(parts: readonly ToolActivityPart[] | undefined): boolean {
-  if (!parts?.length) return false
-  return parts.some(
-    (part) =>
-      part.type === "tool" && READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? "") && part.state?.status === "completed",
+function isUsableInspectionResult(part: ToolActivityPart): boolean {
+  if (
+    part.type !== "tool" ||
+    !READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? "") ||
+    part.tool === "kill_shell" ||
+    part.tool === "skill"
   )
+    return false
+  const state = part.state
+  if (state?.status !== "completed" || !state.output?.trim()) return false
+  if (part.tool === "bash_output") return state.metadata?.shell?.exitCode === 0
+  // Bash reports command failure as a completed tool with a nonzero exit.
+  // A null exit is a background process acknowledgement, not its result.
+  const exit = state.metadata?.exit
+  return exit === undefined || exit === 0
+}
+
+/** True when at least one inspection returned nonempty successful evidence. */
+export function hasUsableReadOnlyEvidence(parts: readonly ToolActivityPart[] | undefined): boolean {
+  return parts?.some(isUsableInspectionResult) ?? false
 }
 
 /** True when this turn completed a read-only tool with a large output payload. */
@@ -384,14 +407,7 @@ export function hasLargeSuccessfulReadOnlyOutput(
   minChars: number,
 ): boolean {
   if (!parts?.length || !Number.isFinite(minChars) || minChars <= 0) return false
-  return parts.some(
-    (part) =>
-      part.type === "tool" &&
-      READ_ONLY_EXPLORATION_TOOLS.has(part.tool ?? "") &&
-      part.state?.status === "completed" &&
-      typeof part.state.output === "string" &&
-      part.state.output.length >= minChars,
-  )
+  return parts.some((part) => isUsableInspectionResult(part) && (part.state?.output?.length ?? 0) >= minChars)
 }
 
 type ReadOnlyExplorationDecision = { action: "ignore" } | { action: "nudge" } | { action: "force_text" }
@@ -428,7 +444,10 @@ export function readOnlyExplorationDecision(input: {
   freshLargeEvidence?: boolean
   /** Already deferred force once this streak for large evidence. */
   largeEvidenceGraceUsed?: boolean
+  /** An inspection already attempted in this run returned usable evidence again. */
+  repeatedEvidence?: boolean
 }): ReadOnlyExplorationDecision {
+  if (input.repeatedEvidence && input.hasUsableEvidence) return { action: "force_text" }
   const hardCeiling = input.forceThreshold + 2
   if (input.consecutiveTurns >= hardCeiling) return { action: "force_text" }
   if (input.consecutiveTurns >= input.forceThreshold && input.hasUsableEvidence) {
