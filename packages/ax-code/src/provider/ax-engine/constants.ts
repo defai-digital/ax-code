@@ -30,6 +30,9 @@ export const AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION = "6.13.1"
 // scheduler's per-step width). Older binaries only know the conflated knob,
 // so they keep receiving the per-model budget as --max-batch-tokens.
 export const AX_ENGINE_MAX_OUTPUT_TOKENS_FLAG_MIN_VERSION = "7.1.0"
+// First qualified explicit-MTP / self-contained macOS archive. PATH copies
+// below this floor are skipped when a bundled or managed runtime is present.
+export const AX_ENGINE_BUNDLED_MIN_VERSION = "7.4.0"
 export const AX_ENGINE_SPECULATION_PROFILE = "agentic"
 export const AX_ENGINE_MTP_MODE = "pure"
 export const AX_ENGINE_RECOMMENDED_MEMORY_BYTES = 64 * 1024 ** 3
@@ -201,13 +204,10 @@ export function resolveAxEngineApiKey(options: Record<string, unknown> = {}, sav
 // managed install directory.
 export const AX_ENGINE_MANAGED_BINARY_NAME = "ax-engine"
 
-// Optional Apple Developer ID Team the installer can additionally require a
-// downloaded binary to be codesigned by. AX Engine release binaries are ad-hoc
-// signed (no Team identifier) and distributed with minisign signatures rather
-// than Apple notarization, so this is empty by default — only the SHA-256 and
-// ad-hoc `codesign --verify` integrity checks apply. Set AX_ENGINE_INSTALL_TEAM_ID
-// to additionally enforce a specific team for a Developer-ID-signed build.
-export const AX_ENGINE_EXPECTED_TEAM_ID = ""
+// Developer ID team on AX Engine 7.4.0+ macOS archives (DEFAI PRIVATE LIMITED).
+// Overlay installs and bundled copies enforce this unless AX_ENGINE_INSTALL_TEAM_ID
+// overrides it. Empty means "any signature that passes codesign --verify".
+export const AX_ENGINE_EXPECTED_TEAM_ID = "N5ZUZDUJS6"
 
 // Environment overrides that point the installer at a specific ax-engine
 // release without a code change (power users / pre-release testing).
@@ -228,13 +228,18 @@ export type AxEngineBinaryRelease = {
   teamId?: string
 }
 
-// Managed installation is intentionally disabled until the release archive is
-// self-contained. The v6.9.0 raw archive omits the matching MLX dylibs and
-// metallib, so it can pass checksum/codesign/doctor checks and still fail on a
-// clean Mac at the first real model load. The Homebrew formula installs the
-// matching runtime and remains the supported macOS path. AX_ENGINE_INSTALL_*
-// overrides stay available for validating a future self-contained artifact.
-export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease | undefined = undefined
+// Pinned self-contained macOS archive (binaries + MLX dylibs + metallib).
+// Darwin-arm64 AX Code releases stage this under engine/<version>/ as the
+// default floor. The same pin is the managed overlay/updater. Homebrew is an
+// alternative, not the required clean-Mac path. AX_ENGINE_INSTALL_* overrides
+// remain for validating a different artifact.
+export const AX_ENGINE_BINARY_RELEASE: AxEngineBinaryRelease = {
+  version: "7.4.0",
+  assetName: "ax-engine-v7.4.0-macos-arm64.tar.gz",
+  url: "https://github.com/defai-digital/ax-engine/releases/download/v7.4.0/ax-engine-v7.4.0-macos-arm64.tar.gz",
+  sha256: "f01467bcd7ac6214263eb02f3bac9f5ddc508c48c0729ca2e7dc4e7c628a229d",
+  teamId: "N5ZUZDUJS6",
+}
 
 // Single source of truth for the built-in AX Engine model catalog exposed by
 // `/provider/ax-engine/models`, external GUI model views, and provider pickers.

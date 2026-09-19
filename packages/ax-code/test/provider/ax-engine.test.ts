@@ -1390,6 +1390,7 @@ describe("ax-engine prepare lifecycle", () => {
               version: "7.3.0",
               installable: false,
               blockers: [],
+              warnings: [],
             }),
             downloadModel: mutate,
             markPrepared: mutate,
@@ -1427,6 +1428,7 @@ describe("ax-engine prepare lifecycle", () => {
             version: "7.4.0",
             installable: false,
             blockers: [],
+            warnings: [],
           }
         },
         fetchContracts: async () => [
@@ -1477,6 +1479,7 @@ describe("ax-engine prepare lifecycle", () => {
             version: "7.4.0",
             installable: false,
             blockers: [],
+            warnings: [],
           }
         },
         downloadModel: async (input) => {

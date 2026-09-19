@@ -6104,7 +6104,7 @@ export class AxEngine extends HeyApiClient {
   /**
    * Install a configured self-contained ax-engine binary
    *
-   * Download and verify an AX Engine build configured through AX_ENGINE_INSTALL_*; normal macOS users install the Homebrew formula.
+   * Download and verify the pinned self-contained AX Engine archive. Darwin-arm64 AX Code releases already include this sidecar; this route is the overlay/updater and recovery path.
    */
   public install<ThrowOnError extends boolean = false>(
     parameters?: {

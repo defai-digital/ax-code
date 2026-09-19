@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-10
+Last reviewed: 2026-09-19
 Owner: ax-code runtime
 Related: [ax-engine LOCAL-ENGINE-CLIENTS](https://github.com/defai-digital/ax-engine/blob/main/docs/LOCAL-ENGINE-CLIENTS.md)
 
@@ -69,7 +69,7 @@ Cancelling the request preserves the existing process.
 | -------------- | ---------------------------------------------------------------- |
 | Host language  | Node/Bun agent runtime with an explicit native-process boundary  |
 | Isolation      | Multi-GB models and native crashes stay out of the agent process |
-| Upgrade        | Version-gated Homebrew/PATH binary without rebuilding ax-code    |
+| Upgrade        | Version-gated bundled floor plus optional managed overlay, without rebuilding ax-code |
 | Provider model | Same OpenAI-compatible path as other local/cloud providers       |
 | Multi-client   | One server can be health-checked and stopped via `server.json`   |
 
@@ -101,8 +101,13 @@ Severity order matches ax-engine `docs/LOCAL-ENGINE-CLIENTS.md`.
 | Phase mapping                      | `packages/ax-code/src/provider/ax-engine/lifecycle.ts`                  |
 | Model policy                       | [AX Engine Model Selection](../providers/ax-engine-model-selection.md)  |
 
+Managed provisioning of a pinned sidecar is not in-process embedding. Darwin-arm64
+releases stage `engine/<version>/` beside the CLI; `ax-code providers ax-engine install`
+is the overlay/updater when a newer pin is published.
+
 ## Non-goals
 
 - Replacing sidecar with in-process SDK embedding in AX Code
 - Adopting gRPC as the primary chat transport
 - Custom Unix-socket or non-OpenAI chat framing for first-party clients
+- Baking model weights into the AX Code installer

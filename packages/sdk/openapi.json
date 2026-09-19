@@ -32394,7 +32394,7 @@
           }
         ],
         "summary": "Install a configured self-contained ax-engine binary",
-        "description": "Download and verify an AX Engine build configured through AX_ENGINE_INSTALL_*; normal macOS users install the Homebrew formula.",
+        "description": "Download and verify the pinned self-contained AX Engine archive. Darwin-arm64 AX Code releases already include this sidecar; this route is the overlay/updater and recovery path.",
         "responses": {
           "200": {
             "description": "Install result",

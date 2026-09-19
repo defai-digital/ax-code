@@ -65,7 +65,14 @@ import {
 
 type AxEngineTuiStatus = {
   eligibility?: { supported?: boolean; blockers?: string[]; warnings?: string[] }
-  dependency?: { available?: boolean; binaryPath?: string; blockers?: string[] }
+  dependency?: {
+    available?: boolean
+    installable?: boolean
+    binaryPath?: string
+    mode?: string
+    blockers?: string[]
+    warnings?: string[]
+  }
   disk?: { ok?: boolean; blockers?: string[]; freeBytes?: number }
   model?: { present?: boolean; modelID?: string; path?: string; blockers?: string[] }
   server?: {
@@ -127,7 +134,7 @@ function runProviderDialogAction(input: {
 
 async function axEngineRequest<T>(
   sdk: ReturnType<typeof useSDK>,
-  path: "status" | "prepare" | "start" | "stop",
+  path: "status" | "prepare" | "start" | "stop" | "install",
   body?: Record<string, unknown>,
 ): Promise<T> {
   const response = await sdk.fetch(urlAllowlistServerRoute(sdk.url, `/provider/ax-engine/${path}`), {
@@ -198,8 +205,9 @@ function renderAxEngineStatusText(status: AxEngineTuiStatus) {
     `Eligibility: ${status.eligibility?.supported ? "ok" : "blocked"}`,
     ...(status.eligibility?.blockers ?? []),
     ...(status.eligibility?.warnings ?? []),
-    `Dependency: ${status.dependency?.available ? status.dependency.binaryPath : "missing"}`,
+    `Dependency: ${status.dependency?.available ? `${status.dependency.binaryPath} [${status.dependency.mode ?? "unknown"}]` : "missing"}`,
     ...(status.dependency?.blockers ?? []),
+    ...(status.dependency?.warnings ?? []),
     `Disk: ${status.disk?.ok ? "ok" : "blocked"}`,
     ...(status.disk?.blockers ?? []),
     `Model: ${status.model?.present ? `${status.model.modelID ?? "unknown"} at ${status.model.path}` : "not prepared"}`,
@@ -575,6 +583,8 @@ export function createDialogProviderOptions() {
                             serverRunning: status.server?.running,
                             serverReady: status.server?.ready,
                             statusBlocker: status.model?.blockers?.[0] ?? status.dependency?.blockers?.[0],
+                            installable: status.dependency?.installable,
+                            available: status.dependency?.available,
                           })}
                           onSelect={(option) => resolve(option.value)}
                         />
@@ -611,6 +621,14 @@ export function createDialogProviderOptions() {
                     await sdk.client.instance.dispose()
                     await sync.bootstrap()
                     toast.show({ variant: "success", message: t("ui.axEngineLocalRuntimeStopped") })
+                    dialog.clear()
+                    return
+                  }
+                  if (action === "install") {
+                    await axEngineRequest(sdk, "install")
+                    await sdk.client.instance.dispose()
+                    await sync.bootstrap()
+                    toast.show({ variant: "success", message: "AX Engine installed" })
                     dialog.clear()
                     return
                   }

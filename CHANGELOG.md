@@ -6,6 +6,11 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+### Changed
+
+- Darwin-arm64 releases include a self-contained AX Engine sidecar. Homebrew is no longer required for local inference
+  on a clean Mac; `ax-code providers ax-engine install` is the overlay/updater.
+
 ## [7.19.3] - 2026-09-19
 
 ### Changed

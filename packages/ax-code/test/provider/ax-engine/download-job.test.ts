@@ -33,6 +33,7 @@ function runtimeWith(download: typeof downloadModel): AxEngineDownloadJobRuntime
       version: "7.4.0",
       installable: false,
       blockers: [],
+      warnings: [],
     }),
     getDiskStatus: async () => ({
       path: "/tmp",

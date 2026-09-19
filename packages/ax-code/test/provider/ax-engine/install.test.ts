@@ -14,6 +14,8 @@ import {
   AX_ENGINE_INSTALL_ENV,
   type AxEngineBinaryRelease,
 } from "../../../src/provider/ax-engine/constants"
+import { AX_ENGINE_RUNTIME_REQUIRED_FILES } from "../../../src/provider/ax-engine/payload"
+import { getBundledBinary } from "../../../src/provider/ax-engine/bundled"
 import {
   getManagedBinary,
   installAxEngineBinary,
@@ -32,9 +34,20 @@ const RELEASE: AxEngineBinaryRelease = {
 
 // A fake `installReleaseBin` that materializes an executable at `bin`, standing
 // in for a real download+verify+extract.
+async function writeRuntimePayload(dir: string, script = "#!/bin/sh\necho ax-engine\n") {
+  await fs.mkdir(dir, { recursive: true })
+  for (const name of AX_ENGINE_RUNTIME_REQUIRED_FILES) {
+    const target = path.join(dir, name)
+    if (name === "ax-engine" || name === "ax-engine-server") {
+      await fs.writeFile(target, script, { mode: 0o755 })
+    } else {
+      await fs.writeFile(target, `${name}\n`)
+    }
+  }
+}
+
 const fakeInstall = (async (input: { bin: string }) => {
-  await fs.mkdir(path.dirname(input.bin), { recursive: true })
-  await fs.writeFile(input.bin, "#!/bin/sh\necho ax-engine\n", { mode: 0o755 })
+  await writeRuntimePayload(path.dirname(input.bin))
   return input.bin
 }) as unknown as NonNullable<AxEngineInstallRuntime["install"]>
 
@@ -76,25 +89,27 @@ describe("resolveInstallableRelease", () => {
       [AX_ENGINE_INSTALL_ENV.sha256]: "b".repeat(64),
       [AX_ENGINE_INSTALL_ENV.version]: "9.9",
     }
-    // ax-engine binaries are ad-hoc signed, so no Developer-ID team is enforced by default.
     expect(resolveInstallableRelease("darwin", "arm64", base)).toMatchObject({
       version: "9.9",
       assetName: "ax-engine-9.9.tar.gz",
       url: "https://example.com/dl/ax-engine-9.9.tar.gz",
       sha256: "b".repeat(64),
+      teamId: "N5ZUZDUJS6",
     })
-    expect(resolveInstallableRelease("darwin", "arm64", base)?.teamId).toBeUndefined()
-    // A team can still be required explicitly.
     expect(
       resolveInstallableRelease("darwin", "arm64", { ...base, [AX_ENGINE_INSTALL_ENV.teamId]: "TEAM123456" })?.teamId,
     ).toBe("TEAM123456")
   })
 
-  test("keeps managed install disabled until a self-contained release is pinned", () => {
-    expect(AX_ENGINE_BINARY_RELEASE).toBeUndefined()
-    expect(resolveInstallableRelease("darwin", "arm64", {})).toBeUndefined()
-    expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(false)
-    // Non-Apple-Silicon-macOS never gets a release either.
+  test("pins a self-contained darwin-arm64 release and refuses other hosts", () => {
+    expect(AX_ENGINE_BINARY_RELEASE.version).toBe("7.4.0")
+    expect(AX_ENGINE_BINARY_RELEASE.sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(AX_ENGINE_BINARY_RELEASE.url.startsWith("https://")).toBe(true)
+    expect(resolveInstallableRelease("darwin", "arm64", {})).toMatchObject({
+      version: "7.4.0",
+      sha256: AX_ENGINE_BINARY_RELEASE.sha256,
+    })
+    expect(isAxEngineInstallable("darwin", "arm64", {})).toBe(true)
     expect(resolveInstallableRelease("linux", "arm64", {})).toBeUndefined()
     expect(resolveInstallableRelease("win32", "x64", {})).toBeUndefined()
     expect(resolveInstallableRelease("win32", "arm64", {})).toBeUndefined()
@@ -254,8 +269,7 @@ describe("dependency resolution picks up the managed binary", () => {
       baseRuntime({
         resolveRelease: () => stale,
         install: (async (input: { bin: string }) => {
-          await fs.mkdir(path.dirname(input.bin), { recursive: true })
-          await fs.writeFile(input.bin, "#!/bin/sh\necho 'ax-engine 6.6.0'\n", { mode: 0o755 })
+          await writeRuntimePayload(path.dirname(input.bin), "#!/bin/sh\necho 'ax-engine 6.6.0'\n")
           return input.bin
         }) as unknown as NonNullable<AxEngineInstallRuntime["install"]>,
       }),
@@ -287,9 +301,9 @@ describe("end-to-end install of a real tarball artifact", () => {
     try {
       // A stand-in ax-engine executable, packed exactly how a release archive
       // is expected to be shaped: the binary at the top level of the tarball.
-      await fs.writeFile(path.join(stage, "ax-engine"), "#!/bin/sh\necho ax-engine-real\n", { mode: 0o755 })
+      await writeRuntimePayload(stage, "#!/bin/sh\necho ax-engine-real\n")
       const tarPath = path.join(stage, "artifact.tar.gz")
-      execFileSync("tar", ["-czf", tarPath, "-C", stage, "ax-engine"])
+      execFileSync("tar", ["-czf", tarPath, "-C", stage, ...AX_ENGINE_RUNTIME_REQUIRED_FILES])
       const bytes = await fs.readFile(tarPath)
       const sha256 = createHash("sha256").update(bytes).digest("hex")
       const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
@@ -309,14 +323,14 @@ describe("end-to-end install of a real tarball artifact", () => {
           fetcher: async () => ({ ok: true, arrayBuffer: async () => arrayBuffer }),
         })) as NonNullable<AxEngineInstallRuntime["install"]>
 
-      let codesignCalledFor: string | undefined
+      const codesigned: string[] = []
       const result = await installAxEngineBinary(
         {},
         baseRuntime({
           resolveRelease: () => release,
           install: realInstall,
           verifyCodesign: async (binaryPath) => {
-            codesignCalledFor = binaryPath
+            codesigned.push(binaryPath)
           },
         }),
       )
@@ -326,8 +340,8 @@ describe("end-to-end install of a real tarball artifact", () => {
       // The real binary was extracted, is executable, and carries its contents.
       await fs.access(bin, fsConstants.X_OK)
       expect(await fs.readFile(bin, "utf8")).toContain("ax-engine-real")
-      // The signature gate ran against the extracted binary.
-      expect(codesignCalledFor).toBe(bin)
+      expect(await fs.readFile(path.join(path.dirname(bin), "mlx.metallib"), "utf8")).toContain("mlx.metallib")
+      expect(codesigned).toContain(bin)
       // And it now resolves as the managed dependency.
       expect(await getManagedBinary()).toEqual({ path: bin, version: "e2e-1" })
       const status = await getDependencyStatus()
@@ -338,5 +352,71 @@ describe("end-to-end install of a real tarball artifact", () => {
     } finally {
       await fs.rm(stage, { recursive: true, force: true }).catch(() => undefined)
     }
+  })
+
+  test("refuses a payload that is missing mlx.metallib", async () => {
+    const stage = await fs.mkdtemp(path.join(os.tmpdir(), "axe-incomplete-"))
+    try {
+      await fs.writeFile(path.join(stage, "ax-engine"), "#!/bin/sh\necho ax-engine\n", { mode: 0o755 })
+      const tarPath = path.join(stage, "artifact.tar.gz")
+      execFileSync("tar", ["-czf", tarPath, "-C", stage, "ax-engine"])
+      const bytes = await fs.readFile(tarPath)
+      const sha256 = createHash("sha256").update(bytes).digest("hex")
+      const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+      const realInstall = ((opts: Parameters<typeof installReleaseBin>[0]) =>
+        installReleaseBin({
+          ...opts,
+          fetcher: async () => ({ ok: true, arrayBuffer: async () => arrayBuffer }),
+        })) as NonNullable<AxEngineInstallRuntime["install"]>
+
+      await expect(
+        installAxEngineBinary(
+          {},
+          baseRuntime({
+            resolveRelease: () => ({
+              version: "incomplete-1",
+              assetName: "artifact.tar.gz",
+              url: "https://example.com/ax-engine/artifact.tar.gz",
+              sha256,
+            }),
+            install: realInstall,
+          }),
+        ),
+      ).rejects.toThrow("mlx.metallib")
+      expect(await getManagedBinary()).toBeUndefined()
+    } finally {
+      await fs.rm(stage, { recursive: true, force: true }).catch(() => undefined)
+    }
+  })
+})
+
+describe("bundled sidecar resolution", () => {
+  test("resolves engine/<version>/ax-engine next to a node-bundled entry", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "axe-bundled-"))
+    try {
+      const dir = path.join(root, "engine", AX_ENGINE_BINARY_RELEASE.version)
+      await writeRuntimePayload(dir, "#!/bin/sh\necho ax-engine 7.4.0\n")
+      const entry = path.join(root, "lib", "index-node-tui.js")
+      await fs.mkdir(path.dirname(entry), { recursive: true })
+      await fs.writeFile(entry, "export {}\n")
+
+      const bundled = await getBundledBinary({ entryPath: entry })
+      expect(bundled).toEqual({
+        path: path.join(dir, "ax-engine"),
+        version: AX_ENGINE_BINARY_RELEASE.version,
+      })
+
+      const status = await getDependencyStatus({ entryPath: entry })
+      if (status.mode === "path") return
+      expect(status.mode).toBe("bundled")
+      expect(status.available).toBe(true)
+      expect(status.binaryPath).toBe(bundled?.path)
+    } finally {
+      await fs.rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("ignores a source-mode TypeScript entry", async () => {
+    expect(await getBundledBinary({ entryPath: "/repo/packages/ax-code/src/index-node-tui.ts" })).toBeUndefined()
   })
 })

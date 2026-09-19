@@ -89,6 +89,7 @@ describe("tui dialog action dispatch", () => {
     const dialogProvider = await fs.readFile(DIALOG_PROVIDER_SRC, "utf8")
 
     expect(dialogProvider).toContain("axEngineRuntimeDialogActions({")
+    expect(dialogProvider).toContain('if (action === "install")')
     expect(dialogProvider).toContain('if (action === "disable")')
     expect(dialogProvider).toContain("setProviderDisabled({")
     expect(dialogProvider).toContain("failed to stop ax-engine while disabling")

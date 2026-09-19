@@ -45,6 +45,7 @@ describe("install script", () => {
     expect(text).toContain('cp -R "$lib_dir" "$staging_root/runtime/lib"')
     expect(text).toContain('cp -R "$node_dir" "$staging_root/runtime/node"')
     expect(text).toContain('cp -R "$node_modules_dir" "$staging_root/runtime/node_modules"')
+    expect(text).toContain('cp -R "$bundle_root/engine" "$staging_root/runtime/engine"')
     expect(text).toContain('install_node_bundle_tree "$bundle_root"')
     expect(text).toContain('write_node_bundle_launcher "$staging_root/runtime/bin/ax-code"')
     expect(text).toContain('while [ -L "$script" ]; do')

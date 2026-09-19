@@ -2,7 +2,7 @@
 
 Status: Active
 Scope: current-state
-Last reviewed: 2026-09-18
+Last reviewed: 2026-09-19
 Owner: ax-code runtime
 
 The root [README](../../README.md) keeps the primary install path. This page is the source of truth for supported CLI installer channels, `ax-code doctor` runtime labels, local launcher behavior, and how those channels relate to Desktop installers.
@@ -147,7 +147,7 @@ Windows Desktop installers are Authenticode-signed by **DEFAI Private Limited**.
 
 ## Platform Policy
 
-- macOS: use the bash release installer as the primary documented CLI path. It installs under `~/.ax-code`, bootstraps pinned Minisign when needed, verifies the release archive, and does not require Homebrew. Contributor builds use `pnpm run setup:cli`.
+- macOS: use the bash release installer as the primary documented CLI path. It installs under `~/.ax-code`, bootstraps pinned Minisign when needed, verifies the release archive, and does not require Homebrew. The darwin-arm64 archive includes a self-contained AX Engine sidecar for local inference. Contributor builds use `pnpm run setup:cli`.
 - The supported Homebrew path explicitly taps and trusts `defai-digital/tap` before using fully qualified install
   commands. Whole-tap trust includes all current and future formulae, casks, and external commands in the shared tap;
   use the bash release installer when that trust scope is not acceptable.

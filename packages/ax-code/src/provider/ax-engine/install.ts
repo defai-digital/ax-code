@@ -10,6 +10,7 @@ import { Log } from "@/util/log"
 import { toErrorMessage } from "@/util/error-message"
 import { installReleaseBin } from "@ax-code/ax-code-intel/server-releases"
 import {
+  AX_ENGINE_BINARY_RELEASE,
   AX_ENGINE_ERROR,
   AX_ENGINE_EXPECTED_TEAM_ID,
   AX_ENGINE_INSTALL_ENV,
@@ -17,6 +18,7 @@ import {
 } from "./constants"
 import { AxEnginePaths } from "./paths"
 import { requirePlatformEligibility } from "./platform"
+import { AX_ENGINE_RUNTIME_REQUIRED_FILES, AX_ENGINE_RUNTIME_SIGNED_FILES } from "./payload"
 
 const log = Log.create({ service: "ax-engine-install" })
 
@@ -47,6 +49,7 @@ export type AxEngineInstallRuntime = {
   install?: typeof installReleaseBin
   verifyCodesign?: (binaryPath: string, expectedTeamId?: string) => Promise<void>
   clearQuarantine?: (binaryPath: string) => Promise<void>
+  smoke?: (binaryPath: string) => Promise<void>
 }
 
 function assetNameFromUrl(url: string): string {
@@ -66,8 +69,8 @@ function optionalTrimmed(value: string | undefined): string | undefined {
 // Resolve the ax-engine release the current host should install, or undefined
 // when there is none. The binary only ships for Apple Silicon macOS. An
 // AX_ENGINE_INSTALL_URL env override wins so a machine can target a specific
-// artifact without a code change. Managed pin is unset until a self-contained
-// archive ships (see AX_ENGINE_BINARY_RELEASE in constants.ts).
+// artifact without a code change. The default pin is the self-contained 7.4.0
+// archive staged into darwin-arm64 AX Code releases.
 export function resolveInstallableRelease(
   platform: string = process.platform,
   arch: string = process.arch,
@@ -86,7 +89,7 @@ export function resolveInstallableRelease(
     }
   }
 
-  return undefined
+  return AX_ENGINE_BINARY_RELEASE
 }
 
 // Whether AX Code can offer a managed install on this host. Meant for status /
@@ -100,6 +103,42 @@ async function isExecutable(file: string): Promise<boolean> {
     .access(file, fsConstants.X_OK)
     .then(() => true)
     .catch(() => false)
+}
+
+async function pathExists(file: string): Promise<boolean> {
+  return fs
+    .access(file)
+    .then(() => true)
+    .catch(() => false)
+}
+
+export async function assertAxEngineRuntimePayload(installDir: string): Promise<void> {
+  const missing: string[] = []
+  for (const name of AX_ENGINE_RUNTIME_REQUIRED_FILES) {
+    if (!(await pathExists(path.join(installDir, name)))) missing.push(name)
+  }
+  if (missing.length) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.DownloadFailed}: ax-engine archive is missing ${missing.join(", ")} — refusing to record a managed install`,
+    )
+  }
+}
+
+async function chmodRuntimePayload(installDir: string): Promise<void> {
+  await Promise.all(
+    AX_ENGINE_RUNTIME_SIGNED_FILES.map((name) => fs.chmod(path.join(installDir, name), 0o755).catch(() => undefined)),
+  )
+}
+
+async function smokeInstalledBinary(binaryPath: string): Promise<void> {
+  const probe = await Process.run([binaryPath, "--version"], { timeout: 15_000, nothrow: true })
+  if (probe.code !== 0) {
+    throw new Error(
+      `${AX_ENGINE_ERROR.BinaryMissing}: installed ax-engine failed --version (${
+        probe.stderr.toString().trim() || `exited ${probe.code}`
+      })`,
+    )
+  }
 }
 
 async function readInstallState(): Promise<AxEngineInstallState | undefined> {
@@ -192,6 +231,7 @@ export async function installAxEngineBinary(
   const install = runtime.install ?? installReleaseBin
   const verify = runtime.verifyCodesign ?? verifyCodesign
   const clearXattr = runtime.clearQuarantine ?? clearQuarantine
+  const smoke = runtime.smoke ?? smokeInstalledBinary
 
   await requireEligibility()
 
@@ -234,7 +274,7 @@ export async function installAxEngineBinary(
       return { installed: false, alreadyPresent: true, version: before.version, binaryPath: before.path }
     }
 
-    using _ = await FileLock.acquire(AxEnginePaths.installLock, { timeoutMs: 60_000, staleMs: 30 * 60_000 })
+    using _ = await FileLock.acquire(AxEnginePaths.installLock, { timeoutMs: 60_000, staleMs: 45 * 60_000 })
 
     // Another process may have finished the install while we waited for the lock.
     const afterLock = await present()
@@ -275,8 +315,14 @@ export async function installAxEngineBinary(
     }
 
     try {
-      await clearXattr(binaryPath)
-      await verify(binaryPath, release.teamId)
+      await assertAxEngineRuntimePayload(installDir)
+      await chmodRuntimePayload(installDir)
+      await clearXattr(installDir)
+      for (const name of AX_ENGINE_RUNTIME_SIGNED_FILES) {
+        await clearXattr(path.join(installDir, name))
+        await verify(path.join(installDir, name), release.teamId)
+      }
+      await smoke(binaryPath)
     } catch (error) {
       // Never leave an unverified binary behind — a later resolution must not
       // pick it up.

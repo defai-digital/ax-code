@@ -207,13 +207,15 @@ export function configUpdateParams<T extends Record<string, unknown>>(config: T)
   return { config }
 }
 
-export type AxEngineRuntimeAction = "use" | "status" | "stop" | "disable"
+export type AxEngineRuntimeAction = "use" | "install" | "status" | "stop" | "disable"
 
 export function axEngineRuntimeDialogActions(
   input: {
     serverRunning?: boolean
     serverReady?: boolean
     statusBlocker?: string
+    installable?: boolean
+    available?: boolean
   } = {},
 ): Array<{ title: string; value: AxEngineRuntimeAction; description?: string }> {
   const actions: Array<{ title: string; value: AxEngineRuntimeAction; description?: string }> = [
@@ -222,12 +224,19 @@ export function axEngineRuntimeDialogActions(
       value: "use",
       description: "Choose a local model; AX Code starts the runtime when needed",
     },
-    {
-      title: "View status",
-      value: "status",
-      description: input.serverReady ? "Local runtime is ready" : input.statusBlocker,
-    },
   ]
+  if (input.installable && input.available === false) {
+    actions.push({
+      title: "Install local runtime",
+      value: "install",
+      description: "Download the pinned AX Engine sidecar without Homebrew",
+    })
+  }
+  actions.push({
+    title: "View status",
+    value: "status",
+    description: input.serverReady ? "Local runtime is ready" : input.statusBlocker,
+  })
   if (input.serverRunning) {
     actions.push({
       title: "Stop local runtime",

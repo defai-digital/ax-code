@@ -16,6 +16,7 @@ import { inspectNativeAddonPayload, nativeAddonIncompleteMessage, NATIVE_ADDON_P
 import pkg from "../package.json"
 import { resolveNativeTypescript } from "../../ax-code-intel/src/typescript-native"
 import { pruneParserDistribution } from "./parser-dist"
+import { stageAxEngineRuntime } from "./stage-ax-engine-runtime"
 
 // Full Node distribution build INCLUDING the interactive TUI. Bundles
 // src/index-node-tui.ts (boot.ts) with esbuild + the AX Code TUI Solid JSX plugin.
@@ -574,6 +575,15 @@ if (release) {
 }
 
 pruneParserDistribution(path.join(outRoot, "node_modules"))
+
+// Darwin-arm64 releases ship a self-contained AX Engine sidecar so a clean Mac
+// does not need Homebrew. Do not re-sign those Mach-Os: they already carry a
+// Developer ID signature and nested notarization. Other platforms omit it.
+if (release && process.platform === "darwin" && arch === "arm64") {
+  const staged = stageAxEngineRuntime({ destRoot: outRoot, required: true })
+  if (!staged) throw new Error("AX Engine sidecar was not staged into the darwin-arm64 runtime")
+  console.log(`Staged AX Engine ${staged.version} at ${path.relative(outRoot, staged.dir)}`)
+}
 
 // macOS Gatekeeper rejects unsigned native code. Unlike the single Bun-SEA
 // binary, a node-bundled dist carries many native libraries (.node addons and

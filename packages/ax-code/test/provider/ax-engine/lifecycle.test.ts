@@ -23,6 +23,7 @@ function baseStatus(over: Partial<AxEngineStatusCore> = {}): AxEngineStatusCore 
       binaryPath: "/usr/local/bin/ax-engine",
       installable: false,
       blockers: [],
+      warnings: [],
     },
     disk: {
       path: "/tmp",
@@ -84,6 +85,7 @@ describe("mapAxEngineStatusToLifecycle", () => {
           mode: "missing",
           installable: true,
           blockers: [AX_ENGINE_ERROR.BinaryMissing],
+          warnings: [],
         },
         server: { running: false, ready: false, blockers: [] },
       }),

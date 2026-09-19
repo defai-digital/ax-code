@@ -689,7 +689,9 @@ export const ProviderRoutes = lazy(() =>
       }),
       async (c) => {
         const config = await Config.get().catch(() => undefined)
-        return c.json(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {}, await savedAxEngineApiKey()))
+        return c.json(
+          await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {}, await savedAxEngineApiKey()),
+        )
       },
     )
     .post(
@@ -697,7 +699,7 @@ export const ProviderRoutes = lazy(() =>
       describeRoute({
         summary: "Install a configured self-contained ax-engine binary",
         description:
-          "Download and verify an AX Engine build configured through AX_ENGINE_INSTALL_*; normal macOS users install the Homebrew formula.",
+          "Download and verify the pinned self-contained AX Engine archive. Darwin-arm64 AX Code releases already include this sidecar; this route is the overlay/updater and recovery path.",
         operationId: "provider.axEngine.install",
         responses: {
           200: {

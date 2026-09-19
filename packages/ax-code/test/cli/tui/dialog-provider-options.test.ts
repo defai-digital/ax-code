@@ -561,6 +561,15 @@ describe("provider dialog options", () => {
     expect(axEngineRuntimeDialogActions().map((item) => item.value)).toEqual(["use", "status", "disable"])
   })
 
+  test("offers install when the pinned sidecar is missing and installable", () => {
+    expect(axEngineRuntimeDialogActions({ installable: true, available: false }).map((item) => item.value)).toEqual([
+      "use",
+      "install",
+      "status",
+      "disable",
+    ])
+  })
+
   test("offers stop only when the local AX Engine process is running", () => {
     expect(axEngineRuntimeDialogActions({ serverRunning: false }).map((item) => item.value)).toEqual([
       "use",

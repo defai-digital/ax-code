@@ -266,6 +266,7 @@ async function printAxEngineStatus(status: any) {
     }`,
   )
   for (const blocker of status.dependency.blockers ?? []) prompts.log.error(blocker)
+  for (const warning of status.dependency.warnings ?? []) prompts.log.warn(warning)
   if (!status.dependency.available && status.dependency.installable)
     prompts.log.info("Run `ax-code providers ax-engine install` to download and install it.")
 

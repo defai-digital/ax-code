@@ -27,6 +27,9 @@ async function runInstaller(hooks: string, check: (fixture: Fixture) => Promise<
       "node_modules/solid-js/package.json": JSON.stringify({ type: "module" }),
       "node_modules/solid-js/dist/solid.js": 'export const version = "9.9.9"\n',
       "package.json": JSON.stringify({ type: "module" }),
+      "engine/7.4.0/ax-engine": "#!/bin/sh\nprintf 'ax-engine\\n'\n",
+      "engine/7.4.0/ax-engine-server": "#!/bin/sh\nprintf 'server\\n'\n",
+      "engine/7.4.0/mlx.metallib": "metallib\n",
     }
     for (const [relative, content] of Object.entries(files)) {
       const target = path.join(source, relative)
@@ -35,6 +38,8 @@ async function runInstaller(hooks: string, check: (fixture: Fixture) => Promise<
     }
     await chmod(path.join(source, "node/bin/node"), 0o755)
     await chmod(path.join(source, "bin/ax-code"), 0o755)
+    await chmod(path.join(source, "engine/7.4.0/ax-engine"), 0o755)
+    await chmod(path.join(source, "engine/7.4.0/ax-engine-server"), 0o755)
     await cp(source, installed, { recursive: true })
     await writeFile(path.join(installed, "node_modules/solid-js/dist/solid.js"), 'export const version = "8.8.8"\n')
     await writeFile(path.join(installed, "lib/obsolete.js"), "previous runtime\n")
@@ -104,9 +109,12 @@ async function expectPreviousRuntime(fixture: Fixture) {
 
 describe.skipIf(process.platform === "win32")("Unix runtime installation", () => {
   test("installs a complete runtime into a new destination", async () => {
-    await runInstaller('rm -rf "$INSTALL_ROOT"; mkdir -p "$INSTALL_DIR"', async ({ result }) => {
+    await runInstaller('rm -rf "$INSTALL_ROOT"; mkdir -p "$INSTALL_DIR"', async ({ installed, result }) => {
       expectExit(result, 0)
       expect(result.stdout).toContain("INSTALL_COMPLETED")
+      const active = path.dirname(path.dirname(await readlink(path.join(installed, "bin/ax-code"))))
+      expect(existsSync(path.join(active, "engine/7.4.0/ax-engine"))).toBe(true)
+      expect(existsSync(path.join(active, "engine/7.4.0/mlx.metallib"))).toBe(true)
     })
   })
 

@@ -4,13 +4,20 @@ import z from "zod"
 import semver from "semver"
 import { which } from "@/util/which"
 import { Process } from "@/util/process"
-import { AX_ENGINE_ERROR, AX_ENGINE_MIN_VERSION, AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION } from "./constants"
+import {
+  AX_ENGINE_BINARY_RELEASE,
+  AX_ENGINE_BUNDLED_MIN_VERSION,
+  AX_ENGINE_ERROR,
+  AX_ENGINE_MIN_VERSION,
+  AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION,
+} from "./constants"
+import { getBundledBinary } from "./bundled"
 import { getManagedBinary, isAxEngineInstallable } from "./install"
 import { parseJsonResult } from "@/util/json-value"
 
 export const AxEngineDependencyStatus = z.object({
   available: z.boolean(),
-  mode: z.enum(["configured", "path", "managed", "missing"]),
+  mode: z.enum(["configured", "path", "managed", "bundled", "missing"]),
   binaryPath: z.string().optional(),
   version: z.string().optional(),
   // Version of the AX Code-managed binary, when `mode` is "managed".
@@ -18,11 +25,13 @@ export const AxEngineDependencyStatus = z.object({
   // When missing, whether AX Code can download + install the binary on this host.
   installable: z.boolean().default(false),
   blockers: z.array(z.string()).default([]),
+  warnings: z.array(z.string()).default([]),
 })
 export type AxEngineDependencyStatus = z.infer<typeof AxEngineDependencyStatus>
 
 export type AxEngineDependencyOptions = {
   binaryPath?: unknown
+  entryPath?: string
   [key: string]: unknown
 }
 
@@ -61,6 +70,16 @@ function unsupportedVersionBlocker(detected: string | undefined) {
   return `${AX_ENGINE_ERROR.VersionUnsupported}: ax-engine ${parsed.version} is installed; ${AX_ENGINE_MIN_VERSION} or later is required`
 }
 
+function belowBundledFloor(detected: string | undefined) {
+  const parsed = detected ? semver.coerce(detected) : undefined
+  if (!parsed) return false
+  return semver.lt(parsed, AX_ENGINE_BUNDLED_MIN_VERSION)
+}
+
+function coercedVersionLabel(detected: string | undefined) {
+  return semver.coerce(detected)?.version ?? detected ?? "unknown"
+}
+
 export function pinnedDownloadVersionBlocker(detected: string | undefined) {
   const version = detected ? semver.coerce(detected) : undefined
   if (version && semver.gte(version, AX_ENGINE_PINNED_DOWNLOAD_MIN_VERSION)) return undefined
@@ -72,10 +91,10 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     typeof options.binaryPath === "string" && options.binaryPath.trim() ? options.binaryPath.trim() : undefined
   const env = process.env.AX_ENGINE_BIN
   const candidate = configured ?? env
+  const warnings: string[] = []
 
-  // Resolution order: an explicit binary (config/env) or an existing PATH
-  // install always wins, so a deliberate user setup is respected. The AX
-  // Code-managed install is the fallback used when nothing else is present.
+  // Resolution order: explicit config/env wins. PATH wins only when it meets
+  // the bundled MTP floor. Managed overlay then bundled floor, then missing.
   if (candidate) {
     if (!(await isExecutable(candidate))) {
       return {
@@ -84,6 +103,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
         binaryPath: candidate,
         installable: false,
         blockers: [`${AX_ENGINE_ERROR.BinaryMissing}: configured ax-engine binary is not executable`],
+        warnings,
       }
     }
     const detectedVersion = await version(candidate)
@@ -95,6 +115,7 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
       version: detectedVersion,
       installable: false,
       blockers: versionBlocker ? [versionBlocker] : [],
+      warnings,
     }
   }
 
@@ -102,31 +123,62 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
   if (found) {
     const detectedVersion = await version(found)
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
-    return {
-      available: !versionBlocker,
-      mode: "path",
-      binaryPath: found,
-      version: detectedVersion,
-      installable: false,
-      blockers: versionBlocker ? [versionBlocker] : [],
+    if (!versionBlocker && !belowBundledFloor(detectedVersion)) {
+      if (AX_ENGINE_BINARY_RELEASE && detectedVersion && semver.coerce(detectedVersion)) {
+        const parsed = semver.coerce(detectedVersion)
+        if (parsed && semver.lt(parsed, AX_ENGINE_BINARY_RELEASE.version)) {
+          warnings.push(
+            `${AX_ENGINE_ERROR.VersionUnsupported}: PATH ax-engine ${parsed.version} is older than the bundled ${AX_ENGINE_BINARY_RELEASE.version} runtime`,
+          )
+        }
+      }
+      return {
+        available: true,
+        mode: "path",
+        binaryPath: found,
+        version: detectedVersion,
+        installable: false,
+        blockers: [],
+        warnings,
+      }
     }
+    warnings.push(
+      versionBlocker ??
+        `${AX_ENGINE_ERROR.VersionUnsupported}: PATH ax-engine ${coercedVersionLabel(detectedVersion)} is older than ${AX_ENGINE_BUNDLED_MIN_VERSION}; using the AX Code runtime instead`,
+    )
   }
 
   const managed = await getManagedBinary()
   if (managed) {
-    // Prefer the live --version output when present; fall back to the install
-    // marker so a bumped AX_ENGINE_MIN_VERSION still gates stale managed installs
-    // the same way PATH/configured binaries are gated.
     const detectedVersion = (await version(managed.path)) ?? managed.version
+    const versionBlocker = unsupportedVersionBlocker(detectedVersion)
+    if (!versionBlocker) {
+      return {
+        available: true,
+        mode: "managed",
+        binaryPath: managed.path,
+        version: detectedVersion,
+        managedVersion: managed.version,
+        installable: false,
+        blockers: [],
+        warnings,
+      }
+    }
+    warnings.push(versionBlocker)
+  }
+
+  const bundled = await getBundledBinary({ entryPath: options.entryPath })
+  if (bundled) {
+    const detectedVersion = (await version(bundled.path)) ?? bundled.version
     const versionBlocker = unsupportedVersionBlocker(detectedVersion)
     return {
       available: !versionBlocker,
-      mode: "managed",
-      binaryPath: managed.path,
+      mode: "bundled",
+      binaryPath: bundled.path,
       version: detectedVersion,
-      managedVersion: managed.version,
       installable: versionBlocker ? isAxEngineInstallable() : false,
       blockers: versionBlocker ? [versionBlocker] : [],
+      warnings,
     }
   }
 
@@ -137,8 +189,9 @@ export async function getDependencyStatus(options: AxEngineDependencyOptions = {
     installable,
     blockers: [
       installable
-        ? `${AX_ENGINE_ERROR.BinaryMissing}: ax-engine is not installed — install it from AX Code to run local models`
-        : `${AX_ENGINE_ERROR.BinaryMissing}: install with \`brew install defai-digital/ax-engine/ax-engine\` or configure provider.ax-engine.options.binaryPath`,
+        ? `${AX_ENGINE_ERROR.BinaryMissing}: ax-engine is not installed — Mac releases include it, or run \`ax-code providers ax-engine install\``
+        : `${AX_ENGINE_ERROR.BinaryMissing}: install AX Engine from AX Code, or configure provider.ax-engine.options.binaryPath`,
     ],
+    warnings,
   }
 }

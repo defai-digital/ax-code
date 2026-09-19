@@ -789,6 +789,11 @@ install_node_bundle_tree() (
     chmod 755 "$staging_root/runtime/node/bin/node" || exit 1
     cp -R "$node_modules_dir" "$staging_root/runtime/node_modules" || exit 1
     cp "$package_json" "$staging_root/runtime/package.json" || exit 1
+    # Optional: darwin-arm64 releases include a self-contained AX Engine sidecar.
+    if [ -d "$bundle_root/engine" ]; then
+      cp -R "$bundle_root/engine" "$staging_root/runtime/engine" || exit 1
+      find "$staging_root/runtime/engine" -type f \( -name ax-engine -o -name ax-engine-server -o -name ax-engine-bench \) -exec chmod 755 {} \;
+    fi
     assert_node_bundle_runtime "$staging_root/runtime" || exit 1
 
     # Never overwrite a generation, including reinstallation of the same release.

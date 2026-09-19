@@ -384,6 +384,30 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "AzureSignTool installation failed" }
           "AZURE_SIGNTOOL_PATH=$(Join-Path $directory 'AzureSignTool.exe')" | Out-File $env:GITHUB_ENV -Append
 
+      - name: Fetch AX Engine sidecar for macOS
+        if: ${{ matrix.targets == 'darwin-arm64' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="7.4.0"
+          ASSET="ax-engine-v${VERSION}-macos-arm64.tar.gz"
+          EXPECTED="f01467bcd7ac6214263eb02f3bac9f5ddc508c48c0729ca2e7dc4e7c628a229d"
+          DEST="$RUNNER_TEMP/$ASSET"
+          SIBLING="$GITHUB_WORKSPACE/../ax-engine/target/release-artifacts/v${VERSION}/$ASSET"
+          if [ -f "$SIBLING" ]; then
+            cp "$SIBLING" "$DEST"
+          else
+            URL="https://github.com/defai-digital/ax-engine/releases/download/v${VERSION}/$ASSET"
+            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/octet-stream" -o "$DEST" "$URL"
+          fi
+          ACTUAL="$(shasum -a 256 "$DEST" | awk '{print $1}')"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::AX Engine archive SHA-256 mismatch (expected $EXPECTED, got $ACTUAL)"
+            exit 1
+          fi
+          echo "AX_ENGINE_BUNDLE_ARCHIVE=$DEST" >> "$GITHUB_ENV"
+
       - name: Build
         working-directory: packages/ax-code
         run: pnpm exec tsx ${{ matrix.build-script }} ${{ matrix.build-args }}
@@ -456,6 +480,17 @@ jobs:
           if ! echo "$DOCTOR_OUTPUT" | grep -F "Native addons: 4/4 installed" >/dev/null; then
             echo "FAIL: release runtime did not ship all native addons"
             exit 1
+          fi
+          if [ "${{ matrix.targets }}" = "darwin-arm64" ]; then
+            ENGINE_BIN="$SMOKE_ROOT/engine/7.4.0/ax-engine"
+            if [ ! -x "$ENGINE_BIN" ]; then
+              echo "FAIL: darwin-arm64 runtime did not ship AX Engine at engine/7.4.0/ax-engine"
+              exit 1
+            fi
+            if [ ! -f "$SMOKE_ROOT/engine/7.4.0/mlx.metallib" ]; then
+              echo "FAIL: darwin-arm64 runtime did not ship mlx.metallib"
+              exit 1
+            fi
           fi
 
       - name: Notarize macOS CLI archive
