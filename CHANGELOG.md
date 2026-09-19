@@ -6,6 +6,21 @@ changes belong to AX Coder.
 
 ## [Unreleased]
 
+## [7.19.3] - 2026-09-19
+
+### Changed
+
+- Publish the paired SDK 2.5.38.
+- Managed AX Engine defaults to `required` MTP, uses model-aware Qwen speculation, preserves project instructions on
+  compact turns, and restores prefix reuse across tool turns.
+- Bump `google/osv-scanner-action` to 2.6.0 and `actions/setup-dotnet` to v6.
+
+### Fixed
+
+- Reject two exact `edit` matches on the same line instead of replacing the first after native ambiguity.
+- Resolve AX Engine speculation and exact-MTP fingerprints from `apiModelID`, matching spawn args and prefix geometry.
+- Observe managed AX Engine status and capability with the same saved API key used at launch.
+
 ## [7.19.2] - 2026-09-18
 
 ### Changed

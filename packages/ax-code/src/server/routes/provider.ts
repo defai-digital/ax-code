@@ -179,7 +179,7 @@ async function axEngineConnectionView() {
   const savedKey = await savedAxEngineApiKey()
 
   if (mode === "managed") {
-    const status = await getAxEngineStatus(options)
+    const status = await getAxEngineStatus(options, savedKey)
     const state = status.server.state
     return {
       mode,
@@ -689,7 +689,7 @@ export const ProviderRoutes = lazy(() =>
       }),
       async (c) => {
         const config = await Config.get().catch(() => undefined)
-        return c.json(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {}))
+        return c.json(await getAxEngineStatus(config?.provider?.["ax-engine"]?.options ?? {}, await savedAxEngineApiKey()))
       },
     )
     .post(

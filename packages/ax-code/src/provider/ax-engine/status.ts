@@ -3,7 +3,8 @@ import { AxEnginePlatformEligibility, getPlatformEligibility } from "./platform"
 import { AxEngineDependencyStatus, getDependencyStatus } from "./dependency"
 import { AxEngineDiskStatus, AxEngineModelStatus, getDiskStatus, getModelStatus } from "./model-cache"
 import { AxEngineServerRuntimeStatus, getServerStatus } from "./server"
-import { AX_ENGINE_ERROR, resolveAxEngineApiKey } from "./constants"
+import { Auth } from "../../auth"
+import { AX_ENGINE_ERROR, AX_ENGINE_PROVIDER_ID, resolveAxEngineApiKey } from "./constants"
 import { resolveAxEngineMtpPolicy } from "./mtp"
 import { toErrorMessage } from "../../util/error-message"
 import { parseAxEngineModelContracts } from "./model-card"
@@ -84,7 +85,7 @@ export function formatAxEngineCapabilityInspectionFailureReason(error: unknown):
 
 async function getCapabilityStatus(
   server: AxEngineServerRuntimeStatus,
-  options: AxEngineRuntimeOptions,
+  apiKey: string,
 ): Promise<AxEngineCapabilityStatus> {
   if (!server.ready || !server.state?.baseURL) {
     return {
@@ -98,7 +99,7 @@ async function getCapabilityStatus(
     const baseURL = server.state.baseURL.replace(/\/+$/, "")
     const response = await fetch(`${baseURL}/models`, {
       signal: AbortSignal.timeout(2000),
-      headers: { authorization: `Bearer ${resolveAxEngineApiKey(options)}` },
+      headers: { authorization: `Bearer ${apiKey}` },
       redirect: "error",
     })
     if (!response.ok) {
@@ -118,15 +119,26 @@ async function getCapabilityStatus(
   }
 }
 
-export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}): Promise<AxEngineStatus> {
+async function savedAxEngineApiKey(savedKey?: unknown) {
+  if (typeof savedKey === "string" && savedKey.trim()) return savedKey.trim()
+  try {
+    const auth = await Auth.get(AX_ENGINE_PROVIDER_ID)
+    return auth?.type === "api" ? auth.key : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export async function getAxEngineStatus(options: AxEngineRuntimeOptions = {}, savedKey?: unknown): Promise<AxEngineStatus> {
+  const apiKey = resolveAxEngineApiKey(options, await savedAxEngineApiKey(savedKey))
   const [eligibility, dependency, disk, model, server] = await Promise.all([
     getPlatformEligibility(),
     getDependencyStatus(options),
     getDiskStatus(options),
     getModelStatus(options),
-    getServerStatus(resolveAxEngineApiKey(options), resolveAxEngineMtpPolicy(options)),
+    getServerStatus(apiKey, resolveAxEngineMtpPolicy(options)),
   ])
-  const capability = await getCapabilityStatus(server, options)
+  const capability = await getCapabilityStatus(server, apiKey)
 
   const core: AxEngineStatusCore = {
     eligibility,
